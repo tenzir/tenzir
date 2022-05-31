@@ -39,11 +39,15 @@
 // TODO: play with smaller (slice-aligned row group sizes)
 namespace vast::plugins::parquet_store {
 
+namespace {
+
 std::filesystem::path store_path_for_partition(const uuid& partition_id) {
   auto store_filename = fmt::format("{}.parquet", partition_id);
   return std::filesystem::path{"archive"} / store_filename;
 }
 
+/// Handles an array containing enum data, transforming the data into
+/// vast.enumeration extension type backed by a dictionary.
 std::shared_ptr<arrow::Array>
 fix_enum_array(const enumeration_type& et,
                const std::shared_ptr<arrow::Array>& arr) {
@@ -89,6 +93,7 @@ map_chunked_array(const VastType& t,
   auto chunks = arrow::ArrayVector{};
   chunks.reserve(arr->num_chunks());
   for (const auto& chunk : arr->chunks()) {
+    // short-circuit: if the first transform is a no-op, skip remaining chunks
     if (std::shared_ptr<arrow::Array> c = m(t, chunk))
       chunks.push_back(c);
     else
@@ -98,8 +103,9 @@ map_chunked_array(const VastType& t,
   return result.ValueOrDie();
 }
 
+/// Transform an array into its canonical form for the provided vast type.
 std::shared_ptr<arrow::Array>
-map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
+align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
   auto f = detail::overload{
     [&](const enumeration_type& et) -> std::shared_ptr<arrow::Array> {
       return fix_enum_array(et, array);
@@ -122,12 +128,7 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
       auto sa = std::static_pointer_cast<arrow::StructArray>(array);
       auto address_array = std::make_shared<address_type::array_type>(
         address_type::to_arrow_type(), sa->field(0));
-
-      auto inner_type
-        = arrow::struct_(std::vector<std::shared_ptr<arrow::Field>>{
-          arrow::field("address", address_type::to_arrow_type()),
-          arrow::field("length", arrow::uint8()),
-        });
+      auto inner_type = subnet_type::to_arrow_type()->storage_type();
       auto children = std::vector<std::shared_ptr<arrow::Array>>{
         address_array,
         sa->field(1),
@@ -141,7 +142,8 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
     },
     [&](const list_type& lt) -> std::shared_ptr<arrow::Array> {
       auto list_array = std::static_pointer_cast<arrow::ListArray>(array);
-      if (auto fixed_array = map_array(lt.value_type(), list_array->values()))
+      if (auto fixed_array
+          = align_array_to_type(lt.value_type(), list_array->values()))
         return std::make_shared<arrow::ListArray>(
           lt.to_arrow_type(), list_array->length(), list_array->value_offsets(),
           fixed_array, list_array->null_bitmap(), list_array->null_count());
@@ -149,8 +151,8 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
     },
     [&](const map_type& mt) -> std::shared_ptr<arrow::Array> {
       auto ma = std::static_pointer_cast<arrow::MapArray>(array);
-      auto key_array = map_array(mt.key_type(), ma->keys());
-      auto val_array = map_array(mt.value_type(), ma->items());
+      auto key_array = align_array_to_type(mt.key_type(), ma->keys());
+      auto val_array = align_array_to_type(mt.value_type(), ma->items());
       if (!key_array && !val_array)
         return {};
       auto ka = key_array ? key_array : ma->keys();
@@ -167,7 +169,7 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
       children.reserve(rt.num_fields());
       auto modified = false;
       for (const auto& field : rt.fields()) {
-        auto mapped_arr = map_array(field.type, *it);
+        auto mapped_arr = align_array_to_type(field.type, *it);
         if (mapped_arr) {
           modified = true;
           children.push_back(mapped_arr);
@@ -191,7 +193,7 @@ map_array(const vast::type& t, std::shared_ptr<arrow::Array> array) {
 }
 
 /// Transform a given `ChunkedArray` according to the provided VAST type
-/// `ChunkedArray`s only occurr at the outermost level, and the VAST type
+/// `ChunkedArray`s only occur at the outermost level, and the VAST type
 /// that is not properly represented at this level is `enumeration_type`.
 std::shared_ptr<arrow::ChunkedArray>
 restore_enum_chunk_array(const vast::type& t,
@@ -201,13 +203,13 @@ restore_enum_chunk_array(const vast::type& t,
       return map_chunked_array(et, array, fix_enum_array);
     },
     [&](const list_type&) -> std::shared_ptr<arrow::ChunkedArray> {
-      return map_chunked_array(t, array, map_array);
+      return map_chunked_array(t, array, align_array_to_type);
     },
     [&](const map_type&) -> std::shared_ptr<arrow::ChunkedArray> {
-      return map_chunked_array(t, array, map_array);
+      return map_chunked_array(t, array, align_array_to_type);
     },
     [&](const record_type&) -> std::shared_ptr<arrow::ChunkedArray> {
-      return map_chunked_array(t, array, map_array);
+      return map_chunked_array(t, array, align_array_to_type);
     },
     [&](const auto&) -> std::shared_ptr<arrow::ChunkedArray> {
       VAST_ASSERT(t.to_arrow_type()->Equals(array->type()));
@@ -260,21 +262,6 @@ table_slice create_table_slice(const std::shared_ptr<arrow::RecordBatch>& rb) {
   return slice;
 }
 
-template <typename Actor>
-caf::expected<uint64_t>
-handle_lookup(Actor& self, const vast::query& query,
-              const std::shared_ptr<arrow::Table>& table) {
-  auto table_slices = std::vector<table_slice>{};
-  for (const auto& rb : arrow::TableBatchReader(*table)) {
-    if (!rb.ok())
-      return caf::make_error(ec::format_error,
-                             fmt::format("unable to read record batch: {} ",
-                                         rb.status().ToString()));
-    table_slices.push_back(create_table_slice(*rb));
-  }
-  return handle_lookup(self, query, table_slices);
-}
-
 // Handler for `vast::query` that is shared between active and passive stores.
 // Returns a the number of events that match the query.
 // Precondition: Query type is either `count` or `extract`.
@@ -317,6 +304,21 @@ handle_lookup(Actor& self, const vast::query& query,
   return caf::visit(handle_query, query.cmd);
 }
 
+template <typename Actor>
+caf::expected<uint64_t>
+handle_lookup(Actor& self, const vast::query& query,
+              const std::shared_ptr<arrow::Table>& table) {
+  auto table_slices = std::vector<table_slice>{};
+  for (const auto& rb : arrow::TableBatchReader(*table)) {
+    if (!rb.ok())
+      return caf::make_error(ec::format_error,
+                             fmt::format("unable to read record batch: {} ",
+                                         rb.status().ToString()));
+    table_slices.push_back(create_table_slice(*rb));
+  }
+  return handle_lookup(self, query, table_slices);
+}
+
 std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
   const std::shared_ptr<parquet::FileMetaData>& parquet_metadata) {
   if (!parquet_metadata)
@@ -351,83 +353,6 @@ read_parquet_buffer(const chunk_ptr& chunk) {
   if (!file_reader->ReadTable(&table).ok())
     return caf::exit_reason::unhandled_exception;
   return align_table_to_schema(arrow_schema, table);
-}
-
-system::store_actor::behavior_type
-store(system::store_actor::stateful_pointer<store_state> self,
-      const system::accountant_actor& accountant,
-      const system::filesystem_actor& fs, const uuid& id) {
-  self->state.self_ = self;
-  self->state.id_ = id;
-  self->state.accountant_ = accountant;
-  self->state.fs_ = fs;
-  self->state.path_ = store_path_for_partition(id);
-  self->request(self->state.fs_, caf::infinite, atom::mmap_v, self->state.path_)
-    .then(
-      [self](const chunk_ptr& chunk) {
-        if (auto table = read_parquet_buffer(chunk); table) {
-          self->state.table_ = *table;
-        } else {
-          self->send_exit(self, table.error());
-        }
-        for (auto&& [query, rp] :
-             std::exchange(self->state.deferred_requests_, {})) {
-          VAST_TRACE("{} delegates {} (pending: {})", *self, query,
-                     rp.pending());
-          rp.delegate(static_cast<system::store_actor>(self), std::move(query));
-        }
-      },
-      [self](caf::error& err) {
-        VAST_ERROR("failed to read archive {}: {}", self->state.path_,
-                   to_string(err));
-        self->state.self_ = nullptr;
-      });
-
-  return {
-    [self](const query& query) -> caf::result<uint64_t> {
-      if (!self->state.table_) {
-        auto rp = self->make_response_promise<uint64_t>();
-        self->state.deferred_requests_.emplace_back(query, rp);
-        return rp;
-      }
-      auto start = std::chrono::steady_clock::now();
-      auto slices = std::vector<table_slice>{};
-      auto num_hits = handle_lookup(self, query, self->state.table_);
-      duration runtime = std::chrono::steady_clock::now() - start;
-      auto id_str = fmt::to_string(query.id);
-      self->send(self->state.accountant_, "parquet-store.lookup.runtime",
-                 runtime,
-                 vast::system::metrics_metadata{{"query", id_str},
-                                                {"store-type", "passive"}});
-      self->send(self->state.accountant_, "parquet-store.lookup.hits",
-                 *num_hits,
-                 vast::system::metrics_metadata{{"query", id_str},
-                                                {"store-type", "passive"}});
-      return num_hits;
-    },
-    [self](atom::erase, const ids& xs) -> caf::result<uint64_t> {
-      // TODO: segment store tracks in-flight erase requests similar to queries.
-      // however, in our case we don't support erasing a subset of the data, so
-      // we can just delete the file directly?
-      auto num_rows = rank(xs);
-      VAST_ASSERT(
-        num_rows == 0
-        || num_rows
-             == static_cast<unsigned long>(self->state.table_->num_rows()));
-      auto rp = self->make_response_promise<uint64_t>();
-      self
-        ->request(self->state.fs_, caf::infinite, atom::erase_v,
-                  self->state.path_)
-        .then(
-          [rp, num_rows](atom::done) mutable {
-            rp.deliver(num_rows);
-          },
-          [&](caf::error& err) mutable {
-            rp.deliver(std::move(err));
-          });
-      return rp;
-    },
-  };
 }
 
 auto init_parquet(caf::unit_t&) {
@@ -534,6 +459,84 @@ auto finish_parquet(
           VAST_ERROR("failed to flush archive {}", to_string(err));
           self->state.self_ = nullptr;
         });
+  };
+}
+
+} // namespace
+
+system::store_actor::behavior_type
+store(system::store_actor::stateful_pointer<store_state> self,
+      const system::accountant_actor& accountant,
+      const system::filesystem_actor& fs, const uuid& id) {
+  self->state.self_ = self;
+  self->state.id_ = id;
+  self->state.accountant_ = accountant;
+  self->state.fs_ = fs;
+  self->state.path_ = store_path_for_partition(id);
+  self->request(self->state.fs_, caf::infinite, atom::mmap_v, self->state.path_)
+    .then(
+      [self](const chunk_ptr& chunk) {
+        if (auto table = read_parquet_buffer(chunk); table) {
+          self->state.table_ = *table;
+        } else {
+          self->send_exit(self, table.error());
+        }
+        for (auto&& [query, rp] :
+             std::exchange(self->state.deferred_requests_, {})) {
+          VAST_TRACE("{} delegates {} (pending: {})", *self, query,
+                     rp.pending());
+          rp.delegate(static_cast<system::store_actor>(self), std::move(query));
+        }
+      },
+      [self](caf::error& err) {
+        VAST_ERROR("failed to read archive {}: {}", self->state.path_,
+                   to_string(err));
+        self->state.self_ = nullptr;
+      });
+  return {
+    [self](const query& query) -> caf::result<uint64_t> {
+      if (!self->state.table_) {
+        auto rp = self->make_response_promise<uint64_t>();
+        self->state.deferred_requests_.emplace_back(query, rp);
+        return rp;
+      }
+      auto start = std::chrono::steady_clock::now();
+      auto slices = std::vector<table_slice>{};
+      auto num_hits = handle_lookup(self, query, self->state.table_);
+      duration runtime = std::chrono::steady_clock::now() - start;
+      auto id_str = fmt::to_string(query.id);
+      self->send(self->state.accountant_, "parquet-store.lookup.runtime",
+                 runtime,
+                 vast::system::metrics_metadata{{"query", id_str},
+                                                {"store-type", "passive"}});
+      self->send(self->state.accountant_, "parquet-store.lookup.hits",
+                 *num_hits,
+                 vast::system::metrics_metadata{{"query", id_str},
+                                                {"store-type", "passive"}});
+      return num_hits;
+    },
+    [self](atom::erase, const ids& xs) -> caf::result<uint64_t> {
+      // TODO: segment store tracks in-flight erase requests similar to queries.
+      // however, in our case we don't support erasing a subset of the data, so
+      // we can just delete the file directly?
+      auto num_rows = rank(xs);
+      VAST_ASSERT(
+        num_rows == 0
+        || num_rows
+             == static_cast<unsigned long>(self->state.table_->num_rows()));
+      auto rp = self->make_response_promise<uint64_t>();
+      self
+        ->request(self->state.fs_, caf::infinite, atom::erase_v,
+                  self->state.path_)
+        .then(
+          [rp, num_rows](atom::done) mutable {
+            rp.deliver(num_rows);
+          },
+          [&](caf::error& err) mutable {
+            rp.deliver(std::move(err));
+          });
+      return rp;
+    },
   };
 }
 

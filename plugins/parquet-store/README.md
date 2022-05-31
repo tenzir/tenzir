@@ -17,18 +17,15 @@ currently contains two columns:
 | event         | struct        | actual event data |
 
 VAST is using Apache Arrow under the hood, and the Arrow schema is stored
-in serialized form as part of the parquet metdata under the key `ARROW:schema`. 
+in serialized form as part of the parquet metdata under the key `ARROW:schema`.
 The Arrow documentation section about [parquet](https://arrow.apache.org/docs/dev/cpp/parquet.html)
 discusses the mapping of types between Arrow and Parquet.
 
-
 ## Limitations / Differences to existing segment store plugin
-
-### Reading data with Apache Spark
 
 ### Table slice granularity
 
-Apache parquet implementation produces one record batch of data per 
+Apache parquet implementation produces one record batch of data per
 [row group](https://parquet.apache.org/docs/concepts/), which is converted into
 a _table slice_, the smallest unit of data used in VAST internally. For storage
 efficiency, row groups are typically larger than table slices created during
