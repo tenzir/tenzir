@@ -1281,9 +1281,8 @@ index(index_actor::stateful_pointer<index_state> self,
         static_cast<idspace_distributor_actor>(self->state.importer),
         self->state.type_registry, self->state.filesystem, transform);
       // match_everything == '"" in #type'
-      static const auto match_everything
-        = vast::predicate{meta_extractor{meta_extractor::type},
-                          relational_operator::ni, data{""}};
+      static const auto match_everything = vast::predicate{
+        selector{selector::type}, relational_operator::ni, data{""}};
       auto query = query::make_extract(sink, match_everything);
       query.id = self->state.pending_queries.create_query_id();
       query.priority = 100;

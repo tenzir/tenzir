@@ -606,16 +606,16 @@ struct row_evaluator {
     return caf::visit(*this, p.lhs, p.rhs);
   }
 
-  bool operator()(const meta_extractor& e, const data& d) {
+  bool operator()(const selector& e, const data& d) {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for
     // every row; this should happen upfront.
     const auto layout = slice_.layout();
     // TODO: type and field queries don't produce false positives in the
     // partition. Is there actually any reason to do the check here?
-    if (e.kind == meta_extractor::type)
+    if (e.kind == selector::type)
       return evaluate(std::string{layout.name()}, op_, d);
-    if (e.kind == meta_extractor::field) {
+    if (e.kind == selector::field) {
       const auto* s = caf::get_if<std::string>(&d);
       if (!s) {
         VAST_WARN("#field can only compare with string");
@@ -640,7 +640,7 @@ struct row_evaluator {
       }
       return neg ? !result : result;
     }
-    if (e.kind == meta_extractor::import_time)
+    if (e.kind == selector::import_time)
       return evaluate(slice_.import_time(), op_, d);
     return false;
   }

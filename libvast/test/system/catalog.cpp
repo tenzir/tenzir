@@ -295,23 +295,19 @@ TEST(attribute extractor - import time) {
   const auto y2k = unbox(to<data>("2000-01-01"));
   const auto y2021 = unbox(to<data>("2021-01-01"));
   const auto y2030 = unbox(to<data>("2030-01-01"));
-  const auto older_than_y2k
-    = expression{predicate{meta_extractor{meta_extractor::import_time},
-                           relational_operator::less, y2k}};
-  const auto newer_than_y2k
-    = expression{predicate{meta_extractor{meta_extractor::import_time},
-                           relational_operator::greater_equal, y2k}};
-  const auto older_than_y2021
-    = expression{predicate{meta_extractor{meta_extractor::import_time},
-                           relational_operator::less, y2021}};
+  const auto older_than_y2k = expression{
+    predicate{selector{selector::import_time}, relational_operator::less, y2k}};
+  const auto newer_than_y2k = expression{predicate{
+    selector{selector::import_time}, relational_operator::greater_equal, y2k}};
+  const auto older_than_y2021 = expression{predicate{
+    selector{selector::import_time}, relational_operator::less, y2021}};
   const auto newer_than_y2021
-    = expression{predicate{meta_extractor{meta_extractor::import_time},
+    = expression{predicate{selector{selector::import_time},
                            relational_operator::greater_equal, y2021}};
-  const auto older_than_y2030
-    = expression{predicate{meta_extractor{meta_extractor::import_time},
-                           relational_operator::less, y2030}};
+  const auto older_than_y2030 = expression{predicate{
+    selector{selector::import_time}, relational_operator::less, y2030}};
   const auto newer_than_y2030
-    = expression{predicate{meta_extractor{meta_extractor::import_time},
+    = expression{predicate{selector{selector::import_time},
                            relational_operator::greater_equal, y2030}};
   CHECK_EQUAL(lookup(older_than_y2k), foo);
   CHECK_EQUAL(lookup(newer_than_y2k), foobar);

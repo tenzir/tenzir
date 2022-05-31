@@ -430,9 +430,9 @@ tests:
       - command: -N export json '#type ni "suricata"'
         transformation: jq -ec '.'
 
-  # Testing the #import_time meta extractor is a bit tricky and requires
-  # sleeping. If this turns out to be a flaky test, increase durations and
-  # queries respectively.
+  # Testing the #import_time selector is a bit tricky and requires sleeping. If
+  # this turns out to be a flaky test, increase durations and queries
+  # respectively.
   Import Time:
     tags: [import, json, suricata]
     steps:

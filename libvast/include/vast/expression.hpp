@@ -34,24 +34,24 @@ namespace vast {
 class expression;
 
 /// Extracts meta data from an event.
-struct meta_extractor : detail::totally_ordered<meta_extractor> {
+struct selector : detail::totally_ordered<selector> {
   enum kind { type, field, import_time };
 
-  meta_extractor() = default;
+  selector() = default;
 
-  meta_extractor(kind k) : kind{k} {
+  selector(kind k) : kind{k} {
     // nop
   }
 
   kind kind;
 };
 
-bool operator==(const meta_extractor& x, const meta_extractor& y);
-bool operator<(const meta_extractor& x, const meta_extractor& y);
+bool operator==(const selector& x, const selector& y);
+bool operator<(const selector& x, const selector& y);
 
 template <class Inspector>
-auto inspect(Inspector& f, meta_extractor& x) {
-  return f(caf::meta::type_name("meta_extractor"), x.kind);
+auto inspect(Inspector& f, selector& x) {
+  return f(caf::meta::type_name("selector"), x.kind);
 }
 
 /// Extracts one or more values according to a given field.
@@ -120,7 +120,7 @@ auto inspect(Inspector& f, data_extractor& x) {
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
   /// The operand of a predicate, which can be either LHS or RHS.
-  using operand = caf::variant<meta_extractor, field_extractor, type_extractor,
+  using operand = caf::variant<selector, field_extractor, type_extractor,
                                data_extractor, data>;
 
   predicate() = default;
@@ -397,8 +397,8 @@ struct sum_type_access<vast::expression>
 namespace std {
 
 template <>
-struct hash<vast::meta_extractor> {
-  size_t operator()(const vast::meta_extractor& x) const {
+struct hash<vast::selector> {
+  size_t operator()(const vast::selector& x) const {
     return vast::hash(x);
   }
 };
@@ -475,14 +475,14 @@ struct formatter<vast::data_extractor> {
 };
 
 template <>
-struct formatter<vast::meta_extractor> {
+struct formatter<vast::selector> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <typename FormatContext>
-  auto format(const vast::meta_extractor& value, FormatContext& ctx) {
+  auto format(const vast::selector& value, FormatContext& ctx) {
     auto out = ctx.out();
     vast::print(out, value);
     return out;

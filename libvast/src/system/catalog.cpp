@@ -229,8 +229,8 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
         return result;
       };
       auto extract_expr = detail::overload{
-        [&](const meta_extractor& lhs, const data& d) -> result_type {
-          if (lhs.kind == meta_extractor::type) {
+        [&](const selector& lhs, const data& d) -> result_type {
+          if (lhs.kind == selector::type) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
@@ -248,7 +248,7 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
-          } else if (lhs.kind == meta_extractor::import_time) {
+          } else if (lhs.kind == selector::import_time) {
             result_type result;
             for (const auto& [part_id, part_syn] : synopses) {
               VAST_ASSERT(part_syn->min_import_time
@@ -264,7 +264,7 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
-          } else if (lhs.kind == meta_extractor::field) {
+          } else if (lhs.kind == selector::field) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;

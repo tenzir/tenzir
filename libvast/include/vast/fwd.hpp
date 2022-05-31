@@ -133,7 +133,7 @@ struct attribute;
 struct augmented_partition_synopsis;
 struct legacy_address_type;
 struct legacy_alias_type;
-struct meta_extractor;
+struct selector;
 struct legacy_bool_type;
 struct concept_;
 struct conjunction;
@@ -364,7 +364,7 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((vast::address))
-  VAST_ADD_TYPE_ID((vast::meta_extractor))
+  VAST_ADD_TYPE_ID((vast::selector))
   VAST_ADD_TYPE_ID((vast::bitmap))
   VAST_ADD_TYPE_ID((vast::chunk_ptr))
   VAST_ADD_TYPE_ID((vast::conjunction))

@@ -331,10 +331,10 @@ TEST(full partition roundtrip) {
     vast::predicate{vast::field_extractor{"foo"},
                     vast::relational_operator::equal, vast::data{1u}}};
   auto type_equals_y = vast::expression{
-    vast::predicate{vast::meta_extractor{vast::meta_extractor::type},
+    vast::predicate{vast::selector{vast::selector::type},
                     vast::relational_operator::equal, vast::data{"y"}}};
   auto type_equals_foo = vast::expression{
-    vast::predicate{vast::meta_extractor{vast::meta_extractor::type},
+    vast::predicate{vast::selector{vast::selector::type},
                     vast::relational_operator::equal, vast::data{"foo"}}};
   // For the query `x == 0`, we expect one result.
   test_expression(x_equals_zero, 1);

@@ -138,13 +138,13 @@ TEST(count meta extractor import time 1) {
     slice.import_time(time::clock::now());
   }
   detail::spawn_container_source(sys, slices, index);
-  auto counter = sys.spawn(
-    system::counter,
-    expression{predicate{meta_extractor{meta_extractor::import_time},
-                         relational_operator::less,
-                         data{vast::time{time::clock::now()}}}},
-    index,
-    /*skip_candidate_check = */ false);
+  auto counter
+    = sys.spawn(system::counter,
+                expression{predicate{selector{selector::import_time},
+                                     relational_operator::less,
+                                     data{vast::time{time::clock::now()}}}},
+                index,
+                /*skip_candidate_check = */ false);
   run();
   anon_send(counter, atom::run_v, client);
   sched.run_once();
@@ -177,9 +177,9 @@ TEST(count meta extractor import time 2) {
   detail::spawn_container_source(sys, slices, index);
   auto counter = sys.spawn(
     system::counter,
-    expression{predicate{
-      meta_extractor{meta_extractor::import_time}, relational_operator::less,
-      data{vast::time{time::clock::now()} - std::chrono::hours{2}}}},
+    expression{
+      predicate{selector{selector::import_time}, relational_operator::less,
+                data{vast::time{time::clock::now()} - std::chrono::hours{2}}}},
     index,
     /*skip_candidate_check = */ false);
   run();

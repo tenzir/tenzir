@@ -38,11 +38,11 @@ fetch_indexer(const PartitionState& state, const data_extractor& dx,
 /// @relates passive_partition_state
 template <typename PartitionState>
 system::indexer_actor
-fetch_indexer(const PartitionState& state, const meta_extractor& ex,
+fetch_indexer(const PartitionState& state, const selector& ex,
               relational_operator op, const data& x) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   ids row_ids;
-  if (ex.kind == meta_extractor::type) {
+  if (ex.kind == selector::type) {
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
@@ -50,7 +50,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       if (evaluate(name, op, x))
         row_ids |= ids;
     }
-  } else if (ex.kind == meta_extractor::import_time) {
+  } else if (ex.kind == selector::import_time) {
     // For a passive partition, this already went through a time synopsis in
     // the catalog, but for the active partition we create an ad-hoc time
     // synopsis here to do the lookup.
@@ -71,7 +71,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
         row_ids |= ids;
     }
 
-  } else if (ex.kind == meta_extractor::field) {
+  } else if (ex.kind == selector::field) {
     auto s = caf::get_if<std::string>(&x);
     if (!s) {
       VAST_WARN("{} #field meta queries only support string "
@@ -152,7 +152,7 @@ evaluate(const PartitionState& state, const expression& expr) {
       return fetch_indexer(state, ext, pred.op, x);
     };
     auto v = detail::overload{
-      [&](const meta_extractor& ex, const data& x) {
+      [&](const selector& ex, const data& x) {
         return get_indexer_handle(ex, x);
       },
       [&](const data_extractor& dx, const data& x) {
