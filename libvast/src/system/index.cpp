@@ -505,6 +505,19 @@ void index_state::decomission_active_partition(const type& layout) {
       [=, this](partition_synopsis_ptr& ps) {
         VAST_DEBUG("{} successfully persisted partition {} {}", *self, layout,
                    id);
+        // Send a metric to the accountant.
+        if (accountant) {
+          auto report = vast::system::report {
+            .data = {
+              {"index.partitions-persisted", uint64_t{1}},
+              {"index.partitions-persisted-events", ps->events},
+            },
+            .metadata = {
+              {"layout", std::string{layout.name()}},
+            },
+          };
+          self->send(accountant, report);
+        }
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
         // TODO: We should skip this continuation if we're currently shutting
