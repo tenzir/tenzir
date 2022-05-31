@@ -102,9 +102,9 @@ parse(const std::vector<vast::data>& field_declarations) {
     const auto type_or_error
       = parse(record_record.begin()->second, std::string_view{});
     if (!type_or_error)
-      return caf::make_error(
-        ec::parse_error, fmt::format("failed to parse record type field: {}",
-                                     type_or_error.error()));
+      return caf::make_error(ec::parse_error,
+                             "failed to parse record type field",
+                             type_or_error.error());
     providers.insert(providers.end(),
                      std::make_move_iterator(type_or_error->providers.begin()),
                      std::make_move_iterator(type_or_error->providers.end()));
@@ -166,18 +166,18 @@ parse_map(std::string_view name, const data& map_to_parse,
   const auto key_type_expected = parse(found_key->second, std::string_view{});
   if (!key_type_expected)
     return caf::make_error(ec::parse_error,
-                           fmt::format("failed to parse map key: {}; while "
+                           fmt::format("failed to parse map key while "
                                        "parsing: {} with name: {}",
-                                       key_type_expected.error(), map_to_parse,
-                                       name));
+                                       map_to_parse, name),
+                           key_type_expected.error());
   const auto value_type_expected
     = parse(found_value->second, std::string_view{});
   if (!value_type_expected)
     return caf::make_error(ec::parse_error,
-                           fmt::format("failed to parse map value: {}; while "
+                           fmt::format("failed to parse map value while "
                                        "parsing: {} with name: {}",
-                                       value_type_expected.error(),
-                                       map_to_parse, name));
+                                       map_to_parse, name),
+                           value_type_expected.error());
   VAST_TRACE(
     fmt::format("Creating map type with name: {}, "
                 "placeholder key: {}, nested key type: {},"
@@ -266,11 +266,11 @@ parse_record_algebra(std::string_view name, const data& record_algebra,
                                        record_algebra, name));
   const auto new_record_or_error = parse(*fields_list_ptr);
   if (!new_record_or_error)
-    return caf::make_error(
-      ec::parse_error,
-      fmt::format("failed to parse record algebra "
-                  "fields: {}; while parsing: {} with name: {}",
-                  new_record_or_error.error(), record_algebra, name));
+    return caf::make_error(ec::parse_error,
+                           fmt::format("failed to parse record algebra while "
+                                       "parsing: {} with name: {}",
+                                       record_algebra, name),
+                           new_record_or_error.error());
   auto new_record = new_record_or_error.value();
   // retrieve records (base, implant or extend)
   if (name_clash_specifier_cnt == 0)
@@ -369,8 +369,17 @@ parse(const data& declaration, std::string_view name) {
   const auto* aliased_type_name_ptr = caf::get_if<std::string>(&declaration);
   // Type names can contain any character that the YAML parser can handle - no
   // need to check for allowed characters.
-  if (aliased_type_name_ptr != nullptr)
-    return parse_builtin(declaration);
+  if (aliased_type_name_ptr != nullptr) {
+    auto alias = parse_builtin(declaration);
+    if (!alias)
+      return caf::make_error(ec::parse_error,
+                             fmt::format("declaration must be a built-in type "
+                                         "or a type alias while parsing: {} "
+                                         "with name: {}",
+                                         declaration, name),
+                             alias.error());
+    return parsed_type(type{name, alias->parsed}, std::move(alias->providers));
+  }
   const auto* declaration_record_ptr = caf::get_if<record>(&declaration);
   if (declaration_record_ptr == nullptr)
     return caf::make_error(ec::parse_error,
@@ -457,10 +466,11 @@ parse(const data& declaration, std::string_view name) {
     // It can only be a built int type
     auto type_expected = parse_builtin(found_type->second);
     if (!type_expected)
-      return caf::make_error(
-        ec::parse_error, fmt::format("failed to parse type alias: {}; while "
-                                     "parsing: {} with name: {}",
-                                     type_expected.error(), declaration, name));
+      return caf::make_error(ec::parse_error,
+                             fmt::format("failed to parse type alias while "
+                                         "parsing: {} with name: {}",
+                                         declaration, name),
+                             type_expected.error());
     if (!type_expected->parsed)
       VAST_TRACE(fmt::format("Creating a placeholder with name: {}, "
                              "nested_type: {}",
@@ -480,10 +490,11 @@ parse(const data& declaration, std::string_view name) {
   if (is_list_found) {
     auto type_expected = parse(found_list->second, std::string_view{});
     if (!type_expected)
-      return caf::make_error(
-        ec::parse_error, fmt::format("failed to parse list: {}; while parsing: "
-                                     "{} with name: {}",
-                                     type_expected.error(), declaration, name));
+      return caf::make_error(ec::parse_error,
+                             fmt::format("failed to parse list while parsing: "
+                                         "{} with name: {}",
+                                         declaration, name),
+                             type_expected.error());
     if (!type_expected->parsed)
       VAST_TRACE(fmt::format("Creating placeholder list type with name: {}, "
                              "nested_type: {}",
@@ -506,10 +517,11 @@ parse(const data& declaration, std::string_view name) {
       // Record
       auto new_record = parse(*record_list_ptr);
       if (!new_record)
-        return caf::make_error(
-          ec::parse_error, fmt::format("failed to parse record: {}, while "
-                                       "parsing: {} with name: {}",
-                                       new_record.error(), declaration, name));
+        return caf::make_error(ec::parse_error,
+                               fmt::format("failed to parse record while "
+                                           "parsing: {} with name: {}",
+                                           declaration, name),
+                               new_record.error());
       return parsed_type(type{name, new_record->parsed, std::move(attributes)},
                          std::move(new_record->providers));
     }
@@ -521,7 +533,7 @@ parse(const data& declaration, std::string_view name) {
 }
 
 caf::expected<parsed_type>
-to_type2(const record::value_type& variable_declaration) {
+parse(const record::value_type& variable_declaration) {
   return parse(variable_declaration.second, variable_declaration.first);
 }
 
@@ -607,9 +619,8 @@ caf::expected<type> resolve_record(const record_type& unresolved_record_type,
       = resolve_placeholder_or_inline(field.type, resolved_types);
     if (!resolved_type)
       return caf::make_error(ec::parse_error,
-                             fmt::format("Failed to resolve record field key "
-                                         "type, reason: {}",
-                                         resolved_type.error())); // FIXME:
+                             "Failed to resolve record field key type",
+                             resolved_type.error());
     record_fields.emplace_back(field.name, *resolved_type);
   }
   return type{record_type{record_fields}};
@@ -648,7 +659,8 @@ caf::expected<type> resolve(const bool is_algebra, const type& to_resolve,
     const auto& new_record
       = resolve(false, algebra_fields_type, resolved_types);
     if (!new_record)
-      return new_record.error();
+      return caf::make_error(ec::parse_error, "failed to resole algebra fields",
+                             new_record.error());
     std::optional<record_type> merged_base_record{};
     VAST_WARN("merging {} records", algebra_records->fields().size());
     for (const auto& record : algebra_records->fields()) {
@@ -695,13 +707,15 @@ caf::expected<type> resolve(const bool is_algebra, const type& to_resolve,
     const auto final_merged_record = merge(
       *merged_base_record, *resolved_record_ptr, merge_conflict_handling);
     if (!final_merged_record)
-      return final_merged_record.error();
+      return caf::make_error(ec::parse_error,
+                             "failed to merge records while evaluating record "
+                             "algebra",
+                             final_merged_record.error());
     VAST_WARN("merging result: type: {}, name: {}", *final_merged_record,
               to_resolve.name());
     return type{to_resolve.name(), *final_merged_record};
   }
   if (auto placeholder = try_read_placeholder(to_resolve); placeholder) {
-    VAST_TRACE("Resolving placeholder");
     const auto type_found
       = std::find_if(resolved_types.begin(), resolved_types.end(),
                      [&](const auto& resolved_type) {
@@ -710,8 +724,10 @@ caf::expected<type> resolve(const bool is_algebra, const type& to_resolve,
     // FIXME: no duplicates should be allowed into resolved_types, check
     // somewhere!
     if (type_found == resolved_types.end())
-      return caf::make_error(ec::logic_error, "placeholder type is not "
-                                              "resolved yet");
+      return caf::make_error(
+        ec::logic_error, fmt::format("placeholder type is not resolved yet "
+                                     "while trying to resolve placeholder: {}",
+                                     placeholder->aliased_name));
     // FIXME: TEST if the placeholder type is not a Type Alias!
     return type{placeholder->name, *type_found};
   }
@@ -726,9 +742,7 @@ caf::expected<type> resolve(const bool is_algebra, const type& to_resolve,
       return resolve_record(unresolved_record_type, resolved_types);
     },
     [&](const concrete_type auto& resolved_type) {
-      caf::expected<type> result = type{resolved_type}; /* caf::make_error(
-         ec::logic_error,
-         fmt::format("Unhandled type in try_resolve: {}", to_resolve));*/
+      caf::expected<type> result = type{resolved_type};
       return result;
     },
   };
@@ -736,8 +750,7 @@ caf::expected<type> resolve(const bool is_algebra, const type& to_resolve,
   const auto resolution_result = caf::visit(collect_unresolved, to_resolve);
   if (resolution_result)
     return type{to_resolve.name(), *resolution_result};
-  return caf::make_error(ec::logic_error,
-                         "Unexpected resolution failure, reason: {}",
+  return caf::make_error(ec::logic_error, "Unexpected resolution failure",
                          resolution_result.error());
 }
 
@@ -802,9 +815,11 @@ caf::expected<module_ng2> to_module2(const data& raw_module) {
   std::vector<parsed_type> parsed_types;
   // Resolve aliases to built-in types or create placeholder types
   for (const auto& current_type : types) {
-    const auto parsed_type = to_type2(current_type);
+    const auto parsed_type = parse(current_type);
     if (!parsed_type)
-      return parsed_type.error();
+      return caf::make_error(
+        ec::parse_error, fmt::format("failed to parse type: {}", current_type),
+        parsed_type.error());
     parsed_types.push_back(*parsed_type);
   }
   std::vector<type> resolved_types;
@@ -817,6 +832,12 @@ caf::expected<module_ng2> to_module2(const data& raw_module) {
   for (auto i = resolved_items; i < parsed_types.end(); i++)
     resolved_types.push_back(i->parsed);
   parsed_types.erase(resolved_items, parsed_types.end());
+  /*  for (auto& parsed_type : parsed_types) {
+    VAST_ERROR("Unresolved: {}", parsed_type.parsed);
+    for (auto& provider : parsed_type.providers) {
+      VAST_ERROR("  provider: {}", provider);
+    }
+    }*/
   // Remove dependencies already resolved
   for (auto& parsed_type : parsed_types) {
     std::erase_if(parsed_type.providers, [&](const auto& current_provider) {
@@ -830,13 +851,16 @@ caf::expected<module_ng2> to_module2(const data& raw_module) {
   // resolved.
   VAST_TRACE("Before resolving {}", parsed_types.empty());
   resolution_manager manager{};
+  // FIXME: Validate that all dependency can be resolved (all proveders are
+  // amongst  parsed.names)
+  // FIXME: Validate that there are no duplicates
+  // FIXME: Check for circular dependencies
   while (!parsed_types.empty()) {
     // FIXME: In case of an invalid schema parsed_types may never get empty!
     const auto type_to_resolve = manager.next_to_resolve(parsed_types);
     if (!type_to_resolve)
       return caf::make_error(ec::parse_error,
-                             "Failed to determine next type "
-                             "to resolve, reason: {}",
+                             "failed to determine the next type to resolve",
                              type_to_resolve.error());
     VAST_TRACE("Next to resolve: {}, is algebra: {}", type_to_resolve->parsed,
                type_to_resolve->is_algebra);
@@ -844,10 +868,10 @@ caf::expected<module_ng2> to_module2(const data& raw_module) {
       type_to_resolve->is_algebra, type_to_resolve->parsed, resolved_types);
     if (!resolve_result)
       return caf::make_error(ec::parse_error,
-                             fmt::format("Failed to resolve: {}, reason: {}",
-                                         type_to_resolve->parsed,
-                                         resolve_result.error()));
-    const auto resolved_type = *resolve_result;
+                             fmt::format("Failed to resolve: {}",
+                                         type_to_resolve->parsed),
+                             resolve_result.error());
+    const auto& resolved_type = *resolve_result;
     std::erase_if(parsed_types, [&](const auto& current_type) {
       return current_type.parsed.name() == resolved_type.name();
     });
@@ -971,10 +995,7 @@ TEST(Parsing string type) {
   const auto declaration = record{{
     "types",
     record{
-      {
-        "string_field1",
-        record{{"type", "string"}},
-      },
+      {"string_field1", "string"},
     },
   }};
   const auto result = unbox(to_module2(declaration));
@@ -987,6 +1008,17 @@ TEST(Parsing string type) {
     "types",
     record{
       {
+        "string_field1",
+        record{{"type", "string"}},
+      },
+    },
+  }};
+  const auto result2 = unbox(to_module2(declaration));
+  CHECK_EQUAL(result2, expected_result);
+  const auto declaration3 = record{{
+    "types",
+    record{
+      {
         "string_field2",
         record{{"type", "string"},
                {"attributes", list{"ioc", // record{{"ioc2", nullptr}},
@@ -994,12 +1026,12 @@ TEST(Parsing string type) {
       },
     },
   }};
-  const auto result2 = unbox(to_module2(declaration2));
-  const auto expected_result2 = module_ng2{
+  const auto result3 = unbox(to_module2(declaration3));
+  const auto expected_result3 = module_ng2{
     .types = {type{
       "string_field2", string_type{}, {{"ioc"}, {"index", "hash"}}, //, {"ioc2"}
     }}};
-  CHECK_EQUAL(result2, expected_result2);
+  CHECK_EQUAL(result3, expected_result3);
 }
 
 TEST(parsing bool type) {
