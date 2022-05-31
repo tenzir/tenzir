@@ -1645,7 +1645,7 @@ TEST(YAML Module - order indepenedent parsing - record_type) {
 }
 
 TEST(YAML Module - minima suricata sample) {
-  auto s
+  const auto* suricata_yaml
     = "#module: suricata\n"
       "#\n"
       "#description: >-\n"
@@ -1658,9 +1658,19 @@ TEST(YAML Module - minima suricata sample) {
       "#  - 'https://github.com/OISF/suricata'\n"
       "#\n"
       "types:\n"
+      "  count_id:\n"
+      "    type: count\n"
+      "    attributes:\n"
+      "      - index: hash\n"
+      "  string_id:\n"
+      "    type: string\n"
+      "    attributes:\n"
+      "      - index: hash\n"
+      "  port: count\n"     // MOVE to base.schema
+      "  timestamp: time\n" // MOVE to base.schema
       "  common:\n"
       "    record:\n"
-      "      - timestamp: vast.timestamp\n"
+      "      - timestamp: timestamp\n"
       "      - pcap_cnt: count\n"
       "      - vlan:\n"
       "          list: count\n"
@@ -1672,24 +1682,24 @@ TEST(YAML Module - minima suricata sample) {
       "      #\n"
       "      # But since concepts are not typed, this doesn't work.\n"
       "      # See the note in the corresponding VAST schema.\n"
-      "#      - src_ip:\n"
-      "#          type: addr\n"
+      "      - src_ip:\n"
+      "          type: addr\n"
       "#          concept: vast.net.src.ip\n"
-      "#      - src_port:\n"
-      "#          type: vast.port\n"
+      "      - src_port:\n"
+      "          type: port\n"
       "#          concept: vast.net.src.port\n"
-      "#      - dest_ip:\n"
-      "#          type: addr\n"
+      "      - dest_ip:\n"
+      "          type: addr\n"
       "#          concept: vast.net.dst.ip\n"
-      "#      - dest_ip:\n"
-      "#          type: vast.port\n"
+      "      - dest_ip:\n"
+      "          type: port\n"
       "#          concept: vast.net.dst.port\n"
-      "#      - proto: \n"
-      "#          type: string\n"
+      "      - proto: \n"
+      "          type: string\n"
       "#          concept: vast.net.proto\n"
-      "#      - event_type: string\n"
-      "#      - community_id:\n"
-      "#          type: vast.string_id\n"
+      "      - event_type: string\n"
+      "      - community_id:\n"
+      "          type: vast.string_id\n"
       "#          concept: vast.net.community_id\n"
       "  component-flow:\n"
       "    record:\n"
@@ -1724,11 +1734,11 @@ TEST(YAML Module - minima suricata sample) {
       "              - source:\n"
       "                  record:\n"
       "                    - ip: addr\n"
-      "                    - port: vast.port\n"
+      "                    - port: port\n"
       "              - target:\n"
       "                  record:\n"
       "                    - ip: addr\n"
-      "                    - port: vast.port\n"
+      "                    - port: port\n"
       "              - flow: component-flow\n"
       "              - payload: string\n"
       "              - payload_printable: string\n"
@@ -1858,7 +1868,7 @@ TEST(YAML Module - minima suricata sample) {
       "                  list: string\n"
       "              - completion_code:\n"
       "                  list: string\n"
-      "              - dynamic_port: vast.port\n"
+      "              - dynamic_port: port\n"
       "              - mode: string\n"
       "              - reply_received: string\n"
       "  ftp_data:\n"
@@ -1879,7 +1889,7 @@ TEST(YAML Module - minima suricata sample) {
       "            record:\n"
       "              - hostname: string\n"
       "              - url: string\n"
-      "              - http_port: vast.port\n"
+      "              - http_port: port\n"
       "              - http_user_agent: string\n"
       "              - http_content_type: string\n"
       "              - http_method: string\n"
@@ -1911,7 +1921,7 @@ TEST(YAML Module - minima suricata sample) {
       "            record:\n"
       "              - hostname: string\n"
       "              - url: string\n"
-      "              - http_port: vast.port\n"
+      "              - http_port: port\n"
       "              - http_user_agent: string\n"
       "              - http_content_type: string\n"
       "              - http_method: string\n"
@@ -1949,9 +1959,9 @@ TEST(YAML Module - minima suricata sample) {
       "              - notify:\n"
       "                  list: string\n"
       "# TODO: continue with krb5 event until end of old schema file.\n";
-  auto declaration = unbox(from_yaml(s));
-  auto result = unbox(to_module2(declaration));
-  VAST_ERROR("PARSED");
+  const auto declaration = unbox(from_yaml(suricata_yaml));
+  const auto result = unbox(to_module2(declaration));
+  // FIXME: Compare result with something
 }
 
 TEST(YAML Module - order independent parsing - record algebra) {
