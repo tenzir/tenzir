@@ -240,7 +240,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
     conjunction result;
     for (auto& [key, rhs] : *xs) {
       auto keys = detail::split(key, "|");
-      auto extractor = field_extractor{std::string{keys[0]}};
+      auto extractor = extractor{std::string{keys[0]}};
       auto op = relational_operator::equal;
       auto all = false;
       auto re = false;

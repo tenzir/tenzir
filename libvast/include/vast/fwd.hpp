@@ -131,45 +131,45 @@ class value_index;
 
 struct attribute;
 struct augmented_partition_synopsis;
-struct legacy_address_type;
-struct legacy_alias_type;
-struct selector;
-struct legacy_bool_type;
 struct concept_;
 struct conjunction;
-struct legacy_count_type;
 struct curried_predicate;
 struct data_extractor;
 struct disjunction;
+struct extractor;
+struct flow;
+struct index_statistics;
+struct integer;
+struct invocation;
+struct layout_statistics;
+struct legacy_address_type;
+struct legacy_alias_type;
+struct legacy_bool_type;
+struct legacy_count_type;
 struct legacy_duration_type;
 struct legacy_enumeration_type;
-struct field_extractor;
-struct flow;
-struct integer;
 struct legacy_integer_type;
-struct invocation;
-struct index_statistics;
 struct legacy_list_type;
 struct legacy_map_type;
+struct legacy_none_type;
+struct legacy_pattern_type;
+struct legacy_real_type;
+struct legacy_record_type;
+struct legacy_string_type;
+struct legacy_subnet_type;
+struct legacy_time_type;
 struct model;
 struct negation;
-struct legacy_none_type;
 struct offset;
+struct partition_info;
 struct partition_synopsis;
 struct partition_synopsis_pair;
-struct partition_info;
-struct legacy_pattern_type;
 struct predicate;
 struct qualified_record_field;
 struct query;
-struct layout_statistics;
-struct legacy_real_type;
-struct legacy_record_type;
+struct selector;
 struct status;
-struct legacy_string_type;
-struct legacy_subnet_type;
 struct taxonomies;
-struct legacy_time_type;
 struct type_extractor;
 struct type_set;
 
@@ -364,7 +364,6 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((vast::address))
-  VAST_ADD_TYPE_ID((vast::selector))
   VAST_ADD_TYPE_ID((vast::bitmap))
   VAST_ADD_TYPE_ID((vast::chunk_ptr))
   VAST_ADD_TYPE_ID((vast::conjunction))
@@ -374,9 +373,10 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::disjunction))
   VAST_ADD_TYPE_ID((vast::ec))
   VAST_ADD_TYPE_ID((vast::expression))
-  VAST_ADD_TYPE_ID((vast::field_extractor))
+  VAST_ADD_TYPE_ID((vast::extractor))
   VAST_ADD_TYPE_ID((vast::integer))
   VAST_ADD_TYPE_ID((vast::invocation))
+  VAST_ADD_TYPE_ID((vast::module))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::partition_info))
   VAST_ADD_TYPE_ID((vast::pattern))
@@ -387,7 +387,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::query))
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
-  VAST_ADD_TYPE_ID((vast::module))
+  VAST_ADD_TYPE_ID((vast::selector))
   VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::taxonomies))

@@ -29,13 +29,13 @@ static predicate to_predicate(predicate_tuple xs) {
           std::move(std::get<2>(xs))};
 }
 
-static predicate::operand to_field_extractor(std::vector<std::string> xs) {
+static predicate::operand to_extractor(std::vector<std::string> xs) {
   // TODO: rather than doing all the work with the attributes, it would be nice
   // if the parser framework would just give us an iterator range over the raw
   // input. Then we wouldn't have to use expensive attributes and could simply
   // wrap a parser P into raw(P) or raw_str(P) to obtain a range/string_view.
   auto field = detail::join(xs, ".");
-  return field_extractor{std::move(field)};
+  return extractor{std::move(field)};
 }
 
 static predicate::operand to_type_extractor(legacy_type x) {
@@ -131,7 +131,7 @@ static auto make_predicate_parser() {
     | "#field"_p ->* [] { return selector{selector::field}; }
     | "#import_time"_p ->* [] { return selector{selector::import_time}; }
     | ':' >> parsers::legacy_type ->* to_type_extractor
-    | field ->* to_field_extractor
+    | field ->* to_extractor
     ;
   auto operation
     = "~"_p   ->* [] { return relational_operator::match; }

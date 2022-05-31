@@ -337,9 +337,9 @@ validator::operator()(const type_extractor& ex, const data& d) {
   return caf::no_error;
 }
 
-caf::expected<void> validator::operator()(const field_extractor&, const data&) {
-  // Validity of a field extractor requires a specific schema, which we don't
-  // have in this context.
+caf::expected<void> validator::operator()(const extractor&, const data&) {
+  // Validity of a extractor requires a specific schema, which we don't have in
+  // this context.
   return caf::no_error;
 }
 
@@ -444,10 +444,10 @@ type_resolver::operator()(const data& d, const type_extractor& ex) {
 }
 
 caf::expected<expression>
-type_resolver::operator()(const field_extractor& ex, const data& d) {
+type_resolver::operator()(const extractor& ex, const data& d) {
   std::vector<expression> connective;
   // First, interpret the field as a suffix of a record field name.
-  auto suffixes = layout_.resolve_key_suffix(ex.field, layout_name_);
+  auto suffixes = layout_.resolve_key_suffix(ex.value, layout_name_);
   for (auto&& offset : suffixes) {
     const auto f = layout_.field(offset);
     if (!compatible(f.type, op_, d))
@@ -468,7 +468,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
 }
 
 caf::expected<expression>
-type_resolver::operator()(const data& d, const field_extractor& ex) {
+type_resolver::operator()(const data& d, const extractor& ex) {
   return (*this)(ex, d);
 }
 

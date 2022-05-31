@@ -69,8 +69,8 @@ struct expression_printer : printer_base<expression_printer> {
       return true;
     }
 
-    bool operator()(const field_extractor& e) const {
-      return printers::str(out_, e.field);
+    bool operator()(const extractor& e) const {
+      return printers::str(out_, e.value);
     }
 
     bool operator()(const data_extractor& e) const {
@@ -86,8 +86,8 @@ struct expression_printer : printer_base<expression_printer> {
   };
 
   template <class Iterator, class T>
-    requires(detail::is_any_v<T, selector, field_extractor, data_extractor,
-                              predicate, conjunction, disjunction, negation>)
+    requires(detail::is_any_v<T, selector, extractor, data_extractor, predicate,
+                              conjunction, disjunction, negation>)
   auto print(Iterator& out, const T& x) const -> bool {
     return visitor<Iterator>{out}(x);
   }
@@ -99,9 +99,8 @@ struct expression_printer : printer_base<expression_printer> {
 };
 
 template <class T>
-  requires(
-    detail::is_any_v<T, selector, field_extractor, data_extractor, predicate,
-                     conjunction, disjunction, negation, expression>)
+  requires(detail::is_any_v<T, selector, extractor, data_extractor, predicate,
+                            conjunction, disjunction, negation, expression>)
 struct printer_registry<T> {
   using type = expression_printer;
 };

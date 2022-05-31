@@ -301,14 +301,14 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
                     detail::pretty_type_name(this), lhs.kind);
           return all_partitions();
         },
-        [&](const field_extractor& lhs, const data& d) -> result_type {
+        [&](const extractor& lhs, const data& d) -> result_type {
           auto pred = [&](const auto& field) {
             if (!compatible(field.type(), x.op, d))
               return false;
             VAST_ASSERT(!field.is_standalone_type());
             auto rt = record_type{{field.field_name(), field.type()}};
             for ([[maybe_unused]] const auto& offset :
-                 rt.resolve_key_suffix(lhs.field, field.layout_name()))
+                 rt.resolve_key_suffix(lhs.value, field.layout_name()))
               return true;
             return false;
           };

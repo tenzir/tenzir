@@ -649,8 +649,8 @@ struct row_evaluator {
     die("type extractor should have been resolved at this point");
   }
 
-  bool operator()(const field_extractor&, const data&) {
-    die("field extractor should have been resolved at this point");
+  bool operator()(const extractor&, const data&) {
+    die("extractors should have been resolved at this point");
   }
 
   bool operator()(const data_extractor& e, const data& d) {

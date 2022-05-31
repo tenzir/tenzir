@@ -36,11 +36,9 @@ TEST(simple query pruning) {
   auto unprunable_types = vast::detail::heterogenous_string_hashset{};
   // foo == "foo" || bar == "foo"
   auto expression1 = vast::disjunction{
-    vast::predicate{vast::field_extractor{"foo"},
-                    vast::relational_operator::equal,
+    vast::predicate{vast::extractor{"foo"}, vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
-    vast::predicate{vast::field_extractor{"bar"},
-                    vast::relational_operator::equal,
+    vast::predicate{vast::extractor{"bar"}, vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
   };
   auto result1 = vast::prune(expression1, unprunable_types);
@@ -52,10 +50,9 @@ TEST(simple query pruning) {
   CHECK_EQUAL(expected1, result1);
   // foo == "foo" || bar != "foo"
   auto expression2 = vast::disjunction{
-    vast::predicate{vast::field_extractor{"foo"},
-                    vast::relational_operator::equal,
+    vast::predicate{vast::extractor{"foo"}, vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
-    vast::predicate{vast::field_extractor{"bar"},
+    vast::predicate{vast::extractor{"bar"},
                     vast::relational_operator::not_equal,
                     vast::data{std::string{"foo"}}},
   };
@@ -63,19 +60,16 @@ TEST(simple query pruning) {
   CHECK_EQUAL(expression2, result2);
   // foo == "foo" || bar == "bar"
   auto expression3 = vast::disjunction{
-    vast::predicate{vast::field_extractor{"foo"},
-                    vast::relational_operator::equal,
+    vast::predicate{vast::extractor{"foo"}, vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
-    vast::predicate{vast::field_extractor{"bar"},
-                    vast::relational_operator::equal,
+    vast::predicate{vast::extractor{"bar"}, vast::relational_operator::equal,
                     vast::data{std::string{"bar"}}},
   };
   auto result3 = vast::prune(expression3, unprunable_types);
   CHECK_EQUAL(expression3, result3);
   // foo == "foo" || :string == "foo"
   auto expression4 = vast::disjunction{
-    vast::predicate{vast::field_extractor{"foo"},
-                    vast::relational_operator::equal,
+    vast::predicate{vast::extractor{"foo"}, vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
     vast::predicate{vast::type_extractor{vast::type{vast::string_type{}}},
                     vast::relational_operator::equal,
@@ -89,18 +83,15 @@ TEST(simple query pruning) {
                       vast::data{std::string{"foo"}}};
   CHECK_EQUAL(expected4, result4);
   // (foo == "foo" || bar == "bar") && (baz == "foo")
-  auto expression5
-    = vast::conjunction{vast::disjunction{
-                          vast::predicate{vast::field_extractor{"foo"},
-                                          vast::relational_operator::equal,
-                                          vast::data{std::string{"foo"}}},
-                          vast::predicate{vast::field_extractor{"bar"},
-                                          vast::relational_operator::equal,
-                                          vast::data{std::string{"bar"}}},
-                        },
-                        vast::predicate{vast::field_extractor{"baz"},
-                                        vast::relational_operator::equal,
-                                        vast::data{std::string{"foo"}}}};
+  auto expression5 = vast::conjunction{
+    vast::disjunction{
+      vast::predicate{vast::extractor{"foo"}, vast::relational_operator::equal,
+                      vast::data{std::string{"foo"}}},
+      vast::predicate{vast::extractor{"bar"}, vast::relational_operator::equal,
+                      vast::data{std::string{"bar"}}},
+    },
+    vast::predicate{vast::extractor{"baz"}, vast::relational_operator::equal,
+                    vast::data{std::string{"foo"}}}};
   auto result5 = vast::prune(expression1, unprunable_types);
   // expected: ':string == "foo"'
   auto expected5
@@ -158,10 +149,10 @@ TEST(query pruning with index config) {
         .state;
   auto& unprunable_fields = state.unprunable_fields;
   auto expression1 = vast::disjunction{
-    vast::predicate{vast::field_extractor{"zeek.conn.proto"},
+    vast::predicate{vast::extractor{"zeek.conn.proto"},
                     vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
-    vast::predicate{vast::field_extractor{"zeek.conn.service"},
+    vast::predicate{vast::extractor{"zeek.conn.service"},
                     vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
   };
@@ -175,10 +166,10 @@ TEST(query pruning with index config) {
   // `:string` lookup, because there's a separate high-precision bloom filter
   // for that field.
   auto expression2 = vast::disjunction{
-    vast::predicate{vast::field_extractor{"zeek.conn.history"},
+    vast::predicate{vast::extractor{"zeek.conn.history"},
                     vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
-    vast::predicate{vast::field_extractor{"zeek.conn.service"},
+    vast::predicate{vast::extractor{"zeek.conn.service"},
                     vast::relational_operator::equal,
                     vast::data{std::string{"foo"}}},
   };

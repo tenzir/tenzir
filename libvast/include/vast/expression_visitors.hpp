@@ -89,7 +89,7 @@ struct validator {
   caf::expected<void> operator()(const predicate& p);
   caf::expected<void> operator()(const selector& ex, const data& d);
   caf::expected<void> operator()(const type_extractor& ex, const data& d);
-  caf::expected<void> operator()(const field_extractor& ex, const data& d);
+  caf::expected<void> operator()(const extractor& ex, const data& d);
 
   template <class T, class U>
   caf::expected<void> operator()(const T& lhs, const U& rhs) {
@@ -100,8 +100,8 @@ struct validator {
   relational_operator op_;
 };
 
-/// Transforms all ::field_extractor and ::type_extractor predicates into
-/// ::data_extractor instances according to a given type.
+/// Transforms all ::extractor and predicates into ::data_extractor instances
+/// according to a given type.
 struct type_resolver {
   explicit type_resolver(const type& layout);
 
@@ -113,9 +113,8 @@ struct type_resolver {
   caf::expected<expression> operator()(const selector& ex, const data& d);
   caf::expected<expression> operator()(const type_extractor& ex, const data& d);
   caf::expected<expression> operator()(const data& d, const type_extractor& ex);
-  caf::expected<expression>
-  operator()(const field_extractor& ex, const data& d);
-  caf::expected<expression> operator()(const data& d, const field_extractor& e);
+  caf::expected<expression> operator()(const extractor& ex, const data& d);
+  caf::expected<expression> operator()(const data& d, const extractor& e);
 
   template <class T, class U>
   caf::expected<expression> operator()(const T& lhs, const U& rhs) {

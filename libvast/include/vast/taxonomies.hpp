@@ -105,15 +105,15 @@ std::vector<std::string>
 resolve_concepts(const concepts_map& concepts,
                  std::vector<std::string> fields_or_concepts);
 
-/// Substitutes concept and model identifiers in field extractors with
-/// replacement expressions containing only concrete field names.
+/// Substitutes concept and model identifiers in extractors with replacement
+/// expressions containing only concrete field names.
 /// @param t The set of taxonomies to apply.
 /// @param e The original expression.
 /// @returns The sustitute expression.
 caf::expected<expression> resolve(const taxonomies& t, const expression& e);
 
-/// Substitutes concept and model identifiers in field extractors with
-/// replacement expressions containing only concrete field names.
+/// Substitutes concept and model identifiers in extractors with replacement
+/// expressions containing only concrete field names.
 /// @param t The set of taxonomies to apply.
 /// @param e The original expression.
 /// @param seen The set of all types in the database.

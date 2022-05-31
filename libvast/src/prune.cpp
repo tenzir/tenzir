@@ -35,13 +35,13 @@ struct pruner {
     for (const auto& operand : connective) {
       bool optimized = false;
       if (const auto* pred = caf::get_if<predicate>(&operand)) {
-        if (caf::holds_alternative<field_extractor>(pred->lhs)
+        if (caf::holds_alternative<extractor>(pred->lhs)
             || (caf::holds_alternative<type_extractor>(pred->lhs)
                 && caf::get<type_extractor>(pred->lhs).type == string_type{})) {
           if (const auto* d = caf::get_if<data>(&pred->rhs)) {
             if (caf::holds_alternative<std::string>(*d)) {
-              auto const* fe = caf::get_if<field_extractor>(&pred->lhs);
-              if (!fe || !unprunable_fields_.contains(fe->field)) {
+              auto const* fe = caf::get_if<extractor>(&pred->lhs);
+              if (!fe || !unprunable_fields_.contains(fe->value)) {
                 optimized = true;
                 // Replace the concrete field name by `:string` if this is
                 // the second time we lookup this value.

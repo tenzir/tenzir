@@ -49,13 +49,13 @@ struct fixture : fixtures::events {
 
 FIXTURE_SCOPE(evaluation_tests, fixture)
 
-TEST(evaluation - meta extractor - #type) {
+TEST(evaluation - selector - #type) {
   auto expr = make_expr("#type == \"zeek.conn\"");
   auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(ids, make_ids({{0, zeek_conn_log_slice.rows()}}));
 }
 
-TEST(evaluation - meta extractor - #field) {
+TEST(evaluation - selector - #field) {
   auto expr = make_expr("#field == \"a.b.c\"");
   auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(ids.size(), zeek_conn_log_slice.rows());
@@ -79,7 +79,7 @@ TEST(evaluation - type extractor - string + duration) {
   CHECK_EQUAL(zeek_conn_log_slice.at(id, 1), make_data_view("jM8ATYNKqZg"));
 }
 
-TEST(evaluation - field extractor - orig_h + proto) {
+TEST(evaluation - extractor - orig_h + proto) {
   // head -n 108 conn.log | awk '$3 != "192.168.1.102" && $7 != "udp"'
   auto expr = make_conn_expr("orig_h != 192.168.1.102 && proto != \"udp\"");
   auto ids = evaluate(expr, zeek_conn_log_slice);
@@ -88,14 +88,14 @@ TEST(evaluation - field extractor - orig_h + proto) {
   CHECK_EQUAL(zeek_conn_log_slice.at(last, 1), make_data_view("WfzxgFx2lWb"));
 }
 
-TEST(evaluation - field extractor - service + orig_h) {
+TEST(evaluation - extractor - service + orig_h) {
   auto str = "service == nil && orig_h == fe80::219:e3ff:fee7:5d23";
   auto expr = make_conn_expr(str);
   auto ids = evaluate(expr, zeek_conn_log_slice);
   REQUIRE_EQUAL(rank(ids), 2u);
 }
 
-TEST(evaluation - field extractor - nonexistent field) {
+TEST(evaluation - -nonexistent field) {
   auto expr = make_conn_expr("devnull != nil");
   auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK(all<0>(ids));
