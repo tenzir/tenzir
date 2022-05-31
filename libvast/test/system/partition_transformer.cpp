@@ -120,8 +120,9 @@ TEST(identity transform / done before persist) {
     });
   // Verify serialized data
   auto partition_path
-    = fmt::format(fmt::runtime(PARTITION_PATH_TEMPLATE), uuid);
-  auto synopsis_path = fmt::format(fmt::runtime(SYNOPSIS_PATH_TEMPLATE), uuid);
+    = fmt::format(VAST_FMT_RUNTIME(PARTITION_PATH_TEMPLATE), uuid);
+  auto synopsis_path
+    = fmt::format(VAST_FMT_RUNTIME(SYNOPSIS_PATH_TEMPLATE), uuid);
   auto partition_rp
     = self->request(filesystem, caf::infinite, vast::atom::read_v,
                     std::filesystem::path{partition_path});
@@ -254,7 +255,7 @@ TEST(partition with multiple types) {
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   auto transform = std::make_shared<vast::transform>(
-    "partition_transform"s, std::vector<std::string>{"zeek.conn"});
+    "partition_transform"s, std::vector<std::string>{});
   auto identity_step = vast::make_transform_step("identity", vast::record{});
   REQUIRE_NOERROR(identity_step);
   transform->add_step(std::move(*identity_step));
@@ -500,6 +501,58 @@ TEST(select transform with an empty result set) {
       FAIL("unexpected error" << e);
     });
   self->send_exit(index, caf::exit_reason::user_shutdown);
+}
+
+// Test that the partition transformer outputs multiple partitions
+// when it gets so many events that they exceed the maximum size
+// for a single partition.
+TEST(exceeded partition size) {
+  // Spawn partition transformer with a small max partition size.
+  auto store_id = "segment-store"s;
+  auto synopsis_opts = vast::index_config{};
+  auto index_opts = caf::settings{};
+  index_opts["max-partition-size"] = 4;
+  auto transform = std::make_shared<vast::transform>(
+    "partition_transform"s, std::vector<std::string>{});
+  auto identity_step = vast::make_transform_step("identity", vast::record{});
+  REQUIRE_NOERROR(identity_step);
+  transform->add_step(std::move(*identity_step));
+  auto transformer
+    = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
+                  index_opts, accountant, importer, type_registry, filesystem,
+                  std::move(transform), PARTITION_PATH_TEMPLATE,
+                  SYNOPSIS_PATH_TEMPLATE);
+  REQUIRE(transformer);
+  // Stream data with three different types
+  size_t const expected_total = 8ull;
+  size_t events = 0;
+  for (size_t i = 0; i < expected_total; ++i) {
+    for (auto& slice : suricata_dns_log) {
+      events += slice.rows();
+      self->send(transformer, slice);
+    }
+  }
+  CHECK_EQUAL(events, expected_total);
+  self->send(transformer, vast::atom::done_v);
+  run();
+  auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
+  run();
+  auto synopses = std::vector<vast::partition_synopsis_ptr>{};
+  auto uuids = std::vector<vast::uuid>{};
+  auto stats = vast::index_statistics{};
+  rp.receive(
+    [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
+      // We expect to receive 2 partitions with 4 events each.
+      CHECK_EQUAL(apsv.size(), 2ull);
+      for (auto& aps : apsv) {
+        stats.layouts[std::string{aps.type.name()}].count
+          += aps.synopsis->events;
+      }
+      CHECK_EQUAL(stats.layouts["suricata.dns"].count, 8ull);
+    },
+    [&](caf::error& err) {
+      FAIL("failed to persist: " << err);
+    });
 }
 
 FIXTURE_SCOPE_END()
