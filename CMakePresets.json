@@ -14,7 +14,7 @@
         "VAST_ENABLE_DEVELOPER_MODE": "ON",
         "VAST_ENABLE_LSVAST": "ON",
         "VAST_ENABLE_MDX_REGENERATE": "ON",
-        "VAST_PLUGINS": "${sourceDir}/plugins/broker;${sourceDir}/plugins/pcap;${sourceDir}/plugins/sigma;${sourceDir}/plugins/summarize"
+        "VAST_PLUGINS": "${sourceDir}/plugins/*"
       }
     },
     {
