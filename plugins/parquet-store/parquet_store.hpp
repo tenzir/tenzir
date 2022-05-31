@@ -63,7 +63,7 @@ struct store_state {
   /// Actor handle of the filesystem.
   system::filesystem_actor fs_ = {};
 
-  /// Holds requests that did arrive while the segment data
+  /// Holds requests that did arrive while the parquet data
   /// was still being loaded from disk.
   using request
     = std::tuple<vast::query, caf::typed_response_promise<uint64_t>>;
@@ -83,10 +83,8 @@ store(system::store_actor::stateful_pointer<store_state> self,
 /// The plugin entrypoint for the parquet store plugin.
 class plugin final : public store_plugin {
 public:
-  /// Initializes the aggregate plugin. This plugin has no general
-  /// configuration, and is configured per instantiation as part of the
-  /// transforms definition. We only check whether there's no unexpected
-  /// configuration here.
+  /// Initializes the parquet plugin. This plugin has no general configuration.
+  /// @param options the plugin options. Must be empty.
   caf::error initialize(data options) override;
 
   [[nodiscard]] const char* name() const override;
@@ -106,7 +104,7 @@ public:
                      const vast::uuid& id) const override;
 
   /// Create a store actor from the given header. Called when deserializing a
-  /// partition that uses this partition as a store backend.
+  /// partition that uses parquet as a store backend.
   /// @param accountant The actor handle the accountant.
   /// @param fs The actor handle of a filesystem.
   /// @param header The store header as found in the partition flatbuffer.
