@@ -304,11 +304,6 @@ handle_lookup(Actor& self, const vast::query& query,
       return num_hits;
     },
     [&](const query::extract& extract) -> caf::expected<uint64_t> {
-      if (extract.policy == query::extract::preserve_ids) {
-        self->send(extract.sink, table_slice{});
-        return caf::make_error(ec::invalid_query, "preserve_ids not supported "
-                                                  "in parquet format");
-      }
       for (const auto& slice : table_slices) {
         auto final_slice = filter(slice, expr, ids);
         if (final_slice) {
