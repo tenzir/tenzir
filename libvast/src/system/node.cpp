@@ -705,6 +705,11 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
           // use it for persistence on shutdown.
           self->demonitor(filesystem_handle);
           filesystem_handle = {};
+          auto& reg = self->system().registry();
+          VAST_INFO("finished core shutdown sequence, {} caf actors remaining; "
+                    "actors: {}; named actors: {}; counters: {}",
+                    reg.running(), reg.actors(), reg.named_actors(),
+                    reg.get_counters());
         };
     terminate<policy::parallel>(self, std::move(aux_components),
                                 shutdown_grace_period, shutdown_kill_timeout)
