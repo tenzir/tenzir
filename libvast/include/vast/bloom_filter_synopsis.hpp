@@ -97,6 +97,10 @@ public:
     return source(bloom_filter_);
   }
 
+  const bloom_filter<HashFunction>& filter() const {
+    return bloom_filter_;
+  }
+
 protected:
   bloom_filter<HashFunction> bloom_filter_;
 };

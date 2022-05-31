@@ -27,8 +27,11 @@
 namespace lsvast {
 
 static const std::map<Kind, printer> printers = {
-  {Kind::Unknown, print_unknown}, {Kind::DatabaseDir, print_vast_db},
-  {Kind::Index, print_index},     {Kind::Partition, print_partition},
+  {Kind::Unknown, print_unknown},
+  {Kind::DatabaseDir, print_vast_db},
+  {Kind::Index, print_index},
+  {Kind::Partition, print_partition},
+  {Kind::PartitionSynopsis, print_partition_synopsis},
   {Kind::Segment, print_segment},
 };
 
@@ -65,6 +68,8 @@ caf::expected<Kind> classify(const std::filesystem::path& path) {
     return Kind::Partition;
   if (vast::fbs::SegmentBufferHasIdentifier(buf))
     return Kind::Segment;
+  if (vast::fbs::PartitionSynopsisBufferHasIdentifier(buf))
+    return Kind::PartitionSynopsis;
   return Kind::Unknown;
 }
 
@@ -152,6 +157,8 @@ int main(int argc, char** argv) {
         return 1;
       }
       options.partition.expand_indexes.emplace_back(argv[++i]);
+    } else if (arg == "--raw-bloom-filters") {
+      options.synopsis.bloom_raw = true;
     } else { // positional arg
       raw_path = arg;
     }
@@ -161,7 +168,8 @@ int main(int argc, char** argv) {
                "Options:\n"
                "  --verbose\n"
                "  --print-bytesizes\n"
-               "  --human-readable\n");
+               "  --human-readable\n"
+               "  --raw-bloom-filters\n");
     return 1;
   }
   if (raw_path.back() == '/')
@@ -169,8 +177,7 @@ int main(int argc, char** argv) {
   const auto path = std::filesystem::path{raw_path};
   const auto kind = classify(path);
   if (!kind) {
-    fmt::print(stderr, "Filesystem error with error code: {}\n",
-               kind.error().code());
+    fmt::print(stderr, "Filesystem error with error code: {}\n", kind.error());
     return 1;
   }
   if (kind == Kind::Unknown) {
