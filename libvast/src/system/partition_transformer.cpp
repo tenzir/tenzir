@@ -35,6 +35,20 @@ void update_statistics(index_statistics& stats, const table_slice& slice) {
   it.value().count += slice.rows();
 }
 
+// A local reimplementation of `caf::broadcast_downstream_manager::push_to()`,
+// because that function was only added late in the 0.17.x cycle and is not
+// available on the Debian 10 packaged version of CAF.
+template <typename T, typename... Ts>
+bool push_to(caf::broadcast_downstream_manager<T>& manager,
+             caf::outbound_stream_slot<T> slot, Ts&&... xs) {
+  auto i = manager.states().find(slot);
+  if (i != manager.states().end()) {
+    i->second.buf.emplace_back(std::forward<Ts>(xs)...);
+    return true;
+  }
+  return false;
+}
+
 } // namespace
 
 void store_or_fulfill(
@@ -367,7 +381,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         for (auto& slice : buildup.slices) {
           slice.offset(offset);
           offset += slice.rows();
-          self->state.stage->out().push_to(slot, slice);
+          push_to(self->state.stage->out(), slot, slice);
           self->state.update_type_ids_and_indexers(data.type_ids, data.id,
                                                    slice);
           mutable_synopsis.add(slice, self->state.partition_capacity,
