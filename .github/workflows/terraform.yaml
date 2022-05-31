@@ -12,15 +12,20 @@ on: workflow_dispatch
 # - The VAST deployment creates a new VPC. Its ip range should not overlap an
 #   existing one in your account. Configure its CIDR in the repository secrets
 #   as VAST_CIDR (for example 172.30.0.0/16).
-# - The CI run uses Terraform Cloud to store the state. Within your Terraform
-#   Cloud account, you need to create two workspaces with the suffixes -step-1
-#   and -step-2. For each workspace, you also need to configure AWS credentials
-#   with sufficient priviledges to deploy the stack. Once this is done,
-#   configure the organization name and the common workspace prefix in the
-#   Github repository secrets as TF_ORGANIZATION and TF_WORKSPACE_PREFIX (the
-#   workspaces in Terraform Cloud should be $TF_WORKSPACE_PREFIX-step-1 and
-#   $TF_WORKSPACE_PREFIX-step-2).
-#   - You also need the API key from Terraform Cloud and set it in TF_API_TOKEN.
+# - The CI run uses Terraform Cloud to store the state. You need to properly
+#   configure workspaces for each Terragrunt step:
+#   - In Github Action secrets, set TF_ORGANIZATION with your Terraform Cloud
+#     organizations name, TF_API_TOKEN with a Terraform Cloud API key (for
+#     instance a user token) and choose a string to set as the
+#     TF_WORKSPACE_PREFIX (e.g "github-action")
+#   - Create a workspace in Terraform Cloud for each step. Their name should be
+#     the concatenation of the chosen prefix and the "-step-1", "-step-2"...
+#     suffixes (e.g "github-action-step-1", "github-action-step-2"...).
+#   - For each of these workspaces:
+#     - configure AWS credentials with sufficient priviledges to deploy the
+#       stack. You can use a Variable Set to make this simpler.
+#     - set the "Terraform Working Directory" field in the general settings to
+#       the path of the environement (cloud/aws/step-x)
 
 # Notes:
 # - If this workflow is executed multiple times at in parallel, the Terraform
