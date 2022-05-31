@@ -74,15 +74,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     filesystem = self->spawn(memory_filesystem);
   }
 
-  std::vector<table_slice>
-  query(const system::store_actor& actor, const ids& ids,
-        query::extract::mode preserve_ids = query::extract::preserve_ids,
-        const expression& expr = {}) {
+  std::vector<table_slice> query(const system::store_actor& actor,
+                                 const ids& ids, const expression& expr = {}) {
     bool done = false;
     uint64_t tally = 0;
     uint64_t rows = 0;
     std::vector<table_slice> result;
-    auto query = query::make_extract(self, preserve_ids, expr);
+    auto query = query::make_extract(self, expr);
     query.ids = ids;
     self->send(actor, query);
     run();
@@ -127,7 +125,7 @@ TEST(parquet store roundtrip) {
   REQUIRE_NOERROR(store);
   run();
   auto ids = ::vast::make_ids({23});
-  auto results = query(*store, ids, vast::query::extract::drop_ids);
+  auto results = query(*store, ids);
   run();
   CHECK_EQUAL(results.size(), 1ull);
   // CHECK_EQUAL(results[0].offset(), 23ull);
@@ -258,7 +256,7 @@ TEST(active parquet store fetchall query) {
   vast::detail::spawn_container_source(sys, slices, builder);
   run();
   auto ids = ::vast::make_ids({23});
-  auto results = query(builder, vast::ids{}, vast::query::extract::drop_ids);
+  auto results = query(builder, vast::ids{});
   run();
   CHECK_EQUAL(results.size(), 1ull);
   compare_table_slices(slice, results[0]);
@@ -284,7 +282,7 @@ TEST(passive parquet store fetchall query) {
   REQUIRE_NOERROR(store);
   run();
   auto ids = ::vast::make_ids({23});
-  auto results = query(*store, vast::ids{}, vast::query::extract::drop_ids);
+  auto results = query(*store, vast::ids{});
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
   compare_table_slices(slice, results[0]);
@@ -311,7 +309,7 @@ TEST(passive parquet store selective query) {
   REQUIRE_NOERROR(store);
   run();
   auto ids = ::vast::make_ids({23});
-  auto results = query(*store, ids, vast::query::extract::drop_ids, *expr);
+  auto results = query(*store, ids, *expr);
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
   const auto& expected_slice = filter(slice, *expr, vast::ids{});
