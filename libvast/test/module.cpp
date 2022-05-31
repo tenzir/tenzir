@@ -1514,8 +1514,7 @@ TEST(YAML Module - yaml alias node) {
                            "    type: string\n"
                            "    attributes:\n"
                            "      - attr1_key:\n"
-                           "      - attr2_key\n"
-                           "      - : value1\n";
+                           "      - attr2_key\n";
   const auto declaration = unbox(from_yaml(yaml));
   const auto result = unbox(to_module2(declaration));
   const auto expected = module_ng2{
