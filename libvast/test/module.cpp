@@ -47,12 +47,24 @@ struct module_ng2 {
                          const module_ng2& second) noexcept = default;
 };
 
+/// Controls what to do when a field name clash occurs in a record algebra.
+enum class record_algebra_type { base, implant, extend };
+
+/// Describes how to compose records in a record algebra.
+struct record_composition {
+  /// Controls what to do when a field name clash occurs in a record algebra.
+  record_algebra_type kind;
+  /// The records to merge into the Record Algebra Fields which is stored as a
+  /// record in #parsed.
+  std::vector<std::string_view> records{};
+};
+
 struct parsed_type {
-  type parsed;                               // Potentially unresolved type
-  std::vector<std::string_view> providers{}; // The types this type depends on
-  bool is_algebra{}; // The record algebra must be executed to resolve the result
-  //  std::vector<std::string> base_records; // FIXME: Idea
-  // FIXME enum: extend, implant, base
+  /// Potentially unresolved type
+  type parsed;
+  /// The types this type depends on
+  std::vector<std::string_view> providers{};
+  std::optional<record_composition> algebra;
   parsed_type(type&& new_parsed) : parsed(new_parsed) {
   }
   parsed_type(type&& new_parsed,
@@ -197,26 +209,19 @@ parse_map(std::string_view name, const data& map_to_parse,
 
 /// Only one of is_base and is_implement and is_extend can be true, if both
 /// is_base and is_extend is false then is_extend is assumed to be true.
-caf::expected<parsed_type> make_parsed_record_algebra(
-  std::string_view name, parsed_type&& new_record, bool is_base,
-  bool is_implant, const std::vector<std::string_view>& algebra_records) {
-  const auto base_type = is_base      ? enumeration_type{{"base"}}
-                         : is_implant ? enumeration_type{{"implant"}}
-                                      : enumeration_type{{"extend"}};
+caf::expected<parsed_type>
+make_parsed_record_algebra(std::string_view name, parsed_type&& new_record,
+                           bool is_base, bool is_implant,
+                           std::vector<std::string_view>&& algebra_records) {
+  const auto algebra_type = is_base      ? record_algebra_type::base
+                            : is_implant ? record_algebra_type::implant
+                                         : record_algebra_type::extend;
   auto providers = std::vector(std::move(new_record.providers));
-  auto record_types = std::vector<enumeration_type::field_view>{};
-  record_types.reserve(algebra_records.size());
-  for (auto type_name : algebra_records) {
+  for (auto type_name : algebra_records)
     providers.emplace_back(type_name);
-    record_types.push_back({type_name});
-  }
   auto result
-    = parsed_type(type{name, record_type{{"algebra_fields", new_record.parsed},
-                                         {"base_type", base_type},
-                                         {"algebra_records",
-                                          enumeration_type{record_types}}}},
-                  std::move(providers));
-  result.is_algebra = true;
+    = parsed_type(type{name, new_record.parsed}, std::move(providers));
+  result.algebra = {algebra_type, std::move(algebra_records)};
   return result;
 }
 
@@ -310,7 +315,8 @@ parse_record_algebra(std::string_view name, const data& record_algebra,
     algebra_records.emplace_back(*record_name_ptr);
   }
   return make_parsed_record_algebra(name, std::move(new_record), is_base_found,
-                                    is_implant_found, algebra_records);
+                                    is_implant_found,
+                                    std::move(algebra_records));
 }
 
 /// Returns a built-in type or a partial placeholder type. The name and
@@ -537,8 +543,9 @@ parse(const record::value_type& variable_declaration) {
   return parse(variable_declaration.second, variable_declaration.first);
 }
 
-caf::expected<type> resolve(const bool is_algebra, const type& to_resolve,
-                            const std::vector<type>& resolved_types);
+caf::expected<type>
+resolve(const type& to_resolve, const std::vector<type>& resolved_types,
+        const std::optional<record_composition>& algebra = std::nullopt);
 
 struct placeholder {
   std::string_view name;
@@ -579,7 +586,7 @@ resolve_placeholder_or_inline(const type& unresolved_type,
     return *type_found;
   }
   VAST_TRACE("Resolving inline type");
-  return resolve(false, unresolved_type, resolved_types);
+  return resolve(unresolved_type, resolved_types);
 }
 
 /// Returns the list type. The name and attribute must be added by the caller.
@@ -626,48 +633,27 @@ caf::expected<type> resolve_record(const record_type& unresolved_record_type,
   return type{record_type{record_fields}};
 }
 
-caf::expected<type> resolve(const bool is_algebra, const type& to_resolve,
-                            const std::vector<type>& resolved_types) {
-  if (is_algebra) {
-    const auto& algebra_ptr = caf::get_if<record_type>(&to_resolve);
-    if (!algebra_ptr)
-      return caf::make_error(ec::parse_error, "invalid format in record "
-                                              "algebra");
-    // "algebra_fields"
-    const auto& algebra_fields_type = algebra_ptr->field(0).type;
-    const auto& algebra_fields = caf::get_if<record_type>(&algebra_fields_type);
-    if (!algebra_fields)
-      return caf::make_error(ec::logic_error, "no algebra fields found");
-    // "base_type"
-    const auto& base_type_type = algebra_ptr->field(1).type;
-    const auto& base_type = caf::get_if<enumeration_type>(&base_type_type);
-    if (!base_type)
-      return caf::make_error(ec::logic_error, "no base type found");
-    // "algebra_records"
-    const auto& algebra_records_type = algebra_ptr->field(2).type;
-    const auto& algebra_records
-      = caf::get_if<enumeration_type>(&algebra_records_type);
-    if (!algebra_records)
-      return caf::make_error(ec::logic_error, "no algebra records found");
+caf::expected<type>
+resolve(const type& to_resolve, const std::vector<type>& resolved_types,
+        const std::optional<record_composition>& algebra) {
+  if (algebra) {
     // set conflict handling
     record_type::merge_conflict merge_conflict_handling
       = record_type::merge_conflict::fail;
-    if (base_type->field(0) == "implant")
+    if (algebra->kind == record_algebra_type::implant)
       merge_conflict_handling = record_type::merge_conflict::prefer_left;
-    if (base_type->field(0) == "extend")
+    if (algebra->kind == record_algebra_type::extend)
       merge_conflict_handling = record_type::merge_conflict::prefer_right;
-    const auto& new_record
-      = resolve(false, algebra_fields_type, resolved_types);
+    const auto& new_record = resolve(to_resolve, resolved_types);
     if (!new_record)
       return caf::make_error(ec::parse_error, "failed to resole algebra fields",
                              new_record.error());
     std::optional<record_type> merged_base_record{};
-    VAST_WARN("merging {} records", algebra_records->fields().size());
-    for (const auto& record : algebra_records->fields()) {
+    for (const auto& record : algebra->records) {
       const auto& base_type
         = std::find_if(resolved_types.begin(), resolved_types.end(),
                        [&](const auto& resolved_type) {
-                         return record.name == resolved_type.name();
+                         return record == resolved_type.name();
                        });
       // FIXME: no duplicates should be allowed into resolved_types, check
       // somewhere!
@@ -863,9 +849,9 @@ caf::expected<module_ng2> to_module2(const data& raw_module) {
                              "failed to determine the next type to resolve",
                              type_to_resolve.error());
     VAST_TRACE("Next to resolve: {}, is algebra: {}", type_to_resolve->parsed,
-               type_to_resolve->is_algebra);
-    const auto resolve_result = resolve(
-      type_to_resolve->is_algebra, type_to_resolve->parsed, resolved_types);
+               type_to_resolve->algebra.has_value());
+    const auto resolve_result = resolve(type_to_resolve->parsed, resolved_types,
+                                        type_to_resolve->algebra);
     if (!resolve_result)
       return caf::make_error(ec::parse_error,
                              fmt::format("Failed to resolve: {}",
