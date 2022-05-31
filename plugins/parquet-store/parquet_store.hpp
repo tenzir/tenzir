@@ -18,7 +18,6 @@
 #include <vast/type.hpp>
 #include <vast/uuid.hpp>
 
-#include <arrow/table.h>
 #include <arrow/type_fwd.h>
 #include <caf/typed_event_based_actor.hpp>
 

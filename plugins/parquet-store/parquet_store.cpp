@@ -22,17 +22,10 @@
 #include <vast/table_slice.hpp>
 #include <vast/type.hpp>
 
-#include <arrow/array/array_dict.h>
-#include <arrow/compute/cast.h>
-#include <arrow/io/file.h>
-#include <arrow/io/memory.h>
-#include <arrow/ipc/dictionary.h>
-#include <arrow/ipc/reader.h>
-#include <arrow/status.h>
-#include <arrow/table.h>
-#include <arrow/type.h>
-#include <arrow/type_fwd.h>
-#include <arrow/util/key_value_metadata.h>
+#include <arrow/api.h>
+#include <arrow/compute/api.h>
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
 #include <caf/actor_system_config.hpp>
 #include <caf/attach_stream_sink.hpp>
 #include <caf/expected.hpp>
@@ -43,6 +36,7 @@
 #include <memory>
 #include <utility>
 
+// TODO: play with smaller (slice-aligned row group sizes)
 namespace vast::plugins::parquet_store {
 
 std::filesystem::path store_path_for_partition(const uuid& partition_id) {
@@ -246,6 +240,26 @@ align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
   return new_table;
 }
 
+/// Transform a record batch into a table slice
+table_slice create_table_slice(const std::shared_ptr<arrow::RecordBatch>& rb) {
+  auto time_col = rb->GetColumnByName("import_time");
+  auto min_max_time = arrow::compute::MinMax(time_col).ValueOrDie();
+  auto max_value = min_max_time.scalar_as<arrow::StructScalar>().value[1];
+  auto event_col = rb->GetColumnByName("event");
+  auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
+  auto event_rb = arrow::RecordBatch::FromStructArray(event_col).ValueOrDie();
+  auto slice = arrow_table_slice_builder::create(
+    event_rb->ReplaceSchemaMetadata(schema_metadata));
+  auto f = detail::overload{
+    [&](const arrow::TimestampScalar& ts) -> void {
+      slice.import_time(vast::time{duration{ts.value}});
+    },
+    [&](const arrow::Scalar&) -> void {},
+  };
+  caf::visit(f, *max_value);
+  return slice;
+}
+
 template <typename Actor>
 caf::expected<uint64_t>
 handle_lookup(Actor& self, const vast::query& query,
@@ -256,7 +270,7 @@ handle_lookup(Actor& self, const vast::query& query,
       return caf::make_error(ec::format_error,
                              fmt::format("unable to read record batch: {} ",
                                          rb.status().ToString()));
-    table_slices.push_back(arrow_table_slice_builder::create(*rb));
+    table_slices.push_back(create_table_slice(*rb));
   }
   return handle_lookup(self, query, table_slices);
 }
@@ -454,17 +468,44 @@ std::shared_ptr<parquet::WriterProperties> writer_properties() {
   return builder.build();
 }
 
+// TODO: make this static or something - no need to recompute every time
 std::shared_ptr<parquet::ArrowWriterProperties> arrow_writer_properties() {
   auto builder = parquet::ArrowWriterProperties::Builder{};
   builder.store_schema(); // serialize arrow schema into parquet meta data
   return builder.build();
 }
 
+auto make_import_time_col(const time& import_time, int64_t rows) {
+  auto v = import_time.time_since_epoch().count();
+  auto builder = time_type::make_arrow_builder(arrow::default_memory_pool());
+  if (auto status = builder->Reserve(rows); !status.ok())
+    die(fmt::format("make time column failed: '{}'", status.ToString()));
+  for (int i = 0; i < rows; ++i) {
+    auto status = builder->Append(v);
+    VAST_ASSERT(status.ok());
+  }
+  return builder->Finish().ValueOrDie();
+}
+
+auto create_record_batch(const table_slice& slice)
+  -> std::shared_ptr<arrow::RecordBatch> {
+  auto rb = to_record_batch(slice);
+  auto md = rb->schema()->metadata();
+  auto event_array = rb->ToStructArray().ValueOrDie();
+  auto time_col = make_import_time_col(slice.import_time(), rb->num_rows());
+  auto schema = arrow::schema(
+    {arrow::field("import_time", time_type::to_arrow_type()),
+     arrow::field("event", event_array->type(), rb->schema()->metadata())});
+  auto new_rb
+    = arrow::RecordBatch::Make(schema, rb->num_rows(), {time_col, event_array});
+  return new_rb;
+}
+
 auto write_parquet_buffer(const std::vector<table_slice>& slices) {
   auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto batches = arrow::RecordBatchVector{};
   for (const auto& slice : slices)
-    batches.push_back(to_record_batch(slice));
+    batches.push_back(create_record_batch(slice));
   auto table = arrow::Table::FromRecordBatches(batches).ValueOrDie();
   auto writer_props = writer_properties();
   auto arrow_writer_props = arrow_writer_properties();
