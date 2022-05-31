@@ -1533,9 +1533,7 @@ TEST(YAML Module - yaml alias node) {
                            {"dst", address_type{}},
                          }},
               },
-              type{"type3",
-                   string_type{},
-                   {{"attr1_key"}, {"attr2_key"}, {"null", "value1"}}}},
+              type{"type3", string_type{}, {{"attr1_key"}, {"attr2_key"}}}},
   };
   CHECK_EQUAL(result, expected);
 }
