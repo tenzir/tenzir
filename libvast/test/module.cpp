@@ -1669,93 +1669,72 @@ TEST(YAML Module - order independent parsing - record algebra) {
                         }},
                  }};
   CHECK_EQUAL(result, expected_result);
-  /*
-  // Base Record Algebra test
-  auto record_algebra_from_yaml = record{{
-    "types",
-    record{
-      {
-
-    ,
-  };
-  auto record_algebra = unbox(to_module2(record_algebra_from_yaml));
-  auto expected_record_algebra = type{
-    "record_algebra_field",
-    record_type{
-      {"field", type{bool_type{}}},
-      {"msg", type{string_type{}}},
-    },
-  };
-  CHECK_EQUAL(record_algebra, expected_record_algebra);
   // Base Record Algebra test with name clash
-  auto clashing_record_algebra_from_yaml = record{{
-    "types",
-    record{
-      {
-
-    "record_algebra_field",
-    record{{
-      "record",
-      record{
-        {"base", list{"common"}},
-        {"fields", list{record{{"field", "string"}}}},
-      },
-    }},
-  };
-  auto clashing_record_algebra
-    = to_module2(clashing_record_algebra_from_yaml);
+  const auto clashing_base_record_declaration = record{
+    {"types",
+     record{
+       {"record_algebra_field",
+        record{{"record",
+                record{
+                  {"base", list{"common"}},
+                  {"fields", list{record{{"msg", "string"}}}},
+                }}}},
+       {"common",
+        record{{"record", list{record{{"msg", record{{"type", "bool"}}}}}}}},
+     }}};
+  auto clashing_record_algebra = to_module2(clashing_base_record_declaration);
+  VAST_INFO("base record algebra clash: {}", clashing_record_algebra.error());
   CHECK_ERROR(clashing_record_algebra);
   // Extend Record Algebra test with name clash
-  auto clashing_extend_record_algebra_from_yaml = record{{
-    "types",
-    record{
-      {
-
-    "record_algebra_field",
-    record{{
-      "record",
-      record{
-        {"extend", list{"common"}},
-        {"fields", list{record{{"field", "string"}}}},
-      },
-    }},
+  auto clashing_extend_record_algebra_from_yaml = record{
+    {"types",
+     record{
+       {"record_algebra_field",
+        record{{"record",
+                record{
+                  {"extend", list{"common"}},
+                  {"fields", list{record{{"msg", "string"}}}},
+                }}}},
+       {"common",
+        record{{"record", list{record{{"msg", record{{"type", "bool"}}}}}}}},
+     }},
   };
-  auto extended_record_algebra
-    = to_module2(clashing_extend_record_algebra_from_yaml);
-  auto expected_extended_record_algebra = type{
-    "record_algebra_field",
-    record_type{
-      {"field", type{string_type{}}},
-    },
-  };
-  CHECK_EQUAL(unbox(extended_record_algebra),
-  expected_extended_record_algebra);
+  const auto extended_record_algebra
+    = unbox(to_module2(clashing_extend_record_algebra_from_yaml));
+  const auto expected_extended_record_algebra
+    = module_ng2{.types = {
+                   type{"common", record_type{{"msg", bool_type{}}}},
+                   type{"record_algebra_field",
+                        record_type{
+                          {"msg", string_type{}},
+                        }},
+                 }};
+  CHECK_EQUAL(extended_record_algebra, expected_extended_record_algebra);
   // Implant Record Algebra test with name clash
-  auto clashing_implant_record_algebra_from_yaml = record{{
-    "types",
-    record{
-      {
-
-    "record_algebra_field",
-    record{{
-      "record",
-      record{
-        {"implant", list{"common"}},
-        {"fields", list{record{{"field", "string"}}}},
-      },
-    }},
+  auto clashing_implant_record_algebra_from_yaml = record{
+    {"types",
+     record{
+       {"record_algebra_field",
+        record{{"record",
+                record{
+                  {"implant", list{"common"}},
+                  {"fields", list{record{{"msg", "string"}}}},
+                }}}},
+       {"common",
+        record{{"record", list{record{{"msg", record{{"type", "bool"}}}}}}}},
+     }},
   };
   auto implanted_record_algebra
-    = to_module2(clashing_implant_record_algebra_from_yaml);
-  auto expected_implanted_record_algebra = type{
-    "record_algebra_field",
-    record_type{
-      {"field", type{bool_type{}}},
-    },
-  };
-  CHECK_EQUAL(unbox(implanted_record_algebra),
-              expected_implanted_record_algebra);
-  */
+    = unbox(to_module2(clashing_implant_record_algebra_from_yaml));
+  auto expected_implanted_record_algebra
+    = module_ng2{.types = {
+                   type{"common", record_type{{"msg", bool_type{}}}},
+                   type{"record_algebra_field",
+                        record_type{
+                          {"msg", bool_type{}},
+                        }},
+                 }};
+  CHECK_EQUAL(implanted_record_algebra, expected_implanted_record_algebra);
 }
 
 // FIXME:: Write checks with attributes!
