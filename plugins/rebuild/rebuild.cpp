@@ -23,6 +23,8 @@ namespace vast::plugins::rebuild {
 namespace {
 
 caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
+  // Read options.
+  const auto all = caf::get_or(inv.options, "vast.rebuild.all", false);
   // Create a scoped actor for interaction with the actor system.
   auto self = caf::scoped_actor{sys};
   // Connect to the node.
@@ -49,7 +51,11 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
     data{time{time::clock::now()}},
   }};
   auto catalog_result = caf::expected<system::catalog_result>{caf::no_error};
-  const auto max_partition_version = defaults::latest_partition_version - 1;
+  const auto max_partition_version = all
+                                       ? defaults::latest_partition_version
+                                       : defaults::latest_partition_version - 1;
+  fmt::print("requesting {} partitions from the catalog...\n",
+             all ? "all" : "outdated");
   self
     ->request(catalog, caf::infinite, atom::candidates_v, lookup_id, expr,
               max_partition_version)
@@ -112,8 +118,9 @@ public:
   /// Creates additional commands.
   [[nodiscard]] std::pair<std::unique_ptr<command>, command::factory>
   make_command() const override {
-    auto rebuild
-      = std::make_unique<command>("rebuild", "TODO", command::opts());
+    auto rebuild = std::make_unique<command>(
+      "rebuild", "TODO",
+      command::opts("?vast.rebuild").add<bool>("all", "TODO"));
     auto factory = command::factory{
       {"rebuild", rebuild_command},
     };
