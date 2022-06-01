@@ -1960,8 +1960,7 @@ TEST(YAML Module - minima suricata sample) {
       "                  list: string\n"
       "# TODO: continue with krb5 event until end of old schema file.\n";
   const auto declaration = unbox(from_yaml(suricata_yaml));
-  const auto result = unbox(to_module2(declaration));
-  // FIXME: Compare result with something
+  CHECK_NOERROR(to_module2(declaration));
 }
 
 TEST(YAML Module - order independent parsing - record algebra) {
