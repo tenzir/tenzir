@@ -300,6 +300,11 @@ partition_transformer_actor::behavior_type partition_transformer(
         const auto* slice_identity = as_bytes(slice).data();
         if (!self->state.original_import_times.contains(slice_identity))
           slice.import_time(self->state.max_import_time);
+        auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
+        unshared_synopsis->min_import_time
+          = std::min(slice.import_time(), unshared_synopsis->min_import_time);
+        unshared_synopsis->max_import_time
+          = std::max(slice.import_time(), unshared_synopsis->max_import_time);
         update_statistics(self->state.stats_out, slice);
         partition_data.events += slice.rows();
         self->state.events += slice.rows();
