@@ -82,12 +82,12 @@ struct parsed_type {
 
 /// Converts a declaration into a vast type.
 /// @param declaration the type declaration parsed from yaml module config file
-/// @param name the name for the declaration
+/// @param name the name for the declaration, empty for inline types
 caf::expected<parsed_type>
-parse(const data& declaration, std::string_view name);
+parse(const data& declaration, std::string_view name = std::string_view{});
 
 caf::expected<parsed_type>
-parse(const std::vector<vast::data>& field_declarations) {
+parse_record_fields(const std::vector<vast::data>& field_declarations) {
   if (field_declarations.empty())
     return caf::make_error(ec::parse_error,
                            fmt::format("record types must have at least "
@@ -111,8 +111,7 @@ parse(const std::vector<vast::data>& field_declarations) {
                                          "have only a single key in the "
                                          "YAML dictionary; while parsing: {}",
                                          record_value));
-    const auto type_or_error
-      = parse(record_record.begin()->second, std::string_view{});
+    const auto type_or_error = parse(record_record.begin()->second);
     if (!type_or_error)
       return caf::make_error(ec::parse_error,
                              "failed to parse record type field",
@@ -175,15 +174,14 @@ parse_map(std::string_view name, const data& map_to_parse,
                                        "and a value; while parsing: {} with "
                                        "name: {}",
                                        map_to_parse, name));
-  const auto key_type_expected = parse(found_key->second, std::string_view{});
+  const auto key_type_expected = parse(found_key->second);
   if (!key_type_expected)
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to parse map key while "
                                        "parsing: {} with name: {}",
                                        map_to_parse, name),
                            key_type_expected.error());
-  const auto value_type_expected
-    = parse(found_value->second, std::string_view{});
+  const auto value_type_expected = parse(found_value->second);
   if (!value_type_expected)
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to parse map value while "
@@ -269,7 +267,7 @@ parse_record_algebra(std::string_view name, const data& record_algebra,
                                        "be specified as YAML list; while "
                                        "parsing: {} with name: {}",
                                        record_algebra, name));
-  const auto new_record_or_error = parse(*fields_list_ptr);
+  const auto new_record_or_error = parse_record_fields(*fields_list_ptr);
   if (!new_record_or_error)
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to parse record algebra while "
@@ -360,7 +358,6 @@ caf::expected<parsed_type> parse_builtin(const data& declaration) {
 }
 
 /// Can handle inline declartaions
-/// FIXME: name optional?
 caf::expected<parsed_type>
 parse(const data& declaration, std::string_view name) {
   // Prevent using reserved names as types names
@@ -494,7 +491,7 @@ parse(const data& declaration, std::string_view name) {
     return parse_enum(name, found_enum->second, std::move(attributes));
   // List
   if (is_list_found) {
-    auto type_expected = parse(found_list->second, std::string_view{});
+    auto type_expected = parse(found_list->second);
     if (!type_expected)
       return caf::make_error(ec::parse_error,
                              fmt::format("failed to parse list while parsing: "
@@ -521,7 +518,7 @@ parse(const data& declaration, std::string_view name) {
     const auto* record_list_ptr = caf::get_if<list>(&found_record->second);
     if (record_list_ptr != nullptr) {
       // Record
-      auto new_record = parse(*record_list_ptr);
+      auto new_record = parse_record_fields(*record_list_ptr);
       if (!new_record)
         return caf::make_error(ec::parse_error,
                                fmt::format("failed to parse record while "
@@ -582,7 +579,9 @@ resolve_placeholder_or_inline(const type& unresolved_type,
                        return placeholder->aliased_name == resolved_type.name();
                      });
     if (type_found == resolved_types.end())
-      return caf::make_error(ec::parse_error, ""); // FIXME:
+      return caf::make_error(ec::logic_error, fmt::format("type cannot be "
+                                                          "resolved: {}",
+                                                          unresolved_type));
     return *type_found;
   }
   VAST_TRACE("Resolving inline type");
@@ -597,7 +596,9 @@ caf::expected<type> resolve_list(const list_type& unresolved_list_type,
     unresolved_list_type.value_type(), resolved_types);
   if (!resolved_type)
     return caf::make_error(ec::parse_error,
-                           "Failed to resolve list type: "); // FIXME:
+                           fmt::format("Failed to resolve list: {}",
+                                       unresolved_list_type),
+                           resolved_type.error());
   return type{list_type{*resolved_type}};
 }
 
@@ -608,12 +609,16 @@ caf::expected<type> resolve_map(const map_type& unresolved_map_type,
     unresolved_map_type.key_type(), resolved_types);
   if (!resolved_key_type)
     return caf::make_error(ec::parse_error,
-                           "Failed to resolve map key type: "); // FIXME:
+                           fmt::format("Failed to resolve map key: {}",
+                                       unresolved_map_type.key_type()),
+                           resolved_key_type.error());
   const auto resolved_value_type = resolve_placeholder_or_inline(
     unresolved_map_type.value_type(), resolved_types);
   if (!resolved_value_type)
     return caf::make_error(ec::parse_error,
-                           "Failed to resolve map value type: "); // FIXME:
+                           fmt::format("Failed to resolve map value: {}",
+                                       unresolved_map_type.value_type()),
+                           resolved_value_type.error());
   return type{map_type{*resolved_key_type, *resolved_value_type}};
 }
 
@@ -1604,6 +1609,26 @@ TEST(YAML Module - order indepenedent parsing - map_type) {
                                              type{"type2", string_type{}}}},
                  }};
   CHECK_EQUAL(result, expected_result);
+  // both key and value depends on the same type
+  const auto declaration_same_key_and_value_type = record{{
+    "types",
+    record{
+      {"map_type",
+       record{
+         {"map", record{{"key", "type1"}, {"value", "type1"}}},
+       }},
+      {"type1", record{{"type", "string"}}},
+    },
+  }};
+  const auto same_key_and_value_result
+    = unbox(to_module2(declaration_same_key_and_value_type));
+  const auto expected_same_key_and_value_result
+    = module_ng2{.types = {
+                   type{"type1", string_type{}},
+                   type{"map_type", map_type{type{"type1", string_type{}},
+                                             type{"type1", string_type{}}}},
+                 }};
+  CHECK_EQUAL(same_key_and_value_result, expected_same_key_and_value_result);
 }
 
 TEST(YAML Module - order indepenedent parsing - record_type) {
@@ -1682,11 +1707,12 @@ TEST(YAML Module - order independent parsing - record algebra) {
        {"common",
         record{{"record", list{record{{"msg", record{{"type", "bool"}}}}}}}},
      }}};
-  auto clashing_record_algebra = to_module2(clashing_base_record_declaration);
+  const auto clashing_record_algebra
+    = to_module2(clashing_base_record_declaration);
   VAST_INFO("base record algebra clash: {}", clashing_record_algebra.error());
   CHECK_ERROR(clashing_record_algebra);
   // Extend Record Algebra test with name clash
-  auto clashing_extend_record_algebra_from_yaml = record{
+  const auto clashing_extend_record_algebra_from_yaml = record{
     {"types",
      record{
        {"record_algebra_field",
@@ -1711,7 +1737,7 @@ TEST(YAML Module - order independent parsing - record algebra) {
                  }};
   CHECK_EQUAL(extended_record_algebra, expected_extended_record_algebra);
   // Implant Record Algebra test with name clash
-  auto clashing_implant_record_algebra_from_yaml = record{
+  const auto clashing_implant_record_algebra_from_yaml = record{
     {"types",
      record{
        {"record_algebra_field",
@@ -1724,9 +1750,9 @@ TEST(YAML Module - order independent parsing - record algebra) {
         record{{"record", list{record{{"msg", record{{"type", "bool"}}}}}}}},
      }},
   };
-  auto implanted_record_algebra
+  const auto implanted_record_algebra
     = unbox(to_module2(clashing_implant_record_algebra_from_yaml));
-  auto expected_implanted_record_algebra
+  const auto expected_implanted_record_algebra
     = module_ng2{.types = {
                    type{"common", record_type{{"msg", bool_type{}}}},
                    type{"record_algebra_field",
@@ -1737,10 +1763,8 @@ TEST(YAML Module - order independent parsing - record algebra) {
   CHECK_EQUAL(implanted_record_algebra, expected_implanted_record_algebra);
 }
 
-// FIXME:: Write checks with attributes!
-// FIXME:: Test case: Map both key and value depends on the same type!
-
 /*
+// FIXME:: Write checks with attributes!
 // FIXME:
 TEST(metadata layer merging) {
   const auto t1 = type{
