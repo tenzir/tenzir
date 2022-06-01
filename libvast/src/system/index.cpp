@@ -1402,6 +1402,18 @@ index(index_actor::stateful_pointer<index_state> self,
           });
       return rp;
     },
+    [self](atom::rebuild, std::vector<vast::uuid> old_partition_ids)
+      -> caf::result<std::vector<partition_info>> {
+      auto transform = std::make_shared<vast::transform>(
+        "identity", std::vector<std::string>{});
+      auto identity_step = make_transform_step("identity", {});
+      if (!identity_step)
+        return identity_step.error();
+      transform->add_step(std::move(*identity_step));
+      return self->delegate(static_cast<index_actor>(self), atom::apply_v,
+                            std::move(transform), std::move(old_partition_ids),
+                            keep_original_partition::no);
+    },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) { //
       return self->state.status(v);
