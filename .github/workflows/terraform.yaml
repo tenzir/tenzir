@@ -106,41 +106,19 @@ jobs:
 
       - name: Start and restart VAST server
         run: |
-          echo "Run start-vast-server"
-          ./vast-cloud start-vast-server
-
-          echo "Run start-vast-server again"
-          ./vast-cloud start-vast-server 2> /dev/null \
-            && { echo "Starting server again should fail"; false; } \
-            || true
-          [[ $(./vast-cloud get-vast-server | wc -w) = "1" ]] \
-            || { echo "Only one task should be started"; false; }
-
-          echo "Run restart-vast-server"
-          ./vast-cloud restart-vast-server
-          [[ $(./vast-cloud get-vast-server | wc -w) = "1" ]] \
-            || { echo "Only one task should be started"; false; }
-
-          echo "The task needs a bit of time to boot, sleeping for a while..."
-          sleep 100
+          ./vast-cloud integration.vast-start-restart
 
       - name: Test db empty from Lambda
         run: |
-          result=$(./vast-cloud run-lambda -c "vast count")
-          echo "Expected vast count 0, got $result"
-          [[ $result = "0" ]]
+          ./vast-cloud integration.vast-count --count 0
 
       - name: Import data
         run: |
-          DATA_URL=https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/vast/integration/data/suricata/eve.json
-          ./vast-cloud execute-command \
-            -c "wget -O - -o /dev/null $DATA_URL | vast import suricata"
+          ./vast-cloud integration.vast-import-suricata
 
       - name: Test db not empty from Lambda
         run: |
-          result=$(./vast-cloud run-lambda -c "vast count")
-          echo "Expected vast count 7, got $result"
-          [[ $result = "7" ]]
+          ./vast-cloud integration.vast-count --count 7
 
       - name: Destroy
         continue-on-error: true
