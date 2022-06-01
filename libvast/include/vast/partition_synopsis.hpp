@@ -64,6 +64,9 @@ struct partition_synopsis final : public caf::ref_counted {
   /// The maximum import timestamp of all contained table slices.
   time max_import_time = time::min();
 
+  /// The version number of this partition.
+  uint64_t version = defaults::latest_partition_version;
+
   /// Synopsis data structures for types.
   std::unordered_map<type, synopsis_ptr> type_synopses_;
 

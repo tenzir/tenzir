@@ -26,6 +26,10 @@ namespace vast::defaults {
 /// Note: the value must be > 0.
 constexpr size_t max_recursion = 100;
 
+/// The version number of the VAST partition format. Bump this whenever making
+/// changes that require partitions to be rebuilt.
+constexpr uint64_t latest_partition_version = 1;
+
 // -- constants for the import command and its subcommands ---------------------
 
 namespace import {

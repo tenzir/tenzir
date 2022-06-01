@@ -21,6 +21,7 @@ partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
   events = std::exchange(that.events, {});
   min_import_time = std::exchange(that.min_import_time, time::max());
   max_import_time = std::exchange(that.max_import_time, time::min());
+  version = std::exchange(that.version, defaults::latest_partition_version);
   type_synopses_ = std::exchange(that.type_synopses_, {});
   field_synopses_ = std::exchange(that.field_synopses_, {});
   memusage_.store(that.memusage_.exchange(0));
@@ -33,6 +34,7 @@ partition_synopsis::operator=(partition_synopsis&& that) noexcept {
     events = std::exchange(that.events, {});
     min_import_time = std::exchange(that.min_import_time, time::max());
     max_import_time = std::exchange(that.max_import_time, time::min());
+    version = std::exchange(that.version, defaults::latest_partition_version);
     type_synopses_ = std::exchange(that.type_synopses_, {});
     field_synopses_ = std::exchange(that.field_synopses_, {});
     memusage_.store(that.memusage_.exchange(0));
@@ -180,6 +182,7 @@ partition_synopsis* partition_synopsis::copy() const {
   result->events = events;
   result->min_import_time = min_import_time;
   result->max_import_time = max_import_time;
+  result->version = version;
   result->memusage_ = memusage_.load();
   result->type_synopses_.reserve(type_synopses_.size());
   result->field_synopses_.reserve(field_synopses_.size());
@@ -225,6 +228,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
     x.min_import_time.time_since_epoch().count(),
     x.max_import_time.time_since_epoch().count()};
   ps_builder.add_import_time_range(&import_time_range);
+  ps_builder.add_version(x.version);
   return ps_builder.Finish();
 }
 
@@ -269,6 +273,7 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     ps.min_import_time = time{};
     ps.max_import_time = time{};
   }
+  ps.version = x.version();
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);
@@ -290,6 +295,7 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     ps.min_import_time = time{};
     ps.max_import_time = time{};
   }
+  ps.version = x.version();
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);
