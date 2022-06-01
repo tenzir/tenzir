@@ -53,7 +53,7 @@ def clean_context(c):
 
 @task(help={"clean-ctx": "Clean up resources before and after running the tests"})
 def all(c, clean_ctx=False):
-    """Run the entire testbook
+    """Run the entire testbook. VAST needs to be deployed beforehand.
     Warning: This will affect the state of the current stack"""
     if clean_ctx:
         clean_context(c)
