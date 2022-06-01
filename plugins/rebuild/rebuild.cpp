@@ -49,7 +49,10 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
     data{time{time::clock::now()}},
   }};
   auto catalog_result = caf::expected<system::catalog_result>{caf::no_error};
-  self->request(catalog, caf::infinite, atom::candidates_v, lookup_id, expr)
+  const auto max_partition_version = defaults::latest_partition_version - 1;
+  self
+    ->request(catalog, caf::infinite, atom::candidates_v, lookup_id, expr,
+              max_partition_version)
     .receive(
       [&](system::catalog_result& value) {
         catalog_result = std::move(value);
@@ -59,6 +62,10 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
       });
   if (!catalog_result)
     return caf::make_message(std::move(catalog_result.error()));
+  if (catalog_result->partitions.empty()) {
+    fmt::print("nothing to do\n");
+    return caf::none;
+  }
   fmt::print("starting transformation of {} partitions...\n",
              catalog_result->partitions.size());
   // Run identity transform on all partitions for the index.

@@ -124,10 +124,8 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
     if (!memoized_partitions.empty() || synopses.empty())
       return memoized_partitions;
     memoized_partitions.reserve(synopses.size());
-    std::transform(synopses.begin(), synopses.end(),
-                   std::back_inserter(memoized_partitions), [](auto& x) {
-                     return x.first;
-                   });
+    for (const auto& [partition, synopsis] : synopses)
+      memoized_partitions.push_back(partition);
     std::sort(memoized_partitions.begin(), memoized_partitions.end());
     return memoized_partitions;
   };
@@ -405,8 +403,17 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     },
     [=](atom::candidates, vast::uuid lookup_id,
         const vast::expression& expr) -> caf::result<catalog_result> {
+      return self->delegate(static_cast<catalog_actor>(self),
+                            atom::candidates_v, lookup_id, expr,
+                            defaults::latest_partition_version);
+    },
+    [=](atom::candidates, vast::uuid lookup_id, const vast::expression& expr,
+        uint64_t max_partition_version) -> caf::result<catalog_result> {
       auto start = std::chrono::steady_clock::now();
       auto result = self->state.lookup(expr);
+      std::erase_if(result.partitions, [&](const uuid& partition) {
+        return self->state.synopses[partition]->version > max_partition_version;
+      });
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(lookup_id);
       self->send(self->state.accountant, "catalog.lookup.runtime", runtime,

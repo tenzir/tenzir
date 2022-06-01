@@ -213,6 +213,10 @@ using catalog_actor = typed_actor_fwd<
   // Return the candidate partitions for an expression.
   caf::replies_to<atom::candidates, vast::uuid,
                   vast::expression>::with<catalog_result>,
+  // Return the candidate partitions for an expression, restricted to a max
+  // partition version.
+  caf::replies_to<atom::candidates, vast::uuid, vast::expression,
+                  uint64_t>::with<catalog_result>,
   // Return the candidate partitions for a query.
   caf::replies_to<atom::candidates, vast::query>::with<catalog_result>>
   // Conform to the procotol of the STATUS CLIENT actor.
