@@ -97,9 +97,11 @@ public:
   }
 
   void deregister_input_path(caf::inbound_path* ptr) noexcept override {
-    VAST_INFO("{} removes {} source", *driver_.state.self,
-              driver_.state.inbound_descriptions[ptr]);
-    driver_.state.inbound_descriptions.erase(ptr);
+    if ((flags_ & (is_stopped_flag | is_shutting_down_flag)) == 0) {
+      VAST_INFO("{} removes {} source", *driver_.state.self,
+                driver_.state.inbound_descriptions[ptr]);
+      driver_.state.inbound_descriptions.erase(ptr);
+    }
     super::deregister_input_path(ptr);
   }
 };
