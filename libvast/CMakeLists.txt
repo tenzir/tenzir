@@ -44,6 +44,13 @@ if (NOT tsl-robin-map_FOUND)
   add_dependencies(robin_map tsl-robin-map-targets-link)
 endif ()
 
+# -- indicators ---------------------------------------------------------------
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/aux/indicators/single_include/indicators/indicators.hpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/vast/vendored/indicators/indicators.hpp"
+  COPYONLY)
+
 # -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
@@ -374,8 +381,10 @@ set_target_properties(
 target_include_directories(
   libvast
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/vast/vendored>
          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/vast/vendored>)
 
 # Make dlopen and dlclose available if we're building a shared library.
 if (BUILD_SHARED_LIBS)

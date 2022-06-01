@@ -20,6 +20,7 @@
 
 #include <caf/function_view.hpp>
 #include <caf/scoped_actor.hpp>
+#include <indicators/indicators.hpp>
 
 namespace vast::plugins::rebuild {
 
@@ -61,7 +62,7 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   const auto max_partition_version = all
                                        ? defaults::latest_partition_version
                                        : defaults::latest_partition_version - 1;
-  fmt::print("requesting {} partitions from the catalog...\n",
+  VAST_DEBUG("requesting {} partitions from the catalog...\n",
              all ? "all" : "outdated");
   auto catalog_result = caf::expected<system::catalog_result>{caf::no_error};
   self
@@ -77,18 +78,37 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   if (!catalog_result)
     return caf::make_message(std::move(catalog_result.error()));
   if (catalog_result->partitions.empty()) {
-    fmt::print("nothing to do\n");
+    VAST_INFO("nothing to do\n");
     return caf::none;
   }
-  fmt::print("starting transformation of {} partitions...\n",
-             catalog_result->partitions.size());
+  auto num_transformed = size_t{0};
+  auto num_results = size_t{0};
+  auto status = [&] {
+    return indicators::option::PostfixText{fmt::format(
+      "{0:>{3}}/{1}/{2:>{3}} (done/total/new)", num_transformed,
+      catalog_result->partitions.size(), num_results,
+      fmt::formatted_size("{}", catalog_result->partitions.size()))};
+  };
+  indicators::show_console_cursor(false);
+  auto bar = indicators::ProgressBar{
+    indicators::option::BarWidth{50},
+    indicators::option::Start{"["},
+    indicators::option::Fill{"■"},
+    indicators::option::Lead{"■"},
+    indicators::option::Remainder{" "},
+    indicators::option::End{"]"},
+    indicators::option::ForegroundColor{indicators::Color::white},
+    indicators::option::MaxProgress{catalog_result->partitions.size()},
+    indicators::option::ShowElapsedTime{step_size != 0},
+    indicators::option::ShowRemainingTime{step_size != 0},
+    status(),
+  };
+  bar.set_progress(0);
   auto current_step_partitions = std::vector<uuid>{};
   step_size = step_size == 0
                 ? catalog_result->partitions.size()
                 : std::min(catalog_result->partitions.size(), step_size);
   current_step_partitions.reserve(step_size);
-  auto num_transformed = size_t{0};
-  auto num_results = size_t{0};
   for (size_t i = 0; i < catalog_result->partitions.size();) {
     current_step_partitions.clear();
     while (i < catalog_result->partitions.size()
@@ -111,9 +131,12 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
     num_transformed += current_step_partitions.size();
     num_results += partition_info->size();
     // Print some statistics for the user.
-    fmt::print("transformed {}/{} -> {} partitions\n", num_transformed,
-               catalog_result->partitions.size(), num_results);
+    bar.set_option(status());
+    bar.set_progress(num_transformed);
   }
+  // Render a newline to make the progress bar not disappear at end of scope.
+  fmt::print("\n");
+  indicators::show_console_cursor(true);
   return caf::none;
 }
 
