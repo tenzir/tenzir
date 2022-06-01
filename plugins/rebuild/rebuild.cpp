@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
@@ -13,6 +15,7 @@
 #include <vast/system/catalog.hpp>
 #include <vast/system/index.hpp>
 #include <vast/system/node_control.hpp>
+#include <vast/system/read_query.hpp>
 #include <vast/system/spawn_or_connect_to_node.hpp>
 
 #include <caf/function_view.hpp>
@@ -43,21 +46,24 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   if (!components)
     return caf::make_message(std::move(components.error()));
   const auto& [catalog, index] = std::move(*components);
+  // Parse the query expression, iff it exists.
+  auto query = system::read_query(inv, "vast.rebuild.read",
+                                  system::must_provide_query::no);
+  if (!query)
+    return caf::make_message(std::move(query.error()));
+  auto expr = to<expression>(*query);
+  if (!expr)
+    return caf::make_message(std::move(expr.error()));
   // Get the partition IDs from the catalog.
   const auto lookup_id = uuid::random();
-  const auto expr = expression{predicate{
-    meta_extractor{meta_extractor::import_time},
-    relational_operator::less,
-    data{time{time::clock::now()}},
-  }};
-  auto catalog_result = caf::expected<system::catalog_result>{caf::no_error};
   const auto max_partition_version = all
                                        ? defaults::latest_partition_version
                                        : defaults::latest_partition_version - 1;
   fmt::print("requesting {} partitions from the catalog...\n",
              all ? "all" : "outdated");
+  auto catalog_result = caf::expected<system::catalog_result>{caf::no_error};
   self
-    ->request(catalog, caf::infinite, atom::candidates_v, lookup_id, expr,
+    ->request(catalog, caf::infinite, atom::candidates_v, lookup_id, *expr,
               max_partition_version)
     .receive(
       [&](system::catalog_result& value) {
@@ -120,7 +126,9 @@ public:
   make_command() const override {
     auto rebuild = std::make_unique<command>(
       "rebuild", "TODO",
-      command::opts("?vast.rebuild").add<bool>("all", "TODO"));
+      command::opts("?vast.rebuild")
+        .add<bool>("all", "TODO")
+        .add<std::string>("read,r", "path for reading the query"));
     auto factory = command::factory{
       {"rebuild", rebuild_command},
     };
