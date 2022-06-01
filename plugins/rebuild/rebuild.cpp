@@ -28,6 +28,8 @@ namespace {
 caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   // Read options.
   const auto all = caf::get_or(inv.options, "vast.rebuild.all", false);
+  auto step_size
+    = caf::get_or(inv.options, "vast.rebuild.step-size", size_t{0});
   // Create a scoped actor for interaction with the actor system.
   auto self = caf::scoped_actor{sys};
   // Connect to the node.
@@ -80,23 +82,38 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   }
   fmt::print("starting transformation of {} partitions...\n",
              catalog_result->partitions.size());
-  // Run identity transform on all partitions for the index.
-  auto partition_info
-    = caf::expected<std::vector<vast::partition_info>>{caf::no_error};
-  self
-    ->request(index, caf::infinite, atom::rebuild_v, catalog_result->partitions)
-    .receive(
-      [&](std::vector<vast::partition_info>& value) {
-        partition_info = std::move(value);
-      },
-      [&](caf::error& err) {
-        partition_info = std::move(err);
-      });
-  if (!partition_info)
-    return caf::make_message(std::move(partition_info.error()));
-  // Print some statistics for the user.
-  fmt::print("successfully transformed {} -> {} partitions\n",
-             catalog_result->partitions.size(), partition_info->size());
+  auto current_step_partitions = std::vector<uuid>{};
+  step_size = step_size == 0
+                ? catalog_result->partitions.size()
+                : std::min(catalog_result->partitions.size(), step_size);
+  current_step_partitions.reserve(step_size);
+  auto num_transformed = size_t{0};
+  auto num_results = size_t{0};
+  for (size_t i = 0; i < catalog_result->partitions.size();) {
+    current_step_partitions.clear();
+    while (i < catalog_result->partitions.size()
+           && current_step_partitions.size() < step_size)
+      current_step_partitions.push_back(catalog_result->partitions[i++]);
+    // Run identity transform on all partitions for the index.
+    auto partition_info
+      = caf::expected<std::vector<vast::partition_info>>{caf::no_error};
+    self
+      ->request(index, caf::infinite, atom::rebuild_v, current_step_partitions)
+      .receive(
+        [&](std::vector<vast::partition_info>& value) {
+          partition_info = std::move(value);
+        },
+        [&](caf::error& err) {
+          partition_info = std::move(err);
+        });
+    if (!partition_info)
+      return caf::make_message(std::move(partition_info.error()));
+    num_transformed += current_step_partitions.size();
+    num_results += partition_info->size();
+    // Print some statistics for the user.
+    fmt::print("transformed {}/{} -> {} partitions\n", num_transformed,
+               catalog_result->partitions.size(), num_results);
+  }
   return caf::none;
 }
 
@@ -128,7 +145,9 @@ public:
       "rebuild", "TODO",
       command::opts("?vast.rebuild")
         .add<bool>("all", "TODO")
-        .add<std::string>("read,r", "path for reading the query"));
+        .add<std::string>("read,r", "path for reading the (optional) query")
+        .add<size_t>("step-size", "number of partitions to transform at once "
+                                  "(default: unlimited)"));
     auto factory = command::factory{
       {"rebuild", rebuild_command},
     };
