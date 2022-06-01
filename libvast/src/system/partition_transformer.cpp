@@ -244,8 +244,10 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);
   self->state.synopsis_path_template = std::move(synopsis_path_template);
+  // For historic reasons, the `vast.max-partition-size` is stored as the
+  // `cardinality` in the value index options.
   self->state.partition_capacity = caf::get_or(
-    index_opts, "max-partition-size", defaults::system::max_partition_size);
+    index_opts, "cardinality", defaults::system::max_partition_size);
   self->state.index_opts = index_opts;
   self->state.accountant = std::move(accountant);
   self->state.idspace_distributor = std::move(idspace_distributor);
