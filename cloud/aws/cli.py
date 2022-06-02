@@ -189,6 +189,11 @@ def run_vast_task(c, cmd_override=None):
         taskDefinition=task_def,
         overrides=overrides,
     )
+    if len(task_res["failures"]) > 0:
+        print(
+            f'{AWS_REGION} might need to be "activated" by running an EC2 instance in it'
+        )
+        raise Exit(task_res["failures"], 1)
     task_arn = task_res["tasks"][0]["taskArn"].split("/")[-1]
     print(f"Started task {task_arn}")
 
