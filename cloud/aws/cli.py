@@ -97,13 +97,17 @@ def docker_login(c):
 
 
 @task
-def deploy_step(c, step, auto_approve=False):
-    """Deploy only one step of the stack"""
-    # Terragrunt is supposed to handle auto-init but it sometimes fails to detect module changes
+def init_step(c, step):
+    """Manually run terraform init on a specific step"""
     c.run(
         f"terragrunt init --terragrunt-working-dir step-{step}",
         env=tf_env(c),
     )
+
+
+@task
+def deploy_step(c, step, auto_approve=False):
+    """Deploy only one step of the stack"""
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir step-{step}",
         env=tf_env(c),
@@ -185,6 +189,11 @@ def run_vast_task(c, cmd_override=None):
         taskDefinition=task_def,
         overrides=overrides,
     )
+    if len(task_res["failures"]) > 0:
+        print(
+            f'{AWS_REGION} might need to be "activated" by running an EC2 instance in it'
+        )
+        raise Exit(task_res["failures"], 1)
     task_arn = task_res["tasks"][0]["taskArn"].split("/")[-1]
     print(f"Started task {task_arn}")
 

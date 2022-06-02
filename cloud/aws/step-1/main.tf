@@ -11,5 +11,5 @@ provider "aws" {
 }
 
 module "env" {
-  source = "./env"
+  source = "../modules/env"
 }

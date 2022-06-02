@@ -27,5 +27,5 @@ provider "aws" {
 provider "time" {}
 
 module "env" {
-  source = "./env"
+  source = "../modules/env"
 }
