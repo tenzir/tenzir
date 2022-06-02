@@ -15,12 +15,12 @@ FIleCopyrightText: (c) 2017 Tessil
 LicenseConcluded: MIT
 
 SPDXID: SPDXRef-File
-FileName: ./libvast/aux/indicators/include/indicators/termcolor.hpp
-FIleCopyrightText: (c) 2013, Ihor Kalnytskyi
+FileName: ./libvast/vendored/indicators/indicators.hpp
+FIleCopyrightText: (c) 2013 Ihor Kalnytskyi
 LicenseConcluded: BSD-3-Clause
 
 SPDXID: SPDXRef-File
-FileName: ./libvast/aux/indicators/*
+FileName: ./libvast/vendored/indicators/indicators.hpp
 FIleCopyrightText: (c) 2019 Pranav
 LicenseConcluded: MIT
 

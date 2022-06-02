@@ -1,6 +1,3 @@
 [submodule "libvast/aux/caf"]
 	path = libvast/aux/caf
 	url = https://github.com/tenzir/actor-framework
-[submodule "libvast/aux/indicators"]
-	path = libvast/aux/indicators
-	url = https://github.com/p-ranav/indicators

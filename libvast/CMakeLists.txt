@@ -47,7 +47,7 @@ endif ()
 # -- indicators ---------------------------------------------------------------
 
 configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/aux/indicators/single_include/indicators/indicators.hpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/vendored/indicators/indicators.hpp"
   "${CMAKE_CURRENT_BINARY_DIR}/include/vast/vendored/indicators/indicators.hpp"
   COPYONLY)
 
