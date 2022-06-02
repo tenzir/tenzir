@@ -165,9 +165,10 @@ public:
   [[nodiscard]] std::pair<std::unique_ptr<command>, command::factory>
   make_command() const override {
     auto rebuild = std::make_unique<command>(
-      "rebuild", "TODO",
+      "rebuild",
+      "rebuilds outdated partitions matching the (optional) query expression",
       command::opts("?vast.rebuild")
-        .add<bool>("all", "TODO")
+        .add<bool>("all", "consider all partitions")
         .add<std::string>("read,r", "path for reading the (optional) query")
         .add<size_t>("step-size", "number of partitions to transform at once "
                                   "(default: unlimited)"));
