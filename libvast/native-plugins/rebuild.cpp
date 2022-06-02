@@ -9,6 +9,8 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
+#include <vast/detail/fanout_counter.hpp>
+#include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
@@ -18,7 +20,7 @@
 #include <vast/system/read_query.hpp>
 #include <vast/system/spawn_or_connect_to_node.hpp>
 
-#include <caf/function_view.hpp>
+#include <caf/after.hpp>
 #include <caf/scoped_actor.hpp>
 #include <indicators/indicators.hpp>
 
@@ -26,9 +28,169 @@ namespace vast::plugins::rebuild {
 
 namespace {
 
+using client_actor = caf::typed_actor<caf::reacts_to<atom::rebuild, uint64_t>>;
+
+struct client_state {
+  client_actor::pointer self = {};
+  system::index_actor index = {};
+  std::vector<uuid> remaining_partitions = {};
+  std::unique_ptr<indicators::ProgressSpinner> indicator = {};
+
+  size_t num_total = {};
+  size_t num_transforming = {};
+  size_t num_transformed = {};
+  size_t num_results = {};
+
+  void create() {
+    VAST_ASSERT(!indicator);
+    indicators::show_console_cursor(false);
+    self->attach_functor([] {
+      indicators::show_console_cursor(true);
+    });
+    indicator = std::make_unique<indicators::ProgressSpinner>(
+      indicators::option::PostfixText{"Retrieving candidate partitions..."},
+      indicators::option::ShowPercentage{false},
+      indicators::option::ForegroundColor{indicators::Color::yellow},
+      indicators::option::SpinnerStates{
+        std::vector<std::string>{"⠈", "⠐", "⠠", "⢀", "⡀", "⠄", "⠂", "⠁"}},
+      indicators::option::FontStyles{
+        std::vector<indicators::FontStyle>{indicators::FontStyle::bold}},
+      indicators::option::MaxProgress{0});
+  }
+
+  void tick() const {
+    if (!indicator)
+      return;
+    indicator->set_option(indicators::option::MaxProgress{num_total});
+    indicator->set_progress(num_transformed);
+    indicator->set_option(indicators::option::PostfixText{
+      fmt::format("[{}/{}] Transforming {} partitions...", num_transformed,
+                  num_total, num_transforming)});
+    indicator->tick();
+  }
+
+  void finish() const {
+    VAST_ASSERT(indicator);
+    VAST_ASSERT(indicator->is_completed());
+    VAST_ASSERT(num_transformed == num_total);
+    indicator->set_option(
+      indicators::option::ForegroundColor{indicators::Color::green});
+    indicator->set_option(indicators::option::PrefixText{"✔"});
+    indicator->set_option(indicators::option::ShowSpinner{false});
+    indicator->set_option(indicators::option::ShowPercentage{false});
+    indicator->set_option(indicators::option::ShowRemainingTime{false});
+    indicator->set_option(indicators::option::PostfixText{
+      fmt::format("Done! Transformed {} into {} partitions.", num_transformed,
+                  num_results)});
+    indicator->mark_as_completed();
+  }
+};
+
+client_actor::behavior_type
+client(client_actor::stateful_pointer<client_state> self,
+       const system::catalog_actor& catalog, system::index_actor index,
+       expression expr, size_t step_size, size_t parallel, bool all) {
+  self->state.self = self;
+  self->state.index = std::move(index);
+  // Create the indicator spinner.
+  self->state.create();
+  // Get the partition IDs from the catalog.
+  const auto lookup_id = uuid::random();
+  const auto max_partition_version = all
+                                       ? defaults::latest_partition_version
+                                       : defaults::latest_partition_version - 1;
+  self
+    ->request(catalog, caf::infinite, atom::candidates_v, lookup_id, expr,
+              max_partition_version)
+    .then(
+      [self, parallel, step_size](system::catalog_result& result) {
+        VAST_ASSERT(parallel != 0);
+        self->state.num_total = result.partitions.size();
+        self->state.remaining_partitions = std::move(result.partitions);
+        self->state.tick();
+        auto counter = detail::make_fanout_counter(
+          parallel,
+          [self]() {
+            self->state.finish();
+            self->quit();
+          },
+          [self](caf::error error) {
+            self->quit(std::move(error));
+          });
+        const uint64_t adjusted_step_size
+          = std::min(step_size == 0 ? self->state.num_total : step_size,
+                     (self->state.num_total + parallel - 1) % parallel);
+        for (size_t i = 0; i < parallel; ++i) {
+          self
+            ->request(static_cast<client_actor>(self), caf::infinite,
+                      atom::rebuild_v, adjusted_step_size)
+            .then(
+              [counter]() {
+                counter->receive_success();
+              },
+              [counter](caf::error& error) {
+                counter->receive_error(std::move(error));
+              });
+        }
+      },
+      [self](caf::error& error) {
+        self->quit(std::move(error));
+      });
+  return {
+    [self](atom::rebuild, uint64_t step_size) -> caf::result<void> {
+      const uint64_t num_partitions
+        = std::min(step_size, detail::narrow_cast<uint64_t>(
+                                self->state.remaining_partitions.size()));
+      if (num_partitions == 0)
+        return {};
+      // Take the appropriate amount of partitions from the remaining
+      // partitions.
+      auto partitions = std::vector<uuid>{};
+      partitions.reserve(num_partitions);
+      const auto first_remaining_partition
+        = std::prev(self->state.remaining_partitions.end(),
+                    detail::narrow_cast<ptrdiff_t>(num_partitions));
+      std::move(first_remaining_partition,
+                self->state.remaining_partitions.end(),
+                std::back_inserter(partitions));
+      self->state.remaining_partitions.erase(
+        first_remaining_partition, self->state.remaining_partitions.end());
+      // Ask the index to rebuild the partitions.
+      auto rp = self->make_response_promise<void>();
+      self->state.num_transforming += num_partitions;
+      self->state.tick();
+      self
+        ->request(self->state.index, caf::infinite, atom::rebuild_v,
+                  std::move(partitions))
+        .then(
+          [self, rp, num_partitions,
+           step_size](std::vector<partition_info>& result) mutable {
+            self->state.num_transforming -= num_partitions;
+            self->state.num_transformed += num_partitions;
+            self->state.num_results += result.size();
+            self->state.tick();
+            rp.delegate(static_cast<client_actor>(self), atom::rebuild_v,
+                        step_size);
+          },
+          [self, num_partitions](caf::error& error) {
+            self->state.num_transforming -= num_partitions;
+            self->state.tick();
+            self->quit(std::move(error));
+          });
+      return rp;
+    },
+    caf::after(std::chrono::milliseconds{125}) >>
+      [self]() noexcept {
+        self->state.tick();
+      },
+  };
+}
+
 caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   // Read options.
   const auto all = caf::get_or(inv.options, "vast.rebuild.all", false);
+  const auto parallel
+    = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1});
   auto step_size
     = caf::get_or(inv.options, "vast.rebuild.step-size", size_t{0});
   // Create a scoped actor for interaction with the actor system.
@@ -48,7 +210,7 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
       self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
-  const auto& [catalog, index] = std::move(*components);
+  auto [catalog, index] = std::move(*components);
   // Parse the query expression, iff it exists.
   auto query = system::read_query(inv, "vast.rebuild.read",
                                   system::must_provide_query::no);
@@ -57,86 +219,25 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   auto expr = to<expression>(*query);
   if (!expr)
     return caf::make_message(std::move(expr.error()));
-  // Get the partition IDs from the catalog.
-  const auto lookup_id = uuid::random();
-  const auto max_partition_version = all
-                                       ? defaults::latest_partition_version
-                                       : defaults::latest_partition_version - 1;
-  VAST_DEBUG("requesting {} partitions from the catalog...\n",
-             all ? "all" : "outdated");
-  auto catalog_result = caf::expected<system::catalog_result>{caf::no_error};
-  self
-    ->request(catalog, caf::infinite, atom::candidates_v, lookup_id, *expr,
-              max_partition_version)
-    .receive(
-      [&](system::catalog_result& value) {
-        catalog_result = std::move(value);
-      },
-      [&](caf::error& err) {
-        catalog_result = std::move(err);
-      });
-  if (!catalog_result)
-    return caf::make_message(std::move(catalog_result.error()));
-  if (catalog_result->partitions.empty()) {
-    VAST_INFO("nothing to do\n");
-    return caf::none;
-  }
-  auto num_transformed = size_t{0};
-  auto num_results = size_t{0};
+  auto handle
+    = self->spawn<caf::linked>(client, std::move(catalog), std::move(index),
+                               std::move(*expr), step_size, parallel, all);
+  auto result = caf::error{};
+  self->do_receive([&](caf::down_msg& msg) {
+    VAST_ASSERT(msg.source == handle.address());
+    result = std::move(msg.reason);
+  });
+  if (result)
+    return caf::make_message(std::move(result));
+  return caf::none;
+#if 0
   auto status = [&] {
     return indicators::option::PostfixText{fmt::format(
       "{0:>{3}}/{1}/{2:>{3}} (done/total/new)", num_transformed,
       catalog_result->partitions.size(), num_results,
       fmt::formatted_size("{}", catalog_result->partitions.size()))};
   };
-  indicators::show_console_cursor(false);
-  auto bar = indicators::ProgressBar{
-    indicators::option::BarWidth{50},
-    indicators::option::Start{"["},
-    indicators::option::Fill{"■"},
-    indicators::option::Lead{"■"},
-    indicators::option::Remainder{" "},
-    indicators::option::End{"]"},
-    indicators::option::ForegroundColor{indicators::Color::white},
-    indicators::option::MaxProgress{catalog_result->partitions.size()},
-    indicators::option::ShowElapsedTime{step_size != 0},
-    indicators::option::ShowRemainingTime{step_size != 0},
-    status(),
-  };
-  bar.set_progress(0);
-  auto current_step_partitions = std::vector<uuid>{};
-  step_size = step_size == 0
-                ? catalog_result->partitions.size()
-                : std::min(catalog_result->partitions.size(), step_size);
-  current_step_partitions.reserve(step_size);
-  for (size_t i = 0; i < catalog_result->partitions.size();) {
-    current_step_partitions.clear();
-    while (i < catalog_result->partitions.size()
-           && current_step_partitions.size() < step_size)
-      current_step_partitions.push_back(catalog_result->partitions[i++]);
-    // Run identity transform on all partitions for the index.
-    auto partition_info
-      = caf::expected<std::vector<vast::partition_info>>{caf::no_error};
-    self
-      ->request(index, caf::infinite, atom::rebuild_v, current_step_partitions)
-      .receive(
-        [&](std::vector<vast::partition_info>& value) {
-          partition_info = std::move(value);
-        },
-        [&](caf::error& err) {
-          partition_info = std::move(err);
-        });
-    if (!partition_info)
-      return caf::make_message(std::move(partition_info.error()));
-    num_transformed += current_step_partitions.size();
-    num_results += partition_info->size();
-    // Print some statistics for the user.
-    bar.set_option(status());
-    bar.set_progress(num_transformed);
-  }
-  // Render a newline to make the progress bar not disappear at end of scope.
-  fmt::print("\n");
-  indicators::show_console_cursor(true);
+#endif
   return caf::none;
 }
 
@@ -171,7 +272,9 @@ public:
         .add<bool>("all", "consider all partitions")
         .add<std::string>("read,r", "path for reading the (optional) query")
         .add<size_t>("step-size", "number of partitions to transform at once "
-                                  "(default: unlimited)"));
+                                  "(default: unlimited)")
+        .add<size_t>("parallel,j", "number of partition sets to transform in "
+                                   "parallel (default: 1)"));
     auto factory = command::factory{
       {"rebuild", rebuild_command},
     };
