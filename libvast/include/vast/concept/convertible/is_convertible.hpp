@@ -9,12 +9,13 @@
 #pragma once
 
 #include <type_traits>
+#include <utility>
 
 namespace vast {
 
-template <class From, class To>
-concept convertible = requires(From from, To to) {
-  convert(from, to);
+template <class From, class To, class... Opts>
+concept convertible = requires(From from, To to, Opts&&... opts) {
+  convert(from, to, std::forward<Opts>(opts)...);
 };
 
 } // namespace vast
