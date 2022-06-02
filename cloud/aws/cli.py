@@ -158,17 +158,19 @@ def deploy_lambda_image(c):
 
 
 @task(autoprint=True)
-def get_vast_server(c):
+def get_vast_server(c, blocking=False):
     """Get the task id of the VAST server"""
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     family = terraform_output(c, "step-2", "vast_task_family")
     task_res = aws("ecs").list_tasks(family=family, cluster=cluster)
     nb_vast_tasks = len(task_res["taskArns"])
-    if nb_vast_tasks == 0:
+    if nb_vast_tasks == 0 and blocking:
+        time.sleep(1)
+        return get_vast_server(c, blocking)
+    if nb_vast_tasks == 0 and not blocking:
         raise Exit("No VAST server running", EXIT_CODE_VAST_SERVER_NOT_RUNNING)
     if nb_vast_tasks > 1:
         raise Exit(f"{nb_vast_tasks} VAST server running", 1)
-
     task_id = task_res["taskArns"][0].split("/")[-1]
     return task_id
 
@@ -179,27 +181,35 @@ def start_vast_server(c):
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     service_name = terraform_output(c, "step-2", "vast_service_name")
     aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=1)
+    task_id = get_vast_server(c, blocking=True)
+    print(f"Started task {task_id}")
+
+
+def stop_vast_task(c):
+    "Stop the current running VAST Fargate Task"
+    task_id = get_vast_server(c)
+    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
+    aws("ecs").stop_task(task=task_id, cluster=cluster)
+    return task_id
 
 
 @task
 def stop_vast_server(c):
-    """Stop the VAST server instance as an AWS Fargate task. Noop if a VAST server is not running"""
+    """Stop the VAST server instance"""
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     service_name = terraform_output(c, "step-2", "vast_service_name")
     aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=0)
+    task_id = stop_vast_task(c)
+    print(f"Stopped task {task_id}")
 
 
 @task
 def restart_vast_server(c):
-    """Stops the running VAST server Fargate task and start a new one"""
-    try:
-        task_id = get_vast_server(c)
-        cluster = terraform_output(c, "step-2", "fargate_cluster_name")
-        aws("ecs").stop_task(task=task_id, cluster=cluster)
-        print(f"Stopped task {task_id}")
-    except Exit as e:
-        if e.code != EXIT_CODE_VAST_SERVER_NOT_RUNNING:
-            raise e
+    """Stop the running VAST server Fargate task, the service starts a new one"""
+    task_id = stop_vast_task(c)
+    print(f"Stopped task {task_id}")
+    task_id = get_vast_server(c, blocking=True)
+    print(f"Started task {task_id}")
 
 
 @task(autoprint=True)
