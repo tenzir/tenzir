@@ -63,7 +63,7 @@ def tf_env(c: Context) -> dict:
 
 def auto_app_fmt(val: bool) -> str:
     if val:
-        return "--terragrunt-non-interactive"
+        return "--terragrunt-non-interactive --auto-approve"
     else:
         return ""
 
