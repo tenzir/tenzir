@@ -157,47 +157,6 @@ def deploy_lambda_image(c):
     )
 
 
-@task
-def run_vast_task(c, cmd_override=None):
-    """Start a new VAST server task on Fargate. DANGER: might lead to inconsistant state"""
-    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
-    subnet = terraform_output(c, "step-2", "ids_appliances_subnet_id")
-    sg = terraform_output(c, "step-2", "vast_security_group")
-    task_def = terraform_output(c, "step-2", "vast_task_definition")
-    overrides = {}
-    if cmd_override is not None:
-        overrides["containerOverrides"] = [
-            {
-                "name": "main",
-                "command": [cmd_override],
-            },
-        ]
-    task_res = aws("ecs").run_task(
-        cluster=cluster,
-        count=1,
-        enableECSManagedTags=True,
-        enableExecuteCommand=True,
-        propagateTags="TASK_DEFINITION",
-        launchType="FARGATE",
-        networkConfiguration={
-            "awsvpcConfiguration": {
-                "subnets": [subnet],
-                "securityGroups": [sg],
-                "assignPublicIp": "DISABLED",
-            }
-        },
-        taskDefinition=task_def,
-        overrides=overrides,
-    )
-    if len(task_res["failures"]) > 0:
-        print(
-            f'{AWS_REGION} might need to be "activated" by running an EC2 instance in it'
-        )
-        raise Exit(task_res["failures"], 1)
-    task_arn = task_res["tasks"][0]["taskArn"].split("/")[-1]
-    print(f"Started task {task_arn}")
-
-
 @task(autoprint=True)
 def get_vast_server(c):
     """Get the task id of the VAST server"""
@@ -214,33 +173,20 @@ def get_vast_server(c):
     return task_id
 
 
-@task(autoprint=True)
-def describe_vast_server(c):
-    """Get a complete description of the VAST server"""
-    task_id = get_vast_server(c)
+@task
+def start_vast_server(c):
+    """Start the VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
-    task_res = aws("ecs").describe_tasks(cluster=cluster, tasks=[task_id])
-    meta = {
-        "task_id": task_id,
-        "ip": task_res["tasks"][0]["containers"][0]["networkInterfaces"][0][
-            "privateIpv4Address"
-        ],
-        "runtime_id": task_res["tasks"][0]["containers"][0]["runtimeId"],
-    }
-    return meta
+    service_name = terraform_output(c, "step-2", "vast_service_name")
+    aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=1)
 
 
 @task
-def start_vast_server(c):
-    """Start a VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
-    try:
-        task_id = get_vast_server(c)
-        raise Exit(f"Server already running: {task_id}", 1)
-    except Exit as e:
-        if e.code == EXIT_CODE_VAST_SERVER_NOT_RUNNING:
-            run_vast_task(c)
-        else:
-            raise e
+def stop_vast_server(c):
+    """Stop the VAST server instance as an AWS Fargate task. Noop if a VAST server is not running"""
+    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
+    service_name = terraform_output(c, "step-2", "vast_service_name")
+    aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=0)
 
 
 @task
@@ -254,7 +200,6 @@ def restart_vast_server(c):
     except Exit as e:
         if e.code != EXIT_CODE_VAST_SERVER_NOT_RUNNING:
             raise e
-    start_vast_server(c)
 
 
 @task(autoprint=True)
@@ -266,25 +211,14 @@ def list_all_tasks(c):
     return task_ids
 
 
-@task
-def stop_all_tasks(c):
-    """Stop all running tasks on the ECS cluster created by Terraform"""
-    task_ids = list_all_tasks(c)
-    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
-    for task_id in task_ids:
-        aws("ecs").stop_task(task=task_id, cluster=cluster)
-        print(f"Stopped task {task_id}")
-
-
 @task(autoprint=True)
 def run_lambda(c, cmd):
     """Run ad-hoc VAST client commands from AWS Lambda"""
     lambda_name = terraform_output(c, "step-2", "vast_lambda_name")
-    task_ip = describe_vast_server(c)["ip"]
     cmd_b64 = base64.b64encode(cmd.encode()).decode()
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
-        Payload=json.dumps({"cmd": cmd_b64, "host": f"{task_ip}:42000"}).encode(),
+        Payload=json.dumps({"cmd": cmd_b64}).encode(),
         InvocationType="RequestResponse",
     )
     if "FunctionError" in lambda_res:
@@ -328,7 +262,7 @@ def destroy_step(c, step, auto_approve=False):
 def destroy(c, auto_approve=False):
     """Tear down the entire terraform stack"""
     try:
-        stop_all_tasks(c)
+        stop_vast_server(c)
     except Exception as e:
         print(str(e))
         print("Failed to stop tasks. Continuing destruction...")

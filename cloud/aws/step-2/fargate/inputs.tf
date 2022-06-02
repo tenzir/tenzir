@@ -15,7 +15,19 @@ variable "environment" {
 
 variable "vpc_id" {}
 
-variable "subnet_id" {}
+// 
+variable "subnet_id" {
+  description = "Resources will only accept traffic from within this subnet"
+}
+
+data "aws_subnet" "selected" {
+  id = var.subnet_id
+}
+
+// 
+variable "service_ip" {
+  description = "An IP that should belong to the subnet var.subnet_id"
+}
 
 variable "task_cpu" {}
 
@@ -28,8 +40,6 @@ variable "ecs_cluster_name" {}
 variable "ecs_task_execution_role_arn" {}
 
 variable "docker_image" {}
-
-variable "ingress_subnet_cidrs" {}
 
 variable "entrypoint" {
   type = string

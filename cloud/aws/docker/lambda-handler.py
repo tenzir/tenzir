@@ -39,13 +39,10 @@ def handler(event, context):
     # input parameters
     logging.debug("event: %s", event)
     src_cmd = base64.b64decode(event["cmd"]).decode("utf-8")
-    host = event["host"]
     logging.info("src_cmd: %s", src_cmd)
-    logging.info("host: %s", host)
 
     # execute the command as bash and return the std outputs
     parsed_cmd = ["/bin/bash", "-c", src_cmd]
-    os.environ["VAST_ENDPOINT"] = host
     process = subprocess.Popen(
         parsed_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
