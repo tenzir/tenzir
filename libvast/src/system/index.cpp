@@ -1276,6 +1276,17 @@ index(index_actor::stateful_pointer<index_state> self,
            std::vector<vast::uuid> old_partition_ids,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
+      for (const auto& partition : old_partition_ids) {
+        if (self->state.partitions_in_transformation.contains(partition)) {
+          VAST_DEBUG("{} delays transformation {} of {} partitions because at "
+                     "least partition {} is already being transformed",
+                     *self, transform->name(), old_partition_ids.size(),
+                     partition);
+          return caf::skip;
+        }
+      }
+      self->state.partitions_in_transformation.insert(old_partition_ids.begin(),
+                                                      old_partition_ids.end());
       VAST_DEBUG("{} applies a transform to partitions {}", *self,
                  old_partition_ids);
       if (!self->state.store_plugin)
@@ -1326,13 +1337,24 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_ASSERT(err == caf::none);
       self->state.schedule_lookups();
       auto rp = self->make_response_promise<std::vector<partition_info>>();
+      auto deliver
+        = [self, rp, old_partition_ids](
+            caf::expected<std::vector<partition_info>>&& result) mutable {
+            for (const auto& partition : old_partition_ids)
+              self->state.partitions_in_transformation.erase(partition);
+            if (result)
+              rp.deliver(std::move(*result));
+            else
+              rp.deliver(std::move(result.error()));
+          };
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
-          [self, rp, old_partition_ids,
+          [self, deliver, old_partition_ids,
            keep](std::vector<augmented_partition_synopsis>& apsv) mutable {
             std::vector<uuid> new_partition_ids;
+            new_partition_ids.reserve(apsv.size());
             for (auto const& aps : apsv)
               new_partition_ids.push_back(aps.uuid);
             auto result = std::vector<partition_info>{};
@@ -1361,23 +1383,23 @@ index(index_actor::stateful_pointer<index_state> self,
                   ->request(self->state.catalog, caf::infinite, atom::merge_v,
                             std::move(apsv))
                   .then(
-                    [self, rp, new_partition_ids,
+                    [self, deliver, new_partition_ids,
                      result = std::move(result)](atom::ok) mutable {
                       self->state.persisted_partitions.insert(
                         new_partition_ids.begin(), new_partition_ids.end());
-                      rp.deliver(std::move(result));
+                      deliver(std::move(result));
                     },
-                    [rp](const caf::error& e) mutable {
-                      rp.deliver(std::move(e));
+                    [deliver](const caf::error& e) mutable {
+                      deliver(std::move(e));
                     });
               else
-                rp.deliver(result);
+                deliver(result);
             } else { // keep == keep_original_partition::no
               self
                 ->request(self->state.catalog, caf::infinite, atom::replace_v,
                           old_partition_ids, std::move(apsv))
                 .then(
-                  [self, rp, old_partition_ids, new_partition_ids,
+                  [self, deliver, old_partition_ids, new_partition_ids,
                    result](atom::ok) mutable {
                     self->state.persisted_partitions.insert(
                       new_partition_ids.begin(), new_partition_ids.end());
@@ -1386,19 +1408,19 @@ index(index_actor::stateful_pointer<index_state> self,
                                 atom::erase_v, old_partition_ids)
                       .then(
                         [=](atom::done) mutable {
-                          rp.deliver(result);
+                          deliver(result);
                         },
                         [=](const caf::error& e) mutable {
-                          rp.deliver(e);
+                          deliver(e);
                         });
                   },
-                  [rp](const caf::error& e) mutable {
-                    rp.deliver(e);
+                  [deliver](const caf::error& e) mutable {
+                    deliver(e);
                   });
             }
           },
-          [rp](const caf::error& e) mutable {
-            rp.deliver(e);
+          [deliver](const caf::error& e) mutable {
+            deliver(e);
           });
       return rp;
     },
