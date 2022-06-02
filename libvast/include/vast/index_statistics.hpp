@@ -29,6 +29,11 @@ struct index_statistics {
   /// The number of events for a given layout.
   detail::heterogenous_string_hashmap<layout_statistics> layouts;
 
+  void merge_inplace(const index_statistics& other) {
+    for (auto const& [field, layout] : other.layouts)
+      layouts[field].count += layout.count;
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector& f, index_statistics& x) {
     return f(caf::meta::type_name("index_statistics"), x.layouts);

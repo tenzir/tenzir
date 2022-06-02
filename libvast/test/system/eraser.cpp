@@ -82,13 +82,14 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
       FAIL("no mock implementation available");
     },
     [=](atom::apply, transform_ptr, std::vector<uuid>,
-        system::keep_original_partition) -> partition_info {
-      return partition_info{
+        system::keep_original_partition) -> std::vector<partition_info> {
+      return std::vector<partition_info>{partition_info{
         .uuid = vast::uuid::nil(),
         .events = 0ull,
         .max_import_time = vast::time::min(),
-        .stats = {},
-      };
+        .type = vast::type{},
+        // .stats = {},
+      }};
     },
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
@@ -107,6 +108,9 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
       FAIL("no mock implementation available");
     },
     [=](atom::erase, uuid) -> atom::done {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::erase, std::vector<uuid>) -> atom::done {
       FAIL("no mock implementation available");
     },
   };
@@ -159,7 +163,7 @@ TEST(eraser on mock INDEX) {
          from(aut).to(index));
   // The mock index doesn't do any internal messaging but just
   // returns the result.
-  expect((vast::partition_info), from(index).to(aut));
+  expect((std::vector<vast::partition_info>), from(index).to(aut));
   expect((atom::ok), from(aut).to(aut));
 }
 

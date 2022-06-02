@@ -250,6 +250,9 @@ public:
   using builder_and_header = std::pair<system::store_builder_actor, chunk_ptr>;
 
   /// Create a store builder actor that accepts incoming table slices.
+  /// The store builder is required to keep a reference to itself alive
+  /// as long as its input stream is live, and persist itself and exit as
+  /// soon as the input stream terminates.
   /// @param accountant The actor handle of the accountant.
   /// @param fs The actor handle of a filesystem.
   /// @param id The partition id for which we want to create a store. Can
