@@ -25,7 +25,7 @@ namespace vast {
 /// @param from The instance to convert.
 /// @returns *from* converted to `T`.
 template <class To, class From, class... Opts>
-  requires(convertible<std::decay_t<From>, To>)
+  requires(convertible<std::decay_t<From>, To, Opts...>)
 auto to(From&& from, Opts&&... opts) -> caf::expected<To> {
   using return_type
     = decltype(convert(from, std::declval<To&>(), std::forward<Opts>(opts)...));
