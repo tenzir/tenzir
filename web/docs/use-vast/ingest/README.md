@@ -1,31 +1,26 @@
 # Ingest
 
-*Ingesting* data refers to the import pipeline that covers the following steps:
+Sending data to VAST (aka *ingesting*) involves spinning up a VAST client node
+that parses and ships the data to a running VAST server node:
 
-```mermaid
-flowchart LR
-  classDef stage fill:#00a4f1,stroke:none,color:#eee
+![Ingest process](/img/ingest.light.png#gh-light-mode-only)
+![Ingest process](/img/ingest.dark.png#gh-dark-mode-only)
 
-  subgraph Client
-    load(Load):::stage
-    parse(Parse):::stage
-    ship(Ship):::stage
-  end
+VAST first acquires data through a *carrier* that represents the data transport
+medium. This typically involves I/O and has the effect of slicing the data into
+chunks of bytes. Thereafter, the *format* determines how to parse the bytes into
+structured events. On the VAST server node, a partition builder (1) creates
+sketches for accelerating querying, and (2) creates a *store* instance by
+transforming the in-memory Arrow representation into an on-disk format, e.g.,
+Parquet.
 
-  subgraph Server
-    route(Route):::stage
-    index(Index):::stage
-    store(Store):::stage
-  end
+Loading and parsing take place in a separate VAST client node to facilitate
+horizontal scaling. The `import` command creates a client for precisly this
+task.
 
-  load --> parse --> ship --> route --> index --> store
-```
-
-Adding a new data source involves spinning up a VAST client node that loads,
-parses, and ships the normalized data to a VAST server node. The deployment
-mindset is that clients have *fate sharing* with the data source, hence reliance
-on process isolation to decoupling from a server node with higher availability
-guarantees.
+At the server node, there exists one partition builder per schema. After a
+partition builder has reached a maximum number of events or reached a timeout,
+it sends the partition to the catalog to register it.
 
 :::note Lakehouse Architecture
 VAST uses open standards for data in motion ([Arrow](https://arrow.apache.org))
@@ -39,11 +34,10 @@ VAST enables this naturally.
 [lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf
 :::
 
-Onboarding a new data source involves configuring a client that sends data to a
-VAST server, as illustrated below. This assumes that you [set up a VAST
-node](/docs/setup-vast) listening at `localhost:42000`.
-
-![Ingest process](/img/ingest.png)
+The following discussion assumes that you [set up a VAST server
+node](/docs/use-vast/run) listening at `localhost:42000`. If your remote VAST
+listens at a different endpoint, e.g., 1.2.3.4:43210, provide the option
+`--endpoint=1.2.3.4:43210` to `vast` or adapt your `vast.yaml` configuration.
 
 ## Choose an import format
 

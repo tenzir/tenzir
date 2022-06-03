@@ -49,7 +49,7 @@ This means the editing workflow looks as follows:
 1. Open <https://excalidraw.com> and click *Upload* in the top left
 2. Select the PNG or SVG you would like to edit
 3. Make your edits in Excalidraw
-4. Re-export the drawing and **check the box "Embed scene"**
+4. Re-export the drawing in size **2x** and **check the box "Embed scene"**
 
 The last part is crucial: If you don't check "Embed scene" it will no longer be
 able to recover the original diagram source.
