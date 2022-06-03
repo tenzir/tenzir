@@ -170,3 +170,38 @@ be rotated.
 VAST processes log messages in a dedicated thread, which by default buffers up
 to 1M messages for servers, and 100 for clients. The option
 `vast.log-queue-size` controls this setting.
+
+## Rebuilding
+
+The `rebuild` command allows for rebuilding outdated partitions to take
+advantage of improvements by newer VAST versions. This rebuilding process takes
+place in the VAST server in the background.
+
+This process merges partitions up to the configured `max-partition-size`, turns
+VAST v1.x's heterogeneous into VAST v2.x's homogenous partitions, migrates all
+data to the currently configured `store-backend`, and upgrades to the most
+recent internal batch encoding and indexes.
+
+This is how you run it:
+
+```bash
+vast rebuild [--all] [--step-size=<number>] [--parallel=<number] [<expression>]
+```
+-
+The `--all` flag makes the rebuild command consider _all_ partitions rather than
+only outdated ones. This is useful when you change configuration options and
+want to regenerate all partitions.
+
+The `--step-size` and `--parallel` options are performance tuning knobs. The
+step size controls the number of partitions to transform at once, and the
+parallelism level controls how many runs to start in parallel. Both default to 1
+in order to minimize resource usage. Setting the step size to a larger value
+allows for merging undersized partitions.
+
+Terminating the rebuild command will cause the VAST server to continue
+rebuilding all currently in-flight partitions.
+
+An optional expression allows for filtering partitions with an expression. The
+partition-level lookup may have false-positives. For example, to rebuild all
+outdated partitions containing `suricata.flow` events older than 2 weeks, run
+`vast rebuild '#type == "suricata.flow" && #import_time < 2 weeks ago'`.
