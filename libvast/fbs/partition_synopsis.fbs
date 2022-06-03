@@ -14,7 +14,9 @@ table LegacyPartitionSynopsis {
   /// The import time range of this partition.
   import_time_range: vast.fbs.interval;
 
-  /// The version number of this partition.
+  /// The version number of this partition. This number is used internally by
+  /// the `rebuild` command to determine whether a partitions needs to be
+  /// upgraded to a more recent version.
   version: ulong;
 }
 
