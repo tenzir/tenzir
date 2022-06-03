@@ -91,6 +91,8 @@ client_actor::behavior_type
 client(client_actor::stateful_pointer<client_state> self,
        const system::catalog_actor& catalog, system::index_actor index,
        expression expr, size_t step_size, size_t parallel, bool all) {
+  VAST_ASSERT(parallel != 0);
+  VAST_ASSERT(step_size != 0);
   self->state.self = self;
   self->state.index = std::move(index);
   // Get the partition IDs from the catalog.
@@ -105,7 +107,11 @@ client(client_actor::stateful_pointer<client_state> self,
               max_partition_version)
     .then(
       [self, parallel, step_size](system::catalog_result& result) {
-        VAST_ASSERT(parallel != 0);
+        if (result.partitions.empty()) {
+          fmt::print("no partitions need to be rebuilt\n", *self);
+          self->quit();
+          return;
+        }
         self->state.num_total = result.partitions.size();
         self->state.remaining_partitions = std::move(result.partitions);
         auto counter = detail::make_fanout_counter(
@@ -117,20 +123,16 @@ client(client_actor::stateful_pointer<client_state> self,
           [self](caf::error error) {
             self->quit(std::move(error));
           });
-        const auto max_step_size
-          = (self->state.num_total + parallel - 1) / parallel;
-        const auto adjusted_step_size
-          = step_size == 0 ? max_step_size : std::min(step_size, max_step_size);
         VAST_INFO("{} triggers a rebuild for up to {} out of {} partitions "
                   "per run with {} parallel runs",
-                  *self, adjusted_step_size, self->state.num_total, parallel);
+                  *self, step_size, self->state.num_total, parallel);
         // Create the indicator spinner.
         self->state.create();
         self->state.tick();
         for (size_t i = 0; i < parallel; ++i) {
           self
             ->request(static_cast<client_actor>(self), caf::infinite,
-                      atom::rebuild_v, adjusted_step_size)
+                      atom::rebuild_v, step_size)
             .then(
               [counter]() {
                 counter->receive_success();
@@ -198,8 +200,12 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   const auto all = caf::get_or(inv.options, "vast.rebuild.all", false);
   const auto parallel
     = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1});
-  auto step_size
-    = caf::get_or(inv.options, "vast.rebuild.step-size", size_t{0});
+  const auto step_size
+    = caf::get_or(inv.options, "vast.rebuild.step-size", size_t{1});
+  if (parallel == 0 || step_size == 0)
+    return caf::make_message(caf::make_error(ec::invalid_configuration,
+                                             "rebuild requires a non-zero step "
+                                             "size and parallel level"));
   // Create a scoped actor for interaction with the actor system.
   auto self = caf::scoped_actor{sys};
   // Connect to the node.
@@ -271,10 +277,10 @@ public:
       command::opts("?vast.rebuild")
         .add<bool>("all", "consider all partitions")
         .add<std::string>("read,r", "path for reading the (optional) query")
-        .add<size_t>("step-size", "number of partitions to transform at once "
-                                  "(default: unlimited)")
-        .add<size_t>("parallel,j", "number of partition sets to transform in "
-                                   "parallel (default: 1)"));
+        .add<size_t>("step-size,n", "number of partitions to transform per run "
+                                    "(default: 1)")
+        .add<size_t>("parallel,j", "number of runs to start in parallel "
+                                   "(default: 1)"));
     auto factory = command::factory{
       {"rebuild", rebuild_command},
     };
