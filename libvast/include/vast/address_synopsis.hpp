@@ -140,8 +140,8 @@ synopsis_ptr make_address_synopsis(vast::type type, const caf::settings& opts) {
   }
   bloom_filter_parameters params;
   params.n = *max_part_size;
-  params.p = caf::get_or(opts, "address-synopsis-fp-rate",
-                         defaults::system::address_synopsis_fp_rate);
+  params.p
+    = caf::get_or(opts, "address-synopsis-fp-rate", defaults::system::fp_rate);
   auto annotated_type = annotate_parameters(type, params);
   // Create either a a buffered_address_synopsis or a plain address synopsis
   // depending on the callers preference.

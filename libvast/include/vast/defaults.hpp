@@ -259,11 +259,8 @@ constexpr std::chrono::milliseconds shutdown_grace_period
 /// @relates shutdown_grace_period
 constexpr std::chrono::seconds shutdown_kill_timeout = std::chrono::minutes{1};
 
-/// The allowed false positive rate for an address_synopsis.
-constexpr double address_synopsis_fp_rate = 0.01;
-
-/// The allowed false positive rate for a string_synopsis.
-constexpr double string_synopsis_fp_rate = 0.01;
+/// The allowed false positive rate for a synopsis.
+constexpr double fp_rate = 0.01;
 
 } // namespace system
 

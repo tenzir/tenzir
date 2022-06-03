@@ -71,8 +71,7 @@ TEST(custom index_config) {
   auto address_parameters = vast::parse_parameters(address_synopsis->type());
   REQUIRE(string_parameters);
   REQUIRE(url_parameters);
-  CHECK_EQUAL(string_parameters->p,
-              vast::defaults::system::string_synopsis_fp_rate);
+  CHECK_EQUAL(string_parameters->p, vast::defaults::system::fp_rate);
   CHECK_EQUAL(address_parameters->p, 0.05);
 }
 

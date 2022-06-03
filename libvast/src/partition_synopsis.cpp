@@ -83,9 +83,7 @@ double get_type_fprate(const index_config& config, const type& type) {
         return fprate;
     }
   }
-  if (type == address_type{})
-    return defaults::system::address_synopsis_fp_rate;
-  return defaults::system::string_synopsis_fp_rate;
+  return config.default_fp_rate;
 }
 
 void partition_synopsis::add(const table_slice& slice,
