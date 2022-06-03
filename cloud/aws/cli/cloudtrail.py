@@ -15,8 +15,20 @@ TFDIR = "./terraform"
 @task
 def deploy(c, auto_approve=False):
     """Deploy the cloudtrail datasource"""
+    core.init_step(c, 3)
     c.run(
         f"terragrunt apply {core.auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/step-3",
+        env=core.conf(VALIDATORS),
+        pty=True,
+    )
+
+
+@task
+def destroy(c, auto_approve=False):
+    """Remove the cloudtrail datasource"""
+    core.init_step(c, 3)
+    c.run(
+        f"terragrunt destroy {core.auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/step-3",
         env=core.conf(VALIDATORS),
         pty=True,
     )

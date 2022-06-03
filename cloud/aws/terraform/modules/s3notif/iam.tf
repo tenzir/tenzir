@@ -1,5 +1,5 @@
 resource "aws_iam_role" "event_bus_invoke_remote_event_bus" {
-  name               = "${module.env.module_name}-cross-event-bus-${local.id}-${module.env.stage}-${var.region}"
+  name               = "${module.env.module_name}-s3-notif-${local.id}"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
