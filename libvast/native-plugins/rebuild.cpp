@@ -239,15 +239,6 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   if (result)
     return caf::make_message(std::move(result));
   return caf::none;
-#if 0
-  auto status = [&] {
-    return indicators::option::PostfixText{fmt::format(
-      "{0:>{3}}/{1}/{2:>{3}} (done/total/new)", num_transformed,
-      catalog_result->partitions.size(), num_results,
-      fmt::formatted_size("{}", catalog_result->partitions.size()))};
-  };
-#endif
-  return caf::none;
 }
 
 /// An example plugin.
