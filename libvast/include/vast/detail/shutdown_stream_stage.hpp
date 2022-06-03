@@ -25,6 +25,9 @@ void shutdown_stream_stage(caf::stream_stage_ptr<In, DownstreamManager>& stage) 
   // First we call `shutdown()` to notify all upstream connections
   // that this stage is closed and will not accept any new messages.
   stage->shutdown();
+  // Then we run the remaining input batches through the drivers
+  // processing callback.
+  // stage->push();
   // Then, we copy all data from the global input buffer to each
   // path-specific output buffer.
   stage->out().fan_out_flush();
