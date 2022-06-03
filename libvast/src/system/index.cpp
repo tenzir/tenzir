@@ -1276,15 +1276,13 @@ index(index_actor::stateful_pointer<index_state> self,
            std::vector<vast::uuid> old_partition_ids,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
-      for (const auto& partition : old_partition_ids) {
-        if (self->state.partitions_in_transformation.contains(partition)) {
-          VAST_DEBUG("{} delays transformation {} of {} partitions because at "
-                     "least partition {} is already being transformed",
-                     *self, transform->name(), old_partition_ids.size(),
-                     partition);
-          return caf::skip;
-        }
-      }
+      for (const auto& partition : old_partition_ids)
+        if (self->state.partitions_in_transformation.contains(partition))
+          return caf::make_error(
+            ec::lookup_error, fmt::format("{} refuses to apply transformation "
+                                          "'{}' partition {} because it is "
+                                          "currently being transformed",
+                                          *self, transform->name(), partition));
       self->state.partitions_in_transformation.insert(old_partition_ids.begin(),
                                                       old_partition_ids.end());
       VAST_DEBUG("{} applies a transform to partitions {}", *self,

@@ -226,14 +226,16 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   auto expr = to<expression>(*query);
   if (!expr)
     return caf::make_message(std::move(expr.error()));
-  auto handle
-    = self->spawn<caf::linked>(client, std::move(catalog), std::move(index),
-                               std::move(*expr), step_size, parallel, all);
+  auto handle = self->spawn<caf::monitored>(
+    client, std::move(catalog), std::move(index), std::move(*expr), step_size,
+    parallel, all);
   auto result = caf::error{};
+  auto done = false;
   self->do_receive([&](caf::down_msg& msg) {
     VAST_ASSERT(msg.source == handle.address());
     result = std::move(msg.reason);
-  });
+    done = true;
+  }).until(done);
   if (result)
     return caf::make_message(std::move(result));
   return caf::none;
