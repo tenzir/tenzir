@@ -479,6 +479,7 @@ void index_state::decomission_active_partition(const type& layout) {
   auto active_partition = active_partitions.find(layout);
   VAST_ASSERT(active_partition != active_partitions.end());
   auto id = active_partition->second.id;
+  VAST_DEBUG("{} decomissions active-partition-{}", *self, id);
   auto actor = std::exchange(active_partition->second.actor, {});
   unpersisted[id] = actor;
   // Send buffered batches and remove active partition from the stream.
@@ -919,6 +920,7 @@ index(index_actor::stateful_pointer<index_state> self,
                msg.reason);
     // Flush buffered batches and end stream.
     detail::shutdown_stream_stage(self->state.stage);
+    VAST_DEBUG("{} stream stage shutdown", *self);
     // Bring down active partition.
     for (auto& [layout, partinfo] : self->state.active_partitions) {
       if (partinfo.actor)
@@ -943,6 +945,7 @@ index(index_actor::stateful_pointer<index_state> self,
     // Terminate partition actors.
     VAST_DEBUG("{} brings down {} partitions", *self, partitions.size());
     shutdown<policy::parallel>(self, std::move(partitions));
+    VAST_DEBUG("{} brought down {} partitions", *self, partitions.size());
   });
   // Set up a down handler for monitored exporter actors.
   self->set_down_handler([=](const caf::down_msg& msg) {

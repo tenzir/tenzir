@@ -30,6 +30,7 @@
 #include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>
 
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
@@ -170,6 +171,17 @@ int main(int argc, char** argv) {
     result->apply({[&](caf::error& err) {
       run_error = std::move(err);
     }});
+  VAST_INFO("VAST finished with {}", run_error);
+  do {
+    auto& reg = sys.registry();
+    VAST_INFO(
+      "{} caf actors remaining; actors: {}; named actors: {}; counters: {}",
+      reg.running(), reg.actors(), reg.named_actors(), reg.get_counters());
+    if (reg.running() == 0)
+      break;
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(5s);
+  } while (true);
   if (run_error) {
     system::render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
