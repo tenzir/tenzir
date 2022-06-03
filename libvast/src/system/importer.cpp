@@ -57,6 +57,12 @@ public:
       VAST_ASSERT(slice.rows() <= static_cast<size_t>(state.available_ids()));
       auto rows = slice.rows();
       events += rows;
+      auto name = slice.layout().name();
+      if (auto it = state.schema_counters.find(name);
+          it != state.schema_counters.end())
+        it.value() += rows;
+      else
+        state.schema_counters.emplace(std::string{name}, rows);
       slice.offset(state.next_id(rows));
       slice.import_time(time::clock::now());
       out.push(std::move(slice));
@@ -226,9 +232,18 @@ void importer_state::send_report() {
   using namespace std::string_literals;
   auto elapsed = std::chrono::duration_cast<duration>(now - last_report);
   auto node_throughput = measurement{elapsed, measurement_.events};
+  auto num_schemas_seen = schema_counters.size();
+  std::vector<performance_sample> samples = {};
+  samples.reserve(num_schemas_seen);
+  samples.push_back(performance_sample{"importer"s, measurement_});
+  samples.push_back(performance_sample{"node_throughput"s, node_throughput});
+  for (const auto& [name, count] : schema_counters)
+    samples.push_back(performance_sample{
+      "ingest", measurement{elapsed, count}, {{"schema", name}}});
+  schema_counters.clear();
   auto r = performance_report{
-    .data
-    = {{{"importer"s, measurement_}, {"node_throughput"s, node_throughput}}}};
+    .data = std::move(samples),
+  };
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
   auto beat = [&](const auto& sample) {
     if (sample.value.events > 0) {

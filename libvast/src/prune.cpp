@@ -70,11 +70,11 @@ struct pruner {
     return result;
   }
 
-  detail::heterogenous_string_hashset const& unprunable_fields_;
+  detail::heterogeneous_string_hashset const& unprunable_fields_;
 };
 
 // Runs the `pruner` and `hoister` until the input is unchanged.
-expression prune(expression e, const detail::heterogenous_string_hashset& hs) {
+expression prune(expression e, const detail::heterogeneous_string_hashset& hs) {
   expression result = caf::visit(pruner{hs}, e);
   while (result != e) {
     std::swap(result, e);

@@ -139,7 +139,7 @@ struct active_partition_state {
   std::optional<std::filesystem::path> synopsis_path = {};
 
   /// Maps qualified fields to indexer actors.
-  //  TODO: Should we use the tsl map here for heterogenous key lookup?
+  //  TODO: Should we use the tsl map here for heterogeneous key lookup?
   detail::stable_map<qualified_record_field, active_indexer_actor> indexers
     = {};
 

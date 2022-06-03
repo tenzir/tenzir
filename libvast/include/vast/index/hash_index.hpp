@@ -354,7 +354,7 @@ private:
   std::vector<digest_type> digests_;
   std::unordered_set<key, key_hasher> unique_digests_;
 
-  // We use a robin_map here because it supports heterogenous lookup, which
+  // We use a robin_map here because it supports heterogeneous lookup, which
   // has a major performance impact for `seeds_`, see ch13760.
   using seeds_map = tsl::robin_map<data, size_t>;
   static_assert(concepts::transparent<seeds_map::key_equal>);

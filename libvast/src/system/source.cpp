@@ -95,7 +95,7 @@ void source_state::send_report() {
     caf::unsafe_send_as(self, accountant, std::move(status));
   // Send the source-specific performance metrics to the accountant.
   auto r = performance_report{{{std::string{name}, metrics}}};
-  for (const auto& [key, m] : r.data) {
+  for (const auto& [key, m, _] : r.data) {
     if (m.events > 0) {
       if (auto rate = m.rate_per_sec(); std::isfinite(rate))
         VAST_INFO("{} source produced {} events at a rate of {} events/sec in "

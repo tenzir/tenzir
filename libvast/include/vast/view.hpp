@@ -552,7 +552,7 @@ struct hash<vast::data> : hash<vast::data_view> {};
 
 template <>
 struct equal_to<vast::data_view> {
-  using is_transparent = void; // Opt-in to heterogenous lookups.
+  using is_transparent = void; // Opt-in to heterogeneous lookups.
 
   template <class Lhs, class Rhs>
   constexpr bool operator()(const Lhs& lhs, const Rhs& rhs) const
