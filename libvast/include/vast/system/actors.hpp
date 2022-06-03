@@ -280,7 +280,8 @@ using index_actor = typed_actor_fwd<
   caf::replies_to<atom::apply, transform_ptr, std::vector<uuid>,
                   keep_original_partition>::with<std::vector<partition_info>>,
   // A shorthand to the above handler that runs an identity transformation on
-  // the provided partitions without keeping the originals.
+  // the provided partitions without keeping the originals. This is a necessity,
+  // because transform_ptr's cannot be send across the wire.
   caf::replies_to<atom::rebuild,
                   std::vector<uuid>>::with<std::vector<partition_info>>,
   // Makes the identity of the importer known to the index.
