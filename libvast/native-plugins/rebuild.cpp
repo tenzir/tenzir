@@ -31,6 +31,8 @@ namespace {
 using client_actor = caf::typed_actor<caf::reacts_to<atom::rebuild, uint64_t>>;
 
 struct client_state {
+  static constexpr auto name = "rebuild-client";
+
   client_actor::pointer self = {};
   system::index_actor index = {};
   std::vector<uuid> remaining_partitions = {};
@@ -48,13 +50,10 @@ struct client_state {
       indicators::show_console_cursor(true);
     });
     indicator = std::make_unique<indicators::ProgressSpinner>(
-      indicators::option::PostfixText{"Retrieving candidate partitions..."},
       indicators::option::ShowPercentage{false},
       indicators::option::ForegroundColor{indicators::Color::yellow},
       indicators::option::SpinnerStates{
         std::vector<std::string>{"⠈", "⠐", "⠠", "⢀", "⡀", "⠄", "⠂", "⠁"}},
-      indicators::option::FontStyles{
-        std::vector<indicators::FontStyle>{indicators::FontStyle::bold}},
       indicators::option::MaxProgress{0});
   }
 
@@ -64,8 +63,8 @@ struct client_state {
     indicator->set_option(indicators::option::MaxProgress{num_total});
     indicator->set_progress(num_transformed);
     indicator->set_option(indicators::option::PostfixText{
-      fmt::format("[{}/{}] Transforming {} partitions...", num_transformed,
-                  num_total, num_transforming)});
+      fmt::format("[{}/{}] Transforming {}/{} partitions...", num_transformed,
+                  num_total, num_transforming, num_total - num_transformed)});
     indicator->tick();
   }
 
@@ -79,6 +78,8 @@ struct client_state {
     indicator->set_option(indicators::option::ShowSpinner{false});
     indicator->set_option(indicators::option::ShowPercentage{false});
     indicator->set_option(indicators::option::ShowRemainingTime{false});
+    indicator->set_option(indicators::option::FontStyles{
+      std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
     indicator->set_option(indicators::option::PostfixText{
       fmt::format("Done! Transformed {} into {} partitions.", num_transformed,
                   num_results)});
@@ -92,13 +93,13 @@ client(client_actor::stateful_pointer<client_state> self,
        expression expr, size_t step_size, size_t parallel, bool all) {
   self->state.self = self;
   self->state.index = std::move(index);
-  // Create the indicator spinner.
-  self->state.create();
   // Get the partition IDs from the catalog.
   const auto lookup_id = uuid::random();
   const auto max_partition_version = all
                                        ? defaults::latest_partition_version
                                        : defaults::latest_partition_version - 1;
+  VAST_INFO("{} requests {} partitions matching the expression {}", *self,
+            all ? "all" : "outdated", expr);
   self
     ->request(catalog, caf::infinite, atom::candidates_v, lookup_id, expr,
               max_partition_version)
@@ -107,7 +108,6 @@ client(client_actor::stateful_pointer<client_state> self,
         VAST_ASSERT(parallel != 0);
         self->state.num_total = result.partitions.size();
         self->state.remaining_partitions = std::move(result.partitions);
-        self->state.tick();
         auto counter = detail::make_fanout_counter(
           parallel,
           [self]() {
@@ -117,9 +117,16 @@ client(client_actor::stateful_pointer<client_state> self,
           [self](caf::error error) {
             self->quit(std::move(error));
           });
-        const uint64_t adjusted_step_size
-          = std::min(step_size == 0 ? self->state.num_total : step_size,
-                     (self->state.num_total + parallel - 1) % parallel);
+        const auto max_step_size
+          = (self->state.num_total + parallel - 1) / parallel;
+        const auto adjusted_step_size
+          = step_size == 0 ? max_step_size : std::min(step_size, max_step_size);
+        VAST_INFO("{} triggers a rebuild for up to {} out of {} partitions "
+                  "per run with {} parallel runs",
+                  *self, adjusted_step_size, self->state.num_total, parallel);
+        // Create the indicator spinner.
+        self->state.create();
+        self->state.tick();
         for (size_t i = 0; i < parallel; ++i) {
           self
             ->request(static_cast<client_actor>(self), caf::infinite,
