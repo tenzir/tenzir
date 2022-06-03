@@ -114,7 +114,7 @@ matching target configuration exists.
 ```yaml
 vast:
   index:
-    # Optional: Override the default for type-level synopses
+    # Set the default false-positive rate for type-level synopses
     default-fp-rate: 0.001
     rules:
       - targets:
