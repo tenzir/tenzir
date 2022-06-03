@@ -27,9 +27,9 @@ EOF
 }
 
 resource "aws_cloudwatch_event_target" "lambda_target" {
-  arn  = var.vast_lambda_arn
+  arn            = var.vast_lambda_arn
   event_bus_name = aws_cloudwatch_event_bus.local_obj_event_bus.name
-  rule = aws_cloudwatch_event_rule.local_s3_object_events_rule.name
+  rule           = aws_cloudwatch_event_rule.local_s3_object_events_rule.name
 }
 
 resource "aws_lambda_permission" "eventbridge_invoke_lambda" {
@@ -41,8 +41,8 @@ resource "aws_lambda_permission" "eventbridge_invoke_lambda" {
 }
 
 module "source_trail" {
-  source = "./trail"
-  bucket_name = var.cloudtrail_bucket_name
-  region = var.cloudtrail_bucket_region
+  source         = "./trail"
+  bucket_name    = var.cloudtrail_bucket_name
+  region         = var.cloudtrail_bucket_region
   target_bus_arn = aws_cloudwatch_event_bus.local_obj_event_bus.arn
 }

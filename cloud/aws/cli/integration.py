@@ -1,4 +1,4 @@
-from invoke import task
+from invoke import task, Context
 import time
 
 
@@ -24,7 +24,7 @@ def vast_start_restart(c):
     time.sleep(100)
 
 
-def vast_import_suricata(c):
+def vast_import_suricata(c: Context):
     """Import Suricata data from the provided URL"""
     url = "https://raw.githubusercontent.com/tenzir/vast/v1.0.0/vast/integration/data/suricata/eve.json"
     c.run(
@@ -32,7 +32,7 @@ def vast_import_suricata(c):
     )
 
 
-def vast_count(c):
+def vast_count(c: Context):
     """Run `vast count` and parse the result"""
     res = c.run('./vast-cloud run-lambda -c "vast count"', hide="stdout")
     return int(res.stdout.strip())

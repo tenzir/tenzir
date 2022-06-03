@@ -1,5 +1,6 @@
 from invoke import task, Context, Exit, Program, Collection
 import integration
+import cloudtrail
 import boto3
 import botocore.client
 import dynaconf
@@ -9,23 +10,33 @@ import json
 import sys
 import io
 
-conf = dynaconf.Dynaconf(
-    load_dotenv=True,
-    envvar_prefix=False,
-    validators=[
-        dynaconf.Validator("VAST_AWS_REGION", must_exist=True),
-        dynaconf.Validator("VAST_CIDR", must_exist=True),
-        dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True),
-        dynaconf.Validator("VAST_LAMBDA_IMAGE"),  # usually resolved lazily
-        dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
-        dynaconf.Validator("VAST_SERVER_STORAGE_TYPE", default="EFS"),
-    ],
-)
+VALIDATORS = [
+    dynaconf.Validator("VAST_AWS_REGION", must_exist=True),
+    dynaconf.Validator("VAST_CIDR", must_exist=True),
+    dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True),
+    dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
+    dynaconf.Validator("VAST_SERVER_STORAGE_TYPE", default="EFS"),
+]
+
+
+def conf(validators=[]) -> dict:
+    """Load config starting with VAST_ from both env variables and .env file"""
+    dc = dynaconf.Dynaconf(
+        load_dotenv=True,
+        envvar_prefix=False,
+        validators=validators,
+    )
+    return {k: v for (k, v) in dc.as_dict().items() if k.startswith("VAST_")}
+
 
 ##  Aliases
 
-AWS_REGION = conf.VAST_AWS_REGION
+AWS_REGION = conf()["VAST_AWS_REGION"]
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
+
+CLOUDROOT = "."
+TFDIR = f"{CLOUDROOT}/terraform"
+DOCKERDIR = f"{CLOUDROOT}/docker"
 
 
 ## Helper functions
@@ -38,26 +49,25 @@ def aws(service):
 
 
 def terraform_output(c: Context, step, key) -> str:
-    return c.run(f"terraform -chdir={step} output --raw {key}", hide="out").stdout
+    return c.run(
+        f"terraform -chdir={TFDIR}/{step} output --raw {key}", hide="out"
+    ).stdout
 
 
 def VAST_VERSION(c: Context):
     """If VAST_VERSION not defined, use latest release"""
-    if "VAST_VERSION" in conf:
-        return conf.VAST_VERSION
+    if "VAST_VERSION" in conf():
+        return conf()["VAST_VERSION"]
     version = c.run(
         "git describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*'", hide="out"
     ).stdout.strip()
     return version
 
 
-def tf_env(c: Context) -> dict:
+def env(c: Context) -> dict:
     return {
-        "TF_VAR_vast_version": VAST_VERSION(c),
-        "TF_VAR_vast_server_storage_type": conf.VAST_SERVER_STORAGE_TYPE,
-        "TF_VAR_peered_vpc_id": conf.VAST_PEERED_VPC_ID,
-        "TF_VAR_vast_cidr": conf.VAST_CIDR,
-        "TF_VAR_region_name": AWS_REGION,
+        **conf(VALIDATORS),
+        "VAST_VERSION": VAST_VERSION(c),
     }
 
 
@@ -101,7 +111,7 @@ def init_step(c, step):
     """Manually run terraform init on a specific step"""
     c.run(
         f"terragrunt init --terragrunt-working-dir step-{step}",
-        env=tf_env(c),
+        env=env(c),
     )
 
 
@@ -109,8 +119,8 @@ def init_step(c, step):
 def deploy_step(c, step, auto_approve=False):
     """Deploy only one step of the stack"""
     c.run(
-        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir step-{step}",
-        env=tf_env(c),
+        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/step-{step}",
+        env=env(c),
         pty=True,
     )
 
@@ -118,18 +128,14 @@ def deploy_step(c, step, auto_approve=False):
 @task
 def deploy(c, auto_approve=False):
     """One liner build and deploy of the stack to AWS"""
-    c.run(
-        f"terragrunt run-all apply {auto_app_fmt(auto_approve)}",
-        env=tf_env(c),
-        pty=True,
-    )
+    deploy_step(c, 1, auto_approve)
+    deploy_step(c, 2, auto_approve)
 
 
+# This command is used by the Terragrunt hook
 @task(autoprint=True)
 def current_lambda_image(c, repo_arn):
-    """Get the current Lambda image URI. In case of failure, returns the error message."""
-    if "VAST_LAMBDA_IMAGE" in conf:
-        return conf.VAST_LAMBDA_IMAGE
+    """Get the current Lambda image URI. In case of failure, returns the error message instead of the URI."""
     try:
         tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
     except Exception as e:
@@ -147,7 +153,7 @@ def deploy_lambda_image(c):
     image_url = terraform_output(c, "step-1", "vast_lambda_repository_url")
     image_tag = int(time.time())
     c.run(
-        f"docker build --build-arg VAST_VERSION={VAST_VERSION(c)} -f docker/lambda.Dockerfile -t {image_url}:{image_tag} ./docker"
+        f"docker build --build-arg VAST_VERSION={VAST_VERSION(c)} -f {DOCKERDIR}/lambda.Dockerfile -t {image_url}:{image_tag} {DOCKERDIR}"
     )
     c.run(f"docker push {image_url}:{image_tag}")
     image_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
@@ -260,10 +266,10 @@ def execute_command(c, cmd="/bin/bash"):
 
 @task
 def destroy_step(c, step, auto_approve=False):
-    """Destroy resources of the step 1 only. Step 2 should be destroyed first"""
+    """Destroy resources of the specified step. Resources depending on it should be cleaned up first."""
     c.run(
-        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir step-{step}",
-        env=tf_env(c),
+        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/step-{step}",
+        env=env(c),
         pty=True,
     )
 
@@ -277,8 +283,8 @@ def destroy(c, auto_approve=False):
         print(str(e))
         print("Failed to stop tasks. Continuing destruction...")
     c.run(
-        f"terragrunt run-all destroy {auto_app_fmt(auto_approve)}",
-        env=tf_env(c),
+        f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}",
+        env=env(c),
         pty=True,
     )
 
@@ -292,10 +298,16 @@ def unhandled_exception(type, value, traceback):
 
 if __name__ == "__main__":
     sys.excepthook = unhandled_exception
+
     namespace = Collection.from_module(sys.modules[__name__])
+
     integ = Collection.from_module(integration)
     integ.configure({"run": {"env": {"VASTCLOUD_NOTTY": "1"}}})
     namespace.add_collection(integ)
+
+    ct = Collection.from_module(cloudtrail)
+    namespace.add_collection(ct)
+
     program = Program(
         binary="./vast-cloud",
         namespace=namespace,
