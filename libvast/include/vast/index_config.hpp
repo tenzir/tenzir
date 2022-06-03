@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/defaults.hpp"
 #include "vast/type.hpp"
 
 #include <string>
@@ -21,7 +22,7 @@ struct index_config {
 
   struct rule {
     std::vector<std::string> targets = {};
-    double fp_rate = 0.01;
+    double fp_rate = defaults::system::fp_rate;
 
     template <class Inspector>
     friend auto inspect(Inspector& f, rule& x) {
@@ -38,15 +39,17 @@ struct index_config {
   };
 
   std::vector<rule> rules = {};
+  double default_fp_rate = defaults::system::fp_rate;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, index_config& x) {
-    return f(x.rules);
+    return f(x.rules, x.default_fp_rate);
   }
 
   static inline const record_type& layout() noexcept {
     static auto result = record_type{
       {"rules", list_type{rule::layout()}},
+      {"default-fp-rate", real_type{}},
     };
     return result;
   }

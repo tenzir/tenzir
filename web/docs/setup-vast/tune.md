@@ -114,6 +114,8 @@ matching target configuration exists.
 ```yaml
 vast:
   index:
+    # Set the default false-positive rate for type-level synopses
+    default-fp-rate: 0.001
     rules:
       - targets:
           # field synopses: need to specify fully qualified field name
