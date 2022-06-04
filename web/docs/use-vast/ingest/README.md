@@ -1,7 +1,7 @@
 # Ingest
 
-Sending data to VAST (aka *ingesting*) involves spinning up a VAST client node
-that parses and ships the data to a running VAST server node:
+Sending data to VAST (aka *ingesting*) involves spinning up a VAST client
+that parses and ships the data to a [VAST server](/docs/use-vast/run):
 
 ![Ingest process](/img/ingest.light.png#gh-light-mode-only)
 ![Ingest process](/img/ingest.dark.png#gh-dark-mode-only)
@@ -9,16 +9,16 @@ that parses and ships the data to a running VAST server node:
 VAST first acquires data through a *carrier* that represents the data transport
 medium. This typically involves I/O and has the effect of slicing the data into
 chunks of bytes. Thereafter, the *format* determines how to parse the bytes into
-structured events. On the VAST server node, a partition builder (1) creates
+structured events. On the VAST server, a partition builder (1) creates
 sketches for accelerating querying, and (2) creates a *store* instance by
 transforming the in-memory Arrow representation into an on-disk format, e.g.,
 Parquet.
 
-Loading and parsing take place in a separate VAST client node to facilitate
+Loading and parsing take place in a separate VAST client to facilitate
 horizontal scaling. The `import` command creates a client for precisly this
 task.
 
-At the server node, there exists one partition builder per schema. After a
+At the server, there exists one partition builder per schema. After a
 partition builder has reached a maximum number of events or reached a timeout,
 it sends the partition to the catalog to register it.
 
@@ -34,10 +34,8 @@ VAST enables this naturally.
 [lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf
 :::
 
-The following discussion assumes that you [set up a VAST server
-node](/docs/use-vast/run) listening at `localhost:42000`. If your remote VAST
-listens at a different endpoint, e.g., 1.2.3.4:43210, provide the option
-`--endpoint=1.2.3.4:43210` to `vast` or adapt your `vast.yaml` configuration.
+The following discussion assumes that you [set up a VAST
+server](/docs/use-vast/run) listening at `localhost:42000`.
 
 ## Choose an import format
 
