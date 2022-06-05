@@ -35,3 +35,11 @@ message("${PARQUET_PATH}")
 find_package(Parquet CONFIG REQUIRED PATHS "${PARQUET_PATH}/cmake/arrow"
              NO_DEFAULT_PATH)
 target_link_libraries(parquet-store PRIVATE "${PARQUET_LIBRARY}")
+
+if (VAST_ENABLE_STATIC_EXECUTABLE)
+  # Work around missing dependency links in the Parquet target
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  find_package(Libevent)
+  find_package(Thrift REQUIRED)
+  target_link_libraries(parquet-store PRIVATE thrift::thrift libevent::event)
+endif ()
