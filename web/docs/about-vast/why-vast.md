@@ -4,16 +4,28 @@ sidebar_position: 0
 
 # Why VAST?
 
-VAST fills a gap when you need a highly embeddable database for security
-data that powers detection and response use cases. The following graphic
-illustrates the placement of VAST in the spectrum of *Observability* ⇔
-*Security* and *Open Platform* ⇔ *Data Silo*.
+VAST fills a gap when you need a highly embeddable data node for security
+telemetry data that powers detection and response use cases:
 
-![VAST Spectra](/img/ecosystem.png)
+![Spectra](/img/spectra.light.png#gh-light-mode-only)
+![Spectra](/img/spectra.dark.png#gh-dark-mode-only)
 
-There exist a lot of database systems out there, and you may ask yourself the
-question: why not use that other system instead? To help answer this question,
-we offer a brief guidance below when other systems might be a better fit.
+You can come from the route of generic analytics engines that lack
+domain-specific features, but then need to bring together data engineers and
+security architects to build a custom system. You can also come from the
+traditional SIEM route that lack the embeddability to be placed at the edge
+close to high-volume data sources, or that are shielded behind an opaque cloud
+service with narrow API.
+
+The raison d'être of VAST is that you can enjoy an open, embeddable security
+analytics engine that serves as a foundation for a sustainable detection and
+reponse architecture. We dread vendor lock-in and therefore only use open
+standards (e.g., Apache Arrow, Parquet, STIX) so that you remain in full
+control of your telemetry data and security content.
+
+There exist a lot of other systems out there, and you may ask yourself the
+question: why not use *X* instead? To help answer this question, we offer a
+brief guidance below when other systems might be a better fit.
 
 ## VAST vs. SIEMs
 
