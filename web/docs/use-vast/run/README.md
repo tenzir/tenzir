@@ -6,7 +6,7 @@ can operate in two modes:
 1. **Server**: runs continuously and listens on a network socket accepting
    connections.
 2. **Client**: connects to the server to (1) submit a request and receive a
-   response, (2) publish data, or (3) subscribe to data. 
+   response, (2) publish data, or (3) subscribe to data.
 
 :::info VAST Node
 A server contains a special component called the *node* that acts as container

@@ -1,3 +1,7 @@
+---
+sidebar_position: 0
+---
+
 # Why VAST?
 
 VAST fills a gap when you need a highly embeddable database for security
