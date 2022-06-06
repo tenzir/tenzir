@@ -69,12 +69,11 @@ deep in the network, or at the edge.
 
 ## VAST vs. Data Warehouses
 
-Data warehouses,
-[OLAP](https://en.wikipedia.org/wiki/Online_analytical_processing) engines, and
-time series databases seem like an appealing choice for immutable structured
-data. They offer sufficient ingest bandwidth, perform well on group-by and
-aggregation queries, come frequently with advanced operations like joins, and
-often scale out well.
+Data warehouses and
+[OLAP](https://en.wikipedia.org/wiki/Online_analytical_processing) engines
+seem like an appealing choice for immutable structured data. They offer
+sufficient ingest bandwidth, perform well on group-by and aggregation queries,
+come frequently with advanced operations like joins, and often scale out well.
 
 However, as a cornerstone for security operations, they fall short in supporting
 the following relevant use cases where VAST has the edge:
