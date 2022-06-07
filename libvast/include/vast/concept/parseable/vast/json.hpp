@@ -32,7 +32,7 @@ static auto const json_count
 static auto const json_number
   = (parsers::hex_prefix >> parsers::hex64 ->* [](uint64_t x) {
         return detail::narrow_cast<vast::real>(x); })
-  | parsers::real_opt_dot;
+  | parsers::real;
 // clang-format on
 
 } // namespace parsers

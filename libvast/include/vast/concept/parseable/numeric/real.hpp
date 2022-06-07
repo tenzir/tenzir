@@ -56,8 +56,6 @@ namespace parsers {
 
 auto const fp = float_parser{};
 auto const real = double_parser{};
-auto const fp_opt_dot = float_parser{};
-auto const real_opt_dot = double_parser{};
 
 } // namespace parsers
 } // namespace vast
