@@ -203,7 +203,7 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   const auto parallel
     = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1});
   const auto step_size
-    = caf::get_or(inv.options, "vast.rebuild.step-size", size_t{1});
+    = caf::get_or(inv.options, "vast.rebuild.step-size", size_t{4});
   if (parallel == 0 || step_size == 0)
     return caf::make_message(caf::make_error(ec::invalid_configuration,
                                              "rebuild requires a non-zero step "
@@ -282,7 +282,7 @@ public:
         .add<bool>("all", "consider all partitions")
         .add<std::string>("read,r", "path for reading the (optional) query")
         .add<size_t>("step-size,n", "number of partitions to transform per run "
-                                    "(default: 1)")
+                                    "(default: 4)")
         .add<size_t>("parallel,j", "number of runs to start in parallel "
                                    "(default: 1)"));
     auto factory = command::factory{
