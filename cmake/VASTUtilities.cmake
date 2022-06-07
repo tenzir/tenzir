@@ -88,6 +88,8 @@ macro (dependency_summary name what category)
     set(location "Not found")
   endif ()
   list(APPEND VAST_DEPENDENCY_SUMMARY " * ${name}: ${location}")
+  list(SORT VAST_DEPENDENCY_SUMMARY)
+  list(REMOVE_DUPLICATES VAST_DEPENDENCY_SUMMARY)
   set_property(GLOBAL PROPERTY "VAST_DEPENDENCY_SUMMARY_${category}_PROPERTY"
                                "${VAST_DEPENDENCY_SUMMARY}")
 endmacro ()
