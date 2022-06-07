@@ -152,10 +152,31 @@ def current_lambda_image(c, repo_arn):
 def deploy_lambda_image(c):
     """Build and push the lambda image, fails if step 1 is not deployed"""
     image_url = terraform_output(c, "step-1", "vast_lambda_repository_url")
+    repo_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
+    # get the digest of the current image
+    current_image = current_lambda_image(c, repo_arn)
+    try:
+        c.run(f"docker pull {current_image}")
+        old_digest = c.run(
+            f"docker inspect --format='{{{{index .RepoDigests 0}}}}' {current_image}",
+            hide="out",
+        ).stdout
+    except:
+        old_digest = "current-image-not-found"
+    # build the image and get the new digest
     image_tag = int(time.time())
     c.run(
         f"docker build --build-arg VAST_VERSION={VAST_VERSION(c)} -f {DOCKERDIR}/lambda.Dockerfile -t {image_url}:{image_tag} {DOCKERDIR}"
     )
+    new_digest = c.run(
+        f"docker inspect --format='{{{{index .RepoDigests 0}}}}' {image_url}:{image_tag}",
+        hide="out",
+    ).stdout
+    # compare old an new digests
+    if old_digest == new_digest:
+        print("Docker image didn't change, skipping push")
+        return
+    # if a change occured, push and tag the new image as current
     c.run(f"docker push {image_url}:{image_tag}")
     image_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
     aws("ecr").tag_resource(
