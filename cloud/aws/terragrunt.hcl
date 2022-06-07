@@ -15,7 +15,7 @@ remote_state {
 
 locals {
   versions_file = "${path_relative_from_include()}/versions.hcl"
-  versions = read_terragrunt_config(local.versions_file)
+  versions      = read_terragrunt_config(local.versions_file)
 }
 
 generate = local.versions.generate

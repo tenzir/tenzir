@@ -511,7 +511,7 @@ TEST(exceeded partition size) {
   auto store_id = "segment-store"s;
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
-  index_opts["max-partition-size"] = 4;
+  index_opts["cardinality"] = 4;
   auto transform = std::make_shared<vast::transform>(
     "partition_transform"s, std::vector<std::string>{});
   auto identity_step = vast::make_transform_step("identity", vast::record{});

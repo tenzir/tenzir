@@ -1,3 +1,3 @@
 add_subdirectory(dscat)
 add_subdirectory(lsvast)
-add_subdirectory(mdx-regenerate)
+add_subdirectory(vast-regenerate)

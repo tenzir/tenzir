@@ -4,7 +4,7 @@ locals {
       cpu       = var.task_cpu
       image     = var.docker_image
       memory    = var.task_memory
-      name      = var.name
+      name      = "main"
       essential = true
       mountPoints = [
         {
@@ -13,8 +13,8 @@ locals {
           readOnly      = false
         }
       ]
-      entrypoint = ["/bin/sh", "-c", "${var.entrypoint}"]
-      command    = []
+      entrypoint = ["/bin/sh", "-c"]
+      command    = ["${var.entrypoint}"]
       portMappings = [
         {
           containerPort = var.port

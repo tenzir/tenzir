@@ -527,7 +527,7 @@ type type::infer(const data& value) noexcept {
       // List types cannot be inferred from empty lists.
       if (list.empty())
         return type{list_type{type{}}};
-      // Technically lists can contain heterogenous data, but for optimization
+      // Technically lists can contain heterogeneous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
       auto value_type = infer(*list.begin());
       VAST_ASSERT(std::all_of(list.begin() + 1, list.end(),
@@ -542,7 +542,7 @@ type type::infer(const data& value) noexcept {
       // Map types cannot be inferred from empty maps.
       if (map.empty())
         return type{map_type{type{}, type{}}};
-      // Technically maps can contain heterogenous data, but for optimization
+      // Technically maps can contain heterogeneous data, but for optimization
       // purposes we only check the first element when assertions are disabled.
       auto key_type = infer(map.begin()->first);
       auto value_type = infer(map.begin()->second);
@@ -1424,7 +1424,7 @@ bool type_check(const type& x, const data& y) noexcept {
         return type_check(vt, d);
       };
       if (check(*it)) {
-        // Technically lists can contain heterogenous data,
+        // Technically lists can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
         VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
@@ -1443,7 +1443,7 @@ bool type_check(const type& x, const data& y) noexcept {
         return type_check(kt, d.first) && type_check(vt, d.second);
       };
       if (check(*it)) {
-        // Technically maps can contain heterogenous data,
+        // Technically maps can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
         VAST_ASSERT(std::all_of(it + 1, u.end(), check), //

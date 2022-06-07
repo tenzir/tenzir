@@ -12,15 +12,20 @@ on: workflow_dispatch
 # - The VAST deployment creates a new VPC. Its ip range should not overlap an
 #   existing one in your account. Configure its CIDR in the repository secrets
 #   as VAST_CIDR (for example 172.30.0.0/16).
-# - The CI run uses Terraform Cloud to store the state. Within your Terraform
-#   Cloud account, you need to create two workspaces with the suffixes -step-1
-#   and -step-2. For each workspace, you also need to configure AWS credentials
-#   with sufficient priviledges to deploy the stack. Once this is done,
-#   configure the organization name and the common workspace prefix in the
-#   Github repository secrets as TF_ORGANIZATION and TF_WORKSPACE_PREFIX (the
-#   workspaces in Terraform Cloud should be $TF_WORKSPACE_PREFIX-step-1 and
-#   $TF_WORKSPACE_PREFIX-step-2).
-#   - You also need the API key from Terraform Cloud and set it in TF_API_TOKEN.
+# - The CI run uses Terraform Cloud to store the state. You need to properly
+#   configure workspaces for each Terragrunt step:
+#   - In Github Action secrets, set TF_ORGANIZATION with your Terraform Cloud
+#     organizations name, TF_API_TOKEN with a Terraform Cloud API key (for
+#     instance a user token) and choose a string to set as the
+#     TF_WORKSPACE_PREFIX (e.g "github-action")
+#   - Create a workspace in Terraform Cloud for each step. Their name should be
+#     the concatenation of the chosen prefix and the "-step-1", "-step-2"...
+#     suffixes (e.g "github-action-step-1", "github-action-step-2"...).
+#   - For each of these workspaces:
+#     - configure AWS credentials with sufficient priviledges to deploy the
+#       stack. You can use a Variable Set to make this simpler.
+#     - set the "Terraform Working Directory" field in the general settings to
+#       the path of the environement (cloud/aws/step-x)
 
 # Notes:
 # - If this workflow is executed multiple times at in parallel, the Terraform
@@ -106,41 +111,19 @@ jobs:
 
       - name: Start and restart VAST server
         run: |
-          echo "Run start-vast-server"
-          ./vast-cloud start-vast-server
-
-          echo "Run start-vast-server again"
-          ./vast-cloud start-vast-server 2> /dev/null \
-            && { echo "Starting server again should fail"; false; } \
-            || true
-          [[ $(./vast-cloud get-vast-server | wc -w) = "1" ]] \
-            || { echo "Only one task should be started"; false; }
-
-          echo "Run restart-vast-server"
-          ./vast-cloud restart-vast-server
-          [[ $(./vast-cloud get-vast-server | wc -w) = "1" ]] \
-            || { echo "Only one task should be started"; false; }
-
-          echo "The task needs a bit of time to boot, sleeping for a while..."
-          sleep 100
+          ./vast-cloud integration.vast-start-restart
 
       - name: Test db empty from Lambda
         run: |
-          result=$(./vast-cloud run-lambda -c "vast count")
-          echo "Expected vast count 0, got $result"
-          [[ $result = "0" ]]
+          ./vast-cloud integration.vast-count --count 0
 
       - name: Import data
         run: |
-          DATA_URL=https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/vast/integration/data/suricata/eve.json
-          ./vast-cloud execute-command \
-            -c "wget -O - -o /dev/null $DATA_URL | vast import suricata"
+          ./vast-cloud integration.vast-import-suricata
 
       - name: Test db not empty from Lambda
         run: |
-          result=$(./vast-cloud run-lambda -c "vast count")
-          echo "Expected vast count 7, got $result"
-          [[ $result = "7" ]]
+          ./vast-cloud integration.vast-count --count 7
 
       - name: Destroy
         continue-on-error: true

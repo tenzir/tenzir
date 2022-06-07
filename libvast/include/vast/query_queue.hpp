@@ -53,6 +53,7 @@ public:
     uuid partition;
     uint64_t priority = 0;
     std::vector<uuid> queries;
+    bool erased = false;
 
     friend auto operator<=>(const entry& lhs, const entry& rhs) {
       return lhs.priority <=> rhs.priority;
@@ -93,6 +94,9 @@ public:
 
   /// Removes a query from the queue entirely.
   [[nodiscard]] caf::error remove_query(const uuid& qid);
+
+  /// Removes a partition from the queue.
+  bool mark_partition_erased(const uuid& pid);
 
   /// Retrieves the next partition to be scheduled and the related queries and
   /// increments the scheduled counters for the latter.

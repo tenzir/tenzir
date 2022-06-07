@@ -10,7 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/detail/heterogenous_string_hash.hpp"
+#include "vast/detail/heterogeneous_string_hash.hpp"
 
 namespace vast {
 
@@ -27,7 +27,7 @@ struct layout_statistics {
 /// Accumulates statistics about indexed data.
 struct index_statistics {
   /// The number of events for a given layout.
-  detail::heterogenous_string_hashmap<layout_statistics> layouts;
+  detail::heterogeneous_string_hashmap<layout_statistics> layouts;
 
   void merge_inplace(const index_statistics& other) {
     for (auto const& [field, layout] : other.layouts)

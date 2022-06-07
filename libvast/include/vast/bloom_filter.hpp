@@ -102,6 +102,10 @@ public:
     return hasher_.size();
   }
 
+  [[nodiscard]] const bitvector<uint64_t>& data() const {
+    return bits_;
+  }
+
   // -- concepts --------------------------------------------------------------
 
   friend bool operator==(const bloom_filter& x, const bloom_filter& y) {

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <vast/fbs/synopsis.hpp>
+
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -18,6 +20,7 @@ enum class Kind {
   Unknown,
   DatabaseDir,
   Partition,
+  PartitionSynopsis,
   Index,
   Segment,
 };
@@ -44,11 +47,17 @@ struct segment_options {
   bool print_contents = true;
 };
 
+// Options specific to printing synopses.
+struct synopsis_options {
+  bool bloom_raw = false;
+};
+
 // Global options.
 struct options {
   formatting_options format = {};
   partition_options partition = {};
   segment_options segment = {};
+  synopsis_options synopsis = {};
 };
 
 struct indentation;
@@ -56,11 +65,18 @@ struct indentation;
 using printer
   = void (*)(const std::filesystem::path&, indentation&, const options&);
 
+// Top-level printers.
 void print_unknown(const std::filesystem::path&, indentation&, const options&);
 void print_vast_db(const std::filesystem::path&, indentation&, const options&);
 void print_partition(const std::filesystem::path&, indentation&,
                      const options&);
+void print_partition_synopsis(const std::filesystem::path&, indentation&,
+                              const options&);
 void print_index(const std::filesystem::path&, indentation&, const options&);
 void print_segment(const std::filesystem::path&, indentation&, const options&);
+
+// Helpers for internal flatbuffer structs.
+void print_synopsis(const vast::fbs::synopsis::LegacySynopsis* synopsis,
+                    indentation&, const options&);
 
 } // namespace lsvast

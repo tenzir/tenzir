@@ -33,7 +33,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 FIXTURE_SCOPE(query_pruning_tests, fixture)
 
 TEST(simple query pruning) {
-  auto unprunable_types = vast::detail::heterogenous_string_hashset{};
+  auto unprunable_types = vast::detail::heterogeneous_string_hashset{};
   // foo == "foo" || bar == "foo"
   auto expression1 = vast::disjunction{
     vast::predicate{vast::field_extractor{"foo"},

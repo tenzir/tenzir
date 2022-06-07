@@ -215,7 +215,7 @@ bool type_check(const type& x, const data_view& y) {
         return type_check(vt, d);
       };
       if (check(*it)) {
-        // Technically lists can contain heterogenous data,
+        // Technically lists can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
         VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
@@ -234,7 +234,7 @@ bool type_check(const type& x, const data_view& y) {
         return type_check(kt, d.first) && type_check(vt, d.second);
       };
       if (check(*it)) {
-        // Technically maps can contain heterogenous data,
+        // Technically maps can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
         VAST_ASSERT(std::all_of(it + 1, u.end(), check), //
