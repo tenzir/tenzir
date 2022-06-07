@@ -19,6 +19,7 @@
 , libunwind
 , xxHash
 , zeek-broker
+, indicators
 , python3
 , jq
 , tcpdump
@@ -67,6 +68,7 @@ stdenv.mkDerivation rec {
     robin-map
     libunwind
     zeek-broker
+    indicators
   ];
   propagatedBuildInputs = [
     arrow-cpp

@@ -22,7 +22,9 @@
 
 #include <caf/after.hpp>
 #include <caf/scoped_actor.hpp>
-#include <indicators/indicators.hpp>
+#include <indicators/cursor_control.hpp>
+#include <indicators/progress_spinner.hpp>
+#include <indicators/setting.hpp>
 
 namespace vast::plugins::rebuild {
 
