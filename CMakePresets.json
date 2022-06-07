@@ -27,7 +27,7 @@
       }
     },
     {
-      "name": "nix-redeb",
+      "name": "nix-relwithdebinfo",
       "hidden": true,
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
@@ -63,12 +63,12 @@
       }
     },
     {
-      "name": "nix-clang-redeb",
-      "inherits": ["nix-base", "nix-redeb", "clang-base"],
+      "name": "nix-clang-relwithdebinfo",
+      "inherits": ["nix-base", "nix-relwithdebinfo", "clang-base"],
       "displayName": "Nix Clang RelWithDebInfo Config",
-      "binaryDir": "${sourceDir}/build/clang/redeb",
+      "binaryDir": "${sourceDir}/build/clang/relwithdebinfo",
       "cacheVariables": {
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/redeb"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/relwithdebinfo"
       }
     },
     {
@@ -101,12 +101,12 @@
       }
     },
     {
-      "name": "nix-gcc-redeb",
-      "inherits": ["nix-base", "nix-redeb", "gcc-base"],
+      "name": "nix-gcc-relwithdebinfo",
+      "inherits": ["nix-base", "nix-relwithdebinfo", "gcc-base"],
       "displayName": "Nix GCC RelWithDebInfo Config",
-      "binaryDir": "${sourceDir}/build/gcc/redeb",
+      "binaryDir": "${sourceDir}/build/gcc/relwithdebinfo",
       "cacheVariables": {
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/redeb"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/relwithdebinfo"
       },
       "environment": {
         "LDFLAGS": "-fuse-ld=lld"
@@ -151,13 +151,13 @@
       }
     },
     {
-      "name": "nix-gcc-static-redeb",
+      "name": "nix-gcc-static-relwithdebinfo",
       "inherits": ["nix-static"],
       "displayName": "Nix GCC Static RelWithDebInfo Config",
-      "binaryDir": "${sourceDir}/build/gcc-static/redeb",
+      "binaryDir": "${sourceDir}/build/gcc-static/relwithdebinfo",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc-static/redeb"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc-static/relwithdebinfo"
       }
     },
     {
@@ -178,8 +178,8 @@
       "configurePreset": "nix-clang-debug"
     },
     {
-      "name": "nix-clang-redeb",
-      "configurePreset": "nix-clang-redeb"
+      "name": "nix-clang-relwithdebinfo",
+      "configurePreset": "nix-clang-relwithdebinfo"
     },
     {
       "name": "nix-clang-release",
@@ -190,8 +190,8 @@
       "configurePreset": "nix-gcc-debug"
     },
     {
-      "name": "nix-gcc-redeb",
-      "configurePreset": "nix-gcc-redeb"
+      "name": "nix-gcc-relwithdebinfo",
+      "configurePreset": "nix-gcc-relwithdebinfo"
     },
     {
       "name": "nix-gcc-release",
@@ -202,8 +202,8 @@
       "configurePreset": "nix-gcc-static-debug"
     },
     {
-      "name": "nix-gcc-static-redeb",
-      "configurePreset": "nix-gcc-static-redeb"
+      "name": "nix-gcc-static-relwithdebinfo",
+      "configurePreset": "nix-gcc-static-relwithdebinfo"
     },
     {
       "name": "nix-gcc-static-release",
