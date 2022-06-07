@@ -8,6 +8,7 @@
 /install/
 /nix/build/
 /compile_commands.json
+/CMakeUserPresets.json
 .mypy_cache/
 __pycache__/
 .clangd/
