@@ -173,37 +173,51 @@ VAST processes log messages in a dedicated thread, which by default buffers up
 to 1M messages for servers, and 100 for clients. The option
 `vast.log-queue-size` controls this setting.
 
-## Rebuilding
+## Rebuild Partitions
 
-The `rebuild` command allows for rebuilding outdated partitions to take
-advantage of improvements by newer VAST versions. This rebuilding process takes
-place in the VAST server in the background.
+The `rebuild` command re-ingests events from existing partitions and replaces
+them with new partitions. This makes it possible to upgrade persistent state to
+a newer version, or recreate persistent state after changing configuration
+parameters, e.g., switching from the Feather to the Parquet store backend.
+Rebuilding partitions also recreates their sketches. The process takes place
+asynchronously in the background.
 
-This process merges partitions up to the configured `max-partition-size`, turns
-VAST v1.x's heterogeneous into VAST v2.x's homogenous partitions, migrates all
-data to the currently configured `store-backend`, and upgrades to the most
-recent internal batch encoding and indexes.
+:::info Upgrade from VAST v1.x partitions
+You can use the `rebuild` command to upgrade your VAST v1.x partitions to v2.x,
+which yields better compression and have a streamlined representation. We
+recommend this to be able to use newer features that do not work with v1.x
+partitions.
+:::
 
 This is how you run it:
 
 ```bash
-vast rebuild [--all] [--step-size=<number>] [--parallel=<number] [<expression>]
+vast rebuild [--all] [--step-size=<number>] [--parallel=<number>] [<expression>]
 ```
--
-The `--all` flag makes the rebuild command consider _all_ partitions rather than
-only outdated ones. This is useful when you change configuration options and
-want to regenerate all partitions.
+
+The on-disk format of VAST's partitions is versioned. By default, the `rebuild`
+command only considers partitions whose version number is not the newest
+version. The `--all` flag makes the command instead consider _all_ partitions
+rather than only outdated ones. This is useful when you change configuration
+options and want to regenerate all partitions.
 
 The `--step-size` and `--parallel` options are performance tuning knobs. The
 step size controls the number of partitions to transform at once, and the
-parallelism level controls how many runs to start in parallel. Both default to 1
-in order to minimize resource usage. Setting the step size to a larger value
-allows for merging undersized partitions.
+parallelism level controls how many runs to start in parallel. The step size
+defaults to 4, and the parallel level to 1.
 
-Terminating the rebuild command will cause the VAST server to continue
-rebuilding all currently in-flight partitions.
+The step size is a critical parameter for merging undersized partitions. For
+optimal results we recommend a larger step size. The memory usage requirements
+for rebuilding partitions in the VAST server scales linearly with both the step
+size and the parallel level.
 
-An optional expression allows for filtering partitions with an expression. The
-partition-level lookup may have false-positives. For example, to rebuild all
-outdated partitions containing `suricata.flow` events older than 2 weeks, run
-`vast rebuild '#type == "suricata.flow" && #import_time < 2 weeks ago'`.
+An optional expression allows for restricting the set of partitions to rebuild.
+VAST performs a catalog lookup with the expression to identify the set of
+candidate partitions. This process may yield false positives, as with regular
+queries, which in this case causes potentially unaffected partitions to undergo
+a rebuild process. For example, to rebuild outdated partitions containing
+`suricata.flow` events older than 2 weeks, run the following command:
+
+```bash
+vast rebuild '#type == "suricata.flow" && #import_time < 2 weeks ago'
+```
