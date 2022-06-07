@@ -96,6 +96,13 @@ catalog_result catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
   auto pruned = prune(expr, unprunable_fields);
   auto result = lookup_impl(pruned);
+  // Sort partitions by their max import time, returning the most recent
+  // partitions first.
+  std::sort(result.begin(), result.end(),
+            [&](const uuid& lhs, const uuid& rhs) {
+              return synopses.find(lhs)->second->max_import_time
+                     > synopses.find(rhs)->second->max_import_time;
+            });
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
   VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",

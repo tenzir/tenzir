@@ -400,8 +400,9 @@ TEST(catalog messages) {
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   expr_response.receive(
-    [this](const catalog_result& candidates) {
+    [this](catalog_result& candidates) {
       auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
+      std::sort(candidates.partitions.begin(), candidates.partitions.end());
       CHECK_EQUAL(candidates.partitions, expected);
     },
     [](const caf::error& e) {
@@ -415,8 +416,9 @@ TEST(catalog messages) {
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   ids_response.receive(
-    [this](const catalog_result& candidates) {
+    [this](catalog_result& candidates) {
       auto expected = std::vector<uuid>{ids[0], ids[1]};
+      std::sort(candidates.partitions.begin(), candidates.partitions.end());
       CHECK_EQUAL(candidates.partitions, expected);
     },
     [](const caf::error& e) {
