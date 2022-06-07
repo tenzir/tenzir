@@ -1092,11 +1092,12 @@ index(index_actor::stateful_pointer<index_state> self,
           auto& midx_candidates = midx_result.partitions;
           VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
                      *self, candidates, midx_candidates);
-          candidates.insert(candidates.end(), midx_candidates.begin(),
-                            midx_candidates.end());
-          std::sort(candidates.begin(), candidates.end());
-          candidates.erase(std::unique(candidates.begin(), candidates.end()),
-                           candidates.end());
+          for (const auto initial_candidates = candidates;
+               const auto& midx_candidate : midx_candidates)
+            if (std::find(initial_candidates.begin(), initial_candidates.end(),
+                          midx_candidate)
+                == initial_candidates.end())
+              candidates.push_back(midx_candidate);
           // Allows the client to query further results after initial taste.
           auto query_id = query.id;
           auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
