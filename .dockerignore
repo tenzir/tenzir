@@ -8,4 +8,5 @@ pyvast/
 .clangd/
 build/
 compile_commands.json
-**/aux/
+/libvast/aux/caf
+/libvast/aux/robin-map
