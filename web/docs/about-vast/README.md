@@ -10,7 +10,7 @@ discussion](https://github.com/tenzir/vast/discussions).
 
 VAST is an embeddable telemetry engine for structured event data, purpose-built
 for use cases in security operations. VAST is an acronym and stands for
-*Visibility Across Space and Time*.
+**Visibility Across Space and Time**.
 
 Consider VAST if you want to:
 
