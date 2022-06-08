@@ -183,7 +183,7 @@ def start_vast_server(c):
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     service_name = terraform_output(c, "step-2", "vast_service_name")
     aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=1)
-    task_id = get_vast_server(c, blocking=True)
+    task_id = get_vast_server(c, max_wait_time_sec=120)
     print(f"Started task {task_id}")
 
 
@@ -210,7 +210,7 @@ def restart_vast_server(c):
     """Stop the running VAST server Fargate task, the service starts a new one"""
     task_id = stop_vast_task(c)
     print(f"Stopped task {task_id}")
-    task_id = get_vast_server(c, blocking=True)
+    task_id = get_vast_server(c, max_wait_time_sec=120)
     print(f"Started task {task_id}")
 
 
