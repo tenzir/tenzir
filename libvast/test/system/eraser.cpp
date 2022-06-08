@@ -87,7 +87,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
         .uuid = vast::uuid::nil(),
         .events = 0ull,
         .max_import_time = vast::time::min(),
-        .type = vast::type{},
+        .schema = vast::type{},
         // .stats = {},
       }};
     },
@@ -98,9 +98,10 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
       FAIL("no mock implementation available");
     },
     [=](atom::resolve, vast::expression) -> system::catalog_result {
-      std::vector<vast::uuid> result;
+      std::vector<vast::partition_info> result;
+      result.reserve(CANDIDATES_PER_MOCK_QUERY);
       for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i)
-        result.push_back(vast::uuid::random());
+        result.push_back({.uuid = vast::uuid::random()});
       return system::catalog_result{system::catalog_result::probabilistic,
                                     std::move(result)};
     },

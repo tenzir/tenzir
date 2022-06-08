@@ -37,7 +37,7 @@ struct client_state {
 
   client_actor::pointer self = {};
   system::index_actor index = {};
-  std::vector<uuid> remaining_partitions = {};
+  std::vector<partition_info> remaining_partitions = {};
   std::unique_ptr<indicators::ProgressSpinner> indicator = {};
 
   size_t num_total = {};
@@ -161,9 +161,12 @@ client(client_actor::stateful_pointer<client_state> self,
       const auto first_remaining_partition
         = std::prev(self->state.remaining_partitions.end(),
                     detail::narrow_cast<ptrdiff_t>(num_partitions));
-      std::move(first_remaining_partition,
-                self->state.remaining_partitions.end(),
-                std::back_inserter(partitions));
+      std::transform(first_remaining_partition,
+                     self->state.remaining_partitions.end(),
+                     std::back_inserter(partitions),
+                     [](const partition_info& partition) {
+                       return partition.uuid;
+                     });
       self->state.remaining_partitions.erase(
         first_remaining_partition, self->state.remaining_partitions.end());
       // Ask the index to rebuild the partitions.

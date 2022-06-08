@@ -99,9 +99,8 @@ catalog_result catalog_state::lookup(const expression& expr) const {
   // Sort partitions by their max import time, returning the most recent
   // partitions first.
   std::sort(result.begin(), result.end(),
-            [&](const uuid& lhs, const uuid& rhs) {
-              return synopses.find(lhs)->second->max_import_time
-                     > synopses.find(rhs)->second->max_import_time;
+            [&](const partition_info& lhs, const partition_info& rhs) {
+              return lhs.max_import_time > rhs.max_import_time;
             });
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
@@ -117,7 +116,8 @@ catalog_result catalog_state::lookup(const expression& expr) const {
   return catalog_result{catalog_result::probabilistic, std::move(result)};
 }
 
-std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
+std::vector<partition_info>
+catalog_state::lookup_impl(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   // The partition UUIDs must be sorted, otherwise the invariants of the
   // inplace union and intersection algorithms are violated, leading to
@@ -125,15 +125,20 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
   // ensure the post-condition of returning a sorted list. We currently
   // rely on `flat_map` already traversing them in the correct order, so
   // no separate sorting step is required.
-  using result_type = std::vector<uuid>;
+  using result_type = std::vector<partition_info>;
   result_type memoized_partitions = {};
   auto all_partitions = [&] {
     if (!memoized_partitions.empty() || synopses.empty())
       return memoized_partitions;
     memoized_partitions.reserve(synopses.size());
-    for (const auto& [partition, synopsis] : synopses)
-      memoized_partitions.push_back(partition);
-    std::sort(memoized_partitions.begin(), memoized_partitions.end());
+    for (const auto& [partition, synopsis] : synopses) {
+      memoized_partitions.push_back({
+        .uuid = partition,
+        .events = synopsis->events,
+        .max_import_time = synopsis->max_import_time,
+        .schema = synopsis->schema,
+      });
+    }
     return memoized_partitions;
   };
   auto f = detail::overload{
@@ -203,7 +208,12 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.push_back(part_id);
+                  result.push_back({
+                    .uuid = part_id,
+                    .events = part_syn->events,
+                    .max_import_time = part_syn->max_import_time,
+                    .schema = part_syn->schema,
+                  });
                   break;
                 }
                 // The field has no dedicated synopsis. Check if there is one
@@ -214,13 +224,23 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.push_back(part_id);
+                  result.push_back({
+                    .uuid = part_id,
+                    .events = part_syn->events,
+                    .max_import_time = part_syn->max_import_time,
+                    .schema = part_syn->schema,
+                  });
                   break;
                 }
               } else {
                 // The catalog couldn't rule out this partition, so we have
                 // to include it in the result set.
-                result.push_back(part_id);
+                result.push_back({
+                  .uuid = part_id,
+                  .events = part_syn->events,
+                  .max_import_time = part_syn->max_import_time,
+                  .schema = part_syn->schema,
+                });
                 break;
               }
             }
@@ -246,7 +266,12 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
                 // short, so we're probably not hitting the allocator due to
                 // SSO.
                 if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
-                  result.push_back(part_id);
+                  result.push_back({
+                    .uuid = part_id,
+                    .events = part_syn->events,
+                    .max_import_time = part_syn->max_import_time,
+                    .schema = part_syn->schema,
+                  });
                   break;
                 }
               }
@@ -264,8 +289,14 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
                 part_syn->max_import_time,
               };
               auto add = ts.lookup(x.op, caf::get<vast::time>(d));
-              if (!add || *add)
-                result.push_back(part_id);
+              if (!add || *add) {
+                result.push_back({
+                  .uuid = part_id,
+                  .events = part_syn->events,
+                  .max_import_time = part_syn->max_import_time,
+                  .schema = part_syn->schema,
+                });
+              }
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
@@ -278,12 +309,11 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
               VAST_WARN("#field meta queries only support string "
                         "comparisons");
             } else {
-              for (const auto& synopsis : synopses) {
+              for (const auto& [part_id, part_syn] : synopses) {
                 // Compare the desired field name with each field in the
                 // partition.
-                auto matching = [&] {
-                  for (const auto& [field, _] :
-                       synopsis.second->field_synopses_) {
+                auto matching = [&](const auto& part_syn) {
+                  for (const auto& [field, _] : part_syn->field_synopses_) {
                     VAST_ASSERT(!field.is_standalone_type());
                     auto rt = record_type{{field.field_name(), field.type()}};
                     for ([[maybe_unused]] const auto& offset :
@@ -291,12 +321,18 @@ std::vector<uuid> catalog_state::lookup_impl(const expression& expr) const {
                       return true;
                   }
                   return false;
-                }();
+                }(part_syn);
                 // Only insert the partition if both sides are equal, i.e. the
                 // operator is "positive" and matching is true, or both are
                 // negative.
-                if (!is_negated(x.op) == matching)
-                  result.push_back(synopsis.first);
+                if (!is_negated(x.op) == matching) {
+                  result.push_back({
+                    .uuid = part_id,
+                    .events = part_syn->events,
+                    .max_import_time = part_syn->max_import_time,
+                    .schema = part_syn->schema,
+                  });
+                }
               }
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
@@ -418,8 +454,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         uint64_t max_partition_version) -> caf::result<catalog_result> {
       auto start = std::chrono::steady_clock::now();
       auto result = self->state.lookup(expr);
-      std::erase_if(result.partitions, [&](const uuid& partition) {
-        return self->state.synopses[partition]->version > max_partition_version;
+      std::erase_if(result.partitions, [&](const partition_info& partition) {
+        return self->state.synopses[partition.uuid]->version
+               > max_partition_version;
       });
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(lookup_id);
@@ -455,16 +492,31 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
           = std::unique(ids_candidates.begin(), ids_candidates.end());
         ids_candidates.erase(new_end, ids_candidates.end());
       }
-      std::vector<vast::uuid> result_candidates;
-      if (has_expression && has_ids)
+      std::vector<partition_info> result_candidates;
+      if (has_expression && has_ids) {
         std::set_intersection(expression_candidates.partitions.begin(),
                               expression_candidates.partitions.end(),
                               ids_candidates.begin(), ids_candidates.end(),
                               std::back_inserter(result_candidates));
-      else if (has_expression)
+      } else if (has_expression) {
         result_candidates = std::move(expression_candidates.partitions);
-      else
-        result_candidates = std::move(ids_candidates);
+      } else {
+        result_candidates.reserve(ids_candidates.size());
+        for (const auto& ids_candidate : ids_candidates) {
+          const auto syn = self->state.synopses.find(ids_candidate);
+          if (syn == self->state.synopses.end())
+            VAST_WARN("{} ignores unknown candidate partition hint {} for "
+                      "query {}",
+                      *self, ids_candidate, query.id);
+          else
+            result_candidates.push_back({
+              .uuid = ids_candidate,
+              .events = syn->second->events,
+              .max_import_time = syn->second->max_import_time,
+              .schema = syn->second->schema,
+            });
+        }
+      }
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
       self->send(self->state.accountant, "catalog.lookup.runtime", runtime,

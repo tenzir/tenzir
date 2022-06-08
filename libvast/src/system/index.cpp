@@ -1097,7 +1097,7 @@ index(index_actor::stateful_pointer<index_state> self,
             if (std::find(initial_candidates.begin(), initial_candidates.end(),
                           midx_candidate)
                 == initial_candidates.end())
-              candidates.push_back(midx_candidate);
+              candidates.push_back(midx_candidate.uuid);
           // Allows the client to query further results after initial taste.
           auto query_id = query.id;
           auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
@@ -1381,12 +1381,12 @@ index(index_actor::stateful_pointer<index_state> self,
                 .uuid = aps.uuid,
                 .events = aps.synopsis->events,
                 .max_import_time = aps.synopsis->max_import_time,
-                .type = aps.type,
+                .schema = aps.type,
               };
               // Update the index statistics. We only need to add the events of
               // the new partition here, the subtraction of the old events is
               // done in `erase`.
-              auto name = std::string{info.type.name()};
+              auto name = std::string{info.schema.name()};
               self->state.stats.layouts[name].count += info.events;
               result.emplace_back(std::move(info));
             }

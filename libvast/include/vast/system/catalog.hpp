@@ -63,7 +63,8 @@ public:
   /// @returns A vector of UUIDs representing candidate partitions.
   [[nodiscard]] catalog_result lookup(const expression& expr) const;
 
-  [[nodiscard]] std::vector<uuid> lookup_impl(const expression& expr) const;
+  [[nodiscard]] std::vector<partition_info>
+  lookup_impl(const expression& expr) const;
 
   /// @returns A best-effort estimate of the amount of memory used for this
   /// catalog (in bytes).
@@ -101,7 +102,7 @@ struct catalog_result {
     probabilistic,
   } kind;
 
-  std::vector<uuid> partitions;
+  std::vector<partition_info> partitions;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, catalog_result& x) {

@@ -1,4 +1,5 @@
 include "synopsis.fbs";
+include "type.fbs";
 
 namespace vast.fbs.partition_synopsis;
 
@@ -18,6 +19,10 @@ table LegacyPartitionSynopsis {
   /// the `rebuild` command to determine whether a partitions needs to be
   /// upgraded to a more recent version.
   version: ulong;
+
+  /// The schema of this partition. Note that this field was not present for
+  /// partition synopses with a version number of 0.
+  schema: [ubyte] (nested_flatbuffer: "vast.fbs.Type");
 }
 
 union PartitionSynopsis {
