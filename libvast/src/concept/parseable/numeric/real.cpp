@@ -21,16 +21,20 @@ bool double_parser::parse(Iterator& f, const Iterator& l, unused_type) const {
   double result;
   auto answer = fast_float::from_chars(&*f, &*l, result,
                                        fast_float::chars_format::general);
-  f += answer.ptr - &*f;
-  return answer.ec == std::errc();
+  auto success = answer.ec == std::errc();
+  if (success)
+    f += answer.ptr - &*f;
+  return success;
 }
 
 template <class Iterator>
 bool double_parser::parse(Iterator& f, const Iterator& l, double& a) const {
   auto answer
     = fast_float::from_chars(&*f, &*l, a, fast_float::chars_format::general);
-  f += answer.ptr - &*f;
-  return answer.ec == std::errc();
+  auto success = answer.ec == std::errc();
+  if (success)
+    f += answer.ptr - &*f;
+  return success;
 }
 
 template bool
