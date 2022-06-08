@@ -60,11 +60,17 @@ import it normally in your Python application.
 from pyvast import VAST
 ```
 
-Once imported, there are three optional keyword arguments to instruct PyVAST
-with: `binary`, `endpoint`, and `logger`. The `binary` keyword defaults to
-`"vast"`. In case the `vast` binary is not in your `$PATH`, set this to the
-actual path to the VAST binary. The `endpoint` keyword refers to the endpoint of
-the VAST node (e.g., `localhost:42000`). Lastly, use the `logger` keyword to
+Once imported, there are four optional keyword arguments to instruct PyVAST
+with: `binary`, `endpoint`, `container` and `logger`. The `binary` keyword defaults to
+`"vast"`. 
+
+In case the `vast` binary is not in your `$PATH`, set this to the
+actual path to the VAST binary. If no `vast` binary is found, container approach will be used as fallback. The `endpoint` keyword refers to the endpoint of
+the VAST node (e.g., `localhost:42000`). 
+
+In case of utilizing Vast in container environment, provide `container` input (default= `{"runtime":"docker", "name":"vast"}`).
+
+Lastly, use the `logger` keyword to
 provide a custom
 [logging.logger](https://docs.python.org/3/library/logging.html#logger-objects)
 object for your application.
