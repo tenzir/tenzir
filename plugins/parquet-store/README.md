@@ -9,7 +9,7 @@ communities.
 ## Data Layout
 
 The top-level schema stored in the parquet files is a _message envelope_, which
-currently contains two columns:
+currently consists of two columns:
 
 | Column Name   | Column Type   | Description       |
 | ------------: | ------------: | :---------------- |

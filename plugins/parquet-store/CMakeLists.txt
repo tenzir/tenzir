@@ -28,9 +28,7 @@ endif ()
 
 find_package(Arrow REQUIRED)
 get_target_property(PARQUET_PATH "${ARROW_LIBRARY}" LOCATION)
-message("${PARQUET_PATH}")
 get_filename_component(PARQUET_PATH "${PARQUET_PATH}" DIRECTORY)
-message("${PARQUET_PATH}")
 
 find_package(Parquet CONFIG REQUIRED PATHS "${PARQUET_PATH}/cmake/arrow"
              NO_DEFAULT_PATH)
