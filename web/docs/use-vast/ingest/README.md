@@ -505,7 +505,11 @@ the event timestamp.
 
 ## Write a schema manually
 
-A [schema][schemas] is a record [type][types] with a name so that VAST can
+When VAST does not ship with a [schema][schemas] for your data out of the box,
+or the inference is not good enough for your use case regarding type semantics
+or performance, you can write easily yourself.
+
+A schema is a record [type][types] with a name so that VAST can
 represent it as a table internally. You would write a schema manually or extend
 an existing schema if your goal is tuning type semantics and performance. For
 example, if you have a field of type `string` that only holds IP addresses, you
@@ -515,10 +519,10 @@ can ship a schema along with [concept][concepts] mappings for a deeper
 integration.
 
 You write a schema (and potentially accompanying types, concepts, and models) in
-[module][modules].
+a [module][modules].
 
 Let's write one from scratch, for a tiny dummy data source called *foo* that
-produces CSV of this kind:
+produces CSV events of this shape:
 
 ```csv
 date,target,message
@@ -549,9 +553,20 @@ types:
       - message: msg
 ```
 
-Place this module in an existing module directory, such as`/etc/vast/schema`, or
-tell VAST in your `vast.yaml` configuration file where to look for additional
-modules via the `module-dirs` key:
+Now that you have a new module, you can choose to deploy it at the client or
+the server. When a VAST server starts, it will send a copy of its local schemas
+to the client. If the client has a schema for the same type, it will override
+the server version. We recommend deploying the module at the server when all
+clients should see the contained schemas, and at the client when the scope is
+local. The diagram below illustrates the initial handshake:
+
+![Schema Transfer](/img/schema-transfer.light.png#gh-light-mode-only)
+![Schema Transfer](/img/schema-transfer.dark.png#gh-dark-mode-only)
+
+Regardless of where you deploy the module, the procedure is the same at client
+and server: place the module in an existing module directory, such as
+`/etc/vast/modules`, or tell VAST in your `vast.yaml` configuration file where
+to look for additional modules via the `module-dirs` key:
 
 ```yaml
 vast:
@@ -559,7 +574,8 @@ vast:
     - path/to/modules
 ```
 
-Restart VAST and you're ready to ingest the CSV with richer typing:
+At the server, restart VAST and you're ready to go. Or just spin up a new client
+and ingest the CSV with richer typing:
 
 ```bash
 vast import csv < foo.csv
