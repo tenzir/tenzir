@@ -2,7 +2,7 @@
 sidebar_position: 0
 ---
 
-# Why VAST?
+# Why VAST
 
 VAST fills a gap when you need a highly embeddable data node for security
 telemetry data that powers detection and response use cases:
@@ -19,7 +19,7 @@ service with narrow API.
 
 The raison d'être of VAST is that you can enjoy an open, embeddable security
 analytics engine that serves as a foundation for a sustainable detection and
-reponse architecture. We dread vendor lock-in and therefore only use open
+response architecture. We dread vendor lock-in and therefore only use open
 standards (e.g., Apache Arrow, Parquet, STIX) so that you remain in full
 control of your telemetry data and security content.
 
