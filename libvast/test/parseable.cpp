@@ -642,6 +642,8 @@ TEST(real - scientific) {
   }
 }
 
+// This is commented out because it revealed bugs in both libstdc++ and fmt.
+// Both libraries format some values incorrectly.
 // TEST(real - scientific exhaustive) {
 //   {
 //     auto p = make_parser<real>{};
@@ -661,7 +663,6 @@ TEST(real - scientific) {
 //           = real_cast::comp{.mantissa = mantissa, .exponent = exp, .sign =
 //           0}};
 //         auto value = cast.value;
-//         // We wanted to trust {fmt}, but it sometimes renders wrong...
 //         auto rendered = fmt::format("{:e}", value);
 //         auto f = rendered.begin();
 //         auto l = rendered.end();
