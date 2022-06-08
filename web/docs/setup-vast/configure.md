@@ -3,6 +3,7 @@ sidebar_position: 4
 ---
 
 # Configure
+
 VAST offers several mechanisms to adjust configuration options on startup.
 
 1. Command-line arguments
@@ -151,3 +152,99 @@ rules apply as for the regular configuration file directory lookup.
 Sometimes, users may wish to run VAST without side effects, e.g., when wrapping
 VAST in their own scripts. Run with `--bare-mode` to disable looking at all
 system- and user-specified configuration paths.
+
+## Plugins
+
+VAST's [plugin architecture](/docs/understand-vast/architecture/plugins) allows
+for flexible replacement and enhancement of functionality at various pre-defined
+customization points. There exist **dynamic plugins** that ship as shared
+libraries and **static plugins** that are compiled into libvast.
+
+:::info Native Plugins
+We call static plugins that ship with VAST *native plugins*. These plugins
+compile into libvast/VAST and are always enabled automatically.
+:::
+
+### Install plugins
+
+Dynamic plugins are just shared libraries and can be placed at a location of
+your choice. We recommend putting them into a single directory and add the path
+to the `vast.plugin-dirs` configuration option..
+
+Static plugins do not require installation since they are compiled into VAST.
+
+### Load plugins
+
+The onfiguration key `vast.plugins` specifies the list of plugins that should
+load at startup. The `bundled` and `all` plugin names are reserved. When
+`bundled` is specified VAST loads all plugins built along with it. When `all` is
+specified VAST loads all available plugins in the configured plugin directories.
+
+Since dynamic plugins are shared libraries, they must be loaded first into the
+running VAST process. At startup, VAST looks for the `vast.plugins` inside the
+`vast.plugin-dirs` directories configured in `vast.yaml`. For example:
+
+```yaml
+vast:
+  plugin-dirs:
+    - .
+    - /opt/foo/lib
+  plugins:
+    - example
+    - /opt/bar/lib/libvast-plugin-example.so
+```
+
+Before executing plugin code, VAST loads the specified plugins via `dlopen(3)`
+and attempts to initialize them as plugins. Part of the initilization is passing
+configuration options to the plugin. To this end, VAST looks for a YAML
+dictionary under `plugins.<name>` in the `vast.yaml` file. For example:
+
+```yaml
+# <configdir>/vast/vast.yaml
+plugins:
+  example:
+    option: 42
+```
+
+Alternatively, you can specify a `plugin/<plugin>.yaml` file. The example
+configurations above and below are equivalent. This makes plugin deployments
+easier, as plugins can be installed and uninstalled alongside their respective
+configuration.
+
+```yaml
+# <configdir>/vast/plugin/example.yaml
+option: 42
+```
+
+After initialization with the configuration options, the plugin is fully
+operational and VAST will call its functions at the plugin-specific
+customization points.
+
+### Show plugins
+
+You can get a list of all plugins and their respective version by running
+`vast version`:
+
+```json
+{
+  "VAST": "v1.4.1-97-gced115d91-dirty",
+  "CAF": "0.17.6",
+  "Apache Arrow": "2.0.0",
+  "PCAP": "libpcap version 1.9.1",
+  "jemalloc": null,
+  "plugins": {
+    "example": "v0.4.1-g14cee3e48-dirty"
+  }
+}
+```
+
+The `vast version` command does not list native plugins.
+
+The version of a plugin consists of three optional parts, separated by dashes:
+
+1. The CMake project version of the plugin
+2. The Git revision of the last commit that touched the plugin
+3. A `dirty` suffix for uncommited changes to the plugin
+
+Plugins created with the recommended scaffolding use the above version number
+format.
