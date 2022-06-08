@@ -158,21 +158,23 @@ def deploy_lambda_image(c):
 
 
 @task(autoprint=True)
-def get_vast_server(c, blocking=False):
-    """Get the task id of the VAST server"""
+def get_vast_server(c, max_wait_time_sec=0):
+    """Get the task id of the VAST server. If no server is running, it waits
+    until max_wait_time_sec for a new server to be started."""
     cluster = terraform_output(c, "step-2", "fargate_cluster_name")
     family = terraform_output(c, "step-2", "vast_task_family")
-    task_res = aws("ecs").list_tasks(family=family, cluster=cluster)
-    nb_vast_tasks = len(task_res["taskArns"])
-    if nb_vast_tasks == 0 and blocking:
+    start_time = time.time()
+    while True:
+        task_res = aws("ecs").list_tasks(family=family, cluster=cluster)
+        nb_vast_tasks = len(task_res["taskArns"])
+        if nb_vast_tasks == 1:
+            task_id = task_res["taskArns"][0].split("/")[-1]
+            return task_id
+        if nb_vast_tasks > 1:
+            raise Exit(f"{nb_vast_tasks} VAST servers running", 1)
+        if nb_vast_tasks == 0 and time.time() - start_time > max_wait_time_sec:
+            raise Exit("No VAST server running", EXIT_CODE_VAST_SERVER_NOT_RUNNING)
         time.sleep(1)
-        return get_vast_server(c, blocking)
-    if nb_vast_tasks == 0 and not blocking:
-        raise Exit("No VAST server running", EXIT_CODE_VAST_SERVER_NOT_RUNNING)
-    if nb_vast_tasks > 1:
-        raise Exit(f"{nb_vast_tasks} VAST server running", 1)
-    task_id = task_res["taskArns"][0].split("/")[-1]
-    return task_id
 
 
 @task
