@@ -25,6 +25,13 @@
 #include <caf/none.hpp>
 
 namespace vast {
+namespace parsers {
+
+constexpr inline auto number = (parsers::count >> &!chr{'.'})
+                               | (parsers::integer >> &!chr{'.'})
+                               | parsers::real;
+
+} // namespace parsers
 
 struct data_parser : parser_base<data_parser> {
   using attribute = data;
@@ -41,13 +48,6 @@ private:
     using namespace parser_literals;
     rule<Iterator, data> p;
     auto ws = ignore(*parsers::space);
-    // clang-format off
-    auto number_parser
-      = (parsers::count >> &!'.'_p)
-      | (parsers::integer >> &!'.'_p)
-      | parsers::real
-      ;
-    // clang-format on
     auto x = ws >> ref(p) >> ws;
     auto kvp = x >> "->" >> x;
     auto trailing_comma = ~(',' >> ws);
@@ -72,7 +72,7 @@ private:
       | parsers::duration
       | parsers::net
       | parsers::addr
-      | number_parser
+      | parsers::number
       | parsers::tf
       | parsers::qqstr
       | parsers::pattern
