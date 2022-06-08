@@ -38,11 +38,11 @@
             git nixUnstable coreutils nix-prefetch-github
           ];
         };
+        default = pkgs.vast;
       };
-      defaultPackage = packages.vast;
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       apps.vast-static = flake-utils.lib.mkApp { drv = packages.vast-static; };
-      defaultApp = apps.vast;
+      apps.default = apps.vast;
       devShell = import ./shell.nix { inherit pkgs; };
       hydraJobs = { inherit packages; } // (
         let

@@ -1,26 +1,22 @@
-{ pkgs
-, useClang ? pkgs.stdenv.isDarwin
-}:
+{ pkgs }:
 let
   inherit (pkgs) lib;
-  llvmPkgs = pkgs.buildPackages.llvmPackages_13;
-  stdenv = if useClang then llvmPkgs.stdenv else pkgs.gcc11Stdenv;
-  inherit (stdenv.hostPlatform) isStatic;
-  mkShell = pkgs.mkShell.override { inherit stdenv; };
+  inherit (pkgs.stdenv.hostPlatform) isStatic;
 in
-mkShell ({
-  name = "vast-dev-" + (if useClang then "clang" else "gcc");
+pkgs.mkShell ({
+  name = "vast-dev";
   hardeningDisable = [ "fortify" ] ++ lib.optional isStatic "pic";
   inputsFrom = [ pkgs.vast ];
+  nativeBuildInputs = [ pkgs.ccache ]
+    ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
+      # Make clang available as alternative compiler when it isn't the default.
+      pkgs.clang_14
+      # Bintools come with a wrapped lld for faster linking.
+      pkgs.llvmPackages_14.bintools
+    ];
   # To build libcaf_openssl with bundled CAF.
   buildInputs = [ pkgs.openssl ];
-
-  shellHook = ''
-    alias xd='nix run nixpkgs#glow "$(git rev-parse --show-toplevel)/nix/README.md"'
-    echo "Entering VAST environment; run \`xd\` for info"
-  '';
 } // lib.optionalAttrs isStatic {
-  VAST_STATIC_EXECUTABLE = "ON";
-} // lib.optionalAttrs (stdenv.isLinux && !isStatic) {
-  nativeBuildInputs = [ llvmPkgs.bintools ];
+  # Signal static build mode to CMake via the environment.
+  VAST_ENABLE_STATIC_EXECUTABLE = "ON";
 })

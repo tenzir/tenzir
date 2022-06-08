@@ -43,6 +43,16 @@ dependencies and versions.
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
 
+### Nix Environment
+
+We provide a Nix flake you can use to setup an environment in which all
+dependencies are available. Running `nix develop` inside the main source
+directory will get you there.
+
+You can also delegate the entire build process to Nix with by invoking
+`nix build`, but be aware that this method does not support incremental
+builds in case you plan to make changes to the source code.
+
 ## Compile
 
 Building VAST involves the following steps:
@@ -63,6 +73,12 @@ Building VAST involves the following steps:
   Optionally, you can use the CMake TUI to visually configure the build:
   ```bash
   ccmake build
+  ```
+
+  The source tree also contains a set of CMake presets that combine various
+  configuration options into curated build flavors. You can list them with:
+  ```bash
+  cmake --list-presets
   ```
 
 3. Build the executable:
@@ -92,17 +108,3 @@ verify that your build works as expected:
   # Optional: Install to a custom prefix
   cmake --install build --prefix /path/to/install/prefix
   ```
-
-## Nix
-
-We provide Nix expressions to create a localized build environment with
-dependencies. Run `nix-shell` in the top-level directory for a deterministic
-build environment.
-
-You can use the same scaffold to build and install VAST directly into the Nix
-Store and add it to the Nix profile. To do so, invoke `nix-env` in the
-top-level directory as follows:
-
-```bash
-nix-env -f default.nix -i
-```
