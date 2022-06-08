@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "parquet_store.hpp"
-
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/chunk.hpp>
+#include <vast/concept/convertible/data.hpp>
+#include <vast/concept/convertible/to.hpp>
 #include <vast/data.hpp>
 #include <vast/detail/base64.hpp>
 #include <vast/detail/narrow.hpp>
@@ -36,9 +36,150 @@
 #include <memory>
 #include <utility>
 
-// TODO: play with smaller (slice-aligned row group sizes)
 namespace vast::plugins::parquet_store {
 
+/// Configuration for the Parquet plugin.
+struct configuration {
+  uint64_t row_group_size{parquet::DEFAULT_MAX_ROW_GROUP_LENGTH};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, configuration& x) {
+    return f(x.row_group_size);
+  }
+
+  static const record_type& layout() noexcept {
+    static auto result = record_type{
+      {"row-group-size", count_type{}},
+    };
+    return result;
+  }
+};
+
+struct store_builder_state {
+  static constexpr const char* name = "active-parquet-store";
+  uuid id_ = {};
+  system::store_builder_actor::pointer self_ = {};
+
+  /// Actor handle of the accountant.
+  system::accountant_actor accountant_ = {};
+
+  /// Actor handle of the filesystem.
+  system::filesystem_actor fs_ = {};
+
+  /// Destination parquet file name.
+  std::filesystem::path path_ = {};
+
+  /// The table slices added to this partition.
+  std::vector<table_slice> table_slices_ = {};
+
+  /// The layout of the first record batch.
+  std::optional<type> vast_type_;
+
+  /// Number of events in this store.
+  size_t num_rows_ = {};
+
+  /// Plugin configuration.
+  configuration config_;
+};
+
+struct store_state {
+  static constexpr const char* name = "passive-parquet-store";
+  uuid id_ = {};
+  system::store_actor::pointer self_ = {};
+
+  /// Source parquet file name.
+  std::filesystem::path path_ = {};
+
+  /// Actor handle of the accountant.
+  system::accountant_actor accountant_ = {};
+
+  /// Actor handle of the filesystem.
+  system::filesystem_actor fs_ = {};
+
+  /// The table slices added to this partition.
+  /// Empty before data is retrieved from the file system.
+  std::optional<std::vector<table_slice>> table_slices_ = {};
+
+  /// Number of events in this store.
+  size_t num_rows_ = {};
+
+  /// Holds requests that did arrive while the parquet dat,a
+  /// was still being loaded from disk.
+  using request
+    = std::tuple<vast::query, caf::typed_response_promise<uint64_t>>;
+  std::vector<request> deferred_requests_ = {};
+};
+
+system::store_builder_actor::behavior_type store_builder(
+  system::store_builder_actor::stateful_pointer<store_builder_state> self,
+  system::accountant_actor accountant, system::filesystem_actor fs,
+  const uuid& id, const configuration& config);
+
+system::store_actor::behavior_type
+store(system::store_actor::stateful_pointer<store_state> self,
+      const system::accountant_actor& accountant,
+      const system::filesystem_actor& fs, const uuid& id);
+
+/// The plugin entrypoint for the parquet store plugin.
+class plugin final : public store_plugin {
+public:
+  /// Initializes the parquet plugin. This plugin has no general configuration.
+  /// @param options the plugin options. Must be empty.
+  caf::error initialize(data options) override {
+    if (caf::holds_alternative<caf::none_t>(options))
+      return caf::none;
+    if (const auto* rec = caf::get_if<record>(&options))
+      if (rec->empty())
+        return caf::none;
+    return convert(options, config_);
+    // return caf::make_error(ec::invalid_configuration, //
+    //                        "expected empty configuration under "
+    //                        "vast.plugins.parquet-store");
+  }
+
+  [[nodiscard]] const char* name() const override {
+    return "parquet-store";
+  }
+
+  /// Create a store builder actor that accepts incoming table slices.
+  /// @param accountant The actor handle of the accountant.
+  /// @param fs The actor handle of a filesystem.
+  /// @param id The partition id for which we want to create a store. Can
+  ///           be used as a unique key by the implementation.
+  /// @returns A store_builder actor and a chunk called the "header". The
+  ///          contents of the header will be persisted on disk, and should
+  ///          allow the plugin to retrieve the correct store actor when
+  ///          `make_store()` below is called.
+  [[nodiscard]] caf::expected<builder_and_header>
+  make_store_builder(system::accountant_actor accountant,
+                     system::filesystem_actor fs,
+                     const vast::uuid& id) const override {
+    auto actor_handle
+      = fs.home_system().spawn(store_builder, accountant, fs, id, config_);
+    auto header = chunk::copy(id);
+    return builder_and_header{actor_handle, header};
+  }
+
+  /// Create a store actor from the given header. Called when deserializing a
+  /// partition that uses parquet as a store backend.
+  /// @param accountant The actor handle the accountant.
+  /// @param fs The actor handle of a filesystem.
+  /// @param header The store header as found in the partition flatbuffer.
+  /// @returns A new store actor.
+  [[nodiscard]] caf::expected<system::store_actor>
+  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
+             std::span<const std::byte> header) const override {
+    if (header.size() != uuid::num_bytes)
+      return caf::make_error(ec::invalid_argument, "header must have size of "
+                                                   "single uuid");
+    auto id = uuid(std::span<const std::byte, uuid::num_bytes>(header.data(),
+                                                               header.size()));
+    return fs.home_system().spawn(store, accountant, fs, id);
+  }
+
+private:
+  configuration config_;
+};
 namespace {
 
 std::filesystem::path store_path_for_partition(const uuid& partition_id) {
@@ -79,14 +220,13 @@ fix_enum_array(const enumeration_type& et,
     default: {
       die(fmt::format("unhandled enum-parquet variation for array type '{}'",
                       arr->type()->ToString()));
-      return arr;
     }
   }
 }
 
 /// Transform a chunked array by applying a mapping function `Mapper` over each
 /// chunk and constructs a new array from the transformed chunks.
-template <typename Mapper, class VastType>
+template <class Mapper, class VastType>
 std::shared_ptr<arrow::ChunkedArray>
 map_chunked_array(const VastType& t,
                   const std::shared_ptr<arrow::ChunkedArray>& arr, Mapper m) {
@@ -95,7 +235,7 @@ map_chunked_array(const VastType& t,
   for (const auto& chunk : arr->chunks()) {
     // short-circuit: if the first transform is a no-op, skip remaining chunks
     if (std::shared_ptr<arrow::Array> c = m(t, chunk))
-      chunks.push_back(c);
+      chunks.push_back(std::move(c));
     else
       return arr;
   }
@@ -104,6 +244,9 @@ map_chunked_array(const VastType& t,
 }
 
 /// Transform an array into its canonical form for the provided vast type.
+/// the Arrow parquet reader does not fully restore the schema used during
+/// write. In particular, it doesn't handle extension types in map keys and
+/// values, as well as dictionary indices, which are used in vast enumerations.
 std::shared_ptr<arrow::Array>
 align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
   auto f = detail::overload{
@@ -243,6 +386,10 @@ align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
 }
 
 /// Transform a record batch into a table slice
+/// The record batch contains a message envelope with the actual event data
+/// alongside VAST-related meta data (currently limited to the import time).
+/// Message envelope is unwrapped and the import time is attached to the table
+/// slice metadata, using the maximum of all import timestamps.
 table_slice create_table_slice(const std::shared_ptr<arrow::RecordBatch>& rb) {
   auto time_col = rb->GetColumnByName("import_time");
   auto min_max_time = arrow::compute::MinMax(time_col).ValueOrDie();
@@ -264,7 +411,6 @@ table_slice create_table_slice(const std::shared_ptr<arrow::RecordBatch>& rb) {
 
 // Handler for `vast::query` that is shared between active and passive stores.
 // Returns a the number of events that match the query.
-// Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
 caf::expected<uint64_t>
 handle_lookup(Actor& self, const vast::query& query,
@@ -302,21 +448,6 @@ handle_lookup(Actor& self, const vast::query& query,
     },
   };
   return caf::visit(handle_query, query.cmd);
-}
-
-template <typename Actor>
-caf::expected<uint64_t>
-handle_lookup(Actor& self, const vast::query& query,
-              const std::shared_ptr<arrow::Table>& table) {
-  auto table_slices = std::vector<table_slice>{};
-  for (const auto& rb : arrow::TableBatchReader(*table)) {
-    if (!rb.ok())
-      return caf::make_error(ec::format_error,
-                             fmt::format("unable to read record batch: {} ",
-                                         rb.status().ToString()));
-    table_slices.push_back(create_table_slice(*rb));
-  }
-  return handle_lookup(self, query, table_slices);
 }
 
 std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
@@ -358,7 +489,6 @@ read_parquet_buffer(const chunk_ptr& chunk) {
 auto init_parquet(caf::unit_t&) {
   // doing nothing: as we're writing the file in one pass at the end into a
   // memory buffer, there's no file opening going on here.
-  VAST_TRACE("initializing stream");
 }
 
 auto add_table_slices(
@@ -373,14 +503,16 @@ auto add_table_slices(
       self->state.num_rows_ += slice.rows();
       self->state.table_slices_.push_back(slice);
     }
-    VAST_TRACE("[{}::{}] received batch of {} table slices", *self,
-               self->state.id_, batch.size());
+    VAST_TRACE("{} received batch of {} table slices for partition {}", *self,
+               batch.size(), self->state.id_);
   };
 }
 
-std::shared_ptr<parquet::WriterProperties> writer_properties() {
+std::shared_ptr<parquet::WriterProperties>
+writer_properties(const configuration& config) {
   auto builder = parquet::WriterProperties::Builder{};
   builder.created_by("VAST telemetry engine")
+    ->max_row_group_length(detail::narrow_cast<int64_t>(config.row_group_size))
     ->enable_dictionary()
     ->compression(parquet::Compression::ZSTD)
     ->compression_level(9)
@@ -421,13 +553,14 @@ auto create_record_batch(const table_slice& slice)
   return new_rb;
 }
 
-auto write_parquet_buffer(const std::vector<table_slice>& slices) {
+auto write_parquet_buffer(const std::vector<table_slice>& slices,
+                          configuration config) {
   auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto batches = arrow::RecordBatchVector{};
   for (const auto& slice : slices)
     batches.push_back(create_record_batch(slice));
   auto table = arrow::Table::FromRecordBatches(batches).ValueOrDie();
-  auto writer_props = writer_properties();
+  auto writer_props = writer_properties(config);
   auto arrow_writer_props = arrow_writer_properties();
   auto status
     = parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink,
@@ -439,12 +572,11 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices) {
 auto finish_parquet(
   system::store_builder_actor::stateful_pointer<store_builder_state> self) {
   return [self](caf::unit_t&, const caf::error&) {
-    auto buffer = write_parquet_buffer(self->state.table_slices_);
-    VAST_TRACE("[{}::{}] write triggered, w/ {} records in {} table slices, "
-               "parquet file "
-               "size: {} bytes",
+    auto buffer
+      = write_parquet_buffer(self->state.table_slices_, self->state.config_);
+    VAST_TRACE("{} writing partition {} with {} events in {} table slices, ",
                *self, self->state.id_, self->state.num_rows_,
-               self->state.table_slices_.size(), buffer->size());
+               self->state.table_slices_.size());
     auto c = chunk::make(buffer);
     auto bytes = std::span<const std::byte>{c->data(), c->size()};
     self
@@ -452,11 +584,11 @@ auto finish_parquet(
                 self->state.path_, c)
       .then(
         [self](atom::ok) {
-          VAST_TRACE("flush archive ./vast.db/{}", self->state.path_);
+          VAST_TRACE("{} flushed archive to {}", *self, self->state.path_);
           self->state.self_ = nullptr;
         },
         [self](caf::error& err) {
-          VAST_ERROR("failed to flush archive {}", to_string(err));
+          VAST_ERROR("{} failed to flush archive {}", *self, to_string(err));
           self->state.self_ = nullptr;
         });
   };
@@ -476,8 +608,20 @@ store(system::store_actor::stateful_pointer<store_state> self,
   self->request(self->state.fs_, caf::infinite, atom::mmap_v, self->state.path_)
     .then(
       [self](const chunk_ptr& chunk) {
-        if (auto table = read_parquet_buffer(chunk); table) {
-          self->state.table_ = *table;
+        if (auto table = read_parquet_buffer(chunk)) {
+          auto table_slices = std::vector<table_slice>{};
+          for (const auto& rb : arrow::TableBatchReader(*table)) {
+            if (!rb.ok())
+              self->send_exit(
+                self, caf::make_error(ec::format_error,
+                                      fmt::format("unable to read record "
+                                                  "batch: "
+                                                  "{} ",
+                                                  rb.status().ToString())));
+            table_slices.push_back(create_table_slice(*rb));
+            self->state.num_rows_ += (*rb)->num_rows();
+          }
+          self->state.table_slices_ = std::move(table_slices);
         } else {
           self->send_exit(self, table.error());
         }
@@ -495,14 +639,14 @@ store(system::store_actor::stateful_pointer<store_state> self,
       });
   return {
     [self](const query& query) -> caf::result<uint64_t> {
-      if (!self->state.table_) {
+      if (!self->state.table_slices_) {
         auto rp = self->make_response_promise<uint64_t>();
         self->state.deferred_requests_.emplace_back(query, rp);
         return rp;
       }
       auto start = std::chrono::steady_clock::now();
       auto slices = std::vector<table_slice>{};
-      auto num_hits = handle_lookup(self, query, self->state.table_);
+      auto num_hits = handle_lookup(self, query, *self->state.table_slices_);
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
       self->send(self->state.accountant_, "parquet-store.lookup.runtime",
@@ -516,14 +660,10 @@ store(system::store_actor::stateful_pointer<store_state> self,
       return num_hits;
     },
     [self](atom::erase, const ids& xs) -> caf::result<uint64_t> {
-      // TODO: segment store tracks in-flight erase requests similar to queries.
-      // however, in our case we don't support erasing a subset of the data, so
-      // we can just delete the file directly?
       auto num_rows = rank(xs);
-      VAST_ASSERT(
-        num_rows == 0
-        || num_rows
-             == static_cast<unsigned long>(self->state.table_->num_rows()));
+      VAST_ASSERT(num_rows == 0
+                  || num_rows
+                       == static_cast<unsigned long>(self->state.num_rows_));
       auto rp = self->make_response_promise<uint64_t>();
       self
         ->request(self->state.fs_, caf::infinite, atom::erase_v,
@@ -543,12 +683,13 @@ store(system::store_actor::stateful_pointer<store_state> self,
 system::store_builder_actor::behavior_type store_builder(
   system::store_builder_actor::stateful_pointer<store_builder_state> self,
   system::accountant_actor accountant, system::filesystem_actor fs,
-  const uuid& id) {
+  const uuid& id, const configuration& config) {
   self->state.self_ = self;
   self->state.id_ = id;
   self->state.accountant_ = std::move(accountant);
   self->state.fs_ = std::move(fs);
   self->state.path_ = store_path_for_partition(self->state.id_);
+  self->state.config_ = config;
   return {
     [self](const query& query) -> caf::result<uint64_t> {
       return handle_lookup(self, query, self->state.table_slices_);
@@ -573,42 +714,6 @@ system::store_builder_actor::behavior_type store_builder(
       return result;
     },
   };
-}
-
-caf::error plugin::initialize(data options) {
-  if (caf::holds_alternative<caf::none_t>(options))
-    return caf::none;
-  if (const auto* rec = caf::get_if<record>(&options))
-    if (rec->empty())
-      return caf::none;
-  return caf::make_error(ec::invalid_configuration, //
-                         "expected empty configuration under "
-                         "vast.plugins.parquet-store");
-}
-
-[[nodiscard]] const char* plugin::name() const {
-  return "parquet-store";
-}
-
-[[nodiscard]] caf::expected<plugin::builder_and_header>
-plugin::make_store_builder(system::accountant_actor accountant,
-                           system::filesystem_actor fs,
-                           const vast::uuid& id) const {
-  auto actor_handle = fs.home_system().spawn(store_builder, accountant, fs, id);
-  auto header = chunk::copy(id);
-  return builder_and_header{actor_handle, header};
-}
-
-[[nodiscard]] caf::expected<system::store_actor>
-plugin::make_store(system::accountant_actor accountant,
-                   system::filesystem_actor fs,
-                   std::span<const std::byte> header) const {
-  if (header.size() != uuid::num_bytes)
-    return caf::make_error(ec::invalid_argument, "header must have size of "
-                                                 "single uuid");
-  auto id = uuid(
-    std::span<const std::byte, uuid::num_bytes>(header.data(), header.size()));
-  return fs.home_system().spawn(store, accountant, fs, id);
 }
 
 } // namespace vast::plugins::parquet_store

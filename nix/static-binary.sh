@@ -30,10 +30,10 @@ cmakeFlags=""
 # Enable the bundled plugins by default.
 plugins=(
   "${toplevel}/plugins/broker"
+  "${toplevel}/plugins/parquet-store"
   "${toplevel}/plugins/pcap"
   "${toplevel}/plugins/sigma"
   "${toplevel}/plugins/summarize"
-  "${toplevel}/plugins/parquet-store"
 )
 
 while [ $# -ne 0 ]; do
