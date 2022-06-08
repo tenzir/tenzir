@@ -24,15 +24,6 @@ struct optional_dot {};
 
 } // namespace policy
 
-struct float_parser : parser_base<float_parser> {
-  using attribute = float;
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const;
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, float& a) const;
-};
-
 struct double_parser : parser_base<double_parser> {
   using attribute = double;
   template <class Iterator>
@@ -43,18 +34,12 @@ struct double_parser : parser_base<double_parser> {
 };
 
 template <>
-struct parser_registry<float> {
-  using type = float_parser;
-};
-
-template <>
 struct parser_registry<double> {
   using type = double_parser;
 };
 
 namespace parsers {
 
-auto const fp = float_parser{};
 auto const real = double_parser{};
 
 } // namespace parsers
