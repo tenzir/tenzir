@@ -468,6 +468,28 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
+# Link against fast_float
+option(VAST_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
+add_feature_info("VAST_ENABLE_BUNDLED_FASTFLOAT" VAST_ENABLE_BUNDLED_FASTFLOAT
+                 "use the fast_float submodule.")
+if (NOT VAST_ENABLE_BUNDLED_FASTFLOAT)
+  find_package(FastFloat 3.4.0 CONFIG)
+endif ()
+if (NOT FastFloat_FOUND)
+  # Use bundled fast_float.
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "fast_float library not found, either use -FastFloat_DIR=... or"
+        " initialize the libvast/aux/fast_float submodule")
+  else ()
+    add_subdirectory(aux/fast_float)
+    add_library(FastFloat::fast_float ALIAS fast_float)
+  endif ()
+endif ()
+target_link_libraries(libvast PRIVATE FastFloat::fast_float)
+dependency_summary("fast_float" FastFloat::fast_float "Dependencies")
+
 # Link against a backtrace library.
 option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
 add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE

@@ -51,3 +51,4 @@ update-source() {
 
 update-source caf "libvast/aux/caf"
 update-source indicators "libvast/aux/indicators"
+update-source fast_float "libvast/aux/fast_float"

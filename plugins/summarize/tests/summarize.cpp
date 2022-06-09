@@ -103,7 +103,7 @@ TEST(summarize Zeek conn log) {
   // used for comparison here. As an example, here's how to calculate the
   // grouped sums of the duration values using jq:
   //
-  //   jq -s 'map(.ts |= .[:-16])
+  //   jq -s 'map(.ts |= .[0:10])
   //     | group_by(.ts)[]
   //     | map(.duration)
   //     | add'
@@ -112,9 +112,15 @@ TEST(summarize Zeek conn log) {
   // sum, and min and max to calculate the min and max values respectively. The
   // rounding functions by trimming the last 16 characters from the timestamp
   // string before grouping.
+  //
+  // Alternatively, this data can be calculated directly from the zeek log with:
+  //
+  //   cat libvast_test/artifacts/logs/zeek/conn.log
+  //     | zeek-cut -D "%Y-%m-%d" ts duration
+  //     | awk '{sums[$1] += $2;}END{for (s in sums){print s,sums[s];}}'
   const auto expected_data = std::vector<std::vector<std::string_view>>{
-    {"2009-11-19", "115588575895806ns", "0", "621229", "286586076"},
-    {"2009-11-18", "65216054323993ns", "48", "519", "98531"},
+    {"2009-11-19", "33722481628959ns", "40", "498087", "286586076"},
+    {"2009-11-18", "147082148590872ns", "0", "123661", "81051017"},
   };
   REQUIRE_EQUAL(summarized_slice.rows(), expected_data.size());
   REQUIRE_EQUAL(summarized_slice.columns(), expected_data[0].size());

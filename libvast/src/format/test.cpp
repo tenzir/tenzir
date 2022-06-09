@@ -33,11 +33,11 @@ namespace {
 
 caf::expected<distribution> make_distribution(const type& t) {
   using parsers::alpha;
-  using parsers::real_opt_dot;
+  using parsers::real;
   auto tag = t.attribute("default");
   if (!tag || tag->empty())
     return caf::no_error;
-  auto parser = +alpha >> '(' >> real_opt_dot >> ',' >> real_opt_dot >> ')';
+  auto parser = +alpha >> '(' >> real >> ',' >> real >> ')';
   std::string name;
   double p0 = {};
   double p1 = {};

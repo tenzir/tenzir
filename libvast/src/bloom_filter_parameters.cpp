@@ -74,9 +74,9 @@ std::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
 
 std::optional<bloom_filter_parameters> parse_parameters(std::string_view x) {
   using namespace parser_literals;
-  using parsers::real_opt_dot;
+  using parsers::real;
   using parsers::u64;
-  auto parser = "bloomfilter("_p >> u64 >> ',' >> real_opt_dot >> ')';
+  auto parser = "bloomfilter("_p >> u64 >> ',' >> real >> ')';
   bloom_filter_parameters xs;
   xs.n = 0;
   xs.p = 0;

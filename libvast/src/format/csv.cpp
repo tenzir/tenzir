@@ -287,7 +287,7 @@ struct container_parser_builder {
       // The default parser for real's requires the dot, so we special-case the
       // real parser here.
       auto ws = ignore(*parsers::space);
-      return (ws >> parsers::real_opt_dot >> ws) ->* [](real x) {
+      return (ws >> parsers::real >> ws) ->* [](real x) {
         return x;
       };
     } else if constexpr (registered_parser_type<type_to_data_t<T>>) {
@@ -332,7 +332,7 @@ struct csv_parser_factory {
       if constexpr (std::is_same_v<U, duration_type>) {
         auto make_duration_parser = [&](auto period) {
           // clang-format off
-        return (-parsers::real_opt_dot ->* [](double x) {
+        return (-parsers::real ->* [](double x) {
           using period_type = decltype(period);
           using double_duration = std::chrono::duration<double, period_type>;
           return std::chrono::duration_cast<duration>(double_duration{x});
@@ -379,7 +379,7 @@ struct csv_parser_factory {
       } else if constexpr (std::is_same_v<U, real_type>) {
         // The default parser for real's requires the dot, so we special-case
         // the real parser here.
-        const auto& p = parsers::real_opt_dot;
+        const auto& p = parsers::real;
         return (-(quoted_parser{p} | p)).with(add_t<real>{bptr_});
       } else if constexpr (registered_parser_type<type_to_data_t<U>>) {
         using value_type = type_to_data_t<U>;

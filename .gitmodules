@@ -4,3 +4,6 @@
 [submodule "libvast/aux/indicators"]
 	path = libvast/aux/indicators
 	url = https://github.com/p-ranav/indicators
+[submodule "libvast/aux/fast_float"]
+	path = libvast/aux/fast_float
+	url = https://github.com/fastfloat/fast_float

@@ -24,6 +24,7 @@
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
+#include <fmt/format.h>
 
 #include <array>
 #include <map>
@@ -77,7 +78,9 @@ TEST(choice - unused LHS) {
 TEST(choice triple) {
   using namespace parsers;
   auto fired = false;
-  auto p = chr{'x'} | i32 | eps->*[&] { fired = true; };
+  auto p = chr{'x'} | i32 | eps->*[&] {
+    fired = true;
+  };
   caf::variant<char, int32_t> x;
   CHECK(skip_to_eoi(p)("foobar", x));
   CHECK(fired);
@@ -594,6 +597,93 @@ TEST(real) {
   //  CHECK(d == 123);
   //  CHECK(f == str.begin() + 4);
 }
+
+TEST(real - scientific) {
+  auto p = make_parser<real>{};
+  {
+    MESSAGE("null exponent");
+    auto str = ".456789e0"s;
+    real d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 0.456789);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("positive exponent");
+    auto str = ".456789e43"s;
+    real d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 4.56789e42);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("explicit positive exponent");
+    auto str = ".456789e+43"s;
+    real d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 4.56789e42);
+    CHECK_EQUAL(f, l);
+  }
+  {
+    MESSAGE("negative exponent");
+    auto str = ".456789e-322"s;
+    real d = 0;
+    auto f = str.begin();
+    auto l = str.end();
+    CHECK(p(f, l, d));
+    CHECK_EQUAL(d, 4.56789e-323);
+    CHECK_EQUAL(f, l);
+  }
+}
+
+// This is commented out because it revealed bugs in both libstdc++ and fmt.
+// Both libraries format some values incorrectly.
+// TEST(real - scientific exhaustive) {
+//   {
+//     auto p = make_parser<real>{};
+//     union real_cast {
+//       real value;
+//       struct comp {
+//         uint64_t mantissa : 52;
+//         uint16_t exponent : 11;
+//         int sign : 1;
+//       } components;
+//     };
+//     uint64_t n = 0;
+//     for (uint64_t mantissa = 0; mantissa < 10000; ++mantissa) {
+//       for (uint16_t exp = 0x400; exp < 0x7fe; ++exp, ++n) {
+//         auto cast = real_cast{
+//           .components
+//           = real_cast::comp{.mantissa = mantissa, .exponent = exp, .sign =
+//           0}};
+//         auto value = cast.value;
+//         auto rendered = fmt::format("{:e}", value);
+//         auto f = rendered.begin();
+//         auto l = rendered.end();
+//         real d = 0;
+//         if (!p(f, l, d))
+//           FAIL("failed to parse " << rendered);
+//         if (value != d) {
+//           const auto& ic = cast.components;
+//           const auto& oc = real_cast{.value = d}.components;
+//           FAIL(fmt::format("[{}] parser output mismatch: {} ({}) != {}\n   "
+//                            "input = {{ .mantissa = {:#015x}, .exponent = "
+//                            "{:#05x}, sign = {} }}\n  output = {{ .mantissa "
+//                            "= {:#015x}, .exponent = {:#05x}, sign = {} }}",
+//                            n, value, rendered, d, ic.mantissa, ic.exponent,
+//                            ic.sign, oc.mantissa, oc.exponent, oc.sign));
+//         }
+//       }
+//     }
+//     MESSAGE("successfully checked " << n << " generated real values");
+//   }
+// }
 
 TEST(byte) {
   using namespace parsers;
