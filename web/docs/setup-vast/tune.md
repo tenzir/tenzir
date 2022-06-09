@@ -192,7 +192,7 @@ partitions.
 This is how you run it:
 
 ```bash
-vast rebuild [--all] [--step-size=<number>] [--parallel=<number>] [<expression>]
+vast rebuild [--all] [--parallel=<number>] [<expression>]
 ```
 
 The on-disk format of VAST's partitions is versioned. By default, the `rebuild`
@@ -201,15 +201,10 @@ version. The `--all` flag makes the command instead consider _all_ partitions
 rather than only outdated ones. This is useful when you change configuration
 options and want to regenerate all partitions.
 
-The `--step-size` and `--parallel` options are performance tuning knobs. The
-step size controls the number of partitions to transform at once, and the
-parallelism level controls how many runs to start in parallel. The step size
-defaults to 4, and the parallel level to 1.
-
-The step size is a critical parameter for merging undersized partitions. For
-optimal results we recommend a larger step size. The memory usage requirements
-for rebuilding partitions in the VAST server scales linearly with both the step
-size and the parallel level.
+The `--parallel` options is a performance tuning knob. The parallelism level
+controls how many sets of partitions to rebuild in parallel. This value defaults
+to 1 to limit the CPU and memory requirements of the rebuilding process, which
+grow linearly with the selected parallelism level.
 
 An optional expression allows for restricting the set of partitions to rebuild.
 VAST performs a catalog lookup with the expression to identify the set of

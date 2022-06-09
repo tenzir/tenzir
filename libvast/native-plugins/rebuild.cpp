@@ -31,22 +31,29 @@ namespace vast::plugins::rebuild {
 
 namespace {
 
-using client_actor = caf::typed_actor<caf::reacts_to<atom::rebuild>>;
+using rebuilder_actor = caf::typed_actor<caf::reacts_to<atom::rebuild>>;
 
-struct client_state {
-  static constexpr auto name = "rebuild-client";
+struct rebuilder_state {
+  /// The name of the rebuilder actor in logs.
+  [[maybe_unused]] static constexpr auto name = "rebuilder";
 
-  client_actor::pointer self = {};
+  /// The state of the rebuilder actor.
+  rebuilder_actor::pointer self = {};
   system::index_actor index = {};
+  size_t parallel = {};
+  size_t max_partition_size = {};
   std::vector<partition_info> remaining_partitions = {};
   std::unique_ptr<indicators::ProgressSpinner> indicator = {};
 
+  /// Various counters required to show a live progress bar of the potentially
+  /// long-running rebuilding process.
   size_t num_total = {};
   size_t num_transforming = {};
   size_t num_transformed = {};
   size_t num_results = {};
   size_t num_heterogeneous = {};
 
+  /// Creates the indicator bar that shows the current progress.
   void create() {
     VAST_ASSERT(!indicator);
     indicators::show_console_cursor(false);
@@ -61,17 +68,26 @@ struct client_state {
       indicators::option::MaxProgress{0});
   }
 
+  /// Update the indicator bar to show the current progress.
   void tick() const {
     if (!indicator)
       return;
     indicator->set_option(indicators::option::MaxProgress{num_total});
     indicator->set_progress(num_transformed);
-    indicator->set_option(indicators::option::PostfixText{
-      fmt::format("[{}/{}] Transforming {}/{} partitions...", num_transformed,
-                  num_total, num_transforming, num_total - num_transformed)});
+    if (num_heterogeneous > 0)
+      indicator->set_option(indicators::option::PostfixText{fmt::format(
+        "[{}/{}] Phase 1/2: Splitting {}/{} heterogeneous partitions...",
+        num_transformed, num_total, num_heterogeneous,
+        num_transforming + num_heterogeneous)});
+    else
+      indicator->set_option(indicators::option::PostfixText{
+        fmt::format("[{}/{}] Phase 2/2: Merging {}/{} homogenous partitions...",
+                    num_transformed, num_total, num_transforming,
+                    num_total - num_transformed)});
     indicator->tick();
   }
 
+  /// Finish the indicator bar.
   void finish() const {
     VAST_ASSERT(indicator);
     VAST_ASSERT(indicator->is_completed());
@@ -91,21 +107,18 @@ struct client_state {
   }
 };
 
-client_actor::behavior_type
-client(client_actor::stateful_pointer<client_state> self,
-       const system::catalog_actor& catalog, system::index_actor index,
-       expression expr, size_t parallel, bool all) {
+rebuilder_actor::behavior_type
+rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
+          const system::catalog_actor& catalog, system::index_actor index,
+          expression expr, size_t parallel, bool all,
+          size_t max_partition_size) {
   VAST_ASSERT(parallel != 0);
   self->state.self = self;
   self->state.index = std::move(index);
+  self->state.parallel = parallel;
+  self->state.max_partition_size = max_partition_size;
   // Get the current max partition size and batch size; this is used internally
   // to smartly configure the number of partitions to run on in parallel.
-  const auto max_partition_size
-    = caf::get_or(catalog->home_system().config(), "vast.max-partition-size",
-                  defaults::system::max_partition_size);
-  const auto batch_size
-    = caf::get_or(catalog->home_system().config(), "vast.import.batch-size",
-                  defaults::import::table_slice_size);
   // Get the partition IDs from the catalog.
   const auto lookup_id = uuid::random();
   const auto max_partition_version = all
@@ -117,19 +130,21 @@ client(client_actor::stateful_pointer<client_state> self,
     ->request(catalog, caf::infinite, atom::candidates_v, lookup_id, expr,
               max_partition_version)
     .then(
-      [self, parallel](system::catalog_result& result) {
+      [self](system::catalog_result& result) {
         if (result.partitions.empty()) {
           fmt::print("no partitions need to be rebuilt\n", *self);
           self->quit();
           return;
         }
-        for (const auto& part : result.partitions)
-          VAST_WARN("{}: {} {} {}", part.uuid, part.events,
-                    data{part.max_import_time}, part.schema);
         self->state.num_total = result.partitions.size();
+        self->state.num_heterogeneous
+          = std::count_if(result.partitions.begin(), result.partitions.end(),
+                          [](const partition_info& partition) {
+                            return !partition.schema;
+                          });
         self->state.remaining_partitions = std::move(result.partitions);
         auto counter = detail::make_fanout_counter(
-          parallel,
+          self->state.parallel,
           [self]() {
             self->state.finish();
             self->quit();
@@ -137,15 +152,15 @@ client(client_actor::stateful_pointer<client_state> self,
           [self](caf::error error) {
             self->quit(std::move(error));
           });
-        VAST_INFO("{} triggers a rebuild for {} partitions with {} parallel "
-                  "runs",
-                  *self, self->state.num_total, parallel);
+        VAST_DEBUG("{} triggers a rebuild for {} partitions with {} parallel "
+                   "runs",
+                   *self, self->state.num_total, self->state.parallel);
         // Create the indicator spinner.
         self->state.create();
         self->state.tick();
-        for (size_t i = 0; i < parallel; ++i) {
+        for (size_t i = 0; i < self->state.parallel; ++i) {
           self
-            ->request(static_cast<client_actor>(self), caf::infinite,
+            ->request(static_cast<rebuilder_actor>(self), caf::infinite,
                       atom::rebuild_v)
             .then(
               [counter]() {
@@ -160,36 +175,48 @@ client(client_actor::stateful_pointer<client_state> self,
         self->quit(std::move(error));
       });
   return {
-    [self, max_partition_size, batch_size](atom::rebuild) -> caf::result<void> {
+    [self](atom::rebuild) -> caf::result<void> {
       if (self->state.remaining_partitions.empty())
         return {}; // We're done!
       auto current_run_partitions = std::vector<uuid>{};
-      // If there's any partition that has no homogenous schema we want to take
-      // it first.
       bool is_heterogeneous = false;
       bool is_oversized = false;
-      const auto heterogenenous_partition
-        = std::find_if(self->state.remaining_partitions.begin(),
-                       self->state.remaining_partitions.end(),
-                       [](const partition_info& partition) {
-                         return !partition.schema;
-                       });
-      if (heterogenenous_partition != self->state.remaining_partitions.end()) {
-        is_heterogeneous = true;
-        self->state.num_heterogeneous += 1;
-        current_run_partitions.push_back(heterogenenous_partition->uuid);
-        self->state.remaining_partitions.erase(heterogenenous_partition);
-      } else if (self->state.num_heterogeneous > 0) {
-        VAST_WARN("???");
-        return caf::skip;
+      if (self->state.num_heterogeneous > 0) {
+        // If there's any partition that has no homogenous schema we want to
+        // take it first and split it up into heterogeneous partitions.
+        const auto heterogenenous_partition
+          = std::find_if(self->state.remaining_partitions.begin(),
+                         self->state.remaining_partitions.end(),
+                         [](const partition_info& partition) {
+                           return !partition.schema;
+                         });
+        if (heterogenenous_partition
+            != self->state.remaining_partitions.end()) {
+          is_heterogeneous = true;
+          current_run_partitions.push_back(heterogenenous_partition->uuid);
+          self->state.remaining_partitions.erase(heterogenenous_partition);
+        } else {
+          // Wait until we have all heterogeneous partitions transformed into
+          // homogenous partitions before starting to work on the homogenous
+          // parittions. In practice, this leads to less undeful partitions.
+          return caf::skip;
+        }
       } else {
+        // Take the first homogenous partition and collect as many of the same
+        // type as possible to create new paritions. The approach used may
+        // collects too many partitions if there is no exact match, but that is
+        // usually better than conservatively undersizing the number of
+        // partitions for the current run. For oversized runs we move the last
+        // transformed partition back to the list of remaining partitions if it
+        // is less than 50% of the desired size.
         const auto schema = self->state.remaining_partitions[0].schema;
         auto num_events = size_t{0};
         const auto first_removed = std::remove_if(
           self->state.remaining_partitions.begin(),
           self->state.remaining_partitions.end(),
           [&](const partition_info& partition) {
-            if (schema == partition.schema && num_events < max_partition_size) {
+            if (schema == partition.schema
+                && num_events < self->state.max_partition_size) {
               num_events += partition.events;
               current_run_partitions.push_back(partition.uuid);
               return true;
@@ -198,9 +225,9 @@ client(client_actor::stateful_pointer<client_state> self,
           });
         self->state.remaining_partitions.erase(
           first_removed, self->state.remaining_partitions.end());
-        is_oversized = num_events > max_partition_size;
+        is_oversized = num_events > self->state.max_partition_size;
       }
-      // Ask the index to rebuild the partitions.
+      // Ask the index to rebuild the partitions we selected.
       auto rp = self->make_response_promise<void>();
       const auto num_partitions = current_run_partitions.size();
       self->state.num_transforming += num_partitions;
@@ -209,29 +236,31 @@ client(client_actor::stateful_pointer<client_state> self,
         ->request(self->state.index, caf::infinite, atom::rebuild_v,
                   std::move(current_run_partitions))
         .then(
-          [self, rp, num_partitions, max_partition_size, batch_size,
-           is_heterogeneous,
+          [self, rp, num_partitions, is_heterogeneous,
            is_oversized](std::vector<partition_info>& result) mutable {
+            // Adjust the counters, update the indicator, and move back
+            // undersized transformed partitions to the list of remainig
+            // partitions as desired.
+            VAST_ASSERT(!result.empty());
             if (is_heterogeneous) {
               self->state.num_heterogeneous -= 1;
-              std::copy(result.begin(), result.end(),
-                        std::back_inserter(self->state.remaining_partitions));
+              if (result.size() > 1
+                  || result[0].events <= self->state.max_partition_size / 2)
+                std::copy(result.begin(), result.end(),
+                          std::back_inserter(self->state.remaining_partitions));
             } else {
               self->state.num_transformed += num_partitions;
               self->state.num_results += result.size();
             }
             if (is_oversized) {
-              std::copy_if(result.begin(), result.end(),
-                           std::back_inserter(self->state.remaining_partitions),
-                           [&](const partition_info& partition) {
-                             if (partition.events + batch_size
-                                 < max_partition_size) {
-                               self->state.num_transformed -= 1;
-                               self->state.num_results -= 1;
-                               return true;
-                             }
-                             return false;
-                           });
+              VAST_ASSERT(result.size() > 1);
+              if (result.back().events <= self->state.max_partition_size / 2) {
+                self->state.remaining_partitions.push_back(
+                  std::move(result.back()));
+                self->state.num_transformed -= 1;
+                self->state.num_results -= 1;
+                self->state.num_total += 1;
+              }
             }
             if (is_heterogeneous || is_oversized)
               std::sort(self->state.remaining_partitions.begin(),
@@ -242,7 +271,8 @@ client(client_actor::stateful_pointer<client_state> self,
                         });
             self->state.num_transforming -= num_partitions;
             self->state.tick();
-            rp.delegate(static_cast<client_actor>(self), atom::rebuild_v);
+            // Pick up new work until we run out of remainig partitions.
+            rp.delegate(static_cast<rebuilder_actor>(self), atom::rebuild_v);
           },
           [self, num_partitions](caf::error& error) {
             self->state.num_transforming -= num_partitions;
@@ -251,6 +281,7 @@ client(client_actor::stateful_pointer<client_state> self,
           });
       return rp;
     },
+    // While the rebuilding is in progress, update the spinner 8x per second.
     caf::after(std::chrono::milliseconds{125}) >>
       [self]() noexcept {
         self->state.tick();
@@ -264,12 +295,11 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   const auto parallel
     = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1});
   if (parallel == 0)
-    return caf::make_message(caf::make_error(ec::invalid_configuration,
-                                             "rebuild requires a non-zero step "
-                                             "size and parallel level"));
-  // Create a scoped actor for interaction with the actor system.
+    return caf::make_message(caf::make_error(
+      ec::invalid_configuration, "rebuild requires a non-zero parallel level"));
+  // Create a scoped actor for interaction with the actor system and connect to
+  // the node.
   auto self = caf::scoped_actor{sys};
-  // Connect to the node.
   auto node_opt = system::spawn_or_connect_to_node(self, inv.options,
                                                    content(sys.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt))
@@ -293,9 +323,32 @@ caf::message rebuild_command(const invocation& inv, caf::actor_system& sys) {
   auto expr = to<expression>(*query);
   if (!expr)
     return caf::make_message(std::move(expr.error()));
-  auto handle
-    = self->spawn<caf::monitored>(client, std::move(catalog), std::move(index),
-                                  std::move(*expr), parallel, all);
+  // Get the server's max partition size.
+  auto max_partition_size
+    = caf::expected<size_t>{defaults::system::max_partition_size};
+  self->request(node, caf::infinite, atom::config_v)
+    .receive(
+      [&](record& config) {
+        const auto vast_it = config.find("vast");
+        if (vast_it == config.end()
+            || !caf::holds_alternative<record>(vast_it->second))
+          return;
+        const auto& vast = caf::get<record>(vast_it->second);
+        const auto max_partition_size_it = vast.find("max-partition-size");
+        if (max_partition_size_it == vast.end()
+            || !caf::holds_alternative<count>(max_partition_size_it->second))
+          return;
+        max_partition_size = caf::get<count>(max_partition_size_it->second);
+      },
+      [&](caf::error& error) {
+        max_partition_size = std::move(error);
+      });
+  if (!max_partition_size)
+    return caf::make_message(std::move(max_partition_size.error()));
+  // Spawn a rebuilder, and wait for it to finish.
+  auto handle = self->spawn<caf::monitored>(rebuilder, std::move(catalog),
+                                            std::move(index), std::move(*expr),
+                                            parallel, all, *max_partition_size);
   auto result = caf::error{};
   auto done = false;
   self

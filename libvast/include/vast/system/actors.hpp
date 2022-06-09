@@ -484,6 +484,8 @@ using node_actor = typed_actor_fwd<
     std::vector<caf::actor>>,
   // Retrieve the version of the process running the NODE.
   caf::replies_to<atom::get, atom::version>::with<record>,
+  // Retrieve the configuration of the NODE.
+  caf::replies_to<atom::config>::with<record>,
   // Handle a signal.
   // TODO: Make this a signal_monitor_client_actor
   caf::reacts_to<atom::signal, int>>::unwrap;
