@@ -35,6 +35,9 @@ resource "aws_subnet" "private" {
 
 resource "aws_eip" "nat_gateway" {
   vpc = true
+  tags = {
+    "Name" = "${module.env.module_name}-nat-gateway-${module.env.stage}"
+  }
 }
 
 resource "aws_nat_gateway" "nat_gateway" {
@@ -45,6 +48,7 @@ resource "aws_nat_gateway" "nat_gateway" {
   }
 }
 
+// Requester side of the peering connection
 resource "aws_vpc_peering_connection" "peering" {
   peer_vpc_id   = var.peered_vpc_id
   vpc_id        = aws_vpc.new.id
@@ -53,7 +57,6 @@ resource "aws_vpc_peering_connection" "peering" {
   auto_accept   = false
 
   tags = {
-    Side = "Requester"
     Name = "${module.env.module_name}-${module.env.stage}"
   }
 }

@@ -1,10 +1,11 @@
 locals {
+  container_name = "main"
   container_definition = [
     {
       cpu       = var.task_cpu
       image     = var.docker_image
       memory    = var.task_memory
-      name      = "main"
+      name      = local.container_name
       essential = true
       mountPoints = [
         {

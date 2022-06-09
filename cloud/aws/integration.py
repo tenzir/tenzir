@@ -8,9 +8,11 @@ def vast_start_restart(c):
     print("Run start-vast-server")
     c.run("./vast-cloud start-vast-server")
 
+    print("Get running vast server")
+    c.run("./vast-cloud get-vast-server")
+
     print("Run start-vast-server again")
-    res = c.run("./vast-cloud start-vast-server", warn=True)
-    assert res.exited != 0, "Starting server again should fail"
+    c.run("./vast-cloud start-vast-server")
 
     print("Run restart-vast-server")
     c.run("./vast-cloud restart-vast-server")
@@ -22,7 +24,6 @@ def vast_start_restart(c):
     time.sleep(100)
 
 
-@task
 def vast_import_suricata(c):
     """Import Suricata data from the provided URL"""
     url = "https://raw.githubusercontent.com/tenzir/vast/v1.0.0/vast/integration/data/suricata/eve.json"
@@ -31,35 +32,26 @@ def vast_import_suricata(c):
     )
 
 
-@task
-def vast_count(c, count):
-    """Validate that the event count in the running server"""
+def vast_count(c):
+    """Run `vast count` and parse the result"""
     res = c.run('./vast-cloud run-lambda -c "vast count"', hide="stdout")
-    vast_count = res.stdout.strip()
-    print(f"Expected vast count {count}, got {vast_count}")
-    assert str(count) == vast_count, "Wrong count"
+    return int(res.stdout.strip())
 
 
 @task
-def clean_context(c):
-    """Remove existing resources that might pertubate the tests"""
-    print("Stop all existing tasks")
-    c.run("./vast-cloud stop-all-tasks")
-    print("Clean mounted folder")
-    c.run('./vast-cloud run-vast-task --cmd-override "rm -rf /var/lib/vast/*"')
-    print("Waiting for the cleaning task to boot...")
-    time.sleep(100)
+def vast_data_import(c):
+    """Import data from a file and check count increase"""
+    print("Import data into VAST")
+    init_count = vast_count(c)
+    vast_import_suricata(c)
+    new_count = vast_count(c)
+    print(f"Expected count increase 7, got {new_count-init_count}")
+    assert 7 == new_count - init_count, "Wrong count"
 
 
-@task(help={"clean-ctx": "Clean up resources before and after running the tests"})
-def all(c, clean_ctx=False):
+@task()
+def all(c):
     """Run the entire testbook. VAST needs to be deployed beforehand.
     Warning: This will affect the state of the current stack"""
-    if clean_ctx:
-        clean_context(c)
     vast_start_restart(c)
-    vast_count(c, 0)
-    vast_import_suricata(c)
-    vast_count(c, 7)
-    if clean_ctx:
-        clean_context(c)
+    vast_data_import(c)
