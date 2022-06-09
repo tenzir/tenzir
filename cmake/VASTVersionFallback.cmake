@@ -5,4 +5,4 @@ set(VAST_VERSION_FALLBACK "v2.0.0")
 # The partition version. This number must be bumped alongside the release
 # version for releases that contain major format changes to the on-disk layout
 # of VAST's partitions.
-set(VAST_PARTITION_VERSION 0)
+set(VAST_PARTITION_VERSION 1)
