@@ -15,6 +15,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/zip_iterator.hpp"
 #include "vast/query.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -186,7 +187,9 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     run();
     rp.receive(
       [&](catalog_result mdx_result) {
-        result = std::move(mdx_result.partitions);
+        result.reserve(mdx_result.partitions.size());
+        for (const auto& partition : mdx_result.partitions)
+          result.push_back(partition.uuid);
       },
       [=](const caf::error& e) {
         FAIL(render(e));
@@ -206,7 +209,9 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     run();
     rp.receive(
       [&](catalog_result candidates) {
-        result = std::move(candidates.partitions);
+        result.reserve(candidates.partitions.size());
+        for (const auto& partition : candidates.partitions)
+          result.push_back(partition.uuid);
       },
       [=](const caf::error& e) {
         FAIL(render(e));
@@ -400,9 +405,13 @@ TEST(catalog messages) {
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   expr_response.receive(
-    [this](const catalog_result& candidates) {
+    [this](catalog_result& candidates) {
       auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
-      CHECK_EQUAL(candidates.partitions, expected);
+      std::sort(candidates.partitions.begin(), candidates.partitions.end());
+      REQUIRE_EQUAL(candidates.partitions.size(), expected.size());
+      for (const auto& [partition, expected_uuid] :
+           detail::zip(candidates.partitions, expected))
+        CHECK_EQUAL(partition.uuid, expected_uuid);
     },
     [](const caf::error& e) {
       auto msg = fmt::format("unexpected error {}", render(e));
@@ -415,9 +424,13 @@ TEST(catalog messages) {
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();
   ids_response.receive(
-    [this](const catalog_result& candidates) {
+    [this](catalog_result& candidates) {
       auto expected = std::vector<uuid>{ids[0], ids[1]};
-      CHECK_EQUAL(candidates.partitions, expected);
+      std::sort(candidates.partitions.begin(), candidates.partitions.end());
+      REQUIRE_EQUAL(candidates.partitions.size(), expected.size());
+      for (const auto& [partition, expected_uuid] :
+           detail::zip(candidates.partitions, expected))
+        CHECK_EQUAL(partition.uuid, expected_uuid);
     },
     [](const caf::error& e) {
       auto msg = fmt::format("unexpected error {}", render(e));
@@ -432,7 +445,10 @@ TEST(catalog messages) {
   both_response.receive(
     [this](const catalog_result& candidates) {
       auto expected = std::vector<uuid>{ids[1]};
-      CHECK_EQUAL(candidates.partitions, expected);
+      REQUIRE_EQUAL(candidates.partitions.size(), expected.size());
+      for (const auto& [partition, expected_uuid] :
+           detail::zip(candidates.partitions, expected))
+        CHECK_EQUAL(partition.uuid, expected_uuid);
     },
     [](const caf::error& e) {
       auto msg = fmt::format("unexpected error {}", render(e));

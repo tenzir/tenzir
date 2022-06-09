@@ -123,7 +123,7 @@ jobs:
             # CHANGELOG.md must not be modified in non-release PRs, unless the
             # template also changed.
             is_unchanged CHANGELOG.md || ! is_unchanged cmake/VASTChangelog.cmake.in
-          else
+          elif is_unchanged .github/workflows/changelog-override.md; then
             # CHANGELOG.md must be modified in release PRs
             ! is_unchanged CHANGELOG.md
             # Check whether the updated CHANGELOG.md is correct

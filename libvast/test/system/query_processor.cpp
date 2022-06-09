@@ -67,6 +67,9 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::keep_original_partition) -> std::vector<partition_info> {
       FAIL("no mock implementation available");
     },
+    [=](atom::rebuild, std::vector<uuid>) -> std::vector<partition_info> {
+      FAIL("no mock implementation available");
+    },
     [=](atom::importer, system::idspace_distributor_actor) {
       FAIL("no mock implementation available");
     },

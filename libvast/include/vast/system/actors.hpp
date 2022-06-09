@@ -213,6 +213,10 @@ using catalog_actor = typed_actor_fwd<
   // Return the candidate partitions for an expression.
   caf::replies_to<atom::candidates, vast::uuid,
                   vast::expression>::with<catalog_result>,
+  // Return the candidate partitions for an expression, restricted to a max
+  // partition version.
+  caf::replies_to<atom::candidates, vast::uuid, vast::expression,
+                  uint64_t>::with<catalog_result>,
   // Return the candidate partitions for a query.
   caf::replies_to<atom::candidates, vast::query>::with<catalog_result>>
   // Conform to the procotol of the STATUS CLIENT actor.
@@ -275,6 +279,11 @@ using index_actor = typed_actor_fwd<
   // preserving the old one(s).
   caf::replies_to<atom::apply, transform_ptr, std::vector<uuid>,
                   keep_original_partition>::with<std::vector<partition_info>>,
+  // A shorthand to the above handler that runs an identity transformation on
+  // the provided partitions without keeping the originals. This is a necessity,
+  // because transform_ptr's cannot be send across the wire.
+  caf::replies_to<atom::rebuild,
+                  std::vector<uuid>>::with<std::vector<partition_info>>,
   // Makes the identity of the importer known to the index.
   caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
@@ -475,6 +484,8 @@ using node_actor = typed_actor_fwd<
     std::vector<caf::actor>>,
   // Retrieve the version of the process running the NODE.
   caf::replies_to<atom::get, atom::version>::with<record>,
+  // Retrieve the configuration of the NODE.
+  caf::replies_to<atom::config>::with<record>,
   // Handle a signal.
   // TODO: Make this a signal_monitor_client_actor
   caf::reacts_to<atom::signal, int>>::unwrap;

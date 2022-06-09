@@ -35,6 +35,8 @@ dependencies and versions.
 |✓|[spdlog](https://github.com/gabime/spdlog)|>= 1.5|Required for logging.|
 |✓|[fmt](https://fmt.dev)|>= 7.1.3|Required for formatted text output.|
 |✓|[xxHash](https://github.com/Cyan4973/xxHash)|>= 0.8.0|Required for computing fast hash digests.|
+|✓|[robin-map](https://github.com/Tessil/robin-map)|>= 0.6.3|Fast hash map and hash set using robin hood hashing. (Bundled as subtree.)|
+|✓|[indicators](https://github.com/p-ranav/indicators)|>= 2.2.0|Activity indicators. (Bundled as submodule.)|
 ||[libpcap](https://www.tcpdump.org)||Required for PCAP import, export, and pivoting to and from PCAP traces.|
 ||[broker](https://github.com/zeek/broker)||Required to build the Broker plugin.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libvast.|

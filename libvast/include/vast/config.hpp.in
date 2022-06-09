@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #cmakedefine01 VAST_ENABLE_ASAN
 #cmakedefine01 VAST_ENABLE_ASSERTIONS
 #cmakedefine01 VAST_ENABLE_BACKTRACE
@@ -29,6 +31,10 @@ extern const char* major;
 extern const char* minor;
 extern const char* patch;
 extern const char* tweak;
+
+/// The version number of the VAST partition format. Bump this whenever making
+/// changes that require partitions to be rebuilt.
+extern const uint64_t partition_version;
 
 namespace build {
 

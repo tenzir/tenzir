@@ -15,6 +15,16 @@ FIleCopyrightText: (c) 2017 Tessil
 LicenseConcluded: MIT
 
 SPDXID: SPDXRef-File
+FileName: ./libvast/aux/indicators/include/indicators/termcolor.hpp
+FIleCopyrightText: (c) 2013, Ihor Kalnytskyi
+LicenseConcluded: BSD-3-Clause
+
+SPDXID: SPDXRef-File
+FileName: ./libvast/aux/indicators/*
+FIleCopyrightText: (c) 2019 Pranav
+LicenseConcluded: MIT
+
+SPDXID: SPDXRef-File
 FileName: ./libvast/src/concept/hashable/crc.cpp
 FileCopyrightText: (C) 1995-2013 Jean-loup Gailly and Mark Adler
 LicenseConcluded: Zlib
