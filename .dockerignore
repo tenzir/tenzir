@@ -1,6 +1,3 @@
-!CHANGELOG.md
-!README.md
-!VERSIONING.md
 *.md
 */*/.git*
 .clangd/
@@ -11,3 +8,6 @@ build/
 compile_commands.json
 nix/
 pyvast/
+!CHANGELOG.md
+!README.md
+!VERSIONING.md
