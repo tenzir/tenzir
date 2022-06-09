@@ -364,6 +364,11 @@ add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
 
 unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
 
+option(VAST_ENABLE_ASSERTIONS_CHEAP "Enable cheap assertions"
+       ON)
+add_feature_info("VAST_ENABLE_ASSERTIONS_CHEAP" VAST_ENABLE_ASSERTIONS_CHEAP
+                 "enable assertions that are cheap to check.")
+
 # -- static build support ------------------------------------------------------
 
 cmake_dependent_option(
