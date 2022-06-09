@@ -294,7 +294,7 @@ tests:
     tags: [node, import-export, argus, ssv, csv]
     steps:
       - command: -N import -t argus.record csv '--separator=" "'
-        input: data/csv/argus.ssv
+        input: data/csv/argus-additional-fields.ssv
       - command: -N export csv
 
   Node argus tsv:

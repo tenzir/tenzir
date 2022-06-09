@@ -217,7 +217,10 @@ caf::optional<type> reader::make_layout(const std::vector<std::string>& names) {
               r->field(*index).type,
             });
           else
-            return caf::none;
+            result_raw.push_back({
+              name,
+              type{string_type{}, {{"skip"}}},
+            });
         }
         auto result = type{record_type{result_raw}};
         result.assign_metadata(t);
