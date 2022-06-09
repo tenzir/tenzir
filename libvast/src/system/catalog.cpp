@@ -448,7 +448,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         const vast::expression& expr) -> caf::result<catalog_result> {
       return self->delegate(
         static_cast<catalog_actor>(self), atom::candidates_v, lookup_id, expr,
-        std::numeric_limits<decltype(defaults::latest_partition_version)>::max());
+        std::numeric_limits<decltype(version::partition_version)>::max());
     },
     [=](atom::candidates, vast::uuid lookup_id, const vast::expression& expr,
         uint64_t max_partition_version) -> caf::result<catalog_result> {

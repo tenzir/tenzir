@@ -15,6 +15,7 @@ const char* major = "@VAST_VERSION_MAJOR@";
 const char* minor = "@VAST_VERSION_MINOR@";
 const char* patch = "@VAST_VERSION_PATCH@";
 const char* tweak = "@VAST_VERSION_TWEAK@";
+const uint64_t partition_version = @VAST_PARTITION_VERSION@;
 
 namespace build {
 

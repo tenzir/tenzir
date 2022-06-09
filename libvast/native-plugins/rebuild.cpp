@@ -9,7 +9,6 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
-#include <vast/defaults.hpp>
 #include <vast/detail/fanout_counter.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
@@ -121,9 +120,8 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   // to smartly configure the number of partitions to run on in parallel.
   // Get the partition IDs from the catalog.
   const auto lookup_id = uuid::random();
-  const auto max_partition_version = all
-                                       ? defaults::latest_partition_version
-                                       : defaults::latest_partition_version - 1;
+  const auto max_partition_version
+    = all ? version::partition_version : version::partition_version - 1;
   VAST_INFO("{} requests {} partitions matching the expression {}", *self,
             all ? "all" : "outdated", expr);
   self
