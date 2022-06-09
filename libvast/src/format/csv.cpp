@@ -145,7 +145,8 @@ caf::error writer::write(const table_slice& x) {
     size_t column = 0;
     for (const auto& [field, _] : rlayout.leaves()) {
       append(separator);
-      if (auto err = render(iter, x.at(row, column, field.type)))
+      if (auto err = render(iter, to_canonical(field.type,
+                                               x.at(row, column, field.type))))
         return err;
       ++column;
     }
