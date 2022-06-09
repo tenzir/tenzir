@@ -109,21 +109,9 @@ jobs:
           sleep 200
           ./vast-cloud deploy --auto-approve
 
-      - name: Start and restart VAST server
+      - name: Run integration.all playbook
         run: |
-          ./vast-cloud integration.vast-start-restart
-
-      - name: Test db empty from Lambda
-        run: |
-          ./vast-cloud integration.vast-count --count 0
-
-      - name: Import data
-        run: |
-          ./vast-cloud integration.vast-import-suricata
-
-      - name: Test db not empty from Lambda
-        run: |
-          ./vast-cloud integration.vast-count --count 7
+          ./vast-cloud integration.all
 
       - name: Destroy
         continue-on-error: true

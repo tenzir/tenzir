@@ -1,0 +1,213 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "nix-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_FIND_FRAMEWORK": "LAST",
+        "CMAKE_FIND_PACKAGE_PREFER_CONFIG": "ON",
+        "CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY": "OFF",
+        "CMAKE_FIND_USE_PACKAGE_REGISTRY": "OFF",
+        "CMAKE_OSX_SYSROOT": "",
+        "VAST_ENABLE_DEVELOPER_MODE": "ON",
+        "VAST_ENABLE_LSVAST": "ON",
+        "VAST_ENABLE_VAST_REGENERATE": "ON",
+        "VAST_PLUGINS": "${sourceDir}/plugins/*"
+      }
+    },
+    {
+      "name": "nix-debug",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "VAST_ENABLE_BUNDLED_CAF": "ON",
+        "VAST_PLUGINS": "${sourceDir}/plugins/pcap;${sourceDir}/plugins/sigma;${sourceDir}/plugins/summarize"
+      }
+    },
+    {
+      "name": "nix-relwithdebinfo",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+      }
+    },
+    {
+      "name": "nix-release",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF"
+      }
+    },
+    {
+      "name": "clang-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      },
+      "environment": {
+        "LDFLAGS": "-fuse-ld=lld"
+      }
+    },
+    {
+      "name": "nix-clang-debug",
+      "inherits": ["nix-base", "nix-debug", "clang-base"],
+      "displayName": "Nix Clang Debug Config",
+      "binaryDir": "${sourceDir}/build/clang/debug",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/debug"
+      }
+    },
+    {
+      "name": "nix-clang-relwithdebinfo",
+      "inherits": ["nix-base", "nix-relwithdebinfo", "clang-base"],
+      "displayName": "Nix Clang RelWithDebInfo Config",
+      "binaryDir": "${sourceDir}/build/clang/relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/relwithdebinfo"
+      }
+    },
+    {
+      "name": "nix-clang-release",
+      "inherits": ["nix-base", "nix-release", "clang-base"],
+      "displayName": "Nix Clang Release Config",
+      "binaryDir": "${sourceDir}/build/clang/release",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/release"
+      }
+    },
+    {
+      "name": "gcc-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "nix-gcc-debug",
+      "inherits": ["nix-base", "nix-debug", "gcc-base"],
+      "displayName": "Nix GCC Debug Config",
+      "binaryDir": "${sourceDir}/build/gcc/debug",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/debug"
+      },
+      "environment": {
+        "LDFLAGS": "-fuse-ld=lld"
+      }
+    },
+    {
+      "name": "nix-gcc-relwithdebinfo",
+      "inherits": ["nix-base", "nix-relwithdebinfo", "gcc-base"],
+      "displayName": "Nix GCC RelWithDebInfo Config",
+      "binaryDir": "${sourceDir}/build/gcc/relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/relwithdebinfo"
+      },
+      "environment": {
+        "LDFLAGS": "-fuse-ld=lld"
+      }
+    },
+    {
+      "name": "nix-gcc-release",
+      "inherits": ["nix-base", "nix-release", "gcc-base"],
+      "displayName": "Nix GCC Release Config",
+      "binaryDir": "${sourceDir}/build/gcc/release",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/release"
+      },
+      "environment": {
+        "LDFLAGS": "-fuse-ld=gold"
+      }
+    },
+    {
+      "name": "nix-static",
+      "inherits": ["nix-base"],
+      "hidden": true,
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": "OFF",
+        "BUILD_TESTING": "OFF",
+        "CMAKE_C_COMPILER": "x86_64-unknown-linux-musl-gcc",
+        "CMAKE_CXX_COMPILER": "x86_64-unknown-linux-musl-g++",
+        "CMAKE_SYSTEM_NAME": "Linux",
+        "VAST_ENABLE_BUNDLED_CAF": "OFF",
+        "VAST_ENABLE_JEMALLOC": "ON",
+        "VAST_ENABLE_UNIT_TESTS": "OFF",
+        "VAST_ENABLE_STATIC_EXECUTABLE": "ON"
+      }
+    },
+    {
+      "name": "nix-gcc-static-debug",
+      "inherits": ["nix-static"],
+      "displayName": "Nix GCC Static Debug Config",
+      "binaryDir": "${sourceDir}/build/gcc-static/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc-static/debug"
+      }
+    },
+    {
+      "name": "nix-gcc-static-relwithdebinfo",
+      "inherits": ["nix-static"],
+      "displayName": "Nix GCC Static RelWithDebInfo Config",
+      "binaryDir": "${sourceDir}/build/gcc-static/relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc-static/relwithdebinfo"
+      }
+    },
+    {
+      "name": "nix-gcc-static-release",
+      "inherits": ["nix-static"],
+      "displayName": "Nix GCC Static Release Config",
+      "binaryDir": "${sourceDir}/build/gcc-static/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc-static/release",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "nix-clang-debug",
+      "configurePreset": "nix-clang-debug"
+    },
+    {
+      "name": "nix-clang-relwithdebinfo",
+      "configurePreset": "nix-clang-relwithdebinfo"
+    },
+    {
+      "name": "nix-clang-release",
+      "configurePreset": "nix-clang-release"
+    },
+    {
+      "name": "nix-gcc-debug",
+      "configurePreset": "nix-gcc-debug"
+    },
+    {
+      "name": "nix-gcc-relwithdebinfo",
+      "configurePreset": "nix-gcc-relwithdebinfo"
+    },
+    {
+      "name": "nix-gcc-release",
+      "configurePreset": "nix-gcc-release"
+    },
+    {
+      "name": "nix-gcc-static-debug",
+      "configurePreset": "nix-gcc-static-debug"
+    },
+    {
+      "name": "nix-gcc-static-relwithdebinfo",
+      "configurePreset": "nix-gcc-static-relwithdebinfo"
+    },
+    {
+      "name": "nix-gcc-static-release",
+      "configurePreset": "nix-gcc-static-release"
+    }
+  ]
+}

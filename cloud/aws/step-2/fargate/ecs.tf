@@ -5,14 +5,14 @@ resource "aws_cloudwatch_log_group" "fargate_logging" {
 
 resource "aws_security_group" "ecs_tasks" {
   name        = "${module.env.module_name}_${var.name}_task_${module.env.stage}"
-  description = "allow inbound access from the cidr blocks specified in the ingress_subnets only"
+  description = "Allow local inbound access"
   vpc_id      = var.vpc_id
 
   ingress {
     protocol    = "tcp"
     from_port   = var.port
     to_port     = var.port
-    cidr_blocks = var.ingress_subnet_cidrs
+    cidr_blocks = [data.aws_subnet.selected.cidr_block]
   }
 
   egress {
@@ -49,7 +49,6 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
       for_each = var.storage_type == "EFS" ? [1] : []
       content {
         file_system_id     = module.efs[0].file_system_id
-        root_directory     = "/storage"
         transit_encryption = "ENABLED"
         authorization_config {
           access_point_id = module.efs[0].access_point_id
@@ -58,4 +57,35 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
       }
     }
   }
+}
+
+resource "aws_ecs_service" "fargate_service" {
+  name                               = "${module.env.module_name}-${var.name}-${module.env.stage}"
+  cluster                            = var.ecs_cluster_name
+  task_definition                    = aws_ecs_task_definition.fargate_task_def.arn
+  desired_count                      = 0
+  deployment_maximum_percent         = 100
+  deployment_minimum_healthy_percent = 0
+  propagate_tags                     = "SERVICE"
+  enable_execute_command             = true
+  enable_ecs_managed_tags            = true
+  launch_type                        = "FARGATE"
+
+  network_configuration {
+    subnets          = [var.subnet_id]
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.fargate_target.arn
+    container_name   = local.container_name
+    container_port   = var.port
+  }
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+
+  depends_on = [aws_lb_listener.fargate_listener]
 }

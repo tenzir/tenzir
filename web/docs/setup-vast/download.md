@@ -60,6 +60,16 @@ command:
 version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
 ```
 
+### Nix
+
+Our repository contains a `flake.nix` that provides a VAST as an app, you can
+use `vast = "github:tenzir/vast/stable"` as an input in your own flake or just
+try it out with:
+
+```bash
+nix run github:tenzir/vast/stable
+```
+
 ## Images
 
 Our CI builds Docker images for the latest release and the current development
