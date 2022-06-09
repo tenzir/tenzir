@@ -167,8 +167,15 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   if (in != nullptr)
     reset(std::move(in));
   using defaults = vast::defaults::import::csv;
-  opt_.separator
+  opt_.separator = defaults::separator[0];
+  auto seperator_option
     = get_or(options, "vast.import.csv.separator", defaults::separator);
+  if (seperator_option.size() != 1)
+    VAST_WARN("{} encountered invalid vast.import.csv.separator '{}'; must be "
+              "a single character",
+              detail::pretty_type_name(*this), seperator_option);
+  else
+    opt_.separator = seperator_option[0];
   opt_.set_separator
     = get_or(options, "vast.import.csv.set_separator", defaults::set_separator);
   opt_.kvp_separator
@@ -248,11 +255,11 @@ struct container_parser_builder {
   result_type operator()(const T& t) const {
     if constexpr (std::is_same_v<T, string_type>) {
       // clang-format off
-      return +(parsers::any - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
+      return +(parsers::any - opt_.separator - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
         return data{std::move(x)};
       };
     } else if constexpr (std::is_same_v<T, pattern_type>) {
-      return +(parsers::any - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
+      return +(parsers::any - opt_.separator - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
         return data{pattern{std::move(x)}};
       };
       // clang-format on
@@ -274,7 +281,7 @@ struct container_parser_builder {
                ->*list_insert;
       // clang-format on
     } else if constexpr (std::is_same_v<T, map_type>) {
-      auto ws = ignore(*parsers::space);
+      auto ws = ignore(*(parsers::space - opt_.separator));
       auto map_insert = [](std::vector<std::pair<Attribute, Attribute>> xs) {
         return map(std::make_move_iterator(xs.begin()),
                    std::make_move_iterator(xs.end()));
@@ -286,13 +293,13 @@ struct container_parser_builder {
     } else if constexpr (std::is_same_v<T, real_type>) {
       // The default parser for real's requires the dot, so we special-case the
       // real parser here.
-      auto ws = ignore(*parsers::space);
+      auto ws = ignore(*(parsers::space - opt_.separator));
       return (ws >> parsers::real_opt_dot >> ws) ->* [](real x) {
         return x;
       };
     } else if constexpr (registered_parser_type<type_to_data_t<T>>) {
       using value_type = type_to_data_t<T>;
-      auto ws = ignore(*parsers::space);
+      auto ws = ignore(*(parsers::space - opt_.separator));
       return (ws >> make_parser<value_type>{} >> ws) ->* [](value_type x) {
         return x;
       };
@@ -328,7 +335,8 @@ struct csv_parser_factory {
   result_type operator()(const type& t) const {
     auto f = [&]<concrete_type U>(const U& u) -> result_type {
       [[maybe_unused]] const auto field
-        = parsers::qqstr | +(parsers::any - opt_.set_separator);
+        = parsers::qqstr
+          | +(parsers::any - opt_.separator - opt_.set_separator);
       if constexpr (std::is_same_v<U, duration_type>) {
         auto make_duration_parser = [&](auto period) {
           // clang-format off
@@ -432,7 +440,7 @@ vast::system::report reader::status() const {
 }
 
 caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
-  auto ws = ignore(*parsers::space);
+  auto ws = ignore(*(parsers::space - opt_.separator));
   auto column_name = parsers::qqstr | +(parsers::printable - opt_.separator);
   auto p = (ws >> column_name >> ws) % opt_.separator;
   std::vector<std::string> columns;

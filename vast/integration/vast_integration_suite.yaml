@@ -290,6 +290,13 @@ tests:
       - command: -N export ascii 'State != "CON" && Dur > 4900ms'
       - command: -N export ascii 'Cause == "Status" && Dur > 1s'
 
+  Node argus ssv:
+    tags: [node, import-export, argus, csv]
+    steps:
+      - command: -N import -t argus.record csv '--separator=" "'
+        input: data/csv/argus.ssv
+      - command: -N export csv
+
   Manual 2:
     tags: [examples, disabled]
     fixture: BiTopologyTester
