@@ -30,7 +30,7 @@ Use [yarn](https://yarnpkg.com/) to build and view the site locally:
 ```bash
 # Setup environment.
 yarn
-# Safer than just 'yarn' as it avoids global dependency pollution.
+# Guaranteed to work, but a bit more to type than just 'yarn':
 yarn install --frozen-lockfile
 ```
 
