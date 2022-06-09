@@ -79,10 +79,10 @@ offers two starting points: a *development* and *production* layer.
 ### Build the production image
 
 The production image is optimized for size and security. This is the official
-`tenzir/vast` image. Build it as follows:
+`tenzir/vast` image. From the repository root, build it as follows:
 
 ```bash
-docker build -t tenzir/vast
+docker build -t tenzir/vast .
 ```
 
 ### Build the development image
@@ -95,5 +95,5 @@ images.
 Build the development image by specifying it as `--target`:
 
 ```bash
-docker build -t tenzir/vast-dev --target development
+docker build -t tenzir/vast-dev --target development .
 ```
