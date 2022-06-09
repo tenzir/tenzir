@@ -291,10 +291,17 @@ tests:
       - command: -N export ascii 'Cause == "Status" && Dur > 1s'
 
   Node argus ssv:
-    tags: [node, import-export, argus, csv]
+    tags: [node, import-export, argus, ssv, csv]
     steps:
       - command: -N import -t argus.record csv '--separator=" "'
         input: data/csv/argus.ssv
+      - command: -N export csv
+
+  Node argus tsv:
+    tags: [node, import-export, argus, tsv, csv]
+    steps:
+      - command: -N import -t argus.record csv '--separator="\t"'
+        input: data/csv/argus-reordered.tsv
       - command: -N export csv
 
   Manual 2:
