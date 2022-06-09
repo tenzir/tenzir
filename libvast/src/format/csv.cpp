@@ -203,25 +203,33 @@ const char* reader::name() const {
   return "csv-reader";
 }
 
-caf::optional<type> reader::make_layout(const std::vector<std::string>& names) {
+caf::optional<type>
+reader::make_layout(const std::vector<std::string>& names, bool first_run) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(names));
   for (const auto& t : module_) {
     if (const auto* r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<type> {
         std::vector<record_type::field_view> result_raw;
         result_raw.reserve(names.size());
+        auto matched_once = false;
         for (const auto& name : names) {
-          if (auto index = r->resolve_key(name))
+          if (auto index = r->resolve_key(name)) {
+            matched_once = true;
             result_raw.push_back({
               name,
               r->field(*index).type,
             });
-          else
+          } else if (!first_run) {
             result_raw.push_back({
               name,
               type{string_type{}, {{"skip"}}},
             });
+          } else {
+            return caf::none;
+          }
         }
+        if (!matched_once)
+          return caf::none;
         auto result = type{record_type{result_raw}};
         result.assign_metadata(t);
         return result;
@@ -238,7 +246,9 @@ caf::optional<type> reader::make_layout(const std::vector<std::string>& names) {
       };
     } // else skip
   }
-  return caf::none;
+  if (!first_run)
+    return caf::none;
+  return make_layout(names, false);
 }
 
 namespace {
