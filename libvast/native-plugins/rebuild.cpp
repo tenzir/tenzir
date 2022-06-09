@@ -204,7 +204,8 @@ client(client_actor::stateful_pointer<client_state> self,
       auto rp = self->make_response_promise<void>();
       const auto num_partitions = current_run_partitions.size();
       self->state.num_transforming += num_partitions;
-      self->state.tick(); self
+      self->state.tick();
+      self
         ->request(self->state.index, caf::infinite, atom::rebuild_v,
                   std::move(current_run_partitions))
         .then(
@@ -223,7 +224,8 @@ client(client_actor::stateful_pointer<client_state> self,
               std::copy_if(result.begin(), result.end(),
                            std::back_inserter(self->state.remaining_partitions),
                            [&](const partition_info& partition) {
-                             if (partition.events + batch_size < max_partition_size) {
+                             if (partition.events + batch_size
+                                 < max_partition_size) {
                                self->state.num_transformed -= 1;
                                self->state.num_results -= 1;
                                return true;
