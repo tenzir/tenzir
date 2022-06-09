@@ -504,17 +504,16 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         result_candidates.reserve(ids_candidates.size());
         for (const auto& ids_candidate : ids_candidates) {
           const auto syn = self->state.synopses.find(ids_candidate);
-          if (syn == self->state.synopses.end())
-            VAST_WARN("{} ignores unknown candidate partition hint {} for "
-                      "query {}",
-                      *self, ids_candidate, query.id);
-          else
-            result_candidates.push_back({
-              .uuid = ids_candidate,
-              .events = syn->second->events,
-              .max_import_time = syn->second->max_import_time,
-              .schema = syn->second->schema,
-            });
+          //  We calculates the candidate partition ids from the query ids above
+          //  race conditions in this same handler, so we can safely assert that
+          //  the candidate partition id is valid.
+          VAST_ASSERT(syn != self->state.synopses.end());
+          result_candidates.push_back({
+            .uuid = ids_candidate,
+            .events = syn->second->events,
+            .max_import_time = syn->second->max_import_time,
+            .schema = syn->second->schema,
+          });
         }
       }
       duration runtime = std::chrono::steady_clock::now() - start;
