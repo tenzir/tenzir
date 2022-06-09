@@ -304,15 +304,9 @@ struct summary {
     }
     // Round time values to a multiple of the configured value.
     if (time_resolution_) {
-      const auto options = arrow::compute::RoundTemporalOptions{
-        std::chrono::duration_cast<std::chrono::duration<int, std::milli>>(
-          *time_resolution_)
-          .count(),
-        arrow::compute::CalendarUnit::MILLISECOND,
-      };
       for (const auto& column : round_temporal_columns_) {
         auto round_temporal_result
-          = arrow::compute::RoundTemporal(batch->column(column), options);
+          = arrow::compute::FloorTemporal(batch->column(column));
         if (!round_temporal_result.ok())
           return caf::make_error(
             ec::unspecified,
