@@ -29,12 +29,13 @@ brief guidance below when other systems might be a better fit.
 
 ## VAST vs. SIEMs
 
-Traditional SIEMs support basic search and a fixed set of analytics operations.
-Most systems face scaling issues and are therefore limited for comprehensive
-analysis that includes high-volume telemetry. They also lack good support for
-threat hunting and raw exploratory data analysis. Consequently, advanced
-emerging use cases, such as data science and detection engineering, require
-additional data-centric workbenches.
+Traditional SIEMs support basic search and a fixed set of analytical operations.
+For moderate data volumes, the established SIEM use cases perform well. But when
+scaling up to high-volume telemetry data, traditional SIEMs fall behind and
+costs often run out of control. Traditional SIEMs also lack good support for
+threat hunting and raw exploratory data analysis. That's why more advanced use
+cases, such as feature extraction, model training, and detection engineering,
+require additional data-centric workbenches.
 
 VAST *complements* a [SIEM][siem] nicely with the following use cases:
 
@@ -63,8 +64,8 @@ VAST *complements* a [SIEM][siem] nicely with the following use cases:
 
 :::note Recommendation
 Unlike a heavy-weight legacy SIEM, VAST is highly embeddable so that you can
-run it everywhere: containerized in the public cloud, on bare-metal appliances
-deep in the network, or at the edge.
+run it everywhere: containerized in the public cloud, in the data center in the
+private cloud, on bare-metal appliances deep in the network, or at the edge.
 :::
 
 ## VAST vs. Data Warehouses
@@ -86,8 +87,8 @@ the following relevant use cases where VAST has the edge:
 - **Rich Typing**: modeling security event data with a generic database often
   reduces the values to strings or integers, as opposed to retaining
   domain-specific semantics, such as IP addresses or port numbers. VAST offers a
-  rich type system that can retain such semantics, supporting both
-  *schema-on-read* (taxonomies) and *schema-on-write* (transforms).
+  rich type system that can retain such semantics at ingest time, while also
+  giving you the ability to query the data with your own taxonomy at query time.
 
 - **Fast Search**: typical query patterns are (1) automatically triggered point
   queries for tactical threat intelligence, arriving at a high rate and often in

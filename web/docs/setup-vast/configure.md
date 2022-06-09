@@ -160,11 +160,6 @@ for flexible replacement and enhancement of functionality at various pre-defined
 customization points. There exist **dynamic plugins** that ship as shared
 libraries and **static plugins** that are compiled into libvast.
 
-:::info Native Plugins
-We call static plugins that ship with VAST *native plugins*. These plugins
-compile into libvast/VAST and are always enabled automatically.
-:::
-
 ### Install plugins
 
 Dynamic plugins are just shared libraries and can be placed at a location of
@@ -237,8 +232,6 @@ You can get a list of all plugins and their respective version by running
   }
 }
 ```
-
-The `vast version` command does not list native plugins.
 
 The version of a plugin consists of three optional parts, separated by dashes:
 

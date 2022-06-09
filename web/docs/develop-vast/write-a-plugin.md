@@ -27,7 +27,7 @@ plugins](https://github.com/tenzir/vast/tree/master/examples/plugins) directory,
 and an [example `CMakeLists.txt` file for
 plugins](https://github.com/tenzir/vast/blob/master/examples/plugins/analyzer/CMakeLists.txt).
 
-We recommend calling the provided `VASTRegisterPlugin` CMake in your plugin's
+We highly urge calling the provided `VASTRegisterPlugin` CMake in your plugin's
 `CMakeLists.txt` file instead of handrolling your CMake build scaffolding
 code. This ensures that your plugin always uses the recommended defaults.
 Non-static installations of VAST contain the `VASTRegisterPlugin.cmake` modules.
@@ -40,6 +40,8 @@ installed file in-place.
 Similarly, the build scaffolding installs files in the `schema` subdirectory
 automatically such that loading the plugin loads additionally required schema
 files automatically.
+
+If a README.md and CHANGELOG.md are available, these file get installed too.
 
 ## Choose a plugin type
 
@@ -99,7 +101,7 @@ The plugin constructor should only perform minimal actions to instantiate a
 well-defined plugin instance. In particular, it should not throw or perform any
 operations that may potentially fail. For the actual plugin ramp up, please use
 the `initialize` function that processes the user configuration. The purpose of
-the destructor is to free any used resources owned by the plugin
+the destructor is to free any used resources owned by the plugin.
 
 Each plugin must have a unique name. This returned string should consicely
 identify the plugin internally.
@@ -163,20 +165,13 @@ behavior.
 ### Building alongside VAST
 
 When configuring the VAST build, you need to tell CMake the path to the plugin
-source directory. The CMake variable `VAST_PLUGINS` holds a semicolon-separated
+source directory. The CMake variable `VAST_PLUGINS` holds a comma-separated
 list of paths to plugin directories.
-
-After the compilation succeeded, you can find the shared object in
-`lib/vast/plugins` within your VAST build directory.
 
 To test that VAST loads the plugin properly, you need to enable it via the
 configuration or the command line first. Use `vast --plugins=example version`
 and look into the `plugins`. A key-value pair with your plugin name and version
 should exist in the output.
-
-By default, plugins are built as dynamic libraries. Build a static VAST binary
-or use the `cmake` option `-DVAST_ENABLE_STATIC_PLUGINS:BOOL=ON` to build
-plugins as static libraries that are baked into the VAST binary directly.
 
 To enable all bundled plugins, i.e., plugins built this way alongside VAST, run
 with `--plugins=bundled` or add `bundled` to the list of enabled plugins in your
@@ -225,7 +220,7 @@ To execute registered unit tests, you can also simply run the test binary
 `<plugin>-test`, where `<plugin>` is the name of your plugin. The build target
 `test` sequentially runs tests for all plugins and VAST itself.
 
-### integration tests
+### Integration tests
 
 Every plugin ideally comes with integration tests as well. Our convention is
 that integration tests reside in an `integration` subdirectory. If you add a
