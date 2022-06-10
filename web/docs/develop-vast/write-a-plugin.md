@@ -91,9 +91,6 @@ public:
 
   // TODO: override pure virtual functions from the base classes.
   // ...
-
-private:
-  record config_;
 };
 ```
 
