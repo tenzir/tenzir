@@ -172,3 +172,47 @@ be rotated.
 VAST processes log messages in a dedicated thread, which by default buffers up
 to 1M messages for servers, and 100 for clients. The option
 `vast.log-queue-size` controls this setting.
+
+## Rebuild Partitions
+
+The `rebuild` command re-ingests events from existing partitions and replaces
+them with new partitions. This makes it possible to upgrade persistent state to
+a newer version, or recreate persistent state after changing configuration
+parameters, e.g., switching from the Feather to the Parquet store backend.
+Rebuilding partitions also recreates their sketches. The process takes place
+asynchronously in the background.
+
+:::info Upgrade from VAST v1.x partitions
+You can use the `rebuild` command to upgrade your VAST v1.x partitions to v2.x,
+which yields better compression and have a streamlined representation. We
+recommend this to be able to use newer features that do not work with v1.x
+partitions.
+:::
+
+This is how you run it:
+
+```bash
+vast rebuild [--all] [--parallel=<number>] [<expression>]
+```
+
+The on-disk format of VAST's partitions is versioned. By default, the `rebuild`
+command only considers partitions whose version number is not the newest
+version. The `--all` flag makes the command instead consider _all_ partitions
+rather than only outdated ones. This is useful when you change configuration
+options and want to regenerate all partitions.
+
+The `--parallel` options is a performance tuning knob. The parallelism level
+controls how many sets of partitions to rebuild in parallel. This value defaults
+to 1 to limit the CPU and memory requirements of the rebuilding process, which
+grow linearly with the selected parallelism level.
+
+An optional expression allows for restricting the set of partitions to rebuild.
+VAST performs a catalog lookup with the expression to identify the set of
+candidate partitions. This process may yield false positives, as with regular
+queries, which in this case causes potentially unaffected partitions to undergo
+a rebuild process. For example, to rebuild outdated partitions containing
+`suricata.flow` events older than 2 weeks, run the following command:
+
+```bash
+vast rebuild '#type == "suricata.flow" && #import_time < 2 weeks ago'
+```

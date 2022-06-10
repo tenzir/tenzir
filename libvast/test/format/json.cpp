@@ -121,8 +121,10 @@ TEST(json hex number parser) {
   CHECK_EQUAL(x, -123.0);
   CHECK(json_number("123", x));
   CHECK_EQUAL(x, 123.0);
-  CHECK(json_number("+123", x));
-  CHECK_EQUAL(x, 123.0);
+  // JSON does not allow `+` before a number.
+  // https://datatracker.ietf.org/doc/html/rfc7159#section-6
+  // CHECK(json_number("+123", x));
+  // CHECK_EQUAL(x, 123.0);
   CHECK(json_number("0xFF", x));
   CHECK_EQUAL(x, 255.0);
 }

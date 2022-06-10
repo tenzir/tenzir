@@ -106,12 +106,17 @@ uuid::size_type uuid::size() const {
   return num_bytes;
 }
 
-bool operator==(const uuid& x, const uuid& y) {
-  return std::equal(x.begin(), x.end(), y.begin());
+std::strong_ordering operator<=>(const uuid& lhs, const uuid& rhs) noexcept {
+  if (&lhs == &rhs)
+    return std::strong_ordering::equal;
+  const auto result = std::memcmp(lhs.begin(), rhs.begin(), uuid::num_bytes);
+  return result == 0  ? std::strong_ordering::equivalent
+         : result < 0 ? std::strong_ordering::less
+                      : std::strong_ordering::greater;
 }
 
-bool operator<(const uuid& x, const uuid& y) {
-  return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end());
+bool operator==(const uuid& lhs, const uuid& rhs) noexcept {
+  return lhs.id_ == rhs.id_;
 }
 
 caf::expected<flatbuffers::Offset<fbs::LegacyUUID>>

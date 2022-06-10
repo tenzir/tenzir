@@ -21,6 +21,8 @@ partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
   events = std::exchange(that.events, {});
   min_import_time = std::exchange(that.min_import_time, time::max());
   max_import_time = std::exchange(that.max_import_time, time::min());
+  version = std::exchange(that.version, version::partition_version);
+  schema = std::exchange(that.schema, {});
   type_synopses_ = std::exchange(that.type_synopses_, {});
   field_synopses_ = std::exchange(that.field_synopses_, {});
   memusage_.store(that.memusage_.exchange(0));
@@ -33,6 +35,8 @@ partition_synopsis::operator=(partition_synopsis&& that) noexcept {
     events = std::exchange(that.events, {});
     min_import_time = std::exchange(that.min_import_time, time::max());
     max_import_time = std::exchange(that.max_import_time, time::min());
+    version = std::exchange(that.version, version::partition_version);
+    schema = std::exchange(that.schema, {});
     type_synopses_ = std::exchange(that.type_synopses_, {});
     field_synopses_ = std::exchange(that.field_synopses_, {});
     memusage_.store(that.memusage_.exchange(0));
@@ -97,6 +101,9 @@ void partition_synopsis::add(const table_slice& slice,
     return factory<synopsis>::make(t, synopsis_options);
   };
   const auto& layout = slice.layout();
+  if (!schema)
+    schema = layout;
+  VAST_ASSERT(schema == layout);
   auto each = caf::get<record_type>(layout).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
@@ -178,6 +185,8 @@ partition_synopsis* partition_synopsis::copy() const {
   result->events = events;
   result->min_import_time = min_import_time;
   result->max_import_time = max_import_time;
+  result->version = version;
+  result->schema = schema;
   result->memusage_ = memusage_.load();
   result->type_synopses_.reserve(type_synopses_.size());
   result->field_synopses_.reserve(field_synopses_.size());
@@ -215,6 +224,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
     synopses.push_back(*maybe_synopsis);
   }
   auto synopses_vector = builder.CreateVector(synopses);
+  auto schema_bytes = as_bytes(x.schema);
+  auto schema_vector = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(schema_bytes.data()), schema_bytes.size());
   fbs::partition_synopsis::LegacyPartitionSynopsisBuilder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
   vast::fbs::uinterval id_range{x.offset, x.offset + x.events};
@@ -223,6 +235,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
     x.min_import_time.time_since_epoch().count(),
     x.max_import_time.time_since_epoch().count()};
   ps_builder.add_import_time_range(&import_time_range);
+  ps_builder.add_version(x.version);
+  ps_builder.add_schema(schema_vector);
   return ps_builder.Finish();
 }
 
@@ -267,6 +281,8 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     ps.min_import_time = time{};
     ps.max_import_time = time{};
   }
+  ps.version = x.version();
+  ps.schema = type{chunk::copy(as_bytes(*x.schema()))};
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);
@@ -288,6 +304,8 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     ps.min_import_time = time{};
     ps.max_import_time = time{};
   }
+  ps.version = x.version();
+  ps.schema = type{chunk::copy(as_bytes(*x.schema()))};
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);

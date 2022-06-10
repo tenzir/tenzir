@@ -10,6 +10,7 @@
 , caf
 , libpcap
 , arrow-cpp
+, fast_float
 , flatbuffers
 , spdlog
 , libyamlcpp
@@ -19,6 +20,7 @@
 , libunwind
 , xxHash
 , zeek-broker
+, indicators
 , python3
 , jq
 , tcpdump
@@ -59,14 +61,16 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [
-    libpcap
+    fast_float
     jemalloc
+    libpcap
+    libunwind
     libyamlcpp
+    robin-map
     simdjson
     spdlog
-    robin-map
-    libunwind
     zeek-broker
+    indicators
   ];
   propagatedBuildInputs = [
     arrow-cpp

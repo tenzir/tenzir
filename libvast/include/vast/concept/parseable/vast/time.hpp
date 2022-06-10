@@ -80,7 +80,7 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
       ;
     // clang-format on
     if constexpr (std::is_same_v<Attribute, unused_type>) {
-      auto p = ignore(real_opt_dot) >> ignore(*space) >> unit;
+      auto p = ignore(parsers::real) >> ignore(*space) >> unit;
       return p(f, l, unused);
     } else {
       double scale;
@@ -89,7 +89,7 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
         auto result = duration_cast<double_duration>(dur) * scale;
         return cast(result);
       };
-      auto p = real_opt_dot >> ignore(*space) >> unit ->* multiply;
+      auto p = parsers::real >> ignore(*space) >> unit->*multiply;
       return p(f, l, scale, x);
     }
   }
@@ -167,8 +167,9 @@ struct ymdhms_parser : vast::parser_base<ymdhms_parser> {
       [](auto x) { return x >= 0 && x <= 23; });
     auto min = integral_parser<int, 2, 2>{}.with(
       [](auto x) { return x >= 0 && x <= 59; });
-    auto sec = parsers::real_opt_dot.with(
-      [](auto x) { return x >= 0.0 && x <= 60.0; });
+    auto sec = parsers::real.with([](auto x) {
+      return x >= 0.0 && x <= 60.0;
+    });
     auto time_divider = '+'_p | 'T' | ' ';
     // clang-format off
     auto sign = '+'_p ->* [] { return 1; }
@@ -215,11 +216,10 @@ namespace parsers {
 auto const ymdhms = ymdhms_parser{};
 
 /// Parses a fractional seconds-timestamp as UNIX epoch.
-auto const unix_ts = real_opt_dot
-  ->* [](double d) {
-    using std::chrono::duration_cast;
-    return time{duration_cast<vast::duration>(double_seconds{d})};
-  };
+auto const unix_ts = parsers::real->*[](double d) {
+  using std::chrono::duration_cast;
+  return time{duration_cast<vast::duration>(double_seconds{d})};
+};
 
 } // namespace parsers
 

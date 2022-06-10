@@ -1092,11 +1092,12 @@ index(index_actor::stateful_pointer<index_state> self,
           auto& midx_candidates = midx_result.partitions;
           VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
                      *self, candidates, midx_candidates);
-          candidates.insert(candidates.end(), midx_candidates.begin(),
-                            midx_candidates.end());
-          std::sort(candidates.begin(), candidates.end());
-          candidates.erase(std::unique(candidates.begin(), candidates.end()),
-                           candidates.end());
+          for (const auto initial_candidates = candidates;
+               const auto& midx_candidate : midx_candidates)
+            if (std::find(initial_candidates.begin(), initial_candidates.end(),
+                          midx_candidate)
+                == initial_candidates.end())
+              candidates.push_back(midx_candidate.uuid);
           // Allows the client to query further results after initial taste.
           auto query_id = query.id;
           auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
@@ -1291,6 +1292,15 @@ index(index_actor::stateful_pointer<index_state> self,
            std::vector<vast::uuid> old_partition_ids,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
+      for (const auto& partition : old_partition_ids)
+        if (self->state.partitions_in_transformation.contains(partition))
+          return caf::make_error(
+            ec::lookup_error, fmt::format("{} refuses to apply transformation "
+                                          "'{}' partition {} because it is "
+                                          "currently being transformed",
+                                          *self, transform->name(), partition));
+      self->state.partitions_in_transformation.insert(old_partition_ids.begin(),
+                                                      old_partition_ids.end());
       VAST_DEBUG("{} applies a transform to partitions {}", *self,
                  old_partition_ids);
       if (!self->state.store_plugin)
@@ -1341,13 +1351,24 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_ASSERT(err == caf::none);
       self->state.schedule_lookups();
       auto rp = self->make_response_promise<std::vector<partition_info>>();
+      auto deliver
+        = [self, rp, old_partition_ids](
+            caf::expected<std::vector<partition_info>>&& result) mutable {
+            for (const auto& partition : old_partition_ids)
+              self->state.partitions_in_transformation.erase(partition);
+            if (result)
+              rp.deliver(std::move(*result));
+            else
+              rp.deliver(std::move(result.error()));
+          };
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
-          [self, rp, old_partition_ids,
+          [self, deliver, old_partition_ids,
            keep](std::vector<augmented_partition_synopsis>& apsv) mutable {
             std::vector<uuid> new_partition_ids;
+            new_partition_ids.reserve(apsv.size());
             for (auto const& aps : apsv)
               new_partition_ids.push_back(aps.uuid);
             auto result = std::vector<partition_info>{};
@@ -1360,12 +1381,12 @@ index(index_actor::stateful_pointer<index_state> self,
                 .uuid = aps.uuid,
                 .events = aps.synopsis->events,
                 .max_import_time = aps.synopsis->max_import_time,
-                .type = aps.type,
+                .schema = aps.type,
               };
               // Update the index statistics. We only need to add the events of
               // the new partition here, the subtraction of the old events is
               // done in `erase`.
-              auto name = std::string{info.type.name()};
+              auto name = std::string{info.schema.name()};
               self->state.stats.layouts[name].count += info.events;
               result.emplace_back(std::move(info));
             }
@@ -1376,23 +1397,23 @@ index(index_actor::stateful_pointer<index_state> self,
                   ->request(self->state.catalog, caf::infinite, atom::merge_v,
                             std::move(apsv))
                   .then(
-                    [self, rp, new_partition_ids,
+                    [self, deliver, new_partition_ids,
                      result = std::move(result)](atom::ok) mutable {
                       self->state.persisted_partitions.insert(
                         new_partition_ids.begin(), new_partition_ids.end());
-                      rp.deliver(std::move(result));
+                      deliver(std::move(result));
                     },
-                    [rp](const caf::error& e) mutable {
-                      rp.deliver(std::move(e));
+                    [deliver](const caf::error& e) mutable {
+                      deliver(std::move(e));
                     });
               else
-                rp.deliver(result);
+                deliver(result);
             } else { // keep == keep_original_partition::no
               self
                 ->request(self->state.catalog, caf::infinite, atom::replace_v,
                           old_partition_ids, std::move(apsv))
                 .then(
-                  [self, rp, old_partition_ids, new_partition_ids,
+                  [self, deliver, old_partition_ids, new_partition_ids,
                    result](atom::ok) mutable {
                     self->state.persisted_partitions.insert(
                       new_partition_ids.begin(), new_partition_ids.end());
@@ -1401,21 +1422,33 @@ index(index_actor::stateful_pointer<index_state> self,
                                 atom::erase_v, old_partition_ids)
                       .then(
                         [=](atom::done) mutable {
-                          rp.deliver(result);
+                          deliver(result);
                         },
                         [=](const caf::error& e) mutable {
-                          rp.deliver(e);
+                          deliver(e);
                         });
                   },
-                  [rp](const caf::error& e) mutable {
-                    rp.deliver(e);
+                  [deliver](const caf::error& e) mutable {
+                    deliver(e);
                   });
             }
           },
-          [rp](const caf::error& e) mutable {
-            rp.deliver(e);
+          [deliver](const caf::error& e) mutable {
+            deliver(e);
           });
       return rp;
+    },
+    [self](atom::rebuild, std::vector<vast::uuid> old_partition_ids)
+      -> caf::result<std::vector<partition_info>> {
+      auto transform = std::make_shared<vast::transform>(
+        "identity", std::vector<std::string>{});
+      auto identity_step = make_transform_step("identity", {});
+      if (!identity_step)
+        return identity_step.error();
+      transform->add_step(std::move(*identity_step));
+      return self->delegate(static_cast<index_actor>(self), atom::apply_v,
+                            std::move(transform), std::move(old_partition_ids),
+                            keep_original_partition::no);
     },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) { //

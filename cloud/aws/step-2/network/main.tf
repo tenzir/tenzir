@@ -1,3 +1,5 @@
+// THIS MODULE CAN ONLY BE INSTANTIATED ONCE
+
 terraform {
   required_providers {
     aws = {

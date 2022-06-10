@@ -6,7 +6,7 @@
 
 option(VAST_ENABLE_BUNDLED_ROBIN_MAP "Always use the bundled tsl-robin-map" OFF)
 add_feature_info("VAST_ENABLE_BUNDLED_ROBIN_MAP" VAST_ENABLE_BUNDLED_ROBIN_MAP
-                 "always use the tsl-robin-map.")
+                 "always use the bundled tsl-robin-map.")
 if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map 0.6.2 QUIET)
   if (tsl-robin-map_FOUND)
@@ -468,6 +468,28 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
+# Link against fast_float
+option(VAST_ENABLE_BUNDLED_FASTFLOAT "Use the fast_float submodule" OFF)
+add_feature_info("VAST_ENABLE_BUNDLED_FASTFLOAT" VAST_ENABLE_BUNDLED_FASTFLOAT
+                 "use the fast_float submodule.")
+if (NOT VAST_ENABLE_BUNDLED_FASTFLOAT)
+  find_package(FastFloat 3.4.0 CONFIG)
+endif ()
+if (NOT FastFloat_FOUND)
+  # Use bundled fast_float.
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "fast_float library not found, either use -FastFloat_DIR=... or"
+        " initialize the libvast/aux/fast_float submodule")
+  else ()
+    add_subdirectory(aux/fast_float)
+    add_library(FastFloat::fast_float ALIAS fast_float)
+  endif ()
+endif ()
+target_link_libraries(libvast PRIVATE FastFloat::fast_float)
+dependency_summary("fast_float" FastFloat::fast_float "Dependencies")
+
 # Link against a backtrace library.
 option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
 add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
@@ -499,6 +521,35 @@ if (VAST_ENABLE_BACKTRACE)
           FATAL_ERROR "Found unexpected backtrace header ${Backtrace_HEADER}")
       endif ()
     endif ()
+  endif ()
+endif ()
+
+# Link against indicators.
+option(VAST_ENABLE_BUNDLED_INDICATORS "Use the indicators submodule" OFF)
+add_feature_info("VAST_ENABLE_BUNDLED_INDICATORS"
+                 VAST_ENABLE_BUNDLED_INDICATORS "use the indicators submodule.")
+if (NOT VAST_ENABLE_BUNDLED_INDICATORS)
+  find_package(indicators 2.2.0 QUIET)
+  if (indicators_FOUND)
+    target_link_libraries(libvast_native_plugins PRIVATE indicators::indicators)
+    dependency_summary("indicators" indicators::indicators "Dependencies")
+  endif ()
+endif ()
+if (NOT indicators_FOUND)
+  # Use bundled indicators.
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/indicators/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "indicators library not found, either use -Dindicators_DIR=... or"
+        " initialize the libvast/aux/indicators submodule")
+  else ()
+    add_subdirectory(aux/indicators)
+    set(indicators_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/indicators)
+    # Work around https://gitlab.kitware.com/cmake/cmake/-/issues/15415 because
+    # indicators doesn't export its target if built as a subproject.
+    target_include_directories(libvast_native_plugins
+                               PRIVATE "${indicators_dir}/include")
+    dependency_summary("Indicators" "${indicators_dir}" "Dependencies")
   endif ()
 endif ()
 

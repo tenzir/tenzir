@@ -25,6 +25,13 @@
 #include <caf/none.hpp>
 
 namespace vast {
+namespace parsers {
+
+constexpr inline auto number = (parsers::count >> &!chr{'.'})
+                               | (parsers::integer >> &!chr{'.'})
+                               | parsers::real;
+
+} // namespace parsers
 
 struct data_parser : parser_base<data_parser> {
   using attribute = data;
@@ -65,9 +72,7 @@ private:
       | parsers::duration
       | parsers::net
       | parsers::addr
-      | parsers::real
-      | parsers::count
-      | parsers::integer
+      | parsers::number
       | parsers::tf
       | parsers::qqstr
       | parsers::pattern

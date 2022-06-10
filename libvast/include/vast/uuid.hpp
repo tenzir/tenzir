@@ -58,8 +58,10 @@ public:
   [[nodiscard]] const_iterator end() const;
   [[nodiscard]] size_type size() const;
 
-  friend bool operator==(const uuid& x, const uuid& y);
-  friend bool operator<(const uuid& x, const uuid& y);
+  friend std::strong_ordering
+  operator<=>(const uuid& lhs, const uuid& rhs) noexcept;
+
+  friend bool operator==(const uuid& lhs, const uuid& rhs) noexcept;
 
   /// @returns the binary data.
   friend std::span<const std::byte, num_bytes> as_bytes(const uuid& x) {

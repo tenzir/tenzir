@@ -1,5 +1,6 @@
 ### VPC
 
+// Accepter side of the peering connection
 resource "aws_vpc_peering_connection_accepter" "peer" {
   provider = aws.monitored_vpc
 
@@ -7,7 +8,7 @@ resource "aws_vpc_peering_connection_accepter" "peer" {
   auto_accept               = true
 
   tags = {
-    Side = "Accepter"
+    Name = "${module.env.module_name}-${module.env.stage}"
   }
 }
 

@@ -64,6 +64,13 @@ struct partition_synopsis final : public caf::ref_counted {
   /// The maximum import timestamp of all contained table slices.
   time max_import_time = time::min();
 
+  /// The version number of this partition.
+  uint64_t version = version::partition_version;
+
+  /// The schema of this partition. This is only set for partition synopses with
+  /// a version >= 1, because they are guaranteed to be homogenous.
+  type schema = {};
+
   /// Synopsis data structures for types.
   std::unordered_map<type, synopsis_ptr> type_synopses_;
 
@@ -97,6 +104,8 @@ private:
 
 /// Some quantitative information about a partition.
 struct partition_info {
+  static constexpr bool use_deep_to_string_formatter = true;
+
   /// The partition id.
   vast::uuid uuid = vast::uuid::nil();
 
@@ -105,18 +114,35 @@ struct partition_info {
   size_t events = 0ull;
 
   /// The newest import timestamp of the table slices in this partition.
-  time max_import_time;
+  time max_import_time = {};
 
-  /// How many events of each type the partition contains.
-  //  A `partition_info` is only created for new partitions, so
-  //  it can not be a heterogenous legacy partition but must have
-  //  exactly one type.
-  vast::type type;
+  /// The schema of the partition.
+  type schema = {};
+
+  friend std::strong_ordering
+  operator<=>(const partition_info& lhs, const partition_info& rhs) noexcept {
+    return lhs.uuid <=> rhs.uuid;
+  }
+
+  friend std::strong_ordering
+  operator<=>(const partition_info& lhs, const class uuid& rhs) noexcept {
+    return lhs.uuid <=> rhs;
+  }
+
+  friend bool
+  operator==(const partition_info& lhs, const partition_info& rhs) noexcept {
+    return lhs.uuid == rhs.uuid;
+  }
+
+  friend bool
+  operator==(const partition_info& lhs, const class uuid& rhs) noexcept {
+    return lhs.uuid == rhs;
+  }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_info& x) {
     return f(caf::meta::type_name("partition_info"), x.uuid, x.events,
-             x.max_import_time, x.type);
+             x.max_import_time, x.schema);
   }
 };
 

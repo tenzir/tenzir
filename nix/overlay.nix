@@ -61,6 +61,7 @@ in
       ];
       dontStrip = true;
     });
+  fast_float = final.callPackage ./fast_float { };
   jemalloc = prev.jemalloc.overrideAttrs (old: {
     EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
     configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
@@ -81,6 +82,7 @@ in
          substituteInPlace configure.ac --replace "-lgcc_s" ""
     '' else old.postPatch;
   });
+  indicators = final.callPackage ./indicators { inherit stdenv; };
   zeek-broker = (final.callPackage ./zeek-broker { inherit stdenv; }).overrideAttrs (old: {
     # https://github.com/NixOS/nixpkgs/issues/130963
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
