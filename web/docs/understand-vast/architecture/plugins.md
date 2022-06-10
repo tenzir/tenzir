@@ -144,8 +144,8 @@ RabbitMQ, or ZeroMQ.
 ### Transform
 
 The transform plugin adds a new [transform
-step](/vast/features/transforms#transform-steps) that users can reference
-in a [transform definition](/vast/features/transforms#definition).
+step](/docs/understand-vast/query-language/operators) that users can reference in
+a [transform definition](/docs/understand-vast/query-language/pipelines).
 
 The base class `transformation_plugin` base class implements the following
 virtual function:
