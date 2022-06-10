@@ -52,7 +52,7 @@ constexpr std::string_view read = "-";
 
 /// Contains settings for the csv subcommand.
 struct csv {
-  static constexpr char separator = ',';
+  static constexpr std::string_view separator = ",";
 
   // TODO: agree on reasonable values
   static constexpr std::string_view set_separator = ",";

@@ -190,9 +190,11 @@ auto make_spawn_source_command() {
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("type,t", "filter event type based on prefix matching")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
-  spawn_source->add_subcommand("csv",
-                               "creates a new CSV source inside the node",
-                               opts("?vast.spawn.source.csv"));
+  spawn_source->add_subcommand(
+    "csv", "creates a new CSV source inside the node",
+    opts("?vast.spawn.source.csv")
+      .add<std::string>("separator", "the single-character separator (default: "
+                                     "',')"));
   spawn_source->add_subcommand(
     "json", "creates a new JSON source inside the node",
     opts("?vast.spawn.source.json")
@@ -480,8 +482,11 @@ std::unique_ptr<command> make_import_command() {
   import_->add_subcommand("zeek-json",
                           "imports Zeek JSON logs from STDIN or file",
                           opts("?vast.import.zeek-json"));
-  import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
-                          opts("?vast.import.csv"));
+  import_->add_subcommand(
+    "csv", "imports CSV logs from STDIN or file",
+    opts("?vast.import.csv")
+      .add<std::string>("separator", "the single-character separator (default: "
+                                     "',')"));
   import_->add_subcommand(
     "json", "imports JSON with schema",
     opts("?vast.import.json")
