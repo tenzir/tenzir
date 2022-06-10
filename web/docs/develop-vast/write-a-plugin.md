@@ -32,16 +32,18 @@ We highly urge calling the provided `VASTRegisterPlugin` CMake in your plugin's
 code. This ensures that your plugin always uses the recommended defaults.
 Non-static installations of VAST contain the `VASTRegisterPlugin.cmake` modules.
 
-If present in the plugin source directory, the build scaffolding automatically
-installs `<plugin>.yaml.example` files, commenting out every line so the file
-has no effect. This serves as documentation for operators that can modify the
-installed file in-place.
+The typical structure of a plugin directory includes the following
+files/directories:
 
-Similarly, the build scaffolding installs files in the `schema` subdirectory
-automatically such that loading the plugin loads additionally required schema
-files automatically.
+- `README.md`: An overview of the plugin and how to use it.
+- `CHANGELOG.md`: A trail of user-facing changes.
+- `schema/`: new schemas that ship with this plugin.
+- `<plugin>.yaml.example`: the configuration knobs of the plugin. We comment out
+  all options by default so that the file serves as reference. Users can
+  uncomment specific settings they would like to adapt.
 
-If a README.md and CHANGELOG.md are available, these file get installed too.
+  The CMake build scaffolding installs all of the above files/directories, if
+  present.
 
 ## Choose a plugin type
 
@@ -238,11 +240,11 @@ If you plan to publish your plugin, you may want to create a GitHub repository.
 Please let us know if you do so, we can then link to community plugins from the
 documentation.
 
-The build scaffolding for plugin installations README.md and CHANGELOG.md files
-in the project root automatically. We recommend adding a README with an
-overview of the project and keeping a changelog file for all user-facing
-changes.
-
-If you think the plugin provides a core functionality that is beneficial to all
-VAST users, feel free to [submit a pull
-request](https://github.com/tenzir/vast/pulls) to the main VAST repository.
+:::tip Contribute Upstream
+If you think your plugin provides key functionality beneficial to all VAST
+users, feel free to [submit a pull
+request](https://github.com/tenzir/vast/pulls) to the main repository. But
+please consider swinging by our [Community Slack](http://slack.tenzir.com) or
+starting a [GitHub Discussion](https://github.com/tenzir/vast/discussions) to
+ensure that your contribution becomes a fruitful addition. 🙏
+::::
