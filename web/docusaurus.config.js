@@ -58,6 +58,11 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      algolia: {
+        appId: 'BVB58VRBDH',
+        apiKey: 'f7c2eb86ff85cd55d9634543ed1c60b2',
+        indexName: 'vast',
+      },
       navbar: {
         title: 'VAST',
         logo: {
@@ -80,6 +85,10 @@ const config = {
             to: '/changelog',
             label: 'Changelog',
             position: 'left',
+          },
+          {
+            type: 'search',
+            position: 'right',
           },
           {
             href: 'http://slack.tenzir.com',
