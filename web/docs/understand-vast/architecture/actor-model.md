@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # Actor Model
 
 VAST uses the [actor model][dist-prog-actor-model] to structure control flow

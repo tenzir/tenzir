@@ -1,31 +1,26 @@
 # Ingest
 
-*Ingesting* data refers to the import pipeline that covers the following steps:
+Sending data to VAST (aka *ingesting*) involves spinning up a VAST client
+that parses and ships the data to a [VAST server](/docs/use-vast/run):
 
-```mermaid
-flowchart LR
-  classDef stage fill:#00a4f1,stroke:none,color:#eee
+![Ingest process](/img/ingest.light.png#gh-light-mode-only)
+![Ingest process](/img/ingest.dark.png#gh-dark-mode-only)
 
-  subgraph Client
-    load(Load):::stage
-    parse(Parse):::stage
-    ship(Ship):::stage
-  end
+VAST first acquires data through a *carrier* that represents the data transport
+medium. This typically involves I/O and has the effect of slicing the data into
+chunks of bytes. Thereafter, the *format* determines how to parse the bytes into
+structured events. On the VAST server, a partition builder (1) creates
+sketches for accelerating querying, and (2) creates a *store* instance by
+transforming the in-memory Arrow representation into an on-disk format, e.g.,
+Parquet.
 
-  subgraph Server
-    route(Route):::stage
-    index(Index):::stage
-    store(Store):::stage
-  end
+Loading and parsing take place in a separate VAST client to facilitate
+horizontal scaling. The `import` command creates a client for precisly this
+task.
 
-  load --> parse --> ship --> route --> index --> store
-```
-
-Adding a new data source involves spinning up a VAST client node that loads,
-parses, and ships the normalized data to a VAST server node. The deployment
-mindset is that clients have *fate sharing* with the data source, hence reliance
-on process isolation to decoupling from a server node with higher availability
-guarantees.
+At the server, there exists one partition builder per schema. After a
+partition builder has reached a maximum number of events or reached a timeout,
+it sends the partition to the catalog to register it.
 
 :::note Lakehouse Architecture
 VAST uses open standards for data in motion ([Arrow](https://arrow.apache.org))
@@ -39,11 +34,8 @@ VAST enables this naturally.
 [lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf
 :::
 
-Onboarding a new data source involves configuring a client that sends data to a
-VAST server, as illustrated below. This assumes that you [set up a VAST
-node](/docs/setup-vast) listening at `localhost:42000`.
-
-![Ingest process](/img/ingest.png)
+The following discussion assumes that you [set up a VAST
+server](/docs/use-vast/run) listening at `localhost:42000`.
 
 ## Choose an import format
 
@@ -513,7 +505,11 @@ the event timestamp.
 
 ## Write a schema manually
 
-A [schema][schemas] is a record [type][types] with a name so that VAST can
+When VAST does not ship with a [schema][schemas] for your data out of the box,
+or the inference is not good enough for your use case regarding type semantics
+or performance, you can write easily yourself.
+
+A schema is a record [type][types] with a name so that VAST can
 represent it as a table internally. You would write a schema manually or extend
 an existing schema if your goal is tuning type semantics and performance. For
 example, if you have a field of type `string` that only holds IP addresses, you
@@ -523,10 +519,10 @@ can ship a schema along with [concept][concepts] mappings for a deeper
 integration.
 
 You write a schema (and potentially accompanying types, concepts, and models) in
-[module][modules].
+a [module][modules].
 
 Let's write one from scratch, for a tiny dummy data source called *foo* that
-produces CSV of this kind:
+produces CSV events of this shape:
 
 ```csv
 date,target,message
@@ -557,9 +553,20 @@ types:
       - message: msg
 ```
 
-Place this module in an existing module directory, such as`/etc/vast/schema`, or
-tell VAST in your `vast.yaml` configuration file where to look for additional
-modules via the `module-dirs` key:
+Now that you have a new module, you can choose to deploy it at the client or
+the server. When a VAST server starts, it will send a copy of its local schemas
+to the client. If the client has a schema for the same type, it will override
+the server version. We recommend deploying the module at the server when all
+clients should see the contained schemas, and at the client when the scope is
+local. The diagram below illustrates the initial handshake:
+
+![Schema Transfer](/img/schema-transfer.light.png#gh-light-mode-only)
+![Schema Transfer](/img/schema-transfer.dark.png#gh-dark-mode-only)
+
+Regardless of where you deploy the module, the procedure is the same at client
+and server: place the module in an existing module directory, such as
+`/etc/vast/modules`, or tell VAST in your `vast.yaml` configuration file where
+to look for additional modules via the `module-dirs` key:
 
 ```yaml
 vast:
@@ -567,7 +574,8 @@ vast:
     - path/to/modules
 ```
 
-Restart VAST and you're ready to ingest the CSV with richer typing:
+At the server, restart VAST and you're ready to go. Or just spin up a new client
+and ingest the CSV with richer typing:
 
 ```bash
 vast import csv < foo.csv
