@@ -10,39 +10,42 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### Changes
 
-- We removed the 'mdx-regenerate' tool from the VAST binary releases.
+- The `mdx-regenerate` tool is no longer part of VAST binary releases.
   [#2260](https://github.com/tenzir/vast/pull/2260)
 
-- Partition transforms now will always emit homogenous partitions, which should make compaction and aging more efficient.
+- Partition transforms now always emit homogenous partitions, i.e., one schema per partition. This makes compaction and aging more efficient.
   [#2277](https://github.com/tenzir/vast/pull/2277)
 
-- The `vast.store-backend` configuration option no longer supports the `archive`, and instead always uses the superior `segment-store` instead. Events stored in the archive will continue to be available in queries.
+- The `vast.store-backend` configuration option no longer supports `archive`, and instead always uses the superior `segment-store` instead. Events stored in the archive will continue to be available in queries.
   [#2290](https://github.com/tenzir/vast/pull/2290)
 
-- The 'vast.use-legacy-query-scheduler' option is now ignored because the legacy query scheduler has been removed.
+- The `vast.use-legacy-query-scheduler` option is now ignored because the legacy query scheduler has been removed.
   [#2312](https://github.com/tenzir/vast/pull/2312)
 
 ### Features
 
-- The 'lsvast' tool can now print contents of individual '.mdx' files, and it now has an option to print raw bloom filter contents of string and address synopses.
+- The `lsvast` tool can now print contents of individual `.mdx` files. It now has an option to print raw Bloom filter contents of string and address synopses.
   [#2260](https://github.com/tenzir/vast/pull/2260)
 
-- The 'mdx-regenerate' tool was renamed to 'vast-regenerate' and can now also regenerate an index file from a list of partition uuids.
+- The `mdx-regenerate` tool was renamed to `vast-regenerate` and can now also regenerate an index file from a list of partition UUIDs.
   [#2260](https://github.com/tenzir/vast/pull/2260)
 
-- VAST now compresses data with Zstd. When persisting data to the segment store, the default configuration achieves over 2x space savings. When transferring data between client and server processes, compression reduces the amount of transferred data by up to 5x. This allowed us to increase the default partition size from 1,048,576 to 4,194,304 events, and the default number of events in a single batch from 1,024 to 65,536. The superior performance increase comes at the cost of a ~20% memory footprint increase at peak load. Use the option `vast.max-partition-size` to tune this space-time tradeoff.
+- VAST now compresses data with Zstd. When persisting data to the segment store, the default configuration achieves over 2x space savings. When transferring data between client and server processes, compression reduces the amount of transferred data by up to 5x. This allowed us to increase the default partition size from 1,048,576 to 4,194,304 events, and the default number of events in a single batch from 1,024 to 65,536. The performance increase comes at the cost of a ~20% memory footprint increase at peak load. Use the option `vast.max-partition-size` to tune this space-time tradeoff.
   [#2268](https://github.com/tenzir/vast/pull/2268)
 
-- VAST now produces additional metrics under the keys `ingest.events`, `ingest.duration` and `ingest.rate`. Each of those gets issued once for every schema that is ingested during the measurement period. You can use the `metadata_schema` value to disambiguate.
+- VAST now produces additional metrics under the keys `ingest.events`, `ingest.duration` and `ingest.rate`. Each of those gets issued once for every schema that VAST ingested during the measurement period. Use the `metadata_schema` key to disambiguate the metrics.
   [#2274](https://github.com/tenzir/vast/pull/2274)
 
-- The `status` command now optionally allows for filtering by component name. E.g., `vast status importer index` only shows the status of the importer and index components.
+- The `status` command now supports filtering by component name. E.g., `vast status importer index` only shows the status of the importer and index components.
   [#2288](https://github.com/tenzir/vast/pull/2288)
 
-- The new `rebuild` command allows for rebuilding old partitions to take advantage of improvements by newer VAST versions. The rebuilding takes place in the VAST server in the background. This process merges partitions up to the configured `max-partition-size`, turns VAST v1.x's heterogeneous into VAST v2.x's homogenous partitions, migrates all data to the currently configured `store-backend`, and upgrades to the most recent internal batch encoding and indexes.
+- The new `rebuild` command rebuilds old partitions to take advantage of improvements in newer VAST versions. Rebuilding takes place in the VAST server in the background. This process merges partitions up to the configured `max-partition-size`, turns VAST v1.x's heterogeneous into VAST v2.x's homogenous partitions, migrates all data to the currently configured `store-backend`, and upgrades to the most recent internal batch encoding and indexes.
   [#2321](https://github.com/tenzir/vast/pull/2321)
 
 ### Bug Fixes
+
+- VAST no longer crashes when importing map or pattern data annotated with the `#skip` attribute.
+  [#2286](https://github.com/tenzir/vast/pull/2286)
 
 - The `--plugins`, `--plugin-dirs`, and `--schema-dirs` command-line options now correctly overwrite their corresponding configuration options.
   [#2289](https://github.com/tenzir/vast/pull/2289)
@@ -50,13 +53,13 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST no longer crashes when a query arrives at a newly created active partition in the time window between the partition creation and the first event arriving at the partition.
   [#2295](https://github.com/tenzir/vast/pull/2295)
 
-- Setting the environment variable `VAST_ENDPOINT` to `host:port` pair no longer fails on startup with a parse error and works as intended.
+- Setting the environment variable `VAST_ENDPOINT` to `host:port` pair no longer fails on startup with a parse error.
   [#2305](https://github.com/tenzir/vast/pull/2305)
 
-- VAST now reads the default false-positive rate for its sketches correctly. This was accndeitally broken with the v2.0 release. The option moved from `vast.catalog-fp-rate` to `vast.index.default-fp-rate`.
+- VAST now reads the default false-positive rate for sketches correctly. This broke accidentally with the v2.0 release. The option moved from `vast.catalog-fp-rate` to `vast.index.default-fp-rate`.
   [#2325](https://github.com/tenzir/vast/pull/2325)
 
-- The parser for `real` typed values is from now on able to understand values in scientific notation, e.g., `1.23e+42`.
+- The parser for `real` values now understands scientific notation, e.g., `1.23e+42`.
   [#2332](https://github.com/tenzir/vast/pull/2332)
 
 ## [v2.0.0][v2.0.0]
