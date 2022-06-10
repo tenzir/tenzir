@@ -12,35 +12,58 @@
 #include "vast/detail/backtrace.hpp"
 #include "vast/detail/pp.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+
+#define VAST_ASSERT_2(expr, msg)                                               \
+  do {                                                                         \
+    if (static_cast<bool>(expr) == false) {                                    \
+      /* NOLINTNEXTLINE */                                                     \
+      ::fprintf(stderr, "%s:%u: assertion failed '%s'\n", __FILE__, __LINE__,  \
+                msg);                                                          \
+      ::vast::detail::backtrace();                                             \
+      ::abort();                                                               \
+    }                                                                          \
+  } while (false)
+
+#define VAST_ASSERT_1(expr) VAST_ASSERT_2(expr, #expr)
+
+#define VAST_NOOP_1(expr)                                                      \
+  static_cast<void>(sizeof(decltype(expr))) // NOLINT(bugprone-*)
+
+#define VAST_NOOP_2(expr, msg)                                                 \
+  do {                                                                         \
+    VAST_ASSERT_1(expr);                                                       \
+    VAST_ASSERT_1(msg);                                                        \
+  } while (false)
+
+// Provide VAST_ASSERT_EXPENSIVE macro
 #if VAST_ENABLE_ASSERTIONS
-#  include <cstdio>
-#  include <cstdlib>
 
-#  define VAST_ASSERT_2(expr, msg)                                             \
-    do {                                                                       \
-      if (static_cast<bool>(expr) == false) {                                  \
-        /* NOLINTNEXTLINE */                                                   \
-        ::fprintf(stderr, "%s:%u: assertion failed '%s'\n", __FILE__,          \
-                  __LINE__, msg);                                              \
-        ::vast::detail::backtrace();                                           \
-        ::abort();                                                             \
-      }                                                                        \
-    } while (false)
+#  define VAST_ASSERT_EXPENSIVE(...)                                           \
+    VAST_PP_OVERLOAD(VAST_ASSERT_, __VA_ARGS__)(__VA_ARGS__)
 
-#  define VAST_ASSERT_1(expr) VAST_ASSERT_2(expr, #  expr)
+#else // !VAST_ENABLE_ASSERTIONS
 
-#else
+#  define VAST_ASSERT_EXPENSIVE(...)                                           \
+    VAST_PP_OVERLOAD(VAST_NOOP_, __VA_ARGS__)(__VA_ARGS__)
 
-#  define VAST_ASSERT_1(expr)                                                  \
-    static_cast<void>(sizeof(decltype(expr))) // NOLINT(bugprone-*)
+#endif // VAST_ENABLE_ASSERTIONS
 
-#  define VAST_ASSERT_2(expr, msg)                                             \
-    do {                                                                       \
-      VAST_ASSERT_1(expr);                                                     \
-      VAST_ASSERT_1(msg);                                                      \
-    } while (false)
+// Provide VAST_ASSERT_CHEAP macro
+#if VAST_ENABLE_ASSERTIONS_CHEAP
 
-#endif
+#  define VAST_ASSERT_CHEAP(...)                                               \
+    VAST_PP_OVERLOAD(VAST_ASSERT_, __VA_ARGS__)(__VA_ARGS__)
 
-#define VAST_ASSERT(...)                                                       \
-  VAST_PP_OVERLOAD(VAST_ASSERT_, __VA_ARGS__)(__VA_ARGS__)
+#else // !VAST_ENABLE_ASSERTIONS_CHEAP
+
+#  define VAST_ASSERT_CHEAP(...)                                               \
+    VAST_PP_OVERLOAD(VAST_NOOP_, __VA_ARGS__)(__VA_ARGS__)
+
+#endif // VAST_ENABLE_ASSERTIONS_CHEAP
+
+// Provide the `VAST_ASSERT()` macro. We treat assertions as
+// expensive by default, cheap assertions need to be marked as such
+// by using `VAST_ASSERT_CHEAP()` instead.
+#define VAST_ASSERT(...) VAST_ASSERT_EXPENSIVE(__VA_ARGS__)

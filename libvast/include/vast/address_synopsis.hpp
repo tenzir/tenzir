@@ -39,7 +39,7 @@ public:
   /// Bloom filter.
   address_synopsis(type x, typename super::bloom_filter_type bf)
     : super{std::move(x), std::move(bf)} {
-    VAST_ASSERT(caf::holds_alternative<address_type>(this->type()));
+    VAST_ASSERT_CHEAP(caf::holds_alternative<address_type>(this->type()));
   }
 
   [[nodiscard]] synopsis_ptr clone() const override {
@@ -88,8 +88,8 @@ template <class HashFunction>
 synopsis_ptr
 make_address_synopsis(vast::type type, bloom_filter_parameters params,
                       std::vector<size_t> seeds) {
-  VAST_ASSERT(caf::holds_alternative<address_type>(type));
-  auto x = make_bloom_filter<HashFunction>(std::move(params), std::move(seeds));
+  VAST_ASSERT_CHEAP(caf::holds_alternative<address_type>(type));
+  auto x = make_bloom_filter<HashFunction>(params, std::move(seeds));
   if (!x) {
     VAST_WARN("{} failed to construct Bloom filter", __func__);
     return nullptr;
@@ -109,7 +109,7 @@ make_address_synopsis(vast::type type, bloom_filter_parameters params,
 template <class HashFunction>
 synopsis_ptr make_buffered_address_synopsis(vast::type type,
                                             bloom_filter_parameters params) {
-  VAST_ASSERT(caf::holds_alternative<address_type>(type));
+  VAST_ASSERT_CHEAP(caf::holds_alternative<address_type>(type));
   if (!params.p) {
     return nullptr;
   }
@@ -125,9 +125,9 @@ synopsis_ptr make_buffered_address_synopsis(vast::type type,
 /// @relates address_synopsis
 template <class HashFunction>
 synopsis_ptr make_address_synopsis(vast::type type, const caf::settings& opts) {
-  VAST_ASSERT(caf::holds_alternative<address_type>(type));
+  VAST_ASSERT_CHEAP(caf::holds_alternative<address_type>(type));
   if (auto xs = parse_parameters(type))
-    return make_address_synopsis<HashFunction>(std::move(type), std::move(*xs));
+    return make_address_synopsis<HashFunction>(std::move(type), *xs);
   // If no explicit Bloom filter parameters were attached to the type, we try
   // to use the maximum partition size of the index as upper bound for the
   // expected number of events.
