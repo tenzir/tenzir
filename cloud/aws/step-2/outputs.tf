@@ -13,3 +13,7 @@ output "fargate_cluster_name" {
 output "vast_lambda_name" {
   value = module.vast_client.lambda_name
 }
+
+output "vast_lambda_arn" {
+  value = module.vast_client.lambda_arn
+}
