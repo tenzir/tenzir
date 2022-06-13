@@ -1,6 +1,7 @@
 from invoke import task, Context, Exit, Program, Collection
 import integration
 import cloudtrail
+import flowlogs
 import boto3
 import botocore.client
 import dynaconf
@@ -336,6 +337,9 @@ if __name__ == "__main__":
 
     ct = Collection.from_module(cloudtrail)
     namespace.add_collection(ct)
+
+    fl = Collection.from_module(flowlogs)
+    namespace.add_collection(fl)
 
     program = Program(
         binary="./vast-cloud",
