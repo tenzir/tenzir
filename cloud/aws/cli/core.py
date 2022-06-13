@@ -110,7 +110,7 @@ def docker_login(c):
 def init_step(c, step):
     """Manually run terraform init on a specific step"""
     c.run(
-        f"terragrunt init --terragrunt-working-dir step-{step}",
+        f"terragrunt init --terragrunt-working-dir {TFDIR}/step-{step}",
         env=env(c),
     )
 
@@ -118,6 +118,7 @@ def init_step(c, step):
 @task
 def deploy_step(c, step, auto_approve=False):
     """Deploy only one step of the stack"""
+    init_step(c, step)
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/step-{step}",
         env=env(c),
@@ -269,6 +270,7 @@ def execute_command(c, cmd="/bin/bash"):
 @task
 def destroy_step(c, step, auto_approve=False):
     """Destroy resources of the specified step. Resources depending on it should be cleaned up first."""
+    init_step(c, step)
     c.run(
         f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/step-{step}",
         env=env(c),

@@ -7,7 +7,7 @@
 # the bucket with the trail might be in another region
 # In that case, the origin event rule needs to be in that region
 provider "aws" {
-  alias  = "trail_region"
+  alias  = "origin_region"
   region = var.region
   default_tags {
     tags = {
@@ -19,12 +19,12 @@ provider "aws" {
 }
 
 data "aws_caller_identity" "current" {
-  provider = aws.trail_region
+  provider = aws.origin_region
 }
 
 resource "aws_s3_bucket" "object_event_target" {
-  provider      = aws.trail_region
-  bucket        = "${module.env.module_name}-obj-event-target-${local.id}-${module.env.stage}"
+  provider      = aws.origin_region
+  bucket        = "${var.bucket_name}-s3notif-${local.id}"
   force_destroy = true
   lifecycle {
     ignore_changes = [lifecycle_rule]
@@ -32,8 +32,8 @@ resource "aws_s3_bucket" "object_event_target" {
 }
 
 resource "aws_cloudtrail" "object_events" {
-  provider              = aws.trail_region
-  name                  = "obj-event-${local.id}-${module.env.module_name}"
+  provider              = aws.origin_region
+  name                  = "${module.env.module_name}-s3notif-${local.id}"
   s3_bucket_name        = aws_s3_bucket.object_event_target.id
   is_multi_region_trail = false
 
@@ -65,7 +65,7 @@ resource "aws_cloudtrail" "object_events" {
 }
 
 resource "aws_s3_bucket_policy" "object_event_target" {
-  provider = aws.trail_region
+  provider = aws.origin_region
   bucket   = aws_s3_bucket.object_event_target.id
   policy   = <<EOF
 {
@@ -95,7 +95,7 @@ EOF
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "object_event_target" {
-  provider = aws.trail_region
+  provider = aws.origin_region
   bucket   = aws_s3_bucket.object_event_target.id
   rule {
     expiration {
@@ -107,8 +107,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "object_event_target" {
 }
 
 resource "aws_cloudwatch_event_rule" "origin_s3_object_events_rule" {
-  provider    = aws.trail_region
-  name        = "${module.env.module_name}-origin-${local.id}-${module.env.stage}"
+  provider    = aws.origin_region
+  name        = "${module.env.module_name}-s3notif-origin-${local.id}"
   description = "Capture s3 object created events"
 
   event_pattern = <<EOF
@@ -125,7 +125,7 @@ EOF
 }
 
 resource "aws_cloudwatch_event_target" "local_obj_event_bus_target" {
-  provider = aws.trail_region
+  provider = aws.origin_region
   arn      = var.target_bus_arn
   rule     = aws_cloudwatch_event_rule.origin_s3_object_events_rule.name
   role_arn = aws_iam_role.event_bus_invoke_remote_event_bus.arn
