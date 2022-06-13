@@ -16,5 +16,5 @@ locals {
   id_raw = "${var.bucket_name}-${module.env.module_name}-${module.env.stage}"
   # 6 hexa digits should be more than sufficient to avoid conflicts as this stack
   # will be deployed only a very moderate amount of times within an account
-  id     = substr(md5(local.id_raw), 0, 6)
+  id = substr(md5(local.id_raw), 0, 6)
 }

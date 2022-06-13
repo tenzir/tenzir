@@ -17,3 +17,7 @@ output "vast_lambda_name" {
 output "vast_lambda_arn" {
   value = module.vast_client.lambda_arn
 }
+
+output "vast_lambda_role_name" {
+  value = module.vast_client.lambda_role_name
+}

@@ -31,16 +31,16 @@ COPY --from=build $PREFIX/ $PREFIX/
 
 WORKDIR ${PREFIX}/lambda
 
-COPY lambda-handler.py .
-COPY cloudtrail.schema /opt/tenzir/vast/etc/vast/schema/types/
-
 USER root
-RUN ln -s ./aws-cli/v2/current/dist/aws /usr/local/bin/ && \
+RUN ln -s $PWD/aws-cli/v2/current/dist/aws /usr/local/bin/aws && \
     apt-get update && \
     apt-get -y --no-install-recommends install jq && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast
+
+COPY lambda-handler.py .
+COPY cloudtrail.schema /opt/tenzir/vast/etc/vast/schema/types/
 
 ENTRYPOINT [ "/usr/bin/python3.9", "-m", "awslambdaric" ]
 CMD [ "lambda-handler.handler" ]

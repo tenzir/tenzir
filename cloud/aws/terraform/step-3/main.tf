@@ -30,6 +30,20 @@ resource "aws_cloudwatch_event_target" "lambda_target" {
   arn            = var.vast_lambda_arn
   event_bus_name = aws_cloudwatch_event_bus.local_obj_event_bus.name
   rule           = aws_cloudwatch_event_rule.local_s3_object_events_rule.name
+
+  input_transformer {
+    input_paths = {
+      objkey = "$.detail.object.key",
+    }
+    input_template = <<EOF
+{
+  "cmd": "${base64encode(local.import_cmd)}",
+  "env": {
+    "SRC_KEY": <objkey>
+  }
+}
+EOF
+  }
 }
 
 resource "aws_lambda_permission" "eventbridge_invoke_lambda" {

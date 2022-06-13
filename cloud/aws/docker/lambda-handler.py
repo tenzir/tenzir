@@ -40,6 +40,10 @@ def handler(event, context):
     logging.debug("event: %s", event)
     src_cmd = base64.b64decode(event["cmd"]).decode("utf-8")
     logging.info("src_cmd: %s", src_cmd)
+    if "env" in event:
+        logging.info("env: %s", event["env"])
+        for (k, v) in event["env"].items():
+            os.environ[k] = v
 
     # execute the command as bash and return the std outputs
     parsed_cmd = ["/bin/bash", "-c", src_cmd]

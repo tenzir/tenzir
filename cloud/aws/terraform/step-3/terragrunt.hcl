@@ -6,8 +6,9 @@ dependency "step_2" {
   config_path = "../step-2"
 
   mock_outputs = {
-    vast_lambda_name = "temporary-dummy-name"
-    vast_lambda_arn = "arn:aws:lambda:::function:temporary-dummy-arn"
+    vast_lambda_name      = "temporary-dummy-name"
+    vast_lambda_arn       = "arn:aws:lambda:::function:temporary-dummy-arn"
+    vast_lambda_role_name = "temporary-dummy-name"
   }
 }
 
@@ -30,4 +31,5 @@ inputs = {
   cloudtrail_bucket_region = local.cloudtrail_bucket_region
   vast_lambda_name         = dependency.step_2.outputs.vast_lambda_name
   vast_lambda_arn          = dependency.step_2.outputs.vast_lambda_arn
+  vast_lambda_role_name    = dependency.step_2.outputs.vast_lambda_role_name
 }
