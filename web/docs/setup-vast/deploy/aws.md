@@ -78,7 +78,7 @@ VASTCLOUD_REBUILD=1 ./vast-cloud
 
 With the toolchain Docker image in place, `vast-cloud` is now ready to execute
 commands via `docker run` that transports the `.env` configuration to the main
-script [`cli.py`][cli.py] driving the Terragrunt invocation. To see what
+script [`core.py`][core.py] driving the Terragrunt invocation. To see what
 commands are available, run `./vast-cloud --list`.
 
 To create the AWS services, run:
@@ -95,15 +95,16 @@ To tear everything down, use:
 
 [vast-cloud-dockerfile]: https://github.com/tenzir/vast/blob/master/cloud/aws/docker/cli.Dockerfile
 [vast-cloud-script]: https://github.com/tenzir/vast/blob/master/cloud/aws/vast-cloud
-[cli.py]: https://github.com/tenzir/vast/blob/master/cloud/aws/cli.py
+[core.py]: https://github.com/tenzir/vast/blob/master/cloud/aws/cli/core.py
 
 :::warning Caveats
 - Access to the VAST server is enforced by limiting inbound traffic to its local
   private subnet.
-- A NAT Gateway is created automatically, you cannot specify an existing one. It
-  will be billed at [an hourly rate](https://aws.amazon.com/vpc/pricing/) even
-  when you aren't running any workload, until you tear down the entire stack.
-- You might sometime bumb into the message *"error waiting for Lambda Function
+- A NAT Gateway and a network load balancer are created automatically, you
+  cannot specify existing ones. They will be billed at [an hourly
+  rate](https://aws.amazon.com/vpc/pricing/) even when you aren't running any
+  workload, until you tear down the entire stack.
+- You might sometime bump into the message *"error waiting for Lambda Function
   creation: InsufficientRolePermissions"* while deploying the stack. You can
   usually solve this by running `./vast-cloud deploy` again a few minutes later.
 :::
@@ -125,12 +126,14 @@ You can replace the running server with a new Fargate task:
 ./vast-cloud restart-vast-server
 ```
 
+Finally, to avoid paying for the Fargate resource when you are not using VAST, you can shut down the server:
+```bash
+./vast-cloud stop-vast-server
+```
+
 :::info
 - If you use `ATTACHED` as storage type, restarting the server task will wipe
   the database.
-- Multiple invocations of `./vast-cloud run-vast-task` create multiple Fargate
-  tasks, preventing other commands from working correctly. We recommand
-  only using `start-vast-server` and `restart-vast-server`.
 :::
 
 ### Run a VAST client on Fargate
@@ -163,10 +166,33 @@ To run a VAST client from Lambda, use the `run-lambda` target:
 The Lambda image also contains extra tooling, such as the AWS CLI, which is
 useful to run batch imports or exports to other AWS services.
 
-### Shutdown Fargate
+### Continuously load data from Cloudtrail
 
-To shutdown all Fargate resources, run:
+If you have Cloudtrail enabled and pushing data into a bucket that is located in
+the same AWS account as your VAST deployment, you can deploy an optional module
+that will stream all the new events arriving in that bucket to the VAST
+instance. To achieve this, assuming that VAST is already deployed, configure the
+following in the `.env` file:
+- `VAST_CLOUDTRAIL_BUCKET_NAME`: the name of the bucket where Cloudtrail is
+  pushing its events
+- `VAST_CLOUDTRAIL_BUCKET_REGION`: the region where that bucket is located
+
+Then run:
 
 ```bash
-./vast-cloud stop-all-tasks
+./vast-cloud cloudtrail.deploy
+```
+
+You should see new events flowing into VAST within a few minutes:
+
+```bash
+./vast-cloud run-lambda -c "vast count '#type==\"aws.cloudtrail\"'"
+```
+
+Running the global `./vast-cloud destroy` command will also destroy optional modules such as
+the Cloudtrail datasource. If you want to destroy the Cloudtrail datasource
+resources only, use:
+
+```bash
+./vast-cloud cloudtrail.destroy
 ```
