@@ -189,10 +189,17 @@ You should see new events flowing into VAST within a few minutes:
 ./vast-cloud run-lambda -c "vast count '#type==\"aws.cloudtrail\"'"
 ```
 
-Running the global `./vast-cloud destroy` command will also destroy optional modules such as
-the Cloudtrail datasource. If you want to destroy the Cloudtrail datasource
-resources only, use:
+Running the global `./vast-cloud destroy` command will also destroy optional
+modules such as the Cloudtrail datasource. If you want to destroy the Cloudtrail
+datasource resources only, use:
 
 ```bash
 ./vast-cloud cloudtrail.destroy
 ```
+
+:::warning Caveats
+- To get notified of new objects in the bucket, we use EventBridge
+  notifications. These notifications are not disabled automatically on your
+  bucket when the stack is destroyed to avoid interfering with your existing
+  notification systems.
+:::
