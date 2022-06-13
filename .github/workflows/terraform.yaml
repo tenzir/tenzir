@@ -16,16 +16,17 @@ on: workflow_dispatch
 #   configure workspaces for each Terragrunt step:
 #   - In Github Action secrets, set TF_ORGANIZATION with your Terraform Cloud
 #     organizations name, TF_API_TOKEN with a Terraform Cloud API key (for
-#     instance a user token) and choose a string to set as the
-#     TF_WORKSPACE_PREFIX (e.g "github-action")
-#   - Create a workspace in Terraform Cloud for each step. Their name should be
-#     the concatenation of the chosen prefix and the "-step-1", "-step-2"...
-#     suffixes (e.g "github-action-step-1", "github-action-step-2"...).
+#     instance a user token).
+#   - Create a workspace in Terraform Cloud for each step you are planning to
+#     deploy:
+#     - [required] gh-act-core-1 for the image repository (ECR)
+#     - [required] gh-act-core-2 the other VAST core resources (VPC, Fargate...)
+#     - [optional] gh-act-cloudtrail for the Cloudtrail datasource
 #   - For each of these workspaces:
 #     - configure AWS credentials with sufficient priviledges to deploy the
 #       stack. You can use a Variable Set to make this simpler.
 #     - set the "Terraform Working Directory" field in the general settings to
-#       the path of the environement (cloud/aws/step-x)
+#       the path of the environement (e.g. cloud/aws/terraform/core-1)
 
 # Notes:
 # - If this workflow is executed multiple times at in parallel, the Terraform
@@ -34,6 +35,8 @@ on: workflow_dispatch
 # - If Terraform fails or is interrupted during deployment or destruction, the
 #   state might end up locked and subsequent runs will fail. In this case the
 #   state first needs to be unlocked, for instance from the Terraform Cloud UI.
+# - You can optionally set a different prefix for the Terraform Cloud workspace
+#   names using the TF_WORKSPACE_PREFIX secret (default is "gh-act")
 
 # Set these secrets to configure the CI run
 env:
