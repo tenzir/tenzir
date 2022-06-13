@@ -10,12 +10,16 @@ provider "aws" {
 }
 
 resource "aws_cloudwatch_event_bus" "local_obj_event_bus" {
-  name = "${module.env.module_name}-obj-events-${module.env.stage}"
+  name = "${module.env.module_name}-${var.source_name}-${module.env.stage}"
+
+  tags = {
+    description = "Notifications of new ${var.source_name} s3 objects"
+  }
 }
 
 resource "aws_cloudwatch_event_rule" "local_s3_object_events_rule" {
-  name           = "${module.env.module_name}-local-${module.env.stage}"
-  description    = "All s3 object created events"
+  name           = "${module.env.module_name}-${var.source_name}-${module.env.stage}"
+  description    = "Capture notifications of new ${var.source_name} s3 objects"
   event_bus_name = aws_cloudwatch_event_bus.local_obj_event_bus.name
 
   event_pattern = <<EOF
@@ -33,11 +37,11 @@ resource "aws_cloudwatch_event_target" "lambda_target" {
 
   input_transformer {
     input_paths = {
-      objkey = "$.detail.object.key",
+      objkey    = "$.detail.object.key",
     }
     input_template = <<EOF
 {
-  "cmd": "${base64encode(local.import_cmd)}",
+  "cmd": "${base64encode(var.import_cmd)}",
   "env": {
     "SRC_KEY": <objkey>
   }
@@ -47,7 +51,7 @@ EOF
 }
 
 resource "aws_lambda_permission" "eventbridge_invoke_lambda" {
-  statement_id  = "AllowExecutionFromEventBridge"
+  statement_id  = "AllowFrom${var.source_name}EventBridge"
   action        = "lambda:InvokeFunction"
   function_name = var.vast_lambda_name
   principal     = "events.amazonaws.com"
@@ -55,8 +59,8 @@ resource "aws_lambda_permission" "eventbridge_invoke_lambda" {
 }
 
 module "source_trail" {
-  source         = "../common/s3notif"
-  bucket_name    = var.cloudtrail_bucket_name
-  region         = var.cloudtrail_bucket_region
+  source         = "../s3notif"
+  bucket_name    = var.source_bucket_name
+  region         = var.source_bucket_region
   target_bus_arn = aws_cloudwatch_event_bus.local_obj_event_bus.arn
 }
