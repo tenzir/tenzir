@@ -33,8 +33,8 @@
 
 #define VAST_NOOP_2(expr, msg)                                                 \
   do {                                                                         \
-    VAST_ASSERT_1(expr);                                                       \
-    VAST_ASSERT_1(msg);                                                        \
+    VAST_NOOP_1(expr);                                                         \
+    VAST_NOOP_1(msg);                                                          \
   } while (false)
 
 // Provide VAST_ASSERT_EXPENSIVE macro
