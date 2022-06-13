@@ -73,7 +73,7 @@ jobs:
 
       - name: Substitute backend with Terraform Cloud
         run: |
-          cat<<EOF > terragrunt.hcl
+          cat<<EOF > terraform/terragrunt.hcl
           generate "backend" {
             path = "backend.generated.tf"
             if_exists = "overwrite"

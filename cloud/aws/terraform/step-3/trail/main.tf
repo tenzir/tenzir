@@ -110,7 +110,7 @@ resource "aws_cloudwatch_event_rule" "origin_s3_object_events_rule" {
   provider    = aws.trail_region
   name        = "${module.env.module_name}-origin-${local.id}-${module.env.stage}"
   description = "Capture s3 object created events"
-  
+
   event_pattern = <<EOF
 {
   "source": ["aws.s3"],
