@@ -1,4 +1,3 @@
-Added new index metrics 'index.partitions-created', 'index.partitions-persisted'
-and 'index.partitions-persisted-events' which allow monitoring the number of
-partitions created and persisted by the index. The former is a pure counter,
-and the latter two are reported separately per layout.
+VAST emits the new metric `partition.events-written` when writing a partition to
+disk. The metric's value is the number of events written, and the
+`metadata_schema` field contains the name of the partition's schema.
