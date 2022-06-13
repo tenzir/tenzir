@@ -17,7 +17,7 @@ else
      new_config='{"EventBridgeConfiguration": {}}'
   else
     echo "- Notification configuration found, adding EventBridge target"
-    new_config="$(echo $current_config | jq '. + {EventBridgeConfiguration: {}}')"
+    new_config=$(echo $current_config | jq '. + {EventBridgeConfiguration: {}}')
   fi
-  aws s3api --region $1 put-bucket-notification-configuration --bucket $2 --notification-configuration $new_config
+  aws s3api --region $1 put-bucket-notification-configuration --bucket $2 --notification-configuration "$new_config"
 fi
