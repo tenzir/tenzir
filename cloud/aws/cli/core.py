@@ -189,8 +189,8 @@ def deploy_lambda_image(c):
 def get_vast_server(c, max_wait_time_sec=0):
     """Get the task id of the VAST server. If no server is running, it waits
     until max_wait_time_sec for a new server to be started."""
-    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
-    family = terraform_output(c, "step-2", "vast_task_family")
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+    family = terraform_output(c, "core-2", "vast_task_family")
     start_time = time.time()
     while True:
         task_res = aws("ecs").list_tasks(family=family, cluster=cluster)
