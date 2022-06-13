@@ -14,7 +14,7 @@ dependency "step_2" {
 
 locals {
   cloudtrail_bucket_name   = get_env("VAST_CLOUDTRAIL_BUCKET_NAME", "temporary-dummy-name")
-  cloudtrail_bucket_region = get_env("VAST_CLOUDTRAIL_BUCKET_REGION", "temporary-dummy-region")
+  cloudtrail_bucket_region = get_env("VAST_CLOUDTRAIL_BUCKET_REGION", "us-east-1") # needs to be a real region to pass validation
 }
 
 
