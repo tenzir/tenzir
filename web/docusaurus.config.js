@@ -62,6 +62,7 @@ const config = {
         appId: 'BVB58VRBDH',
         apiKey: 'f7c2eb86ff85cd55d9634543ed1c60b2',
         indexName: 'vast',
+        contextualSearch: false,
       },
       navbar: {
         title: 'VAST',
