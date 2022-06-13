@@ -110,7 +110,7 @@ def docker_login(c):
 def init_step(c, step):
     """Manually run terraform init on a specific step"""
     c.run(
-        f"terragrunt init --terragrunt-working-dir {TFDIR}/step-{step}",
+        f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
         env=env(c),
     )
 
@@ -120,7 +120,7 @@ def deploy_step(c, step, auto_approve=False):
     """Deploy only one step of the stack"""
     init_step(c, step)
     c.run(
-        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/step-{step}",
+        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
         env=env(c),
         pty=True,
     )
@@ -129,8 +129,8 @@ def deploy_step(c, step, auto_approve=False):
 @task
 def deploy(c, auto_approve=False):
     """One liner build and deploy of the stack to AWS"""
-    deploy_step(c, 1, auto_approve)
-    deploy_step(c, 2, auto_approve)
+    deploy_step(c, "core-1", auto_approve)
+    deploy_step(c, "core-2", auto_approve)
 
 
 # This command is used by the Terragrunt hook
@@ -151,8 +151,8 @@ def current_lambda_image(c, repo_arn):
 @task
 def deploy_lambda_image(c):
     """Build and push the lambda image, fails if step 1 is not deployed"""
-    image_url = terraform_output(c, "step-1", "vast_lambda_repository_url")
-    repo_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
+    image_url = terraform_output(c, "core-1", "vast_lambda_repository_url")
+    repo_arn = terraform_output(c, "core-1", "vast_lambda_repository_arn")
     # get the digest of the current image
     current_image = current_lambda_image(c, repo_arn)
     try:
@@ -178,7 +178,7 @@ def deploy_lambda_image(c):
         return
     # if a change occured, push and tag the new image as current
     c.run(f"docker push {image_url}:{image_tag}")
-    image_arn = terraform_output(c, "step-1", "vast_lambda_repository_arn")
+    image_arn = terraform_output(c, "core-1", "vast_lambda_repository_arn")
     aws("ecr").tag_resource(
         resourceArn=image_arn,
         tags=[{"Key": "current", "Value": f"{image_url}:{image_tag}"}],
@@ -208,8 +208,8 @@ def get_vast_server(c, max_wait_time_sec=0):
 @task
 def start_vast_server(c):
     """Start the VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
-    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
-    service_name = terraform_output(c, "step-2", "vast_service_name")
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+    service_name = terraform_output(c, "core-2", "vast_service_name")
     aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=1)
     task_id = get_vast_server(c, max_wait_time_sec=120)
     print(f"Started task {task_id}")
@@ -218,7 +218,7 @@ def start_vast_server(c):
 def stop_vast_task(c):
     "Stop the current running VAST Fargate Task"
     task_id = get_vast_server(c)
-    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     aws("ecs").stop_task(task=task_id, cluster=cluster)
     return task_id
 
@@ -226,8 +226,8 @@ def stop_vast_task(c):
 @task
 def stop_vast_server(c):
     """Stop the VAST server instance"""
-    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
-    service_name = terraform_output(c, "step-2", "vast_service_name")
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+    service_name = terraform_output(c, "core-2", "vast_service_name")
     aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=0)
     task_id = stop_vast_task(c)
     print(f"Stopped task {task_id}")
@@ -245,7 +245,7 @@ def restart_vast_server(c):
 @task(autoprint=True)
 def list_all_tasks(c):
     """List the ids of all tasks running on the ECS cluster"""
-    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     task_res = aws("ecs").list_tasks(cluster=cluster)
     task_ids = [task.split("/")[-1] for task in task_res["taskArns"]]
     return task_ids
@@ -254,7 +254,7 @@ def list_all_tasks(c):
 @task(autoprint=True)
 def run_lambda(c, cmd):
     """Run ad-hoc VAST client commands from AWS Lambda"""
-    lambda_name = terraform_output(c, "step-2", "vast_lambda_name")
+    lambda_name = terraform_output(c, "core-2", "vast_lambda_name")
     cmd_b64 = base64.b64encode(cmd.encode()).decode()
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
@@ -272,7 +272,7 @@ def run_lambda(c, cmd):
 def execute_command(c, cmd="/bin/bash"):
     """Run ad-hoc or interactive commands from the VAST server Fargate task"""
     task_id = get_vast_server(c)
-    cluster = terraform_output(c, "step-2", "fargate_cluster_name")
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues
     if cmd != "/bin/bash":
         cmd = f"/bin/bash -c 'echo {base64.b64encode(cmd.encode()).decode()} | base64 -d | /bin/bash'"
@@ -293,7 +293,7 @@ def destroy_step(c, step, auto_approve=False):
     """Destroy resources of the specified step. Resources depending on it should be cleaned up first."""
     init_step(c, step)
     c.run(
-        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/step-{step}",
+        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
         env=env(c),
         pty=True,
     )

@@ -3,7 +3,7 @@ include "root" {
 }
 
 dependency "step_2" {
-  config_path = "../step-2"
+  config_path = "../core-2"
 
   mock_outputs = {
     vast_lambda_name      = "temporary-dummy-name"

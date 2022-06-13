@@ -1,5 +1,5 @@
 module "env" {
-  source = "../../../modules/env"
+  source = "../../../common/env"
 }
 
 variable "name" {}

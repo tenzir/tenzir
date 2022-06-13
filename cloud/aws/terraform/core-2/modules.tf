@@ -45,7 +45,7 @@ module "vast_server" {
 }
 
 module "vast_client" {
-  source = "../modules/lambda"
+  source = "../common/lambda"
 
   function_base_name = "client"
   region_name        = var.region_name

@@ -3,7 +3,7 @@ include "root" {
 }
 
 dependency "step_1" {
-  config_path = "../step-1"
+  config_path = "../core-1"
 
   mock_outputs = {
     vast_lambda_repository_arn = "arn:aws:ecr:::repository/temporary-dummy-arn"

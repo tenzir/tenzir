@@ -1,7 +1,7 @@
 # global configuration
 
 module "env" {
-  source = "../../modules/env"
+  source = "../../common/env"
 }
 
 variable "region_name" {}

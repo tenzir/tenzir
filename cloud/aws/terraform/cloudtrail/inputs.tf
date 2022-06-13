@@ -17,7 +17,7 @@ variable "vast_lambda_role_name" {
 }
 
 module "env" {
-  source = "../modules/env"
+  source = "../common/env"
 }
 
 locals {

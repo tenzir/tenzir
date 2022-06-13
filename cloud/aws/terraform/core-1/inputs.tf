@@ -3,5 +3,5 @@ variable "region_name" {
 }
 
 module "env" {
-  source = "../modules/env"
+  source = "../common/env"
 }

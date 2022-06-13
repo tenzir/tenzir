@@ -8,7 +8,7 @@ variable "target_bus_arn" {
 }
 
 module "env" {
-  source = "../../modules/env"
+  source = "../../common/env"
 }
 
 locals {
