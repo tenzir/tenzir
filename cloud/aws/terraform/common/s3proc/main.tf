@@ -1,14 +1,3 @@
-provider "aws" {
-  region = var.region_name
-  default_tags {
-    tags = {
-      module      = module.env.module_name
-      provisioner = "terraform"
-      stage       = terraform.workspace
-    }
-  }
-}
-
 resource "aws_cloudwatch_event_bus" "local_obj_event_bus" {
   name = "${module.env.module_name}-${var.source_name}-${module.env.stage}"
 
@@ -37,7 +26,7 @@ resource "aws_cloudwatch_event_target" "lambda_target" {
 
   input_transformer {
     input_paths = {
-      objkey    = "$.detail.object.key",
+      objkey = "$.detail.object.key",
     }
     input_template = <<EOF
 {
