@@ -2,7 +2,7 @@
 title: VAST v1.1.1
 description: VAST v1.1.1 - Compaction & Query Language Frontends
 authors: dominiklohmann
-slug: 2022-03-25/vast-v1.1.1
+date: 2022-03-25
 tags: [release, compaction, query]
 ---
 

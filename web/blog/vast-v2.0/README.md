@@ -2,7 +2,7 @@
 title: VAST v2.0
 description: VAST v2.0 - Smarter Query Scheduling & Tunable Filters
 authors: dominiklohmann
-slug: 2022-05-16/vast-v2.0
+date: 2022-05-16
 tags: [release, compaction, performance, pcap]
 ---
 
