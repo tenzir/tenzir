@@ -2,9 +2,10 @@
 title: VAST v1.0
 description: VAST v1.0 – New Year, New Versioning Scheme
 authors: dominiklohmann
-slug: 2022-01-27/vast-v1.0
+date: 2022-01-27
 tags: [release, transforms, query]
 ---
+
 We are happy to announce [VAST v1.0][github-vast-release]!
 
 This release brings a new approach to software versioning for Tenzir. We laid
