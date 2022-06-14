@@ -6,6 +6,81 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
+## [v2.1.0-rc1][v2.1.0-rc1]
+
+### Changes
+
+- The `mdx-regenerate` tool is no longer part of VAST binary releases.
+  [#2260](https://github.com/tenzir/vast/pull/2260)
+
+- Partition transforms now always emit homogenous partitions, i.e., one schema per partition. This makes compaction and aging more efficient.
+  [#2277](https://github.com/tenzir/vast/pull/2277)
+
+- The `vast.store-backend` configuration option no longer supports `archive`, and instead always uses the superior `segment-store` instead. Events stored in the archive will continue to be available in queries.
+  [#2290](https://github.com/tenzir/vast/pull/2290)
+
+- The `vast.use-legacy-query-scheduler` option is now ignored because the legacy query scheduler has been removed.
+  [#2312](https://github.com/tenzir/vast/pull/2312)
+
+### Features
+
+- The `lsvast` tool can now print contents of individual `.mdx` files. It now has an option to print raw Bloom filter contents of string and address synopses.
+  [#2260](https://github.com/tenzir/vast/pull/2260)
+
+- The `mdx-regenerate` tool was renamed to `vast-regenerate` and can now also regenerate an index file from a list of partition UUIDs.
+  [#2260](https://github.com/tenzir/vast/pull/2260)
+
+- VAST now compresses data with Zstd. When persisting data to the segment store, the default configuration achieves over 2x space savings. When transferring data between client and server processes, compression reduces the amount of transferred data by up to 5x. This allowed us to increase the default partition size from 1,048,576 to 4,194,304 events, and the default number of events in a single batch from 1,024 to 65,536. The performance increase comes at the cost of a ~20% memory footprint increase at peak load. Use the option `vast.max-partition-size` to tune this space-time tradeoff.
+  [#2268](https://github.com/tenzir/vast/pull/2268)
+
+- VAST now produces additional metrics under the keys `ingest.events`, `ingest.duration` and `ingest.rate`. Each of those gets issued once for every schema that VAST ingested during the measurement period. Use the `metadata_schema` key to disambiguate the metrics.
+  [#2274](https://github.com/tenzir/vast/pull/2274)
+
+- The `status` command now supports filtering by component name. E.g., `vast status importer index` only shows the status of the importer and index components.
+  [#2288](https://github.com/tenzir/vast/pull/2288)
+
+- VAST emits the new metric `partition.events-written` when writing a partition to disk. The metric's value is the number of events written, and the `metadata_schema` field contains the name of the partition's schema.
+  [#2302](https://github.com/tenzir/vast/pull/2302)
+
+- The new `rebuild` command rebuilds old partitions to take advantage of improvements in newer VAST versions. Rebuilding takes place in the VAST server in the background. This process merges partitions up to the configured `max-partition-size`, turns VAST v1.x's heterogeneous into VAST v2.x's homogenous partitions, migrates all data to the currently configured `store-backend`, and upgrades to the most recent internal batch encoding and indexes.
+  [#2321](https://github.com/tenzir/vast/pull/2321)
+
+- PyVAST now supports running client commands for VAST servers running in a container environment, if no local VAST binary is available. Specify the `container` keyword to customize this behavior. It defaults to `{"runtime": "docker", "name": "vast"}`.
+  [#2334](https://github.com/tenzir/vast/pull/2334)
+  [@KaanSK](https://github.com/KaanSK)
+
+- The `csv` import gained a new `--seperator='x'` option that defaults to `','`. Set it to `'\t'` to import tab-separated values, or `' '` to import space-separated values.
+  [#2336](https://github.com/tenzir/vast/pull/2336)
+
+### Bug Fixes
+
+- VAST no longer crashes when importing map or pattern data annotated with the `#skip` attribute.
+  [#2286](https://github.com/tenzir/vast/pull/2286)
+
+- The `--plugins`, `--plugin-dirs`, and `--schema-dirs` command-line options now correctly overwrite their corresponding configuration options.
+  [#2289](https://github.com/tenzir/vast/pull/2289)
+
+- VAST no longer crashes when a query arrives at a newly created active partition in the time window between the partition creation and the first event arriving at the partition.
+  [#2295](https://github.com/tenzir/vast/pull/2295)
+
+- Setting the environment variable `VAST_ENDPOINT` to `host:port` pair no longer fails on startup with a parse error.
+  [#2305](https://github.com/tenzir/vast/pull/2305)
+
+- VAST now reads the default false-positive rate for sketches correctly. This broke accidentally with the v2.0 release. The option moved from `vast.catalog-fp-rate` to `vast.index.default-fp-rate`.
+  [#2325](https://github.com/tenzir/vast/pull/2325)
+
+- The parser for `real` values now understands scientific notation, e.g., `1.23e+42`.
+  [#2332](https://github.com/tenzir/vast/pull/2332)
+
+- The `csv` import no longer crashes when the CSV file contains columns not present in the selected schema. Instead, it imports these columns as strings.
+  [#2336](https://github.com/tenzir/vast/pull/2336)
+
+- `vast export csv` now renders enum columns in their string representation instead of their internal numerical representation.
+  [#2336](https://github.com/tenzir/vast/pull/2336)
+
+- The JSON import now treats `time` and `duration` fields correctly for JSON strings containing a number, i.e., the JSON string `"1654735756"` now behaves just like the JSON number `1654735756` and for a `time` field results in the value `2022-06-09T00:49:16.000Z`.
+  [#2340](https://github.com/tenzir/vast/pull/2340)
+
 ## [v2.0.0][v2.0.0]
 
 ### Breaking Changes
@@ -1699,6 +1774,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
+[v2.1.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.1.0-rc1
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
