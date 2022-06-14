@@ -9,8 +9,8 @@
     <icon>https://vast.io/img/favicon.ico</icon>
     <entry>
         <title type="html"><![CDATA[VAST v2.0]]></title>
-        <id>2022-05-16/vast-v2.0</id>
-        <link href="https://vast.io/blog/2022-05-16/vast-v2.0"/>
+        <id>/vast-v2.0</id>
+        <link href="https://vast.io/blog/vast-v2.0"/>
         <updated>2022-05-16T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[VAST v2.0 - Smarter Query Scheduling & Tunable Filters]]></summary>
         <content type="html"><![CDATA[<p>Dear community, we are excited to announce <a href="https://github.com/tenzir/vast/releases/tag/v2.0.0" target="_blank" rel="noopener noreferrer">VAST v2.0</a>,
@@ -112,8 +112,8 @@ experimental Terraform scripts for deploying VAST to AWS Fargate and Lambda.</li
     </entry>
     <entry>
         <title type="html"><![CDATA[VAST v1.1.2]]></title>
-        <id>2022-03-29/vast-v1.1.2</id>
-        <link href="https://vast.io/blog/2022-03-29/vast-v1.1.2"/>
+        <id>/vast-v1.1.2</id>
+        <link href="https://vast.io/blog/vast-v1.1.2"/>
         <updated>2022-03-29T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[VAST v1.1.2 - Compaction & Query Language Frontends]]></summary>
         <content type="html"><![CDATA[<p>Dear community, we are happy to announce the release of <a href="https://github.com/tenzir/vast/releases/tag/v1.1.2" target="_blank" rel="noopener noreferrer">VAST
@@ -134,8 +134,8 @@ would time out during the meta index lookup.
     </entry>
     <entry>
         <title type="html"><![CDATA[VAST v1.1.1]]></title>
-        <id>2022-03-25/vast-v1.1.1</id>
-        <link href="https://vast.io/blog/2022-03-25/vast-v1.1.1"/>
+        <id>/vast-v1.1.1</id>
+        <link href="https://vast.io/blog/vast-v1.1.1"/>
         <updated>2022-03-25T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[VAST v1.1.1 - Compaction & Query Language Frontends]]></summary>
         <content type="html"><![CDATA[<p>Dear community, we are excited to announce <a href="https://github.com/tenzir/vast/releases/tag/v1.1.1" target="_blank" rel="noopener noreferrer">VAST
@@ -158,8 +158,8 @@ the export path once all workers were stuck.</li></ul><p>Thanks to <a href="http
     </entry>
     <entry>
         <title type="html"><![CDATA[VAST v1.1]]></title>
-        <id>2022-03-03/vast-v1.1</id>
-        <link href="https://vast.io/blog/2022-03-03/vast-v1.1"/>
+        <id>/vast-v1.1</id>
+        <link href="https://vast.io/blog/vast-v1.1"/>
         <updated>2022-03-03T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[VAST v1.1 - Compaction & Query Language Frontends]]></summary>
         <content type="html"><![CDATA[<p>Dear community, we are excited to announce <a href="https://github.com/tenzir/vast/releases/tag/v1.1.0" target="_blank" rel="noopener noreferrer">VAST v1.1</a>,
@@ -250,8 +250,8 @@ warns on startup if it’s configured to run aging.</p>]]></content>
     </entry>
     <entry>
         <title type="html"><![CDATA[VAST v1.0]]></title>
-        <id>2022-01-27/vast-v1.0</id>
-        <link href="https://vast.io/blog/2022-01-27/vast-v1.0"/>
+        <id>/vast-v1.0</id>
+        <link href="https://vast.io/blog/vast-v1.0"/>
         <updated>2022-01-27T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[VAST v1.0 – New Year, New Versioning Scheme]]></summary>
         <content type="html"><![CDATA[<p>We are happy to announce <a href="https://github.com/tenzir/vast/releases/tag/v1.0.0" target="_blank" rel="noopener noreferrer">VAST v1.0</a>!</p><p>This release brings a new approach to software versioning for Tenzir. We laid
