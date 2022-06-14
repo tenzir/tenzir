@@ -39,8 +39,18 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `status` command now supports filtering by component name. E.g., `vast status importer index` only shows the status of the importer and index components.
   [#2288](https://github.com/tenzir/vast/pull/2288)
 
+- VAST emits the new metric `partition.events-written` when writing a partition to disk. The metric's value is the number of events written, and the `metadata_schema` field contains the name of the partition's schema.
+  [#2302](https://github.com/tenzir/vast/pull/2302)
+
 - The new `rebuild` command rebuilds old partitions to take advantage of improvements in newer VAST versions. Rebuilding takes place in the VAST server in the background. This process merges partitions up to the configured `max-partition-size`, turns VAST v1.x's heterogeneous into VAST v2.x's homogenous partitions, migrates all data to the currently configured `store-backend`, and upgrades to the most recent internal batch encoding and indexes.
   [#2321](https://github.com/tenzir/vast/pull/2321)
+
+- PyVAST now supports running client commands for VAST servers running in a container environment, if no local VAST binary is available. Specify the `container` keyword to customize this behavior. It defaults to `{"runtime": "docker", "name": "vast"}`.
+  [#2334](https://github.com/tenzir/vast/pull/2334)
+  [@KaanSK](https://github.com/KaanSK)
+
+- The `csv` import gained a new `--seperator='x'` option that defaults to `','`. Set it to `'\t'` to import tab-separated values, or `' '` to import space-separated values.
+  [#2336](https://github.com/tenzir/vast/pull/2336)
 
 ### Bug Fixes
 
@@ -61,6 +71,15 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The parser for `real` values now understands scientific notation, e.g., `1.23e+42`.
   [#2332](https://github.com/tenzir/vast/pull/2332)
+
+- The `csv` import no longer crashes when the CSV file contains columns not present in the selected schema. Instead, it imports these columns as strings.
+  [#2336](https://github.com/tenzir/vast/pull/2336)
+
+- `vast export csv` now renders enum columns in their string representation instead of their internal numerical representation.
+  [#2336](https://github.com/tenzir/vast/pull/2336)
+
+- The JSON import now treats `time` and `duration` fields correctly for JSON strings containing a number, i.e., the JSON string `"1654735756"` now behaves just like the JSON number `1654735756` and for a `time` field results in the value `2022-06-09T00:49:16.000Z`.
+  [#2340](https://github.com/tenzir/vast/pull/2340)
 
 ## [v2.0.0][v2.0.0]
 

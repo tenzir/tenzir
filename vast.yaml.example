@@ -330,6 +330,12 @@ vast:
     # An alternate schema as a string.
     #schema: <none>
 
+    # The `vast import csv` command imports comma-separated values.
+    csv:
+      # The single-character separator. Set this to ' ' to parse space-separated
+      # values, or '\t' to parse tab-separated values.
+      separator: ','
+
     # The `vast import json` command imports JSONL data.
     json:
       # Read the event type from the given field (specify as

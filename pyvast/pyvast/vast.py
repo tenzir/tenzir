@@ -19,12 +19,19 @@ Example:
 
 import asyncio
 import logging
+from distutils.spawn import find_executable
 
 
 class VAST:
     """A VAST node handle"""
 
-    def __init__(self, binary="vast", endpoint=None, logger=None):
+    def __init__(
+        self,
+        binary="vast",
+        endpoint=None,
+        container={"runtime": "docker", "name": "vast"},
+        logger=None,
+    ):
         if logger:
             self.logger = logger
         else:
@@ -37,6 +44,7 @@ class VAST:
                 )
             )
             self.logger.addHandler(ch)
+        self.container = container
         self.binary = binary
         self.endpoint = endpoint
         self.call_stack = []
@@ -48,8 +56,15 @@ class VAST:
         """Spawns a process asynchronously."""
         if self.endpoint is not None:
             args = ("-e", self.endpoint) + args
+
+        if find_executable(self.binary) is not None:
+            command = self.binary
+        else:
+            args = ("exec", self.container.get("name"), "vast") + args
+            command = self.container.get("runtime")
+
         return await asyncio.create_subprocess_exec(
-            self.binary,
+            command,
             *args,
             stdin=stdin,
             stdout=asyncio.subprocess.PIPE,
@@ -80,7 +95,9 @@ class VAST:
         if name.endswith("_"):
             # trim trailing underscores to overcome the 'import' keyword
             name = name[:-1]
-        self.call_stack.append(name.replace("_", "-"))
+
+        if not name == "__iter_":
+            self.call_stack.append(name.replace("_", "-"))
 
         def method(*args, **kwargs):
             if kwargs:

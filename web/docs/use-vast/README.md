@@ -21,11 +21,13 @@ flowchart TB
   %% Actions
   subgraph manage [ ]
     direction TB
+    run(Run):::action
     ingest(Ingest):::action
     query(Query):::future
     transform(Transform):::future
     introspect(Introspect):::future
   end
+  click run "/docs/use-vast/run" "Run Data"
   click ingest "/docs/use-vast/ingest" "Ingest Data"
   %%click query "/docs/use-vast/query" "Query Data"
   %%click transform "/docs/use-vast/transform" "Transform Data"
