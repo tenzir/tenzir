@@ -482,13 +482,15 @@ if (NOT FastFloat_FOUND)
       FATAL_ERROR
         "fast_float library not found, either use -FastFloat_DIR=... or"
         " initialize the libvast/aux/fast_float submodule")
-  else ()
-    add_subdirectory(aux/fast_float)
-    add_library(FastFloat::fast_float ALIAS fast_float)
   endif ()
+  add_subdirectory(aux/fast_float)
+  add_library(FastFloat::fast_float ALIAS fast_float)
+  dependency_summary("fast_float" "${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float"
+                     "Dependencies")
+else ()
+  dependency_summary("fast_float" FastFloat::fast_float "Dependencies")
 endif ()
 target_link_libraries(libvast PRIVATE FastFloat::fast_float)
-dependency_summary("fast_float" FastFloat::fast_float "Dependencies")
 
 # Link against a backtrace library.
 option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
