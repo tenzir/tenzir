@@ -7,13 +7,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #define SUITE chunk
-
 #include "vast/chunk.hpp"
 
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
+
+#include <caf/test/dsl.hpp>
 
 #include <cstddef>
 #include <span>
@@ -80,6 +81,28 @@ TEST(serialization) {
   CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_NOT_EQUAL(y, nullptr);
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
+}
+
+TEST(compression) {
+  // We assemble a large test string with many repetitions for compression
+  // tests.
+  const auto piece = std::string_view{"foobarbaz"};
+  auto str = std::string{};
+  str.reserve(piece.size() * 1000);
+  for (auto i = 0; i < 1000; ++i)
+    str += piece;
+  const auto original = chunk::make(std::move(str));
+  const auto compressed = unbox(chunk::compress(as_bytes(*original)));
+  CHECK_LESS(compressed->size(), original->size());
+  const auto decompressed
+    = unbox(chunk::decompress(as_bytes(*compressed), original->size()));
+  CHECK_EQUAL(as_bytes(*original), as_bytes(*decompressed));
+  const auto decompressed_oversized
+    = chunk::decompress(as_bytes(*compressed), original->size() + 1);
+  CHECK_ERROR(decompressed_oversized);
+  const auto decompressed_undersized
+    = chunk::decompress(as_bytes(*compressed), original->size() - 1);
+  CHECK_ERROR(decompressed_undersized);
 }
 
 TEST(as_bytes) {
