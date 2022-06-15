@@ -64,9 +64,9 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
   // Deserialize the value index and spawn a passive_indexer lazily when it is
   // requested for the first time.
   if (!indexer) {
-    const auto *qualified_index = flatbuffer->indexes()->Get(position);
-    const auto *index = qualified_index->index();
-    const auto *data = index->data();
+    const auto* qualified_index = flatbuffer->indexes()->Get(position);
+    const auto* index = qualified_index->index();
+    const auto* data = index->data();
     if (!data)
       return {};
     auto uncompressed_data = chunk::make(as_bytes(*data), []() noexcept {});

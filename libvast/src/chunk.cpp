@@ -206,8 +206,8 @@ chunk_ptr decompress(const chunk_ptr& chunk, size_t buffer_size) noexcept {
   const auto length
     = codec
         ->Decompress(detail::narrow_cast<int64_t>(chunk->size()),
-                   reinterpret_cast<const uint8_t*>(chunk->data()),
-                   detail::narrow_cast<int64_t>(buffer_size), buffer.data())
+                     reinterpret_cast<const uint8_t*>(chunk->data()),
+                     detail::narrow_cast<int64_t>(buffer_size), buffer.data())
         .ValueOrDie();
   buffer.resize(length);
   return chunk::make(std::move(buffer));

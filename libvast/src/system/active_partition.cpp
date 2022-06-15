@@ -117,10 +117,10 @@ pack(flatbuffers::FlatBufferBuilder& builder,
     auto fieldname = builder.CreateString(name);
     auto uncompressed_size = chunk ? chunk->size() : 0;
     auto compressed_chunk = compress(chunk);
-    auto data
-      = compressed_chunk ? builder.CreateVector(
-          reinterpret_cast<const uint8_t*>(compressed_chunk->data()), compressed_chunk->size())
-              : 0;
+    auto data = compressed_chunk ? builder.CreateVector(
+                  reinterpret_cast<const uint8_t*>(compressed_chunk->data()),
+                  compressed_chunk->size())
+                                 : 0;
     fbs::value_index::detail::LegacyValueIndexBuilder vbuilder(builder);
     vbuilder.add_data(data);
     vbuilder.add_uncompressed_size(uncompressed_size);
