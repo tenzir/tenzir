@@ -26,7 +26,7 @@ exclude this, but the focus is on offloading as much processing to the edge as
 possible, including contextualization and pre-processing.
 
 This approach differs from traditional architectures that centralizes *all*
-security event data, with SIEMs of as work horse. Specifically, when building a
+security event data, with SIEMs as work horse. Specifically, when building a
 central solution on top of legacy SIEMs, operators struggle with (i) keeping up
 with ingesting the exponentially increasing data volumes, i.e., operate under a
 continuously saturated write path, (ii) answering low-latency queries needed for

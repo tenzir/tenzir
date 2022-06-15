@@ -40,8 +40,8 @@ and local-facing side. On the backbone-facing side, VAST implements the security
 domain knowledge and analytical processing power to enable composable use cases,
 such as routing security content to detection engines, or executing security on
 top of the available telemetry. On the local-facing side, VAST integrates
-security tools by infusing them with fabric-provided data and, vice versa, and
-exposing their key data to the fabric for other tools.
+security tools by infusing them with fabric-provided data and exposing their own
+data to the fabric for other tools.
 
 The communication principle of the fabric is publish-subscribe, wrapping
 request-response-style communication where appropriate. An example scenario
