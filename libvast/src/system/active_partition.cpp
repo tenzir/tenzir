@@ -115,12 +115,15 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   // the flatbuffers being preserved.
   for (const auto& [name, chunk] : x.indexer_chunks) {
     auto fieldname = builder.CreateString(name);
+    auto uncompressed_size = chunk ? chunk->size() : 0;
+    auto compressed_chunk = compress(chunk);
     auto data
-      = chunk ? builder.CreateVector(
-          reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size())
+      = compressed_chunk ? builder.CreateVector(
+          reinterpret_cast<const uint8_t*>(compressed_chunk->data()), compressed_chunk->size())
               : 0;
     fbs::value_index::detail::LegacyValueIndexBuilder vbuilder(builder);
     vbuilder.add_data(data);
+    vbuilder.add_uncompressed_size(uncompressed_size);
     auto vindex = vbuilder.Finish();
     fbs::value_index::LegacyQualifiedValueIndexBuilder qbuilder(builder);
     qbuilder.add_field_name(fieldname);

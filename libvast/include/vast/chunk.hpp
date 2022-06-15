@@ -190,6 +190,20 @@ public:
   friend std::shared_ptr<arrow::Buffer>
   as_arrow_buffer(chunk_ptr chunk) noexcept;
 
+  /// Compress a chunk.
+  /// @param chunk The chunk to compress.
+  /// @note For later decompression, store the size of the chunk before
+  /// compression alongside the resulting compressed chunk.
+  /// @relates decompress
+  friend chunk_ptr compress(const chunk_ptr& chunk) noexcept;
+  
+  /// Decompress a chunk.
+  /// @param chunk The chunk to decompress.
+  /// @param buffer_size The initial buffer size for decompression. This must be
+  /// greater or equal to the size before compression.
+  /// @relates compress
+  friend chunk_ptr decompress(const chunk_ptr& chunk, size_t buffer_size) noexcept;
+
   // -- concepts --------------------------------------------------------------
 
   friend std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept;

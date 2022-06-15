@@ -7,6 +7,10 @@ namespace vast.fbs.value_index.detail;
 table LegacyValueIndex {
   /// A value index serialized using CAF 0.17's binary serializer.
   data: [ubyte];
+
+  /// The size of the value index before compression. A value of zero indicates
+  /// that no compression was used.
+  uncompressed_size: ulong;
 }
 
 table ValueIndexBase {

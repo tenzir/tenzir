@@ -64,18 +64,22 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
   // Deserialize the value index and spawn a passive_indexer lazily when it is
   // requested for the first time.
   if (!indexer) {
-    auto qualified_index = flatbuffer->indexes()->Get(position);
-    auto index = qualified_index->index();
-    auto data = index->data();
+    const auto *qualified_index = flatbuffer->indexes()->Get(position);
+    const auto *index = qualified_index->index();
+    const auto *data = index->data();
     if (!data)
       return {};
+    auto uncompressed_data = chunk::make(as_bytes(*data), []() noexcept {});
+    if (const auto uncompressed_size = index->uncompressed_size())
+      uncompressed_data = decompress(uncompressed_data, uncompressed_size);
+    VAST_ASSERT(uncompressed_data);
+    detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
-    if (auto error = fbs::deserialize_bytes(data, state_ptr)) {
-      VAST_ERROR("{} failed to deserialize indexer at {} with error: "
-                 "{}",
-                 *self, position, render(error));
+    if (!sink(state_ptr)) {
+      VAST_ERROR("{} failed to deserialize indexer at {}", *self, position);
       return {};
     }
+    VAST_ASSERT(state_ptr);
     indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
   }
   return indexer;
