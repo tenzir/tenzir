@@ -138,12 +138,12 @@ public:
 
   /// Decompress a view of bytes into a chunk.
   /// @param The bytes to decompress.
-  /// @param decompressed_size_hint The initial buffer size for the resulting
-  /// chunk. Must greater or equal to the size before compression.
+  /// @param decompressed_size The initial buffer size for the resulting
+  /// chunk. Must exactly match the buffer size before compression.
   /// @returns A decompressed chunk, or an error.
   /// @relates compress
   static caf::expected<chunk_ptr>
-  decompress(view_type bytes, size_t decompressed_size_hint) noexcept;
+  decompress(view_type bytes, size_t decompressed_size) noexcept;
 
   // -- container facade -------------------------------------------------------
 

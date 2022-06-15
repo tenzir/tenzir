@@ -115,7 +115,7 @@ caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
 }
 
 caf::expected<chunk_ptr>
-chunk::decompress(view_type bytes, size_t decompressed_size_hint) noexcept {
+chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
   // Creating the codec cannot fail; we test that it works in VAST's main
   // function to catch this early.
   auto codec
@@ -127,7 +127,7 @@ chunk::decompress(view_type bytes, size_t decompressed_size_hint) noexcept {
   const auto bytes_size = detail::narrow_cast<int64_t>(bytes.size());
   const auto* bytes_data = reinterpret_cast<const uint8_t*>(bytes.data());
   auto buffer = std::vector<uint8_t>{};
-  buffer.resize(decompressed_size_hint);
+  buffer.resize(decompressed_size);
   auto length = codec->Decompress(bytes_size, bytes_data,
                                   detail::narrow_cast<int64_t>(buffer.size()),
                                   buffer.data());
@@ -135,7 +135,7 @@ chunk::decompress(view_type bytes, size_t decompressed_size_hint) noexcept {
     return caf::make_error(ec::system_error,
                            fmt::format("failed to compress chunk: {}",
                                        length.status().ToString()));
-  buffer.resize(length.MoveValueUnsafe());
+  VAST_ASSERT(buffer.size() == decompressed_size);
   return chunk::make(std::move(buffer));
 }
 
