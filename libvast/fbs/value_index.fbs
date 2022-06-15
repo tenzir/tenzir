@@ -10,7 +10,7 @@ table LegacyValueIndex {
 
   /// The size of the value index before compression. A value of zero indicates
   /// that no compression was used.
-  uncompressed_size: ulong;
+  decompressed_size: ulong;
 }
 
 table ValueIndexBase {

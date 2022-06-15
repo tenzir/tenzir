@@ -69,9 +69,10 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
     const auto* data = index->data();
     if (!data)
       return {};
-    auto uncompressed_data = chunk::make(as_bytes(*data), []() noexcept {});
-    if (const auto uncompressed_size = index->uncompressed_size())
-      uncompressed_data = decompress(uncompressed_data, uncompressed_size);
+    auto uncompressed_data
+      = index->decompressed_size() != 0
+          ? chunk::decompress(as_bytes(*data), index->decompressed_size())
+          : chunk::make(as_bytes(*data), []() noexcept {});
     VAST_ASSERT(uncompressed_data);
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;

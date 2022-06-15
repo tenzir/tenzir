@@ -90,6 +90,55 @@ caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
   return make(map, size, std::move(deleter));
 }
 
+caf::expected<chunk_ptr> chunk::compress(view_type bytes) noexcept {
+  // Creating the codec cannot fail; we test that it works in VAST's main
+  // function to catch this early.
+  auto codec
+    = arrow::util::Codec::Create(
+        arrow::Compression::ZSTD,
+        arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie())
+        .ValueOrDie();
+  const auto bytes_size = detail::narrow_cast<int64_t>(bytes.size());
+  const auto* bytes_data = reinterpret_cast<const uint8_t*>(bytes.data());
+  const auto max_length = codec->MaxCompressedLen(bytes_size, bytes_data);
+  auto buffer = std::vector<uint8_t>{};
+  buffer.resize(max_length);
+  auto length
+    = codec->Compress(bytes_size, bytes_data, max_length, buffer.data());
+  if (!length.ok())
+    return caf::make_error(ec::system_error,
+                           fmt::format("failed to compress chunk: {}",
+                                       length.status().ToString()));
+  buffer.resize(length.MoveValueUnsafe());
+  return chunk::make(std::move(buffer));
+}
+
+caf::expected<chunk_ptr>
+chunk::decompress(view_type bytes, size_t decompressed_size_hint) noexcept {
+  // Creating the codec cannot fail; we test that it works in VAST's main
+  // function to catch this early.
+  auto codec
+    = arrow::util::Codec::Create(
+        arrow::Compression::ZSTD,
+        arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie())
+        .ValueOrDie();
+  const auto bytes_size = detail::narrow_cast<int64_t>(bytes.size());
+  const auto* bytes_data = reinterpret_cast<const uint8_t*>(bytes.data());
+  auto buffer = std::vector<uint8_t>{};
+  buffer.resize(decompressed_size_hint);
+  auto length = codec->Decompress(bytes_size, bytes_data,
+                                  detail::narrow_cast<int64_t>(buffer.size()),
+                                  buffer.data());
+  if (!length.ok())
+    return caf::make_error(ec::system_error,
+                           fmt::format("failed to compress chunk: {}",
+                                       length.status().ToString()));
+  buffer.resize(length.MoveValueUnsafe());
+  return chunk::make(std::move(buffer));
+}
+
 // -- container facade ---------------------------------------------------------
 
 chunk::pointer chunk::data() const noexcept {
@@ -166,51 +215,6 @@ std::shared_ptr<arrow::Buffer> as_arrow_buffer(chunk_ptr chunk) noexcept {
             buffer = {};
             chunk = {};
           }};
-}
-
-chunk_ptr compress(const chunk_ptr& chunk) noexcept {
-  if (!chunk)
-    return nullptr;
-  auto codec
-    = arrow::util::Codec::Create(
-        arrow::Compression::ZSTD,
-        arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-          .ValueOrDie())
-        .ValueOrDie();
-  const auto max_length
-    = codec->MaxCompressedLen(detail::narrow_cast<int64_t>(chunk->size()),
-                              reinterpret_cast<const uint8_t*>(chunk->data()));
-  auto buffer = std::vector<uint8_t>{};
-  buffer.resize(max_length);
-  const auto length
-    = codec
-        ->Compress(detail::narrow_cast<int64_t>(chunk->size()),
-                   reinterpret_cast<const uint8_t*>(chunk->data()), max_length,
-                   buffer.data())
-        .ValueOrDie();
-  buffer.resize(length);
-  return chunk::make(std::move(buffer));
-}
-
-chunk_ptr decompress(const chunk_ptr& chunk, size_t buffer_size) noexcept {
-  if (!chunk)
-    return nullptr;
-  auto codec
-    = arrow::util::Codec::Create(
-        arrow::Compression::ZSTD,
-        arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-          .ValueOrDie())
-        .ValueOrDie();
-  auto buffer = std::vector<uint8_t>{};
-  buffer.resize(buffer_size);
-  const auto length
-    = codec
-        ->Decompress(detail::narrow_cast<int64_t>(chunk->size()),
-                     reinterpret_cast<const uint8_t*>(chunk->data()),
-                     detail::narrow_cast<int64_t>(buffer_size), buffer.data())
-        .ValueOrDie();
-  buffer.resize(length);
-  return chunk::make(std::move(buffer));
 }
 
 // -- concepts -----------------------------------------------------------------

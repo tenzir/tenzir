@@ -128,6 +128,23 @@ public:
   mmap(const std::filesystem::path& filename, size_type size = 0,
        size_type offset = 0);
 
+  /// Compresses a view of bytes into a chunk.
+  /// @param bytes The bytes to compress.
+  /// @note For later decompression, store the size of the chunk before
+  /// compression alongside the resulting compressed chunk.
+  /// @returns A compressed chunk, or an error.
+  /// @relates decompress
+  static caf::expected<chunk_ptr> compress(view_type bytes) noexcept;
+
+  /// Decompress a view of bytes into a chunk.
+  /// @param The bytes to decompress.
+  /// @param decompressed_size_hint The initial buffer size for the resulting
+  /// chunk. Must greater or equal to the size before compression.
+  /// @returns A decompressed chunk, or an error.
+  /// @relates compress
+  static caf::expected<chunk_ptr>
+  decompress(view_type bytes, size_t decompressed_size_hint) noexcept;
+
   // -- container facade -------------------------------------------------------
 
   /// @returns The pointer to the chunk.
@@ -189,21 +206,6 @@ public:
   /// Create an Arrow Buffer that structurally shares the lifetime of the chunk.
   friend std::shared_ptr<arrow::Buffer>
   as_arrow_buffer(chunk_ptr chunk) noexcept;
-
-  /// Compress a chunk.
-  /// @param chunk The chunk to compress.
-  /// @note For later decompression, store the size of the chunk before
-  /// compression alongside the resulting compressed chunk.
-  /// @relates decompress
-  friend chunk_ptr compress(const chunk_ptr& chunk) noexcept;
-
-  /// Decompress a chunk.
-  /// @param chunk The chunk to decompress.
-  /// @param buffer_size The initial buffer size for decompression. This must be
-  /// greater or equal to the size before compression.
-  /// @relates compress
-  friend chunk_ptr
-  decompress(const chunk_ptr& chunk, size_t buffer_size) noexcept;
 
   // -- concepts --------------------------------------------------------------
 
