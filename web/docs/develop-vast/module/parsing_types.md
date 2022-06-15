@@ -62,14 +62,14 @@ type1:
    type: count
 ```
 
-A Type Alias cannot have an inline type. Examples:
+A Type Alias cannot have an inline type. Rationale:
 
 ```yaml
 type1:
   type:
     type: addr
 
-# Type1 is more straightforward as:
+# Type1 is euqivalent to the more straightforward:
 
 type1:
   type: addr
@@ -92,7 +92,10 @@ A Record Algebra is not a VAST type; it defines operations on record types. The
 module parser represents the unresolved YAML declaration as a VAST type; this
 makes parsing a Record Algebra challenging.
 
-Inlined Record Algebra would look like these
+The module parser does not support inlining Record Algebras; inlining leads to a
+complex user experience as the examples show.
+
+Inlined Record Algebra would look like:
 
 ```yaml
 list1:
@@ -129,10 +132,6 @@ record_algebra1:
             fields:
               - new_field: string
 ```
-
-The examples show that reading inline Record Algebras may not be an easy user
-experience. For these reasons, the module parser does not support inlining
-Record Algebras.
 
 ## Attributes
 
