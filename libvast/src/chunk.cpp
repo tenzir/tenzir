@@ -133,7 +133,7 @@ chunk::decompress(view_type bytes, size_t decompressed_size) noexcept {
                                   buffer.data());
   if (!length.ok())
     return caf::make_error(ec::system_error,
-                           fmt::format("failed to compress chunk: {}",
+                           fmt::format("failed to decompress chunk: {}",
                                        length.status().ToString()));
   VAST_ASSERT(buffer.size() == decompressed_size);
   return chunk::make(std::move(buffer));
