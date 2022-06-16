@@ -94,18 +94,18 @@ Building VAST involves the following steps:
 After you have built the executable, run the unit and integration tests to
 verify that your build works as expected:
 
-1. Run component-level unit tests:
+4. Run component-level unit tests:
   ```bash
   ctest --test-dir build
   ```
 
-2. Run end-to-end integration tests:
+5. Run end-to-end integration tests:
   ```bash
   cmake --build build --target integration
   ```
 ## Install
 
-5. Install VAST system-wide or into a custom prefix:
+6. Install VAST system-wide or into a custom prefix:
   ```bash
   cmake --install build
   # Optional: Install to a custom prefix
