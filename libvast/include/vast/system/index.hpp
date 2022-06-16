@@ -315,8 +315,9 @@ struct index_state {
   /// Plugin responsible for spawning new partition-local stores.
   const vast::store_plugin* store_plugin = {};
 
-  /// The partitions currently being transformed.
-  detail::stable_set<uuid> partitions_in_transformation = {};
+  /// The partitions currently being transformed mapped to the actor that
+  /// initiated the transformation.
+  detail::stable_map<uuid, caf::actor_addr> partitions_in_transformation = {};
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem = {};

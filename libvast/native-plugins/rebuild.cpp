@@ -239,38 +239,42 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
             // Adjust the counters, update the indicator, and move back
             // undersized transformed partitions to the list of remainig
             // partitions as desired.
-            VAST_ASSERT(!result.empty());
             bool needs_second_stage = false;
-            if (is_heterogeneous) {
-              self->state.num_heterogeneous -= 1;
-              if (result.size() > 1
-                  || result[0].events <= self->state.max_partition_size / 2) {
-                std::copy(result.begin(), result.end(),
-                          std::back_inserter(self->state.remaining_partitions));
-                needs_second_stage = true;
+            self->state.num_transformed += num_partitions;
+            self->state.num_results += result.size();
+            if (!result.empty()) {
+              if (is_heterogeneous) {
+                self->state.num_transformed -= num_partitions + 1;
+                self->state.num_results -= result.size();
+                self->state.num_heterogeneous -= 1;
+                if (result.size() > 1
+                    || result[0].events <= self->state.max_partition_size / 2) {
+                  std::copy(
+                    result.begin(), result.end(),
+                    std::back_inserter(self->state.remaining_partitions));
+                  needs_second_stage = true;
+                }
               }
-            } else {
-              self->state.num_transformed += num_partitions;
-              self->state.num_results += result.size();
-            }
-            if (is_oversized) {
-              VAST_ASSERT(result.size() > 1);
-              if (result.back().events <= self->state.max_partition_size / 2) {
-                self->state.remaining_partitions.push_back(
-                  std::move(result.back()));
-                needs_second_stage = true;
-                self->state.num_transformed -= 1;
-                self->state.num_results -= 1;
-                self->state.num_total += 1;
+              if (is_oversized) {
+                VAST_ASSERT(result.size() > 1);
+                if (result.back().events
+                    <= self->state.max_partition_size / 2) {
+                  self->state.remaining_partitions.push_back(
+                    std::move(result.back()));
+                  needs_second_stage = true;
+                  self->state.num_transformed -= 1;
+                  self->state.num_results -= 1;
+                  self->state.num_total += 1;
+                }
               }
+              if (needs_second_stage)
+                std::sort(self->state.remaining_partitions.begin(),
+                          self->state.remaining_partitions.end(),
+                          [](const partition_info& lhs,
+                             const partition_info& rhs) {
+                            return lhs.max_import_time > rhs.max_import_time;
+                          });
             }
-            if (needs_second_stage)
-              std::sort(self->state.remaining_partitions.begin(),
-                        self->state.remaining_partitions.end(),
-                        [](const partition_info& lhs,
-                           const partition_info& rhs) {
-                          return lhs.max_import_time > rhs.max_import_time;
-                        });
             self->state.num_transforming -= num_partitions;
             self->state.tick();
             // Pick up new work until we run out of remainig partitions.
