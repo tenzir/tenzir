@@ -2,7 +2,7 @@ include "root" {
   path = find_in_parent_folders()
 }
 
-dependency "step_2" {
+dependency "core_2" {
   config_path = "../core-2"
 
   mock_outputs = {
@@ -30,7 +30,7 @@ inputs = {
   region_name           = local.region_name
   source_bucket_name    = local.source_bucket_name
   source_bucket_region  = local.source_bucket_region
-  vast_lambda_name      = dependency.step_2.outputs.vast_lambda_name
-  vast_lambda_arn       = dependency.step_2.outputs.vast_lambda_arn
-  vast_lambda_role_name = dependency.step_2.outputs.vast_lambda_role_name
+  vast_lambda_name      = dependency.core_2.outputs.vast_lambda_name
+  vast_lambda_arn       = dependency.core_2.outputs.vast_lambda_arn
+  vast_lambda_role_name = dependency.core_2.outputs.vast_lambda_role_name
 }
