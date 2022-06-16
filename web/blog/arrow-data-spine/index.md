@@ -18,19 +18,19 @@ as the Arrow ecosystem matured. In this blog post we explain our journey of
 becoming an Arrow-native engine, and what we are looking forward to in the
 fast-growing Arrow ecosystem.
 
-After having witnessed first-hand an commitment of [Ray][ray] to Arrow, we
-started using Arrow as optional dependency for column-oriented representation of
-structured event data, next to a row-oriented [MsgPack][msgpack] representation.
-The assumption was that a row-based data representation matches more closely
-typical event data and therefore allows for much higher ingestion rates, whereas
-a column-oriented representation lends itself better for analytical workloads.
-Both representations implemented the same data model that provides rich typing
-and corresponding operations (e.g., native representation of IPv4 and IPv6
-addresses plus the ability to perform top-k prefix search to answer subnet
-membership queries). Strong typing at the core of the system allows for
-efficient data representation and enables type-based optimizations, such as
-custom bitmap indexing structures. The data model came first, then the
-representation. Arrow was only a representation:
+After having witnessed first-hand a commitment of [Ray][ray] to Arrow, we
+started using Arrow as optional dependency for an alternative, column-oriented
+representation of structured event data, next to a row-oriented
+[MsgPack][msgpack] representation. The assumption was that a row-based data
+representation matches more closely typical event data and therefore allows for
+much higher ingestion rates, whereas a column-oriented representation lends
+itself better for analytical workloads. Both representations implemented the
+same data model that provides rich typing and corresponding operations (e.g.,
+native representation of IPv4 and IPv6 addresses plus the ability to perform
+top-k prefix search to answer subnet membership queries). Strong typing at the
+core of the system allows for efficient data representation and enables
+type-based optimizations, such as custom bitmap indexing structures. The data
+model came first, then the representation. Arrow was only a representation:
 
 ![MsgPack & Arrow](msgpack-arrow.light.png#gh-light-mode-only)
 ![MsgPack & Arrow](msgpack-arrow.dark.png#gh-dark-mode-only)
@@ -80,43 +80,59 @@ parts of the system. Orange pieces highlight Arrow building blocks that we use
 today, and green pieces elements we plan to use in the future. There are several
 aspects worth pointing out:
 
-1. **Unified Data Representation**: When users ingest data into VAST, the
+1. **Unified Data Plane**: When users ingest data into VAST, the
    parsing process converts the native data into Arrow. Similarly, a
    conversation boundary exists when data leaves the system, e.g., when a user
    wants a query result shown in JSON, CSV, or some custom format. Source and
    sink data formats are [exchangeable
    plugins](/docs/understand-vast/architecture/plugins).
+
 2. **Read/Write Path Separation**: one design goal of VAST is a strict
    separation of read and write path, in order to scale them independently. The
    write path follows a horizontally scalable architecture where builders (one per
    schema) turn the in-memory record batches into a persistent representation.
    VAST currently has support for Parquet and Feather.
+
 3. **Pluggable Query Engine**: VAST has live/continuous queries that simply run
    over the stream of incoming data, and historical queries that operate on
    persistent data. The harboring execution engine is something we are about to
    make pluggable. The reason is that VAST runs in extremely different
    environments, from cluster to edge. Query engines are usually optimized for a
    specific use case, so why not use the best engine for the job at hand? Arrow
-   makes this possible. [DuckDB][duckdb] is a great example as an embeddable
-   OLAP engine. For this to work, we also need a standardized control plane.
-   This is where [Substrait][substrait] and [Flight][flight] come into play.
-   Flight for communication and Substrait for canonical query representation. We
-   already experimented with Substrait, converting VAST queries into a logical
-   query plan. This confirmed that the approach works in theory. In fact, VAST
-   has a "query language" plugin to make it possible to translate security
-   content (e.g., [Sigma rules][sigma]) into native queries. To date, we have a
-   very limited, hand-rolled engine that uses [Compute][compute] a bit, but
-   doesn't go much beyond search.
+   makes this possible. [DuckDB][duckdb] and [DataFusion][datafusion] are great
+   example of embeddable query engines.
 
-With the bag of tools from the Arrow ecosystem, plus all other embeddable Arrow
-engines that are emerging, we have a modular architecture to can cover a very
-wide spectrum of use cases.
+4. **Unified Control Plane**: to realize a pluggable query engine, we also need
+   a standardized control plane. This is where [Substrait][substrait] and
+   [Flight][flight] come into play. Flight for communication and Substrait as
+   canonical query representation. We already experimented with Substrait,
+   converting VAST queries into a logical query plan. In fact, VAST has a "query
+   language" plugin to make it possible to translate security content. (For
+   example, our Sigma plugin translates [Sigma rules][sigma] into VAST queries).
+   In short: Substrait is to the control plane what Arrow is to the data plane.
+   Both are needed to modularize the concept of a query engine.
+
+Making our own query engine more suitable for analytical workloads has
+received less attention in the past, as we prioritized high-performance data
+acquisition, low-latency search, in-stream matching using [Compute][compute],
+and expressiveness of the underlying domain data model. We did so because VAST
+must run robustly in production on numerous appliances all over the world in a
+security service provider setting, with confined processing and storage where
+efficiency is key.
+
+Moving forward, we are excited to bring more analytical horse power to the
+system, while opening up the arena for third-party engines. With the bag of
+tools from the Arrow ecosystem, plus all other embeddable Arrow engines that are
+emerging, we have a modular architecture to can cover a very wide spectrum of
+use cases.
 
 [arrow]: https://arrow.apache.org
 [compute]: https://arrow.apache.org/docs/cpp/compute.html
 [extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
 [flight]: https://arrow.apache.org/docs/format/Flight.html
 [substrait]: https://substrait.io/
+[datafusion]: https://arrow.apache.org/datafusion/
+[datafusion-c]: https://github.com/datafusion-contrib/datafusion-c
 [msgpack]: https://msgpack.org/index.html
 [iox]: https://github.com/influxdata/influxdb_iox
 [husky]: https://www.datadoghq.com/blog/engineering/introducing-husky/
