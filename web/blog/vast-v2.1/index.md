@@ -27,29 +27,41 @@ Additionally, VAST now compresses on-disk indexes with Zstd, resulting in a
 50-80% size reduction depending on the type of indexes used.
 
 This allowed us to increase the default partition size from 1,048,576 to
-4,194,304 events, and the default number of events in a single batch from 1,024
+4,194,304 events[^1], and the default number of events in a single batch from 1,024
 to 65,536, resulting in a massive performance increase at the cost of a ~20%
 larger memory footprint at peak load. Use the option `vast.max-partition-size`
 to tune this space-time tradeoff.
 
 To benchmark this, we used [`speeve`][speeve] to generate 20 Eve JSON files
-containing 8,388,608 events each, totalling 167,772,160 events. We spawned a
-VAST server process and ran 20 VAST client processes importing one file each in
-parallel. The numbers speak for themselves:
+containing 8,388,608 events each[^2]. We spawned a VAST server process and ran
+20 VAST client processes importing one file each in parallel. The numbers speak
+for themselves:
 
-|Version|v2.0.0|v2.0.0|v2.1.0|
+||VAST v2.0|VAST v2.1|Change|
 |-:|:-|:-|:-|
-|Configuration|v2.0 defaults|v2.1 defaults|v2.1 defaults|
-|Ingest Duration|1,650s|240s|242s (-85.3%)|
-|Ingest Rate|101,680/s|699,051/s|693,273/s (+581.8%)|
-|Index Size|14,791MiB|N/A[^1]|5,721MiB (-61.3%)|
-|Store Size|37,656MiB|N/A[^1]|8,491MiB (-77.5%)|
-|Database Size|52,446MiB|N/A[^1]|14,212MiB (-72.9%)|
+|Ingest Duration|1,650s|242s|-85.3%|
+|Ingest Rate|101,680/s|693,273/s|+581.8%|
+|Index Size|14,791MiB|5,721MiB|-61.3%|
+|Store Size|37,656MiB|8,491MiB|-77.5%|
+|Database Size|52,446MiB|14,212MiB|-72.9%|
+
+:::note Compressed Filesystems
+The above benchmarks ran on filesystems without compression. We expect the gain
+from compression to be smaller when using compressed filesystems like
+[`btrfs`][btrfs].
+:::
 
 [speeve]: https://github.com/satta/speeve
-[^1]: VAST v2.0.0 failed to write its state to disk with the defaults for v2.1
-  because the partition size exceeded the maximum possible size of a FlatBuffers
-  table.
+[btrfs]: https://btrfs.wiki.kernel.org/index.php/Main_Page
+
+[^1]: VAST v2.0 failed to write its partitions to disk with the defaults for
+  v2.1 because the on-disk size exceeded the maximum possible size of a
+  FlatBuffers table, which VAST internally uses to have an open standard for its
+  persistent state.
+[^2]: This resulted in 167,772,160 events, with a total of 200'917'930 unique
+  values with a schema distribution of 80.74% `suricata.flow`, 7.85%
+  `suricata.dns`, 5.35% `suricata.http`, 4.57% `suricata.fileinfo`, 1.04%
+  `suricata.tls`, 0.41% `suricata.ftp`, and 0.04% `suricata.smtp`.
 
 ## Optimizing VAST Databases
 
