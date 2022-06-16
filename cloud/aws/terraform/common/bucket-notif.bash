@@ -1,4 +1,10 @@
 #!/bin/bash
+
+# Activate event bridge notifications on specified AWS S3 bucket, without
+# disturbing existing notification configurations. The first argument is the
+# bucket region, the second one its name. This is meant to be run by Terragrunt
+# in a hook.
+
 echo "Running script: ./$(basename $0) $1 $2"
 
 current_config=$(aws s3api --region $1 get-bucket-notification-configuration --bucket $2)
