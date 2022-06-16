@@ -282,7 +282,8 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     ps.max_import_time = time{};
   }
   ps.version = x.version();
-  ps.schema = type{chunk::copy(as_bytes(*x.schema()))};
+  if (const auto* schema = x.schema())
+    ps.schema = type{chunk::copy(as_bytes(*schema))};
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);
@@ -305,7 +306,8 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     ps.max_import_time = time{};
   }
   ps.version = x.version();
-  ps.schema = type{chunk::copy(as_bytes(*x.schema()))};
+  if (const auto* schema = x.schema())
+    ps.schema = type{chunk::copy(as_bytes(*schema))};
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);
