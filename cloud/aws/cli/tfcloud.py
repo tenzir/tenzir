@@ -8,7 +8,7 @@ def tfvar(key: str, sensitive: bool):
         "attributes": {
             "key": key,
             "value": "",
-            "category": "terraform",
+            "category": "env",
             "sensitive": sensitive,
         },
     }
@@ -147,6 +147,7 @@ class Client:
                 "type": "vars",
                 "attributes": {
                     "value": variable_value,
+                    "category": "env",
                 },
             }
         }
