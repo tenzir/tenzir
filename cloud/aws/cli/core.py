@@ -35,7 +35,7 @@ def conf(validators=[]) -> dict:
 
 ##  Aliases
 
-AWS_REGION = conf()["VAST_AWS_REGION"]
+AWS_REGION = conf(VALIDATORS)["VAST_AWS_REGION"]
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
 
 CLOUDROOT = "."
