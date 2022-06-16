@@ -33,6 +33,16 @@ moves away from point-to-point integrations:
 ![Security Data Fabric](/img/security-data-fabric.light.png#gh-light-mode-only)
 ![Security Data Fabric](/img/security-data-fabric.dark.png#gh-dark-mode-only)
 
+The network of VAST nodes forms the security data fabric. Communication takes
+place over a pluggable messaging *backbone*, such as Kafka, RabbitMQ, or MQTT.
+In this architecture, VAST assumes a mediator function, with a backbone-facing
+and local-facing side. On the backbone-facing side, VAST implements the security
+domain knowledge and analytical processing power to enable composable use cases,
+such as routing security content to detection engines, or executing security on
+top of the available telemetry. On the local-facing side, VAST integrates
+security tools by infusing them with fabric-provided data and exposing their own
+data to the fabric for other tools.
+
 The communication principle of the fabric is publish-subscribe, wrapping
 request-response-style communication where appropriate. An example scenario
 looks as follows: a network sensor publishes structured events to the fabric. A
@@ -40,14 +50,17 @@ detector subscribes to this data stream to publish alerts back to the fabric. A
 triaging engine consumes to the alerts, inventory, and vulnerability information
 to create prioritized incidents in a case management tool.
 
-:::note Beyond Message Bus
-We are arguing for more than just a generic message bus here. Large
-organizations have enough engineering bandwidth to [build their own custom
-version][intel-soc]. In addition to commoditizing this architecture, our goal is
-to implant security domain knowledge and analytical data processing power into
-the very fabric, such that security application developers do not have
-to deal with data wrangling and can purely focus on providing value with domain
-logic.
+:::info OpenDXL Comparison
+[OpenDXL](https://www.opendxl.com/) might appear similar in many ways. The key
+difference is that we do not want to prescribe MQTT as fixed backbone. While
+this may work for some scenarios, [large SOCs often use Kafka][intel-soc] as
+their high-bandwidth messaging backbone. In addition, we do not want to burden
+operators with rolling out *another* message bus that abstracts the
+infrastructure complexity. VAST should just use what is there.
+
+We demonstrated the concept of a pluggable backbone in [Threat
+Bus](https://github.com/tenzir/threatbus), which onboards data to the fabric by
+converting it to STIX and then routing it via the backbone.
 :::
 
 [intel-soc]: https://www.intel.com.au/content/www/au/en/it-management/intel-it-best-practices/modern-scalable-cyber-intelligence-platform-kafka.html
