@@ -33,7 +33,6 @@ def tf_version(c):
 @task
 def config_tfcloud(c):
     conf = core.conf(VALIDATORS)
-    print(conf)
     client = tfcloud.Client(
         conf["TF_ORGANIZATION"],
         conf["TF_API_TOKEN"],
