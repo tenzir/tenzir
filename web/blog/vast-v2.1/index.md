@@ -8,8 +8,9 @@ tags: [release, performance]
 ---
 
 [VAST v2.1][github-vast-release] is out! This release comes with a particular
-focus on performance and reducing the size of VAST databases, and brings a new
-utility for optimizing databases in production.
+focus on performance and reducing the size of VAST databases. It brings a new
+utility for optimizing databases in production, allowing existing deployments to
+take full advantage of the improvements after updating.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 
