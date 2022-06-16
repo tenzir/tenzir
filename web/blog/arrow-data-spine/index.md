@@ -76,8 +76,8 @@ power the architecture of VAST:
 ![Arrow Data Plane](arrow-data-plane.dark.png#gh-dark-mode-only)
 
 In the center we have highlighted the Arrow data plane that powers other
-parts of the system. Orange pieces highlight Arrow building blocks that we use
-today, and green pieces elements we plan to use in the future. There are several
+parts of the system. Green pieces highlight Arrow building blocks that we use
+today, and orange pieces elements we plan to use in the future. There are several
 aspects worth pointing out:
 
 1. **Unified Data Plane**: When users ingest data into VAST, the
