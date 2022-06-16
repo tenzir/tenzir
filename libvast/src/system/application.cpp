@@ -492,7 +492,7 @@ std::unique_ptr<command> make_import_command() {
     opts("?vast.import.json")
       .add<std::string>("selector", "read the event type from the given field "
                                     "(specify as '<field>[:<prefix>]')"));
-  import_->add_subcommand("suricata", "imports suricata eve json",
+  import_->add_subcommand("suricata", "imports suricata EVE JSON",
                           opts("?vast.import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
                           opts("?vast.import.syslog"));
