@@ -29,7 +29,7 @@ def conf(validators=[]) -> dict:
     return {
         k: v
         for (k, v) in dc.as_dict().items()
-        if k.startswith("VAST_") or k.startswith("TF_")
+        if k.startswith(("VAST_", "TF_", "AWS_"))
     }
 
 

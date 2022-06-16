@@ -12,9 +12,9 @@ on: workflow_dispatch
 # - The VAST deployment creates a new VPC. Its ip range should not overlap an
 #   existing one in your account. Configure its CIDR in the repository secrets
 #   as VAST_CIDR (for example 172.30.0.0/16).
-# - The CI run uses Terraform Cloud to store the state. You need to properly
-#   configure workspaces for each Terragrunt step. Run `./vast-cloud
-#   integration.config-tfcloud` to do so.
+# - The CI run uses Terraform Cloud to store the state. In Github Action
+#   secrets, set TF_ORGANIZATION with your Terraform Cloud organizations name
+#   and TF_API_TOKEN with a Terraform Cloud API key (for instance a user token). 
 
 # Notes:
 # - If this workflow is executed multiple times at in parallel, the Terraform
@@ -61,6 +61,9 @@ jobs:
           echo -n $TF_API_TOKEN | md5sum
           echo -n $AWS_ACCESS_KEY_ID | md5sum
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
+
+      - name: Configure Terraform Cloud
+        run: ./vast-cloud integration.config-tfcloud -a
 
       - name: Substitute backend with Terraform Cloud
         run: |

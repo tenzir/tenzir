@@ -97,7 +97,7 @@ class Client:
         )
 
     @print_error_resp
-    def create_varset(self, name, vars: "list[dict]"):
+    def create_varset(self, name) -> dict:
         existing_varset = self.get_varset(name)
         if existing_varset is not None:
             print(f"Varset {name} already exists ({existing_varset['id']})")
@@ -109,7 +109,6 @@ class Client:
                     "name": name,
                     "global": False,
                 },
-                "relationships": {"vars": {"data": [tfvar(**arg) for arg in vars]}},
             }
         }
         print(f"Creating varset {name}... ", end="")
@@ -141,30 +140,47 @@ class Client:
         print("DONE")
 
     @print_error_resp
-    def set_variable(self, varset_id, variable_id, variable_value):
-        payload = {
-            "data": {
-                "type": "vars",
-                "attributes": {
-                    "value": variable_value,
-                    "category": "env",
-                },
-            }
-        }
-        print(f"Assigning value to variable {variable_id}... ", end="")
-        res = requests.patch(
-            f"{self.url}/varsets/{varset_id}/relationships/vars/{variable_id}",
-            headers=self.headers,
-            json=payload,
-        )
-        res.raise_for_status()
-        print("DONE")
-
-    @print_error_resp
-    def get_variables(self, varset_id):
+    def get_variable(self, varset_id: str, key: str) -> dict:
+        "Find a variable in a varset by its key, None if doesn't exist"
         res = requests.get(
             f"{self.url}/varsets/{varset_id}/relationships/vars",
             headers=self.headers,
         )
         res.raise_for_status()
-        return res.json()["data"]
+        return next(
+            (var for var in res.json()["data"] if var["attributes"]["key"] == key),
+            None,
+        )
+
+    @print_error_resp
+    def set_variable(
+        self, varset_id: str, variable_key: str, variable_value: str, sensitive: bool
+    ):
+        payload = {
+            "data": {
+                "type": "vars",
+                "attributes": {
+                    "key": variable_key,
+                    "value": variable_value,
+                    "category": "env",
+                    "sensitive": sensitive,
+                },
+            }
+        }
+        var = self.get_variable(varset_id, variable_key)
+        if var is not None:
+            print(f"Updating variable {variable_key} in set {varset_id}... ", end="")
+            res = requests.patch(
+                f"{self.url}/varsets/{varset_id}/relationships/vars/{var['id']}",
+                headers=self.headers,
+                json=payload,
+            )
+        else:
+            print(f"Creating variable {variable_key} in set {varset_id}... ", end="")
+            res = requests.post(
+                f"{self.url}/varsets/{varset_id}/relationships/vars",
+                headers=self.headers,
+                json=payload,
+            )
+        res.raise_for_status()
+        print("DONE")
