@@ -14,7 +14,7 @@ on: workflow_dispatch
 #   as VAST_CIDR (for example 172.30.0.0/16).
 # - The CI run uses Terraform Cloud to store the state. In Github Action
 #   secrets, set TF_ORGANIZATION with your Terraform Cloud organizations name
-#   and TF_API_TOKEN with a Terraform Cloud API key (for instance a user token). 
+#   and TF_API_TOKEN with a Terraform Cloud API key (for instance a user token).
 
 # Notes:
 # - If this workflow is executed multiple times at in parallel, the Terraform
