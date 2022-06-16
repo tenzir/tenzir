@@ -733,8 +733,8 @@ index_state::status(status_verbosity v) const {
     for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = record{};
       xs["count"] = count{layout_stats.count};
-      xs["rate"] = detail::narrow_cast<real>(layout_stats.count)
-                   / detail::narrow_cast<real>(sum);
+      xs["percentage"] = 100.0 * detail::narrow_cast<real>(layout_stats.count)
+                         / detail::narrow_cast<real>(sum);
       layout_object[name] = xs;
     }
     stats_object["layouts"] = std::move(layout_object);
