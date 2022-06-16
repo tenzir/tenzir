@@ -1,4 +1,4 @@
-# Write a plugin
+# Write a Plugin
 
 Implementing a new plugin requires the following steps:
 
