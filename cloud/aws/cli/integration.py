@@ -1,5 +1,63 @@
 from invoke import task, Context
 import time
+import dynaconf
+import core
+import json
+import re
+import tfcloud
+
+VALIDATORS = [
+    dynaconf.Validator("TF_ORGANIZATION", must_exist=True),
+    dynaconf.Validator("TF_WORKSPACE_PREFIX", default="gh-act"),
+    dynaconf.Validator("TF_API_TOKEN", must_exist=True),
+    dynaconf.Validator("TF_STATE_BACKEND", default="local"),
+]
+
+TFDIR = "./terraform"
+
+
+@task(autoprint=True)
+def list_modules(c):
+    deps = c.run(
+        """terragrunt graph-dependencies""", hide="out", env=core.conf(VALIDATORS)
+    ).stdout
+    return re.findall('terraform/(.*)" ;', deps)
+
+
+@task(autoprint=True)
+def tf_version(c):
+    version_json = c.run("terraform version -json", hide="out").stdout
+    return json.loads(version_json)["terraform_version"]
+
+
+@task
+def config_tfcloud(c):
+    conf = core.conf(VALIDATORS)
+    print(conf)
+    client = tfcloud.Client(
+        conf["TF_ORGANIZATION"],
+        conf["TF_API_TOKEN"],
+    )
+    ws_list = client.upsert_workspaces(
+        conf["TF_WORKSPACE_PREFIX"],
+        list_modules(c),
+        tf_version(c),
+        "cloud/aws/terraform",
+    )
+    varset = client.create_varset(
+        f"{conf['TF_WORKSPACE_PREFIX']}-aws-creds",
+        [
+            {"key": "AWS_SECRET_ACCESS_KEY", "sensitive": True},
+            {"key": "AWS_ACCESS_KEY_ID", "sensitive": False},
+        ],
+    )
+    for ws in ws_list:
+        client.assign_varset(varset["id"], ws["id"])
+
+    print("Set variables (Ctrl+c to cancel):")
+    for var in client.get_variables(varset["id"]):
+        val = input(f"{var['attributes']['key']}:")
+        client.set_variable(varset["id"], var["id"], val)
 
 
 @task

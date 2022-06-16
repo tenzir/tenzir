@@ -13,20 +13,8 @@ on: workflow_dispatch
 #   existing one in your account. Configure its CIDR in the repository secrets
 #   as VAST_CIDR (for example 172.30.0.0/16).
 # - The CI run uses Terraform Cloud to store the state. You need to properly
-#   configure workspaces for each Terragrunt step:
-#   - In Github Action secrets, set TF_ORGANIZATION with your Terraform Cloud
-#     organizations name, TF_API_TOKEN with a Terraform Cloud API key (for
-#     instance a user token).
-#   - Create a workspace in Terraform Cloud for each step you are planning to
-#     deploy:
-#     - [required] gh-act-core-1 for the image repository (ECR)
-#     - [required] gh-act-core-2 the other VAST core resources (VPC, Fargate...)
-#     - [optional] gh-act-cloudtrail for the Cloudtrail datasource
-#   - For each of these workspaces:
-#     - configure AWS credentials with sufficient priviledges to deploy the
-#       stack. You can use a Variable Set to make this simpler.
-#     - set the "Terraform Working Directory" field in the general settings to
-#       the path of the environement (e.g. cloud/aws/terraform/core-1)
+#   configure workspaces for each Terragrunt step. Run `./vast-cloud
+#   integration.config-tfcloud` to do so.
 
 # Notes:
 # - If this workflow is executed multiple times at in parallel, the Terraform

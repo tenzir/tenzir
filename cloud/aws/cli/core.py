@@ -26,7 +26,11 @@ def conf(validators=[]) -> dict:
         envvar_prefix=False,
         validators=validators,
     )
-    return {k: v for (k, v) in dc.as_dict().items() if k.startswith("VAST_")}
+    return {
+        k: v
+        for (k, v) in dc.as_dict().items()
+        if k.startswith("VAST_") or k.startswith("TF_")
+    }
 
 
 ##  Aliases

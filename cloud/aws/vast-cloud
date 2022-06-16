@@ -48,5 +48,6 @@ docker run -i $([[ -z $VASTCLOUD_NOTTY ]] && echo "-t") \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
     --env-file <(env | grep VAST_) \
+    --env-file <(env | grep TF_) \
     --env-file <(env | grep HOST_) \
     tenzir/vast-cloud-cli "$@"
