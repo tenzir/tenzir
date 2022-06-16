@@ -10,7 +10,7 @@ tags: [release, performance]
 [VAST v2.1][github-vast-release] is out! This release comes with a particular
 focus on performance and reducing the size of VAST databases. It brings a new
 utility for optimizing databases in production, allowing existing deployments to
-take full advantage of the improvements after updating.
+take full advantage of the improvements after upgrading.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 
@@ -29,21 +29,21 @@ Additionally, VAST now compresses on-disk indexes with Zstd, resulting in a
 This allowed us to increase the default partition size from 1,048,576 to
 4,194,304 events[^1], and the default number of events in a single batch from 1,024
 to 65,536, resulting in a massive performance increase at the cost of a ~20%
-larger memory footprint at peak load. Use the option `vast.max-partition-size`
+larger memory footprint at peak loads. Use the option `vast.max-partition-size`
 to tune this space-time tradeoff.
 
-To benchmark this, we used [`speeve`][speeve] to generate 20 Eve JSON files
+To benchmark this, we used [`speeve`][speeve] to generate 20 EVE JSON files
 containing 8,388,608 events each[^2]. We spawned a VAST server process and ran
-20 VAST client processes importing one file each in parallel. The numbers speak
-for themselves:
+20 VAST client processes in parallel, with one process per file. We observed the
+following improvements:
 
 ||VAST v2.0|VAST v2.1|Change|
 |-:|:-|:-|:-|
-|Ingest Duration|1,650s|242s|-85.3%|
-|Ingest Rate|101,680/s|693,273/s|+581.8%|
-|Index Size|14,791MiB|5,721MiB|-61.3%|
-|Store Size|37,656MiB|8,491MiB|-77.5%|
-|Database Size|52,446MiB|14,212MiB|-72.9%|
+|Ingest Duration|1,650 s|242 s|-85.3%|
+|Ingest Rate|101,680 events/s|693,273 events/s|+581.8%|
+|Index Size|14,791 MiB|5,721 MiB|-61.3%|
+|Store Size|37,656 MiB|8,49 1MiB|-77.5%|
+|Database Size|52,446 MiB|14,212 MiB|-72.9%|
 
 :::note Compressed Filesystems
 The above benchmarks ran on filesystems without compression. We expect the gain

@@ -206,7 +206,7 @@ this is where Zeek publishes log events. Use `--topic` to set a different topic.
 
 ### Suricata
 
-The `import suricata` command format consumes [Eve
+The `import suricata` command format consumes [EVE
 JSON](https://suricata.readthedocs.io/en/latest/output/eve/eve-json-output.html)
 logs from [Suricata](https://suricata-ids.org). Eve JSON is Suricata's unified
 format to log all types of activity as single stream of [line-delimited
