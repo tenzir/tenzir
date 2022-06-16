@@ -1,5 +1,6 @@
 {
   "zeek.conn": {
-    "count": 34090
+    "count": 34090,
+    "rate": 1
   }
 }
