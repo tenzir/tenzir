@@ -1,4 +1,5 @@
 .terraform
+.terragrunt-cache
 .env
 cmd.tmp
 *.generated.tf

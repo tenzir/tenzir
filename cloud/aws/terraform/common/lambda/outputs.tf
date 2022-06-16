@@ -6,6 +6,10 @@ output "lambda_name" {
   value = aws_lambda_function.lambda.function_name
 }
 
+output "lambda_role_name" {
+  value = aws_iam_role.lambda_role.name
+}
+
 output "role_arn" {
   value = aws_iam_role.lambda_role.arn
 }

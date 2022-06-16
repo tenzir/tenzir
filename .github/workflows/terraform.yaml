@@ -12,20 +12,9 @@ on: workflow_dispatch
 # - The VAST deployment creates a new VPC. Its ip range should not overlap an
 #   existing one in your account. Configure its CIDR in the repository secrets
 #   as VAST_CIDR (for example 172.30.0.0/16).
-# - The CI run uses Terraform Cloud to store the state. You need to properly
-#   configure workspaces for each Terragrunt step:
-#   - In Github Action secrets, set TF_ORGANIZATION with your Terraform Cloud
-#     organizations name, TF_API_TOKEN with a Terraform Cloud API key (for
-#     instance a user token) and choose a string to set as the
-#     TF_WORKSPACE_PREFIX (e.g "github-action")
-#   - Create a workspace in Terraform Cloud for each step. Their name should be
-#     the concatenation of the chosen prefix and the "-step-1", "-step-2"...
-#     suffixes (e.g "github-action-step-1", "github-action-step-2"...).
-#   - For each of these workspaces:
-#     - configure AWS credentials with sufficient priviledges to deploy the
-#       stack. You can use a Variable Set to make this simpler.
-#     - set the "Terraform Working Directory" field in the general settings to
-#       the path of the environement (cloud/aws/step-x)
+# - The CI run uses Terraform Cloud to store the state. In Github Action
+#   secrets, set TF_ORGANIZATION with your Terraform Cloud organizations name
+#   and TF_API_TOKEN with a Terraform Cloud API key (for instance a user token).
 
 # Notes:
 # - If this workflow is executed multiple times at in parallel, the Terraform
@@ -34,6 +23,8 @@ on: workflow_dispatch
 # - If Terraform fails or is interrupted during deployment or destruction, the
 #   state might end up locked and subsequent runs will fail. In this case the
 #   state first needs to be unlocked, for instance from the Terraform Cloud UI.
+# - You can optionally set a different prefix for the Terraform Cloud workspace
+#   names using the TF_WORKSPACE_PREFIX secret (default is "gh-act")
 
 # Set these secrets to configure the CI run
 env:
@@ -41,7 +32,7 @@ env:
   VAST_CIDR: "${{ secrets.VAST_CIDR }}"
   VAST_AWS_REGION: "${{ secrets.VAST_AWS_REGION }}"
   TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
-  TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX }}"
+  TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX || 'gh-act' }}"
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
@@ -71,9 +62,12 @@ jobs:
           echo -n $AWS_ACCESS_KEY_ID | md5sum
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
 
+      - name: Configure Terraform Cloud
+        run: ./vast-cloud integration.config-tfcloud -a
+
       - name: Substitute backend with Terraform Cloud
         run: |
-          cat<<EOF > terragrunt.hcl
+          cat<<EOF > terraform/terragrunt.hcl
           generate "backend" {
             path = "backend.generated.tf"
             if_exists = "overwrite"

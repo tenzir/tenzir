@@ -47,8 +47,8 @@ RUN groupadd -g $CALLER_GID -o $UNAME && \
 USER $UNAME
 
 # Install Python dependencies
-RUN pip install boto3 dynaconf invoke
+RUN pip install boto3 dynaconf invoke requests
 
 WORKDIR /vast/cloud/aws
 
-ENTRYPOINT [ "python", "./cli.py" ]
+ENTRYPOINT [ "python", "./cli/core.py" ]
