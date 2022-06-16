@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.1.0-rc1][v2.1.0-rc1]
+## [v2.1.0-rc2][v2.1.0-rc2]
 
 ### Changes
 
@@ -51,6 +51,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The `csv` import gained a new `--seperator='x'` option that defaults to `','`. Set it to `'\t'` to import tab-separated values, or `' '` to import space-separated values.
   [#2336](https://github.com/tenzir/vast/pull/2336)
+
+- VAST now compresses on-disk indexes with Zstd, resulting in a 50-80% size reduction depending on the type of indexes used, and reducing the overall index size to below the raw data size. This improves retention spans significantly. For example, using the default configuration, the indexes for `suricata.ftp` events now use 75% less disk space, and `suricata.flow` 30% less.
+  [#2346](https://github.com/tenzir/vast/pull/2346)
 
 ### Bug Fixes
 
@@ -1774,7 +1777,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.1.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.1.0-rc1
+[v2.1.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.1.0-rc2
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
