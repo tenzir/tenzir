@@ -108,9 +108,10 @@ aspects worth pointing out:
    canonical query representation. We already experimented with Substrait,
    converting VAST queries into a logical query plan. In fact, VAST has a "query
    language" plugin to make it possible to translate security content. (For
-   example, our Sigma plugin translates [Sigma rules][sigma] into VAST queries).
-   In short: Substrait is to the control plane what Arrow is to the data plane.
-   Both are needed to modularize the concept of a query engine.
+   example, our [Sigma plugin][sigma-plugin] translates [Sigma rules][sigma]
+   into VAST queries.) In short: Substrait is to the control plane what Arrow is
+   to the data plane. Both are needed to modularize the concept of a query
+   engine.
 
 Making our own query engine more suitable for analytical workloads has
 received less attention in the past, as we prioritized high-performance data
@@ -142,3 +143,4 @@ use cases.
 [polars]: https://github.com/pola-rs/polars
 [duckdb]: https://duckdb.org/
 [sigma]: https://github.com/SigmaHQ/sigma
+[sigma-plugin]: https://github.com/tenzir/vast/tree/master/plugins/sigma
