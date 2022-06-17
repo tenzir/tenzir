@@ -1,12 +1,11 @@
 ---
-draft: true
 description: How VAST leverages Apache Arrow for Security Data Engineering
 authors: mavam
 date: 2022-06-17
 tags: [architecture, arrow, performance, query]
 ---
 
-# Arrow Data Spine
+# Apache Arrow as Platform for Security Data Engineering
 
 VAST bets on [Apache Arrow][arrow] as the open interface to structured data. By
 "bet," we mean that VAST does not work without Arrow. And we are not alone.
@@ -47,7 +46,7 @@ After having identified the data model requirements, the question of
 representation came next. At first, we unified the internal representation with
 a row-oriented representation using [MsgPack][msgpack], which comes with a
 mechanism for adding custom types. The assumption was that a row-based data
-representation matches more closely typical event data (e.g., JSONL) and
+representation more closely matches typical event data (e.g., JSONL) and
 therefore allows for much higher processing rates. Moreover, early use cases of
 VAST were limited to interactive, multi-dimensional search to extract a subset
 of *entire* records, spread over a longitudinal archive of data. The
