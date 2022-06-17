@@ -3,9 +3,9 @@
 The VAST documentation resides inside [our main GitHub
 repository](https://github.com/tenzir/vast) in
 [`/web/docs`](https://github.com/tenzir/vast/tree/master/web/docs).
-We use [Docusaurus](https://docusaurus.io/) as site framework.
+We use [Docusaurus](https://docusaurus.io/) as website framework.
 
-### Build and View Locally
+## Build and view locally
 
 To view the entire site (including the documentation) locally,
 change to the [`/web`](https://github.com/tenzir/vast/tree/master/web/)
@@ -20,7 +20,7 @@ yarn start
 Browse to <http://localhost:3000/> to view the site. Docusaurus should spawn
 your default browser automatically upon invoking `yarn start`.
 
-### Write Content
+## Write content
 
 Docusaurus uses an [enhanced flavor of
 Markdown](https://docusaurus.io/docs/markdown-features) that allows for
@@ -37,7 +37,7 @@ embedding richer content elements, such as:
 We encourage making judicious use of these extras for an optimal reading
 experience.
 
-### Editing Sketch Images
+## Edit diagrams
 
 We use [Excalidraw](https://excalidraw.com) as primary tool to create sketches
 of architectural diagrams. It is open source and has a neat collaboration
@@ -59,11 +59,11 @@ If possible, *uncheck* the box "Background" to generate a transparent
 background, as it makes images fit in more seamlessly.
 :::
 
-### Catering to Dark Mode
+## Cater to dark mode
 
 Our setup makes it easy to render different images whether light or dark mode is
 toggled. We use the same CSS that GitHub supports, i.e., `#gh-dark-mode-only`
-and `gh-light-mode-only`.
+and `#gh-light-mode-only`.
 
 Here's an example to include one image that exists in two variants:
 
