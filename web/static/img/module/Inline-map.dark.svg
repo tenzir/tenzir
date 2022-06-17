@@ -1,0 +1,62 @@
+ <svg xmlns="http://www.w3.org/2000/svg" width="831" height="37">
+         <defs>
+            <style type="text/css">
+    @namespace "http://www.w3.org/2000/svg";
+    .line                 {fill: none; stroke: #FFFFFF; stroke-width: 2;}
+    .bold-line            {stroke: #FFFFFF; shape-rendering: crispEdges; stroke-width: 4;}
+    .thin-line            {stroke: #1F1800; shape-rendering: crispEdges}
+    .filled               {fill: #332900; stroke: none;}
+    text.terminal         {font-family: Verdana, Sans-serif;
+                            font-size: 12px;
+                            fill: #141000;
+                            font-weight: bold;
+                          }
+    text.nonterminal      {font-family: Verdana, Sans-serif;
+                            font-size: 12px;
+                            fill: #1A1400;
+                            font-weight: normal;
+                          }
+    text.regexp           {font-family: Verdana, Sans-serif;
+                            font-size: 12px;
+                            fill: #1F1800;
+                            font-weight: normal;
+                          }
+    rect, circle, polygon {fill: #FFFFFF; stroke: #332900;}
+    rect.terminal         {fill: #00A4F1; stroke: #332900; stroke-width: 1;}
+    rect.nonterminal      {fill: #00EDE1; stroke: #332900; stroke-width: 1;}
+    rect.text             {fill: none; stroke: none;}
+    polygon.regexp        {fill: #FFF4C7; stroke: #332900; stroke-width: 1;}
+  </style>
+         </defs>
+         <polygon points="9 17 1 13 1 21"/>
+         <polygon points="17 17 9 13 9 21"/>
+         <rect x="31" y="3" width="28" height="32" rx="10"/>
+         <rect x="29" y="1" width="28" height="32" class="terminal" rx="10"/>
+         <text class="terminal" x="39" y="21">{</text>
+         <rect x="79" y="3" width="48" height="32" rx="10"/>
+         <rect x="77" y="1" width="48" height="32" class="terminal" rx="10"/>
+         <text class="terminal" x="87" y="21">map</text>
+         <rect x="147" y="3" width="24" height="32" rx="10"/>
+         <rect x="145" y="1" width="24" height="32" class="terminal" rx="10"/>
+         <text class="terminal" x="155" y="21">:</text>
+         <rect x="191" y="3" width="28" height="32" rx="10"/>
+         <rect x="189" y="1" width="28" height="32" class="terminal" rx="10"/>
+         <text class="terminal" x="199" y="21">{</text>
+            <rect x="239" y="3" width="116" height="32"/>
+            <rect x="237" y="1" width="116" height="32" class="nonterminal"/>
+            <text class="nonterminal" x="247" y="21">Inline-map-key</text><rect x="375" y="3" width="24" height="32" rx="10"/>
+         <rect x="373" y="1" width="24" height="32" class="terminal" rx="10"/>
+         <text class="terminal" x="383" y="21">,</text>
+            <rect x="419" y="3" width="128" height="32"/>
+            <rect x="417" y="1" width="128" height="32" class="nonterminal"/>
+            <text class="nonterminal" x="427" y="21">Inline-map-value</text><rect x="567" y="3" width="28" height="32" rx="10"/>
+         <rect x="565" y="1" width="28" height="32" class="terminal" rx="10"/>
+         <text class="terminal" x="575" y="21">}</text>
+            <rect x="615" y="3" width="140" height="32"/>
+            <rect x="613" y="1" width="140" height="32" class="nonterminal"/>
+            <text class="nonterminal" x="623" y="21">Optional-attributes</text><rect x="775" y="3" width="28" height="32" rx="10"/>
+         <rect x="773" y="1" width="28" height="32" class="terminal" rx="10"/>
+         <text class="terminal" x="783" y="21">}</text>
+         <svg:path xmlns:svg="http://www.w3.org/2000/svg" class="line" d="m17 17 h2 m0 0 h10 m28 0 h10 m0 0 h10 m48 0 h10 m0 0 h10 m24 0 h10 m0 0 h10 m28 0 h10 m0 0 h10 m116 0 h10 m0 0 h10 m24 0 h10 m0 0 h10 m128 0 h10 m0 0 h10 m28 0 h10 m0 0 h10 m140 0 h10 m0 0 h10 m28 0 h10 m3 0 h-3"/>
+         <polygon points="821 17 829 13 829 21"/>
+         <polygon points="821 17 813 13 813 21"/></svg>
