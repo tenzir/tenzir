@@ -7,20 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice_builder.hpp>
-#include <vast/chunk.hpp>
 #include <vast/concept/convertible/data.hpp>
-#include <vast/concept/convertible/to.hpp>
 #include <vast/data.hpp>
 #include <vast/detail/base64.hpp>
-#include <vast/detail/narrow.hpp>
-#include <vast/detail/zip_iterator.hpp>
-#include <vast/error.hpp>
-#include <vast/io/write.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query.hpp>
 #include <vast/system/report.hpp>
-#include <vast/table_slice.hpp>
-#include <vast/type.hpp>
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
@@ -33,14 +25,11 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 
-#include <memory>
-#include <utility>
-
-namespace vast::plugins::parquet_store {
+namespace vast::plugins::parquet {
 
 /// Configuration for the Parquet plugin.
 struct configuration {
-  uint64_t row_group_size{parquet::DEFAULT_MAX_ROW_GROUP_LENGTH};
+  uint64_t row_group_size{::parquet::DEFAULT_MAX_ROW_GROUP_LENGTH};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
@@ -128,17 +117,11 @@ public:
   caf::error initialize(data options) override {
     if (caf::holds_alternative<caf::none_t>(options))
       return caf::none;
-    if (const auto* rec = caf::get_if<record>(&options))
-      if (rec->empty())
-        return caf::none;
     return convert(options, config_);
-    // return caf::make_error(ec::invalid_configuration, //
-    //                        "expected empty configuration under "
-    //                        "vast.plugins.parquet-store");
   }
 
   [[nodiscard]] const char* name() const override {
-    return "parquet-store";
+    return "parquet";
   }
 
   /// Create a store builder actor that accepts incoming table slices.
@@ -451,7 +434,7 @@ handle_lookup(Actor& self, const vast::query& query,
 }
 
 std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
-  const std::shared_ptr<parquet::FileMetaData>& parquet_metadata) {
+  const std::shared_ptr<::parquet::FileMetaData>& parquet_metadata) {
   if (!parquet_metadata)
     return {};
   auto arrow_metadata
@@ -472,17 +455,17 @@ caf::expected<std::shared_ptr<arrow::Table>>
 read_parquet_buffer(const chunk_ptr& chunk) {
   VAST_ASSERT(chunk);
   auto bufr = std::make_shared<arrow::io::BufferReader>(as_arrow_buffer(chunk));
-  auto parquet_reader = parquet::ParquetFileReader::Open(bufr);
+  auto parquet_reader = ::parquet::ParquetFileReader::Open(bufr);
   auto arrow_schema
     = parse_arrow_schema_from_metadata(parquet_reader->metadata());
-  std::unique_ptr<parquet::arrow::FileReader> file_reader{};
-  if (!parquet::arrow::OpenFile(bufr, arrow::default_memory_pool(),
-                                &file_reader)
-         .ok())
-    return caf::exit_reason::unhandled_exception;
+  std::unique_ptr<::parquet::arrow::FileReader> file_reader{};
+  if (auto st = ::parquet::arrow::OpenFile(bufr, arrow::default_memory_pool(),
+                                           &file_reader);
+      !st.ok())
+    return caf::make_error(ec::parse_error, st.ToString());
   std::shared_ptr<arrow::Table> table{};
-  if (!file_reader->ReadTable(&table).ok())
-    return caf::exit_reason::unhandled_exception;
+  if (auto st = file_reader->ReadTable(&table); !st.ok())
+    return caf::make_error(ec::parse_error, st.ToString());
   return align_table_to_schema(arrow_schema, table);
 }
 
@@ -508,21 +491,21 @@ auto add_table_slices(
   };
 }
 
-std::shared_ptr<parquet::WriterProperties>
+std::shared_ptr<::parquet::WriterProperties>
 writer_properties(const configuration& config) {
-  auto builder = parquet::WriterProperties::Builder{};
-  builder.created_by("VAST telemetry engine")
+  auto builder = ::parquet::WriterProperties::Builder{};
+  builder.created_by("VAST")
     ->max_row_group_length(detail::narrow_cast<int64_t>(config.row_group_size))
     ->enable_dictionary()
-    ->compression(parquet::Compression::ZSTD)
+    ->compression(::parquet::Compression::ZSTD)
     ->compression_level(9)
-    ->version(parquet::ParquetVersion::PARQUET_2_6);
+    ->version(::parquet::ParquetVersion::PARQUET_2_6);
   return builder.build();
 }
 
 // TODO: make this static or something - no need to recompute every time
-std::shared_ptr<parquet::ArrowWriterProperties> arrow_writer_properties() {
-  auto builder = parquet::ArrowWriterProperties::Builder{};
+std::shared_ptr<::parquet::ArrowWriterProperties> arrow_writer_properties() {
+  auto builder = ::parquet::ArrowWriterProperties::Builder{};
   builder.store_schema(); // serialize arrow schema into parquet meta data
   return builder.build();
 }
@@ -563,8 +546,8 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices,
   auto writer_props = writer_properties(config);
   auto arrow_writer_props = arrow_writer_properties();
   auto status
-    = parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink,
-                                 1 << 24, writer_props, arrow_writer_props);
+    = ::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink,
+                                   1 << 24, writer_props, arrow_writer_props);
   VAST_ASSERT(status.ok(), status.ToString().c_str());
   return sink->Finish().ValueOrDie();
 }
@@ -661,9 +644,10 @@ store(system::store_actor::stateful_pointer<store_state> self,
     },
     [self](atom::erase, const ids& xs) -> caf::result<uint64_t> {
       auto num_rows = rank(xs);
-      VAST_ASSERT(num_rows == 0
-                  || num_rows
-                       == static_cast<unsigned long>(self->state.num_rows_));
+      VAST_ASSERT(
+        num_rows == 0
+        || num_rows
+             == detail::narrow_cast<unsigned long>(self->state.num_rows_));
       auto rp = self->make_response_promise<uint64_t>();
       self
         ->request(self->state.fs_, caf::infinite, atom::erase_v,
@@ -716,7 +700,7 @@ system::store_builder_actor::behavior_type store_builder(
   };
 }
 
-} // namespace vast::plugins::parquet_store
+} // namespace vast::plugins::parquet
 
 // Finally, register our plugin.
-VAST_REGISTER_PLUGIN(vast::plugins::parquet_store::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::parquet::plugin)
