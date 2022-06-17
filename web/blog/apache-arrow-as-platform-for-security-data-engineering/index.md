@@ -1,12 +1,11 @@
 ---
-draft: true
 description: How VAST leverages Apache Arrow for Security Data Engineering
 authors: mavam
-date: 2022-06-22
+date: 2022-06-17
 tags: [architecture, arrow, performance, query]
 ---
 
-# Arrow Data Spine
+# Apache Arrow as Platform for Security Data Engineering
 
 VAST bets on [Apache Arrow][arrow] as the open interface to structured data. By
 "bet," we mean that VAST does not work without Arrow. And we are not alone.
@@ -15,70 +14,89 @@ Influx's [IOx][iox], DataDog's [Husky][husky], Anyscale's [Ray][ray],
 making Arrow a corner stone of their system architecture. For us, Arrow was not
 always a required dependency. We shifted to a tighter integration over the years
 as the Arrow ecosystem matured. In this blog post we explain our journey of
-becoming an Arrow-native engine, and what we are looking forward to in the
-fast-growing Arrow ecosystem.
+becoming an Arrow-native engine.
 
-After having witnessed first-hand a commitment of [Ray][ray] to Arrow, we
-started using Arrow as optional dependency for an alternative, column-oriented
-representation of structured event data, next to a row-oriented
-[MsgPack][msgpack] representation. The assumption was that a row-based data
-representation matches more closely typical event data and therefore allows for
-much higher ingestion rates, whereas a column-oriented representation lends
-itself better for analytical workloads. Both representations implemented the
-same data model that provides rich typing and corresponding operations (e.g.,
-native representation of IPv4 and IPv6 addresses plus the ability to perform
-top-k prefix search to answer subnet membership queries). Strong typing at the
-core of the system allows for efficient data representation and enables
-type-based optimizations, such as custom bitmap indexing structures. The data
-model came first, then the representation. Arrow was only a representation:
+[arrow]: https://arrow.apache.org
+[iox]: https://github.com/influxdata/influxdb_iox
+[husky]: https://www.datadoghq.com/blog/engineering/introducing-husky/
+[ray]: https://github.com/ray-project/ray
+[tensorbase]: https://github.com/tensorbase/tensorbase
+[arrow-projects]: https://arrow.apache.org/powered_by/
+
+<!--truncate-->
+
+Today, the need to bring advanced security analytics and data engineering
+together is stronger than ever, but there is a huge gap between the two fields.
+We see Arrow as the vehicle to close this gap, allowing us developers to
+practice *security data engineering* to make security analytics easy for users.
+That is, the experience should allow experts to interact with the data in the
+security domain, end-to-end without context switching. To achieve this, we began
+our journey with VAST by developing a data model for structured security
+telemetry. Having worked for a decade with the [Zeek][zeek] (fka. Bro) network
+security monitor, we understood the value of having first-class support for
+domain-specific entities (e.g., native representation of IPv4 and IPv6
+addresses) and type-specific operations (e.g., the ability to perform top-k
+prefix search to answer subnet membership queries). In addition, the ability to
+embed domain semantics with user-defined types (e.g., IP addresses, subnets, and
+URLs) was central to expressing complex relationships to develop effective
+analytical models. It was clear that we needed the domain model deep in the core
+of the system to successfully support security analytics.
+
+After having identified the data model requirements, the question of
+representation came next. At first, we unified the internal representation with
+a row-oriented representation using [MsgPack][msgpack], which comes with a
+mechanism for adding custom types. The assumption was that a row-based data
+representation more closely matches typical event data (e.g., JSONL) and
+therefore allows for much higher processing rates. Moreover, early use cases of
+VAST were limited to interactive, multi-dimensional search to extract a subset
+of *entire* records, spread over a longitudinal archive of data. The
+row-oriented encoding worked well for this.
+
+But as security operations were maturing, requirements extended to analytical
+processing of structured data, making a columnar format increasingly beneficial.
+After having witnessed first-hand the early commitment of [Ray][ray] to Arrow,
+we started using Arrow as optional dependency as additional column-oriented
+encoding. We abstracted a batch of data encoding-independent behind a "table
+slice":
 
 ![MsgPack & Arrow](msgpack-arrow.light.png#gh-light-mode-only)
 ![MsgPack & Arrow](msgpack-arrow.dark.png#gh-dark-mode-only)
 
-Early use cases of VAST were limited to interactive, multi-dimensional search to
-extract a subset of disparate records (= rows) in their entirety. The
-row-oriented option worked well for this. But as security operations were
-maturing, requirements extended to analytical processing of structured data,
-making a columnar increasingly beneficial.
-
-Today, the need to bring advanced security analytics and data engineering
-together is stronger than ever, but there is a huge gap between the two fields.
-We see Arrow as the vehicle to close this gap, by practicing *security data
-engineering*. Security analytics should not only be easy and fast. It should
-also allow the expert to act in their domain, end-to-end. This requires treating
-central domain objects as first-class (e.g., IP addresses, subnets, and URLs)
-and making working with them *easy*. This aspect is where our perception of
-Arrow changed: the primary value proposition of Arrow is to *make data
-interoperability easy*. With an open format specification at its core,
+Hiding the concrete encoding behind a cell-based access interface worked for
+low-volume use cases, but backfired as we scaled up and slowed us down
+substantially in development. We needed to make a choice. This is where timing
+was right: our perception of the rapidly evolving Arrow ecosystem changed.
 Arrow-based runtimes were mushrooming all over the place. Nowadays it requires
 only a few lines of code to integrate Arrow data into the central logic of
-applications.
+applications. We realized that the primary value proposition of Arrow is to
+*make data interoperability easy*.
 
-Data interoperability is a sufficient, but not a necessary condition for
-enabling security analytics. We also need to embed the data model of the
-security domain. This is where Arrow's [extension types][extension-types] come
-into play. They add *semantics* to otherwise generic types, e.g., by telling the
-user "this is a transport-layer port" and not just a 16-bit unsigned integer, or
-"this is a connection 4-tuple to represent a network flow" instead of "this is
-a record with 4 fields of type string and unsigned integer". Extension types are
-composable and allow for creating a rich typing layer with meaningful domain
-objects on top of a standardized data representation. Since they are embedded in
-the data, they do not have to be made available out-of-band when crossing the
-boundaries of different tools. Now we have self-describing security data.
+But data interoperability is only a sufficient condition for enabling
+sustainable security analytics. The differentiating value of a *security* data
+platform is support for the *security* domain. This is where Arrow's [extension
+types][extension-types] come into play. They add *semantics* to otherwise
+generic types, e.g., by telling the user "this is a transport-layer port" and
+not just a 16-bit unsigned integer, or "this is a connection 4-tuple to
+represent a network flow" instead of "this is a record with 4 fields of type
+string and unsigned integer". Extension types are composable and allow for
+creating a rich typing layer with meaningful domain objects on top of a
+standardized data representation. Since they are embedded in the data, they do
+not have to be made available out-of-band when crossing the boundaries of
+different tools. Now we have self-describing security data.
 
 Interoperability plus support for a domain-specific data model makes Arrow a
-solid *data plane*. But Arrow is much more than standardized data
-representation. Arrow also comes with bag of tools for working with the
+solid *data plane*. It turns out that Arrow is much more than a standardized
+data representation. Arrow also comes with bag of tools for working with the
 standardized data. In the diagram below, we show the various Arrow pieces that
 power the architecture of VAST:
 
 ![Arrow Data Plane](arrow-data-plane.light.png#gh-light-mode-only)
 ![Arrow Data Plane](arrow-data-plane.dark.png#gh-dark-mode-only)
 
-In the center we have highlighted the Arrow data plane that powers other
-parts of the system. Green pieces highlight Arrow building blocks that we use
-today, and orange pieces elements we plan to use in the future. There are several
-aspects worth pointing out:
+In the center we have the Arrow data plane that powers other parts of the
+system. Green elements highlight Arrow building blocks that we use today, and
+orange pieces elements we plan to use in the future. There are several aspects
+worth pointing out:
 
 1. **Unified Data Plane**: When users ingest data into VAST, the
    parsing process converts the native data into Arrow. Similarly, a
@@ -127,7 +145,6 @@ tools from the Arrow ecosystem, plus all other embeddable Arrow engines that are
 emerging, we have a modular architecture to can cover a very wide spectrum of
 use cases.
 
-[arrow]: https://arrow.apache.org
 [compute]: https://arrow.apache.org/docs/cpp/compute.html
 [extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
 [flight]: https://arrow.apache.org/docs/format/Flight.html
@@ -135,12 +152,7 @@ use cases.
 [datafusion]: https://arrow.apache.org/datafusion/
 [datafusion-c]: https://github.com/datafusion-contrib/datafusion-c
 [msgpack]: https://msgpack.org/index.html
-[iox]: https://github.com/influxdata/influxdb_iox
-[husky]: https://www.datadoghq.com/blog/engineering/introducing-husky/
-[ray]: https://github.com/ray-project/ray
-[tensorbase]: https://github.com/tensorbase/tensorbase
-[arrow-projects]: https://arrow.apache.org/powered_by/
-[polars]: https://github.com/pola-rs/polars
 [duckdb]: https://duckdb.org/
 [sigma]: https://github.com/SigmaHQ/sigma
 [sigma-plugin]: https://github.com/tenzir/vast/tree/master/plugins/sigma
+[zeek]: https://zeek.org

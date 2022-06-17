@@ -3,7 +3,7 @@ draft: true
 title: VAST v2.1
 description: VAST v2.1 - TODO
 authors: dominiklohmann
-date: 2022-06-16
+date: 2022-06-23
 tags: [release, performance]
 ---
 
