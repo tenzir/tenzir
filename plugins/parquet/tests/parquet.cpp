@@ -111,7 +111,7 @@ TEST(parquet store roundtrip) {
   auto xs = std::vector<vast::table_slice>{suricata_dns_log[0]};
   xs[0].offset(23u);
   auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -248,7 +248,7 @@ TEST(active parquet store fetchall query) {
   auto slice = f.slice;
   slice.offset(23);
   auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, uuid)->first;
@@ -262,12 +262,44 @@ TEST(active parquet store fetchall query) {
   compare_table_slices(slice, results[0]);
 }
 
+TEST(passive parquet store fetchall small row group size) {
+  auto f = table_slice_fixture();
+  auto slice = f.slice;
+  slice.offset(23);
+  auto uuid = vast::uuid::random();
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet");
+  REQUIRE(plugin);
+  // We know that initialize may be called multiple times for this plugin.
+  auto _
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    = const_cast<store_plugin*>(plugin)->initialize(
+      record{{"row-group-size", 63u}});
+  auto builder_and_header
+    = plugin->make_store_builder(accountant, filesystem, uuid);
+  REQUIRE_NOERROR(builder_and_header);
+  auto& [builder, header] = *builder_and_header;
+  auto slices = std::vector<table_slice>{16, slice};
+  vast::detail::spawn_container_source(sys, slices, builder);
+  run();
+  // The local store expects a single stream source, so the data should be
+  // flushed to disk after the source disconnected.
+  auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
+  REQUIRE_NOERROR(store);
+  run();
+  auto ids = ::vast::make_ids({23});
+  auto results = query(*store, vast::ids{});
+  run();
+  // expecting four row groups because the row group size size is one
+  CHECK_EQUAL(results.size(), 2ull);
+  // compare_table_slices(slice, results[0]);
+}
+
 TEST(passive parquet store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   slice.offset(23);
   auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -294,7 +326,7 @@ TEST(passive parquet store selective query) {
   auto expr = to<expression>("f1 == \"n1\"");
   slice.offset(23);
   auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -319,7 +351,7 @@ TEST(passive parquet store selective query) {
 TEST(passive parquet store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, vast::uuid::random());
@@ -340,7 +372,7 @@ TEST(passive parquet store erase) {
 TEST(active parquet store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, vast::uuid::random())
@@ -364,7 +396,7 @@ TEST(active parquet store erase) {
 TEST(active parquet store status) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet-store");
+  const auto* plugin = vast::plugins::find<vast::store_plugin>("parquet");
   REQUIRE(plugin);
   auto uuid = vast::uuid::random();
   auto builder
