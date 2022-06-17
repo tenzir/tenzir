@@ -2,7 +2,7 @@
 draft: true
 description: How VAST leverages Apache Arrow for Security Data Engineering
 authors: mavam
-date: 2022-06-22
+date: 2022-06-17
 tags: [architecture, arrow, performance, query]
 ---
 
@@ -16,6 +16,13 @@ making Arrow a corner stone of their system architecture. For us, Arrow was not
 always a required dependency. We shifted to a tighter integration over the years
 as the Arrow ecosystem matured. In this blog post we explain our journey of
 becoming an Arrow-native engine.
+
+[arrow]: https://arrow.apache.org
+[iox]: https://github.com/influxdata/influxdb_iox
+[husky]: https://www.datadoghq.com/blog/engineering/introducing-husky/
+[ray]: https://github.com/ray-project/ray
+[tensorbase]: https://github.com/tensorbase/tensorbase
+[arrow-projects]: https://arrow.apache.org/powered_by/
 
 <!--truncate-->
 
@@ -139,7 +146,6 @@ tools from the Arrow ecosystem, plus all other embeddable Arrow engines that are
 emerging, we have a modular architecture to can cover a very wide spectrum of
 use cases.
 
-[arrow]: https://arrow.apache.org
 [compute]: https://arrow.apache.org/docs/cpp/compute.html
 [extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
 [flight]: https://arrow.apache.org/docs/format/Flight.html
@@ -147,12 +153,6 @@ use cases.
 [datafusion]: https://arrow.apache.org/datafusion/
 [datafusion-c]: https://github.com/datafusion-contrib/datafusion-c
 [msgpack]: https://msgpack.org/index.html
-[iox]: https://github.com/influxdata/influxdb_iox
-[husky]: https://www.datadoghq.com/blog/engineering/introducing-husky/
-[ray]: https://github.com/ray-project/ray
-[tensorbase]: https://github.com/tensorbase/tensorbase
-[arrow-projects]: https://arrow.apache.org/powered_by/
-[polars]: https://github.com/pola-rs/polars
 [duckdb]: https://duckdb.org/
 [sigma]: https://github.com/SigmaHQ/sigma
 [sigma-plugin]: https://github.com/tenzir/vast/tree/master/plugins/sigma
