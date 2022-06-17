@@ -1,4 +1,4 @@
-from invoke import task, Context
+from invoke import task, Context, Collection
 import time
 import dynaconf
 import core
@@ -13,7 +13,7 @@ VALIDATORS = [
     dynaconf.Validator("TF_STATE_BACKEND", default="local"),
 ]
 
-TFDIR = "./terraform"
+INVOKE_CONFIG = {"run": {"env": {"VASTCLOUD_NOTTY": "1"}}}
 
 
 @task(autoprint=True)

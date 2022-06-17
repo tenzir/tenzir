@@ -9,7 +9,7 @@ VALIDATORS = [
     dynaconf.Validator("VAST_FLOWLOGS_BUCKET_REGION", must_exist=True),
 ]
 
-TFDIR = "./terraform"
+INVOKE_CONFIG = {}
 
 
 @task
@@ -17,7 +17,7 @@ def deploy(c, auto_approve=False):
     """Deploy the VPC FLow Logs datasource"""
     core.init_step(c, "flowlogs")
     c.run(
-        f"terragrunt apply {core.auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/flowlogs",
+        f"terragrunt apply {core.auto_app_fmt(auto_approve)} --terragrunt-working-dir {core.TFDIR}/flowlogs",
         env=core.conf(VALIDATORS),
         pty=True,
     )
@@ -28,7 +28,7 @@ def destroy(c, auto_approve=False):
     """Remove the VPC FLow Logs datasource"""
     core.init_step(c, "flowlogs")
     c.run(
-        f"terragrunt destroy {core.auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/flowlogs",
+        f"terragrunt destroy {core.auto_app_fmt(auto_approve)} --terragrunt-working-dir {core.TFDIR}/flowlogs",
         env=core.conf(VALIDATORS),
         pty=True,
     )
