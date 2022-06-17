@@ -23,7 +23,7 @@ terraform {
   after_hook "enable_eventbridge_notifications" {
     commands = ["apply"]
     # path relative to common/s3proc
-    execute  = ["../common/bucket-notif.bash", local.source_bucket_region, local.source_bucket_name]
+    execute = ["../common/bucket-notif.bash", local.source_bucket_region, local.source_bucket_name]
   }
 }
 
