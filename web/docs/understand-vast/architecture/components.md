@@ -12,14 +12,17 @@ components are multi-instance in that the runtime can spawn them multiple times
 for horizontal scaling. Only a few components are singletons where at most one
 instance can exist, e.g., because they guard access to an underlying resource.
 
-The diagram below illsutrates VAST's key components in the dataflow between
+The diagram below illustrates VAST's key components in the dataflow between
 them:
 
 ![Components](/img/components.light.png#gh-light-mode-only)
 ![Components](/img/components.dark.png#gh-dark-mode-only)
 
 By convention, we use ALL-CAPS naming for actor components and represent them as
-circles. Red circles are singletons and blue circles multi-instance actors.
+circles. Red circles are singletons and blue circles multi-instance actors. We
+also did not show process boundaries in this diagram, as the actor model allows
+us to [draw them flexibly](actor-model#flexible-distribution), based on the
+requirements of the deployment environment.
 
 ## Singleton Components
 
@@ -30,11 +33,24 @@ actor does this by definition, because control flow within actor is sequential.)
 
 ### CATALOG
 
-import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+The catalog is the central component that sits in both read and write path. It
+has the two key functions:
 
-<MissingDocumentation/>
+1. **Partition Management**: the catalog is the owner of *partitions*, each of
+   which consists of a concatenation of record batches encoded in a format
+   suitable for persistence, plus optional sparse and dense indexes. Other
+   components can add and remove partitions. The catalog is the only component
+   that allows mutation as part of its interface.
+2. **Query Entry Point**: user queries arrive at the catalog, which returns a
+   set of candidate partitions for each query by looking up partition metadata
+   and, if available, performing sketch lookups. The result of query consists of
+   URI that points to the partition and a small amount of partition metadata.
+   The catalog also forwards a query to all partition builders for optimal
+   result freshness.
 
 ### SCHEDULER
+
+import MissingDocumentation from '@site/presets/MissingDocumentation.md';
 
 <MissingDocumentation/>
 
@@ -48,16 +64,50 @@ on many distributed files, each of which represented by a single instance.
 
 ### LOADER
 
-<MissingDocumentation/>
+:::note Not Yet Implemented
+This component is not yet implemented. Until then, the [SOURCE](#SOURCE)
+performs both I/O and subsequent input parsing.
+:::
 
 ### SOURCE
+
+The source transforms a stream of framed bytes into Arrow record batches, and
+then relays them to a partition builder. A source actor wraps a pluggable
+*reader* for a given input format, e.g., JSON, CSV, or PCAP.
+
+### PARTITION BUILDER
+
+The partition builder takes as input a sequence of Arrow record batches and
+turns them into partitions. There exists one builder per schema, so the stream
+of record batches gets demultiplexed over a set of builders. Each partition
+builder keeps writing record batches into its store until either a timeout fires
+or the store reaches a configured size. The builder then hands the ownership of
+the resulting partition the catalog and starts over with a new partition.
+
+In addition to translating the in-memory record batch representation into a
+persistent format, the partition builder also generates sparse and dense
+indexes to accelerate queries.
+
+:::note Not Yet Implemented
+Partition building as described above is not happening at this location in the
+dataflow pipeline, but deeper inside the query engine. Moreover, building of
+dense bitmap indexes also takes place elsewhere and is not yet configurable. We
+are in the process of refactoring this logic to match the described
+architecture.
+:::
+
+### QUERY
 
 <MissingDocumentation/>
 
 ### SINK
 
-<MissingDocumentation/>
+The sink transforms a stream Arrow record batches into a sequence of bytes using
+a pluggable *writer* for a given output format, e.g., JSON, CSV, or PCAP.
 
 ### DUMPER
 
-<MissingDocumentation/>
+:::note Not Yet Implemented
+This component is not yet implemented. Until then, the [SINK](#SINK)
+performs both output formatting and subsequent I/O.
+:::
