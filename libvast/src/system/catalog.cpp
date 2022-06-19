@@ -531,6 +531,29 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       record result;
       result["memory-usage"] = count{self->state.memusage()};
       result["num-partitions"] = count{self->state.synopses.size()};
+      if (v >= status_verbosity::detailed) {
+        auto partitions = list{};
+        partitions.reserve(self->state.synopses.size());
+        for (const auto& [id, synopsis] : self->state.synopses) {
+          VAST_ASSERT(synopsis);
+          auto partition = record{
+            {"id", fmt::to_string(id)},
+            {"schema", synopsis->schema
+                         ? data{std::string{synopsis->schema.name()}}
+                         : data{}},
+            {"num-events", synopsis->events},
+            {"import-time",
+             record{
+               {"min", synopsis->min_import_time},
+               {"max", synopsis->max_import_time},
+             }},
+          };
+          if (v >= status_verbosity::debug)
+            partition["version"] = synopsis->version;
+          partitions.emplace_back(std::move(partition));
+        }
+        result["partitions"] = std::move(partitions);
+      }
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       return result;
