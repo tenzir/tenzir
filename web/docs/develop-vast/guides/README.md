@@ -1,7 +1,7 @@
-# Understand VAST
+# Guides
 
-This section describes VAST from a systems engineering perspective. We cover the
-following topics:
+This section includes walkthrough instructions for frequent procedures. The
+following guides are available:
 
 ```mdx-code-block
 import DocCardList from '@theme/DocCardList';

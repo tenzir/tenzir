@@ -1,4 +1,4 @@
-# Write Documentation
+# Documentation
 
 The VAST documentation resides inside [our main GitHub
 repository](https://github.com/tenzir/vast) in
