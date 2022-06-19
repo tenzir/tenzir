@@ -1,5 +1,17 @@
 # Frontends
 
-import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+A query language *frontend* is the representation of query. VAST features a
+[query language plugin][query-language-plugin] that allows for exchanging the
+query frontend by replacing it with a different language.
 
-<MissingDocumentation/>
+[query-language-plugin]: /docs/understand-vast/architecture/plugins#query-language
+
+The [**VAST** **Q**uery **L**anguage (VASTQL)](.) is the default query language
+frontend. Besides VAST, the following frontends ship with VAST:
+
+```mdx-code-block
+import DocCardList from '@theme/DocCardList';
+import {useCurrentSidebarCategory} from '@docusaurus/theme-common';
+
+<DocCardList items={useCurrentSidebarCategory().items}/>
+```
