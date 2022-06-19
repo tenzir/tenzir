@@ -1,2 +1,2 @@
-The output `vast status --detailed` now shows metadata from all partitions.
-under `.catalog.partitions`.
+The output `vast status --detailed` now shows metadata from all partitions
+under the key `.catalog.partitions`.
