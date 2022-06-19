@@ -50,9 +50,24 @@ has the two key functions:
 
 ### SCHEDULER
 
-import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+The scheduler is the central component in the query engine that drives query
+execution. Scheduling concerns the loading and evicting in-memory partitions
+that can answer queries concurrently, with the goal to achieve minimum partition
+thrashing.
 
-<MissingDocumentation/>
+Why does thrashing occur? Typical workloads in security analytics (especially
+when executing security content) exhibit a high rate of point queries. This
+results in a large overlap of relevant partitions among a given set of queries.
+In the most naive case of serial query execution, VAST would process all
+partitions sequentially, i.e., loading one from disk, run the query, evict it
+again. If we have a total of P partitions and Q queries waiting in line to
+be executed, we would perform P ⨉ Q partition load and evict operations. In
+practice, each query only needs to access a subset of partitions. The catalog is
+the component that determines the candidate set for a given query. For an
+increasing number of queries, the overlap of partitions turns out to be large.
+This is where scheduler benefit kicks in: by sorting the to-be-processed
+partitions by the number of queries outstanding queries that access them, we can
+create optimal I/O access patterns.
 
 ## Multi-instance Components
 
@@ -98,7 +113,9 @@ architecture.
 
 ### QUERY
 
-<MissingDocumentation/>
+Every query a user submits has a corresponding query actor that tracks its
+execution. The interface of the query actor allows for extracting results in a
+pull-based fashion, e.g., users can ask "give me 100 more results".
 
 ### SINK
 
