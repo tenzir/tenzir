@@ -255,7 +255,6 @@ TEST(active parquet store fetchall query) {
   auto slices = std::vector<table_slice>{slice};
   vast::detail::spawn_container_source(sys, slices, builder);
   run();
-  auto ids = ::vast::make_ids({23});
   auto results = query(builder, vast::ids{});
   run();
   CHECK_EQUAL(results.size(), 1ull);
@@ -273,24 +272,21 @@ TEST(passive parquet store fetchall small row group size) {
   auto _
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
     = const_cast<store_plugin*>(plugin)->initialize(
-      record{{"row-group-size", 63u}});
+      record{{"row-group-size", 512u}});
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);
   auto& [builder, header] = *builder_and_header;
-  auto slices = std::vector<table_slice>{16, slice};
+  auto slices = std::vector<table_slice>{1024, slice}; // 4096 elements
   vast::detail::spawn_container_source(sys, slices, builder);
   run();
-  // The local store expects a single stream source, so the data should be
-  // flushed to disk after the source disconnected.
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = ::vast::make_ids({23});
   auto results = query(*store, vast::ids{});
   run();
-  // expecting four row groups because the row group size size is one
-  CHECK_EQUAL(results.size(), 2ull);
+  // 4096 elements with row group size of 512 is 8 table slices
+  CHECK_EQUAL(results.size(), 8ull);
   // compare_table_slices(slice, results[0]);
 }
 
@@ -313,7 +309,6 @@ TEST(passive parquet store fetchall query) {
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = ::vast::make_ids({23});
   auto results = query(*store, vast::ids{});
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
