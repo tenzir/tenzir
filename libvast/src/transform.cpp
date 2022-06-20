@@ -52,6 +52,7 @@ bool transform::applies_to(std::string_view event_name) const {
 
 caf::error transform::add(table_slice&& x) {
   VAST_DEBUG("transform {} adds a slice", name_);
+  import_timestamps_.push_back(x.import_time());
   auto batch = to_record_batch(x);
   return add_batch(x.layout(), batch);
 }
@@ -66,8 +67,16 @@ caf::expected<std::vector<table_slice>> transform::finish() {
   auto finished = finish_batch();
   if (!finished)
     return std::move(finished.error());
-  for (auto& [layout, batch] : *finished)
-    result.emplace_back(batch);
+  result.reserve(finished->size());
+  VAST_ASSERT(is_aggregate() || finished->size() == import_timestamps_.size());
+  for (size_t i = 0; auto& [layout, batch] : *finished) {
+    auto& slice = result.emplace_back(batch);
+    if (is_aggregate())
+      slice.import_time(import_timestamps_.back());
+    else
+      slice.import_time(import_timestamps_[i++]);
+  }
+  import_timestamps_.clear();
   return result;
 }
 

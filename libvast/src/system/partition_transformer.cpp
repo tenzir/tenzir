@@ -259,12 +259,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   return {
     [self](vast::table_slice& slice) {
       update_statistics(self->state.stats_in, slice);
-      // Store the old import time before applying any transformations to the
-      // data, as for now we do not want to assign a new import time range to
-      // transformed partitions.
       const auto old_import_time = slice.import_time();
-      const auto* slice_identity = as_bytes(slice).data();
-      self->state.original_import_times[slice_identity] = old_import_time;
       if (auto err = self->state.transform->add(std::move(slice))) {
         VAST_ERROR("{} failed to add slice: {}", *self, err);
         return;
@@ -296,12 +291,6 @@ partition_transformer_actor::behavior_type partition_transformer(
           partition_data.synopsis
             = caf::make_copy_on_write<partition_synopsis>();
         }
-        // If the transform is a no-op we may get back the original table slice
-        // that's still mapped as read-only, but in this case we also don't need
-        // to adjust the import time.
-        const auto* slice_identity = as_bytes(slice).data();
-        if (!self->state.original_import_times.contains(slice_identity))
-          slice.import_time(self->state.max_import_time);
         auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
         unshared_synopsis->min_import_time
           = std::min(slice.import_time(), unshared_synopsis->min_import_time);
@@ -313,7 +302,6 @@ partition_transformer_actor::behavior_type partition_transformer(
         self->state.partition_buildup[partition_data.id].slices.push_back(
           std::move(slice));
       }
-      self->state.original_import_times.clear();
       auto stream_data = partition_transformer_state::stream_data{
         .partition_chunks
         = std::vector<std::tuple<vast::uuid, vast::type, chunk_ptr>>{},
