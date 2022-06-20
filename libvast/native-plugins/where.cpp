@@ -59,6 +59,12 @@ public:
 #endif // VAST_ENABLE_ASSERTIONS
   }
 
+  /// The where transform step may drop rows, so it must be considered an
+  /// aggregate transform step.
+  [[nodiscard]] bool is_aggregate() const override {
+    return true;
+  }
+
   /// Applies the transformation to a record batch with a corresponding vast
   /// layout.
   [[nodiscard]] caf::error
