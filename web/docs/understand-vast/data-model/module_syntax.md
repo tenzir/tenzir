@@ -1,10 +1,12 @@
 # Module Syntax
 
+The syntax below is designed to produce a YAML oneliner which can be placed
+inside the `types` dictionary of a YAML Module.
+
 ## Type-declaration
 
 ![Type-declaration Railroad Diagram](/img/module/Type-declaration.light.svg#gh-light-mode-only)
 ![Type-declaration Railroad Diagram](/img/module/Type-declaration.dark.svg#gh-dark-mode-only)
-
 
 ```
 Type-declaration
@@ -31,7 +33,6 @@ Type-alias
 referenced by
 
 - [Type-declaration](#type-declaration)
-
 
 ## Inline-type-alias
 
@@ -60,7 +61,6 @@ List     ::= '{' Declaration-name ':' Inline-list '}'
 referenced by
 
 - [Type-declaration](#type-declaration)
-
 
 ## Inline-list
 
@@ -271,7 +271,6 @@ referenced by
 
 - [Base-records-and-record](#base-records-and-record)
 
-
 ## Record-declaration
 
 ![Record-declaration Railroad Diagram](/img/module/Record-declaration.light.svg#gh-light-mode-only)
@@ -394,7 +393,6 @@ referenced by:
 ![Declaration-name Railroad Diagram](/img/module/Declaration-name.light.svg#gh-light-mode-only)
 ![Declaration-name Railroad Diagram](/img/module/Declaration-name.dark.svg#gh-dark-mode-only)
 
-
 ```
 Declaration-name
          ::= 'Identifier'
@@ -422,7 +420,6 @@ Field-name
 referenced by
 
     Record-field
-
 
 ## Enum-value
 
