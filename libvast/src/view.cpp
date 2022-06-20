@@ -396,12 +396,11 @@ to_arrow_scalar(const type& type, const data_view& view) noexcept {
   auto f = detail::overload{
     [&]<concrete_type Type>(
       [[maybe_unused]] const Type& t) -> std::shared_ptr<arrow::Scalar> {
-      if constexpr (detail::is_any_v<Type, map_type, enumeration_type,
-                                     subnet_type>) {
+      if constexpr (detail::is_any_v<Type, map_type, enumeration_type>) {
         // TODO: This is slow because we create a single-element Array and then
         // use that API to get a scalar for the first element, but I cannot
-        // figure out how to create a scalar for map, enumeraion, or subnet
-        // types directly. -- DL
+        // figure out how to create a scalar for map or enumeraion types
+        // directly. -- DL
         auto builder = t.make_arrow_builder(arrow::default_memory_pool());
         VAST_ASSERT(builder);
         auto append_result = append_builder(
@@ -453,6 +452,20 @@ to_arrow_scalar(const type& type, const data_view& view) noexcept {
         std::make_shared<arrow::FixedSizeBinaryScalar>(
           arrow::Buffer::Wrap(bytes.data(), bytes.size())),
         address_type::to_arrow_type());
+    },
+    [&](const subnet_type&) -> std::shared_ptr<arrow::Scalar> {
+      const auto& typed_view
+        = caf::get<typename view_trait<type_to_data_t<subnet_type>>::type>(
+          view);
+      return std::make_shared<type_to_arrow_scalar_t<subnet_type>>(
+        std::make_shared<arrow::StructScalar>(
+          std::vector<std::shared_ptr<arrow::Scalar>>{
+            to_arrow_scalar(vast::type{address_type{}},
+                            make_data_view(typed_view.network())),
+            std::make_shared<arrow::UInt8Scalar>(typed_view.length()),
+          },
+          subnet_type::to_arrow_type()->storage_type()),
+        subnet_type::to_arrow_type());
     },
     [&](const list_type& lt) -> std::shared_ptr<arrow::Scalar> {
       const auto vt = lt.value_type();
