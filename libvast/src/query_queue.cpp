@@ -8,7 +8,22 @@
 
 #include "vast/query_queue.hpp"
 
+#include "vast/detail/algorithms.hpp"
+
 namespace vast {
+
+bool operator<(const query_queue::entry& lhs,
+               const query_queue::entry& rhs) noexcept {
+  return lhs.priority < rhs.priority;
+}
+
+bool operator==(const query_queue::entry& lhs, const uuid& rhs) noexcept {
+  return lhs.partition == rhs;
+}
+
+bool operator==(const uuid& lhs, const query_queue::entry& rhs) noexcept {
+  return lhs == rhs.partition;
+}
 
 size_t query_queue::num_partitions() const {
   return partitions.size() + inactive_partitions.size();
@@ -62,18 +77,17 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
     return caf::make_error(ec::unspecified, "A query with this ID exists "
                                             "already");
   for (const auto& cand : candidates) {
-    auto it = std::find_if(partitions.begin(), partitions.end(), [&](auto& x) {
-      return x.partition == cand;
-    });
+    auto it = std::find(partitions.begin(), partitions.end(), cand);
     if (it != partitions.end()) {
       it->priority += query_state_it->second.query.priority;
       it->queries.push_back(qid);
+      VAST_ASSERT_CHEAP(!detail::contains(inactive_partitions, cand),
+                        "A partition must not be active and inactive at the "
+                        "same time");
       continue;
     }
-    it = std::find_if(inactive_partitions.begin(), inactive_partitions.end(),
-                      [&](auto& x) {
-                        return x.partition == cand;
-                      });
+    it
+      = std::find(inactive_partitions.begin(), inactive_partitions.end(), cand);
     if (it != inactive_partitions.end()) {
       it->priority += query_state_it->second.query.priority;
       it->queries.push_back(qid);
@@ -138,18 +152,15 @@ query_queue::activate(const uuid& qid, uint32_t num_partitions) {
 }
 
 bool query_queue::mark_partition_erased(const uuid& pid) {
-  auto it = std::find_if(partitions.begin(), partitions.end(),
-                         [&](const auto& entry) {
-                           return entry.partition == pid;
-                         });
+  auto it = std::find(partitions.begin(), partitions.end(), pid);
   if (it != partitions.end()) {
     it->erased = true;
+    VAST_ASSERT_CHEAP(!detail::contains(inactive_partitions, pid),
+                      "A partition must not be active and inactive at the same "
+                      "time");
     return true;
   }
-  it = std::find_if(inactive_partitions.begin(), inactive_partitions.end(),
-                    [&](const auto& entry) {
-                      return entry.partition == pid;
-                    });
+  it = std::find(inactive_partitions.begin(), inactive_partitions.end(), pid);
   if (it != inactive_partitions.end()) {
     it->erased = true;
     return true;
