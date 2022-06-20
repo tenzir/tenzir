@@ -405,8 +405,12 @@ catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
         accountant_actor accountant) {
   self->state.self = self;
-  self->state.accountant = std::move(accountant);
-  self->send(self->state.accountant, atom::announce_v, self->name());
+  if (accountant) {
+    self->state.accountant = std::move(accountant);
+    self->send(self->state.accountant, atom::announce_v, self->name());
+    self->delayed_send(self, defaults::system::telemetry_rate,
+                       atom::telemetry_v);
+  }
   return {
     [=](
       atom::merge,
@@ -558,7 +562,44 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         detail::fill_status_map(result, self);
       return result;
     },
-  };
+    [=](atom::telemetry) {
+      VAST_ASSERT(self->state.accountant);
+      auto num_partitions_and_events_per_schema_and_version
+        = detail::stable_map<std::pair<std::string_view, count>,
+                             std::pair<count, count>>{};
+      for (const auto& [_, synopsis] : self->state.synopses) {
+        VAST_ASSERT(synopsis);
+        auto& [num_partitions, num_events]
+          = num_partitions_and_events_per_schema_and_version[std::pair{
+            synopsis->schema.name(), synopsis->version}];
+        num_partitions += 1;
+        num_events += synopsis->events;
+      }
+      auto r = report{};
+      r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
+      for (const auto& [schema_and_version, num_partitions_and_events] :
+           num_partitions_and_events_per_schema_and_version) {
+        r.data.push_back(data_point{
+          .key = "catalog.num-partitions",
+          .value = num_partitions_and_events.first,
+          .metadata = {
+            {"schema", std::string{schema_and_version.first}},
+            {"partition-version", fmt::to_string(schema_and_version.second)},
+          },
+        });
+        r.data.push_back(data_point{
+          .key = "catalog.num-events",
+          .value = num_partitions_and_events.second,
+          .metadata = {
+            {"schema", std::string{schema_and_version.first}},
+            {"partition-version", fmt::to_string(schema_and_version.second)},
+          },
+        });
+      }
+      self->send(self->state.accountant, std::move(r));
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         atom::telemetry_v);
+    }};
 }
 
 } // namespace vast::system

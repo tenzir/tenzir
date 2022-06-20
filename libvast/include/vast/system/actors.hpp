@@ -218,7 +218,9 @@ using catalog_actor = typed_actor_fwd<
   caf::replies_to<atom::candidates, vast::uuid, vast::expression,
                   uint64_t>::with<catalog_result>,
   // Return the candidate partitions for a query.
-  caf::replies_to<atom::candidates, vast::query>::with<catalog_result>>
+  caf::replies_to<atom::candidates, vast::query>::with<catalog_result>,
+  // Internal telemetry loop.
+  caf::reacts_to<atom::telemetry>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
