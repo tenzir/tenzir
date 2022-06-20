@@ -154,5 +154,5 @@ use cases.
 [msgpack]: https://msgpack.org/index.html
 [duckdb]: https://duckdb.org/
 [sigma]: https://github.com/SigmaHQ/sigma
-[sigma-plugin]: https://github.com/tenzir/vast/tree/master/plugins/sigma
+[sigma-plugin]: /docs/understand-vast/query-language/frontends/sigma
 [zeek]: https://zeek.org
