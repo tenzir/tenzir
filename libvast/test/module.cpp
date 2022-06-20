@@ -40,13 +40,6 @@ constexpr auto reserved_names
                "time", "string",  "pattern", "addr",  "subnet",
                "enum", "list",    "map",     "record"};
 
-struct module_ng2 {
-  std::vector<type> types;
-  // FIXME: The order of types should not matter?
-  friend bool operator==(const module_ng2& first,
-                         const module_ng2& second) noexcept = default;
-};
-
 /// Controls what to do when a field name clash occurs in a record algebra.
 enum class record_algebra_type { base, implant, extend };
 
@@ -78,6 +71,29 @@ struct parsed_type {
     : parsed(new_parsed) {
     providers.push_back(additional_provider);
   }
+};
+
+/// The module
+struct module_ng2 {
+  /// The name of the module
+  std::string name = {};
+
+  /// The description of the module
+  std::string description = {};
+
+  std::vector<std::string> references = {};
+
+  std::vector<type> types;
+  // FIXME: The order of types should not matter?
+  friend bool operator==(const module_ng2& first,
+                         const module_ng2& second) noexcept = default;
+};
+
+// The result of the parsing. The final module will contain resolved types, but
+// only the parsed types are available after parsing.
+struct parsed_module {
+  module_ng2 module{};
+  std::vector<parsed_type> parsed_types{};
 };
 
 /// Converts a declaration into a vast type.
@@ -194,7 +210,7 @@ parse_map(std::string_view name, const data& map_to_parse,
                 "placeholder value: {}, nested value type: {}",
                 name, !key_type_expected->parsed, key_type_expected->parsed,
                 !value_type_expected->parsed, value_type_expected->parsed));
-  auto providers = std::vector(std::move(key_type_expected->providers));
+  auto providers = std::vector(key_type_expected->providers);
   providers.insert(
     providers.end(),
     std::make_move_iterator(value_type_expected->providers.begin()),
@@ -785,44 +801,129 @@ private:
   std::vector<std::string_view> resolving_types_{};
 };
 
-caf::expected<module_ng2> to_module2(const data& raw_module) {
-  const auto* module_declaration_ptr = caf::get_if<record>(&raw_module);
-  if (module_declaration_ptr == nullptr)
-    return caf::make_error(ec::parse_error, "parses a module with an invalid "
-                                            "format");
-  const auto& module_declaration = *module_declaration_ptr;
-  // types
-  const auto found_types = module_declaration.find("types");
-  if (found_types == module_declaration.end())
-    return caf::make_error(ec::parse_error, "parses a module with no types");
+/// Parses the mandatory module name
+caf::expected<std::string> parse_module_name(const record& module) {
+  // the name is under the 'module' key
+  const auto name_element = module.find("module");
+  if (name_element == module.end())
+    return caf::make_error(ec::parse_error, "module must have a name");
+  const auto* name = caf::get_if<std::string>(&name_element->second);
+  if (name == nullptr)
+    return caf::make_error(ec::parse_error, "the format of the module's name "
+                                            "is invalid");
+  return *name;
+}
+
+/// Parses the optional module description
+caf::expected<std::string> parse_module_description(const record& module) {
+  const auto description_element = module.find("description");
+  if (description_element == module.end())
+    return "";
+  const auto* description
+    = caf::get_if<std::string>(&description_element->second);
+  if (description == nullptr) {
+    const auto* no_description
+      = caf::get_if<caf::none_t>(&description_element->second);
+    if (no_description == nullptr)
+      return caf::make_error(ec::parse_error, "the format of the module's "
+                                              "description is invalid");
+    return "";
+  }
+  return *description;
+}
+
+/// Parses the optional module references
+caf::expected<std::vector<std::string>>
+parse_module_references(const record& module) {
+  auto result = std::vector<std::string>{};
+  const auto references_element = module.find("references");
+  if (references_element == module.end())
+    return result;
+  const auto* references = caf::get_if<vast::list>(&references_element->second);
+  if (references == nullptr) {
+    const auto* no_references
+      = caf::get_if<caf::none_t>(&references_element->second);
+    if (no_references == nullptr)
+      return caf::make_error(ec::parse_error,
+                             "the module's references must be a "
+                             "list");
+    return result;
+  }
+  for (const auto& reference_element : *references) {
+    const auto* reference = caf::get_if<std::string>(&reference_element);
+    if (reference == nullptr)
+      return caf::make_error(ec::parse_error, "every reference amongst the "
+                                              "module's references must be a "
+                                              "string");
+    result.emplace_back(*reference);
+  }
+  return std::move(result);
+}
+
+/// Parses the optional module types
+caf::expected<std::vector<parsed_type>>
+parse_module_types(const record& module) {
+  auto result = std::vector<parsed_type>{};
+  const auto found_types = module.find("types");
+  if (found_types == module.end())
+    return result;
   const auto* types_ptr = caf::get_if<record>(&found_types->second);
   if (types_ptr == nullptr)
     return caf::make_error(ec::parse_error, "parses a module with invalid "
                                             "types");
-  const auto& types = *types_ptr;
-  if (types.empty()) // FIXME: Maybe we allow empty types in module?
-    return caf::make_error(ec::parse_error, "parses a module with empty "
-                                            "types");
-  std::vector<parsed_type> parsed_types;
-  // Resolve aliases to built-in types or create placeholder types
-  for (const auto& current_type : types) {
+  // Parse and resolve aliases to built-in types or create placeholder types
+  for (const auto& current_type : *types_ptr) {
     const auto parsed_type = parse(current_type);
     if (!parsed_type)
       return caf::make_error(
         ec::parse_error, fmt::format("failed to parse type: {}", current_type),
         parsed_type.error());
-    parsed_types.push_back(*parsed_type);
+    result.push_back(*parsed_type);
   }
+  return std::move(result);
+}
+
+caf::expected<module_ng2> to_module2(const data& module) {
+  auto parse_result = parsed_module{};
+  const auto* module_declaration_ptr = caf::get_if<record>(&module);
+  if (module_declaration_ptr == nullptr)
+    return caf::make_error(ec::parse_error, "parses a module with an invalid "
+                                            "format");
+  const auto& module_declaration = *module_declaration_ptr;
+  auto module_name = parse_module_name(module_declaration);
+  if (!module_name)
+    return caf::make_error(ec::parse_error, "failed to parse module name",
+                           module_name.error());
+  parse_result.module.name = std::move(*module_name);
+  auto module_description = parse_module_description(module_declaration);
+  if (!module_description)
+    return caf::make_error(ec::parse_error,
+                           "failed to parse module description",
+                           module_description.error());
+  parse_result.module.description = std::move(*module_description);
+  auto module_references = parse_module_references(module_declaration);
+  if (!module_references)
+    return caf::make_error(ec::parse_error, "failed to parse module references",
+                           module_references.error());
+  parse_result.module.references = std::move(*module_references);
+  auto module_types = parse_module_types(module_declaration);
+  if (!module_types)
+    return caf::make_error(ec::parse_error, "failed to parse types in module",
+                           module_types.error());
+  parse_result.parsed_types = std::move(*module_types);
+  // resolve types
   std::vector<type> resolved_types;
   // Move parsed items that are already resolved to resolved types.
-  const auto resolved_items = std::stable_partition(
-    parsed_types.begin(), parsed_types.end(), [](const auto& current_type) {
-      return !current_type.providers.empty();
-    });
-  // FIXME: insert / backinserter / moveiterator
-  for (auto i = resolved_items; i < parsed_types.end(); i++)
+  const auto resolved_items
+    = std::stable_partition(parse_result.parsed_types.begin(),
+                            parse_result.parsed_types.end(),
+                            [](const auto& current_type) {
+                              return !current_type.providers.empty();
+                            });
+  for (auto i = resolved_items; i < parse_result.parsed_types.end(); i++)
     resolved_types.push_back(i->parsed);
-  parsed_types.erase(resolved_items, parsed_types.end());
+  parse_result.parsed_types.erase(resolved_items,
+                                  parse_result.parsed_types.end());
   /*  for (auto& parsed_type : parsed_types) {
     VAST_ERROR("Unresolved: {}", parsed_type.parsed);
     for (auto& provider : parsed_type.providers) {
@@ -830,7 +931,7 @@ caf::expected<module_ng2> to_module2(const data& raw_module) {
     }
     }*/
   // Remove dependencies already resolved
-  for (auto& parsed_type : parsed_types) {
+  for (auto& parsed_type : parse_result.parsed_types) {
     std::erase_if(parsed_type.providers, [&](const auto& current_provider) {
       return std::any_of(resolved_types.begin(), resolved_types.end(),
                          [&](const auto& resolved_type) {
@@ -840,15 +941,16 @@ caf::expected<module_ng2> to_module2(const data& raw_module) {
   }
   // From this point on parsed types contain only types that need to be
   // resolved.
-  VAST_TRACE("Before resolving {}", parsed_types.empty());
+  VAST_TRACE("Before resolving {}", parse_result.parsed_types.empty());
   resolution_manager manager{};
   // FIXME: Validate that all dependency can be resolved (all proveders are
   // amongst  parsed.names)
   // FIXME: Validate that there are no duplicates
   // FIXME: Check for circular dependencies
-  while (!parsed_types.empty()) {
+  while (!parse_result.parsed_types.empty()) {
     // FIXME: In case of an invalid schema parsed_types may never get empty!
-    const auto type_to_resolve = manager.next_to_resolve(parsed_types);
+    const auto type_to_resolve
+      = manager.next_to_resolve(parse_result.parsed_types);
     if (!type_to_resolve)
       return caf::make_error(ec::parse_error,
                              "failed to determine the next type to resolve",
@@ -863,20 +965,21 @@ caf::expected<module_ng2> to_module2(const data& raw_module) {
                                          type_to_resolve->parsed),
                              resolve_result.error());
     const auto& resolved_type = *resolve_result;
-    std::erase_if(parsed_types, [&](const auto& current_type) {
+    std::erase_if(parse_result.parsed_types, [&](const auto& current_type) {
       return current_type.parsed.name() == resolved_type.name();
     });
     VAST_TRACE("Resolved: {}", resolved_type.name());
     resolved_types.push_back(resolved_type);
     // Remove the resolved dependency
-    for (auto& parsed_type : parsed_types) {
+    for (auto& parsed_type : parse_result.parsed_types) {
       std::erase_if(parsed_type.providers, [&](const auto& current) {
         return current == resolved_type.name();
       });
     }
     manager.resolved();
   }
-  return module_ng2{.types = resolved_types};
+  parse_result.module.types = std::move(resolved_types);
+  return std::move(parse_result.module);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -983,42 +1086,47 @@ caf::error convert(const record&, type&, const symbol_table_ng&) {
 /////////////////////////////////////////////////////////////////////////////
 
 TEST(Parsing string type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {"string_field1", "string"},
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {"string_field1", "string"},
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_result
-    = module_ng2{.types = {
+    = module_ng2{.name = "test",
+                 .types = {
                    type{"string_field1", string_type{}},
                  }};
   CHECK_EQUAL(result, expected_result);
-  const auto declaration2 = record{{
-    "types",
-    record{
-      {
-        "string_field1",
-        record{{"type", "string"}},
-      },
-    },
-  }};
+  const auto declaration2 = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "string_field1",
+         record{{"type", "string"}},
+       },
+     }},
+  };
   const auto result2 = unbox(to_module2(declaration));
   CHECK_EQUAL(result2, expected_result);
-  const auto declaration3 = record{{
-    "types",
-    record{
-      {
-        "string_field2",
-        record{{"type", "string"},
-               {"attributes", list{"ioc", // record{{"ioc2", nullptr}},
-                                   record{{"index", "hash"}}}}},
-      },
-    },
-  }};
+  const auto declaration3 = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "string_field2",
+         record{{"type", "string"},
+                {"attributes", list{"ioc", // record{{"ioc2", nullptr}},
+                                    record{{"index", "hash"}}}}},
+       },
+     }},
+  };
   const auto result3 = unbox(to_module2(declaration3));
   const auto expected_result3 = module_ng2{
+    .name = "test",
     .types = {type{
       "string_field2", string_type{}, {{"ioc"}, {"index", "hash"}}, //, {"ioc2"}
     }}};
@@ -1026,188 +1134,210 @@ TEST(Parsing string type) {
 }
 
 TEST(parsing bool type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "bool_field",
-        record{{"type", "bool"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "bool_field",
+         record{{"type", "bool"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"bool_field", bool_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing integer type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "int_field",
-        record{{"type", "integer"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "int_field",
+         record{{"type", "integer"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"int_field", integer_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing count_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "count_field",
-        record{{"type", "count"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "count_field",
+         record{{"type", "count"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"count_field", count_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing real_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "real_field",
-        record{{"type", "real"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "real_field",
+         record{{"type", "real"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"real_field", real_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing duration_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "duration_field",
-        record{{"type", "duration"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "duration_field",
+         record{{"type", "duration"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_type
-    = module_ng2{.types = {
+    = module_ng2{.name = "test",
+                 .types = {
                    type{"duration_field", duration_type{}},
                  }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing time_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "time_field",
-        record{{"type", "time"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "time_field",
+         record{{"type", "time"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"time_field", time_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing string_type without attributes) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "string_field",
-        record{{"type", "string"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "string_field",
+         record{{"type", "string"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"string_field", string_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing pattern_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "pattern_field",
-        record{{"type", "pattern"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "pattern_field",
+         record{{"type", "pattern"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"pattern_field", pattern_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing address_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "address_field",
-        record{{"type", "addr"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "address_field",
+         record{{"type", "addr"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"address_field", address_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing subnet_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "subnet_field",
-        record{{"type", "subnet"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "subnet_field",
+         record{{"type", "subnet"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
+  const auto expected_type = module_ng2{.name = "test",
+                                        .types = {
                                           type{"subnet_field", subnet_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing enumeration_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "enum_field",
-        record{{"enum", list{"on", "off", "unknown"}}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "enum_field",
+         record{{"enum", list{"on", "off", "unknown"}}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_type = module_ng2{
+    .name = "test",
     .types = {
       type{"enum_field", enumeration_type{{"on"}, {"off"}, {"unknown"}}},
     }};
@@ -1215,38 +1345,42 @@ TEST(YAML Type - Parsing enumeration_type) {
 }
 
 TEST(YAML Type - Parsing list_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "list_field",
-        record{{"list", "count"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "list_field",
+         record{{"list", "count"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_type
-    = module_ng2{.types = {
+    = module_ng2{.name = "test",
+                 .types = {
                    type{"list_field", list_type{count_type{}}},
                  }};
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing map_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "map_field",
-        record{
-          {"map", record{{"key", "count"}, {"value", "string"}}},
-        },
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "map_field",
+         record{
+           {"map", record{{"key", "count"}, {"value", "string"}}},
+         },
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_type
-    = module_ng2{.types = {
+    = module_ng2{.name = "test",
+                 .types = {
                    type{
                      "map_field",
                      map_type{count_type{}, string_type{}},
@@ -1256,103 +1390,108 @@ TEST(YAML Type - Parsing map_type) {
 }
 
 TEST(YAML Type - Parsing record_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "record_field",
-        record{{
-          "record",
-          list{
-            record{{"src_ip", "string"}},
-            record{{"dst_ip", "string"}},
-          },
-        }},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "record_field",
+         record{{
+           "record",
+           list{
+             record{{"src_ip", "string"}},
+             record{{"dst_ip", "string"}},
+           },
+         }},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
-                                          type{
-                                            "record_field",
-                                            record_type{
-                                              {"src_ip", string_type{}},
-                                              {"dst_ip", string_type{}},
-                                            },
-                                          },
-                                        }};
+  const auto expected_type = module_ng2{
+    .name = "test",
+    .types = {type{
+      "record_field",
+      record_type{
+        {"src_ip", string_type{}},
+        {"dst_ip", string_type{}},
+      },
+    }},
+  };
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing inline record_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "record_field",
-        record{{"record",
-                list{
-                  record{{"source", record{{"type", "string"}}}},
-                  record{{"destination", record{{"type", "string"}}}},
-                }}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "record_field",
+         record{{"record",
+                 list{
+                   record{{"source", record{{"type", "string"}}}},
+                   record{{"destination", record{{"type", "strin"
+                                                          "g"}}}},
+                 }}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.types = {
-                                          type{
-                                            "record_field",
-                                            record_type{
-                                              {"source", string_type{}},
-                                              {"destination", string_type{}},
-                                            },
-                                          },
-                                        }};
+  const auto expected_type = module_ng2{
+    .name = "test",
+    .types = {type{
+      "record_field",
+      record_type{
+        {"source", string_type{}},
+        {"destination", string_type{}},
+      },
+    }},
+  };
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing inline record_type with attributes) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "record_field",
-        record{{
-          "record",
-          list{record{{
-                 "source",
-                 record{
-                   {"type", "string"},
-                   {"attributes", list{"originator"}},
-                 },
-               }},
-               record{
-                 {"destination",
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "record_field",
+         record{{
+           "record",
+           list{record{{
+                  "source",
                   record{
                     {"type", "string"},
-                    {"attributes", list{"responder"}},
-                  }},
-               }},
-        }},
-      },
-    },
-  }};
+                    {"attributes", list{"originator"}},
+                  },
+                }},
+                record{
+                  {"destination",
+                   record{
+                     {"type", "string"},
+                     {"attributes", list{"responder"}},
+                   }},
+                }},
+         }},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type
-    = module_ng2{.types = {
-                   type{
-                     "record_field",
-                     record_type{
-                       {"source", type{string_type{}, {{"originator"}}}},
-                       {"destination", type{string_type{}, {{"responder"}}}},
-                     },
-                   },
-                 }};
+  const auto expected_type = module_ng2{
+    .name = "test",
+    .types = {type{
+      "record_field",
+      record_type{
+        {"source", type{string_type{}, {{"originator"}}}},
+        {"destination", type{string_type{}, {{"responder"}}}},
+      },
+    }},
+  };
   CHECK_EQUAL(result, expected_type);
 }
 
 TEST(YAML Type - Parsing record algebra) {
-  ////////////////////////////////////////////
   const auto expected_base_record_type
     = type{"common", record_type{{"field", bool_type{}}}};
   const auto expected_record_algebra = type{
@@ -1377,119 +1516,125 @@ TEST(YAML Type - Parsing record algebra) {
       {"field", type{bool_type{}}},
     },
   };
-  ///////////////////////////////////////////
   // Base Record Algebra test
-  const auto record_algebra_from_yaml = record{{
-    "types",
-    record{
-      {
-        "common",
-        record{{
-          "record",
-          list{record{{"field", record{{"type", "bool"}}}}},
-        }},
-      },
-      {
-        "record_algebra_field",
-        record{{
-          "record",
-          record{
-            {"base", list{"common"}},
-            {"fields", list{record{{"field", "string"}}}},
-          },
-        }},
-      },
-      {
-        "record_algebra_field",
-        record{{
-          "record",
-          record{
-            {"extend", list{"common"}},
-            {"fields", list{record{{"field", "string"}}}},
-          },
-        }},
-      },
-      {
-        "record_algebra_field",
-        record{{
-          "record",
-          record{
-            {"implant", list{"common"}},
-            {"fields", list{record{{"field", "string"}}}},
-          },
-        }},
-      },
-      {
-        "record_algebra_field",
-        record{{
-          "record",
-          record{
-            {"base", list{"common"}},
-            {"fields", list{record{{"msg", "string"}}}},
-          },
-        }},
-      },
-    },
-  }};
+  const auto record_algebra_from_yaml = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "common",
+         record{{
+           "record",
+           list{record{{"field", record{{"type", "bool"}}}}},
+         }},
+       },
+       {
+         "record_algebra_field",
+         record{{
+           "record",
+           record{
+             {"base", list{"common"}},
+             {"fields", list{record{{"field", "string"}}}},
+           },
+         }},
+       },
+       {
+         "record_algebra_field",
+         record{{
+           "record",
+           record{
+             {"extend", list{"common"}},
+             {"fields", list{record{{"field", "string"}}}},
+           },
+         }},
+       },
+       {
+         "record_algebra_field",
+         record{{
+           "record",
+           record{
+             {"implant", list{"common"}},
+             {"fields", list{record{{"field", "string"}}}},
+           },
+         }},
+       },
+       {
+         "record_algebra_field",
+         record{{
+           "record",
+           record{
+             {"base", list{"common"}},
+             {"fields", list{record{{"msg", "string"}}}},
+           },
+         }},
+       },
+     }},
+  };
 }
 
 TEST(YAML Module) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "count_field",
-        record{{"type", "count"}},
-      },
-      {
-        "string_field",
-        record{{"type", "string"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "count_field",
+         record{{"type", "count"}},
+       },
+       {
+         "string_field",
+         record{{"type", "string"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_result
-    = module_ng2{.types = {type{"count_field", count_type{}},
+    = module_ng2{.name = "test",
+                 .types = {type{"count_field", count_type{}},
                            type{"string_field", string_type{}}}};
   CHECK_EQUAL(result, expected_result);
 }
 
 TEST(YAML Module - type alias) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "string_field",
-        record{{"type", "string"},
-               {"attributes", list{"ioc", record{{"index", "hash"}}}}},
-      },
-      {
-        "string_field_alias",
-        record{{"type", "string_field"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "string_field",
+         record{{"type", "string"},
+                {"attributes", list{"ioc", record{{"index", "has"
+                                                            "h"}}}}},
+       },
+       {
+         "string_field_alias",
+         record{{"type", "string_field"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_result = module_ng2{.types = {
-                                            type{
-                                              "string_field",
-                                              string_type{},
-                                              {{"ioc"}, {"index", "hash"}},
-                                            },
-                                            type{
-                                              "string_field_alias",
-                                              type{
-                                                "string_field",
-                                                string_type{},
-                                                {{"ioc"}, {"index", "hash"}},
-                                              },
-                                            },
-                                          }};
+  const auto expected_result = module_ng2{
+    .name = "test",
+    .types = {type{
+                "string_field",
+                string_type{},
+                {{"ioc"}, {"index", "hash"}},
+              },
+              type{
+                "string_field_alias",
+                type{
+                  "string_field",
+                  string_type{},
+                  {{"ioc"}, {"index", "hash"}},
+                },
+              }},
+  };
   CHECK_EQUAL(result, expected_result);
 }
 
 TEST(YAML Module - yaml alias node) {
-  const auto* const yaml = "types:\n"
+  const auto* const yaml = "module: test\n"
+                           "types:\n"
                            "  type1:\n"
                            "    list: &record1\n"
                            "      record:\n"
@@ -1509,6 +1654,7 @@ TEST(YAML Module - yaml alias node) {
   const auto declaration = unbox(from_yaml(yaml));
   const auto result = unbox(to_module2(declaration));
   const auto expected = module_ng2{
+    .name = "test",
     .types = {type{
                 "type1",
                 list_type{record_type{
@@ -1530,38 +1676,42 @@ TEST(YAML Module - yaml alias node) {
 }
 
 TEST(YAML Module - order independent parsing - type aliases) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "type1",
-        record{{"type", "type2"}},
-      },
-      {
-        "type2",
-        record{{"type", "string"}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "type1",
+         record{{"type", "type2"}},
+       },
+       {
+         "type2",
+         record{{"type", "string"}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_result
-    = module_ng2{.types = {type{"type2", string_type{}},
+    = module_ng2{.name = "test",
+                 .types = {type{"type2", string_type{}},
                            type{"type1", type{"type2", string_type{}}}}};
   CHECK_EQUAL(result, expected_result);
 }
 
 TEST(YAML Module - order independent parsing - type enumeration) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "enum_field",
-        record{{"enum", list{"on", "off", "unknown"}}},
-      },
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "enum_field",
+         record{{"enum", list{"on", "off", "unknown"}}},
+       },
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_result = module_ng2{
+    .name = "test",
     .types = {
       type{"enum_field", enumeration_type{{"on"}, {"off"}, {"unknown"}}},
     }};
@@ -1569,16 +1719,18 @@ TEST(YAML Module - order independent parsing - type enumeration) {
 }
 
 TEST(YAML Module - order independent parsing - list_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {"type1", record{{"list", "type2"}}},
-      {"type2", record{{"list", "type3"}}},
-      {"type3", record{{"type", "string"}}},
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {"type1", record{{"list", "type2"}}},
+       {"type2", record{{"list", "type3"}}},
+       {"type3", record{{"type", "string"}}},
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_result = module_ng2{
+    .name = "test",
     .types
     = {type{"type3", string_type{}},
        type{"type2", list_type{type{"type3", string_type{}}}},
@@ -1589,20 +1741,22 @@ TEST(YAML Module - order independent parsing - list_type) {
 }
 
 TEST(YAML Module - order indepenedent parsing - map_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {"map_type",
-       record{
-         {"map", record{{"key", "type1"}, {"value", "type2"}}},
-       }},
-      {"type1", record{{"type", "count"}}},
-      {"type2", record{{"type", "string"}}},
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {"map_type",
+        record{
+          {"map", record{{"key", "type1"}, {"value", "type2"}}},
+        }},
+       {"type1", record{{"type", "count"}}},
+       {"type2", record{{"type", "string"}}},
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_result
-    = module_ng2{.types = {
+    = module_ng2{.name = "test",
+                 .types = {
                    type{"type1", count_type{}},
                    type{"type2", string_type{}},
                    type{"map_type", map_type{type{"type1", count_type{}},
@@ -1610,20 +1764,22 @@ TEST(YAML Module - order indepenedent parsing - map_type) {
                  }};
   CHECK_EQUAL(result, expected_result);
   // both key and value depends on the same type
-  const auto declaration_same_key_and_value_type = record{{
-    "types",
-    record{
-      {"map_type",
-       record{
-         {"map", record{{"key", "type1"}, {"value", "type1"}}},
-       }},
-      {"type1", record{{"type", "string"}}},
-    },
-  }};
+  const auto declaration_same_key_and_value_type = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {"map_type",
+        record{
+          {"map", record{{"key", "type1"}, {"value", "type1"}}},
+        }},
+       {"type1", record{{"type", "string"}}},
+     }},
+  };
   const auto same_key_and_value_result
     = unbox(to_module2(declaration_same_key_and_value_type));
   const auto expected_same_key_and_value_result
-    = module_ng2{.types = {
+    = module_ng2{.name = "test",
+                 .types = {
                    type{"type1", string_type{}},
                    type{"map_type", map_type{type{"type1", string_type{}},
                                              type{"type1", string_type{}}}},
@@ -1632,33 +1788,35 @@ TEST(YAML Module - order indepenedent parsing - map_type) {
 }
 
 TEST(YAML Module - order indepenedent parsing - record_type) {
-  const auto declaration = record{{
-    "types",
-    record{
-      {
-        "record_field",
-        record{{"record",
-                list{
-                  record{
-                    {"source",
-                     record{
-                       {"type", "type2"},
-                     }},
-                  },
-                  record{
-                    {"destination",
-                     record{
-                       {"type", "type3"},
-                     }},
-                  },
-                }}},
-      },
-      {"type2", record{{"type", "string"}}},
-      {"type3", record{{"type", "string"}}},
-    },
-  }};
+  const auto declaration = record{
+    {"module", "test"},
+    {"types",
+     record{
+       {
+         "record_field",
+         record{{"record",
+                 list{
+                   record{
+                     {"source",
+                      record{
+                        {"type", "type2"},
+                      }},
+                   },
+                   record{
+                     {"destination",
+                      record{
+                        {"type", "type3"},
+                      }},
+                   },
+                 }}},
+       },
+       {"type2", record{{"type", "string"}}},
+       {"type3", record{{"type", "string"}}},
+     }},
+  };
   const auto result = unbox(to_module2(declaration));
   const auto expected_result = module_ng2{
+    .name = "test",
     .types = {
       type{"type2", string_type{}},
       type{"type3", string_type{}},
@@ -1669,19 +1827,112 @@ TEST(YAML Module - order indepenedent parsing - record_type) {
   CHECK_EQUAL(result, expected_result);
 }
 
-TEST(YAML Module - minima suricata sample) {
+TEST(YAML Module - name description references) {
+  // Normal case must succeed
+  const auto* normal_case
+    = "{ module: test, description: desc, references: [ref1, ref2]}";
+  const auto expected_normal_case = module_ng2{
+    .name = "test",
+    .description = "desc",
+    .references = {"ref1", "ref2"},
+  };
+  const auto normal_case_converted = unbox(from_yaml(normal_case));
+  CHECK_EQUAL(expected_normal_case, to_module2(normal_case_converted));
+  // Missing name must fail
+  const auto* missing_name = "{ description: desc, references: [ref1, ref2]}";
+  auto missing_name_converted = unbox(from_yaml(missing_name));
+  CHECK_ERROR(to_module2(missing_name_converted));
+  // Wrong name must fail
+  const auto* wrong_name
+    = "{ module: 42, description: desc, references: [ref1, ref2]}";
+  auto wrong_name_converted = unbox(from_yaml(wrong_name));
+  CHECK_ERROR(to_module2(wrong_name_converted));
+  // name without value must fail
+  const auto* no_value_name
+    = "{ module: , description: desc, references: [ref1, ref2]}";
+  auto no_value_name_converted = unbox(from_yaml(no_value_name));
+  CHECK_ERROR(to_module2(no_value_name_converted));
+  // Missing description must succeed
+  const auto* missing_description = "{ module: test, references: [ref1, ref2]}";
+  const auto expected_no_description = module_ng2{
+    .name = "test",
+    .description = "",
+    .references = {"ref1", "ref2"},
+  };
+  const auto missing_description_converted
+    = unbox(from_yaml(missing_description));
+  CHECK_EQUAL(expected_no_description,
+              to_module2(missing_description_converted));
+  // Description without value must succeed
+  const auto* no_value_description
+    = "{ module: test, description: , references: [ref1, ref2]}";
+  const auto no_value_description_converted
+    = unbox(from_yaml(no_value_description));
+  CHECK_EQUAL(expected_no_description,
+              to_module2(no_value_description_converted));
+  // Wrong description must fail
+  const auto* wrong_description
+    = "{ module: test, description: [list], references: [ref1, ref2]}";
+  auto wrong_description_converted = unbox(from_yaml(wrong_description));
+  CHECK_ERROR(to_module2(wrong_description_converted));
+  // Missing description must succeed
+  const auto* missing_references = "{ module: test, description: desc}";
+  const auto expected_no_references = module_ng2{
+    .name = "test",
+    .description = "desc",
+    .references = {},
+  };
+  const auto missing_references_converted
+    = unbox(from_yaml(missing_references));
+  CHECK_EQUAL(expected_no_references, to_module2(missing_references_converted));
+  // Wrong references must fail
+  const auto* wrong_references
+    = "{ module: test, description: desc, references: {url: ref1}}";
+  auto wrong_references_converted = unbox(from_yaml(wrong_references));
+  CHECK_ERROR(to_module2(wrong_references_converted));
+  // Empty references must succeed
+  const auto* empty_references
+    = "{ module: test, description: desc, references: []}";
+  const auto empty_references_converted = unbox(from_yaml(empty_references));
+  CHECK_EQUAL(expected_no_references, to_module2(empty_references_converted));
+  // References without value must succeed
+  const auto* no_value_references
+    = "{ module: test, description: desc, references:}";
+  const auto no_value_references_converted
+    = unbox(from_yaml(no_value_references));
+  CHECK_EQUAL(expected_no_references,
+              to_module2(no_value_references_converted));
+  // Wrong references must fail
+  const auto* wrong_reference
+    = "{ module: test, description: desc, references: [42]}";
+  auto wrong_reference_converted = unbox(from_yaml(wrong_reference));
+  CHECK_ERROR(to_module2(wrong_reference_converted));
+  // Reference without value is just skipped by the yaml parser so it works
+  const auto* no_value_reference
+    = "{ module: test, description: desc, references: [cool_site,]}";
+  auto no_value_reference_converted = unbox(from_yaml(no_value_reference));
+  const auto expected_no_value_references = module_ng2{
+    .name = "test",
+    .description = "desc",
+    .references = {"cool_site"},
+  };
+  CHECK_EQUAL(expected_no_value_references,
+              to_module2(no_value_reference_converted));
+}
+
+TEST(YAML Module - minimal suricata sample) {
   const auto* suricata_yaml
-    = "#module: suricata\n"
-      "#\n"
-      "#description: >-\n"
-      "#  Suricata is an open-source threat detection engine, combining\n"
-      "#  intrusion  detection (IDS), intrusion prevention (IPS), network\n"
-      "#  security monitoring (NSM) and PCAP processing.\n"
-      "#\n"
-      "#references:\n"
-      "#  - 'https://suricata.io/'\n"
-      "#  - 'https://github.com/OISF/suricata'\n"
-      "#\n"
+    = "module: suricata\n"
+      "\n"
+      "description: >-\n"
+      "  Suricata is an open-source threat detection engine, combining\n"
+      "  intrusion  detection (IDS), intrusion prevention (IPS), network\n"
+      "  security monitoring (NSM) and PCAP processing.\n"
+      "\n"
+      "references:\n"
+      "  - 'https://suricata.io/'\n"
+      "  - 'https://github.com/OISF/suricata'\n"
+      "\n"
       "types:\n"
       "  count_id:\n"
       "    type: count\n"
@@ -1991,6 +2242,7 @@ TEST(YAML Module - minima suricata sample) {
 TEST(YAML Module - order independent parsing - record algebra) {
   // Creating a base record for later Record Algebra tests.
   const auto base_record_declaration = record{
+    {"module", "test"},
     {"types",
      record{
        {"record_algebra_field",
@@ -2000,11 +2252,13 @@ TEST(YAML Module - order independent parsing - record algebra) {
                   {"fields", list{record{{"msg", "string"}}}},
                 }}}},
        {"common",
-        record{{"record", list{record{{"field", record{{"type", "bool"}}}}}}}},
+        record{{"record", list{record{{"field", record{{"type", "boo"
+                                                                "l"}}}}}}}},
      }}};
   const auto result = unbox(to_module2(base_record_declaration));
   const auto expected_result
-    = module_ng2{.types = {
+    = module_ng2{.name = "test",
+                 .types = {
                    type{"common", record_type{{"field", bool_type{}}}},
                    type{"record_algebra_field",
                         record_type{
@@ -2015,6 +2269,7 @@ TEST(YAML Module - order independent parsing - record algebra) {
   CHECK_EQUAL(result, expected_result);
   // Base Record Algebra test with name clash
   const auto clashing_base_record_declaration = record{
+    {"module", "test"},
     {"types",
      record{
        {"record_algebra_field",
@@ -2032,6 +2287,7 @@ TEST(YAML Module - order independent parsing - record algebra) {
   CHECK_ERROR(clashing_record_algebra);
   // Extend Record Algebra test with name clash
   const auto clashing_extend_record_algebra_from_yaml = record{
+    {"module", "test"},
     {"types",
      record{
        {"record_algebra_field",
@@ -2047,7 +2303,8 @@ TEST(YAML Module - order independent parsing - record algebra) {
   const auto extended_record_algebra
     = unbox(to_module2(clashing_extend_record_algebra_from_yaml));
   const auto expected_extended_record_algebra
-    = module_ng2{.types = {
+    = module_ng2{.name = "test",
+                 .types = {
                    type{"common", record_type{{"msg", bool_type{}}}},
                    type{"record_algebra_field",
                         record_type{
@@ -2057,6 +2314,7 @@ TEST(YAML Module - order independent parsing - record algebra) {
   CHECK_EQUAL(extended_record_algebra, expected_extended_record_algebra);
   // Implant Record Algebra test with name clash
   const auto clashing_implant_record_algebra_from_yaml = record{
+    {"module", "test"},
     {"types",
      record{
        {"record_algebra_field",
@@ -2071,14 +2329,16 @@ TEST(YAML Module - order independent parsing - record algebra) {
   };
   const auto implanted_record_algebra
     = unbox(to_module2(clashing_implant_record_algebra_from_yaml));
-  const auto expected_implanted_record_algebra
-    = module_ng2{.types = {
-                   type{"common", record_type{{"msg", bool_type{}}}},
-                   type{"record_algebra_field",
-                        record_type{
-                          {"msg", bool_type{}},
-                        }},
-                 }};
+  const auto expected_implanted_record_algebra = module_ng2{
+    .name = "test",
+    .description = "",
+    .references = {},
+    .types = {type{"common", record_type{{"msg", bool_type{}}}},
+              type{"record_algebra_field",
+                   record_type{
+                     {"msg", bool_type{}},
+                   }}},
+  };
   CHECK_EQUAL(implanted_record_algebra, expected_implanted_record_algebra);
 }
 
