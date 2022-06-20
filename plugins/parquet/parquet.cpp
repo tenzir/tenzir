@@ -97,6 +97,9 @@ struct store_state {
   using request
     = std::tuple<vast::query, caf::typed_response_promise<uint64_t>>;
   std::vector<request> deferred_requests_ = {};
+
+  /// Plugin configuration.
+  configuration config_;
 };
 
 system::store_builder_actor::behavior_type store_builder(
@@ -107,7 +110,8 @@ system::store_builder_actor::behavior_type store_builder(
 system::store_actor::behavior_type
 store(system::store_actor::stateful_pointer<store_state> self,
       const system::accountant_actor& accountant,
-      const system::filesystem_actor& fs, const uuid& id);
+      const system::filesystem_actor& fs, const uuid& id,
+      const configuration& config);
 
 /// The plugin entrypoint for the parquet store plugin.
 class plugin final : public store_plugin {
@@ -157,7 +161,7 @@ public:
                                                    "single uuid");
     auto id = uuid(std::span<const std::byte, uuid::num_bytes>(header.data(),
                                                                header.size()));
-    return fs.home_system().spawn(store, accountant, fs, id);
+    return fs.home_system().spawn(store, accountant, fs, id, config_);
   }
 
 private:
@@ -368,28 +372,50 @@ align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
   return new_table;
 }
 
-/// Transform a record batch into a table slice
-/// The record batch contains a message envelope with the actual event data
-/// alongside VAST-related meta data (currently limited to the import time).
-/// Message envelope is unwrapped and the import time is attached to the table
-/// slice metadata, using the maximum of all import timestamps.
-table_slice create_table_slice(const std::shared_ptr<arrow::RecordBatch>& rb) {
-  auto time_col = rb->GetColumnByName("import_time");
+auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
   auto min_max_time = arrow::compute::MinMax(time_col).ValueOrDie();
   auto max_value = min_max_time.scalar_as<arrow::StructScalar>().value[1];
+  auto f = detail::overload{
+    [&](const arrow::TimestampScalar& ts) -> vast::time {
+      return time{duration{ts.value}};
+    },
+    [&](const arrow::Scalar& scalar) -> vast::time {
+      die(fmt::format("import_time is not a time column, got {} instead",
+                      scalar.type->ToString()));
+      return time{duration{0}};
+    },
+  };
+  return caf::visit(f, *max_value);
+} // namespace vast::plugins::parquet
+
+/// Extract event column from record batch and transform into new record batch.
+/// The record batch contains a message envelope with the actual event data
+/// alongside VAST-related meta data (currently limited to the import time).
+/// Message envelope is unwrapped and the metadata, attached to the to-level
+/// schema the input record batch is copied to the newly created record batch.
+std::shared_ptr<arrow::RecordBatch>
+prepare_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
   auto event_col = rb->GetColumnByName("event");
   auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
   auto event_rb = arrow::RecordBatch::FromStructArray(event_col).ValueOrDie();
-  auto slice = arrow_table_slice_builder::create(
-    event_rb->ReplaceSchemaMetadata(schema_metadata));
-  auto f = detail::overload{
-    [&](const arrow::TimestampScalar& ts) -> void {
-      slice.import_time(vast::time{duration{ts.value}});
-    },
-    [&](const arrow::Scalar&) -> void {},
-  };
-  caf::visit(f, *max_value);
-  return slice;
+  return event_rb->ReplaceSchemaMetadata(schema_metadata);
+}
+
+std::vector<table_slice>
+create_table_slices(const std::shared_ptr<arrow::RecordBatch>& rb,
+                    int64_t max_slice_size) {
+  auto final_rb = prepare_record_batch(rb);
+  auto time_col = rb->GetColumnByName("import_time");
+  auto slices = std::vector<table_slice>{};
+  slices.reserve(rb->num_rows() / max_slice_size + 1);
+  for (int64_t offset = 0; offset < rb->num_rows(); offset += max_slice_size) {
+    auto rb_sliced = final_rb->Slice(offset, max_slice_size);
+    auto slice = arrow_table_slice_builder::create(rb_sliced);
+    slice.import_time(
+      derive_import_time(time_col->Slice(offset, max_slice_size)));
+    slices.push_back(slice);
+  }
+  return slices;
 }
 
 // Handler for `vast::query` that is shared between active and passive stores.
@@ -491,11 +517,9 @@ auto add_table_slices(
   };
 }
 
-std::shared_ptr<::parquet::WriterProperties>
-writer_properties(const configuration& config) {
+std::shared_ptr<::parquet::WriterProperties> writer_properties() {
   auto builder = ::parquet::WriterProperties::Builder{};
   builder.created_by("VAST")
-    ->max_row_group_length(detail::narrow_cast<int64_t>(config.row_group_size))
     ->enable_dictionary()
     ->compression(::parquet::Compression::ZSTD)
     ->compression_level(9)
@@ -536,14 +560,13 @@ auto create_record_batch(const table_slice& slice)
   return new_rb;
 }
 
-auto write_parquet_buffer(const std::vector<table_slice>& slices,
-                          configuration config) {
+auto write_parquet_buffer(const std::vector<table_slice>& slices) {
   auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto batches = arrow::RecordBatchVector{};
   for (const auto& slice : slices)
     batches.push_back(create_record_batch(slice));
   auto table = arrow::Table::FromRecordBatches(batches).ValueOrDie();
-  auto writer_props = writer_properties(config);
+  auto writer_props = writer_properties();
   auto arrow_writer_props = arrow_writer_properties();
   auto status
     = ::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink,
@@ -555,8 +578,7 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices,
 auto finish_parquet(
   system::store_builder_actor::stateful_pointer<store_builder_state> self) {
   return [self](caf::unit_t&, const caf::error&) {
-    auto buffer
-      = write_parquet_buffer(self->state.table_slices_, self->state.config_);
+    auto buffer = write_parquet_buffer(self->state.table_slices_);
     VAST_TRACE("{} writing partition {} with {} events in {} table slices, ",
                *self, self->state.id_, self->state.num_rows_,
                self->state.table_slices_.size());
@@ -582,12 +604,14 @@ auto finish_parquet(
 system::store_actor::behavior_type
 store(system::store_actor::stateful_pointer<store_state> self,
       const system::accountant_actor& accountant,
-      const system::filesystem_actor& fs, const uuid& id) {
+      const system::filesystem_actor& fs, const uuid& id,
+      const configuration& config) {
   self->state.self_ = self;
   self->state.id_ = id;
   self->state.accountant_ = accountant;
   self->state.fs_ = fs;
   self->state.path_ = store_path_for_partition(id);
+  self->state.config_ = config;
   self->request(self->state.fs_, caf::infinite, atom::mmap_v, self->state.path_)
     .then(
       [self](const chunk_ptr& chunk) {
@@ -601,7 +625,11 @@ store(system::store_actor::stateful_pointer<store_state> self,
                                                   "batch: "
                                                   "{} ",
                                                   rb.status().ToString())));
-            table_slices.push_back(create_table_slice(*rb));
+            auto slices
+              = create_table_slices(*rb, detail::narrow_cast<int64_t>(
+                                           self->state.config_.row_group_size));
+            for (const auto& slice : slices)
+              table_slices.push_back(slice);
             self->state.num_rows_ += (*rb)->num_rows();
           }
           self->state.table_slices_ = std::move(table_slices);
