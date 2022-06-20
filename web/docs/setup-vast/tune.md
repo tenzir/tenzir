@@ -192,14 +192,16 @@ partitions.
 This is how you run it:
 
 ```bash
-vast rebuild [--all] [--parallel=<number>] [<expression>]
+vast rebuild [--all] [--undersized] [--parallel=<number>] [<expression>]
 ```
 
 The on-disk format of VAST's partitions is versioned. By default, the `rebuild`
 command only considers partitions whose version number is not the newest
 version. The `--all` flag makes the command instead consider _all_ partitions
 rather than only outdated ones. This is useful when you change configuration
-options and want to regenerate all partitions.
+options and want to regenerate all partitions. The `--undersized` flag causes
+VAST to only rebuild partitions that are under the configured partition size
+limit.
 
 The `--parallel` options is a performance tuning knob. The parallelism level
 controls how many sets of partitions to rebuild in parallel. This value defaults

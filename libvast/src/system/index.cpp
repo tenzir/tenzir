@@ -1327,29 +1327,12 @@ index(index_actor::stateful_pointer<index_state> self,
         auto corrected_old_partition_ids = std::vector<uuid>{};
         corrected_old_partition_ids.reserve(old_partition_ids.size());
         for (const auto& partition : old_partition_ids) {
-          const auto match = std::find_if(
-            self->state.partitions_in_transformation.begin(),
-            self->state.partitions_in_transformation.end(),
-            [&](const auto& partition_in_transformation) noexcept {
-              return partition == partition_in_transformation.first;
-            });
-          if (match == self->state.partitions_in_transformation.end()) {
+          if (self->state.partitions_in_transformation.insert(partition).second) {
             corrected_old_partition_ids.push_back(partition);
-            self->state.partitions_in_transformation[partition]
-              = current_sender->address();
-          } else if (match->second == current_sender->address()) {
-            // Getting overlapping partitions from the same sender is a hard
-            // error. This indicates a logic error upstream.
-            return caf::make_error(
-              ec::logic_error,
-              fmt::format("{} refuses to apply transformation '{}' to "
-                          "partition {} because it is currently being "
-                          "transformed by the same sender",
-                          *self, transform->name(), partition));
           } else {
-            // Getting overlapping partitions from different senders triggers a
-            // warning, and we silently ignore the partition at the cost of the
-            // transformation being less efficient.
+            // Getting overlapping partitions triggers a warning, and we
+            // silently ignore the partition at the cost of the transformation
+            // being less efficient.
             // TODO: Implement some synchronization mechanism for partition
             // erasure so rebuild, compaction, and aging can properly
             // synchronize.
