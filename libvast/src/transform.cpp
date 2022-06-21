@@ -68,13 +68,16 @@ caf::expected<std::vector<table_slice>> transform::finish() {
   if (!finished)
     return std::move(finished.error());
   result.reserve(finished->size());
-  VAST_ASSERT(is_aggregate() || finished->size() == import_timestamps_.size());
-  for (size_t i = 0; auto& [layout, batch] : *finished) {
-    auto& slice = result.emplace_back(batch);
-    if (is_aggregate())
+  if (is_aggregate() || finished->size() != import_timestamps_.size()) {
+    for (auto& [layout, batch] : *finished) {
+      auto& slice = result.emplace_back(batch);
       slice.import_time(import_timestamps_.back());
-    else
+    }
+  } else {
+    for (size_t i = 0; auto& [layout, batch] : *finished) {
+      auto& slice = result.emplace_back(batch);
       slice.import_time(import_timestamps_[i++]);
+    }
   }
   import_timestamps_.clear();
   return result;
