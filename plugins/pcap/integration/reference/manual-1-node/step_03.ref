@@ -4,7 +4,8 @@
   },
   "layouts": {
     "pcap.packet": {
-      "count": 1000
+      "count": 1000,
+      "percentage": 100
     }
   }
 }
