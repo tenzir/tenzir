@@ -33,7 +33,7 @@ resource "aws_cloudtrail" "object_events" {
   is_multi_region_trail = false
 
   advanced_event_selector {
-    name = "New Cloudtrail S3 objects"
+    name = "New objects in ${var.bucket_name}"
 
     field_selector {
       field  = "eventCategory"
