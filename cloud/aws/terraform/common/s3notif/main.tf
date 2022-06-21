@@ -60,8 +60,8 @@ resource "aws_cloudtrail" "object_events" {
 }
 
 resource "aws_s3_bucket_policy" "object_event_target" {
-  bucket   = aws_s3_bucket.object_event_target.id
-  policy   = <<EOF
+  bucket = aws_s3_bucket.object_event_target.id
+  policy = <<EOF
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -89,7 +89,7 @@ EOF
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "object_event_target" {
-  bucket   = aws_s3_bucket.object_event_target.id
+  bucket = aws_s3_bucket.object_event_target.id
   rule {
     expiration {
       days = 1
