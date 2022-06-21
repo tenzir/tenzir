@@ -1,0 +1,52 @@
+// For more information, refer to the official log event reference:
+// -> https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html
+
+type aws.flowlogs = record {
+  // from v2:
+  version: int,
+  "account-id": string,
+  "interface-id": string,
+  srcaddr: addr,
+  dstaddr: addr,
+  srcport: int,
+  dstport: int,
+  protocol: int,
+  packets: int,
+  bytes: int,
+  start: int,
+  end: int,
+  action: enum{
+    ACCEPT,
+    REJECT,
+  },
+  "log-status": enum{
+    OK,
+    NODATA,
+    SKIPDATA,
+  },
+  // from v3:
+  "vpc-id": string,
+  "subnet-id": string,
+  "instance-id": string,
+  "tcp-flags": int,
+  type: enum{
+    IPv4,
+    IPv6,
+    EFA,
+  },
+  "pkt-srcaddr": addr,
+  "pkt-dstaddr": addr,
+  // from v4:
+  region: string,
+  "az-id": string,
+  "sublocation-type": string,
+  "sublocation-id": string,
+  // from v5:
+  "pkt-src-aws-service": string,
+  "pkt-dst-aws-service": string,
+  "flow-direction": enum{
+    ingress,
+    egress,
+  },
+  "traffic-path": int,
+}

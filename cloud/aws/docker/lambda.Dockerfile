@@ -40,7 +40,7 @@ RUN ln -s $PWD/aws-cli/v2/current/dist/aws /usr/local/bin/aws && \
 USER vast:vast
 
 COPY lambda-handler.py .
-COPY cloudtrail.schema /opt/tenzir/vast/etc/vast/schema/types/
+COPY schema/* /opt/tenzir/vast/etc/vast/schema/types/
 
 ENTRYPOINT [ "/usr/bin/python3.9", "-m", "awslambdaric" ]
 CMD [ "lambda-handler.handler" ]

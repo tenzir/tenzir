@@ -1,6 +1,7 @@
 from invoke import task, Context, Exit, Program, Collection
 import integration
 import cloudtrail
+import flowlogs
 import boto3
 import botocore.client
 import dynaconf
@@ -17,6 +18,10 @@ VALIDATORS = [
     dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
     dynaconf.Validator("VAST_SERVER_STORAGE_TYPE", default="EFS"),
 ]
+
+CMD_HELP = {
+    "cmd": "A bash command to be executed. We recommand wrapping it with single quotes to avoid unexpected interpolations."
+}
 
 
 def conf(validators=[]) -> dict:
@@ -255,7 +260,7 @@ def list_all_tasks(c):
     return task_ids
 
 
-@task(autoprint=True)
+@task(autoprint=True, help=CMD_HELP)
 def run_lambda(c, cmd):
     """Run ad-hoc VAST client commands from AWS Lambda"""
     lambda_name = terraform_output(c, "core-2", "vast_lambda_name")
@@ -272,7 +277,7 @@ def run_lambda(c, cmd):
     return res
 
 
-@task
+@task(help=CMD_HELP)
 def execute_command(c, cmd="/bin/bash"):
     """Run ad-hoc or interactive commands from the VAST server Fargate task"""
     task_id = get_vast_server(c)
@@ -336,6 +341,9 @@ if __name__ == "__main__":
 
     ct = Collection.from_module(cloudtrail)
     namespace.add_collection(ct)
+
+    fl = Collection.from_module(flowlogs)
+    namespace.add_collection(fl)
 
     program = Program(
         binary="./vast-cloud",
