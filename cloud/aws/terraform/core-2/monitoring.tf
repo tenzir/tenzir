@@ -19,7 +19,7 @@ resource "aws_cloudwatch_log_metric_filter" "vast_server_rates" {
 }
 
 resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${module.env.module_name}-preset-${module.env.stage}"
+  dashboard_name = "${module.env.module_name}-preset-${module.env.stage}-${var.region_name}"
 
   dashboard_body = <<EOF
 {
