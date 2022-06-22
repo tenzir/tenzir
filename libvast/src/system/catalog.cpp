@@ -571,7 +571,8 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         VAST_ASSERT(synopsis);
         auto& [num_partitions, num_events]
           = num_partitions_and_events_per_schema_and_version[std::pair{
-            synopsis->schema.name(), synopsis->version}];
+            synopsis->schema ? synopsis->schema.name() : std::string_view{},
+            synopsis->version}];
         num_partitions += 1;
         num_events += synopsis->events;
       }
