@@ -22,7 +22,12 @@ locals {
 # Check that the provided buckets exists and is in the expected region
 resource "null_resource" "bucket-location-check" {
   provisioner "local-exec" {
-    command = "aws s3api get-bucket-location --bucket ${var.bucket_name} | grep ${var.region} || exit 1"
+    command = <<EOT
+aws s3api get-bucket-location --bucket ${var.bucket_name} \
+  | grep ${var.region} \
+  || echo 'Wrong region for source bucket' \
+  && exit 1
+    EOT
     when    = create
   }
 }
