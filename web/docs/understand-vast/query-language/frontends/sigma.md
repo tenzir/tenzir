@@ -128,18 +128,17 @@ Sigma predominantly offers rules with a focus on endpoint data, such as
 telemetry. While there exist rules for network-based detections (e.g., for
 DNS queries, SMB events, and Kerberos traffic), they receive less attention.
 
-As of Februrary 2021, the [rules][sigma-rules-2021-02] directory includes a
-total of 709 total `*.yml` files compared to 36 files in the `network`
-directory:
+As of June 2022, the [rules][sigma-rules-2022-06] directory includes a total of
+2,015 total `*.yml` files compared to 51 files in the `network` directory:
 
 ```bash
 find rules -name '*.yml' | wc -l
-709
+2015
 find rules/network -name '*.yml' | wc -l
-36
+51
 ```
 
-That is, network-based rules account only for **5%** of the total rules. This
+That is, network-based rules account only for **2.5%** of the total rules. This
 illustrates the emphasis of the community and project authors, who have strong
 background in endpoint detection.
 
@@ -149,4 +148,4 @@ natively supporting Sigma in VAST, we are looking forward to offer a platform
 with detection capabilities on both ends of the spectrum.
 
 [sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
-[sigma-rules-2021-02]: https://github.com/SigmaHQ/sigma/tree/8ae8c213a97786e4e76e3094a50cd159498662f3/rules
+[sigma-rules-2022-06]: https://github.com/SigmaHQ/sigma/tree/d78818e27d42710f427eb205a9ca59b4ab97e728/rules
