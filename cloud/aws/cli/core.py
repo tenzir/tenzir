@@ -22,7 +22,8 @@ CMD_HELP = {
 
 
 def conf(validators=[]) -> dict:
-    """Load config starting with VAST_ from both env variables and .env file"""
+    """Load config starting with VAST_, TF_ or AWS_ from both env variables and
+    .env file"""
     dc = dynaconf.Dynaconf(
         load_dotenv=True,
         envvar_prefix=False,

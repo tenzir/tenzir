@@ -1,7 +1,7 @@
 generate "backend" {
-  path = "backend.generated.tf"
+  path      = "backend.generated.tf"
   if_exists = "overwrite"
-  contents = <<EOC
+  contents  = <<EOC
 terraform {
   cloud {
     organization = "${get_env("TF_ORGANIZATION")}"
