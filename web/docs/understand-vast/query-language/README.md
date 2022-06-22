@@ -1,8 +1,8 @@
 # Query Language
 
 VAST query language (or VASTQL) allows for flexible extraction of events. It
-is currently limited to the [expression language](expressions) to filter a
-subset of data.
+is currently limited to the [expression language](query-language/expressions) to
+filter a subset of data.
 
 ## Language Evolution
 
