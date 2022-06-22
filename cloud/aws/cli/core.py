@@ -274,7 +274,16 @@ def run_lambda(c, cmd):
     )
     resp_payload = lambda_res["Payload"].read().decode()
     if "FunctionError" in lambda_res:
-        mess = f'{lambda_res["FunctionError"]}: {resp_payload}'
+        # For command errors (the most likely ones), display the same object as
+        # for successful results. Otherwise display the raw error payload.
+        mess = resp_payload
+        try:
+            json_payload = json.loads(resp_payload)
+            if json_payload["errorType"] == "CommandException":
+                # CommandException is already JSON encoded
+                mess = json_payload["errorMessage"]
+        except Exception:
+            pass
         raise Exit(message=mess, code=1)
     return resp_payload
 

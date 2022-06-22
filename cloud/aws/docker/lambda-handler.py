@@ -4,6 +4,7 @@ import logging
 import base64
 import sys
 import io
+import json
 from threading import Thread
 
 logging.getLogger().setLevel(logging.INFO)
@@ -83,11 +84,12 @@ def handler(event, context):
     stderr = stderr_thread.join().strip()
     returncode = process.wait()
     logging.info("returncode: %s", returncode)
-
-    if returncode != 0:
-        raise CommandException(stderr)
-    return {
+    result = {
         "stdout": stdout,
         "stderr": stderr,
         "parsed_cmd": parsed_cmd,
+        "returncode": returncode,
     }
+    if returncode != 0:
+        raise CommandException(json.dumps(result))
+    return result
