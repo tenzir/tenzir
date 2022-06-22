@@ -78,6 +78,9 @@ private:
 
   /// The slices being transformed.
   std::deque<transform_batch> to_transform_;
+
+  /// The import timestamps collected since the last call to finish.
+  std::vector<time> import_timestamps_ = {};
 };
 
 class transformation_engine {
