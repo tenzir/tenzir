@@ -57,7 +57,6 @@ public:
 
     friend bool operator<(const entry& lhs, const entry& rhs) noexcept;
     friend bool operator==(const entry& lhs, const uuid& rhs) noexcept;
-    friend bool operator==(const uuid& lhs, const entry& rhs) noexcept;
   };
 
   // -- observers --------------------------------------------------------------

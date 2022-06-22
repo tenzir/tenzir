@@ -21,10 +21,6 @@ bool operator==(const query_queue::entry& lhs, const uuid& rhs) noexcept {
   return lhs.partition == rhs;
 }
 
-bool operator==(const uuid& lhs, const query_queue::entry& rhs) noexcept {
-  return lhs == rhs.partition;
-}
-
 size_t query_queue::num_partitions() const {
   return partitions.size() + inactive_partitions.size();
 }
@@ -81,9 +77,9 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
     if (it != partitions.end()) {
       it->priority += query_state_it->second.query.priority;
       it->queries.push_back(qid);
-      VAST_ASSERT_CHEAP(!detail::contains(inactive_partitions, cand),
-                        "A partition must not be active and inactive at the "
-                        "same time");
+      VAST_ASSERT(!detail::contains(inactive_partitions, cand),
+                  "A partition must not be active and inactive at the same "
+                  "time");
       continue;
     }
     it
