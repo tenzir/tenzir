@@ -55,9 +55,8 @@ public:
     std::vector<uuid> queries;
     bool erased = false;
 
-    friend auto operator<=>(const entry& lhs, const entry& rhs) {
-      return lhs.priority <=> rhs.priority;
-    }
+    friend bool operator<(const entry& lhs, const entry& rhs) noexcept;
+    friend bool operator==(const entry& lhs, const uuid& rhs) noexcept;
   };
 
   // -- observers --------------------------------------------------------------

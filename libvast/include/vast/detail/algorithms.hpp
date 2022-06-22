@@ -8,10 +8,26 @@
 
 #pragma once
 
+#include "vast/concepts.hpp"
+
 #include <algorithm>
 #include <vector>
 
 namespace vast::detail {
+
+template <class T>
+concept has_contains = requires(T& t, typename T::value_type& x) {
+  requires concepts::container<T>;
+  { t.contains(x) } -> std::convertible_to<bool>;
+};
+
+template <concepts::range T, class U>
+bool contains(const T& t, const U& x) {
+  if constexpr (has_contains<T>)
+    return t.contains(x);
+  else
+    return std::find(t.begin(), t.end(), x) != t.end();
+}
 
 template <class Collection>
 auto unique_values(const Collection& xs) {
