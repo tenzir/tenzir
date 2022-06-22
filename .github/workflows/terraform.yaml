@@ -64,7 +64,7 @@ jobs:
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
 
       - name: Configure Terraform Cloud
-        run: ./vast-cloud integration.config-tfcloud -a
+        run: ./vast-cloud tfcloud.config --auto
 
       - name: Deploy
         id: deploy
