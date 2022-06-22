@@ -25,7 +25,8 @@ template <concepts::range T, class U>
 bool contains(const T& t, const U& x) {
   if constexpr (has_contains<T>)
     return t.contains(x);
-  return std::find(t.begin(), t.end(), x) != t.end();
+  else
+    return std::find(t.begin(), t.end(), x) != t.end();
 }
 
 template <class Collection>
