@@ -13,8 +13,8 @@ type aws.flowlogs = record {
   protocol: int,
   packets: int,
   bytes: int,
-  start: int,
-  end: int,
+  start: timestamp,
+  end: time,
   action: enum{
     ACCEPT,
     REJECT,

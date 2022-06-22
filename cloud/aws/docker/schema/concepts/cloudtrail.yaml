@@ -1,0 +1,13 @@
+- concept:
+    name: net.src.ip
+    fields:
+      - aws.cloudtrail.sourceIPAddress
+- concept:
+    name: aws.account_id
+    fields:
+      - aws.cloudtrail.userIdentity.accountId
+      - aws.cloudtrail.userIdentity.sessionContext.sessionIssuer.accountId
+- concept:
+    name: aws.region
+    fields:
+      - aws.cloudtrail.awsRegion

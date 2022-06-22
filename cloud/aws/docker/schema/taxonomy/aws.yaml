@@ -1,0 +1,8 @@
+- concept:
+    name: aws.account_id
+    description: >-
+      The id of the AWS account
+- concept:
+    name: aws.region
+    description: >-
+      The region of the AWS datacenter

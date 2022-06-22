@@ -44,6 +44,7 @@ AWS_REGION = conf(VALIDATORS)["VAST_AWS_REGION"]
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
 
 CLOUDROOT = "."
+REPOROOT = "../.."
 TFDIR = f"{CLOUDROOT}/terraform"
 DOCKERDIR = f"{CLOUDROOT}/docker"
 
@@ -142,9 +143,8 @@ def deploy(c, auto_approve=False):
     deploy_step(c, "core-2", auto_approve)
 
 
-# This command is used by the Terragrunt hook
 @task(autoprint=True)
-def current_lambda_image(c, repo_arn):
+def current_image(c, repo_arn):
     """Get the current Lambda image URI. In case of failure, returns the error message instead of the URI."""
     try:
         tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
@@ -157,25 +157,29 @@ def current_lambda_image(c, repo_arn):
     return current
 
 
-@task
-def deploy_lambda_image(c):
-    """Build and push the lambda image, fails if step 1 is not deployed"""
-    image_url = terraform_output(c, "core-1", "vast_lambda_repository_url")
-    repo_arn = terraform_output(c, "core-1", "vast_lambda_repository_arn")
+@task(help={"type": "Can be either 'lambda' or 'fargate'"})
+def deploy_image(c, type):
+    """Build and push the image, fails if step 1 is not deployed"""
+    image_url = terraform_output(c, "core-1", f"vast_{type}_repository_url")
+    repo_arn = terraform_output(c, "core-1", f"vast_{type}_repository_arn")
     # get the digest of the current image
-    current_image = current_lambda_image(c, repo_arn)
     try:
-        c.run(f"docker pull {current_image}")
+        current_img = current_image(c, repo_arn)
+        c.run(f"docker pull {current_img}")
         old_digest = c.run(
-            f"docker inspect --format='{{{{.RepoDigests}}}}' {current_image}",
+            f"docker inspect --format='{{{{.RepoDigests}}}}' {current_img}",
             hide="out",
         ).stdout
     except:
         old_digest = "current-image-not-found"
     # build the image and get the new digest
     image_tag = int(time.time())
+    version = VAST_VERSION(c)
+    if version == "latest":
+        c.run(f"docker build -t tenzir/vast:{image_tag} {REPOROOT}")
+        version = image_tag
     c.run(
-        f"docker build --build-arg VAST_VERSION={VAST_VERSION(c)} -f {DOCKERDIR}/lambda.Dockerfile -t {image_url}:{image_tag} {DOCKERDIR}"
+        f"docker build --build-arg VAST_VERSION={version} -f {DOCKERDIR}/{type}.Dockerfile -t {image_url}:{image_tag} {DOCKERDIR}"
     )
     new_digest = c.run(
         f"docker inspect --format='{{{{.RepoDigests}}}}' {image_url}:{image_tag}",
@@ -187,9 +191,8 @@ def deploy_lambda_image(c):
         return
     # if a change occured, push and tag the new image as current
     c.run(f"docker push {image_url}:{image_tag}")
-    image_arn = terraform_output(c, "core-1", "vast_lambda_repository_arn")
     aws("ecr").tag_resource(
-        resourceArn=image_arn,
+        resourceArn=repo_arn,
         tags=[{"Key": "current", "Value": f"{image_url}:{image_tag}"}],
     )
 
