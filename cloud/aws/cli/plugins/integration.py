@@ -1,17 +1,11 @@
-from invoke import task, Context, Collection
+from invoke import task, Context
 import time
-import dynaconf
-import core
 import json
 import re
 import tfcloud
+from common import COMMON_VALIDATORS, conf
 
-VALIDATORS = [
-    dynaconf.Validator("TF_ORGANIZATION", must_exist=True),
-    dynaconf.Validator("TF_WORKSPACE_PREFIX", default="gh-act"),
-    dynaconf.Validator("TF_API_TOKEN", must_exist=True),
-    dynaconf.Validator("TF_STATE_BACKEND", default="local"),
-]
+VALIDATORS = COMMON_VALIDATORS
 
 INVOKE_CONFIG = {"run": {"env": {"VASTCLOUD_NOTTY": "1"}}}
 
@@ -20,7 +14,7 @@ INVOKE_CONFIG = {"run": {"env": {"VASTCLOUD_NOTTY": "1"}}}
 def list_modules(c):
     """List available Terragrunt modules"""
     deps = c.run(
-        """terragrunt graph-dependencies""", hide="out", env=core.conf(VALIDATORS)
+        """terragrunt graph-dependencies""", hide="out", env=conf(VALIDATORS)
     ).stdout
     return re.findall('terraform/(.*)" ;', deps)
 
@@ -41,7 +35,7 @@ the values you want to give to the environment variables"""
 )
 def config_tfcloud(c, auto=False):
     """Configure workspaces in your Terrraform Cloud account."""
-    conf = core.conf(VALIDATORS)
+    conf = conf(VALIDATORS)
     client = tfcloud.Client(
         conf["TF_ORGANIZATION"],
         conf["TF_API_TOKEN"],

@@ -6,14 +6,23 @@ import time
 import base64
 import json
 import io
+from common import (
+    COMMON_VALIDATORS,
+    conf,
+    TFDIR,
+    AWS_REGION,
+    auto_app_fmt,
+    REPOROOT,
+    DOCKERDIR,
+)
+
 
 VALIDATORS = [
-    dynaconf.Validator("VAST_AWS_REGION", must_exist=True),
+    *COMMON_VALIDATORS,
     dynaconf.Validator("VAST_CIDR", must_exist=True),
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True),
     dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
     dynaconf.Validator("VAST_SERVER_STORAGE_TYPE", default="EFS"),
-    dynaconf.Validator("TF_STATE_BACKEND", default="local"),
 ]
 
 CMD_HELP = {
@@ -21,30 +30,8 @@ CMD_HELP = {
 }
 
 
-def conf(validators=[]) -> dict:
-    """Load config starting with VAST_, TF_ or AWS_ from both env variables and
-    .env file"""
-    dc = dynaconf.Dynaconf(
-        load_dotenv=True,
-        envvar_prefix=False,
-        validators=validators,
-    )
-    return {
-        k: v
-        for (k, v) in dc.as_dict().items()
-        if k.startswith(("VAST_", "TF_", "AWS_"))
-    }
-
-
 ##  Aliases
-
-AWS_REGION = conf(VALIDATORS)["VAST_AWS_REGION"]
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
-
-CLOUDROOT = "."
-REPOROOT = "../.."
-TFDIR = f"{CLOUDROOT}/terraform"
-DOCKERDIR = f"{CLOUDROOT}/docker"
 
 
 ## Helper functions
@@ -77,13 +64,6 @@ def env(c: Context) -> dict:
         **conf(VALIDATORS),
         "VAST_VERSION": VAST_VERSION(c),
     }
-
-
-def auto_app_fmt(val: bool) -> str:
-    if val:
-        return "--terragrunt-non-interactive --auto-approve"
-    else:
-        return ""
 
 
 ## Tasks

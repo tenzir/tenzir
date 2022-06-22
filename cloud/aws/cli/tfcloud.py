@@ -28,6 +28,8 @@ def print_error_resp(func):
 
 
 class Client:
+    """A client with useful requests to the Terraform Cloud API"""
+
     def __init__(self, org: str, token: str):
         self.url = "https://app.terraform.io/api/v2"
         self.org_url = f"{self.url}/organizations/{org}"
