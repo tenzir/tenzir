@@ -165,8 +165,8 @@ This allows for quick type-based point queries, such as
 Value predicates of type `subnet` expand more broadly. Given a subnet
 `10.0.0.0/8`, the parser expands this to:
 
-```
-:subnet == 10.0.0.0/8 || :addr in 10.0.0.0/8`
+```c
+:subnet == 10.0.0.0/8 || :addr in 10.0.0.0/8
 ```
 
 This makes it easier to search for IP addresses belonging to a specific subnet.
