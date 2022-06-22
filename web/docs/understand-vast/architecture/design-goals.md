@@ -23,9 +23,9 @@ data-related design goals.
 
 ### Open Data Access
 
-In a world of black boxes exposed through a narrow API, many organizations has
-very limited access to their very own data. We want to build a system that gives
-the user full control over their own data, and freedom of choice for processing
+In a world of black boxes exposed through a narrow API, many organizations have
+limited access to their very own data. We want to build a system that gives
+the user full control over their data, and freedom of choice for processing
 tools.
 
 Importantly, data should not be encoded in a proprietary format. We do not want
@@ -35,8 +35,8 @@ applications on top.
 
 ### Rich and Strong Typing
 
-To accommodate the idioms of the security domain, an analytics engine be able to
-work with objects in the domain, without losing semantic information and
+To accommodate the idioms of the security domain, an analytics engine must be
+able to work with objects in the domain, without losing semantic information and
 degenerating the representation to a generic data model. Security analysts are
 not data engineers, and the goal should be avoiding context switches to
 lower-level implementation details when possible.
@@ -54,9 +54,9 @@ processing logic deeper into the system.
 
 ### Interoperability
 
-Having an open and flexible data model is not enough for building a platform
-system. The system must also come with extensible mechanisms to integrate with
-*other* systems. In fact, a platform should come with first-class support for
+Having an open and flexible data model is not enough for building a platform.
+The system must also come with extensible mechanisms to integrate with *other*
+systems. In fact, a platform should come with first-class support for
 simplifying integration with existing solutions.
 
 For example, this can mean offering multiple access mechanisms to the same data
@@ -97,7 +97,7 @@ activity of endpoints, the network, and cloud resources. This generates a
 never-ending torrent of telemetry at high event rates. Consequently, an
 analytics engine must be able to operate under a saturated write path (ingest).
 
-The read path (queries) should not be affected by the write path and scalable
-independently. At least conceptually. In certain deployment environments this is
+The read path (queries) should not be affected by the write path and scale
+independently, at least conceptually. In certain deployment environments this is
 not avoidable, e.g., when the I/O path to persistent storage is shared, or
 cannot handle well simultaneous read/write operations.

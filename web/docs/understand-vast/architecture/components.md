@@ -24,34 +24,43 @@ also did not show process boundaries in this diagram, as the actor model allows
 us to [draw them flexibly](actor-model#flexible-distribution), based on the
 requirements of the deployment environment.
 
+:::caution Work in Progress
+The implementation lags behind above sketched architecture in a few places. We
+describe the desired state here to expose the dataflow dependecies more clearly.
+For example, the query engine is not yet pluggable, LOADER and DUMPER are
+integrated into SOURCE and SINK, dense indexes are not yet configurable, and
+partition building currently still takes place within the query engine.
+:::
+
 ## Singleton Components
 
 Singleton components have a special restriction in that VAST can spawn at most
 one instance of them. This restriction exists because such a component mutates
-an underlying resource and therefore needs to enforce sequential access. (An
-actor does this by definition, because control flow within actor is sequential.)
+an underlying resource. To avoid data races in the presence of writes, wrapping
+the resources behind an actor implicitly squentializes accesses, given that
+actors process one message at a time.
 
 ### CATALOG
 
-The catalog is the central component that sits in both read and write path. It
+The catalog is the central component that sits both paths, read and write. It
 has the two key functions:
 
 1. **Partition Management**: the catalog is the owner of *partitions*, each of
    which consists of a concatenation of record batches encoded in a format
    suitable for persistence, plus optional sparse and dense indexes. Other
-   components can add and remove partitions. The catalog is the only component
-   that allows mutation as part of its interface.
+   components can add and remove partitions.
 2. **Query Entry Point**: user queries arrive at the catalog, which returns a
    set of candidate partitions for each query by looking up partition metadata
-   and, if available, performing sketch lookups. The result of query consists of
-   URI that points to the partition and a small amount of partition metadata.
-   The catalog also forwards a query to all partition builders for optimal
-   result freshness.
+   and, if available, performing lookups in sub-linear index structures (such
+   as Bloom filters). The query result consists of a URI that points to the
+   partition and a small amount of partition metadata. The catalog also forwards
+   a query to all active partitions to include data in partitions that
+   are still under construction.
 
 ### SCHEDULER
 
 The scheduler is the central component in the query engine that drives query
-execution. Scheduling concerns the loading and evicting in-memory partitions
+execution. Scheduling concerns the loading and evicting of in-memory partitions
 that can answer queries concurrently, with the goal to achieve minimum partition
 thrashing.
 
@@ -87,29 +96,26 @@ performs both I/O and subsequent input parsing.
 ### SOURCE
 
 The source transforms a stream of framed bytes into Arrow record batches, and
-then relays them to a partition builder. A source actor wraps a pluggable
+then relays them to an active partition. A source actor wraps a pluggable
 *reader* for a given input format, e.g., JSON, CSV, or PCAP.
 
-### PARTITION BUILDER
+### PARTITION
 
-The partition builder takes as input a sequence of Arrow record batches and
-turns them into partitions. There exists one builder per schema, so the stream
-of record batches gets demultiplexed over a set of builders. Each partition
-builder keeps writing record batches into its store until either a timeout fires
-or the store reaches a configured size. The builder then hands the ownership of
-the resulting partition the catalog and starts over with a new partition.
+There two types of partitions, *active* and *passive*, that share the same actor
+interface. The difference is that active partitions are mutable and in the
+process of being built, whereas passive partitions are immutable and only
+respond to query operations.
+
+The active partition takes as input a sequence of Arrow record batches until it
+is "full." There exists one partition instance per schema, so the stream of
+record batches gets demultiplexed over a set of actors. Each active partition
+keeps writing record batches into its store until either a timeout fires or the
+store reaches a configured size. The active partition then hands the ownership
+of the resulting partition the catalog and starts over with a new partition.
 
 In addition to translating the in-memory record batch representation into a
-persistent format, the partition builder also generates sparse and dense
-indexes to accelerate queries.
-
-:::note Not Yet Implemented
-Partition building as described above is not happening at this location in the
-dataflow pipeline, but deeper inside the query engine. Moreover, building of
-dense bitmap indexes also takes place elsewhere and is not yet configurable. We
-are in the process of refactoring this logic to match the described
-architecture.
-:::
+persistent format, the active partition also builds indexes to accelerate
+queries.
 
 ### QUERY
 
@@ -119,8 +125,8 @@ pull-based fashion, e.g., users can ask "give me 100 more results".
 
 ### SINK
 
-The sink transforms a stream Arrow record batches into a sequence of bytes using
-a pluggable *writer* for a given output format, e.g., JSON, CSV, or PCAP.
+The sink transforms a stream of Arrow record batches into a sequence of bytes
+using a pluggable *writer* for a given output format, e.g., JSON, CSV, or PCAP.
 
 ### DUMPER
 
