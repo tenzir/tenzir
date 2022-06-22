@@ -7,6 +7,7 @@ VALIDATORS = [
     dynaconf.Validator("VAST_AWS_REGION", must_exist=True),
     dynaconf.Validator("VAST_CLOUDTRAIL_BUCKET_NAME", must_exist=True),
     dynaconf.Validator("VAST_CLOUDTRAIL_BUCKET_REGION", must_exist=True),
+    dynaconf.Validator("TF_STATE_BACKEND", default="local"),
 ]
 
 INVOKE_CONFIG = {}

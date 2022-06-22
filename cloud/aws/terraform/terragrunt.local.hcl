@@ -1,7 +1,3 @@
-# We use Terragrunt to 
-# - DRY the Terraform config 
-# - Manage dependencies between modules
-
 remote_state {
   backend = "local"
   generate = {
