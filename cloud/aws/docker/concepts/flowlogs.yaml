@@ -21,7 +21,7 @@
 - concept:
     name: aws.account_id
     fields:
-      - aws.flowlogs."account-id"
+      - aws.flowlogs.account-id
 - concept:
     name: aws.region
     fields:

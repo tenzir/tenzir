@@ -30,3 +30,7 @@ The storage type that should be used for the VAST server task:
 variable "vast_lambda_image" {
   description = "The VAST Lambda Docker image in ECR"
 }
+
+variable "vast_server_image" {
+  description = "The VAST server Docker image in ECR"
+}

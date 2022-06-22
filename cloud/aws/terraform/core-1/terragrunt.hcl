@@ -3,9 +3,9 @@ include "root" {
 }
 
 terraform {
-  after_hook "deploy_lambda_image" {
+  after_hook "deploy_images" {
     commands = ["apply"]
-    execute  = ["../../vast-cloud", "docker-login", "deploy-lambda-image"]
+    execute  = ["../../vast-cloud", "docker-login", "deploy-image", "--type", "lambda", "deploy-image", "--type", "fargate"]
   }
 }
 

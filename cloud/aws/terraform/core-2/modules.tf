@@ -31,7 +31,7 @@ module "vast_server" {
   task_cpu    = 2048
   task_memory = 4096
 
-  docker_image        = "tenzir/vast:${var.vast_version}"
+  docker_image        = var.vast_server_image
   storage_type        = var.vast_server_storage_type
   storage_mount_point = "/var/lib/vast"
 

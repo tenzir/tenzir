@@ -48,7 +48,11 @@ resource "aws_iam_role_policy" "fargate_task_execution_policy" {
       "Action": [
         "logs:CreateLogStream",
         "logs:PutLogEvents",
-        "ecs:StartTelemetrySession"
+        "ecs:StartTelemetrySession",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:GetAuthorizationToken"
       ],
       "Resource": "*"
     }
