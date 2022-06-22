@@ -79,16 +79,15 @@ def handler(event, context):
         target=buff_and_print, args=(process.stderr, "stderr")
     )
     stderr_thread.start()
-    stdout = buff_and_print(process.stdout, "stdout")
-    stderr = stderr_thread.join()
+    stdout = buff_and_print(process.stdout, "stdout").strip()
+    stderr = stderr_thread.join().strip()
     returncode = process.wait()
     logging.info("returncode: %s", returncode)
 
-    # organize command output
     if returncode != 0:
         raise CommandException(stderr)
     return {
-        "stdout": stdout.strip(),
-        "stderr": stderr.strip(),
+        "stdout": stdout,
+        "stderr": stderr,
         "parsed_cmd": parsed_cmd,
     }
