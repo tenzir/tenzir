@@ -18,7 +18,7 @@ namespace vast::detail {
 template <class T>
 concept has_contains = requires(T& t, typename T::value_type& x) {
   requires concepts::container<T>;
-  requires t.contains(x);
+  { t.contains(x) } -> std::convertible_to<bool>;
 };
 
 template <concepts::range T, class U>
