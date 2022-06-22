@@ -20,6 +20,9 @@ locals {
 }
 
 # Check that the provided buckets exists and is in the expected region
-data "aws_s3_bucket" "selected" {
-  bucket = var.bucket_name
+resource "null_resource" "bucket-location-check" {
+  provisioner "local-exec" {
+    command = "aws s3api get-bucket-location --bucket ${var.bucket_name} | grep ${var.region} || exit 1"
+    when    = create
+  }
 }
