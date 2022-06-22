@@ -51,4 +51,4 @@ RUN pip install boto3 dynaconf invoke requests
 
 WORKDIR /vast/cloud/aws
 
-ENTRYPOINT [ "python", "./cli/core.py" ]
+ENTRYPOINT [ "python", "./cli/main.py" ]

@@ -1,14 +1,10 @@
-from invoke import task, Context, Exit, Program, Collection
-import integration
-import cloudtrail
-import flowlogs
+from invoke import task, Context, Exit
 import boto3
 import botocore.client
 import dynaconf
 import time
 import base64
 import json
-import sys
 import io
 
 VALIDATORS = [
@@ -324,33 +320,3 @@ def destroy(c, auto_approve=False):
         env=env(c),
         pty=True,
     )
-
-
-def unhandled_exception(type, value, traceback):
-    """Override for `sys.excepthook` without stack trace"""
-    print(f"{type.__name__}: {str(value)}")
-
-
-## Bootstrap
-
-if __name__ == "__main__":
-    sys.excepthook = unhandled_exception
-
-    namespace = Collection.from_module(sys.modules[__name__])
-
-    integ = Collection.from_module(integration)
-    integ.configure({"run": {"env": {"VASTCLOUD_NOTTY": "1"}}})
-    namespace.add_collection(integ)
-
-    ct = Collection.from_module(cloudtrail)
-    namespace.add_collection(ct)
-
-    fl = Collection.from_module(flowlogs)
-    namespace.add_collection(fl)
-
-    program = Program(
-        binary="./vast-cloud",
-        namespace=namespace,
-        version="0.1.0",
-    )
-    program.run()
