@@ -1,0 +1,87 @@
+// Notes:
+// - We avoid over-using the enum type to facilitate forward compatibility
+// - Some advanced embedded fields are left commented with their type containing the mention "TDB".
+//   Those can specified and added further down the road when usecases that require them arise.
+//
+// For more information, refer to the official log event reference:
+// -> https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-record-contents.html
+
+
+type aws.cloudtrail = record {
+  eventVersion: string,
+  eventTime: timestamp,
+  eventSource: string,
+  eventName: string,
+  awsRegion: string,
+  sourceIPAddress: addr, // warning, this can be a domain
+  requestID: string,
+  // type of event that generated this record
+  // most of the events are triggered through the API, even if it originates from an interaction with the console or another service
+  eventType: enum{
+    AwsApiCall,
+    AwsServiceEvent,
+    AwsConsoleAction,
+    AwsConsoleSignIn,
+    AwsCloudTrailInsight, // will not use [eventName,eventSource,sourceIPAddress,userAgent,userIdentity] fields
+  },
+  eventCategory: enum{
+    Management,
+    Data,
+    Insight,
+  },
+  // userIdentity will usually be sparsely filled according to the value set in the "type" field
+  // for instance for type=AWSService, only only invokedBy will be set with the calling service defined
+  userIdentity: record{
+    type: string, // one of [Root,IAMUser,AssumedRole,FederatedUser,Directory,AWSAccount,AWSService,Unknown]
+    userName: string,
+    principalId: string,
+    arn: string,
+    accountId: string,
+    accessKeyId: string,
+    invokedBy: string,
+    sessionContext: record{
+      sessionIssuer: record{
+        type: string, // one of [Root,IAMUser,Role]
+        userName: string,
+        principalId : string,
+        arn: string,
+        accountId: string,
+      },
+      attributes: record{
+        creationDate: timestamp,
+        mfaAuthenticated: bool,
+        sourceIdentity: string,
+      },
+      // webIdFederationData = record{},
+    },
+  },
+  userAgent: string,
+  errorCode: string,
+  errorMessage: string,
+  apiVersion: string,
+  managementEvent: bool,
+  readOnly: bool,
+  recipientAccountId: string,
+  sharedEventID: string,
+  vpcEndpointId: string,
+  sessionCredentialFromConsole: bool,
+  tlsDetails: record{
+    tlsVersion: string,
+    cipherSuite: string,
+    clientProvidedHostHeader: string,
+  },
+
+  // defined iif eventType=AwsServiceEvent
+  // serviceEventDetails: record{ TBD },
+
+  // defined iif eventType=AwsCloudTrailInsight
+  // insightDetails: record{ TBD },
+
+  // requestParameters: record{ TBD },
+  // responseElements: record{ TBD },
+  // edgeDeviceDetails: record{ TBD },
+  // addendum: record{ TBD },
+  // resources: list<record{ TBD }>,
+  // additionalEventData: record{ TBD },
+  
+}

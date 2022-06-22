@@ -1,0 +1,28 @@
+- concept:
+    name: net.src.ip
+    fields:
+      - aws.flowlogs.srcaddr
+- concept:
+    name: net.src.port
+    fields:
+      - aws.flowlogs.srcport
+- concept:
+    name: net.dst.ip
+    fields:
+      - aws.flowlogs.dstaddr
+- concept:
+    name: net.dst.port
+    fields:
+      - aws.flowlogs.dstport
+- concept:
+    name: net.proto
+    fields:
+      - aws.flowlogs.protocol
+- concept:
+    name: aws.account_id
+    fields:
+      - aws.flowlogs."account-id"
+- concept:
+    name: aws.region
+    fields:
+      - aws.flowlogs.region
