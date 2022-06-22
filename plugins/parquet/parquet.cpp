@@ -30,15 +30,17 @@ namespace vast::plugins::parquet {
 /// Configuration for the Parquet plugin.
 struct configuration {
   uint64_t row_group_size{::parquet::DEFAULT_MAX_ROW_GROUP_LENGTH};
+  int64_t zstd_compression_level{9};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.row_group_size);
+    return f(x.row_group_size, x.zstd_compression_level);
   }
 
   static const record_type& layout() noexcept {
     static auto result = record_type{
       {"row-group-size", count_type{}},
+      {"zstd-compression-level", integer_type{}},
     };
     return result;
   }
@@ -517,12 +519,13 @@ auto add_table_slices(
   };
 }
 
-std::shared_ptr<::parquet::WriterProperties> writer_properties() {
+std::shared_ptr<::parquet::WriterProperties>
+writer_properties(const configuration& config) {
   auto builder = ::parquet::WriterProperties::Builder{};
   builder.created_by("VAST")
     ->enable_dictionary()
     ->compression(::parquet::Compression::ZSTD)
-    ->compression_level(9)
+    ->compression_level(detail::narrow_cast<int>(config.zstd_compression_level))
     ->version(::parquet::ParquetVersion::PARQUET_2_6);
   return builder.build();
 }
@@ -560,13 +563,14 @@ auto create_record_batch(const table_slice& slice)
   return new_rb;
 }
 
-auto write_parquet_buffer(const std::vector<table_slice>& slices) {
+auto write_parquet_buffer(const std::vector<table_slice>& slices,
+                          const configuration& config) {
   auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto batches = arrow::RecordBatchVector{};
   for (const auto& slice : slices)
     batches.push_back(create_record_batch(slice));
   auto table = arrow::Table::FromRecordBatches(batches).ValueOrDie();
-  auto writer_props = writer_properties();
+  auto writer_props = writer_properties(config);
   auto arrow_writer_props = arrow_writer_properties();
   auto status
     = ::parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), sink,
@@ -578,7 +582,8 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices) {
 auto finish_parquet(
   system::store_builder_actor::stateful_pointer<store_builder_state> self) {
   return [self](caf::unit_t&, const caf::error&) {
-    auto buffer = write_parquet_buffer(self->state.table_slices_);
+    auto buffer
+      = write_parquet_buffer(self->state.table_slices_, self->state.config_);
     VAST_TRACE("{} writing partition {} with {} events in {} table slices, ",
                *self, self->state.id_, self->state.num_rows_,
                self->state.table_slices_.size());
