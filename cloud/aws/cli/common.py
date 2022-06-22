@@ -1,4 +1,7 @@
+from invoke import Context
 import dynaconf
+import json
+import re
 
 COMMON_VALIDATORS = [
     dynaconf.Validator("VAST_AWS_REGION", must_exist=True),
@@ -12,10 +15,12 @@ COMMON_VALIDATORS = [
     ),
 ]
 
+## Helper functions
+
 
 def conf(validators=[]) -> dict:
-    """Load config starting with VAST_, TF_ or AWS_ from both env variables and
-    .env file"""
+    """Load config starting with either VAST_, TF_ or AWS_ from both environment
+    variables and .env file"""
     dc = dynaconf.Dynaconf(
         load_dotenv=True,
         envvar_prefix=False,
@@ -28,16 +33,31 @@ def conf(validators=[]) -> dict:
     }
 
 
+def auto_app_fmt(val: bool) -> str:
+    """Format the CLI options for auto approve"""
+    if val:
+        return "--terragrunt-non-interactive --auto-approve"
+    else:
+        return ""
+
+
+def list_modules(c: Context):
+    """List available Terragrunt modules"""
+    deps = c.run(
+        """terragrunt graph-dependencies""", hide="out", env=conf(COMMON_VALIDATORS)
+    ).stdout
+    return re.findall('terraform/(.*)" ;', deps)
+
+
+def tf_version(c: Context):
+    """Terraform version used by the CLI"""
+    version_json = c.run("terraform version -json", hide="out").stdout
+    return json.loads(version_json)["terraform_version"]
+
+
 # Aliases
 AWS_REGION = conf(COMMON_VALIDATORS)["VAST_AWS_REGION"]
 CLOUDROOT = "."
 REPOROOT = "../.."
 TFDIR = f"{CLOUDROOT}/terraform"
 DOCKERDIR = f"{CLOUDROOT}/docker"
-
-
-def auto_app_fmt(val: bool) -> str:
-    if val:
-        return "--terragrunt-non-interactive --auto-approve"
-    else:
-        return ""
