@@ -62,16 +62,26 @@ caf::expected<std::vector<table_slice>> transform::finish() {
              steps_.size());
   auto guard = caf::detail::make_scope_guard([this]() {
     this->to_transform_.clear();
+    this->import_timestamps_.clear();
   });
   std::vector<table_slice> result{};
   auto finished = finish_batch();
   if (!finished)
     return std::move(finished.error());
+  if (finished->empty())
+    return result;
   result.reserve(finished->size());
+  // Wrap the batches into table slices and assign import timestamps.
+  // In case the numbers of input and output batches differ we use the
+  // maximum of the input timestamps, otherwise we assume the input and output
+  // streams are aligned.
   if (is_aggregate() || finished->size() != import_timestamps_.size()) {
+    VAST_ASSERT_CHEAP(!import_timestamps_.empty());
+    auto max_import_timestamp
+      = *std::max_element(import_timestamps_.begin(), import_timestamps_.end());
     for (auto& [layout, batch] : *finished) {
       auto& slice = result.emplace_back(batch);
-      slice.import_time(import_timestamps_.back());
+      slice.import_time(max_import_timestamp);
     }
   } else {
     for (size_t i = 0; auto& [layout, batch] : *finished) {
@@ -79,7 +89,6 @@ caf::expected<std::vector<table_slice>> transform::finish() {
       slice.import_time(import_timestamps_[i++]);
     }
   }
-  import_timestamps_.clear();
   return result;
 }
 
