@@ -261,7 +261,10 @@ def list_all_tasks(c):
 
 @task(autoprint=True, help=CMD_HELP)
 def run_lambda(c, cmd):
-    """Run ad-hoc VAST client commands from AWS Lambda"""
+    """Run ad-hoc VAST client commands from AWS Lambda
+
+    Returns an object containing the standard and error outputs as well as the
+    parsed command that was executed"""
     lambda_name = terraform_output(c, "core-2", "vast_lambda_name")
     cmd_b64 = base64.b64encode(cmd.encode()).decode()
     lambda_res = aws("lambda").invoke(
@@ -269,11 +272,11 @@ def run_lambda(c, cmd):
         Payload=json.dumps({"cmd": cmd_b64}).encode(),
         InvocationType="RequestResponse",
     )
+    resp_payload = lambda_res["Payload"].read().decode()
     if "FunctionError" in lambda_res:
-        mess = f'{lambda_res["FunctionError"]}: {lambda_res["Payload"].read()}'
+        mess = f'{lambda_res["FunctionError"]}: {resp_payload}'
         raise Exit(message=mess, code=1)
-    res = json.loads(lambda_res["Payload"].read())["result"]
-    return res
+    return resp_payload
 
 
 @task(help=CMD_HELP)

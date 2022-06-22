@@ -2,9 +2,12 @@ import os
 import subprocess
 import logging
 import base64
+import sys
+import io
 from threading import Thread
 
 logging.getLogger().setLevel(logging.INFO)
+__stdout__ = sys.stdout
 
 
 class ReturningThread(Thread):
@@ -24,6 +27,26 @@ class ReturningThread(Thread):
         return self._return
 
 
+class CommandException(Exception):
+    ...
+
+
+def hide_command_exception(func):
+    """Block printing on CommandException to avoid logging stderr twice"""
+
+    def func_wrapper(*args, **kwargs):
+        # reset stdout to its original value that we saved on init
+        sys.stdout = __stdout__
+        try:
+            return func(*args, **kwargs)
+        except CommandException as e:
+            # the error will be printed to a disposable buffer
+            sys.stdout = io.StringIO()
+            raise e
+
+    return func_wrapper
+
+
 def buff_and_print(stream, stream_name):
     """Buffer and log every line of the given stream"""
     buff = []
@@ -34,6 +57,7 @@ def buff_and_print(stream, stream_name):
     return "".join(buff)
 
 
+@hide_command_exception
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
     # input parameters
@@ -57,7 +81,14 @@ def handler(event, context):
     stderr_thread.start()
     stdout = buff_and_print(process.stdout, "stdout")
     stderr = stderr_thread.join()
+    returncode = process.wait()
+    logging.info("returncode: %s", returncode)
 
-    # multiplex stdout and stderr into the result field
-    res = stdout if stdout != "" else stderr
-    return {"result": res, "parsed_cmd": parsed_cmd}
+    # organize command output
+    if returncode != 0:
+        raise CommandException(stderr)
+    return {
+        "stdout": stdout.strip(),
+        "stderr": stderr.strip(),
+        "parsed_cmd": parsed_cmd,
+    }
