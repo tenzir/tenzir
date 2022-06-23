@@ -97,7 +97,7 @@ a standardized control plane. This is where <a href="https://substrait.io/" targ
 canonical query representation. We already experimented with Substrait,
 converting VAST queries into a logical query plan. In fact, VAST has a "query
 language" plugin to make it possible to translate security content. (For
-example, our <a href="https://github.com/tenzir/vast/tree/master/plugins/sigma" target="_blank" rel="noopener noreferrer">Sigma plugin</a> translates <a href="https://github.com/SigmaHQ/sigma" target="_blank" rel="noopener noreferrer">Sigma rules</a>
+example, our <a href="/docs/understand-vast/query-language/frontends/sigma">Sigma plugin</a> translates <a href="https://github.com/SigmaHQ/sigma" target="_blank" rel="noopener noreferrer">Sigma rules</a>
 into VAST queries.) In short: Substrait is to the control plane what Arrow is
 to the data plane. Both are needed to modularize the concept of a query
 engine.</p></li></ol><p>Making our own query engine more suitable for analytical workloads has
