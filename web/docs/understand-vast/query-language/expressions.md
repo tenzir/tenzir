@@ -2,14 +2,15 @@
 sidebar_position: 0
 ---
 
-import MissingDocumentation from '@site/presets/MissingDocumentation.md';
-
 # Expressions
 
 VAST's expression language makes it easy to describe a relevant subset of
-interest.
+interest over structured data. The "easy" part is that VAST expressions operate
+on multiple different schemas at once, as opposed to traditional expressions
+that apply to a single, fixed schema. The language captures this heterogeneity
+with [extractors](#extractors).
 
-An *expression* is a constraint over an event that evaluates to `true` or
+An *expression* is a function over an event that evaluates to `true` or
 `false`, indicating whether it qualifies as result. Expression operands are
 either sub-expressions or predicates, and can be composed via *conjunctions*
 (`&&`), *disjunctions* (`||`), and *negations* (`!`).
@@ -25,7 +26,10 @@ When written out, it looks like this:
 (dport <= 1024 || :addr in 10.0.0.0/8) && ! (#type == /zeek.*/)
 ```
 
-Let's take a look at the individual components in more depth.
+In this example, the predicate operands `dport`, `:addr`, and `#type` represent
+[extractors](#extractors) that resolve to a set of matching fields at runtime.
+
+Let's take a look at the expression components in more depth.
 
 ## Connectives
 
@@ -67,7 +71,7 @@ The table below illustrates a partial function over the cross product of
 available types. Each letter in a cell denotes a set of operators:
 - **E**: equality operators `==`, `!=`
 - **R**: range operators `<`, `<=`, `>=`, `>`
-- **M**: membrership operators `in`, `!in`, `ni`, `!ni`
+- **M**: membership operators `in`, `!in`, `ni`, `!ni`
 
 | | **Bool** | **Integer** | **Count** | **Real** | **Duration** | **Time** | **String** | **Pattern** | **Address** | **Subnet** | **Enum** | **List** | **Map**
 ---|---|---|---|---|---|---|---|---|---|---|---|---|---
@@ -87,8 +91,14 @@ available types. Each letter in a cell denotes a set of operators:
 
 ### Extractors
 
-An *extractor* retrieves a certain aspect of an event. VAST has the
-following extractor types:
+An *extractor* retrieves a certain aspect of an event. When looking up an
+expression, VAST *binds* the extractor to a specific record field, i.e., maps it
+to the corresponding numeric column offset in the schema. **Binding an expression
+implicitly creates a disjunction of all matching fields.** We find that this
+existential qualification is the natural user experience when "extracting" data
+declaratively.
+
+VAST has the following extractor types:
 
 1. [Field](#field-extractor): extracts all fields whose name match a given
    record field name.
@@ -111,9 +121,11 @@ disjunction of all fields ending in `z`.
 
 ##### Examples
 
-- `ts > 1 day ago`
-- `zeek.conn.id.orig_h in 192.168.0.0/24`
-- `orig_bytes >= 10Ki`
+- `ts > 1 day ago`: events with a record field `ts` from the last 24h hours
+- `zeek.conn.id.orig_h in 192.168.0.0/24`: connections with source IP in
+  192.168.0.0/24
+- `orig_bytes >= 10Ki`: events with a field `orig_bytes` greater or equal to
+  10 * 2^10.
 
 #### Type Extractor
 
@@ -123,15 +135,16 @@ types](/docs/understand-vast/data-model/type-system) and user-defined aliases.
 
 A search for type `:T` includes all aliased types. For example, given the alias
 `port` that maps to `count`, then the `:count` type extractor will also consider
-instances of type `port`. However, a `:port` query does not inclucde `:count`
+instances of type `port`. However, a `:port` query does not include `:count`
 types because an alias is a strict refinement of an existing type.
 
 ##### Examples
 
-- `:timestamp > 1 hour ago`
-- `:addr == 6.6.6.6`
-- `:count > 42M`
-- `"evil" in :string`
+- `:timestamp > 1 hour ago`: events with a `timestamp` alias in the last hour
+- `:addr == 6.6.6.6`: events with any field of type `addr` equal to 6.6.6.6
+- `:count > 42M`: events where `count` values is greater than 42M
+- `"evil" in :string`: events where any `string` field contains the substring
+  `evil`
 
 #### Meta Extractor
 
@@ -145,10 +158,11 @@ schema) instead of the value domain.
 
 ##### Examples
 
-- `#type == "zeek.conn"`
-- `"suricata" in #type`
-- `#field == "community_id"`
-- `#import_time > 1 hour ago`
+- `#type == "zeek.conn"`: events of type `zeek.conn`
+- `"suricata" in #type`: events that have `suricata` in their type name
+- `#field == "community_id"`: events that have a field with name `community_id`
+- `#import_time > 1 hour ago`: events that have been imported within the last
+  hour
 
 ### Value Predicates
 
@@ -197,6 +211,6 @@ Complex types:
 
 | Identifier  | Description                             | Example Data
 | ----------- | --------------------------------------- | ------------
-| `list`      | An (ordered) sequence of values where each element has type `T` | `[1, 2, 3]`, `[]`
-| `map`       | An associate array which maps a keys to values | `{x -> a, y -> b, z -> c}`, `{}`
+| `list`      | An ordered sequence of values where each element has type `T` | `[1, 2, 3]`, `[]`
+| `map`       | An associate array which maps keys to values | `{x -> a, y -> b, z -> c}`, `{}`
 | `record`    | a product type with one or more named fields | `<x: a, y: b, z: c>`, `<a, b, c>`, `<>`
