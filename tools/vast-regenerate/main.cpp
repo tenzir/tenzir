@@ -93,10 +93,8 @@ caf::error write_index_bin(const std::vector<vast::uuid>& uuids,
   for (const auto& uuid : uuids) {
     if (auto uuid_fb = pack(builder, uuid))
       partition_offsets.push_back(*uuid_fb);
-    else {
-      fmt::print(stderr, "failed to pack uuid {}: {}\n", uuid, uuid_fb.error());
-      return 1;
-    }
+    else
+      return uuid_fb.error();
   }
   fmt::print("writing {} partition\n", partition_offsets.size());
   auto partitions = builder.CreateVector(partition_offsets);
@@ -284,7 +282,7 @@ with an incorrect all-zero event count.
       path = arg;
     }
   }
-  if (!path) {
+  if (path.empty()) {
     fmt::print(stderr, "error: missing required path argument.\n\n{}", usage);
     return 1;
   }
