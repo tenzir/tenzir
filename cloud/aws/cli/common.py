@@ -19,8 +19,9 @@ COMMON_VALIDATORS = [
 
 
 def conf(validators=[]) -> dict:
-    """Load config starting with either VAST_, TF_ or AWS_ from both environment
-    variables and .env file"""
+    """Load variables from both the environment and the .env file if:
+    - they are prefixed with either VAST_, TF_ or AWS_
+    - their value is not the empty string"""
     dc = dynaconf.Dynaconf(
         load_dotenv=True,
         envvar_prefix=False,
@@ -29,7 +30,7 @@ def conf(validators=[]) -> dict:
     return {
         k: v
         for (k, v) in dc.as_dict().items()
-        if k.startswith(("VAST_", "TF_", "AWS_"))
+        if k.startswith(("VAST_", "TF_", "AWS_")) and v != ""
     }
 
 
