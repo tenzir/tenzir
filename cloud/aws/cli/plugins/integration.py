@@ -103,8 +103,15 @@ def vast_import_suricata(c: Context):
 
 def vast_count(c: Context):
     """Run `vast count` and parse the result"""
-    res = c.run('./vast-cloud run-lambda -c "vast count"', hide="stdout")
-    return int(res.stdout.strip())
+    res_raw = c.run('./vast-cloud run-lambda -c "vast count"', hide="stdout")
+    res_obj = json.loads(res_raw.stdout)
+    assert res_obj["parsed_cmd"] == [
+        "/bin/bash",
+        "-c",
+        "vast count",
+    ], "Unexpected parsed command"
+    assert res_obj["stdout"].isdigit(), "Count result is not a number"
+    return int(res_obj["stdout"])
 
 
 @task
