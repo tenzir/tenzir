@@ -24,7 +24,7 @@ on: workflow_dispatch
 #   state might end up locked and subsequent runs will fail. In this case the
 #   state first needs to be unlocked, for instance from the Terraform Cloud UI.
 # - You can optionally set a different prefix for the Terraform Cloud workspace
-#   names using the TF_WORKSPACE_PREFIX secret (default is "gh-act")
+#   names using the TF_WORKSPACE_PREFIX secret (default is "gh-act-")
 
 # Set these secrets to configure the CI run
 env:
@@ -32,7 +32,7 @@ env:
   VAST_CIDR: "${{ secrets.VAST_CIDR }}"
   VAST_AWS_REGION: "${{ secrets.VAST_AWS_REGION }}"
   TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
-  TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX }}"
+  TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX  || 'gh-act-' }}"
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
   TF_STATE_BACKEND: "cloud"
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"

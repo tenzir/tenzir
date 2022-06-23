@@ -6,8 +6,8 @@ from common import COMMON_VALIDATORS, auto_app_fmt, conf, TFDIR
 
 VALIDATORS = [
     *COMMON_VALIDATORS,
-    dynaconf.Validator("VAST_FLOWLOGS_BUCKET_NAME", must_exist=True),
-    dynaconf.Validator("VAST_FLOWLOGS_BUCKET_REGION", must_exist=True),
+    dynaconf.Validator("VAST_FLOWLOGS_BUCKET_NAME", must_exist=True, ne=""),
+    dynaconf.Validator("VAST_FLOWLOGS_BUCKET_REGION", must_exist=True, ne=""),
 ]
 
 INVOKE_CONFIG = {}

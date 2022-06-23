@@ -19,10 +19,12 @@ from common import (
 
 VALIDATORS = [
     *COMMON_VALIDATORS,
-    dynaconf.Validator("VAST_CIDR", must_exist=True),
-    dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True),
+    dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
+    dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
     dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
-    dynaconf.Validator("VAST_SERVER_STORAGE_TYPE", default="EFS"),
+    dynaconf.Validator(
+        "VAST_SERVER_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]
+    ),
 ]
 
 CMD_HELP = {

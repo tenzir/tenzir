@@ -2,16 +2,20 @@ from invoke import Context
 import dynaconf
 import json
 import re
+from boto3.session import Session
 
+AWS_REGIONS = Session().get_available_regions("s3")
+
+# Note: an empty variable is considered as existing
 COMMON_VALIDATORS = [
-    dynaconf.Validator("VAST_AWS_REGION", must_exist=True),
-    dynaconf.Validator("TF_STATE_BACKEND", default="local"),
-    dynaconf.Validator("TF_WORKSPACE_PREFIX", default="gh-act"),
+    dynaconf.Validator("VAST_AWS_REGION", must_exist=True, is_in=AWS_REGIONS),
+    dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
+    dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
     # if we use tf cloud as backend, the right variable must be configured
     dynaconf.Validator("TF_STATE_BACKEND", ne="cloud")
     | (
-        dynaconf.Validator("TF_ORGANIZATION", must_exist=True)
-        & dynaconf.Validator("TF_API_TOKEN", must_exist=True)
+        dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne="")
+        & dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne="")
     ),
 ]
 
@@ -20,8 +24,7 @@ COMMON_VALIDATORS = [
 
 def conf(validators=[]) -> dict:
     """Load variables from both the environment and the .env file if:
-    - their key is prefixed with either VAST_, TF_ or AWS_
-    - their value is not the empty string"""
+    - their key is prefixed with either VAST_, TF_ or AWS_"""
     dc = dynaconf.Dynaconf(
         load_dotenv=True,
         envvar_prefix=False,
@@ -30,7 +33,7 @@ def conf(validators=[]) -> dict:
     return {
         k: v
         for (k, v) in dc.as_dict().items()
-        if k.startswith(("VAST_", "TF_", "AWS_")) and v != ""
+        if k.startswith(("VAST_", "TF_", "AWS_"))
     }
 
 

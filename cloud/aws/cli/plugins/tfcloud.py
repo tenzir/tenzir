@@ -5,8 +5,8 @@ from common import conf, COMMON_VALIDATORS, list_modules, tf_version
 
 VALIDATORS = [
     *COMMON_VALIDATORS,
-    dynaconf.Validator("TF_ORGANIZATION", must_exist=True),
-    dynaconf.Validator("TF_API_TOKEN", must_exist=True),
+    dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne=""),
+    dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne=""),
 ]
 
 
@@ -65,7 +65,7 @@ class Client:
         ws_map = self.list_workspaces(prefix)
         updted_ws_list = []
         for mod in modules:
-            ws_for_mod = f"{prefix}-{mod}"
+            ws_for_mod = f"{prefix}{mod}"
             payload = {
                 "data": {
                     "attributes": {
@@ -99,7 +99,7 @@ class Client:
         return updted_ws_list
 
     @print_error_resp
-    def get_varset(self, name) -> dict:
+    def get_varset(self, name: str) -> dict:
         "Find a varset from its name, None if doesn't exist"
         res = requests.get(f"{self.org_url}/varsets", headers=self.headers)
         res.raise_for_status()
@@ -108,7 +108,7 @@ class Client:
         )
 
     @print_error_resp
-    def create_varset(self, name) -> dict:
+    def create_varset(self, name: str) -> dict:
         existing_varset = self.get_varset(name)
         if existing_varset is not None:
             print(f"Varset {name} already exists ({existing_varset['id']})")
@@ -132,7 +132,7 @@ class Client:
         return existing_varset
 
     @print_error_resp
-    def assign_varset(self, varset_id, workspace_id):
+    def assign_varset(self, varset_id: str, workspace_id: str):
         payload = {
             "data": [
                 {
@@ -219,7 +219,7 @@ def config(c, auto=False):
     )
 
     varset = client.create_varset(
-        f"{config['TF_WORKSPACE_PREFIX']}-aws-creds",
+        f"{config['TF_WORKSPACE_PREFIX']}aws-creds",
     )
     for ws in ws_list:
         client.assign_varset(varset["id"], ws["id"])

@@ -7,7 +7,7 @@ terraform {
     organization = "${get_env("TF_ORGANIZATION")}"
     token        = "${get_env("TF_API_TOKEN")}"
     workspaces {
-      name = "${get_env("TF_WORKSPACE_PREFIX")}-${path_relative_to_include()}"
+      name = "${get_env("TF_WORKSPACE_PREFIX")}${path_relative_to_include()}"
     }
   }
 }
