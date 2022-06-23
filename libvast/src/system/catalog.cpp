@@ -344,14 +344,31 @@ catalog_state::lookup_impl(const expression& expr) const {
         },
         [&](const field_extractor& lhs, const data& d) -> result_type {
           auto pred = [&](const auto& field) {
-            if (!compatible(field.type(), x.op, d))
+            auto match_name = [&] {
+              auto field_name = field.field_name();
+              auto key = std::string_view{lhs.field};
+              if (field_name.length() >= key.length()) {
+                auto pos = field_name.length() - key.length();
+                auto sub = field_name.substr(pos);
+                return sub == key && (pos == 0 || field_name[pos - 1] == '.');
+              }
+              auto layout_name = field.layout_name();
+              if (key.length() > layout_name.length() + 1 + field_name.length())
+                return false;
+              auto pos = key.length() - field_name.length();
+              auto second = key.substr(pos);
+              if (second != field_name)
+                return false;
+              if (key[pos - 1] != '.')
+                return false;
+              auto fpos = layout_name.length() - (pos - 1);
+              return key.substr(0, pos - 1) == layout_name.substr(fpos)
+                     && (fpos == 0 || layout_name[fpos - 1] == '.');
+            };
+            if (!match_name())
               return false;
             VAST_ASSERT(!field.is_standalone_type());
-            auto rt = record_type{{field.field_name(), field.type()}};
-            for ([[maybe_unused]] const auto& offset :
-                 rt.resolve_key_suffix(lhs.field, field.layout_name()))
-              return true;
-            return false;
+            return compatible(field.type(), x.op, d);
           };
           return search(pred);
         },

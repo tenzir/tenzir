@@ -370,18 +370,22 @@ TEST(catalog with bool synopsis) {
   };
   auto expected1 = std::vector<uuid>{id1};
   auto expected2 = std::vector<uuid>{id2};
+  auto none = std::vector<uuid>{};
   // Check by field name field.
   CHECK_EQUAL(lookup_("x == T"), expected1);
   CHECK_EQUAL(lookup_("x != F"), expected1);
   CHECK_EQUAL(lookup_("x == F"), expected2);
   CHECK_EQUAL(lookup_("x != T"), expected2);
+  // fully qualified name
+  CHECK_EQUAL(lookup_("test.x == T"), expected1);
+  CHECK_EQUAL(lookup_("test.x == F"), expected2);
+  CHECK_EQUAL(lookup_("est.x == T"), none);
   // Same as above, different extractor.
   CHECK_EQUAL(lookup_(":bool == T"), expected1);
   CHECK_EQUAL(lookup_(":bool != F"), expected1);
   CHECK_EQUAL(lookup_(":bool == F"), expected2);
   CHECK_EQUAL(lookup_(":bool != T"), expected2);
   // Invalid schema: y does not a valid field
-  auto none = std::vector<uuid>{};
   CHECK_EQUAL(lookup_("y == T"), none);
   CHECK_EQUAL(lookup_("y != F"), none);
   CHECK_EQUAL(lookup_("y == F"), none);
