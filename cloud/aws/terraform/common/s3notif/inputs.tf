@@ -25,8 +25,7 @@ resource "null_resource" "bucket-location-check" {
     command = <<EOT
 aws s3api get-bucket-location --bucket ${var.bucket_name} \
   | grep ${var.region} \
-  || echo 'Wrong region for source bucket' \
-  && exit 1
+  || (echo 'Wrong region for source bucket'; exit 1)
     EOT
     when    = create
   }
