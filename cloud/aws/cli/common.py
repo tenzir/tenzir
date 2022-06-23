@@ -20,7 +20,7 @@ COMMON_VALIDATORS = [
 
 def conf(validators=[]) -> dict:
     """Load variables from both the environment and the .env file if:
-    - they are prefixed with either VAST_, TF_ or AWS_
+    - their key is prefixed with either VAST_, TF_ or AWS_
     - their value is not the empty string"""
     dc = dynaconf.Dynaconf(
         load_dotenv=True,
