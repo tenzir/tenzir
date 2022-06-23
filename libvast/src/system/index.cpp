@@ -891,6 +891,8 @@ index(index_actor::stateful_pointer<index_state> self,
       // TODO: Consider switching layouts to a robin map to take advantage of
       // transparent key lookup with string views, avoding the copy of the name
       // here.
+      if (self->state.is_shutting_down)
+        return;
       self->state.stats.layouts[std::string{layout.name()}].count += x.rows();
       auto& active = self->state.active_partitions[layout];
       if (!active.actor) {
@@ -940,6 +942,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
+    self->state.is_shutting_down = true;
     // Flush buffered batches and end stream.
     detail::shutdown_stream_stage(self->state.stage);
     // Bring down active partition.

@@ -328,6 +328,9 @@ struct index_state {
   caf::settings index_opts;
 
   constexpr static inline auto name = "index";
+
+  /// The value is set to true when a shutdown was requested.
+  bool is_shutting_down = {};
 };
 
 /// Indexes events in horizontal partitions.
