@@ -534,15 +534,13 @@ void index_state::decomission_active_partition(const type& layout) {
             },
             [=, this](const caf::error& err) {
               VAST_DEBUG("{} received error for request to persist partition "
-                         "{} "
-                         "{}: {}",
+                         "{} {}: {}",
                          *self, layout, id, err);
             });
       },
       [=, this](caf::error& err) {
         VAST_ERROR("{} failed to persist partition {} {} with error: {}", *self,
                    layout, id, err);
-        self->quit(std::move(err));
       });
 }
 
