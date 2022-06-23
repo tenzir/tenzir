@@ -533,7 +533,16 @@ add_feature_info("VAST_ENABLE_BUNDLED_INDICATORS"
 if (NOT VAST_ENABLE_BUNDLED_INDICATORS)
   find_package(indicators 2.2.0 QUIET)
   if (indicators_FOUND)
-    target_link_libraries(libvast_native_plugins PRIVATE indicators::indicators)
+    # CMake exports private interface dependencies because they might depend on
+    # other non-interface libraries. CMake could scan the depency tree to figure
+    # out when this is actually needed, but it doesn't.
+    # We know that indicators itself doesn't have any dependency, so we work
+    # around this behavior by not linking to the target.
+    # https://gitlab.kitware.com/cmake/cmake/-/issues/15415 for more discussion.
+    get_target_property(indicators_include_directory indicators::indicators
+                        INTERFACE_INCLUDE_DIRECTORIES)
+    target_include_directories(
+      libvast_native_plugins PRIVATE "${indicators_include_directory}/include")
     dependency_summary("indicators" indicators::indicators "Dependencies")
   endif ()
 endif ()
