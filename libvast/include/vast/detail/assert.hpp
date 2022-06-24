@@ -17,7 +17,7 @@
 
 #define VAST_ASSERT_2(expr, msg)                                               \
   do {                                                                         \
-    if (static_cast<bool>(expr) == false) {                                    \
+    if (static_cast<bool>(expr) == false) [[unlikely]] {                       \
       /* NOLINTNEXTLINE */                                                     \
       ::fprintf(stderr, "%s:%u: assertion failed '%s'\n", __FILE__, __LINE__,  \
                 msg);                                                          \
