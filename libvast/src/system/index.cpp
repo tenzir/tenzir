@@ -1304,23 +1304,15 @@ index(index_actor::stateful_pointer<index_state> self,
            std::vector<vast::uuid> old_partition_ids,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
-      for (const auto& partition : old_partition_ids)
-        if (self->state.partitions_in_transformation.contains(partition))
-          return caf::make_error(
-            ec::lookup_error, fmt::format("{} refuses to apply transformation "
-                                          "'{}' partition {} because it is "
-                                          "currently being transformed",
-                                          *self, transform->name(), partition));
-      self->state.partitions_in_transformation.insert(old_partition_ids.begin(),
-                                                      old_partition_ids.end());
+      const auto current_sender = self->current_sender();
+      if (old_partition_ids.empty())
+        return caf::make_error(ec::invalid_argument, "no partitions given");
       VAST_DEBUG("{} applies a transform to partitions {}", *self,
                  old_partition_ids);
       if (!self->state.store_plugin)
         return caf::make_error(ec::invalid_configuration,
                                "partition transforms are not supported for the "
                                "global archive");
-      if (old_partition_ids.empty())
-        return caf::make_error(ec::invalid_argument, "no partitions given");
       std::erase_if(old_partition_ids, [&](uuid old_partition_id) {
         if (self->state.persisted_partitions.contains(old_partition_id)) {
           return false;
@@ -1329,9 +1321,28 @@ index(index_actor::stateful_pointer<index_state> self,
                   old_partition_id, transform->name());
         return true;
       });
+      {
+        auto corrected_old_partition_ids = std::vector<uuid>{};
+        corrected_old_partition_ids.reserve(old_partition_ids.size());
+        for (const auto& partition : old_partition_ids) {
+          if (self->state.partitions_in_transformation.insert(partition).second) {
+            corrected_old_partition_ids.push_back(partition);
+          } else {
+            // Getting overlapping partitions triggers a warning, and we
+            // silently ignore the partition at the cost of the transformation
+            // being less efficient.
+            // TODO: Implement some synchronization mechanism for partition
+            // erasure so rebuild, compaction, and aging can properly
+            // synchronize.
+            VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
+                      "because it is currently being transformed",
+                      *self, transform->name(), partition);
+          }
+        }
+        old_partition_ids = std::move(corrected_old_partition_ids);
+      }
       if (old_partition_ids.empty())
-        return caf::make_error(ec::invalid_argument, "no known partitions "
-                                                     "given");
+        return std::vector<partition_info>{};
       auto store_id = std::string{self->state.store_plugin->name()};
       auto partition_path_template = self->state.partition_path_template();
       auto partition_synopsis_path_template
@@ -1453,7 +1464,7 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::rebuild, std::vector<vast::uuid> old_partition_ids)
       -> caf::result<std::vector<partition_info>> {
       auto transform = std::make_shared<vast::transform>(
-        "identity", std::vector<std::string>{});
+        "rebuild", std::vector<std::string>{});
       auto identity_step = make_transform_step("identity", {});
       if (!identity_step)
         return identity_step.error();
