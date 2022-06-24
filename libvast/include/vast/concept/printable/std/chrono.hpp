@@ -153,19 +153,14 @@ struct time_point_printer : printer_base<time_point_printer<Clock, Duration>> {
            static_cast<unsigned>(D), static_cast<int>(h.count()),
            static_cast<int>(m.count()), static_cast<int>(s.count())))
       return false;
-    if (sub_secs == 0)
-      return true;
-    // For the sub-second part, we print print down to the lowest resolution
-    // necessary (all the way down to ns).
-    constexpr auto num3 = printers::integral<int, policy::plain, 3>;
-    constexpr auto num6 = printers::integral<int, policy::plain, 6>;
-    constexpr auto num9 = printers::integral<int, policy::plain, 9>;
     *out++ = '.';
-    if (sub_secs % 1000000 == 0)
-      return num3(out, sub_secs / 1000000);
-    if (sub_secs % 1000 == 0)
-      return num6(out, sub_secs / 1000);
-    return num9(out, sub_secs);
+    constexpr auto num6 = printers::integral<int, policy::plain, 6>;
+    // We don't do proper rounding for nanoseconds to avoid surprising
+    // output like .999999999 -> .000000.
+    // Rounding the entire timestamp can be equally problematic:
+    //  in:  1999-12-31T23.59.59.999999500
+    //  out: 2000-01-01T00:00:00.000000
+    return num6(out, sub_secs / 1000);
   }
 };
 

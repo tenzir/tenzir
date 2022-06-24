@@ -348,9 +348,11 @@ TEST(duration) {
 
 TEST(time) {
   using namespace std::chrono_literals;
-  CHECK_TO_STRING(vast::time{0s}, "1970-01-01T00:00:00");
-  CHECK_TO_STRING(vast::time{1ms}, "1970-01-01T00:00:00.001");
+  CHECK_TO_STRING(vast::time{0s}, "1970-01-01T00:00:00.000000");
+  CHECK_TO_STRING(vast::time{1ms}, "1970-01-01T00:00:00.001000");
   CHECK_TO_STRING(vast::time{1us}, "1970-01-01T00:00:00.000001");
+  CHECK_TO_STRING(vast::time{1ns}, "1970-01-01T00:00:00.000000");
+  CHECK_TO_STRING(vast::time{999ns}, "1970-01-01T00:00:00.000000");
   CHECK_TO_STRING(vast::time{1502658642123456us}, "2017-08-13T21:10:42.123456");
 }
 
