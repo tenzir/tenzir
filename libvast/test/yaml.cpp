@@ -95,7 +95,7 @@ TEST(to_yaml - basic) {
 TEST(to_yaml - time types) {
   auto t = unbox(to<vast::time>("2021-01-01"));
   auto yaml = unbox(to_yaml(record{{"d", 12ms}, {"t", t}}));
-  auto str = "d: 12.0ms\nt: 2021-01-01T00:00:00";
+  auto str = "d: 12.0ms\nt: 2021-01-01T00:00:00.000000";
   CHECK_EQUAL(yaml, str);
 }
 
