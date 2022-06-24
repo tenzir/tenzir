@@ -885,6 +885,8 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
       VAST_ASSERT(x.encoding() != table_slice_encoding::none);
+      if (!self->state.stage->running())
+        return;
       auto&& layout = x.layout();
       // TODO: Consider switching layouts to a robin map to take advantage of
       // transparent key lookup with string views, avoding the copy of the name
