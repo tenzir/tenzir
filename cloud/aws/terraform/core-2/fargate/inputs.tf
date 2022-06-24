@@ -62,5 +62,5 @@ variable "storage_mount_point" {
 
 locals {
   id_raw = "${var.name}-${module.env.stage}-${var.region_name}"
-  id = substr(md5(local.id_raw), 0, 6)
+  id     = substr(md5(local.id_raw), 0, 6)
 }

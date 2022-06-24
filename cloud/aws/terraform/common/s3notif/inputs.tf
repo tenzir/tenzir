@@ -13,7 +13,7 @@ module "env" {
 
 locals {
   id_raw = "${var.bucket_name}-${module.env.module_name}-${module.env.stage}-${var.target_bus_arn}"
-  id = substr(md5(local.id_raw), 0, 6)
+  id     = substr(md5(local.id_raw), 0, 6)
 }
 
 # Check that the provided buckets exists and is in the expected region

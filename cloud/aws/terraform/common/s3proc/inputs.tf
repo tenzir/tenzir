@@ -29,5 +29,5 @@ module "env" {
 
 locals {
   id_raw = "${var.source_name}-${var.source_bucket_name}-${module.env.module_name}-${module.env.stage}-${var.region_name}"
-  id = substr(md5(local.id_raw), 0, 6)
+  id     = substr(md5(local.id_raw), 0, 6)
 }
