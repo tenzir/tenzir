@@ -11,7 +11,7 @@ const config = {
   url: 'https://vast.io',
   baseUrl: '/',
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'error',
+  onBrokenMarkdownLinks: 'throw',
   favicon: 'img/favicon.ico',
   organizationName: 'tenzir', // Usually your GitHub org/user name.
   projectName: 'vast', // Usually your repo name.
