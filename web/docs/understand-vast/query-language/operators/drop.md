@@ -1,0 +1,15 @@
+# drop
+
+Drops fields having the configured key suffixes from the input.
+
+## Parameters
+
+- `fields: [string]`: The key suffixes of the fields to drop.
+
+## Example
+
+```yaml
+- drop:
+    fields:
+      - source_ip
+```
