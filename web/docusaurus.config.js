@@ -11,7 +11,7 @@ const config = {
   url: 'https://vast.io',
   baseUrl: '/',
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'error',
+  onBrokenMarkdownLinks: 'throw',
   favicon: 'img/favicon.ico',
   organizationName: 'tenzir', // Usually your GitHub org/user name.
   projectName: 'vast', // Usually your repo name.
@@ -112,7 +112,7 @@ const config = {
         content:
         'This site is under construction. Help us by leaving <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/discussions">feedback</a> and a <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">GitHub Star</a>.',
         backgroundColor: '#f1f2f2',
-        isCloseable: false,
+        isCloseable: true,
       },
       footer: {
         links: [

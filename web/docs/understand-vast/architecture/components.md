@@ -1,3 +1,7 @@
+---
+sidebar_position: 2
+---
+
 # Components
 
 VAST uses the [actor model](actor-model) to structure the application logic into
