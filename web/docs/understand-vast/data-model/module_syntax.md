@@ -3,6 +3,9 @@
 The syntax below is designed to produce a YAML oneliner which can be placed
 inside the `types` dictionary of a YAML Module.
 
+The railroad diagrams are generated
+[generated](#Generating-the-railroad-diagrams) from Labelled BNF(LBNF) file.
+
 ## Type-declaration
 
 ![Type-declaration Railroad Diagram](/img/module/Type-declaration.light.svg#gh-light-mode-only)
@@ -500,3 +503,152 @@ Built-in-simple-type
 referenced by
 
     Type-name
+
+## Generating the railroad diagrams
+
+1. After installing `BNFC` and `pdflatex` run:
+
+```
+~/.cabal/bin/bnfc -m --latex types.cf
+```
+
+2. Edit `types.tex` add the following line after the line with `\documentclass`
+
+```
+\usepackage[margin=2cm,landscape,a3paper]{geometry}
+```
+
+3. Convert the tex file to pdf
+
+```
+pdflatex types.tex
+```
+
+4. Open pdf and save as `types.bnf`
+   (with KDE's okular: File / Export As / Plain Text...)
+
+```
+okular types.pdf
+```
+
+5. Edit `types.bnf` remove everything so that only the `BNF` grammar remains.
+   Page numbers has to be removed also.
+
+6. Convert the BNF to W3C EBNF:
+
+```
+cat types.bnf | perl -pe 's/{/"{"/g' | perl -pe 's/}/"}"/g' | \
+    perl -pe 's/ : / ":" /g' | perl -pe 's/ \[ / "[" /g' | \
+    perl -pe 's/ \] / "]" /g'  | perl -pe 's/ \]/ "]"/g'  | perl -pe 's/⟨//g' | \
+    perl -pe 's/ ⟩//g' | perl -pe 's/ ⟩//g' | perl -pe 's/,/","/g' | \
+    perl -pe 's/  2//g' | \
+    perl -pe 's/ attributes / "attributes" /g' | \
+    perl -pe 's/ base/ "base"/g' | \
+    perl -pe 's/ enum / "enum" /g' | \
+    perl -pe 's/ extend/ "extend"/g' | \
+    perl -pe 's/ fields / "fields" /g' | \
+    perl -pe 's/ implant/ "implant"/g' | \
+    perl -pe 's/ key / "key" /g' | \
+    perl -pe 's/ list / "list" /g' | \
+    perl -pe 's/ map / "map" /g' | \
+    perl -pe 's/ record / "record" /g' | \
+    perl -pe 's/ type / "type" /g' | \
+    perl -pe 's/ value / "value" /g' | \
+    perl -pe 's/Ident/ "Identifier" /g' > types.ebnf
+```
+
+7. Convert the W3C EBNF to railroad diagram (Edit Grammar and View Diagram
+   tabs): https://www.bottlecaps.de/rr/ui
+
+8. Make sure to uncheck the "Inline literals" when generating the diagram.
+
+9. Save the railroad diagram as XHTML+SVG.
+
+10. Extract the images out of the diaram with xsltproc. (This can take a couple
+    of minutes)
+
+```
+xsltproc --param index 0 extract_svg.xsl diagram.xhtml > svgs.txt
+```
+
+The `extract_svg.xsl`:
+
+```
+<?xml version="1.0"?>
+
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                version="1.0">
+  <xsl:param name="index" />
+
+ <xsl:template match="node()|@*">
+   <xsl:apply-templates select="node()|@*"/>
+ </xsl:template>
+
+ <xsl:template match="//*[local-name()='svg']">
+   <xsl:copy-of select="." />
+ </xsl:template>
+
+ <xsl:template match="//*[local-name()='div' and @class='ebnf']">
+   --- CUT: <xsl:value-of select=".//*[local-name()='a' and local-name(parent::*)='div']/text()" /> ---
+ </xsl:template>
+</xsl:stylesheet>
+```
+
+11. Cut out the images and change the colors with the python script:
+
+```
+#!/usr/bin/env python3
+import re
+
+svgs = open('svgs.txt', 'r')
+lines = svgs.readlines()
+light_svg = ""
+dark_svg = ""
+for line in lines:
+  if not line.startswith('   --- CUT: '):
+    line = re.sub('<a[^>]*>', '', line)
+    line = line.replace('</a>', '')
+    light_line = line.replace(
+      '.line                 {fill: none; stroke: #332900; stroke-width: 1;}',
+      '.line                 {fill: none; stroke: #000000; stroke-width: 2;}')
+    light_line = light_line.replace(
+      '{stroke: #141000; shape-rendering: crispEdges; stroke-width: 2;}',
+      '{stroke: #141000; shape-rendering: crispEdges; stroke-width: 4;}')
+    light_line = light_line.replace(
+      'polygon {fill: #332900; stroke: #332900;}',
+      'polygon {fill: #000000; stroke: #332900;}')
+    light_line = light_line.replace(
+      '.terminal         {fill: #FFDB4D; stroke: #332900; stroke-width: 1;}',
+      '.terminal         {fill: #00A4F1; stroke: #332900; stroke-width: 1;}')
+    light_line = light_line.replace(
+      '.nonterminal      {fill: #FFEC9E; stroke: #332900; stroke-width: 1;}',
+      '.nonterminal      {fill: #00EDE1; stroke: #332900; stroke-width: 1;}')
+    light_svg += light_line
+    dark_line = line.replace(
+      '.line                 {fill: none; stroke: #332900; stroke-width: 1;}',
+      '.line                 {fill: none; stroke: #FFFFFF; stroke-width: 2;}')
+    dark_line = dark_line.replace(
+      '{stroke: #141000; shape-rendering: crispEdges; stroke-width: 2;}',
+      '{stroke: #FFFFFF; shape-rendering: crispEdges; stroke-width: 4;}')
+    dark_line = dark_line.replace(
+      'polygon {fill: #332900; stroke: #332900;}',
+      'polygon {fill: #FFFFFF; stroke: #332900;}')
+    dark_line = dark_line.replace(
+      '.terminal         {fill: #FFDB4D; stroke: #332900; stroke-width: 1;}',
+      '.terminal         {fill: #00A4F1; stroke: #332900; stroke-width: 1;}')
+    dark_line = dark_line.replace(
+      '.nonterminal      {fill: #FFEC9E; stroke: #332900; stroke-width: 1;}',
+      '.nonterminal      {fill: #00EDE1; stroke: #332900; stroke-width: 1;}')
+    dark_svg += dark_line
+    continue
+  filename = line.replace('   --- CUT: ', '')
+  filename = filename.strip().replace(' ---', '')
+  svg_file_light = open(filename + '.light.svg', 'w')
+  svg_file_light.write(light_svg)
+  svg_file_light.close()
+  svg_file_dark = open(filename + '.dark.svg', 'w')
+  svg_file_dark.write(dark_svg)
+  svg_file_dark.close()
+  light_svg = ""
+  dark_svg = ""
+```

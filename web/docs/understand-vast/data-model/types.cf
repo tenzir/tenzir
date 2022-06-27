@@ -1,0 +1,104 @@
+-- This grammar is in LBNF format; it has two purposes:
+--
+-- 1. Convert it into a railroad diagram for documentation.
+--
+-- 2. Compile it into a compiler which is helpful to validate sample syntaxes.
+--
+--
+----- Compile it into a compiler -------------------------------------
+--
+-- ~/.cabal/bin/bnfc -m --cpp types.cf
+-- make
+-- echo "{ a: {type: string}}" | ./Testtypes 
+--
+
+-- Type_declaration:
+Type_declaration_Type_alias     . Type_declaration ::= Type_alias;
+Type_declaration_List           . Type_declaration ::= List;
+Type_declaration_Map            . Type_declaration ::= Map;
+Type_declaration_Record         . Type_declaration ::= Record;
+Type_declaration_Enumeration    . Type_declaration ::= Enumeration;
+Type_declaration_Record_algebra . Type_declaration ::= Record_algebra;
+
+-- Type Alias:
+E_Type_alias        . Type_alias ::= "{" Declaration_name ":" Type_name "}";
+E_Type_alias_inline . Type_alias ::= "{" Declaration_name ":" Inline_type_alias "}";
+E_Inline_type_alias . Inline_type_alias ::= "{" "type" ":" Type_name Optional_attributes "}";
+
+-- List:
+E_List . List ::= "{" Declaration_name ":" Inline_list "}";
+E_Inline_list . Inline_list ::= "{" "list" ":" Type_name_or_inline Optional_attributes "}";
+
+-- Map:
+E_Map . Map ::= "{" Declaration_name ":" Inline_map "}";
+E_Inline_map . Inline_map ::=  "{" "map" ":" "{" Inline_map_key "," Inline_map_value "}" Optional_attributes "}";
+E_Inline_map_key . Inline_map_key ::= "key" ":" Type_name_or_inline;
+E_Inline_map_value . Inline_map_value ::= "value" ":" Type_name_or_inline;
+
+-- Record:
+E_Record . Record ::=  "{" Declaration_name ":" Inline_record "}";
+E_Inline_record . Inline_record ::=  "{" "record" ":" "[" [Record_field] "]" Optional_attributes "}";
+separator nonempty Record_field ",";
+E_Record_field . Record_field ::= "{" Field_name ":" Type_name_or_inline "}";
+
+-- Enumeration:
+E_Enumeration . Enumeration ::= "{" Declaration_name ":" Inline_enumeration "}";
+E_Inline_enumeration . Inline_enumeration ::= "{" "enum" ":" "[" Enum_values "]" Optional_attributes "}";
+Enum_values_Single . Enum_values ::= Enum_value;
+Enum_values_List   . Enum_values ::= Enum_value "," Enum_values;
+
+-- Record algebra
+E_Record_algebra . Record_algebra ::=  "{" Declaration_name ":" Record_algebra_declaration "}";
+E_Record_algebra_declaration . Record_algebra_declaration ::= "{" "record" ":" "{" Base_records_and_record "}" "}";
+E_Base_records_and_record . Base_records_and_record ::= Base_records_declaration "," Record_declaration;
+E_Base_records_declaration . Base_records_declaration ::= Name_clash_specifier ":" "[" Base_records "]";
+E_Record_declaration . Record_declaration ::= "fields" ":" "[" [Record_field] "]" Optional_attributes;
+Base_records_sinle    . Base_records ::= Base_record_name;
+Base_records_multiple . Base_records ::= Base_record_name "," Base_records;
+Name_clash_specifier_base    . Name_clash_specifier ::= "base";
+Name_clash_specifier_implant . Name_clash_specifier ::= "implant";
+Name_clash_specifier_extend  . Name_clash_specifier ::= "extend";
+
+-- Optional attributes
+Optional_attributes_Empty      . Optional_attributes ::= "";
+Optional_attributes_Attributes . Optional_attributes ::= "," "attributes" ":" "[" [Attribute] "]";
+separator nonempty Attribute ",";
+EAttribute_string          . Attribute ::= Attribute_key;
+EAttribute_key_empty_value . Attribute ::= "{" Attribute_key ":" "}";
+EAttribute_key_value       . Attribute ::= "{" Attribute_key ":" Attribute_value "}";
+
+-- Type_name:
+Type_name_Built_in_simple_type . Type_name ::= Built_in_simple_type;
+Type_name_Declaration_name     . Type_name ::= Declaration_name;
+
+-- Inline_type:
+Inline_type_Inline_type_alias . Inline_type ::= Inline_type_alias;
+Inline_type_Inline_list       . Inline_type ::= Inline_list;
+Inline_type_Inline_map        . Inline_type ::= Inline_map;
+Inline_type_Inline_record     . Inline_type ::= Inline_record;
+
+-- Type_name_or_inline:
+Type_name_or_inline_Type   . Type_name_or_inline ::= Type_name;
+Type_name_or_inline_Inline . Type_name_or_inline ::= Inline_type;
+
+-- Identifiers
+E_Declaration_name       . Declaration_name ::= Ident;
+E_Field_name             . Field_name ::= Ident;
+E_Enum_value             . Enum_value ::= Ident;
+E_Base_record_name       . Base_record_name ::= Ident;
+E_Attribute_key          . Attribute_key ::= Ident;
+E_Attribute_value        . Attribute_value ::= Ident;
+E_Attribute_value_Empty  . Attribute_value ::= ;
+
+-- Built_in_simple_type:
+Built_in_simple_type_Bool     . Built_in_simple_type ::= "bool";
+Built_in_simple_type_Integer  . Built_in_simple_type ::= "integer";
+Built_in_simple_type_OCount   . Built_in_simple_type ::= "count";
+Built_in_simple_type_Real     . Built_in_simple_type ::= "real";
+Built_in_simple_type_Duration . Built_in_simple_type ::= "duration";
+Built_in_simple_type_Time     . Built_in_simple_type ::= "time";
+Built_in_simple_type_String   . Built_in_simple_type ::= "string";
+Built_in_simple_type_Pattern  . Built_in_simple_type ::= "pattern";
+Built_in_simple_type_Address  . Built_in_simple_type ::= "addr";
+Built_in_simple_type_Subnet   . Built_in_simple_type ::= "subnet";
+
