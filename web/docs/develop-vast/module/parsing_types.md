@@ -1,4 +1,162 @@
 # Parsing YAML Types
+
+## Type parsing redesign goals
+
+1. Improve error handling when parsing.
+2. Easily way to bundle type, concept, and model definitions.
+3. Make dumping types in commands like `vast dump` and `vast status` easy, and
+   use YAML only as output format.
+
+## New way of parsing types
+
+We are using a minimal YAML-based layout that reads similar to the old DSL. The
+key property is that there are many places where a type can occur, and in all
+places, it is valid to put all variations of type.
+
+In the following, the essential rule to remember is that a type is a YAML
+dictionary; only in type alias and record field declaration can it be a YAML
+string value for brevity.
+
+## Type Alias
+
+Define a new type alias as YAML dictionary, with a type key:
+
+```
+url:
+  type: string
+```
+
+Every type can have metadata in the form of attributes, which are free-form
+key-values pairs with an optional value:
+
+```
+url:
+  type: string
+  attributes:
+  - index: hash
+  - ioc
+```
+
+# List
+
+A list type has the list key and a valid type on the RHS:
+
+```
+urls:
+  list: url
+```
+
+# Map
+
+A map type is a YAML dictionary with a key and a value, each of which references
+an existing type:
+
+```
+urls:
+  map:
+    key: string
+    value: bool
+```
+
+As with record fields and other types, inline type definitions also work.
+
+# Record
+
+A record type is a list of singleton YAML dictionaries, each of which represents
+a field:
+
+```
+connection:
+  record:
+  - src_ip: addr
+  - dst_ip: addr
+  - src_port: port
+  - dst_port: port
+  - proto: string
+```
+
+The RHS of a field definition is either a type identifier 👆 or an inline type
+definition 👇:
+
+```
+flow:
+  record:
+  - source:
+      type: addr
+      attributes:
+      - originator
+  - destination:
+      type: addr
+      attributes:
+      - responder
+```
+
+Record of lists are possible:
+
+```
+matrix:
+  record:
+  - values:
+      list:
+        list:
+          real
+```
+
+Likewise, lists of records:
+
+```
+answers:
+  list:
+    record:
+    - question: string
+    - correct: bool
+```
+
+# Enumeration
+
+An enum type has the enum key and contains a list of strings:
+
+```
+status:
+  enum:
+  - on
+  - off
+  - unknown
+```
+
+# Record Algebra
+
+When composing records, we need need to define records in their extended form,
+which requires an additional `fields` key:
+
+```
+# The base record.
+common:
+  record:
+  - field:
+      type: bool
+
+# The combined record...
+bundle:
+  record:
+    base:
+      - common
+    fields:
+      - msg: string
+
+# ...which has the same layout as this specification:
+bundle:
+- field: bool
+- msg: string
+```
+
+There are three special keys under the record key that control what to do when a
+field name clash occurs:
+
+1. `base`: raise an error
+2. `implant`: prefer the base record
+3. `extend`: prefer the current record
+
 ## Inlining and naming
 
 The type declaration syntax does not provide a way to name inline types, which
