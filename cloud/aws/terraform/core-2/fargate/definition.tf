@@ -14,8 +14,9 @@ locals {
           readOnly      = false
         }
       ]
-      entrypoint = ["/bin/sh", "-c"]
-      command    = ["${var.entrypoint}"]
+      entrypoint  = ["/bin/sh", "-c"]
+      command     = ["${var.entrypoint}"]
+      stopTimeout = 120 # the max value for Fargate
       portMappings = [
         {
           containerPort = var.port
