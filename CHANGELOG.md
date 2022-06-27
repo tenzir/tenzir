@@ -6,7 +6,12 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.1.0-rc2][v2.1.0-rc2]
+## [v2.1.0-rc3][v2.1.0-rc3]
+
+### Breaking Changes
+
+- VAST will from now on always format `time` and `timestamp` values with six decimal places (microsecond precision) instead of the old value dependent dynamic precision. This may require action for downstream tooling like metrics collectors that expect nanosecond granularity.
+  [#2380](https://github.com/tenzir/vast/pull/2380)
 
 ### Changes
 
@@ -55,6 +60,13 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now compresses on-disk indexes with Zstd, resulting in a 50-80% size reduction depending on the type of indexes used, and reducing the overall index size to below the raw data size. This improves retention spans significantly. For example, using the default configuration, the indexes for `suricata.ftp` events now use 75% less disk space, and `suricata.flow` 30% less.
   [#2346](https://github.com/tenzir/vast/pull/2346)
 
+- The index statistics in `vast status --detailed` now show the event distribution per schema as a percentage of the total number of events in addition to the per-schema number, e.g., for `suricata.flow` events under the key `index.statistics.layouts.suricata.flow.percentage`.
+  [#2351](https://github.com/tenzir/vast/pull/2351)
+
+- The output `vast status --detailed` now shows metadata from all partitions under the key `.catalog.partitions`. Additionally, the catalog emits metrics under the key `catalog.num-events` and `catalog.num-partitions` containing the number of events and partitions respectively. The metrics contain the schema name in the field `metadata_schema` and the (internal) partition version in the field `metadata_partition-version`.
+  [#2360](https://github.com/tenzir/vast/pull/2360)
+  [#2363](https://github.com/tenzir/vast/pull/2363)
+
 ### Bug Fixes
 
 - VAST no longer crashes when importing map or pattern data annotated with the `#skip` attribute.
@@ -68,6 +80,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Setting the environment variable `VAST_ENDPOINT` to `host:port` pair no longer fails on startup with a parse error.
   [#2305](https://github.com/tenzir/vast/pull/2305)
+
+- VAST no longer hangs when it is shut down while still importing events.
+  [#2324](https://github.com/tenzir/vast/pull/2324)
 
 - VAST now reads the default false-positive rate for sketches correctly. This broke accidentally with the v2.0 release. The option moved from `vast.catalog-fp-rate` to `vast.index.default-fp-rate`.
   [#2325](https://github.com/tenzir/vast/pull/2325)
@@ -83,6 +98,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The JSON import now treats `time` and `duration` fields correctly for JSON strings containing a number, i.e., the JSON string `"1654735756"` now behaves just like the JSON number `1654735756` and for a `time` field results in the value `2022-06-09T00:49:16.000Z`.
   [#2340](https://github.com/tenzir/vast/pull/2340)
+
+- VAST component will no longer terminate when it can't write any more data to disk. Incoming data will still be accepted but discarded. We encourage all users to enable the disk-monitor or compaction features as a proper solution to this problem.
+  [#2376](https://github.com/tenzir/vast/pull/2376)
 
 ## [v2.0.0][v2.0.0]
 
@@ -1777,7 +1795,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.1.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.1.0-rc2
+[v2.1.0-rc3]: https://github.com/tenzir/vast/releases/tag/v2.1.0-rc3
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
