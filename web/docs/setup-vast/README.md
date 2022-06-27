@@ -1,8 +1,9 @@
 # Setup VAST
 
-This section covers the different stages of the setup process that ultimately
-yield a running VAST instance. You have several options to enter the setup
-pipeline, based on what intermediate artifact you would like to begin with.
+This section describes VAST from an **operator perspective**. We cover the
+different stages of the setup process that ultimately yield a running VAST
+instance. You have several options to enter the setup pipeline, based on what
+intermediate artifact you would like to begin with.
 
 ```mermaid
 flowchart LR
