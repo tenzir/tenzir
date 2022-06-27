@@ -3,7 +3,7 @@
 ## Type parsing redesign goals
 
 1. Improve error handling when parsing.
-2. Easily way to bundle type, concept, and model definitions.
+2. Easy way to bundle type, concept, and model definitions.
 3. Make dumping types in commands like `vast dump` and `vast status` easy, and
    use YAML only as output format.
 
