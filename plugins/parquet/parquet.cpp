@@ -530,7 +530,6 @@ writer_properties(const configuration& config) {
   return builder.build();
 }
 
-// TODO: make this static or something - no need to recompute every time
 std::shared_ptr<::parquet::ArrowWriterProperties> arrow_writer_properties() {
   auto builder = ::parquet::ArrowWriterProperties::Builder{};
   builder.store_schema(); // serialize arrow schema into parquet meta data
@@ -584,7 +583,7 @@ auto finish_parquet(
   return [self](caf::unit_t&, const caf::error&) {
     auto buffer
       = write_parquet_buffer(self->state.table_slices_, self->state.config_);
-    VAST_TRACE("{} writing partition {} with {} events in {} table slices, ",
+    VAST_TRACE("{} writes partition {} with {} events in {} table slices, ",
                *self, self->state.id_, self->state.num_rows_,
                self->state.table_slices_.size());
     auto c = chunk::make(buffer);

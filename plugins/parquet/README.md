@@ -31,7 +31,7 @@ a _table slice_, the smallest unit of data used in VAST internally. For storage
 efficiency, row groups are typically larger than table slices created during
 import, which are smaller to increase data recency and immediate availability.
 The `import_time`, stored and associated per table slice, is not correctly
-maintained in the larger table slice that spans multiple initial slices.
+maintained in the larger table slice that spans multiple input slices.
 VAST uses the largest of the available import times.
 Note that the information is properly stored for each event inside the parquet
 file, and we plan to fix that deficiency in an upcoming release.
