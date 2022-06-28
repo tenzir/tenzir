@@ -118,7 +118,7 @@ by VAST's query engine:
 |`startswith`|match the value as a prefix|🟢|🟢|
 |`endswith`|match the value as a suffix|🟢|🟢|
 |`base64`|encode the value with Base64|🟢|🟢
-|`base64offset`|encode value as all three possible Base64 variants|🟢|🟡
+|`base64offset`|encode value as all three possible Base64 variants|🟢|🟢
 |`utf16le`/`wide`|transform the value to UTF16 little endian|🟢|🟡
 |`utf16be`|transform the value to UTF16 big endian|🟢|🟡
 |`utf16`|transform the value to UTF16|🟢|🟡

@@ -17,6 +17,7 @@
 #include <vast/error.hpp>
 #include <vast/expression_visitors.hpp>
 
+#include <array>
 #include <map>
 #include <regex>
 #include <string>
@@ -258,7 +259,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         return predicate{extractor, op, value};
       };
       // Value transformation; identity by default.
-      std::vector<std::function<data(const data&)>> transforms;
+      std::vector<std::function<caf::expected<data>(const data&)>> transforms;
       // Parse modifiers.
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
         if (*i == "all") {
@@ -279,33 +280,41 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           // should become /X$/.
           op = relational_operator::ni;
         } else if (*i == "base64") {
-          auto encode = [](const data& d) -> data {
-            auto f = detail::overload{[](const auto& x) {
-                                        auto str = to_string(x);
-                                        return detail::base64::encode(str);
-                                      },
-                                      [](const std::string& x) {
-                                        return detail::base64::encode(x);
-                                      }};
-            return caf::visit(f, d);
+          auto encode = [](const data& x) -> caf::expected<data> {
+            if (const auto* str = caf::get_if<std::string>(&x))
+              return detail::base64::encode(*str);
+            return caf::make_error(ec::type_clash, //
+                                   "base64 only works with strings");
           };
           transforms.emplace_back(encode);
         } else if (*i == "base64offset") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "base64offset modifier not "
-                                                    "yet implemented");
+          op = relational_operator::in;
+          auto encode = [](const data& x) -> caf::expected<data> {
+            const auto* str = caf::get_if<std::string>(&x);
+            if (!str)
+              return caf::make_error(ec::type_clash, //
+                                     "base64offset only works with strings");
+            static constexpr std::array<size_t, 3> start = {{0, 2, 3}};
+            static constexpr std::array<size_t, 3> end = {{0, 3, 2}};
+            std::vector<std::string> xs(3);
+            for (size_t i = 0; i < 3; ++i) {
+              auto padded = std::string(i, ' ') + *str;
+              auto b64 = detail::base64::encode(padded);
+              auto len = b64.size() - end[(str->size() + i) % 3];
+              xs[i] = b64.substr(start[i], len - start[i]);
+            }
+            return list{xs[0], xs[1], xs[2]};
+          };
+          transforms.emplace_back(encode);
         } else if (*i == "utf16le" || *i == "wide") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "utf16le/wide modifier not "
-                                                    "yet implemented");
+          return caf::make_error(ec::unimplemented, //
+                                 "utf16le/wide not yet implemented");
         } else if (*i == "utf16be") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "utf16be modifier not yet "
-                                                    "implemented");
+          return caf::make_error(ec::unimplemented, //
+                                 "utf16be not yet implemented");
         } else if (*i == "utf16") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "utf16 modifier not yet "
-                                                    "implemented");
+          return caf::make_error(ec::unimplemented, //
+                                 "utf16 not yet implemented");
         } else if (*i == "re") {
           op = relational_operator::match;
           auto to_re = [](const data& d) -> data {
@@ -335,10 +344,13 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         }
       }
       // Helper to apply all modifiers over a value.
-      auto transform = [&](const data& x) {
+      auto transform = [&](const data& x) -> caf::expected<data> {
         auto result = x;
         for (auto f : transforms)
-          result = f(result);
+          if (auto x = f(result))
+            result = std::move(*x);
+          else
+            return x.error();
         return result;
       };
       // Parse RHS.
@@ -351,13 +363,19 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             return caf::make_error(ec::type_clash, "nested lists disallowed");
           if (caf::holds_alternative<record>(value))
             return caf::make_error(ec::type_clash, "nested records disallowed");
-          connective.emplace_back(make_predicate(transform(value)));
+          if (auto x = transform(value))
+            connective.emplace_back(make_predicate(*x));
+          else
+            return x.error();
         }
         auto expr = all ? expression{conjunction(std::move(connective))}
                         : expression{disjunction(std::move(connective))};
         result.emplace_back(hoist(std::move(expr)));
       } else {
-        result.emplace_back(make_predicate(transform(rhs)));
+        if (auto x = transform(rhs))
+          result.emplace_back(make_predicate(*x));
+        else
+          return x.error();
       }
     }
     return result.size() == 1 ? result[0] : result;

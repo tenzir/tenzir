@@ -239,6 +239,32 @@ TEST(modifier - double base64) {
   CHECK_EQUAL(search_id, expected);
 }
 
+// The ground truth is in the sigma repo. We use the rule
+// tests/test-modifiers.yml and invoke it as follows:
+//
+//   tools/sigmac -t es-qs -c winlogbeat tests/test-modifiers.yml
+//
+// This yields:
+//
+// (winlog.channel:"Security" AND field.keyword:/.*foobar.*/ AND
+// encoded:"VABoAGkAcwAgAHMAdAByAGkAbgBnACAAaQBzACAAQgBhAHMAZQA2ADQAIABlAG4AYwBvAGQAZQBkAA\=\="
+// AND obfuscated.keyword:(*aHR0cDovL* OR *h0dHA6Ly* OR *odHRwOi8v* OR
+// *aHR0cHM6Ly* OR *h0dHBzOi8v* OR *odHRwczovL*) AND allmatch.keyword:*foo* AND
+// allmatch.keyword:*bar* AND allmatch.keyword:*bla* AND end.keyword:*test AND
+// start.keyword:test*)
+//
+// Note the following sub-expression: *aHR0cDovL* OR *h0dHA6Ly* OR *odHRwOi8v*
+//
+// This is what we are testing here.
+TEST(modifier - base64offset) {
+  auto yaml = R"__(
+    foo|base64offset: "http://"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expr = R"__(foo in ["aHR0cDovL", "h0dHA6Ly", "odHRwOi8v"])__"s;
+  CHECK_EQUAL(search_id, to_expr(expr));
+}
+
 TEST(search id selection - exact match) {
   auto yaml = R"__(
     detection:
