@@ -245,18 +245,8 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       auto extractor = field_extractor{std::string{keys[0]}};
       auto op = relational_operator::equal;
       auto all = false;
-      auto re = false;
-      // Value factory that takes into account whether the `re` modifier is
-      // present.
+      // Predicate factory that references the extractor.
       auto make_predicate = [&](const data& value) {
-        // If the 're' modifier is present, we interpret the raw string
-        // directly as pattern.
-        if (re)
-          if (auto str = caf::get_if<std::string>(&value))
-            return predicate{extractor, relational_operator::match,
-                             data{pattern{*str}}};
-        // Otherwise, we may have a pattern in case of a string and must try to
-        // parse it as such.
         if (auto str = caf::get_if<std::string>(&value))
           if (!str->empty())
             if (auto pat = make_pattern(*str))
@@ -317,8 +307,25 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           return caf::make_error(ec::unimplemented, "utf16 modifier not yet "
                                                     "implemented");
         } else if (*i == "re") {
-          re = true;
           op = relational_operator::match;
+          auto to_re = [](const data& d) -> data {
+            auto f = detail::overload{
+              [](const auto& x) -> data {
+                auto str = to_string(x);
+                if (auto pat = make_pattern(str))
+                  return pat;
+                return str;
+              },
+              [](const std::string& x) -> data {
+                return pattern{x};
+              },
+              [](const pattern& x) -> data {
+                return x;
+              }
+            };
+            return caf::visit(f, d);
+          };
+          transforms.emplace_back(to_re);
         } else if (*i == "cidr") {
           // TODO
           return caf::make_error(ec::unimplemented, "cidr modifier not yet "
