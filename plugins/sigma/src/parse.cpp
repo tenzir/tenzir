@@ -153,7 +153,9 @@ struct detection_parser : parser_base<detection_parser> {
   bool parse(Iterator& f, const Iterator& l, expression& result) const {
     using namespace parser_literals;
     auto ws = ignore(*parsers::space);
-    auto negate = [](expression x) { return negation{std::move(x)}; };
+    auto negate = [](expression x) {
+      return negation{std::move(x)};
+    };
     rule<Iterator, expression> expr;
     rule<Iterator, expression> group;
     // clang-format off
@@ -278,15 +280,13 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           op = relational_operator::ni;
         } else if (*i == "base64") {
           auto encode = [](const data& d) -> data {
-            auto f = detail::overload{
-              [](const auto& x) {
-                auto str = to_string(x);
-                return detail::base64::encode(str);
-              },
-              [](const std::string& x) {
-                return detail::base64::encode(x);
-              }
-            };
+            auto f = detail::overload{[](const auto& x) {
+                                        auto str = to_string(x);
+                                        return detail::base64::encode(str);
+                                      },
+                                      [](const std::string& x) {
+                                        return detail::base64::encode(x);
+                                      }};
             return caf::visit(f, d);
           };
           transforms.emplace_back(encode);
@@ -309,20 +309,18 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "re") {
           op = relational_operator::match;
           auto to_re = [](const data& d) -> data {
-            auto f = detail::overload{
-              [](const auto& x) -> data {
-                auto str = to_string(x);
-                if (auto pat = make_pattern(str))
-                  return pat;
-                return str;
-              },
-              [](const std::string& x) -> data {
-                return pattern{x};
-              },
-              [](const pattern& x) -> data {
-                return x;
-              }
-            };
+            auto f = detail::overload{[](const auto& x) -> data {
+                                        auto str = to_string(x);
+                                        if (auto pat = make_pattern(str))
+                                          return pat;
+                                        return str;
+                                      },
+                                      [](const std::string& x) -> data {
+                                        return pattern{x};
+                                      },
+                                      [](const pattern& x) -> data {
+                                        return x;
+                                      }};
             return caf::visit(f, d);
           };
           transforms.emplace_back(to_re);
