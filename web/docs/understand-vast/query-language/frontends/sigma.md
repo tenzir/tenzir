@@ -118,8 +118,10 @@ by VAST's query engine:
 |`startswith`|match the value as a prefix|🟢|🟢|
 |`endswith`|match the value as a suffix|🟢|🟢|
 |`base64`|encode the value with Base64|🟢|🟢
-|`base64offset`|If a value might appear somewhere in a base64-encoded value the representation might change depending on the position in the overall value|🟢|🟡
-|`wide`|transform the to UTF16-LE|🟢|🟡
+|`base64offset`|encode value as all three possible Base64 variants|🟢|🟡
+|`utf16le`/`wide`|transform the value to UTF16 little endian|🟢|🟡
+|`utf16be`|transform the value to UTF16 big endian|🟢|🟡
+|`utf16`|transform the value to UTF16|🟢|🟡
 |`re`|interpret the value as regular expression|🟢|🔴
 |`cidr`|interpret the value as a IP CIDR|🔴|🟡
 |`all`|changes the expression logic from OR to AND|🟢|🟢
