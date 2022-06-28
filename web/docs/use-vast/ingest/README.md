@@ -63,8 +63,8 @@ help for a specific format, run `vast import <format> help`.
 
 The `json` import format consumes [line-delimited
 JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects
-according to a specified [schema][schemas]. That is, one line corresponds to one event.
-The object field names correspond to record field names.
+according to a specified schema. That is, one line corresponds to one event. The
+object field names correspond to record field names.
 
 JSON can express only a subset VAST's data model. For example, VAST has
 first-class support for IP addresses but they are strings in JSON. To get the
@@ -485,8 +485,8 @@ writing a schema will be optional in the future, i.e., only needed when tuning
 data semantics.
 :::
 
-The `infer` command attempts to deduce a [schema][schemas], given a sample of
-data. For example, consider this JSON data:
+The `infer` command attempts to deduce a schema, given a sample of data. For
+example, consider this JSON data:
 
 import MissingDocumentation from '@site/presets/MissingDocumentation.md';
 
@@ -505,11 +505,11 @@ the event timestamp.
 
 ## Write a schema manually
 
-When VAST does not ship with a [schema][schemas] for your data out of the box,
+When VAST does not ship with a [module][modules] for your data out of the box,
 or the inference is not good enough for your use case regarding type semantics
 or performance, you can write easily yourself.
 
-A schema is a record [type][types] with a name so that VAST can
+A schema is a record type with a name so that VAST can
 represent it as a table internally. You would write a schema manually or extend
 an existing schema if your goal is tuning type semantics and performance. For
 example, if you have a field of type `string` that only holds IP addresses, you
@@ -583,9 +583,8 @@ vast import csv < foo.csv
 
 ## Map events to schemas
 
-For some input formats, such as JSON and CSV, VAST requires an existing
-[schema][schemas] to find the corresponding type definition and use higher-level
-types.
+For some input formats, such as JSON and CSV, VAST requires an existing schema
+to find the corresponding type definition and use higher-level types.
 
 There exist two ways to tell VAST how to map events to schemas:
 
@@ -618,7 +617,6 @@ There exist two ways to tell VAST how to map events to schemas:
    field `event_type` and prefixes it with `suricata.` to look for a
    corresponding schema.
 
-[types]: /docs/understand-vast/data-model/types
-[concepts]: /docs/understand-vast/data-model/types
-[schemas]: /docs/understand-vast/data-model/types#schemas
+[types]: /docs/understand-vast/data-model/type-system
+[concepts]: /docs/understand-vast/data-model/taxonomies#concepts
 [modules]: /docs/understand-vast/data-model/modules

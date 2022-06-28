@@ -254,8 +254,9 @@ argument. We are also telling VAST via `-t pulsedive` that the data matches the
 `pulsedive` type (specified in the bundled `pulsedive.schema`). After parsing,
 VAST forwards the parsed indicators to the matcher `ips`.
 
-An additional [concepts definition](/vast/data-model/taxonomies) for
-the `matcher.indicator.value` and `matcher.indicator.context` fields for the
+An additional [concepts
+definition](/docs/understand-vast/data-model/taxonomies#concepts) for the
+`matcher.indicator.value` and `matcher.indicator.context` fields for the
 `pulsedive` type lets the command know which fields to treat as *value* and
 optional *context*.
 
