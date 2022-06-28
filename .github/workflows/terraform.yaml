@@ -24,7 +24,7 @@ on: workflow_dispatch
 #   state might end up locked and subsequent runs will fail. In this case the
 #   state first needs to be unlocked, for instance from the Terraform Cloud UI.
 # - You can optionally set a different prefix for the Terraform Cloud workspace
-#   names using the TF_WORKSPACE_PREFIX secret (default is "gh-act")
+#   names using the TF_WORKSPACE_PREFIX secret (default is "gh-act-")
 
 # Set these secrets to configure the CI run
 env:
@@ -32,8 +32,9 @@ env:
   VAST_CIDR: "${{ secrets.VAST_CIDR }}"
   VAST_AWS_REGION: "${{ secrets.VAST_AWS_REGION }}"
   TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
-  TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX || 'gh-act' }}"
+  TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX  || 'gh-act-' }}"
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+  TF_STATE_BACKEND: "cloud"
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
   VASTCLOUD_NOTTY: 1
@@ -63,32 +64,7 @@ jobs:
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
 
       - name: Configure Terraform Cloud
-        run: ./vast-cloud integration.config-tfcloud -a
-
-      - name: Substitute backend with Terraform Cloud
-        run: |
-          cat<<EOF > terraform/terragrunt.hcl
-          generate "backend" {
-            path = "backend.generated.tf"
-            if_exists = "overwrite"
-            contents = <<EOC
-          terraform {
-            cloud {
-              organization = "$TF_ORGANIZATION"
-              token        = "$TF_API_TOKEN"
-              workspaces {
-                name = "$TF_WORKSPACE_PREFIX-\${path_relative_to_include()}"
-              }
-            }
-          }
-          EOC
-          }
-          locals {
-            versions_file = "\${path_relative_from_include()}/versions.hcl"
-            versions = read_terragrunt_config(local.versions_file)
-          }
-          generate = local.versions.generate
-          EOF
+        run: ./vast-cloud tfcloud.config --auto
 
       - name: Deploy
         id: deploy

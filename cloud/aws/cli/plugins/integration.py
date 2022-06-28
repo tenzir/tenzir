@@ -1,74 +1,10 @@
-from invoke import task, Context, Collection
+from invoke import task, Context
 import time
-import dynaconf
-import core
-import json
-import re
-import tfcloud
+from common import COMMON_VALIDATORS
 
-VALIDATORS = [
-    dynaconf.Validator("TF_ORGANIZATION", must_exist=True),
-    dynaconf.Validator("TF_WORKSPACE_PREFIX", default="gh-act"),
-    dynaconf.Validator("TF_API_TOKEN", must_exist=True),
-    dynaconf.Validator("TF_STATE_BACKEND", default="local"),
-]
+VALIDATORS = COMMON_VALIDATORS
 
 INVOKE_CONFIG = {"run": {"env": {"VASTCLOUD_NOTTY": "1"}}}
-
-
-@task(autoprint=True)
-def list_modules(c):
-    """List available Terragrunt modules"""
-    deps = c.run(
-        """terragrunt graph-dependencies""", hide="out", env=core.conf(VALIDATORS)
-    ).stdout
-    return re.findall('terraform/(.*)" ;', deps)
-
-
-@task(autoprint=True)
-def tf_version(c):
-    """Terraform version used by the CLI"""
-    version_json = c.run("terraform version -json", hide="out").stdout
-    return json.loads(version_json)["terraform_version"]
-
-
-@task(
-    help={
-        "auto": """if set to True, this will forward the values of your 
-current environement variables. Otherwise you will be prompted for 
-the values you want to give to the environment variables"""
-    }
-)
-def config_tfcloud(c, auto=False):
-    """Configure workspaces in your Terrraform Cloud account."""
-    conf = core.conf(VALIDATORS)
-    client = tfcloud.Client(
-        conf["TF_ORGANIZATION"],
-        conf["TF_API_TOKEN"],
-    )
-    ws_list = client.upsert_workspaces(
-        conf["TF_WORKSPACE_PREFIX"],
-        list_modules(c),
-        tf_version(c),
-        "cloud/aws/terraform",
-    )
-
-    varset = client.create_varset(
-        f"{conf['TF_WORKSPACE_PREFIX']}-aws-creds",
-    )
-    for ws in ws_list:
-        client.assign_varset(varset["id"], ws["id"])
-
-    var_defs = [
-        {"key": "AWS_SECRET_ACCESS_KEY", "sensitive": True},
-        {"key": "AWS_ACCESS_KEY_ID", "sensitive": False},
-    ]
-    for var_def in var_defs:
-        if auto:
-            value = conf[var_def["key"]]
-        else:
-            value = input(f"{var_def['key']} (Ctrl+c to cancel):")
-        client.set_variable(varset["id"], var_def["key"], value, var_def["sensitive"])
 
 
 @task

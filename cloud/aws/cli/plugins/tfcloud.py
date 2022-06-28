@@ -1,4 +1,13 @@
+from invoke import task
+import dynaconf
 import requests
+from common import conf, COMMON_VALIDATORS, list_modules, tf_version
+
+VALIDATORS = [
+    *COMMON_VALIDATORS,
+    dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne=""),
+    dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne=""),
+]
 
 
 def tfvar(key: str, sensitive: bool):
@@ -28,6 +37,8 @@ def print_error_resp(func):
 
 
 class Client:
+    """A client with useful requests to the Terraform Cloud API"""
+
     def __init__(self, org: str, token: str):
         self.url = "https://app.terraform.io/api/v2"
         self.org_url = f"{self.url}/organizations/{org}"
@@ -54,7 +65,7 @@ class Client:
         ws_map = self.list_workspaces(prefix)
         updted_ws_list = []
         for mod in modules:
-            ws_for_mod = f"{prefix}-{mod}"
+            ws_for_mod = f"{prefix}{mod}"
             payload = {
                 "data": {
                     "attributes": {
@@ -88,7 +99,7 @@ class Client:
         return updted_ws_list
 
     @print_error_resp
-    def get_varset(self, name) -> dict:
+    def get_varset(self, name: str) -> dict:
         "Find a varset from its name, None if doesn't exist"
         res = requests.get(f"{self.org_url}/varsets", headers=self.headers)
         res.raise_for_status()
@@ -97,7 +108,7 @@ class Client:
         )
 
     @print_error_resp
-    def create_varset(self, name) -> dict:
+    def create_varset(self, name: str) -> dict:
         existing_varset = self.get_varset(name)
         if existing_varset is not None:
             print(f"Varset {name} already exists ({existing_varset['id']})")
@@ -121,7 +132,7 @@ class Client:
         return existing_varset
 
     @print_error_resp
-    def assign_varset(self, varset_id, workspace_id):
+    def assign_varset(self, varset_id: str, workspace_id: str):
         payload = {
             "data": [
                 {
@@ -184,3 +195,42 @@ class Client:
             )
         res.raise_for_status()
         print("DONE")
+
+
+@task(
+    help={
+        "auto": """if set to True, this will forward the values of your 
+current environement variables. Otherwise you will be prompted for 
+the values you want to give to the environment variables"""
+    }
+)
+def config(c, auto=False):
+    """Configure workspaces in your Terrraform Cloud account"""
+    config = conf(VALIDATORS)
+    client = Client(
+        config["TF_ORGANIZATION"],
+        config["TF_API_TOKEN"],
+    )
+    ws_list = client.upsert_workspaces(
+        config["TF_WORKSPACE_PREFIX"],
+        list_modules(c),
+        tf_version(c),
+        "cloud/aws/terraform",
+    )
+
+    varset = client.create_varset(
+        f"{config['TF_WORKSPACE_PREFIX']}aws-creds",
+    )
+    for ws in ws_list:
+        client.assign_varset(varset["id"], ws["id"])
+
+    var_defs = [
+        {"key": "AWS_SECRET_ACCESS_KEY", "sensitive": True},
+        {"key": "AWS_ACCESS_KEY_ID", "sensitive": False},
+    ]
+    for var_def in var_defs:
+        if auto:
+            value = config[var_def["key"]]
+        else:
+            value = input(f"{var_def['key']} (Ctrl+c to cancel):")
+        client.set_variable(varset["id"], var_def["key"], value, var_def["sensitive"])
