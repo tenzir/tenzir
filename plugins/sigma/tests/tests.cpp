@@ -15,12 +15,14 @@
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/printable/stream.hpp>
 #include <vast/concept/printable/vast/expression.hpp>
+#include <vast/detail/base64.hpp>
 #include <vast/expression.hpp>
 #include <vast/test/test.hpp>
 
 #include <caf/test/dsl.hpp>
 
 using namespace std::string_literals;
+using namespace std::string_view_literals;
 using namespace vast;
 using namespace vast::detail;
 
@@ -180,7 +182,7 @@ TEST(modifier - endswith) {
 
 TEST(modifier - lt) {
   auto yaml = R"__(
-    foo|lt: "42"
+    foo|lt: 42
   )__";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo < 42");
@@ -189,7 +191,7 @@ TEST(modifier - lt) {
 
 TEST(modifier - lte) {
   auto yaml = R"__(
-    foo|lte: "42"
+    foo|lte: 42
   )__";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo <= 42");
@@ -198,7 +200,7 @@ TEST(modifier - lte) {
 
 TEST(modifier - gt) {
   auto yaml = R"__(
-    foo|gt: "42"
+    foo|gt: 42
   )__";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo > 42");
@@ -207,10 +209,33 @@ TEST(modifier - gt) {
 
 TEST(modifier - gte) {
   auto yaml = R"__(
-    foo|gte: "42"
+    foo|gte: 42
   )__";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo >= 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - base64) {
+  auto yaml = R"__(
+    foo|base64: value
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto base64_value = detail::base64::encode("value"sv);
+  REQUIRE_EQUAL(base64_value, "dmFsdWU="); // echo -n value | base64
+  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - double base64) {
+  auto yaml = R"__(
+    foo|base64|base64: value
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto base64_value = detail::base64::encode("value"sv);
+  base64_value = detail::base64::encode(base64_value);
+  REQUIRE_EQUAL(base64_value, "ZG1Gc2RXVT0="); // echo -n dmFsdWU= | base64
+  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
   CHECK_EQUAL(search_id, expected);
 }
 

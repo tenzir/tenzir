@@ -10,6 +10,8 @@
 
 #include <vast/concept/parseable/core.hpp>
 #include <vast/concept/parseable/string.hpp>
+#include <vast/concept/printable/to_string.hpp>
+#include <vast/concept/printable/vast/data.hpp>
 #include <vast/detail/base64.hpp>
 #include <vast/detail/string.hpp>
 #include <vast/error.hpp>
@@ -263,6 +265,8 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         // By default, we take the operator based on the provided modifiers.
         return predicate{extractor, op, value};
       };
+      // Value transformation; identity by default.
+      std::vector<std::function<data(const data&)>> transforms;
       // Parse modifiers.
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
         if (*i == "all") {
@@ -283,9 +287,19 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           // should become /X$/.
           op = relational_operator::ni;
         } else if (*i == "base64") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "base64 modifier not yet "
-                                                    "implemented");
+          auto encode = [](const data& d) -> data {
+            auto f = detail::overload{
+              [](const auto& x) {
+                auto str = to_string(x);
+                return detail::base64::encode(str);
+              },
+              [](const std::string& x) {
+                return detail::base64::encode(x);
+              }
+            };
+            return caf::visit(f, d);
+          };
+          transforms.emplace_back(encode);
         } else if (*i == "base64offset") {
           // TODO
           return caf::make_error(ec::unimplemented, "base64offset modifier not "
@@ -305,8 +319,23 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "re") {
           re = true;
           op = relational_operator::match;
+        } else if (*i == "cidr") {
+          // TODO
+          return caf::make_error(ec::unimplemented, "cidr modifier not yet "
+                                                    "implemented");
+        } else if (*i == "expand") {
+          // TODO
+          return caf::make_error(ec::unimplemented, "expand modifier not yet "
+                                                    "implemented");
         }
       }
+      // Helper to apply all modifiers over a value.
+      auto transform = [&](const data& x) {
+        auto result = x;
+        for (auto f : transforms)
+          result = f(result);
+        return result;
+      };
       // Parse RHS.
       if (caf::holds_alternative<record>(rhs))
         return caf::make_error(ec::type_clash, "nested maps not allowed");
@@ -317,13 +346,13 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             return caf::make_error(ec::type_clash, "nested lists disallowed");
           if (caf::holds_alternative<record>(value))
             return caf::make_error(ec::type_clash, "nested records disallowed");
-          connective.emplace_back(make_predicate(value));
+          connective.emplace_back(make_predicate(transform(value)));
         }
         auto expr = all ? expression{conjunction(std::move(connective))}
                         : expression{disjunction(std::move(connective))};
         result.emplace_back(hoist(std::move(expr)));
       } else {
-        result.emplace_back(make_predicate(rhs));
+        result.emplace_back(make_predicate(transform(rhs)));
       }
     }
     return result.size() == 1 ? result[0] : result;

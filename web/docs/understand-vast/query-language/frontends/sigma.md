@@ -117,11 +117,11 @@ by VAST's query engine:
 |`contains`|perform a substring search with the value|🟢|🟢|
 |`startswith`|match the value as a prefix|🟢|🟢|
 |`endswith`|match the value as a suffix|🟢|🟢|
-|`base64`|encode the value with Base64|🟢|🟡
+|`base64`|encode the value with Base64|🟢|🟢
 |`base64offset`|If a value might appear somewhere in a base64-encoded value the representation might change depending on the position in the overall value|🟢|🟡
 |`wide`|transform the to UTF16-LE|🟢|🟡
 |`re`|interpret the value as regular expression|🟢|🔴
-|`cidr`|interprete the value as a IP CIDR|🔴|🟡
+|`cidr`|interpret the value as a IP CIDR|🔴|🟡
 |`all`|changes the expression logic from OR to AND|🟢|🟢
 |`lt`|compare less than (`<`) the value|🔴|🟢
 |`lte`|compare less than or equal to (`<=`) the value|🔴|🟢
