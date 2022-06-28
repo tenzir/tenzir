@@ -178,6 +178,42 @@ TEST(modifier - endswith) {
   CHECK_EQUAL(search_id, expected);
 }
 
+TEST(modifier - lt) {
+  auto yaml = R"__(
+    foo|lt: "42"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo < 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - lte) {
+  auto yaml = R"__(
+    foo|lte: "42"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo <= 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - gt) {
+  auto yaml = R"__(
+    foo|gt: "42"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo > 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - gte) {
+  auto yaml = R"__(
+    foo|gte: "42"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo >= 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
 TEST(search id selection - exact match) {
   auto yaml = R"__(
     detection:

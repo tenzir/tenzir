@@ -85,7 +85,7 @@ of search expressions using boolean algebra (AND, OR, NOT) and offer multiple
 ways to define predicates and sub-expression. But there also exist differences
 in expressiveness and intent. This section compares the two systems.
 
-### Expressiveness
+## Expressiveness
 
 The majority of rule definitions include combinations of exact string lookups,
 substring searches, or pattern matches. Sigma uses
@@ -93,35 +93,43 @@ substring searches, or pattern matches. Sigma uses
 to select a concrete operator for given search predicate. Without a modifier
 specification, Sigma uses equality comparison (`==`) of field and value. For
 example, the `contains` modifier changes the operator to substring search, and
-the `re` modifier switches to a regular expression match.
-
-Sigma currently lacks support for ordering relationships, such as less-than
-comparison of numerical values, e.g., `x < 42` or `timestamp >= 2021-02`,
-whereas VAST offers relational operators (`<`, `<=`, `>=`, `>`) for numeric
-types.
+the `re` modifier switches to a regular expression match. The now "legacy" sigma
+compiler lacks support for ordering relationships, such as less-than comparison
+of numerical values, e.g., `x < 42` or `timestamp >= 2021-02`. The
+[pySigma][pysigma] project addresses this with the additional modifiers `lt`,
+`lte`, `gt`, `gte`.
 
 ## Compatibility
 
 VAST's support for Sigma is still in the early stages and does not support the
-full [language specification][sigma-spec]. The following features are currently
-unsupported:
+full [language specification][sigma-spec]. Most notable, the concept of a
+"value" is different:
 
-- Certain value invariants:
-  - VAST does not offer case-insensitive search, whereas it's the default in
-    Sigma
-  - Interpretation of string values containing `*` and `?` wildcards  
-- The following modifiers:
-  - `re`
-  - `base64`
-  - `base64offset`
-  - `utf16le` / `wide`
-  - `utf16be`
-  - `utf16`
-- TimeFrame specification
-- Aggregation expressions
-- Near aggregation expressions
+- VAST does not yet offer case-insensitive string search
+- VAST does not yet treat `*` and `?` wildcards in strings as wildcards
 
-### Focus on Endpoint
+The table below shows the current implementation status of modifiers, where 🟢
+means implemented, 🟡 not yet implemented but possible, and 🔴 not yet supported
+by VAST's query engine:
+
+|Modifier|Use|sigmac|VAST|
+|--------|---|:----:|:--:|
+|`contains`|perform a substring search with the value|🟢|🟢|
+|`startswith`|match the value as a prefix|🟢|🟢|
+|`endswith`|match the value as a suffix|🟢|🟢|
+|`base64`|encode the value with Base64|🟢|🟡
+|`base64offset`|If a value might appear somewhere in a base64-encoded value the representation might change depending on the position in the overall value|🟢|🟡
+|`wide`|transform the to UTF16-LE|🟢|🟡
+|`re`|interpret the value as regular expression|🟢|🔴
+|`cidr`|interprete the value as a IP CIDR|🔴|🟡
+|`all`|changes the expression logic from OR to AND|🟢|🟢
+|`lt`|compare less than (`<`) the value|🔴|🟢
+|`lte`|compare less than or equal to (`<=`) the value|🔴|🟢
+|`gt`|compare greater than (`>`) the value|🔴|🟢
+|`gte`|compare greater than or equal to (`>=`) the value|🔴|🟢
+|`expand`|expand value to placeholder strings, e.g., `%something%`|🔴|🔴
+
+## Focus on Endpoint
 
 Sigma predominantly offers rules with a focus on endpoint data, such as
 [Sysmon](https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon)
@@ -147,5 +155,7 @@ NetFlow, and full support for network monitors like Zeek and Suricata. By
 natively supporting Sigma in VAST, we are looking forward to offer a platform
 with detection capabilities on both ends of the spectrum.
 
+[pysigma]: https://github.com/SigmaHQ/pySigma
+[correlations]: https://github.com/SigmaHQ/sigma/wiki/Specification:-Sigma-Correlations
 [sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
 [sigma-rules-2022-06]: https://github.com/SigmaHQ/sigma/tree/d78818e27d42710f427eb205a9ca59b4ab97e728/rules

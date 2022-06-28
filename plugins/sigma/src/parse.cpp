@@ -267,6 +267,14 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
         if (*i == "all") {
           all = true;
+        } else if (*i == "lt") {
+          op = relational_operator::less;
+        } else if (*i == "lte") {
+          op = relational_operator::less_equal;
+        } else if (*i == "gt") {
+          op = relational_operator::greater;
+        } else if (*i == "gte") {
+          op = relational_operator::greater_equal;
         } else if (*i == "contains") {
           op = relational_operator::ni;
         } else if (*i == "endswith" || *i == "startswith") {
