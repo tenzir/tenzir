@@ -49,27 +49,28 @@ struct record_composition {
   record_algebra_type kind;
   /// The records to merge into the Record Algebra Fields which is stored as a
   /// record in #parsed.
-  std::vector<std::string_view> records{};
+  std::vector<std::string> records{};
 };
 
 struct parsed_type {
   /// Potentially unresolved type
   type parsed;
   /// The types this type depends on
-  std::vector<std::string_view> providers{};
+  /// The name of the type at parse time; the parser cannot determine whether it
+  /// is qualified or unqualified.
+  std::vector<std::string> providers{};
   std::optional<record_composition> algebra;
-  parsed_type(type&& new_parsed) : parsed(new_parsed) {
+  parsed_type(type new_parsed) : parsed(std::move(new_parsed)) {
   }
-  parsed_type(type&& new_parsed,
-              std::vector<std::string_view>&& additional_providers)
-    : parsed(new_parsed) {
-    providers.insert(providers.end(),
-                     std::make_move_iterator(additional_providers.begin()),
-                     std::make_move_iterator(additional_providers.end()));
+  parsed_type(type new_parsed,
+              const std::vector<std::string>& additional_providers)
+    : parsed(std::move(new_parsed)) {
+    for (const auto& provider : additional_providers)
+      providers.emplace_back(provider);
   }
-  parsed_type(type&& new_parsed, std::string_view additional_provider)
-    : parsed(new_parsed) {
-    providers.push_back(additional_provider);
+  parsed_type(type new_parsed, std::string_view additional_provider)
+    : parsed(std::move(new_parsed)) {
+    providers.emplace_back(additional_provider);
   }
 };
 
@@ -81,19 +82,81 @@ struct module_ng2 {
   /// The description of the module
   std::string description = {};
 
+  /// The URIs pointing to the description of the format represented by the
+  /// module
   std::vector<std::string> references = {};
 
+  /// The ready-to-use resolved types with qualified names.
   std::vector<type> types;
+
   // FIXME: The order of types should not matter?
   friend bool operator==(const module_ng2& first,
                          const module_ng2& second) noexcept = default;
 };
 
-// The result of the parsing. The final module will contain resolved types, but
-// only the parsed types are available after parsing.
+/// Qualifies the type name with the module name.
+///
+/// The qualified type name is the type name prefixed with the module_name.
+std::string inline qualify(std::string_view type_name,
+                           std::string_view module_name) {
+  return fmt::format("{}.{}", module_name, type_name);
+}
+
+/// Determines if the possibly unqualified type_name is equal to the qualified
+/// name using the given module_name for qualification.
+bool inline is_equal_to_qualified(std::string_view type_name,
+                                  std::string_view module_name,
+                                  std::string_view qualified_name) {
+  // determine if the type_name can be qualified or unqualified based on the
+  // name length only.
+  bool is_qualified_long = type_name.length() == qualified_name.length();
+  bool is_unqualified_long
+    = module_name.length() + 1 + type_name.length() == qualified_name.length();
+  // The qualification is not done; it only checks for the possibility.
+  if (!is_qualified_long && !is_unqualified_long)
+    return false;
+  if (!qualified_name.ends_with(type_name))
+    return false; // Type names are different.
+  if (is_qualified_long)
+    return true; // The type name is qualified.
+  if (is_unqualified_long)
+    return true; // The type name is unqualified.
+  return false;
+}
+
+// The result of the parsing. The module contains resolved types, but only the
+// parsed types are available after parsing.
 struct parsed_module {
   module_ng2 module{};
   std::vector<parsed_type> parsed_types{};
+
+  void mark_resolved(const type& resolved_type) {
+    module.types.push_back(resolved_type);
+    // Remove the resolved dependency
+    for (auto& parsed_type : parsed_types) {
+      std::erase_if(parsed_type.providers, [&](const auto& current) {
+        return is_equal_to_qualified(current, module.name,
+                                     resolved_type.name());
+      });
+    }
+  }
+
+  void mark_resolved(std::vector<parsed_type>::iterator begin,
+                     std::vector<parsed_type>::iterator end) {
+    for (auto i = begin; i < end; i++)
+      mark_resolved(i->parsed);
+  }
+
+  caf::expected<type>
+  resolve_placeholder_or_inline(const type& unresolved_type);
+  caf::expected<type> resolve_record(const record_type& unresolved_record_type);
+  /// Returns the list type. The name and attribute must be added by the caller.
+  caf::expected<type> resolve_list(const list_type& unresolved_list_type);
+  caf::expected<type> resolve_map(const map_type& unresolved_map_type);
+  caf::expected<type>
+  resolve(const type& to_resolve,
+          // const std::vector<type>& resolved_types,
+          const std::optional<record_composition>& algebra = std::nullopt);
 };
 
 /// Converts a declaration into a vast type.
@@ -110,7 +173,7 @@ parse_record_fields(const std::vector<vast::data>& field_declarations) {
                                        "one field; while parsing: {}",
                                        field_declarations));
   auto record_fields = std::vector<record_type::field_view>{};
-  auto providers = std::vector<std::string_view>{};
+  auto providers = std::vector<std::string>{};
   record_fields.reserve(field_declarations.size());
   for (const auto& record_value : field_declarations) {
     const auto* record_record_ptr = caf::get_if<record>(&record_value);
@@ -138,7 +201,7 @@ parse_record_fields(const std::vector<vast::data>& field_declarations) {
     record_fields.emplace_back(record_record.begin()->first,
                                type_or_error->parsed);
   }
-  return parsed_type{type{record_type{record_fields}}, std::move(providers)};
+  return parsed_type{type{record_type{record_fields}}, providers};
 }
 
 caf::expected<parsed_type>
@@ -224,18 +287,17 @@ parse_map(std::string_view name, const data& map_to_parse,
 /// Only one of is_base and is_implement and is_extend can be true, if both
 /// is_base and is_extend is false then is_extend is assumed to be true.
 caf::expected<parsed_type>
-make_parsed_record_algebra(std::string_view name, parsed_type&& new_record,
+make_parsed_record_algebra(std::string_view name, const parsed_type& new_record,
                            bool is_base, bool is_implant,
-                           std::vector<std::string_view>&& algebra_records) {
+                           const std::vector<std::string>& algebra_records) {
   const auto algebra_type = is_base      ? record_algebra_type::base
                             : is_implant ? record_algebra_type::implant
                                          : record_algebra_type::extend;
-  auto providers = std::vector(std::move(new_record.providers));
-  for (auto type_name : algebra_records)
+  auto providers = std::vector(new_record.providers);
+  for (const auto& type_name : algebra_records)
     providers.emplace_back(type_name);
-  auto result
-    = parsed_type(type{name, new_record.parsed}, std::move(providers));
-  result.algebra = {algebra_type, std::move(algebra_records)};
+  auto result = parsed_type(type{name, new_record.parsed}, providers);
+  result.algebra = {algebra_type, algebra_records};
   return result;
 }
 
@@ -315,7 +377,7 @@ parse_record_algebra(std::string_view name, const data& record_algebra,
                                    "'extend'; while parsing: {} with name: {}",
                                    record_algebra, name));
   std::optional<record_type> merged_base_record{};
-  std::vector<std::string_view> algebra_records{};
+  std::vector<std::string> algebra_records{};
   algebra_records.reserve(record_list.size());
   for (const auto& record : record_list) {
     const auto& record_name_ptr = caf::get_if<std::string>(&record);
@@ -373,7 +435,7 @@ caf::expected<parsed_type> parse_builtin(const data& declaration) {
   return parsed_type{type{aliased_type_name, type{}}, aliased_type_name};
 }
 
-/// Can handle inline declartaions
+/// Can handle inline declarations
 caf::expected<parsed_type>
 parse(const data& declaration, std::string_view name) {
   // Prevent using reserved names as types names
@@ -551,14 +613,13 @@ parse(const data& declaration, std::string_view name) {
   return caf::make_error(ec::logic_error, "unknown type found when parsing");
 }
 
-caf::expected<parsed_type>
-parse(const record::value_type& variable_declaration) {
-  return parse(variable_declaration.second, variable_declaration.first);
+/// Parses a type declaration and always qualifies it(prefixes it with the
+/// module name).
+caf::expected<parsed_type> parse(const std::string_view module_name,
+                                 const record::value_type& type_declaration) {
+  return parse(type_declaration.second,
+               qualify(type_declaration.first, module_name));
 }
-
-caf::expected<type>
-resolve(const type& to_resolve, const std::vector<type>& resolved_types,
-        const std::optional<record_composition>& algebra = std::nullopt);
 
 struct placeholder {
   std::string_view name;
@@ -583,33 +644,32 @@ try_read_placeholder(const type& placeholder_candidate) {
 }
 
 caf::expected<type>
-resolve_placeholder_or_inline(const type& unresolved_type,
-                              const std::vector<type>& resolved_types) {
+parsed_module::resolve_placeholder_or_inline(const type& unresolved_type) {
   if (auto placeholder = try_read_placeholder(unresolved_type); placeholder) {
     VAST_TRACE("Resolving placeholder with "
                "name: {}",
                placeholder->name);
-    const auto type_found
-      = std::find_if(resolved_types.begin(), resolved_types.end(),
-                     [&](const auto& resolved_type) {
-                       return placeholder->aliased_name == resolved_type.name();
-                     });
-    if (type_found == resolved_types.end())
+    const auto type_found = std::find_if(
+      module.types.begin(), module.types.end(), [&](const auto& resolved_type) {
+        return is_equal_to_qualified(placeholder->aliased_name, module.name,
+                                     resolved_type.name());
+      });
+    if (type_found == module.types.end())
       return caf::make_error(ec::logic_error, fmt::format("type cannot be "
                                                           "resolved: {}",
                                                           unresolved_type));
     return *type_found;
   }
   VAST_TRACE("Resolving inline type");
-  return resolve(unresolved_type, resolved_types);
+  return resolve(unresolved_type);
 }
 
 /// Returns the list type. The name and attribute must be added by the caller.
-caf::expected<type> resolve_list(const list_type& unresolved_list_type,
-                                 const std::vector<type>& resolved_types) {
+caf::expected<type>
+parsed_module::resolve_list(const list_type& unresolved_list_type) {
   VAST_TRACE("Resolving list_type");
-  const auto resolved_type = resolve_placeholder_or_inline(
-    unresolved_list_type.value_type(), resolved_types);
+  const auto resolved_type
+    = resolve_placeholder_or_inline(unresolved_list_type.value_type());
   if (!resolved_type)
     return caf::make_error(ec::parse_error,
                            fmt::format("Failed to resolve list: {}",
@@ -618,18 +678,18 @@ caf::expected<type> resolve_list(const list_type& unresolved_list_type,
   return type{list_type{*resolved_type}};
 }
 
-caf::expected<type> resolve_map(const map_type& unresolved_map_type,
-                                const std::vector<type>& resolved_types) {
+caf::expected<type>
+parsed_module::resolve_map(const map_type& unresolved_map_type) {
   VAST_TRACE("Resolving map_type");
-  const auto resolved_key_type = resolve_placeholder_or_inline(
-    unresolved_map_type.key_type(), resolved_types);
+  const auto resolved_key_type
+    = resolve_placeholder_or_inline(unresolved_map_type.key_type());
   if (!resolved_key_type)
     return caf::make_error(ec::parse_error,
                            fmt::format("Failed to resolve map key: {}",
                                        unresolved_map_type.key_type()),
                            resolved_key_type.error());
-  const auto resolved_value_type = resolve_placeholder_or_inline(
-    unresolved_map_type.value_type(), resolved_types);
+  const auto resolved_value_type
+    = resolve_placeholder_or_inline(unresolved_map_type.value_type());
   if (!resolved_value_type)
     return caf::make_error(ec::parse_error,
                            fmt::format("Failed to resolve map value: {}",
@@ -638,13 +698,12 @@ caf::expected<type> resolve_map(const map_type& unresolved_map_type,
   return type{map_type{*resolved_key_type, *resolved_value_type}};
 }
 
-caf::expected<type> resolve_record(const record_type& unresolved_record_type,
-                                   const std::vector<type>& resolved_types) {
+caf::expected<type>
+parsed_module::resolve_record(const record_type& unresolved_record_type) {
   VAST_TRACE("Resolving record_type");
   auto record_fields = std::vector<record_type::field_view>{};
   for (const auto& field : unresolved_record_type.fields()) {
-    const auto& resolved_type
-      = resolve_placeholder_or_inline(field.type, resolved_types);
+    const auto& resolved_type = resolve_placeholder_or_inline(field.type);
     if (!resolved_type)
       return caf::make_error(ec::parse_error,
                              "Failed to resolve record field key type",
@@ -655,8 +714,8 @@ caf::expected<type> resolve_record(const record_type& unresolved_record_type,
 }
 
 caf::expected<type>
-resolve(const type& to_resolve, const std::vector<type>& resolved_types,
-        const std::optional<record_composition>& algebra) {
+parsed_module::resolve(const type& to_resolve,
+                       const std::optional<record_composition>& algebra) {
   if (algebra) {
     // set conflict handling
     record_type::merge_conflict merge_conflict_handling
@@ -665,20 +724,21 @@ resolve(const type& to_resolve, const std::vector<type>& resolved_types,
       merge_conflict_handling = record_type::merge_conflict::prefer_left;
     if (algebra->kind == record_algebra_type::extend)
       merge_conflict_handling = record_type::merge_conflict::prefer_right;
-    const auto& new_record = resolve(to_resolve, resolved_types);
+    const auto& new_record = resolve(to_resolve);
     if (!new_record)
       return caf::make_error(ec::parse_error, "failed to resole algebra fields",
                              new_record.error());
     std::optional<record_type> merged_base_record{};
     for (const auto& record : algebra->records) {
       const auto& base_type
-        = std::find_if(resolved_types.begin(), resolved_types.end(),
+        = std::find_if(module.types.begin(), module.types.end(),
                        [&](const auto& resolved_type) {
-                         return record == resolved_type.name();
+                         return is_equal_to_qualified(record, module.name,
+                                                      resolved_type.name());
                        });
       // FIXME: no duplicates should be allowed into resolved_types, check
       // somewhere!
-      if (base_type == resolved_types.end())
+      if (base_type == module.types.end())
         return caf::make_error(ec::logic_error, "base type is not resolved "
                                                 "yet");
       // FIXME: for (const auto& attribute : base_type->attributes())
@@ -723,14 +783,14 @@ resolve(const type& to_resolve, const std::vector<type>& resolved_types,
     return type{to_resolve.name(), *final_merged_record};
   }
   if (auto placeholder = try_read_placeholder(to_resolve); placeholder) {
-    const auto type_found
-      = std::find_if(resolved_types.begin(), resolved_types.end(),
-                     [&](const auto& resolved_type) {
-                       return placeholder->aliased_name == resolved_type.name();
-                     });
+    const auto type_found = std::find_if(
+      module.types.begin(), module.types.end(), [&](const auto& resolved_type) {
+        return is_equal_to_qualified(placeholder->aliased_name, module.name,
+                                     resolved_type.name());
+      });
     // FIXME: no duplicates should be allowed into resolved_types, check
     // somewhere!
-    if (type_found == resolved_types.end())
+    if (type_found == module.types.end())
       return caf::make_error(
         ec::logic_error, fmt::format("placeholder type is not resolved yet "
                                      "while trying to resolve placeholder: {}",
@@ -740,13 +800,13 @@ resolve(const type& to_resolve, const std::vector<type>& resolved_types,
   }
   const auto collect_unresolved = detail::overload{
     [&](const list_type& unresolved_list_type) {
-      return resolve_list(unresolved_list_type, resolved_types);
+      return resolve_list(unresolved_list_type);
     },
     [&](const map_type& unresolved_map_type) {
-      return resolve_map(unresolved_map_type, resolved_types);
+      return resolve_map(unresolved_map_type);
     },
     [&](const record_type& unresolved_record_type) {
-      return resolve_record(unresolved_record_type, resolved_types);
+      return resolve_record(unresolved_record_type);
     },
     [&](const concrete_type auto& resolved_type) {
       caf::expected<type> result = type{resolved_type};
@@ -764,30 +824,30 @@ resolve(const type& to_resolve, const std::vector<type>& resolved_types,
 class resolution_manager {
 public:
   caf::expected<parsed_type>
-  next_to_resolve(const std::vector<parsed_type>& unresolved_types) {
+  next_to_resolve(const parsed_module& parsed_module) {
     while (true) {
       if (resolving_types_.empty()) {
-        const auto& to_resolve = unresolved_types.front();
-        resolving_types_.push_back(to_resolve.parsed.name());
+        const auto& to_resolve = parsed_module.parsed_types.front();
+        resolving_types_.emplace_back(to_resolve.parsed.name());
       }
       const auto type_name_to_resolve = resolving_types_.back();
-      const auto& type_to_resolve
-        = std::find_if(unresolved_types.begin(), unresolved_types.end(),
-                       [&](const auto& current_parsed_type) {
-                         return current_parsed_type.parsed.name()
-                                == type_name_to_resolve;
-                       });
+      const auto& type_to_resolve = std::find_if(
+        parsed_module.parsed_types.begin(), parsed_module.parsed_types.end(),
+        [&](const auto& current_parsed_type) {
+          return is_equal_to_qualified(type_name_to_resolve,
+                                       parsed_module.module.name,
+                                       current_parsed_type.parsed.name());
+        });
       // Not amongst unresolved types so it should  be resolved already
-      if (type_to_resolve == unresolved_types.end())
+      if (type_to_resolve == parsed_module.parsed_types.end())
         //  return type_to_resolve->parsed;
         return caf::make_error(ec::logic_error,
                                fmt::format("unresolved type expected when "
                                            "trying to resolve: {}",
                                            type_name_to_resolve));
       if (!type_to_resolve->providers.empty()) {
-        resolving_types_.insert(resolving_types_.end(),
-                                type_to_resolve->providers.begin(),
-                                type_to_resolve->providers.end());
+        for (const auto& provider : type_to_resolve->providers)
+          resolving_types_.push_back(provider);
       }
       if (type_name_to_resolve == resolving_types_.back())
         return *type_to_resolve;
@@ -798,7 +858,7 @@ public:
   }
 
 private:
-  std::vector<std::string_view> resolving_types_{};
+  std::vector<std::string> resolving_types_{};
 };
 
 /// Parses the mandatory module name
@@ -862,7 +922,7 @@ parse_module_references(const record& module) {
 
 /// Parses the optional module types
 caf::expected<std::vector<parsed_type>>
-parse_module_types(const record& module) {
+parse_module_types(std::string_view module_name, const record& module) {
   auto result = std::vector<parsed_type>{};
   const auto found_types = module.find("types");
   if (found_types == module.end())
@@ -873,7 +933,7 @@ parse_module_types(const record& module) {
                                             "types");
   // Parse and resolve aliases to built-in types or create placeholder types
   for (const auto& current_type : *types_ptr) {
-    const auto parsed_type = parse(current_type);
+    const auto parsed_type = parse(module_name, current_type);
     if (!parsed_type)
       return caf::make_error(
         ec::parse_error, fmt::format("failed to parse type: {}", current_type),
@@ -906,13 +966,13 @@ caf::expected<module_ng2> to_module2(const data& module) {
     return caf::make_error(ec::parse_error, "failed to parse module references",
                            module_references.error());
   parse_result.module.references = std::move(*module_references);
-  auto module_types = parse_module_types(module_declaration);
+  auto module_types
+    = parse_module_types(parse_result.module.name, module_declaration);
   if (!module_types)
     return caf::make_error(ec::parse_error, "failed to parse types in module",
                            module_types.error());
   parse_result.parsed_types = std::move(*module_types);
   // resolve types
-  std::vector<type> resolved_types;
   // Move parsed items that are already resolved to resolved types.
   const auto resolved_items
     = std::stable_partition(parse_result.parsed_types.begin(),
@@ -920,8 +980,7 @@ caf::expected<module_ng2> to_module2(const data& module) {
                             [](const auto& current_type) {
                               return !current_type.providers.empty();
                             });
-  for (auto i = resolved_items; i < parse_result.parsed_types.end(); i++)
-    resolved_types.push_back(i->parsed);
+  parse_result.mark_resolved(resolved_items, parse_result.parsed_types.end());
   parse_result.parsed_types.erase(resolved_items,
                                   parse_result.parsed_types.end());
   /*  for (auto& parsed_type : parsed_types) {
@@ -931,14 +990,6 @@ caf::expected<module_ng2> to_module2(const data& module) {
     }
     }*/
   // Remove dependencies already resolved
-  for (auto& parsed_type : parse_result.parsed_types) {
-    std::erase_if(parsed_type.providers, [&](const auto& current_provider) {
-      return std::any_of(resolved_types.begin(), resolved_types.end(),
-                         [&](const auto& resolved_type) {
-                           return current_provider == resolved_type.name();
-                         });
-    });
-  }
   // From this point on parsed types contain only types that need to be
   // resolved.
   VAST_TRACE("Before resolving {}", parse_result.parsed_types.empty());
@@ -949,36 +1000,28 @@ caf::expected<module_ng2> to_module2(const data& module) {
   // FIXME: Check for circular dependencies
   while (!parse_result.parsed_types.empty()) {
     // FIXME: In case of an invalid schema parsed_types may never get empty!
-    const auto type_to_resolve
-      = manager.next_to_resolve(parse_result.parsed_types);
+    const auto type_to_resolve = manager.next_to_resolve(parse_result);
     if (!type_to_resolve)
       return caf::make_error(ec::parse_error,
                              "failed to determine the next type to resolve",
                              type_to_resolve.error());
     VAST_TRACE("Next to resolve: {}, is algebra: {}", type_to_resolve->parsed,
                type_to_resolve->algebra.has_value());
-    const auto resolve_result = resolve(type_to_resolve->parsed, resolved_types,
-                                        type_to_resolve->algebra);
+    const auto resolve_result
+      = parse_result.resolve(type_to_resolve->parsed, type_to_resolve->algebra);
     if (!resolve_result)
       return caf::make_error(ec::parse_error,
                              fmt::format("Failed to resolve: {}",
                                          type_to_resolve->parsed),
                              resolve_result.error());
-    const auto& resolved_type = *resolve_result;
+    auto resolved_type = *resolve_result;
     std::erase_if(parse_result.parsed_types, [&](const auto& current_type) {
       return current_type.parsed.name() == resolved_type.name();
     });
-    VAST_TRACE("Resolved: {}", resolved_type.name());
-    resolved_types.push_back(resolved_type);
-    // Remove the resolved dependency
-    for (auto& parsed_type : parse_result.parsed_types) {
-      std::erase_if(parsed_type.providers, [&](const auto& current) {
-        return current == resolved_type.name();
-      });
-    }
+    VAST_TRACE("Resolved: {}, {}", resolved_type, resolved_type.type_index());
+    parse_result.mark_resolved(std::move(resolved_type));
     manager.resolved();
   }
-  parse_result.module.types = std::move(resolved_types);
   return std::move(parse_result.module);
 }
 
@@ -1097,7 +1140,7 @@ TEST(Parsing string type) {
   const auto expected_result
     = module_ng2{.name = "test",
                  .types = {
-                   type{"string_field1", string_type{}},
+                   type{"test.string_field1", string_type{}},
                  }};
   CHECK_EQUAL(result, expected_result);
   const auto declaration2 = record{
@@ -1125,11 +1168,12 @@ TEST(Parsing string type) {
      }},
   };
   const auto result3 = unbox(to_module2(declaration3));
-  const auto expected_result3 = module_ng2{
-    .name = "test",
-    .types = {type{
-      "string_field2", string_type{}, {{"ioc"}, {"index", "hash"}}, //, {"ioc2"}
-    }}};
+  const auto expected_result3 = module_ng2{.name = "test",
+                                           .types = {type{
+                                             "test.string_field2",
+                                             string_type{},
+                                             {{"ioc"}, {"index", "hash"}},
+                                           }}};
   CHECK_EQUAL(result3, expected_result3);
 }
 
@@ -1147,7 +1191,7 @@ TEST(parsing bool type) {
   const auto result = unbox(to_module2(declaration));
   const auto expected_type = module_ng2{.name = "test",
                                         .types = {
-                                          type{"bool_field", bool_type{}},
+                                          type{"test.bool_field", bool_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
@@ -1164,10 +1208,11 @@ TEST(YAML Type - Parsing integer type) {
      }},
   };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.name = "test",
-                                        .types = {
-                                          type{"int_field", integer_type{}},
-                                        }};
+  const auto expected_type
+    = module_ng2{.name = "test",
+                 .types = {
+                   type{"test.int_field", integer_type{}},
+                 }};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -1183,10 +1228,11 @@ TEST(YAML Type - Parsing count_type) {
      }},
   };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.name = "test",
-                                        .types = {
-                                          type{"count_field", count_type{}},
-                                        }};
+  const auto expected_type
+    = module_ng2{.name = "test",
+                 .types = {
+                   type{"test.count_field", count_type{}},
+                 }};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -1204,7 +1250,7 @@ TEST(YAML Type - Parsing real_type) {
   const auto result = unbox(to_module2(declaration));
   const auto expected_type = module_ng2{.name = "test",
                                         .types = {
-                                          type{"real_field", real_type{}},
+                                          type{"test.real_field", real_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
@@ -1224,7 +1270,7 @@ TEST(YAML Type - Parsing duration_type) {
   const auto expected_type
     = module_ng2{.name = "test",
                  .types = {
-                   type{"duration_field", duration_type{}},
+                   type{"test.duration_field", duration_type{}},
                  }};
   CHECK_EQUAL(result, expected_type);
 }
@@ -1243,7 +1289,7 @@ TEST(YAML Type - Parsing time_type) {
   const auto result = unbox(to_module2(declaration));
   const auto expected_type = module_ng2{.name = "test",
                                         .types = {
-                                          type{"time_field", time_type{}},
+                                          type{"test.time_field", time_type{}},
                                         }};
   CHECK_EQUAL(result, expected_type);
 }
@@ -1260,10 +1306,11 @@ TEST(YAML Type - Parsing string_type without attributes) {
      }},
   };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.name = "test",
-                                        .types = {
-                                          type{"string_field", string_type{}},
-                                        }};
+  const auto expected_type
+    = module_ng2{.name = "test",
+                 .types = {
+                   type{"test.string_field", string_type{}},
+                 }};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -1279,10 +1326,11 @@ TEST(YAML Type - Parsing pattern_type) {
      }},
   };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.name = "test",
-                                        .types = {
-                                          type{"pattern_field", pattern_type{}},
-                                        }};
+  const auto expected_type
+    = module_ng2{.name = "test",
+                 .types = {
+                   type{"test.pattern_field", pattern_type{}},
+                 }};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -1298,10 +1346,11 @@ TEST(YAML Type - Parsing address_type) {
      }},
   };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.name = "test",
-                                        .types = {
-                                          type{"address_field", address_type{}},
-                                        }};
+  const auto expected_type
+    = module_ng2{.name = "test",
+                 .types = {
+                   type{"test.address_field", address_type{}},
+                 }};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -1317,10 +1366,11 @@ TEST(YAML Type - Parsing subnet_type) {
      }},
   };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_type = module_ng2{.name = "test",
-                                        .types = {
-                                          type{"subnet_field", subnet_type{}},
-                                        }};
+  const auto expected_type
+    = module_ng2{.name = "test",
+                 .types = {
+                   type{"test.subnet_field", subnet_type{}},
+                 }};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -1339,7 +1389,7 @@ TEST(YAML Type - Parsing enumeration_type) {
   const auto expected_type = module_ng2{
     .name = "test",
     .types = {
-      type{"enum_field", enumeration_type{{"on"}, {"off"}, {"unknown"}}},
+      type{"test.enum_field", enumeration_type{{"on"}, {"off"}, {"unknown"}}},
     }};
   CHECK_EQUAL(result, expected_type);
 }
@@ -1359,7 +1409,7 @@ TEST(YAML Type - Parsing list_type) {
   const auto expected_type
     = module_ng2{.name = "test",
                  .types = {
-                   type{"list_field", list_type{count_type{}}},
+                   type{"test.list_field", list_type{count_type{}}},
                  }};
   CHECK_EQUAL(result, expected_type);
 }
@@ -1382,7 +1432,7 @@ TEST(YAML Type - Parsing map_type) {
     = module_ng2{.name = "test",
                  .types = {
                    type{
-                     "map_field",
+                     "test.map_field",
                      map_type{count_type{}, string_type{}},
                    },
                  }};
@@ -1410,7 +1460,7 @@ TEST(YAML Type - Parsing record_type) {
   const auto expected_type = module_ng2{
     .name = "test",
     .types = {type{
-      "record_field",
+      "test.record_field",
       record_type{
         {"src_ip", string_type{}},
         {"dst_ip", string_type{}},
@@ -1440,7 +1490,7 @@ TEST(YAML Type - Parsing inline record_type) {
   const auto expected_type = module_ng2{
     .name = "test",
     .types = {type{
-      "record_field",
+      "test.record_field",
       record_type{
         {"source", string_type{}},
         {"destination", string_type{}},
@@ -1481,7 +1531,7 @@ TEST(YAML Type - Parsing inline record_type with attributes) {
   const auto expected_type = module_ng2{
     .name = "test",
     .types = {type{
-      "record_field",
+      "test.record_field",
       record_type{
         {"source", type{string_type{}, {{"originator"}}}},
         {"destination", type{string_type{}, {{"responder"}}}},
@@ -1493,9 +1543,9 @@ TEST(YAML Type - Parsing inline record_type with attributes) {
 
 TEST(YAML Type - Parsing record algebra) {
   const auto expected_base_record_type
-    = type{"common", record_type{{"field", bool_type{}}}};
+    = type{"test.common", record_type{{"field", bool_type{}}}};
   const auto expected_record_algebra = type{
-    "record_algebra_field",
+    "test.record_algebra_field",
     record_type{
       {"field", type{bool_type{}}},
       {"msg", type{string_type{}}},
@@ -1504,14 +1554,14 @@ TEST(YAML Type - Parsing record algebra) {
   // Base Record Algebra test with name clash
   // Extend Record Algebra test with name clash
   const auto expected_extended_record_algebra = type{
-    "record_algebra_field",
+    "test.record_algebra_field",
     record_type{
       {"field", type{string_type{}}},
     },
   };
   // Implant Record Algebra test with name clash
   const auto expected_implanted_record_algebra = type{
-    "record_algebra_field",
+    "test.record_algebra_field",
     record_type{
       {"field", type{bool_type{}}},
     },
@@ -1590,8 +1640,8 @@ TEST(YAML Module) {
   const auto result = unbox(to_module2(declaration));
   const auto expected_result
     = module_ng2{.name = "test",
-                 .types = {type{"count_field", count_type{}},
-                           type{"string_field", string_type{}}}};
+                 .types = {type{"test.count_field", count_type{}},
+                           type{"test.string_field", string_type{}}}};
   CHECK_EQUAL(result, expected_result);
 }
 
@@ -1616,14 +1666,14 @@ TEST(YAML Module - type alias) {
   const auto expected_result = module_ng2{
     .name = "test",
     .types = {type{
-                "string_field",
+                "test.string_field",
                 string_type{},
                 {{"ioc"}, {"index", "hash"}},
               },
               type{
-                "string_field_alias",
+                "test.string_field_alias",
                 type{
-                  "string_field",
+                  "test.string_field",
                   string_type{},
                   {{"ioc"}, {"index", "hash"}},
                 },
@@ -1655,22 +1705,23 @@ TEST(YAML Module - yaml alias node) {
   const auto result = unbox(to_module2(declaration));
   const auto expected = module_ng2{
     .name = "test",
-    .types = {type{
-                "type1",
-                list_type{record_type{
-                  {"src", address_type{}},
-                  {"dst", address_type{}},
-                }},
-              },
-              type{
-                "type2",
-                map_type{string_type{},
-                         record_type{
-                           {"src", address_type{}},
-                           {"dst", address_type{}},
-                         }},
-              },
-              type{"type3", string_type{}, {{"attr1_key"}, {"attr2_key"}}}},
+    .types
+    = {type{
+         "test.type1",
+         list_type{record_type{
+           {"src", address_type{}},
+           {"dst", address_type{}},
+         }},
+       },
+       type{
+         "test.type2",
+         map_type{string_type{},
+                  record_type{
+                    {"src", address_type{}},
+                    {"dst", address_type{}},
+                  }},
+       },
+       type{"test.type3", string_type{}, {{"attr1_key"}, {"attr2_key"}}}},
   };
   CHECK_EQUAL(result, expected);
 }
@@ -1691,10 +1742,10 @@ TEST(YAML Module - order independent parsing - type aliases) {
      }},
   };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_result
-    = module_ng2{.name = "test",
-                 .types = {type{"type2", string_type{}},
-                           type{"type1", type{"type2", string_type{}}}}};
+  const auto expected_result = module_ng2{
+    .name = "test",
+    .types = {type{"test.type2", string_type{}},
+              type{"test.type1", type{"test.type2", string_type{}}}}};
   CHECK_EQUAL(result, expected_result);
 }
 
@@ -1713,7 +1764,7 @@ TEST(YAML Module - order independent parsing - type enumeration) {
   const auto expected_result = module_ng2{
     .name = "test",
     .types = {
-      type{"enum_field", enumeration_type{{"on"}, {"off"}, {"unknown"}}},
+      type{"test.enum_field", enumeration_type{{"on"}, {"off"}, {"unknown"}}},
     }};
   CHECK_EQUAL(result, expected_result);
 }
@@ -1732,11 +1783,12 @@ TEST(YAML Module - order independent parsing - list_type) {
   const auto expected_result = module_ng2{
     .name = "test",
     .types
-    = {type{"type3", string_type{}},
-       type{"type2", list_type{type{"type3", string_type{}}}},
-       type{"type1", list_type{
-                       type{"type2", list_type{type{"type3", string_type{}}}},
-                     }}}};
+    = {type{"test.type3", string_type{}},
+       type{"test.type2", list_type{type{"test.type3", string_type{}}}},
+       type{"test.type1",
+            list_type{
+              type{"test.type2", list_type{type{"test.type3", string_type{}}}},
+            }}}};
   CHECK_EQUAL(result, expected_result);
 }
 
@@ -1754,14 +1806,14 @@ TEST(YAML Module - order indepenedent parsing - map_type) {
      }},
   };
   const auto result = unbox(to_module2(declaration));
-  const auto expected_result
-    = module_ng2{.name = "test",
-                 .types = {
-                   type{"type1", count_type{}},
-                   type{"type2", string_type{}},
-                   type{"map_type", map_type{type{"type1", count_type{}},
-                                             type{"type2", string_type{}}}},
-                 }};
+  const auto expected_result = module_ng2{
+    .name = "test",
+    .types = {
+      type{"test.type1", count_type{}},
+      type{"test.type2", string_type{}},
+      type{"test.map_type", map_type{type{"test.type1", count_type{}},
+                                     type{"test.type2", string_type{}}}},
+    }};
   CHECK_EQUAL(result, expected_result);
   // both key and value depends on the same type
   const auto declaration_same_key_and_value_type = record{
@@ -1777,13 +1829,13 @@ TEST(YAML Module - order indepenedent parsing - map_type) {
   };
   const auto same_key_and_value_result
     = unbox(to_module2(declaration_same_key_and_value_type));
-  const auto expected_same_key_and_value_result
-    = module_ng2{.name = "test",
-                 .types = {
-                   type{"type1", string_type{}},
-                   type{"map_type", map_type{type{"type1", string_type{}},
-                                             type{"type1", string_type{}}}},
-                 }};
+  const auto expected_same_key_and_value_result = module_ng2{
+    .name = "test",
+    .types = {
+      type{"test.type1", string_type{}},
+      type{"test.map_type", map_type{type{"test.type1", string_type{}},
+                                     type{"test.type1", string_type{}}}},
+    }};
   CHECK_EQUAL(same_key_and_value_result, expected_same_key_and_value_result);
 }
 
@@ -1818,11 +1870,11 @@ TEST(YAML Module - order indepenedent parsing - record_type) {
   const auto expected_result = module_ng2{
     .name = "test",
     .types = {
-      type{"type2", string_type{}},
-      type{"type3", string_type{}},
-      type{"record_field",
-           record_type{{"source", type{"type2", string_type{}}},
-                       {"destination", type{"type3", string_type{}}}}},
+      type{"test.type2", string_type{}},
+      type{"test.type3", string_type{}},
+      type{"test.record_field",
+           record_type{{"source", type{"test.type2", string_type{}}},
+                       {"destination", type{"test.type3", string_type{}}}}},
     }};
   CHECK_EQUAL(result, expected_result);
 }
@@ -2259,8 +2311,8 @@ TEST(YAML Module - order independent parsing - record algebra) {
   const auto expected_result
     = module_ng2{.name = "test",
                  .types = {
-                   type{"common", record_type{{"field", bool_type{}}}},
-                   type{"record_algebra_field",
+                   type{"test.common", record_type{{"field", bool_type{}}}},
+                   type{"test.record_algebra_field",
                         record_type{
                           {"field", bool_type{}},
                           {"msg", string_type{}},
@@ -2305,8 +2357,8 @@ TEST(YAML Module - order independent parsing - record algebra) {
   const auto expected_extended_record_algebra
     = module_ng2{.name = "test",
                  .types = {
-                   type{"common", record_type{{"msg", bool_type{}}}},
-                   type{"record_algebra_field",
+                   type{"test.common", record_type{{"msg", bool_type{}}}},
+                   type{"test.record_algebra_field",
                         record_type{
                           {"msg", string_type{}},
                         }},
@@ -2333,8 +2385,8 @@ TEST(YAML Module - order independent parsing - record algebra) {
     .name = "test",
     .description = "",
     .references = {},
-    .types = {type{"common", record_type{{"msg", bool_type{}}}},
-              type{"record_algebra_field",
+    .types = {type{"test.common", record_type{{"msg", bool_type{}}}},
+              type{"test.record_algebra_field",
                    record_type{
                      {"msg", bool_type{}},
                    }}},
