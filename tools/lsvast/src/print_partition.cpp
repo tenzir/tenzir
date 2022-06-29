@@ -136,7 +136,10 @@ void print_partition_legacy(
     }
   }
   if (auto partition_synopsis = partition->partition_synopsis()) {
-    // TODO
+    auto fields = partition_synopsis->field_sketches()->size();
+    auto types = partition_synopsis->type_sketches()->size();
+    std::cout << indent << "(partition synopsis with " << fields
+              << " field sketches and " << types << " type sketches)\n";
   }
   // Print column indices.
   std::cout << indent << "Column Indices\n";
