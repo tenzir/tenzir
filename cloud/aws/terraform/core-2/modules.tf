@@ -35,7 +35,7 @@ module "vast_server" {
   storage_type        = var.vast_server_storage_type
   storage_mount_point = "/var/lib/vast"
 
-  entrypoint = "echo '${file("vast-server.yaml")}' > ./override.yaml && exec vast --config=./override.yaml start"
+  entrypoint = "vast start"
   port       = 42000
 
   environment = [{

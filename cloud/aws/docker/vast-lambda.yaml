@@ -1,0 +1,6 @@
+vast:
+  file-verbosity: quiet
+  plugins:
+    - all
+  import:
+    blocking: true
