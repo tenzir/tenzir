@@ -28,6 +28,7 @@
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
+#include "vast/test/unit_test_access.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -37,6 +38,8 @@
 #include <cstddef>
 #include <filesystem>
 #include <span>
+
+using private_access = vast::partition_synopsis::unit_test_access;
 
 vast::system::store_actor::behavior_type dummy_store() {
   return {[](const vast::query&) {
@@ -132,18 +135,12 @@ TEST(empty partition roundtrip) {
   state.data.id = vast::uuid::random();
   state.data.store_id = "legacy_archive";
   state.data.store_header = vast::chunk::make_empty();
-  state.data.offset = 17;
   state.data.events = 23;
   state.data.synopsis = caf::make_copy_on_write<vast::partition_synopsis>();
-  state.data.synopsis.unshared().offset = state.data.offset;
-  state.data.synopsis.unshared().events = state.data.events;
-  state.data.synopsis.unshared().use_sketches = false;
   auto& ids = state.data.type_ids["x"];
   ids.append_bits(false, 3);
   ids.append_bits(true, 3);
-  // Prepare a layout for the partition synopsis. The partition synopsis only
-  // looks at the layout of the table slices it gets, so we feed it
-  // with an empty table slice.
+  // Prepare a layout for the partition synopsis.
   auto layout = vast::type{
     "y",
     vast::record_type{
@@ -156,10 +153,16 @@ TEST(empty partition roundtrip) {
     vast::defaults::import::table_slice_type, layout);
   REQUIRE(slice_builder);
   auto slice = slice_builder->finish();
-  slice.offset(0);
+  constexpr auto PARTITION_OFFSET = 17ull;
+  slice.offset(PARTITION_OFFSET);
   REQUIRE_NOT_EQUAL(slice.encoding(), vast::table_slice_encoding::none);
   state.data.synopsis.unshared().add(
     slice, vast::defaults::system::max_partition_size, vast::index_config{});
+  // Force a fake number of events, since we are feeding an empty table
+  // slice to the synopsis.
+  auto synopsis_internals = private_access{state.data.synopsis.unshared()};
+  synopsis_internals.events_ = state.data.events;
+  synopsis_internals.use_sketches_ = false;
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {
@@ -198,9 +201,9 @@ TEST(empty partition roundtrip) {
   auto ps = caf::make_copy_on_write<vast::partition_synopsis>();
   auto error2 = vast::system::unpack(*partition_legacy, ps.unshared());
   CHECK(!error2);
-  CHECK_EQUAL(ps->field_synopses_.size(), 1u);
-  CHECK_EQUAL(ps->offset, state.data.offset);
-  CHECK_EQUAL(ps->events, state.data.events);
+  CHECK_EQUAL(ps->field_synopses().size(), 1u);
+  CHECK_EQUAL(ps->offset(), PARTITION_OFFSET);
+  CHECK_EQUAL(ps->events(), state.data.events);
   auto catalog
     = self->spawn(vast::system::catalog, vast::system::accountant_actor{});
   auto rp = self->request(catalog, caf::infinite, vast::atom::merge_v,
@@ -282,8 +285,6 @@ TEST(full partition roundtrip) {
   // Spawn a read-only partition from this chunk and try to query the data we
   // added. We make two queries, one "#type"-query and one "normal" query
   auto archive = sys.spawn(dummy_store);
-  // auto archive =
-  // vast::system::store_actor::behavior_type::make_empty_behavior();
   auto readonly_partition
     = sys.spawn(vast::system::passive_partition, partition_uuid,
                 vast::system::accountant_actor{}, archive, fs, persist_path);

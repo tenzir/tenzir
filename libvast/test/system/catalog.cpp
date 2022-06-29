@@ -25,6 +25,7 @@
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
+#include "vast/test/unit_test_access.hpp"
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
 
@@ -36,6 +37,8 @@ using namespace vast;
 using namespace vast::system;
 
 using std::literals::operator""s;
+
+using private_access = vast::partition_synopsis::unit_test_access;
 
 namespace {
 
@@ -52,10 +55,11 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
   auto result = partition_synopsis{};
   auto synopsis_opts = vast::index_config{};
   result.add(ts, defaults::system::max_partition_size, synopsis_opts);
-  result.offset = ts.offset();
-  result.events = ts.rows();
-  result.min_import_time = ts.import_time();
-  result.max_import_time = ts.import_time();
+  auto synopsis_internals = private_access{result};
+  synopsis_internals.offset_ = ts.offset();
+  synopsis_internals.events_ = ts.rows();
+  synopsis_internals.min_import_time_ = ts.import_time();
+  synopsis_internals.max_import_time_ = ts.import_time();
   return result;
 }
 

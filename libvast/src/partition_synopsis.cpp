@@ -19,13 +19,13 @@
 namespace vast {
 
 partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept
-  : use_sketches(that.use_sketches) {
-  offset = std::exchange(that.offset, {}), events
-                                           = std::exchange(that.events, {});
-  min_import_time = std::exchange(that.min_import_time, time::max());
-  max_import_time = std::exchange(that.max_import_time, time::min());
-  version = std::exchange(that.version, version::partition_version);
-  schema = std::exchange(that.schema, {});
+  : use_sketches_(that.use_sketches_) {
+  offset_ = std::exchange(that.offset_, {});
+  events_ = std::exchange(that.events_, {});
+  min_import_time_ = std::exchange(that.min_import_time_, time::max());
+  max_import_time_ = std::exchange(that.max_import_time_, time::min());
+  version_ = std::exchange(that.version_, version::partition_version);
+  schema_ = std::exchange(that.schema_, {});
   type_synopses_ = std::exchange(that.type_synopses_, {});
   field_synopses_ = std::exchange(that.field_synopses_, {});
   type_sketches_ = std::exchange(that.type_sketches_, {});
@@ -36,13 +36,13 @@ partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept
 partition_synopsis&
 partition_synopsis::operator=(partition_synopsis&& that) noexcept {
   if (this != &that) {
-    offset = std::exchange(that.offset, {});
-    events = std::exchange(that.events, {});
-    use_sketches = that.use_sketches;
-    min_import_time = std::exchange(that.min_import_time, time::max());
-    max_import_time = std::exchange(that.max_import_time, time::min());
-    version = std::exchange(that.version, version::partition_version);
-    schema = std::exchange(that.schema, {});
+    offset_ = std::exchange(that.offset_, {});
+    events_ = std::exchange(that.events_, {});
+    use_sketches_ = that.use_sketches_;
+    min_import_time_ = std::exchange(that.min_import_time_, time::max());
+    max_import_time_ = std::exchange(that.max_import_time_, time::min());
+    version_ = std::exchange(that.version_, version::partition_version);
+    schema_ = std::exchange(that.schema_, {});
     type_synopses_ = std::exchange(that.type_synopses_, {});
     field_synopses_ = std::exchange(that.field_synopses_, {});
     type_sketches_ = std::exchange(that.type_sketches_, {});
@@ -66,7 +66,6 @@ void partition_synopsis::shrink() {
       continue;
     synopsis.swap(shrinked_synopsis);
   }
-  // TODO: Make a utility function instead of copy/pasting
   for (auto& [field, synopsis] : type_synopses_) {
     if (!synopsis)
       continue;
@@ -107,17 +106,18 @@ void partition_synopsis::add(const table_slice& slice,
                              const index_config& fp_rates) {
   memusage_ = 0; // Invalidate cached size.
   const auto& layout = slice.layout();
-  if (!schema)
-    schema = layout;
-  VAST_ASSERT(schema == layout);
+  if (!schema_)
+    schema_ = layout;
+  VAST_ASSERT(schema_ == layout);
   // Update generic partition synopsis information.
-  min_import_time = std::min(min_import_time, slice.import_time());
-  max_import_time = std::max(max_import_time, slice.import_time());
-  events += slice.rows();
+  min_import_time_ = std::min(min_import_time_, slice.import_time());
+  max_import_time_ = std::max(max_import_time_, slice.import_time());
+  events_ += slice.rows();
+  offset_ = std::min(offset_, slice.offset());
   // Synopses are created live by the partition synopsis, but
   // sketches are built externally by the partition_sketch_builder
   // and only inserted into a partition synopsis after the fact.
-  if (use_sketches) {
+  if (use_sketches_) {
     VAST_ASSERT(type_synopses_.empty() && field_synopses_.empty(),
                 "cannot change between synopses and sketches on the fly");
     return;
@@ -210,14 +210,14 @@ size_t partition_synopsis::memusage() const {
 
 partition_synopsis* partition_synopsis::copy() const {
   auto result = std::make_unique<partition_synopsis>();
-  result->offset = offset;
-  result->events = events;
-  result->min_import_time = min_import_time;
-  result->max_import_time = max_import_time;
-  result->version = version;
-  result->schema = schema;
+  result->offset_ = offset_;
+  result->events_ = events_;
+  result->min_import_time_ = min_import_time_;
+  result->max_import_time_ = max_import_time_;
+  result->version_ = version_;
+  result->schema_ = schema_;
   result->memusage_ = memusage_.load();
-  result->use_sketches = use_sketches;
+  result->use_sketches_ = use_sketches_;
   result->type_synopses_.reserve(type_synopses_.size());
   result->field_synopses_.reserve(field_synopses_.size());
   result->type_sketches_.reserve(type_sketches_.size());
@@ -250,7 +250,7 @@ caf::expected<
   flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>
 pack_legacy(flatbuffers::FlatBufferBuilder& builder,
             const partition_synopsis& x) {
-  if (x.use_sketches)
+  if (x.use_sketches_)
     return caf::make_error(ec::logic_error, "cannot create legacy synopsis "
                                             "from sketches");
   std::vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>> synopses;
@@ -268,18 +268,18 @@ pack_legacy(flatbuffers::FlatBufferBuilder& builder,
     synopses.push_back(*maybe_synopsis);
   }
   auto synopses_vector = builder.CreateVector(synopses);
-  auto schema_bytes = as_bytes(x.schema);
+  auto schema_bytes = as_bytes(x.schema_);
   auto schema_vector = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(schema_bytes.data()), schema_bytes.size());
   fbs::partition_synopsis::LegacyPartitionSynopsisBuilder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
-  vast::fbs::uinterval id_range{x.offset, x.offset + x.events};
+  vast::fbs::uinterval id_range{x.offset_, x.offset_ + x.events_};
   ps_builder.add_id_range(&id_range);
   vast::fbs::interval import_time_range{
-    x.min_import_time.time_since_epoch().count(),
-    x.max_import_time.time_since_epoch().count()};
+    x.min_import_time_.time_since_epoch().count(),
+    x.max_import_time_.time_since_epoch().count()};
   ps_builder.add_import_time_range(&import_time_range);
-  ps_builder.add_version(x.version);
+  ps_builder.add_version(x.version_);
   ps_builder.add_schema(schema_vector);
   return ps_builder.Finish();
 }
@@ -294,7 +294,7 @@ pack_nested(flatbuffers::FlatBufferBuilder& builder, const type& type) {
 
 caf::expected<flatbuffers::Offset<fbs::partition_synopsis::PartitionSynopsisV1>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
-  if (!x.use_sketches)
+  if (!x.use_sketches_)
     return caf::make_error(ec::logic_error, "cannot create sketches from "
                                             "legacy synopses");
   std::vector<flatbuffers::Offset<fbs::partition_synopsis::FieldSketch>>
@@ -324,25 +324,23 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   auto field_sketches_vector = builder.CreateVector(field_sketches);
   auto type_sketches_vector = builder.CreateVector(type_sketches);
   fbs::partition_synopsis::PartitionSynopsisV1Builder ps_builder(builder);
-  vast::fbs::uinterval id_range{x.offset, x.offset + x.events};
+  vast::fbs::uinterval id_range{x.offset_, x.offset_ + x.events_};
   ps_builder.add_id_range(&id_range);
   ps_builder.add_field_sketches(field_sketches_vector);
   ps_builder.add_type_sketches(type_sketches_vector);
   vast::fbs::interval import_time_range{
-    x.min_import_time.time_since_epoch().count(),
-    x.max_import_time.time_since_epoch().count()};
+    x.min_import_time_.time_since_epoch().count(),
+    x.max_import_time_.time_since_epoch().count()};
   ps_builder.add_import_time_range(&import_time_range);
   return ps_builder.Finish();
 }
-
-namespace {
 
 // Not publicly exposed because it doesn't fully initialize `ps`.
 caf::error unpack_(
   const flatbuffers::Vector<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>&
     synopses,
   partition_synopsis& ps) {
-  ps.use_sketches = false;
+  ps.use_sketches_ = false;
   for (const auto* synopsis : synopses) {
     if (!synopsis)
       return caf::make_error(ec::format_error, "synopsis is null");
@@ -362,8 +360,6 @@ caf::error unpack_(
   return caf::none;
 }
 
-} // namespace
-
 caf::error unpack(const fbs::partition_synopsis::PartitionSynopsisV1& x,
                   partition_synopsis& ps) {
   if (!x.id_range())
@@ -374,11 +370,11 @@ caf::error unpack(const fbs::partition_synopsis::PartitionSynopsisV1& x,
     return caf::make_error(ec::format_error, "missing field sketches");
   if (!x.type_sketches())
     return caf::make_error(ec::format_error, "missing type sketches");
-  ps.use_sketches = true;
-  ps.offset = x.id_range()->begin();
-  ps.events = x.id_range()->end() - x.id_range()->begin();
-  ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
-  ps.max_import_time = time{} + duration{x.import_time_range()->end()};
+  ps.use_sketches_ = true;
+  ps.offset_ = x.id_range()->begin();
+  ps.events_ = x.id_range()->end() - x.id_range()->begin();
+  ps.min_import_time_ = time{} + duration{x.import_time_range()->begin()};
+  ps.max_import_time_ = time{} + duration{x.import_time_range()->end()};
   for (auto fs : *x.field_sketches()) {
     if (!fs)
       return caf::make_error(ec::format_error, "missing id range");
@@ -424,18 +420,18 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
                   partition_synopsis& ps) {
   if (!x.id_range())
     return caf::make_error(ec::format_error, "missing id range");
-  ps.offset = x.id_range()->begin();
-  ps.events = x.id_range()->end() - x.id_range()->begin();
+  ps.offset_ = x.id_range()->begin();
+  ps.events_ = x.id_range()->end() - x.id_range()->begin();
   if (x.import_time_range()) {
-    ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
-    ps.max_import_time = time{} + duration{x.import_time_range()->end()};
+    ps.min_import_time_ = time{} + duration{x.import_time_range()->begin()};
+    ps.max_import_time_ = time{} + duration{x.import_time_range()->end()};
   } else {
-    ps.min_import_time = time{};
-    ps.max_import_time = time{};
+    ps.min_import_time_ = time{};
+    ps.max_import_time_ = time{};
   }
-  ps.version = x.version();
+  ps.version_ = x.version();
   if (const auto* schema = x.schema())
-    ps.schema = type{chunk::copy(as_bytes(*schema))};
+    ps.schema_ = type{chunk::copy(as_bytes(*schema))};
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);
@@ -448,18 +444,18 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
                   partition_synopsis& ps, uint64_t offset, uint64_t events) {
   // We should not end up in this overload when an id range already exists.
   VAST_ASSERT(!x.id_range());
-  ps.offset = offset;
-  ps.events = events;
+  ps.offset_ = offset;
+  ps.events_ = events;
   if (x.import_time_range()) {
-    ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
-    ps.max_import_time = time{} + duration{x.import_time_range()->end()};
+    ps.min_import_time_ = time{} + duration{x.import_time_range()->begin()};
+    ps.max_import_time_ = time{} + duration{x.import_time_range()->end()};
   } else {
-    ps.min_import_time = time{};
-    ps.max_import_time = time{};
+    ps.min_import_time_ = time{};
+    ps.max_import_time_ = time{};
   }
-  ps.version = x.version();
+  ps.version_ = x.version();
   if (const auto* schema = x.schema())
-    ps.schema = type{chunk::copy(as_bytes(*schema))};
+    ps.schema_ = type{chunk::copy(as_bytes(*schema))};
   if (!x.synopses())
     return caf::make_error(ec::format_error, "missing synopses");
   return unpack_(*x.synopses(), ps);

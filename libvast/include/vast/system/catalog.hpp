@@ -94,7 +94,8 @@ public:
   detail::flat_map<uuid, partition_synopsis_ptr> synopses = {};
 
   /// Maps ids to the corresponding partitions.
-  //  TODO: Maybe this should be moved into it a standalone actor.
+  //  TODO: This was accidentally broken when allowing partitions with
+  //  non-contiguous id ranges, and should probably be removed.
   detail::range_map<id, uuid> offset_map = {};
 
   /// The set of fields that should not be touched by the pruner.

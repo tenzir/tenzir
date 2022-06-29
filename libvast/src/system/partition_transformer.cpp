@@ -291,11 +291,6 @@ partition_transformer_actor::behavior_type partition_transformer(
           partition_data.synopsis
             = caf::make_copy_on_write<partition_synopsis>();
         }
-        auto* unshared_synopsis = partition_data.synopsis.unshared_ptr();
-        unshared_synopsis->min_import_time
-          = std::min(slice.import_time(), unshared_synopsis->min_import_time);
-        unshared_synopsis->max_import_time
-          = std::max(slice.import_time(), unshared_synopsis->max_import_time);
         update_statistics(self->state.stats_out, slice);
         partition_data.events += slice.rows();
         self->state.events += slice.rows();
@@ -383,11 +378,7 @@ partition_transformer_actor::behavior_type partition_transformer(
                                self->state.synopsis_opts);
         }
         // Update the synopsis
-        // TODO: It would make more sense if the partition
-        // synopsis keeps track of offset/events internally.
         mutable_synopsis.shrink();
-        mutable_synopsis.offset = data.offset;
-        mutable_synopsis.events = data.events;
         // Create the value indices.
         for (auto& [qf, idx] :
              self->state.partition_buildup.at(data.id).indexers)
@@ -431,8 +422,7 @@ partition_transformer_actor::behavior_type partition_transformer(
           flatbuffers::FlatBufferBuilder builder;
           auto type = vast::fbs::partition_synopsis::PartitionSynopsis{};
           auto offset = flatbuffers::Offset<void>{};
-          // VAST_INFO("synopsis using sketches? {}", p)
-          if (partition_data.synopsis->use_sketches) {
+          if (partition_data.synopsis->use_sketches()) {
             auto synopsis = pack(builder, *partition_data.synopsis);
             if (!synopsis) {
               stream_data.synopsis_chunks = synopsis.error();

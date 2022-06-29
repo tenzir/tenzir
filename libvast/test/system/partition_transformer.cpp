@@ -110,7 +110,7 @@ TEST(identity transform / done before persist) {
     [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
       REQUIRE_EQUAL(apsv.size(), 1ull);
       auto& aps = apsv.front();
-      CHECK_EQUAL(aps.synopsis->events, 20ull);
+      CHECK_EQUAL(aps.synopsis->events(), 20ull);
       CHECK_EQUAL(aps.type.name(), "zeek.conn");
       uuid = aps.uuid;
       synopsis = aps.synopsis;
@@ -293,7 +293,7 @@ TEST(partition with multiple types) {
       CHECK_EQUAL(apsv.size(), 3ull);
       for (auto& aps : apsv) {
         stats.layouts[std::string{aps.type.name()}].count
-          += aps.synopsis->events;
+          += aps.synopsis->events();
         uuids.push_back(aps.uuid);
         synopses.push_back(aps.synopsis);
       }
@@ -544,7 +544,7 @@ TEST(exceeded partition size) {
       CHECK_EQUAL(apsv.size(), 2ull);
       for (auto& aps : apsv) {
         stats.layouts[std::string{aps.type.name()}].count
-          += aps.synopsis->events;
+          += aps.synopsis->events();
       }
       CHECK_EQUAL(stats.layouts["suricata.dns"].count, 8ull);
     },

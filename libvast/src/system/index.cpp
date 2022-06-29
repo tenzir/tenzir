@@ -142,7 +142,7 @@ caf::error extract_partition_synopsis(
   flatbuffers::FlatBufferBuilder builder;
   // We can not convert between sketches and synopses, so we
   // write the same format that we found in the partition.
-  if (!ps.use_sketches) {
+  if (!ps.use_sketches()) {
     auto ps_flatbuffer = pack_legacy(builder, ps);
     if (!ps_flatbuffer)
       return ps_flatbuffer.error();
@@ -361,7 +361,7 @@ caf::error index_state::load_from_disk() {
   // partition versions more freely.
   const auto num_outdated = std::count_if(
     synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
-      return id_and_synopsis.second->version < version::partition_version;
+      return id_and_synopsis.second->version() < version::partition_version;
     });
   if (num_outdated > 0)
     VAST_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
@@ -547,7 +547,7 @@ void index_state::decomission_active_partition(const type& layout) {
         if (accountant) {
           auto report = vast::system::report {
             .data = {
-              {"partition.events-written", ps->events},
+              {"partition.events-written", ps->events()},
             },
             .metadata = {
               {"schema", std::string{layout.name()}},
@@ -1441,8 +1441,8 @@ index(index_actor::stateful_pointer<index_state> self,
               VAST_ASSERT(aps.synopsis);
               auto info = partition_info{
                 .uuid = aps.uuid,
-                .events = aps.synopsis->events,
-                .max_import_time = aps.synopsis->max_import_time,
+                .events = aps.synopsis->events(),
+                .max_import_time = aps.synopsis->max_import_time(),
                 .schema = aps.type,
               };
               // Update the index statistics. We only need to add the events of

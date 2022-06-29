@@ -104,6 +104,25 @@ private:
   std::unordered_map<type, std::unique_ptr<sketch::builder>> type_builders_;
 
   index_config config_;
+
+  // TODO: It may make sense to track the following data in a higher-level
+  // `partition_synopsis_builder`, so this class can focus solely on creating
+  // sketches.
+
+  /// Id of the first event.
+  uint64_t offset_ = invalid_id;
+
+  // Number of events.
+  uint64_t events_ = 0;
+
+  /// The minimum import timestamp of all contained table slices.
+  time min_import_time_ = time::max();
+
+  /// The maximum import timestamp of all contained table slices.
+  time max_import_time_ = time::min();
+
+  /// The schema of this partition.
+  type schema_ = {};
 };
 
 } // namespace vast

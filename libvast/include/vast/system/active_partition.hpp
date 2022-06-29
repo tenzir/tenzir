@@ -78,11 +78,7 @@ struct active_partition_state {
     /// Maps type names to IDs. Used the answer #type queries.
     std::unordered_map<std::string, ids> type_ids = {};
 
-    /// Partition synopsis for this partition. This is built up in parallel
-    /// to the one in the index, so it can be shrinked and serialized into
-    /// a `Partition` flatbuffer upon completion of this partition. Will be
-    /// sent back to the partition after persisting to minimize memory footprint
-    /// of the catalog.
+    /// Partition synopsis for this partition.
     partition_synopsis_ptr synopsis = {};
 
     /// A mapping from qualified field name to serialized indexer state
@@ -114,6 +110,10 @@ struct active_partition_state {
   /// for its probabilistic summary data structures.
   bool use_sketches = {};
 
+  // The import time range of this partition.
+  time min_import_time_ = time::clock::time_point::max();
+  time max_import_time_ = time::clock::time_point::min();
+
   /// The sketch builder.
   // TODO: Add a default constructor to the sketch builder
   // so we can store it in the state directly.
@@ -131,6 +131,8 @@ struct active_partition_state {
 
   /// Options to be used when adding events to the partition_synopsis.
   uint64_t partition_capacity = 0ull;
+
+  /// Indexing-related user configuration.
   index_config synopsis_index_config = {};
 
   /// A readable name for this partition.

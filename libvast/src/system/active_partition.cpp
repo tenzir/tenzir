@@ -156,7 +156,7 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   }
   auto type_ids = builder.CreateVector(tids);
   // Serialize synopses.
-  bool write_sketches = x.synopsis->use_sketches;
+  bool write_sketches = x.synopsis->use_sketches();
   auto maybe_ps_legacy = caf::expected<
     flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>{
     caf::no_error};
@@ -246,12 +246,12 @@ active_partition_actor::behavior_type active_partition(
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
       VAST_TRACE_SCOPE("partition {} got table slice {} {}",
                        self->state.data.id, VAST_ARG(out), VAST_ARG(x));
-      // Adjust the import time range iff necessary.
-      auto& mutable_synopsis = self->state.data.synopsis.unshared();
-      mutable_synopsis.min_import_time
-        = std::min(mutable_synopsis.min_import_time, x.import_time());
-      mutable_synopsis.max_import_time
-        = std::max(mutable_synopsis.max_import_time, x.import_time());
+      // Note that we need to maintain valid min/max import times,
+      // because the import_time
+      self->state.min_import_time_
+        = std::min(self->state.min_import_time_, x.import_time());
+      self->state.max_import_time_
+        = std::max(self->state.max_import_time_, x.import_time());
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
@@ -447,9 +447,6 @@ active_partition_actor::behavior_type active_partition(
               auto& mutable_synopsis = self->state.data.synopsis.unshared();
               // TODO: It would probably make more sense if the partition
               // synopsis keeps track of offset/events internally.
-              mutable_synopsis.offset = self->state.data.offset;
-              mutable_synopsis.events = self->state.data.events;
-              mutable_synopsis.use_sketches = self->state.use_sketches;
               if (self->state.use_sketches) {
                 auto error = std::move(*self->state.sketch_builder)
                                .finish_into(mutable_synopsis);
@@ -462,10 +459,7 @@ active_partition_actor::behavior_type active_partition(
                   = self->state.legacy_synopsis_builder.unshared();
                 // Shrink synopses for addr fields to optimal size.
                 mutable_builder.shrink();
-                mutable_synopsis.type_synopses_
-                  = std::move(mutable_builder.type_synopses_);
-                mutable_synopsis.field_synopses_
-                  = std::move(mutable_builder.field_synopses_);
+                mutable_synopsis = std::move(mutable_builder);
               }
               for (auto& [qf, actor] : self->state.indexers) {
                 if (actor == nullptr) {

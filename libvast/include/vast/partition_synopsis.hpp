@@ -29,6 +29,8 @@ T* default_intrusive_cow_ptr_unshare(T*&);
 
 namespace vast {
 
+struct partition_sketch_builder;
+
 /// Contains one synopsis per partition column.
 struct partition_synopsis final : public caf::ref_counted {
   partition_synopsis() = default;
@@ -59,24 +61,79 @@ struct partition_synopsis final : public caf::ref_counted {
   ///          synopsis.
   size_t memusage() const;
 
-  /// Id of the first event in the partition.
-  uint64_t offset = invalid_id;
+  /// Whether this partition synopsis uses sketches or synopsis internally.
+  [[nodiscard]] bool use_sketches() const {
+    return use_sketches_;
+  }
 
-  // Number of events in the partition.
-  uint64_t events = 0;
+  /// The smallest import time of any contained table slice.
+  [[nodiscard]] time min_import_time() const {
+    return min_import_time_;
+  }
 
-  /// The minimum import timestamp of all contained table slices.
-  time min_import_time = time::max();
+  /// The largest import time of any contained table slice.
+  [[nodiscard]] time max_import_time() const {
+    return max_import_time_;
+  }
 
-  /// The maximum import timestamp of all contained table slices.
-  time max_import_time = time::min();
+  /// The number of events in this partition.
+  [[nodiscard]] uint64_t events() const {
+    return events_;
+  }
 
-  /// The version number of this partition.
-  uint64_t version = version::partition_version;
+  /// The smallest offset of any contained table slice.
+  [[nodiscard]] uint64_t offset() const {
+    return offset_;
+  }
+
+  /// The version of this partition synopsis.
+  [[nodiscard]] uint64_t version() const {
+    return version_;
+  }
 
   /// The schema of this partition. This is only set for partition synopses with
   /// a version >= 1, because they are guaranteed to be homogenous.
-  type schema = {};
+  [[nodiscard]] const type& schema() const {
+    return schema_;
+  }
+
+  // TODO: Expose a generic interface for `lookup()` instead of exposing
+  // the actual maps, so the caller doesn't need to bother with distinguishing
+  // between sketches and synopses.
+  [[nodiscard]] auto const& type_synopses() const {
+    return type_synopses_;
+  }
+  [[nodiscard]] auto const& field_synopses() const {
+    return field_synopses_;
+  }
+  [[nodiscard]] auto const& type_sketches() const {
+    return type_sketches_;
+  }
+  [[nodiscard]] auto const& field_sketches() const {
+    return field_sketches_;
+  }
+
+  struct unit_test_access;
+
+private:
+  /// Id of the first event in the partition.
+  uint64_t offset_ = invalid_id;
+
+  // Number of events in the partition.
+  uint64_t events_ = 0;
+
+  /// The minimum import timestamp of all contained table slices.
+  time min_import_time_ = time::max();
+
+  /// The maximum import timestamp of all contained table slices.
+  time max_import_time_ = time::min();
+
+  /// The version number of this partition.
+  uint64_t version_ = version::partition_version;
+
+  /// The schema of this partition. This is only set for partition synopses with
+  /// a version >= 1, because they are guaranteed to be homogenous.
+  type schema_ = {};
 
   /// Whether this partition synopsis holds its data as sketch
   /// or as synopsis.
@@ -85,7 +142,7 @@ struct partition_synopsis final : public caf::ref_counted {
   //  TODO: We still use `false` as default for unit tests that
   //  construct a `partition_synopsis` directly and don't know
   //  about sketches yet.
-  bool use_sketches = false;
+  bool use_sketches_ = false;
 
   /// Synopsis data structures for types.
   std::unordered_map<type, synopsis_ptr> type_synopses_;
@@ -104,8 +161,11 @@ struct partition_synopsis final : public caf::ref_counted {
   detail::flat_map<qualified_record_field, std::optional<sketch::sketch>>
     field_sketches_;
 
-  // -- flatbuffer -------------------------------------------------------------
+  friend struct partition_sketch_builder;
+  friend struct unit_test_access;
 
+public:
+  // -- flatbuffer -------------------------------------------------------------
   FRIEND_ATTRIBUTE_NODISCARD friend caf::expected<
     flatbuffers::Offset<fbs::partition_synopsis::LegacyPartitionSynopsis>>
   pack_legacy(flatbuffers::FlatBufferBuilder& builder,
@@ -128,6 +188,13 @@ struct partition_synopsis final : public caf::ref_counted {
          partition_synopsis& ps);
 
 private:
+  // Helper for `unpack()`, not publicly exposed because it doesn't fully
+  // initialize `ps`.
+  friend caf::error
+  unpack_(const flatbuffers::Vector<
+            flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>& synopses,
+          partition_synopsis& ps);
+
   // Returns a raw pointer to a deep copy of this partition synopsis.
   // For use by the `caf::intrusive_cow_ptr`.
   friend partition_synopsis* ::caf::default_intrusive_cow_ptr_unshare<

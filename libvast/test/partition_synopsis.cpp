@@ -15,6 +15,9 @@
 #include "vast/detail/collect.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
+#include "vast/test/unit_test_access.hpp"
+
+using private_access = vast::partition_synopsis::unit_test_access;
 
 namespace {
 
@@ -28,7 +31,7 @@ TEST(custom index_config) {
   // Setup.
   using namespace std::string_literals;
   auto ps = vast::partition_synopsis{};
-  ps.use_sketches = false;
+  private_access{ps}.use_sketches_ = false;
   auto capacity = vast::defaults::system::max_partition_size;
   auto synopsis_opts = vast::index_config{
     .rules = {
@@ -55,9 +58,9 @@ TEST(custom index_config) {
   REQUIRE(host_key);
   auto uri_field = vast::qualified_record_field(layout, *uri_key);
   auto host_field = vast::qualified_record_field(layout, *host_key);
-  auto const& host_synopsis = ps.field_synopses_.at(host_field);
+  auto const& host_synopsis = ps.field_synopses().at(host_field);
   CHECK_EQUAL(host_synopsis, nullptr);
-  auto& url_synopsis = ps.field_synopses_.at(uri_field);
+  auto& url_synopsis = ps.field_synopses().at(uri_field);
   REQUIRE_NOT_EQUAL(url_synopsis, nullptr);
   auto const& type = url_synopsis->type();
   auto attributes = vast::detail::collect(type.attributes());
@@ -65,9 +68,10 @@ TEST(custom index_config) {
   REQUIRE(url_parameters.has_value());
   CHECK_EQUAL(url_parameters->p, 0.001);
   // Verify type synopses.
-  auto& string_synopsis = ps.type_synopses_.at(vast::type{vast::string_type{}});
+  auto& string_synopsis
+    = ps.type_synopses().at(vast::type{vast::string_type{}});
   auto& address_synopsis
-    = ps.type_synopses_.at(vast::type{vast::address_type{}});
+    = ps.type_synopses().at(vast::type{vast::address_type{}});
   auto string_parameters = vast::parse_parameters(string_synopsis->type());
   auto address_parameters = vast::parse_parameters(address_synopsis->type());
   REQUIRE(string_parameters);

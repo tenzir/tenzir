@@ -152,6 +152,11 @@ partition_sketch_builder::make(type layout, index_config config) {
 
 caf::error partition_sketch_builder::add(const table_slice& x) {
   const auto& layout = caf::get<record_type>(x.layout());
+  events_ += x.rows();
+  offset_ = std::min(offset_, x.offset());
+  min_import_time_ = std::min(min_import_time_, x.import_time());
+  max_import_time_ = std::max(max_import_time_, x.import_time());
+  schema_ = x.layout();
   auto record_batch = to_record_batch(x);
   // Handle all field sketches.
   for (auto const& [key, factory] : field_factory_) {
@@ -226,7 +231,13 @@ caf::error partition_sketch_builder::finish_into(partition_synopsis& ps) && {
   VAST_ASSERT(ps.field_synopses_.empty() && ps.type_synopses_.empty(),
               "cannot mix & match sketches and synopses in the same partition "
               "synopsis");
-  ps.use_sketches = true;
+  ps.events_ = events_;
+  ps.offset_ = offset_;
+  ps.min_import_time_ = min_import_time_;
+  ps.max_import_time_ = max_import_time_;
+  ps.schema_ = schema_;
+  ps.version_ = version::partition_version;
+  ps.use_sketches_ = true;
   ps.type_sketches_.reserve(type_builders_.size());
   for (auto&& [type, builder] : std::exchange(type_builders_, {})) {
     VAST_INFO("Finishing builder for type {}", type);

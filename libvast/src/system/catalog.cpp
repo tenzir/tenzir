@@ -60,8 +60,8 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
       }
       // The field has no dedicated synopsis. Check if there is one
       // for the type in general.
-    } else if (auto it = part_syn->type_sketches_.find(cleaned_type);
-               it != part_syn->type_sketches_.end()) {
+    } else if (auto it = part_syn->type_sketches().find(cleaned_type);
+               it != part_syn->type_sketches().end()) {
       auto opt = it->second.lookup(x.op, rhs);
       if (!opt || *opt) {
         VAST_TRACE("catalog selects {} at predicate {}", part_id, x);
@@ -96,8 +96,8 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
       }
       // The field has no dedicated synopsis. Check if there is one
       // for the type in general.
-    } else if (auto it = part_syn->type_synopses_.find(cleaned_type);
-               it != part_syn->type_synopses_.end() && it->second) {
+    } else if (auto it = part_syn->type_synopses().find(cleaned_type);
+               it != part_syn->type_synopses().end() && it->second) {
       auto opt = it->second->lookup(x.op, make_view(rhs));
       if (!opt || *opt) {
         VAST_TRACE("{} selects {} at predicate {}",
@@ -120,27 +120,27 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
     const auto& rhs = caf::get<data>(x.rhs);
     result_type result;
     for (const auto& [part_id, part_syn] : synopses) {
-      if (!part_syn->use_sketches) {
-        for (auto const& [field, syn] : part_syn->field_synopses_)
+      if (!part_syn->use_sketches()) {
+        for (auto const& [field, syn] : part_syn->field_synopses())
           if (match(field))
             if (lookup_with_synopsis(rhs, part_id, part_syn, field, syn)) {
               result.push_back({
                 .uuid = part_id,
-                .events = part_syn->events,
-                .max_import_time = part_syn->max_import_time,
-                .schema = part_syn->schema,
+                .events = part_syn->events(),
+                .max_import_time = part_syn->max_import_time(),
+                .schema = part_syn->schema(),
               });
               break;
             }
       } else {
-        for (auto const& [field, sketch] : part_syn->field_sketches_)
+        for (auto const& [field, sketch] : part_syn->field_sketches())
           if (match(field))
             if (lookup_with_sketch(rhs, part_id, part_syn, field, sketch)) {
               result.push_back({
                 .uuid = part_id,
-                .events = part_syn->events,
-                .max_import_time = part_syn->max_import_time,
-                .schema = part_syn->schema,
+                .events = part_syn->events(),
+                .max_import_time = part_syn->max_import_time(),
+                .schema = part_syn->schema(),
               });
               break;
             }
@@ -160,7 +160,7 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
         // at the layout names.
         result_type result;
         for (const auto& [part_id, part_syn] : synopses) {
-          for (const auto& [fqf, _] : part_syn->field_synopses_) {
+          for (const auto& [fqf, _] : part_syn->field_synopses()) {
             // TODO: provide an overload for view of evaluate() so that
             // we can use string_view here. Fortunately type names are
             // short, so we're probably not hitting the allocator due to
@@ -168,9 +168,9 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
             if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
               result.push_back({
                 .uuid = part_id,
-                .events = part_syn->events,
-                .max_import_time = part_syn->max_import_time,
-                .schema = part_syn->schema,
+                .events = part_syn->events(),
+                .max_import_time = part_syn->max_import_time(),
+                .schema = part_syn->schema(),
               });
               break;
             }
@@ -181,19 +181,21 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
       } else if (lhs.kind == meta_extractor::import_time) {
         result_type result;
         for (const auto& [part_id, part_syn] : synopses) {
-          VAST_ASSERT(part_syn->min_import_time <= part_syn->max_import_time,
-                      "encountered empty or moved-from partition synopsis");
+          auto min_time = part_syn->min_import_time();
+          auto max_time = part_syn->max_import_time();
+          VAST_ASSERT(min_time <= max_time, "encountered empty or moved-from "
+                                            "partition synopsis");
           auto ts = time_synopsis{
-            part_syn->min_import_time,
-            part_syn->max_import_time,
+            min_time,
+            max_time,
           };
           auto add = ts.lookup(x.op, caf::get<vast::time>(d));
           if (!add || *add)
             result.push_back({
               .uuid = part_id,
-              .events = part_syn->events,
-              .max_import_time = part_syn->max_import_time,
-              .schema = part_syn->schema,
+              .events = part_syn->events(),
+              .max_import_time = max_time,
+              .schema = part_syn->schema(),
             });
         }
         VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
@@ -210,8 +212,8 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
           for (const auto& [part_id, part_syn] : synopses) {
             // Compare the desired field name with each field in the
             // partition.
-            auto matching = [&] {
-              for (const auto& [field, _] : part_syn->field_synopses_) {
+            auto matching = [&, &part_syn = part_syn] {
+              for (const auto& [field, _] : part_syn->field_synopses()) {
                 VAST_ASSERT(!field.is_standalone_type());
                 auto rt = record_type{{field.field_name(), field.type()}};
                 for ([[maybe_unused]] const auto& offset :
@@ -226,9 +228,9 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
             if (!is_negated(x.op) == matching)
               result.push_back({
                 .uuid = part_id,
-                .events = part_syn->events,
-                .max_import_time = part_syn->max_import_time,
-                .schema = part_syn->schema,
+                .events = part_syn->events(),
+                .max_import_time = part_syn->max_import_time(),
+                .schema = part_syn->schema(),
               });
           }
         }
@@ -290,12 +292,13 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
 }
 
 void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
-  for (auto const& [field, synopsis] : ps.field_synopses_)
+  for (auto const& [field, synopsis] : ps.field_synopses())
     if (synopsis != nullptr && field.type() == string_type{})
       unprunable_fields.insert(std::string{field.name()});
-  VAST_INFO("updating fields for {} field sketches", ps.field_sketches_.size());
+  VAST_INFO("updating fields for {} field sketches",
+            ps.field_sketches().size());
   // FIXME: Do we also need to care about address_type here?
-  for (auto const& [field, sketch] : ps.field_sketches_)
+  for (auto const& [field, sketch] : ps.field_sketches())
     if (sketch && field.type() == string_type{})
       unprunable_fields.insert(std::string{field.name()});
   // TODO/BUG: We also need to prevent pruning for enum types,
@@ -324,7 +327,7 @@ void catalog_state::erase(const uuid& partition) {
 }
 
 void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
-  offset_map.inject(ps->offset, ps->offset + ps->events, partition);
+  offset_map.inject(ps->offset(), ps->offset() + ps->events(), partition);
   update_unprunable_fields(*ps);
   synopses.emplace(partition, std::move(ps));
 }
@@ -333,8 +336,8 @@ void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
   std::vector<std::pair<uuid, partition_synopsis_ptr>> flat_data;
   for (auto&& [uuid, synopsis] : std::move(ps)) {
     VAST_ASSERT(synopsis->get_reference_count() == 1ull);
-    offset_map.inject(synopsis->offset, synopsis->offset + synopsis->events,
-                      uuid);
+    offset_map.inject(synopsis->offset(),
+                      synopsis->offset() + synopsis->events(), uuid);
     flat_data.emplace_back(uuid, std::move(synopsis));
   }
   std::sort(flat_data.begin(), flat_data.end(),
@@ -381,9 +384,9 @@ std::vector<partition_info> catalog_state::all_partitions() const {
   for (const auto& [partition, synopsis] : synopses) {
     result.push_back({
       .uuid = partition,
-      .events = synopsis->events,
-      .max_import_time = synopsis->max_import_time,
-      .schema = synopsis->schema,
+      .events = synopsis->events(),
+      .max_import_time = synopsis->max_import_time(),
+      .schema = synopsis->schema(),
     });
   }
   VAST_ASSERT_EXPENSIVE(std::is_sorted(result.begin(), result.end()));
@@ -493,8 +496,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       self->state.erase(partition);
       return atom::ok_v;
     },
-    [=](atom::replace, std::vector<uuid> old_uuids,
-        std::vector<augmented_partition_synopsis> new_synopses) -> atom::ok {
+    [=](atom::replace, const std::vector<uuid>& old_uuids,
+        const std::vector<augmented_partition_synopsis>& new_synopses)
+      -> atom::ok {
       for (auto const& uuid : old_uuids)
         self->state.erase(uuid);
       for (auto& aps : new_synopses)
@@ -512,7 +516,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       auto start = std::chrono::steady_clock::now();
       auto result = self->state.lookup(expr);
       std::erase_if(result.partitions, [&](const partition_info& partition) {
-        return self->state.synopses[partition.uuid]->version
+        return self->state.synopses[partition.uuid]->version()
                > max_partition_version;
       });
       duration runtime = std::chrono::steady_clock::now() - start;
@@ -567,9 +571,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
           VAST_ASSERT(syn != self->state.synopses.end());
           result_candidates.push_back({
             .uuid = ids_candidate,
-            .events = syn->second->events,
-            .max_import_time = syn->second->max_import_time,
-            .schema = syn->second->schema,
+            .events = syn->second->events(),
+            .max_import_time = syn->second->max_import_time(),
+            .schema = syn->second->schema(),
           });
         }
       }
@@ -595,18 +599,18 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
           VAST_ASSERT(synopsis);
           auto partition = record{
             {"id", fmt::to_string(id)},
-            {"schema", synopsis->schema
-                         ? data{std::string{synopsis->schema.name()}}
+            {"schema", synopsis->schema()
+                         ? data{std::string{synopsis->schema().name()}}
                          : data{}},
-            {"num-events", synopsis->events},
+            {"num-events", synopsis->events()},
             {"import-time",
              record{
-               {"min", synopsis->min_import_time},
-               {"max", synopsis->max_import_time},
+               {"min", synopsis->min_import_time()},
+               {"max", synopsis->max_import_time()},
              }},
           };
           if (v >= status_verbosity::debug)
-            partition["version"] = synopsis->version;
+            partition["version"] = synopsis->version();
           partitions.emplace_back(std::move(partition));
         }
         result["partitions"] = std::move(partitions);
@@ -624,9 +628,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         VAST_ASSERT(synopsis);
         auto& [num_partitions, num_events]
           = num_partitions_and_events_per_schema_and_version[std::pair{
-            synopsis->schema.name(), synopsis->version}];
+            synopsis->schema().name(), synopsis->version()}];
         num_partitions += 1;
-        num_events += synopsis->events;
+        num_events += synopsis->events();
       }
       auto r = report{};
       r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
