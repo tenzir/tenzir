@@ -87,7 +87,7 @@ struct module_ng2 {
   std::vector<std::string> references = {};
 
   /// The ready-to-use resolved types with qualified names.
-  std::vector<type> types;
+  std::vector<type> types = {};
 
   // FIXME: The order of types should not matter?
   friend bool operator==(const module_ng2& first,
@@ -869,8 +869,11 @@ caf::expected<std::string> parse_module_name(const record& module) {
     return caf::make_error(ec::parse_error, "module must have a name");
   const auto* name = caf::get_if<std::string>(&name_element->second);
   if (name == nullptr)
-    return caf::make_error(ec::parse_error, "the format of the module's name "
-                                            "is invalid");
+    return caf::make_error(ec::parse_error, "the name of the module must be a "
+                                            "YAML string");
+  if (name->find('.') != std::string::npos)
+    return caf::make_error(ec::parse_error, "the name of the module cannot "
+                                            "contain a dot");
   return *name;
 }
 
@@ -1904,6 +1907,11 @@ TEST(YAML Module - name description references) {
     = "{ module: , description: desc, references: [ref1, ref2]}";
   auto no_value_name_converted = unbox(from_yaml(no_value_name));
   CHECK_ERROR(to_module2(no_value_name_converted));
+  // name containing a dot must fail
+  const auto* dot_in_name
+    = "{ module: foo.bar, description: desc, references: [ref1, ref2]}";
+  auto dot_in_name_converted = unbox(from_yaml(dot_in_name));
+  CHECK_ERROR(to_module2(dot_in_name_converted));
   // Missing description must succeed
   const auto* missing_description = "{ module: test, references: [ref1, ref2]}";
   const auto expected_no_description = module_ng2{
