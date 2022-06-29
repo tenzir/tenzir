@@ -1,5 +1,10 @@
 # Operators
 
-import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+VAST ships with the following operators:
 
-<MissingDocumentation/>
+```mdx-code-block
+import DocCardList from '@theme/DocCardList';
+import {useCurrentSidebarCategory} from '@docusaurus/theme-common';
+
+<DocCardList items={useCurrentSidebarCategory().items}/>
+```

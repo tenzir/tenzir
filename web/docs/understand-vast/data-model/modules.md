@@ -1,3 +1,7 @@
+---
+sidebar-position: 1
+---
+
 # Modules
 
 import MissingDocumentation from '@site/presets/MissingDocumentation.md';
