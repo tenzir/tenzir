@@ -145,7 +145,7 @@ plugin:
 
 1. `compaction.space.scan-binary`: an absolute path to a binary that should be
    executed to determine the current disk usage
-2. `compaction.space.step-size`: adjust how many deletion candidates should be
+2. `compaction.space.step-size`: adjust how many compaction candidates should be
    processed before re-checking the size of the database directory
 
 ### Transform data after exceeding a retention span
@@ -173,10 +173,10 @@ events from the database and replaces them with the transformed events. The
 this behavior and to keep the input partitions available.
 
 :::note
-VAST applies each rule will only once per partition and stores the applied rule
-name within the partition meta data. If you rename a rule in the configuration
-and reload a new compaction configuration, already compacted partitions will
-undergo another round of compaction.
+VAST applies each rule only once per partition and stores the applied rule name
+within the partition meta data. If you rename a rule in the configuration and
+reload a new compaction configuration, already compacted partitions will undergo
+another round of compaction.
 :::
 
 The pipelines referenced in the compaction configuration must be defined in the

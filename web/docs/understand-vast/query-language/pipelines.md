@@ -44,5 +44,5 @@ vast:
              - flow.end
 ```
 
-The above example h `example_pipeline` consists of two operators, `hash` and
-`summarize` that execute in sequential order.
+The above `example` pipeline consists of two operators, `hash` and `summarize`
+that execute in sequential order.

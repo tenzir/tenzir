@@ -505,9 +505,9 @@ the event timestamp.
 
 ## Write a schema manually
 
-When VAST does not ship with a [module][modules] for your data out of the box,
+If VAST does not ship with a [module][modules] for your data out of the box,
 or the inference is not good enough for your use case regarding type semantics
-or performance, you can write easily yourself.
+or performance, you can easily write one yourself.
 
 A schema is a record type with a name so that VAST can
 represent it as a table internally. You would write a schema manually or extend

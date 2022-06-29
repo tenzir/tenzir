@@ -53,23 +53,23 @@ retention span and manage finite storage. Compaction operates in two dimensions:
    spatial compaction gives you a much more powerful mechanism to achieve long
    retention periods while working with high-volume telemetry.
 
-:::tip Key Beneifts
+:::tip Key Benefits
 In summary, VAST's data aging capabilities have the following benefits:
 
 - **Easy Compliance**: VAST makes it easy to implement and share compliance
-  policies. Th configuration of temporal compaction is a human-readable file
+  policies. The configuration of temporal compaction is a human-readable file
   that clearly states what happens with the data at what age.
 
 - **Gradual Event Decay**: instead of deleting old data as a whole, VAST offers
   an incremental approach to reduce size and information content of events. For
-  example, first filter out unneeded fields, then aggregat the smaller events
+  example, first filter out unneeded fields, then aggregate the smaller events
   into an event summary, and delete the summary at last. Being able to express
   event decay in this gradual way is the Goldilocks approach of managing utility
   of security telemetry.
 
 - **Dynamic Aging**: When only considering age as input for deleting old data,
   high-volume data source also dictate the retention span for low-volume event
-  streams, because they can consume orders of magnitute more space. VAST's
+  streams, because they can consume orders of magnitude more space. VAST's
   weighted aging makes it possible to define a *relative* importance of events
   to each other. By assigning higher age weights to low-volume-but-important
   data sources (e.g., alerts), we can selectively increase their retention span.

@@ -73,7 +73,7 @@ imperfect approximation in practice, for the following reasons:
 - **Incompleteness**: we have to appreciate that all data models are incomplete
   because data sources continuously evolve.
 - **Incorrectness**: in addition to lacking information, data models contain
-  a growing number errors, for the same evolutionary reasons as above.
+  a growing number of errors, for the same evolutionary reasons as above.
 - **Variance**: data models vary substantially between products, making it
   difficult to mix-and-match semantics.
 :::
@@ -117,13 +117,6 @@ concepts:
     - suricata.flow.src_ip
 ```
 
-Concepts have no explicit type because extractors have no type either. Queries
-remain meaningful even if types differ across extractors, because VAST ignores
-all fields where the type does not match. For example, if you define a concept
-`x` that includes two fields `a` of type `real` and `b` of type `string`, then
-the query `x < 4.2` would only consider field `a`. In this regard, you can think
-of concepts like [sum types](https://en.wikipedia.org/wiki/Sum_type).
-
 Concepts compose. A concept can include other concepts to represent semantic
 hierarchies. For example, consider our above `source_ip` concept. If we want to
 generalize this concept to also include MAC addresses, we could define a concept
@@ -139,7 +132,7 @@ You define the composite concept in a module as follows:
 concepts:
   source_ip:
     description: the originator of a connection
-    fields: # TODO: extractors?
+    fields:
     - zeek.conn.id.orig_l2_addr
     concepts:
     - source_ip
@@ -152,8 +145,7 @@ field, you can define the concept in the corresponding module.
 ## Models
 
 A *model* is made of one or more concepts. An event fulfills a model
-if and only if it fulfills all contained concepts. Models are thus [product
-types](https://en.wikipedia.org/wiki/Product_type).
+if and only if it fulfills all contained concepts.
 
 Consider again Sysmon and Suricata data for formalizing the notion of a
 `connection` that requires the following concepts to be fulfilled: `source_ip`,
@@ -199,7 +191,7 @@ destination_ip == 10.0.0.1 && destination_port == 80
 ```
 
 Thereafter, the concept resolution takes place again, assuming that there exist
-concept definitions for `source_port` symmetric to `destination_ip`:
+concept definitions for `destination_port` symmetric to `destination_ip`:
 
 ```c
 (sysmon.NetworkConnection.RemoteIp == 10.0.0.1
