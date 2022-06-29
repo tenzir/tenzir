@@ -52,6 +52,51 @@ The `vast.import.read-timeout` option determines how long a call to read data
 from the input will block. After the read timeout elapses, VAST tries again at a
 later.
 
+## Persistent Storage
+
+In VAST, data is stored in _partitions_, storing multiple, homogeneous table
+slices in a single file. VAST currently offers two different storage formats:
+
+1. Segment store format, based on a thin wrapper around Apache Arrow IPC and
+2. Apache Parquet file format
+
+At the moment, the default format is the segment store. The parquet format is
+implemented as a bundled, open source plugin and can be enabled for the VAST
+server via:
+
+```yaml
+vast:
+  plugins:
+    - parquet
+  store-backend: parquet
+```
+
+Choosing parquet has a few trade-offs, and depending on your use case, can be
+a better choice:
+1. Requires about 40% less storage for the same data
+2. Is slightly more expensive to serialize, with a small performance hit (+10%
+   CPU consumption in ingest path)
+3. Is more expensive to deserialize, increasing CPU utilization for query
+   execution
+4. Reduced storage requirements reduce the amount of I/O required for reading
+5. Standard format compatible with a wide variety of other systems
+
+Depending on the actual system setup (type of disks, size of storage, CPU) and
+the typical workloads (type of queries, selectivity, more live queries vs.
+retro queries), parquet can be the right choice. In particular, we recommend
+parquet when:
+
+1. Storage is limited, and you want to increase retention time
+2. Your VAST system is limited by I/O, and not by CPU
+3. Retro query performance is not your current limitation
+4. You want to be able to read the data with off-the-shelf data science tools
+
+:::tip 
+`vast rebuild` rewrites the entire database, and can be used to switch an
+existing instance to a different storage backend. However, VAST works perfectly
+fine with a mixed-storage configuration, so a full rebuild is not required.
+:::
+
 ## Memory usage and caching
 
 The amount of memory that a VAST server process is allowed to use can currently
