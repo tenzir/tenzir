@@ -334,9 +334,9 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           };
           transforms.emplace_back(to_re);
         } else if (*i == "cidr") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "cidr modifier not yet "
-                                                    "implemented");
+          // This modifier only requires adjusting the operator because VAST
+          // already parses strings as typed values.
+          op = relational_operator::in;
         } else if (*i == "expand") {
           // TODO
           return caf::make_error(ec::unimplemented, "expand modifier not yet "

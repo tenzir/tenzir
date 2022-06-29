@@ -123,7 +123,7 @@ by VAST's query engine:
 |`utf16be`|transform the value to UTF16 big endian|🟢|🟡
 |`utf16`|transform the value to UTF16|🟢|🟡
 |`re`|interpret the value as regular expression|🟢|🔴
-|`cidr`|interpret the value as a IP CIDR|🔴|🟡
+|`cidr`|interpret the value as a IP CIDR|🔴|🟢
 |`all`|changes the expression logic from OR to AND|🟢|🟢
 |`lt`|compare less than (`<`) the value|🔴|🟢
 |`lte`|compare less than or equal to (`<=`) the value|🔴|🟢

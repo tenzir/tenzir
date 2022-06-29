@@ -265,6 +265,15 @@ TEST(modifier - base64offset) {
   CHECK_EQUAL(search_id, to_expr(expr));
 }
 
+TEST(modifier - cidr) {
+  auto yaml = R"__(
+    foo|cidr: 192.168.0.0/24
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo in 192.168.0.0/24"s);
+  CHECK_EQUAL(search_id, expected);
+}
+
 TEST(search id selection - exact match) {
   auto yaml = R"__(
     detection:
