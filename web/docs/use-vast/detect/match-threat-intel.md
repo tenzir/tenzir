@@ -456,7 +456,7 @@ and bits used.
 Finally, we hand the Bloom filter over to VAST and associate it with the
 matcher called `ns`:
 
-```sh
+```bash
 vast matcher load dns < ns.bloom
 ```
 
@@ -496,39 +496,38 @@ head -n 15 ipblocklist.csv
 "2021-01-17 07:47:59","46.101.90.205","4643","online","2021-08-18","Dridex"
 ```
 
-Before VAST can read this data, we need to tell VAST what type to use for it.
+Before VAST can read this data, we need to tell VAST what type to use for it. We
+write an `abuse` [module](/docs/understand-vast/data-model/modules) for this:
 
-```
-type abuse.feodo.blocklist = record {
-  first_seen_utc: time,
-  dst_ip: addr,
-  dst_port: port,
-  c2_status: enum { online, offline },
-  last_online: time,
-  malware: string,
-}
+```yaml
+module: abuse
+types:
+  feodo.blocklist:
+    record:
+      - first_seen_utc: time
+      - dst_ip: addr
+      - dst_port: port
+      - c2_status:
+          enum:
+            - online
+            - offline
+      - last_online: time
+      - malware: string
 ```
 
 In addition, you need to tell VAST what fields have the indicator data,
 consisting of value and an optional context. To this end, you need to provide a
-concept definition:
+[concept](/docs/understand-vast/data-model/taxonomies#concepts) definition:
 
 ```yaml
-- concept:
-    name: matcher.indicator.value
+concepts:
+  matcher.indicator.value:
     fields:
       - abuse.feodo.blocklist.dst_ip
-- concept:
-    name: matcher.indicator.context
+  matcher.indicator.context:
     fields:
       - abuse.feodo.blocklist.malware
 ```
-
-:::note Upcoming changes
-We understand that this specification feels cumbersome and are working on a
-solution. In the future, you'll be able to define type and concepts in a single
-YAML file. Stay tuned.
-:::
 
 Now we can translate the blocklist into a format that VAST can read, e.g., CSV
 or JSON. In the example below, we simply add a header to the plain text file to
