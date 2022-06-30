@@ -156,6 +156,8 @@ The following list describes all available metrics keys:
 |`scheduler.partition.scheduled`|The number of scheduled partitions.|#partitions||
 |`segment-store.lookup.runtime`|The duration of a query evaluation in a partition store.|#nanoseconds|🔎💾|
 |`segment-store.lookup.hits`|The number of results of a query in a partition store.|#events|🔎💾|
+|`parquet-store.lookup.runtime`|The duration of a query evaluation in a parquet store.|#nanoseconds|🔎→
+|`parquet-store.lookup.hits`|The number of results of a query in a parquet store.|#events|🔎💾|
 |`source.start`|Timepoint when the source started.|nanoseconds since epoch||
 |`source.stop`|Timepoint when the source stopped.|nanoseconds since epoch||
 |`syslog-reader.rate`|The rate of events processed by the syslog source.|#events/second||
