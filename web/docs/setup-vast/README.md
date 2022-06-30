@@ -36,13 +36,13 @@ flowchart LR
   instance <--> tune
   instance <--> monitor
   %% Links
-  click download "/docs/setup-vast/download/" "Download VAST"
-  click build "/docs/setup-vast/build/" "Build VAST"
-  click install "/docs/setup-vast/install/" "Install VAST"
-  click deploy "/docs/setup-vast/deploy/" "Deploy VAST"
-  click configure "/docs/setup-vast/configure/" "Configure VAST"
-  click tune "/docs/setup-vast/tune/" "Tune VAST"
-  click monitor "/docs/setup-vast/monitor/" "Monitor VAST"
+  click download "setup-vast/download" "Download VAST"
+  click build "setup-vast/build" "Build VAST"
+  click install "setup-vast/install" "Install VAST"
+  click deploy "setup-vast/deploy" "Deploy VAST"
+  click configure "setup-vast/configure" "Configure VAST"
+  click tune "setup-vast/tune" "Tune VAST"
+  click monitor "setup-vast/monitor" "Monitor VAST"
 ```
 
 :::tip Quick Start
