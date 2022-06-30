@@ -52,30 +52,6 @@ vast:
 Alternatively, pass the corresponding command-line option when starting VAST:
 `vast --enable-metrics start`.
 
-## Report metrics as ordinary events
-
-By default, VAST reports metrics using the *self sink*, i.e., they are ingested
-as `vast.metrics` events back into VAST. This allows them to be queried like
-regular data. The self sink has the following configuration options:
-
-```yaml
-vast:
-  metrics:
-    self-sink:
-      enable: true
-      slice-size: 100
-```
-
-The following query operates on all metrics with the key `pcap-reader.recv`
-that keeps track of a delta of received packets on all interfaces VAST listens
-on. With JSON as export format, you can use `jq` to calculate the sum of these
-values to get the total amount of packets seen on all interfaces.
-
-```bash
-vast export json '#type == "vast.metrics" && key == "pcap-reader.recv"' |
-  jq -s 'map(.value | tonumber) | add'
-```
-
 ## Write metrics to a file or UNIX domain socket
 
 VAST also supports writing metrics to a file or UNIX domain socket (UDS). You
