@@ -318,18 +318,20 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "re") {
           op = relational_operator::match;
           auto to_re = [](const data& d) -> data {
-            auto f = detail::overload{[](const auto& x) -> data {
-                                        auto str = to_string(x);
-                                        if (auto pat = make_pattern(str))
-                                          return pat;
-                                        return str;
-                                      },
-                                      [](const std::string& x) -> data {
-                                        return pattern{x};
-                                      },
-                                      [](const pattern& x) -> data {
-                                        return x;
-                                      }};
+            auto f = detail::overload{
+              [](const auto& x) -> data {
+                auto str = to_string(x);
+                if (auto pat = make_pattern(str))
+                  return pat;
+                return str;
+              },
+              [](const std::string& x) -> data {
+                return pattern{x};
+              },
+              [](const pattern& x) -> data {
+                return x;
+              },
+            };
             return caf::visit(f, d);
           };
           transforms.emplace_back(to_re);
