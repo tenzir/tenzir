@@ -1,6 +1,15 @@
 # Changelog
 
 This changelog documents all notable changes to the summarize plugin for VAST.
+
+## 2.1.0
+
+### Features
+
+- The new `gather` action creates a list of all unique values in the selected
+  columns in the grouped events.
+  [#2391](https://github.com/tenzir/vast/pull/2391)
+
 ## 2.0.0
 
 ### Breaking Changes

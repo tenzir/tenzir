@@ -104,10 +104,14 @@ struct configuration {
   /// List of fields to take the conjunction of.
   std::vector<std::string> all = {};
 
+  /// List of fields to gather all unique values of.
+  std::vector<std::string> gather = {};
+
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.time_resolution, x.group_by, x.sum, x.min, x.max, x.any, x.all);
+    return f(x.time_resolution, x.group_by, x.sum, x.min, x.max, x.any, x.all,
+             x.gather);
   }
 
   /// Enable parsing from a record via convertible.
@@ -120,6 +124,7 @@ struct configuration {
       {"max", list_type{string_type{}}},
       {"any", list_type{string_type{}}},
       {"all", list_type{string_type{}}},
+      {"gather", list_type{string_type{}}},
     };
     return result;
   }
@@ -136,6 +141,7 @@ struct summary {
     max,      ///< Use the maximum value within the same group.
     any,      ///< Disjoin values within the same group.
     all,      ///< Conjoin values within the same group.
+    gather,   ///< Gather unique values within the same group.
   };
 
   /// The key by which summaries are grouped. Essentially, this is a
@@ -221,6 +227,7 @@ struct summary {
     resolve_action(config.max, action::max);
     resolve_action(config.any, action::any);
     resolve_action(config.all, action::all);
+    resolve_action(config.gather, action::gather);
     std::sort(unflattened_actions.begin(), unflattened_actions.end());
     const auto has_duplicates
       = std::adjacent_find(unflattened_actions.begin(),
@@ -234,12 +241,12 @@ struct summary {
                              fmt::format("summary detected ambiguous "
                                          "action configuration for layout {}",
                                          layout));
-    auto drop_transformations = std::vector<record_type::transformation>{};
+    auto transformations = std::vector<record_type::transformation>{};
     for (int flat_index = 0; const auto& leaf : rt.leaves()) {
       if (result.selected_columns_.size() >= unflattened_actions.size()
           || leaf.index
                != unflattened_actions[result.selected_columns_.size()].first) {
-        drop_transformations.push_back({leaf.index, record_type::drop()});
+        transformations.push_back({leaf.index, record_type::drop()});
       } else {
         const auto action
           = unflattened_actions[result.selected_columns_.size()].second;
@@ -248,11 +255,16 @@ struct summary {
             && caf::holds_alternative<time_type>(leaf.field.type))
           result.round_temporal_columns_.push_back(
             detail::narrow_cast<int>(result.selected_columns_.size()));
+        if (action == action::gather)
+          transformations.push_back({leaf.index, record_type::assign({{
+                                                   std::string{leaf.field.name},
+                                                   list_type{leaf.field.type},
+                                                 }})});
         result.selected_columns_.push_back(flat_index);
       }
       ++flat_index;
     }
-    auto adjusted_rt = rt.transform(std::move(drop_transformations));
+    auto adjusted_rt = rt.transform(std::move(transformations));
     // If the schema cannot be adjusted the summary does not apply to the given
     // layout. This is not an error.
     if (!adjusted_rt)
@@ -362,7 +374,12 @@ struct summary {
             if (array.IsNull(row))
               continue;
             if (caf::holds_alternative<caf::none_t>(value)) {
-              value = materialize(value_at(type, array, row));
+              if (actions_[column] != action::gather) {
+                value = materialize(value_at(type, array, row));
+              } else if constexpr (std::is_same_v<Type, list_type>) {
+                value
+                  = list{materialize(value_at(type.value_type(), array, row))};
+              }
               continue;
             }
             switch (actions_[column]) {
@@ -451,6 +468,25 @@ struct summary {
                 }
                 break;
               }
+              case action::gather: {
+                if constexpr (std::is_same_v<Type, list_type>) {
+                  auto new_value
+                    = materialize(value_at(type.value_type(), array, row));
+                  auto& old_values = caf::get<list>(value);
+                  if (std::none_of(old_values.begin(), old_values.end(),
+                                   [&](const auto& old_value) {
+                                     return old_value == new_value;
+                                   }))
+                    old_values.emplace_back(std::move(new_value));
+                } else {
+                  return caf::make_error(
+                    ec::logic_error,
+                    fmt::format("summarize transform step cannot "
+                                "'gather' into non-list fields {}",
+                                batch->schema()->field(column)->ToString()));
+                }
+                break;
+              }
             }
           }
           return caf::none;
@@ -470,15 +506,13 @@ struct summary {
   /// Returns the summarized batches.
   caf::expected<transform_batch> finish() {
     VAST_ASSERT(builder_);
-    auto cast_requirements
-      = std::vector<std::optional<bool>>(builder_->num_fields(), std::nullopt);
     const auto bucket_size = detail::narrow_cast<int64_t>(buckets_.size());
     auto resize_status = builder_->Reserve(bucket_size);
     VAST_ASSERT(resize_status.ok(), resize_status.ToString().c_str());
     for (auto&& bucket : std::exchange(buckets_, {})) {
       auto row_append_result = builder_->Append();
       VAST_ASSERT(row_append_result.ok(), row_append_result.ToString().c_str());
-      for (int column = 0; auto& value : bucket.second) {
+      for (int column = 0; const auto& value : bucket.second) {
         auto* column_builder = builder_->field_builder(column);
         auto append_result = append_builder(
           caf::get<record_type>(flattened_adjusted_layout_).field(column).type,

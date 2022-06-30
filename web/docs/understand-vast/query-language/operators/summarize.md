@@ -20,8 +20,8 @@ suffix of a nested field instead spelling out the full name.
 - `time-resolution`: An optional duration value that specifies the rounding of
   time values in the `group-by` section. For example, `01:48` is rounded down to
   `01:00` when a 1-hour `time-resolution` is used.
-- `sum` / `min` / `max` / `any` / `all`: A list of columns to perform the
-  respective aggregation function on within the grouped buckets. Fields that
+- `sum` / `min` / `max` / `any` / `all` / `gather`: A list of columns to perform
+  the respective aggregation function on within the grouped buckets. Fields that
   have no such function specified and are not part of the `group-by` columns are
   dropped from the output.
 
