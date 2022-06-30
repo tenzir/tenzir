@@ -39,6 +39,7 @@ const auto agg_test_layout = vast::type{
     {"any_false", vast::bool_type{}},
     {"all_false", vast::bool_type{}},
     {"alternating_number", vast::count_type{}},
+    {"alternating_number_list", list_type{vast::count_type{}}},
   },
 };
 
@@ -62,8 +63,13 @@ table_slice make_testdata(table_slice_encoding encoding
     auto any_false = false;
     auto all_false = i != 0;
     auto alternating_number = detail::narrow_cast<count>(i % 3);
+    auto alternating_number_list = list{
+      detail::narrow_cast<count>(i % 3),
+      detail::narrow_cast<count>(i % 5),
+    };
     REQUIRE(builder->add(time, ip, port, sum, sum_null, min, max, any_true,
-                         all_true, any_false, all_false, alternating_number));
+                         all_true, any_false, all_false, alternating_number,
+                         alternating_number_list));
   }
   vast::table_slice slice = builder->finish();
   return slice;
@@ -141,7 +147,7 @@ TEST(summarize test) {
     {"max", list{"max"}},
     {"any", list{"any_true", "any_false"}},
     {"all", list{"all_true", "all_false"}},
-    {"gather", list{"alternating_number"}},
+    {"gather", list{"alternating_number", "alternating_number_list"}},
   };
   auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
   REQUIRE_SUCCESS(
@@ -162,8 +168,12 @@ TEST(summarize test) {
   CHECK_EQUAL(summarized_slice.at(0, 9), data_view{false});
   CHECK_EQUAL(summarized_slice.at(0, 10), data_view{false});
   const auto expected_alternating_numbers = list{count{0}, count{1}, count{2}};
+  const auto expected_alternating_numbers_list
+    = list{count{0}, count{1}, count{2}, count{3}, count{4}};
   CHECK_EQUAL(summarized_slice.at(0, 11),
               make_data_view(expected_alternating_numbers));
+  CHECK_EQUAL(summarized_slice.at(0, 12),
+              make_data_view(expected_alternating_numbers_list));
 }
 
 TEST(summarize test fully qualified field names) {
