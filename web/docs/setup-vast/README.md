@@ -16,6 +16,7 @@ flowchart LR
   deploy(Deploy):::action
   configure(Configure):::action
   tune(Tune):::action
+  monitor(Monitor):::action
   %% Artifacts
   source([Source Code]):::artifact
   binary([Binary]):::artifact
@@ -33,6 +34,7 @@ flowchart LR
   deploy --> instance
   instance <--> configure
   instance <--> tune
+  instance <--> monitor
   %% Links
   click download "/docs/setup-vast/download/" "Download VAST"
   click build "/docs/setup-vast/build/" "Build VAST"
@@ -40,6 +42,7 @@ flowchart LR
   click deploy "/docs/setup-vast/deploy/" "Deploy VAST"
   click configure "/docs/setup-vast/configure/" "Configure VAST"
   click tune "/docs/setup-vast/tune/" "Tune VAST"
+  click monitor "/docs/setup-vast/monitor/" "Monitor VAST"
 ```
 
 :::tip Quick Start
