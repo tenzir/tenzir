@@ -242,7 +242,8 @@ caf::error merge_environment(record& config) {
   for (const auto& [key, value] : detail::environment())
     if (!value.empty())
       if (auto config_key = to_config_key(key)) {
-        if (!config_key->starts_with("caf."))
+        if (!config_key->starts_with("caf.")
+            && !config_key->starts_with("plugins."))
           config_key->insert(0, "vast.");
         // These environment variables have been manually checked already.
         // Inserting them into the config would ignore higher-precedence values

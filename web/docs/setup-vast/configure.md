@@ -101,13 +101,16 @@ VAST_IMPORT__BATCH_SIZE=42 vast import json < data
 vast import --batch-size=42 json < data
 ```
 
-:::caution CAF Settings
-To provide CAF settings, which have the form `caf.x.y.z` in the configuration
-file, the environment variable must have the form `VAST_CAF__X__Y__Z`.
+:::caution CAF and plugin Settings
+To provide CAF and plugin settings, which have the form `caf.x.y.z` and
+`plugins.name.x.y.z` in the configuration file, the environment variable must
+have the form `VAST_CAF__X__Y__Z` and `VAST_PLUGINS__NAME__X__Y__Z`
+respectively.
 
-The configuration file is an exception in this regard: `vast.caf.` is not a
-valid key prefix. Instead, CAF configuration file keys have the prefix `caf.`,
-i.e., they are hoisted into the global scope.
+The configuration file is an exception in this regard: `vast.caf.` and
+`vast.plugins.` are invalid key prefixes. Instead, CAF and plugin configuration
+file keys have the prefixes `caf.` and `plugins.`, i.e., they are hoisted into
+the global scope.
 :::
 
 ### Values
