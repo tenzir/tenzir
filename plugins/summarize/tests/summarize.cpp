@@ -147,7 +147,7 @@ TEST(summarize test) {
     {"max", list{"max"}},
     {"any", list{"any_true", "any_false"}},
     {"all", list{"all_true", "all_false"}},
-    {"gather", list{"alternating_number", "alternating_number_list"}},
+    {"union", list{"alternating_number", "alternating_number_list"}},
   };
   auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
   REQUIRE_SUCCESS(

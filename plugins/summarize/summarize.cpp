@@ -105,13 +105,13 @@ struct configuration {
   std::vector<std::string> all = {};
 
   /// List of fields to gather all unique values of.
-  std::vector<std::string> gather = {};
+  std::vector<std::string> union_ = {};
 
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
     return f(x.time_resolution, x.group_by, x.sum, x.min, x.max, x.any, x.all,
-             x.gather);
+             x.union_);
   }
 
   /// Enable parsing from a record via convertible.
@@ -124,7 +124,7 @@ struct configuration {
       {"max", list_type{string_type{}}},
       {"any", list_type{string_type{}}},
       {"all", list_type{string_type{}}},
-      {"gather", list_type{string_type{}}},
+      {"union", list_type{string_type{}}},
     };
     return result;
   }
@@ -135,14 +135,14 @@ struct summary {
   /// The action to take for a given column. Columns without an action are
   /// dropped as part of the summary.
   enum class action {
-    group_by,      ///< Group identical values.
-    sum,           ///< Accumulate values within the same group.
-    min,           ///< Use the minimum value within the same group.
-    max,           ///< Use the maximum value within the same group.
-    any,           ///< Disjoin values within the same group.
-    all,           ///< Conjoin values within the same group.
-    gather,        ///< Gather unique values within the same group.
-    gather_unlist, ///< Gather unique unlisted values within the same group.
+    group_by,     ///< Group identical values.
+    sum,          ///< Accumulate values within the same group.
+    min,          ///< Use the minimum value within the same group.
+    max,          ///< Use the maximum value within the same group.
+    any,          ///< Disjoin values within the same group.
+    all,          ///< Conjoin values within the same group.
+    union_,       ///< Gather unique values within the same group.
+    union_unlist, ///< Gather unique unlisted values within the same group.
   };
 
   /// The key by which summaries are grouped. Essentially, this is a
@@ -228,7 +228,7 @@ struct summary {
     resolve_action(config.max, action::max);
     resolve_action(config.any, action::any);
     resolve_action(config.all, action::all);
-    resolve_action(config.gather, action::gather);
+    resolve_action(config.union_, action::union_);
     std::sort(unflattened_actions.begin(), unflattened_actions.end());
     const auto has_duplicates
       = std::adjacent_find(unflattened_actions.begin(),
@@ -255,9 +255,9 @@ struct summary {
             && caf::holds_alternative<time_type>(leaf.field.type))
           result.round_temporal_columns_.push_back(
             detail::narrow_cast<int>(result.selected_columns_.size()));
-        if (action == action::gather) {
+        if (action == action::union_) {
           if (caf::holds_alternative<list_type>(leaf.field.type))
-            action = action::gather_unlist;
+            action = action::union_unlist;
           else
             transformations.push_back(
               {leaf.index, record_type::assign({{
@@ -380,11 +380,11 @@ struct summary {
             if (array.IsNull(row))
               continue;
             if (caf::holds_alternative<caf::none_t>(value)) {
-              if (actions_[column] != action::gather
-                  && actions_[column] != action::gather_unlist) {
+              if (actions_[column] != action::union_
+                  && actions_[column] != action::union_unlist) {
                 value = materialize(value_at(type, array, row));
               } else if constexpr (std::is_same_v<Type, list_type>) {
-                if (actions_[column] == action::gather_unlist) {
+                if (actions_[column] == action::union_unlist) {
                   value = list{};
                   auto& old_values = caf::get<list>(value);
                   auto new_values = materialize(value_at(type, array, row));
@@ -489,7 +489,7 @@ struct summary {
                 }
                 break;
               }
-              case action::gather: {
+              case action::union_: {
                 if constexpr (std::is_same_v<Type, list_type>) {
                   auto new_value
                     = materialize(value_at(type.value_type(), array, row));
@@ -503,12 +503,12 @@ struct summary {
                   return caf::make_error(
                     ec::logic_error,
                     fmt::format("summarize transform step cannot "
-                                "'gather' into non-list fields {}",
+                                "'union' into non-list fields {}",
                                 batch->schema()->field(column)->ToString()));
                 }
                 break;
               }
-              case action::gather_unlist: {
+              case action::union_unlist: {
                 if constexpr (std::is_same_v<Type, list_type>) {
                   auto new_values = materialize(value_at(type, array, row));
                   auto& old_values = caf::get<list>(value);
@@ -522,7 +522,7 @@ struct summary {
                   return caf::make_error(
                     ec::logic_error,
                     fmt::format("summarize transform step cannot "
-                                "'gather' into non-list fields {}",
+                                "'union' into non-list fields {}",
                                 batch->schema()->field(column)->ToString()));
                 }
                 break;

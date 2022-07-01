@@ -26,11 +26,11 @@ aggregation.
 An optional duration value that specifies the tolerance when comparing time
 values in the `group-by` section.
 
-### `sum` / `min` / `max` / `any` / `all` / `gather`
+### `sum` / `min` / `max` / `any` / `all` / `union`
 
-A list of columns to perform the respective aggregation function on within the
-grouped buckets. Fields that have no such function specified and are not part of
-the `group-by` columns are dropped from the output.
+A list of columns to perform the respective aggregation function on the grouped
+buckets. Fields that have no such function specified and are not part of the
+`group-by` columns are dropped from the output.
 
 ## Usage Example
 

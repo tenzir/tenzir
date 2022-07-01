@@ -6,7 +6,7 @@ This changelog documents all notable changes to the summarize plugin for VAST.
 
 ### Features
 
-- The new `gather` action creates a list of all unique values in the selected
+- The new `union` action creates a list of all unique values in the selected
   columns in the grouped events.
   [#2391](https://github.com/tenzir/vast/pull/2391)
 
