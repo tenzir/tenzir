@@ -1426,6 +1426,7 @@ index(index_actor::stateful_pointer<index_state> self,
                      result = std::move(result)](atom::ok) mutable {
                       self->state.persisted_partitions.insert(
                         new_partition_ids.begin(), new_partition_ids.end());
+                      self->state.flush_to_disk();
                       deliver(std::move(result));
                     },
                     [deliver](const caf::error& e) mutable {
@@ -1442,6 +1443,7 @@ index(index_actor::stateful_pointer<index_state> self,
                    result](atom::ok) mutable {
                     self->state.persisted_partitions.insert(
                       new_partition_ids.begin(), new_partition_ids.end());
+                    self->state.flush_to_disk();
                     self
                       ->request(static_cast<index_actor>(self), caf::infinite,
                                 atom::erase_v, old_partition_ids)
