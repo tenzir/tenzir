@@ -15,7 +15,6 @@
 #include "vast/detail/heterogeneous_string_hash.hpp"
 #include "vast/fbs/partition_synopsis.hpp"
 #include "vast/index_config.hpp"
-#include "vast/partition_sketch.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/sketch/builder.hpp"
 #include "vast/type.hpp"
@@ -46,20 +45,8 @@ public:
   caf::error add(const table_slice& x);
 
   // Fill in the `field_sketches` and `type_sketches` of the partition
-  // synopsis. Destroys the builder.
-  // TODO: It would probably be better to pass in a flatbuffer builder
-  // here so we don't have to copy around the sketches so much.
+  // synopsis. Destroys the partition_sketch_builder.
   caf::error finish_into(partition_synopsis&) &&;
-
-  /// Checks whether the partition sketch fulfils an expression.
-  /// @param expr The expression to check.
-  /// @returns A probability in [0,1] that indicates the relevancy of this
-  /// partition for *expr*. The semantics are as follows:
-  /// - `= 0: guaranteed no results
-  /// - 1: guaranteed results
-  /// -
-  /// and 1 means definitely results. A value between 0 and 1 means "maybe".
-  // double lookup(const expression& expr) const noexcept;
 
   /// Gets all field extractors.
   /// @returns the list of field extractors for which builders exists.
@@ -97,7 +84,7 @@ private:
   index_config config_;
 
   // TODO: It may make sense to track the following data in a higher-level
-  // `partition_synopsis_builder`, so this class can focus solely on creating
+  // `partition_synopsis_builder`, so this class can focus solely on building
   // sketches.
 
   /// Id of the first event.

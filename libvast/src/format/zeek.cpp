@@ -63,7 +63,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
   else if (zeek_type == "subnet")
     t = type{subnet_type{}};
   else if (zeek_type == "port")
-    // TODO: once we ship with builtin type aliases, we should reference the
+    // TODO: Once we ship with builtin type aliases, we should reference the
     // port alias type here. Until then, we create the alias manually.
     // See also:
     // - src/format/pcap.cpp

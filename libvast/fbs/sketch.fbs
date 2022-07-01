@@ -3,15 +3,8 @@ include "data.fbs";
 
 namespace vast.fbs.sketch;
 
-// TODO: Create a generic min/max synopsis, and benchmark the overhead
-// of using a generic `Data` vs concrete structs.
-// table MinMax {
-//   min: Data (required);
-//   max: Data (required);
-// }
-
-// TODO: move into separate file, and consider moving Bloom filter into
-// namespace fbs::sketch as well.
+// TODO: Move these into separate file, and consider moving Bloom
+// filter into namespace fbs::sketch as well.
 struct MinMaxI64 {
   min: long;
   max: long;

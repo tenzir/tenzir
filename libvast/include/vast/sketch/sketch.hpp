@@ -41,8 +41,4 @@ private:
   flatbuffer<fbs::Sketch> flatbuffer_;
 };
 
-// TODO - figure out why the friend declaration above is not enough
-// flatbuffers::Offset<flatbuffers::Vector<uint8_t>>
-// pack_nested(flatbuffers::FlatBufferBuilder& builder, const sketch&);
-
 } // namespace vast::sketch

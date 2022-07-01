@@ -29,7 +29,7 @@ T* default_intrusive_cow_ptr_unshare(T*&);
 
 namespace vast {
 
-struct partition_sketch_builder;
+class partition_sketch_builder;
 
 /// Contains one synopsis per partition column.
 struct partition_synopsis final : public caf::ref_counted {
@@ -37,11 +37,6 @@ struct partition_synopsis final : public caf::ref_counted {
   ~partition_synopsis() override = default;
   partition_synopsis(const partition_synopsis&) = delete;
   partition_synopsis(partition_synopsis&& that) noexcept;
-
-  // TODO: Split this into an `active_partition_synopsis` for which
-  // table slices can be added and which can be shrinked, and a
-  // `passive_partition_synopsis` which is just the mmapped flatbuffer.
-  partition_synopsis(const index_config&) = delete; // FIXME
 
   partition_synopsis& operator=(const partition_synopsis&) = delete;
   partition_synopsis& operator=(partition_synopsis&& that) noexcept;
@@ -139,7 +134,9 @@ private:
   /// or as synopsis.
   //  Only one of these may be nonempty at the same time, and
   //  the "synopses" way will probably be removed in the future.
-  //  TODO: Switch to `true` as default in the next version.
+  //  NOTE: The default value here is only relevant for unit tests who
+  //  construct partition synopses directly, during regular
+  //  operation the value is determined by the `index_config`.
   bool use_sketches_ = false;
 
   /// Synopsis data structures for types.
@@ -149,17 +146,13 @@ private:
   std::unordered_map<qualified_record_field, synopsis_ptr> field_synopses_;
 
   /// Sketch data structures for types.
-  /// TODO: Measure if flat_map or unordered_map or something else
-  /// makes more sense for storage.
-  //  FIXME: `type_synopses_` has some users checking for null pointers;
-  //  double-check whether that's a mistake or if we need `optional` as key.
   detail::flat_map<type, sketch::sketch> type_sketches_;
 
   /// Sketch data structures for individual columns.
   detail::flat_map<qualified_record_field, std::optional<sketch::sketch>>
     field_sketches_;
 
-  friend struct partition_sketch_builder;
+  friend class partition_sketch_builder;
   friend struct unit_test_access;
 
 public:
