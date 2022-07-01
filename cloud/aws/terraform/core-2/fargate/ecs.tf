@@ -59,6 +59,31 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
   }
 }
 
+data "aws_service_discovery_dns_namespace" "current_ns" {
+  name = var.service_discov_namespace
+  type = "DNS_PRIVATE"
+}
+
+resource "aws_service_discovery_service" "fargate_svc" {
+  name = var.name
+
+  dns_config {
+    namespace_id = data.aws_service_discovery_dns_namespace.current_ns.id
+
+    dns_records {
+      ttl  = 5
+      type = "A"
+    }
+
+    routing_policy = "WEIGHTED"
+  }
+
+  # This health state is updated by ECS using container level health checks
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+}
+
 resource "aws_ecs_service" "fargate_service" {
   name                               = "${module.env.module_name}-${var.name}-${module.env.stage}"
   cluster                            = var.ecs_cluster_name
@@ -77,15 +102,12 @@ resource "aws_ecs_service" "fargate_service" {
     assign_public_ip = false
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.fargate_target.arn
-    container_name   = local.container_name
-    container_port   = var.port
-  }
-
   lifecycle {
     ignore_changes = [desired_count]
   }
 
-  depends_on = [aws_lb_listener.fargate_listener]
+  service_registries {
+    registry_arn   = aws_service_discovery_service.fargate_svc.arn
+    container_name = local.container_name
+  }
 }
