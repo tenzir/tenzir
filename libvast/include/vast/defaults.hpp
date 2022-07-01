@@ -141,7 +141,8 @@ constexpr size_t max_string_size = 1024;
 constexpr size_t max_container_elements = 256;
 
 /// Whether to use sketches by default when creating new partition synopses.
-constexpr bool use_sketches = false;
+// constexpr bool use_sketches = false;
+constexpr bool use_sketches = true;
 
 } // namespace index
 

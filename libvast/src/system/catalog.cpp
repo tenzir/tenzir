@@ -52,7 +52,9 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
     auto cleaned_type = caf::visit(prune, field.type());
     // We rely on having empty sketches for the
     // fields that don't have their own synopsis.
+    VAST_INFO("sketch lookup on cleaned type {}", cleaned_type);
     if (sketch) {
+      VAST_INFO("field lookup");
       auto opt = sketch->lookup(x.op, rhs);
       if (!opt || *opt) {
         VAST_TRACE("catalog selects {} at predicate {}", part_id, x);
@@ -63,6 +65,7 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
     } else if (auto it = part_syn->type_sketches().find(cleaned_type);
                it != part_syn->type_sketches().end()) {
       auto opt = it->second.lookup(x.op, rhs);
+      VAST_INFO("type lookup got {} for rhs {}", opt, rhs);
       if (!opt || *opt) {
         VAST_TRACE("catalog selects {} at predicate {}", part_id, x);
         return true;
@@ -133,9 +136,13 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
               break;
             }
       } else {
-        for (auto const& [field, sketch] : part_syn->field_sketches())
-          if (match(field))
+        for (auto const& [field, sketch] : part_syn->field_sketches()) {
+          VAST_INFO("sketch matching {}", field.field_name());
+          if (match(field)) {
+            VAST_INFO("... MATCH");
             if (lookup_with_sketch(rhs, part_id, part_syn, field, sketch)) {
+              VAST_INFO("adding result");
+
               result.push_back({
                 .uuid = part_id,
                 .events = part_syn->events(),
@@ -144,6 +151,8 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
               });
               break;
             }
+          }
+        }
       }
     }
     VAST_DEBUG("{} checked {} partitions for predicate {} and got {} results",
@@ -160,21 +169,30 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
         // at the layout names.
         result_type result;
         for (const auto& [part_id, part_syn] : synopses) {
-          for (const auto& [fqf, _] : part_syn->field_synopses()) {
-            // TODO: provide an overload for view of evaluate() so that
-            // we can use string_view here. Fortunately type names are
-            // short, so we're probably not hitting the allocator due to
-            // SSO.
-            if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
-              result.push_back({
-                .uuid = part_id,
-                .events = part_syn->events(),
-                .max_import_time = part_syn->max_import_time(),
-                .schema = part_syn->schema(),
-              });
-              break;
-            }
+          bool match = false;
+          // For version >= 1, the partition only contains a single type so
+          // we can check directly against that, for older versions we have
+          // to test against all type of all fields.
+          if (part_syn->version() < 1) {
+            for (const auto& [fqf, _] : part_syn->field_synopses())
+              // TODO: provide an overload for view of evaluate() so that
+              // we can use string_view here. Fortunately type names are
+              // short, so we're probably not hitting the allocator due to
+              // SSO.
+              if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
+                match = true;
+                break;
+              }
+          } else {
+            match = evaluate(std::string{part_syn->schema().name()}, x.op, d);
           }
+          if (match)
+            result.push_back({
+              .uuid = part_id,
+              .events = part_syn->events(),
+              .max_import_time = part_syn->max_import_time(),
+              .schema = part_syn->schema(),
+            });
         }
         VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
         return result;
@@ -292,12 +310,12 @@ catalog_state::predicate_lookup_impl(const predicate& x) const {
 }
 
 void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
+  VAST_DEBUG("updating unprunable fields for {} sketches and {} synopsis",
+             ps.field_sketches().size(), ps.field_synopses().size());
   for (auto const& [field, synopsis] : ps.field_synopses())
     if (synopsis != nullptr && field.type() == string_type{})
       unprunable_fields.insert(std::string{field.name()});
-  VAST_INFO("updating fields for {} field sketches",
-            ps.field_sketches().size());
-  // FIXME: Do we also need to care about address_type here?
+  // TODO: Do we also need to care about address_type here?
   for (auto const& [field, sketch] : ps.field_sketches())
     if (sketch && field.type() == string_type{})
       unprunable_fields.insert(std::string{field.name()});

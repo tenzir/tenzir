@@ -38,8 +38,6 @@ public:
   /// Construct a partition sketch builder from an index configuration.
   /// @param config The index configuration.
   /// @returns A partition sketch builder iff the configuration was correct.
-  // FIXME: Pass the type of the partition here, so that we only create builders
-  // for fields and types that will actually appear.
   static caf::expected<partition_sketch_builder>
   make(vast::type layout, index_config config);
 
@@ -49,13 +47,9 @@ public:
 
   // Fill in the `field_sketches` and `type_sketches` of the partition
   // synopsis. Destroys the builder.
-  // FIXME: It would probably be better to pass in a flatbuffer builder
+  // TODO: It would probably be better to pass in a flatbuffer builder
   // here so we don't have to copy around the sketches so much.
   caf::error finish_into(partition_synopsis&) &&;
-
-  /// Creates an immutable partition sketch from the builder state.
-  /// @returns The partition sketch.
-  // caf::expected<partition_sketch> finish();
 
   /// Checks whether the partition sketch fulfils an expression.
   /// @param expr The expression to check.
@@ -81,21 +75,18 @@ private:
   /// @pre *config* is validated.
   explicit partition_sketch_builder(index_config config);
 
-  // TODO: Not completely sure if we even need the `{field,type}_factory_` maps.
+  // TODO: Since we know the partition layout a priori we could just
+  // create all the relevant builders directly insted of using these
+  // factory maps.
 
   /// Factory to create field sketch builders, mapping field extractors to
   /// builder factories.
   detail::heterogeneous_string_hashmap<builder_factory> field_factory_;
 
   /// Factory to create type sketch builders.
-  // detail::heterogeneous_string_hashmap<builder_factory> type_factory_;
   detail::flat_map<type, builder_factory> type_factory_;
 
   /// Sketches for fields, tracked by field extractor.
-  // detail::heterogeneous_string_hashmap<std::unique_ptr<sketch::builder>>
-  //   field_builders_;
-  // TODO: Does it make more sense to keep string as a key and change
-  // the other code instead?
   std::unordered_map<vast::qualified_record_field,
                      std::unique_ptr<sketch::builder>>
     field_builders_;

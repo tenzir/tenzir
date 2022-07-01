@@ -22,17 +22,13 @@ namespace vast::sketch {
 caf::error buffered_builder::add(const std::shared_ptr<arrow::Array>& xs) {
   // TODO: Add a template parameter to the buffered builder so we
   // know the specific array type here.
-  for (auto digest : detail::hash_array(*xs)) {
-    digests_.insert(digest);
-  }
-  VAST_INFO("adding array with {} rows, having {} digests", xs->length(),
-            digests_.size());
   // TODO: figure out how to handle NULL values.
+  for (auto digest : detail::hash_array(*xs))
+    digests_.insert(digest);
   return caf::none;
 }
 
 caf::expected<sketch> buffered_builder::finish() {
-  VAST_INFO("building with {} digests", digests_.size());
   auto result = build(digests_);
   if (result)
     digests_.clear();

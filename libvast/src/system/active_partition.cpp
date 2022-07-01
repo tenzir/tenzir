@@ -227,11 +227,12 @@ active_partition_actor::behavior_type active_partition(
   self->state.use_sketches = synopsis_opts.use_sketches;
   self->state.synopsis_index_config = synopsis_opts;
   if (self->state.use_sketches) {
-    VAST_INFO("making sketch builder");
     self->state.sketch_builder
       = partition_sketch_builder::make(partition_layout, synopsis_opts);
-    // FIXME: error handling
-    VAST_ASSERT(self->state.sketch_builder);
+    // TODO: Better error handling.
+    if (!self->state.sketch_builder)
+      VAST_ERROR("{} failed to create sketch builder: {}", *self,
+                 self->state.sketch_builder.error());
   } else
     self->state.legacy_synopsis_builder
       = caf::make_copy_on_write<partition_synopsis>();

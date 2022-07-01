@@ -333,26 +333,39 @@ caf::error index_state::load_from_disk() {
     }
     const auto* ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->get()->data());
     partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
-    if (ps_flatbuffer->partition_synopsis_type()
-        != fbs::partition_synopsis::PartitionSynopsis::legacy)
-      return caf::make_error(ec::format_error, "invalid partition synopsis "
-                                               "version");
-    const auto& synopsis_legacy
-      = *ps_flatbuffer->partition_synopsis_as_legacy();
-    // Re-write old partition synopses that were created before the offset and
-    // id were saved.
-    if (!synopsis_legacy.id_range()) {
-      VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
-                   partition_uuid);
-      if (auto error = extract_partition_synopsis(part_path, synopsis_path))
-        return error;
-      // TODO: There is probably a good way to rewrite this without the jump,
-      // but in the meantime I defer to Knuth:
-      //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
-      goto retry;
+    switch (ps_flatbuffer->partition_synopsis_type()) {
+      case fbs::partition_synopsis::PartitionSynopsis::NONE:
+        return caf::make_error(ec::format_error, "invalid partition synopsis "
+                                                 "version");
+
+      case fbs::partition_synopsis::PartitionSynopsis::legacy: {
+        auto const& synopsis_legacy
+          = *ps_flatbuffer->partition_synopsis_as_legacy();
+        // Re-write old partition synopses that were created before the offset
+        // and id were saved. We should probably automatically upgrade them to
+        // v1 instead, but that requires going through the store and
+        // re-indexing all data to build sketches instead of synopses.
+        if (!synopsis_legacy.id_range()) {
+          VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
+                       partition_uuid);
+          if (auto error = extract_partition_synopsis(part_path, synopsis_path))
+            return error;
+          // TODO: There is probably a good way to rewrite this without the
+          // jump, but in the meantime I defer to Knuth:
+          //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
+          goto retry;
+        }
+        if (auto error = unpack(synopsis_legacy, ps.unshared()))
+          return error;
+        break;
+      }
+      case fbs::partition_synopsis::PartitionSynopsis::v1: {
+        auto const& synopsis_v1 = *ps_flatbuffer->partition_synopsis_as_v1();
+        if (auto error = unpack(synopsis_v1, ps.unshared()))
+          return error;
+        break;
+      }
     }
-    if (auto error = unpack(synopsis_legacy, ps.unshared()))
-      return error;
     persisted_partitions.insert(partition_uuid);
     synopses->emplace(partition_uuid, std::move(ps));
   }

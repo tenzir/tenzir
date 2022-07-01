@@ -32,17 +32,15 @@ bloom_filter_builder::build(const std::unordered_set<uint64_t>& digests) {
   bloom_filter_config config;
   config.n = digests.size();
   config.p = p_;
-  VAST_INFO("using config n={}, p={}", config.n, config.p);
   auto params = evaluate(config);
   if (!params)
-    return caf::make_error(ec::invalid_argument, //
-                           "invalid Bloom filter parameters");
+    return caf::make_error(ec::invalid_argument, "invalid Bloom filter "
+                                                 "parameters");
   // Estimate the size.
   const auto bitvector_size = (params->m + 63) / 64;
-  constexpr auto flatbuffer_size = 42; // TODO: compute size manually
-  flatbuffers::FlatBufferBuilder builder{flatbuffer_size};
+  flatbuffers::FlatBufferBuilder builder;
   // Create a Bloom filter embedded in the builder allocator.
-  uint64_t* buf;
+  uint64_t* buf = nullptr;
   auto bits_offset = builder.CreateUninitializedVector(bitvector_size, &buf);
   std::fill_n(buf, bitvector_size, 0);
   auto bits = std::span{buf, bitvector_size};
@@ -57,8 +55,6 @@ bloom_filter_builder::build(const std::unordered_set<uint64_t>& digests) {
   auto sketch_offset = fbs::CreateSketch(
     builder, fbs::sketch::Sketch::bloom_filter, bloom_filter_offset.Union());
   builder.Finish(sketch_offset);
-  // TODO: verify actual size
-  // VAST_ASSERT(builder.GetSize() == flatbuffer_size);
   auto fb = flatbuffer<fbs::Sketch>::make(builder.Release());
   if (!fb)
     return fb.error();

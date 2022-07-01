@@ -139,9 +139,7 @@ private:
   /// or as synopsis.
   //  Only one of these may be nonempty at the same time, and
   //  the "synopses" way will probably be removed in the future.
-  //  TODO: We still use `false` as default for unit tests that
-  //  construct a `partition_synopsis` directly and don't know
-  //  about sketches yet.
+  //  TODO: Switch to `true` as default in the next version.
   bool use_sketches_ = false;
 
   /// Synopsis data structures for types.

@@ -19,12 +19,11 @@
 namespace vast {
 
 partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept
-  : use_sketches_(that.use_sketches_) {
+  : version_(that.version_), use_sketches_(that.use_sketches_) {
   offset_ = std::exchange(that.offset_, {});
   events_ = std::exchange(that.events_, {});
   min_import_time_ = std::exchange(that.min_import_time_, time::max());
   max_import_time_ = std::exchange(that.max_import_time_, time::min());
-  version_ = std::exchange(that.version_, version::partition_version);
   schema_ = std::exchange(that.schema_, {});
   type_synopses_ = std::exchange(that.type_synopses_, {});
   field_synopses_ = std::exchange(that.field_synopses_, {});
@@ -297,15 +296,17 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   if (!x.use_sketches_)
     return caf::make_error(ec::logic_error, "cannot create sketches from "
                                             "legacy synopses");
+  VAST_DEBUG("creating partition synopsis flatbuffer with {} field sketches "
+             "and {} type sketches",
+             x.field_sketches().size(), x.type_sketches().size());
   std::vector<flatbuffers::Offset<fbs::partition_synopsis::FieldSketch>>
     field_sketches;
   std::vector<flatbuffers::Offset<fbs::partition_synopsis::TypeSketch>>
     type_sketches;
   for (auto const& [field, sketch] : x.field_sketches_) {
     if (!sketch)
-      continue; // FIXME - is this correct or should we leave the field as null?
-    auto name
-      = builder.CreateString(field.name()); // FIXME - field.field_name() ?
+      continue;
+    auto name = builder.CreateString(field.name());
     auto type_offset = pack_nested(builder, field.type());
     auto field_offset
       = fbs::type::detail::CreateRecordField(builder, name, type_offset);
@@ -323,6 +324,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   }
   auto field_sketches_vector = builder.CreateVector(field_sketches);
   auto type_sketches_vector = builder.CreateVector(type_sketches);
+  auto schema_vector = pack_nested(builder, x.schema_);
   fbs::partition_synopsis::PartitionSynopsisV1Builder ps_builder(builder);
   vast::fbs::uinterval id_range{x.offset_, x.offset_ + x.events_};
   ps_builder.add_id_range(&id_range);
@@ -332,6 +334,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
     x.min_import_time_.time_since_epoch().count(),
     x.max_import_time_.time_since_epoch().count()};
   ps_builder.add_import_time_range(&import_time_range);
+  ps_builder.add_version(x.version_);
+  ps_builder.add_schema(schema_vector);
   return ps_builder.Finish();
 }
 
@@ -375,12 +379,27 @@ caf::error unpack(const fbs::partition_synopsis::PartitionSynopsisV1& x,
   ps.events_ = x.id_range()->end() - x.id_range()->begin();
   ps.min_import_time_ = time{} + duration{x.import_time_range()->begin()};
   ps.max_import_time_ = time{} + duration{x.import_time_range()->end()};
-  for (auto fs : *x.field_sketches()) {
+  ps.version_ = x.version();
+  auto schema = vast::type{chunk::copy(*x.schema())};
+  ps.schema_ = schema;
+  auto layout_name = ps.schema_.name();
+  // Insert field -> null mappings for all fields in the schema. This can
+  // be dropped after the catalog gets refactored to work on the schema
+  // directly.
+  auto const& record = caf::get<record_type>(ps.schema_);
+  for (auto const& leaf : record.leaves()) {
+    auto flattened_name = record.key(leaf.index);
+    auto qf = vast::qualified_record_field{layout_name, flattened_name,
+                                           leaf.field.type};
+    ps.field_sketches_.emplace(qf, std::nullopt);
+  }
+  // Overwrite the nulls with actual sketches where they exist.
+  for (auto const* fs : *x.field_sketches()) {
     if (!fs)
       return caf::make_error(ec::format_error, "missing id range");
     auto const* field = fs->field();
-    auto field_name = field->name();
-    auto type_bytes = field->type();
+    auto const* field_name = field->name();
+    auto const* type_bytes = field->type();
     if (!type_bytes)
       return caf::make_error(ec::format_error, "missing type");
     auto type_chunk
@@ -393,12 +412,11 @@ caf::error unpack(const fbs::partition_synopsis::PartitionSynopsisV1& x,
     if (!fb)
       return caf::make_error(ec::format_error, "invalid sketch");
     auto sketch = sketch::sketch{*fb};
-    auto const* layout_name = x.layout_name();
-    auto qf = vast::qualified_record_field{
-      layout_name->string_view(), field_name->string_view(), std::move(type)};
+    auto qf = vast::qualified_record_field{layout_name,
+                                           field_name->string_view(), type};
     ps.field_sketches_.insert(std::make_pair(std::move(qf), std::move(sketch)));
   }
-  for (auto ts : *x.type_sketches()) {
+  for (auto const* ts : *x.type_sketches()) {
     auto const* type_bytes = ts->type();
     auto type_chunk
       = chunk::copy(as_bytes(type_bytes->data(), type_bytes->size()));

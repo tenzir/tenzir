@@ -10,6 +10,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -31,7 +32,9 @@ using minmax_builder
 
 sketch_builder_ptr
 make_sketch_builder(const type& t, const index_config::rule* rule) {
-  VAST_ASSERT(rule != nullptr);
+  VAST_ASSERT_CHEAP(rule != nullptr);
+  if (t.attribute("skip"))
+    return nullptr;
   auto f = detail::overload{
     [](const bool_type&) -> sketch_builder_ptr {
       // We (ab)use the min-max sketch to represent min = false and max = true.
@@ -84,7 +87,8 @@ make_sketch_builder(const type& t, const index_config::rule* rule) {
     [](const record_type&) -> sketch_builder_ptr {
       // If the use case of creating sketches for records comes up, we can
       // solve it with the same "compound sketch" idea mentioned above.
-      die("sketch builders can only operate on individual columns");
+      // die("sketch builders can only operate on individual columns");
+      return nullptr;
     },
   };
   return caf::visit(f, t);
@@ -105,7 +109,6 @@ partition_sketch_builder::make(type layout, index_config config) {
   partition_sketch_builder builder{std::move(config)};
   for (const auto& rule : builder.config_.rules) {
     // Create one sketch per target.
-    // FIXME: Verify that target fields exists in layout.
     for (const auto& target : rule.targets) {
       auto op = to<predicate::operand>(target);
       if (!op)
@@ -157,7 +160,6 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
   min_import_time_ = std::min(min_import_time_, x.import_time());
   max_import_time_ = std::max(max_import_time_, x.import_time());
   schema_ = x.layout();
-  auto record_batch = to_record_batch(x);
   // Handle all field sketches.
   for (auto const& [key, factory] : field_factory_) {
     auto offsets = layout.resolve_key_suffix(key, x.layout().name());
@@ -174,11 +176,11 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
     auto first_field = layout.field(first_offset);
     if (!builder)
       builder = factory(first_field.type);
-    if (!builder)
-      return caf::make_error(
-        ec::unspecified,
-        fmt::format("failed to construct sketch builder for key '{}'", key));
-    auto xs = record_batch->column(layout.flat_index(first_offset));
+    if (!builder) {
+      VAST_WARN("failed to construct sketch builder for key '{}'", key);
+      continue;
+    }
+    auto xs = column_at(x, first_offset);
     if (auto err = builder->add(xs))
       return err;
     while (++begin != end) {
@@ -189,7 +191,7 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
                   offset);
         continue;
       }
-      auto ys = record_batch->column(layout.flat_index(first_offset));
+      auto ys = column_at(x, first_offset);
       if (auto err = builder->add(ys))
         return err;
     }
@@ -204,16 +206,14 @@ caf::error partition_sketch_builder::add(const table_slice& x) {
       auto& factory = i->second;
       auto& builder = type_builders_[t];
       if (!builder) {
-        VAST_INFO("constructing new builder for type '{}'", t);
         builder = factory(t);
       }
       if (!builder) {
-        VAST_INFO("not builder");
         return caf::make_error(
           ec::unspecified,
           fmt::format("failed to construct sketch builder for type '{}'", t));
       }
-      auto xs = record_batch->column(layout.flat_index(leaf.index));
+      auto xs = column_at(x, leaf.index);
       if (auto err = builder->add(xs))
         return err;
       return caf::none;
@@ -239,22 +239,33 @@ caf::error partition_sketch_builder::finish_into(partition_synopsis& ps) && {
   ps.version_ = version::partition_version;
   ps.use_sketches_ = true;
   ps.type_sketches_.reserve(type_builders_.size());
+  // Add type sketches for all relevant types.
   for (auto&& [type, builder] : std::exchange(type_builders_, {})) {
-    VAST_INFO("Finishing builder for type {}", type);
+    if (!builder)
+      continue;
     auto sketch = builder->finish();
     if (!sketch) {
-      // FIXME: temporary workaround until list<string> works correctly.
+      VAST_WARN("failed to build sketch for type {}: {}", type, sketch.error());
       continue;
-      // return sketch.error();
     }
     ps.type_sketches_.insert(std::make_pair(type, std::move(*sketch)));
   }
+  // Add field -> nullopt entries for all fields.
+  auto const& record = caf::get<record_type>(ps.schema_);
+  for (auto const& leaf : record.leaves()) {
+    auto flattened_name = record.key(leaf.index);
+    auto qf = vast::qualified_record_field{schema_.name(), flattened_name,
+                                           leaf.field.type};
+    ps.field_sketches_.emplace(qf, std::nullopt);
+  }
+  // Overwrite with field -> sketch entries for fields that have a dedicated
+  // sketch.
   for (auto&& [field, builder] : std::exchange(field_builders_, {})) {
     auto sketch = builder->finish();
     if (!sketch) {
-      // FIXME: temporary workaround until list<string> works correctly.
+      VAST_WARN("failed to build sketch for field {}: {}", field.field_name(),
+                sketch.error());
       continue;
-      // return sketch.error();
     }
     ps.field_sketches_[field] = std::move(*sketch);
   }

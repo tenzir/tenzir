@@ -36,7 +36,13 @@ table TypeSketch {
 }
 
 table PartitionSynopsisV1 {
-  layout_name: string;  
+  /// The type of the data stored in this partition.
+  schema: [ubyte] (nested_flatbuffer: "vast.fbs.Type");  
+
+  /// The version number of this partition. This number is used internally by
+  /// the `rebuild` command to determine whether a partitions needs to be
+  /// upgraded to a more recent version.
+  version: ulong;
 
   /// Sketches for individual fields.
   field_sketches: [FieldSketch];
