@@ -187,6 +187,9 @@ public:
   friend std::shared_ptr<arrow::RecordBatch>
   to_record_batch(const table_slice& slice);
 
+  friend std::shared_ptr<arrow::Array>
+  column_at(const table_slice& slice, const vast::offset& offset);
+
   /// Creates a typed view on a given set of columns of a table slice.
   /// @note This function is defined and documented in 'vast/project.hpp'.
   template <class... Hints>

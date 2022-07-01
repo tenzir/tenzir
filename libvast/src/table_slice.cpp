@@ -136,6 +136,14 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
   }
 }
 
+arrow::FieldPath make_path(const offset& index) noexcept {
+  auto intermediate = std::vector<int>{};
+  intermediate.reserve(index.size());
+  for (auto x : index)
+    intermediate.push_back(detail::narrow_cast<int>(x));
+  return arrow::FieldPath{std::move(intermediate)};
+};
+
 } // namespace
 
 // -- constructors, destructors, and assignment operators ----------------------
@@ -421,6 +429,13 @@ std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
     },
   };
   return visit(f, as_flatbuffer(slice.chunk_));
+}
+
+std::shared_ptr<arrow::Array>
+column_at(const table_slice& slice, const vast::offset& offset) {
+  auto path = make_path(offset);
+  auto const& batch = to_record_batch(slice);
+  return path.Get(*batch).ValueOrDie();
 }
 
 // -- concepts -----------------------------------------------------------------
