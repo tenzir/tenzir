@@ -274,15 +274,32 @@ caf::error index_state::load_from_disk() {
                                        "{}: {}",
                                        dir, err.message()));
   auto partitions = std::vector<uuid>{};
+  auto synopsis_files = std::vector<uuid>{};
   auto synopses = std::make_shared<std::map<uuid, partition_synopsis_ptr>>();
   for (const auto& entry : dir_iter) {
-    const auto filename = entry.path().filename().string();
+    const auto stem = entry.path().stem();
     vast::uuid partition_uuid{};
     // Ignore files that don't use UUID for the filename.
-    if (!parsers::uuid(filename, partition_uuid))
+    if (!parsers::uuid(stem.string(), partition_uuid))
       continue;
-    partitions.push_back(partition_uuid);
+    auto ext = entry.path().extension();
+    if (ext.empty())
+      partitions.push_back(partition_uuid);
+    else if (ext == std::filesystem::path{".mdx"})
+      synopsis_files.push_back(partition_uuid);
   }
+  std::sort(partitions.begin(), partitions.end());
+  std::sort(synopsis_files.begin(), synopsis_files.end());
+  auto orphans = std::vector<uuid>{};
+  std::set_difference(synopsis_files.begin(), synopsis_files.end(),
+                      partitions.begin(), partitions.end(),
+                      std::back_inserter(orphans));
+  // Do a bit of housekeeping. MDX files without matching partitions shouldn't
+  // be there in the first place.
+  VAST_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
+  for (auto& orphan : orphans)
+    std::filesystem::remove(dir / fmt::to_string(orphan) / ".mdx", err);
+  // Now try to load the partitions - with a progress indicator.
   for (size_t idx = 0; idx < partitions.size(); ++idx) {
     auto partition_uuid = partitions[idx];
     auto part_path = partition_path(partition_uuid);
