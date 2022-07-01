@@ -359,19 +359,19 @@ TEST(time) {
 // -- JSON --------------------------------------------------------------------
 
 template <class Printer, class T>
-void check_to_json(Printer& p, const T& x, const char* str) {
+void check_to_json(Printer& p, const T& value, const char* expected) {
   const auto to_json = [&](auto x) {
     std::string str;
     auto out = std::back_inserter(str);
     REQUIRE(p.print(out, x));
     return str;
   };
-  CHECK_EQUAL(to_json(x), str);
-  CHECK_EQUAL(to_json(make_view(x)), str);
-  if constexpr (!std::is_same_v<decltype(x), data>) {
-    data dx{x};
-    CHECK_EQUAL(to_json(dx), str);
-    CHECK_EQUAL(to_json(make_view(dx)), str);
+  CHECK_EQUAL(to_json(value), expected);
+  CHECK_EQUAL(to_json(make_view(value)), expected);
+  if constexpr (!std::is_same_v<T, data>) {
+    data dx{value};
+    CHECK_EQUAL(to_json(dx), expected);
+    CHECK_EQUAL(to_json(make_view(dx)), expected);
   }
 }
 
@@ -383,6 +383,13 @@ TEST(JSON - omit - nulls) {
   check_to_json(
     p, vast::record{{"a", vast::record{{"b", caf::none}}}, {"c", caf::none}},
     "{\"a\": {}}");
+}
+
+TEST(JSON - remove trailing zeroes) {
+  auto p = json_printer<policy::oneline, policy::human_readable_durations,
+                        policy::omit_nulls, 2>{};
+  check_to_json(p, vast::real{5.0}, "5.0");
+  check_to_json(p, vast::real{5.10}, "5.1");
 }
 
 // -- API ---------------------------------------------------------------------
