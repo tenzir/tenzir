@@ -101,7 +101,7 @@ tests:
   Conn log counting:
     tags: [node, counting, zeek]
     steps:
-      - command: -N --max-partition-size=64 import -b zeek
+      - command: -N --max-partition-size=64 import zeek
         input: data/zeek/conn.log.gz
       - command: -N count ":addr == 192.168.1.104"
       - command: -N count -e ":addr == 192.168.1.104"
@@ -182,6 +182,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
         # We use the `null` export format since timeouts are always racy; we
         # cannot reliably make a 0 second timeout return 0 events.
       - command: export --timeout=0s null 'resp_h == 192.168.1.104'
@@ -194,6 +195,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: export ascii 'resp_h == 192.168.1.104'
       # import some more to make sure accounting data is in the system.
       - command: import -b --batch-size=10 zeek
@@ -218,6 +220,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: import -b zeek
         input: data/zeek/dns.log.gz
+      - command: flush
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
       - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
@@ -228,6 +231,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: export ascii 'conn.duration <= 1.0s'
       - command: export json 'duration >= 10.0s && duration < 15s'
       - command: export json --numeric-durations 'duration >= 1.8s && duration < 2.0s'
@@ -242,6 +246,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: export ascii 'fe80::5074:1b53:7e7:ad4d || 169.254.225.22'
       - command: export ascii '"OrfTtuI5G4e" || fe80::5074:1b53:7e7:ad4d'
   Node Type Query:
@@ -256,6 +261,7 @@ tests:
     steps:
       - command: import -b -n 20 zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: export ascii '#type == "zeek.conn"'
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
@@ -347,6 +353,7 @@ tests:
         input: data/pcap/zeek/conn.log.gz
       - command: import -b suricata
         input: data/pcap/suricata/eve.json.gz
+      - command: flush
       - command: count "net.src.ip == 192.168.168.100"
       - command: count "net.connection == <192.168.168.100, _, 72.247.178.18, _, _>"
       # We omit the whitespace after the colon on purpose, otherwise pyyaml
@@ -396,6 +403,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: explore --after=3min 'uid == "Yaix3QBP3Xg"'
       - command: explore --format=ascii --after=3min 'uid == "Yaix3QBP3Xg"'
   # The first queries are stress tests for the deduplication: The query
@@ -478,6 +486,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: version
         transformation: sleep 15
@@ -492,6 +501,7 @@ tests:
       - command: spawn source -r @./data/suricata/eve.json suricata
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: count '#type ~ /suricata.*/'
   Example config file:
     tags: [import-export, zeek]
@@ -500,28 +510,30 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: export ascii 'net.app !in ["dns", "ftp", "http", "ssl"]'
   # The `DiskMonitorTester` is set up to run every second and to delete all
   # partitions on disk. We first import the complete zeek dataset with 8462
-  # events, then some additional suricata events to force the previous slice
-  # to be written on disk and then give the disk monitor enough time to run.
-  # After that, all events from the first import should have been erased.
+  # events, then flush, and then wait some to give the disk monitor enough time
+  # to run. After that, all events from the first import should have been
+  # erased.
   Disk monitor:
     tags: [disk-quota]
     fixture: DiskMonitorTester
     steps:
-      - command: import zeek
+      - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: import -n 1 zeek
-        input: data/zeek/conn.log.gz
+      - command: flush
+      - command: version
         transformation: sleep 4
       - command: count '#type == /zeek.*/'
   Transforms:
     tags: [server, client, import-export, transforms, suricata]
     fixture: TransformsTester
     steps:
-      - command: --config=@./vast-transforms.yaml import suricata
+      - command: --config=@./vast-transforms.yaml import -b suricata
         input: data/suricata/eve.json
+      - command: flush
       - command: export json '#type == "suricata.http"'
       - command: export json '#type == "suricata.netflow"'
       - command: export json '#type == "suricata.dns"'
@@ -551,6 +563,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: import -b zeek
         input: data/zeek/dns.log.gz
+      - command: flush
       - command: export --timeout=0ms json
         expected_result: error
       - command: export --timeout=0ms json
