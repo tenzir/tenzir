@@ -95,6 +95,9 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::erase, std::vector<uuid>) -> atom::done {
       FAIL("no mock implementation available");
     },
+    [=](atom::flush) {
+      FAIL("no mock implementation available");
+    },
   };
 }
 

@@ -191,10 +191,16 @@ struct index_state {
   vast::uuid create_query_id();
 
   /// Creates a new active partition.
-  void create_active_partition(const type& layout);
+  /// @param schema The schema of the new partition. All events routed to the
+  /// partition are assumed to have the exact same schema.
+  void create_active_partition(const type& schema);
 
   /// Decommissions the active partition.
-  void decomission_active_partition(const type& layout);
+  /// @param schema The schema of the active partition to decomission.
+  /// @param completion The completeion handler; called when the partition was
+  /// decomissioned successfully.
+  void decomission_active_partition(
+    const type& schema, std::function<void(const caf::error&)> completion);
 
   /// Adds a new partition creation listener.
   void

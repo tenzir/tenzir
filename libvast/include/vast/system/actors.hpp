@@ -286,6 +286,8 @@ using index_actor = typed_actor_fwd<
   // because transform_ptr's cannot be send across the wire.
   caf::replies_to<atom::rebuild,
                   std::vector<uuid>>::with<std::vector<partition_info>>,
+  // Decomissions all active partitions, effectively flushing them to disk.
+  caf::reacts_to<atom::flush>,
   // Makes the identity of the importer known to the index.
   caf::reacts_to<atom::importer, idspace_distributor_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
