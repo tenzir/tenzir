@@ -71,6 +71,12 @@ A LRU cache of partitions accelerates queries to recently used partitions. The
 parameter `max-resident-partitions` controls the number of partitions in the LRU
 cache.
 
+:::note
+Run `vast flush` to force VAST to write all active partitions to disk
+immediately. The command returns only after all active partitions were flushed
+to disk.
+:::
+
 ### Catalog
 
 The catalog manages partition meta data and is responsible for deciding whether
