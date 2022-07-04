@@ -12,6 +12,7 @@
 
 #include "vast/chunk.hpp"
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/concept/printable/vast/error.hpp"
@@ -266,6 +267,114 @@ caf::error index_state::load_from_disk() {
     VAST_VERBOSE("{} found no prior state, starting with a clean slate", *self);
     return caf::none;
   }
+  auto dir_iter = std::filesystem::directory_iterator(dir, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to list directory contents of "
+                                       "{}: {}",
+                                       dir, err.message()));
+  auto partitions = std::vector<uuid>{};
+  auto synopsis_files = std::vector<uuid>{};
+  auto synopses = std::make_shared<std::map<uuid, partition_synopsis_ptr>>();
+  for (const auto& entry : dir_iter) {
+    const auto stem = entry.path().stem();
+    vast::uuid partition_uuid{};
+    // Ignore files that don't use UUID for the filename.
+    if (!parsers::uuid(stem.string(), partition_uuid))
+      continue;
+    auto ext = entry.path().extension();
+    if (ext.empty())
+      partitions.push_back(partition_uuid);
+    else if (ext == std::filesystem::path{".mdx"})
+      synopsis_files.push_back(partition_uuid);
+  }
+  std::sort(partitions.begin(), partitions.end());
+  std::sort(synopsis_files.begin(), synopsis_files.end());
+  auto orphans = std::vector<uuid>{};
+  std::set_difference(synopsis_files.begin(), synopsis_files.end(),
+                      partitions.begin(), partitions.end(),
+                      std::back_inserter(orphans));
+  // Do a bit of housekeeping. MDX files without matching partitions shouldn't
+  // be there in the first place.
+  VAST_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
+  for (auto& orphan : orphans)
+    std::filesystem::remove(dir / fmt::to_string(orphan) / ".mdx", err);
+  // Now try to load the partitions - with a progress indicator.
+  for (size_t idx = 0; idx < partitions.size(); ++idx) {
+    auto partition_uuid = partitions[idx];
+    auto part_path = partition_path(partition_uuid);
+    VAST_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid, idx,
+               partitions.size());
+    // Generate external partition synopsis file if it doesn't exist.
+    auto synopsis_path = partition_synopsis_path(partition_uuid);
+    if (!exists(synopsis_path)) {
+      if (auto error = extract_partition_synopsis(part_path, synopsis_path))
+        return error;
+    }
+  retry:
+    auto chunk = chunk::mmap(synopsis_path);
+    if (!chunk) {
+      VAST_WARN("{} could not mmap partition at {}", *self, part_path);
+      continue;
+    }
+    const auto* ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->get()->data());
+    partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
+    if (ps_flatbuffer->partition_synopsis_type()
+        != fbs::partition_synopsis::PartitionSynopsis::legacy)
+      return caf::make_error(ec::format_error, "invalid partition synopsis "
+                                               "version");
+    const auto& synopsis_legacy
+      = *ps_flatbuffer->partition_synopsis_as_legacy();
+    // Re-write old partition synopses that were created before the offset and
+    // id were saved.
+    if (!synopsis_legacy.id_range()) {
+      VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
+                   partition_uuid);
+      if (auto error = extract_partition_synopsis(part_path, synopsis_path))
+        return error;
+      // TODO: There is probably a good way to rewrite this without the jump,
+      // but in the meantime I defer to Knuth:
+      //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
+      goto retry;
+    }
+    if (auto error = unpack(synopsis_legacy, ps.unshared()))
+      return error;
+    persisted_partitions.insert(partition_uuid);
+    synopses->emplace(partition_uuid, std::move(ps));
+  }
+  // Recommend the user to run 'vast rebuild' if any partition syopses are
+  // outdated. We need to nudge them a bit so we can drop support for older
+  // partition versions more freely.
+  const auto num_outdated = std::count_if(
+    synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
+      return id_and_synopsis.second->version < version::partition_version;
+    });
+  if (num_outdated > 0)
+    VAST_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
+              "rebuild' to upgrade existing partitions in the background",
+              *self, num_outdated, synopses->size());
+  // We collect all synopses to send them in bulk, since the `await` interface
+  // doesn't lend itself to a huge number of awaited messages: Only the tip of
+  // the current awaited list is considered, leading to an O(n**2) worst-case
+  // behavior if the responses arrive in the same order to how they were sent.
+  VAST_DEBUG("{} requesting bulk merge of {} partitions", *self,
+             synopses->size());
+  this->accept_queries = false;
+  self
+    ->request(catalog, caf::infinite, atom::merge_v,
+              std::exchange(synopses, {}))
+    .then(
+      [this](atom::ok) {
+        VAST_INFO("{} finished initializing and is ready to accept queries",
+                  *self);
+        this->accept_queries = true;
+      },
+      [this](caf::error& err) {
+        VAST_ERROR("{} could not load catalog state from disk, shutting "
+                   "down with error {}",
+                   *self, err);
+        self->send_exit(self, std::move(err));
+      });
   if (auto fname = index_filename(); std::filesystem::exists(fname, err)) {
     VAST_VERBOSE("{} loads state from {}", *self, fname);
     auto buffer = io::read(fname);
@@ -280,89 +389,6 @@ caf::error index_state::load_from_disk() {
     if (index->index_type() != fbs::index::Index::v0)
       return caf::make_error(ec::format_error, "invalid index version");
     const auto* index_v0 = index->index_as_v0();
-    const auto* partition_uuids = index_v0->partitions();
-    VAST_ASSERT(partition_uuids);
-    auto synopses = std::make_shared<std::map<uuid, partition_synopsis_ptr>>();
-    const size_t total = partition_uuids->size();
-    for (size_t idx = 0; idx < total; ++idx) {
-      const auto* uuid_fb = partition_uuids->Get(idx);
-      VAST_ASSERT(uuid_fb);
-      vast::uuid partition_uuid{};
-      if (auto error = unpack(*uuid_fb, partition_uuid))
-        return caf::make_error(ec::format_error, fmt::format("could not unpack "
-                                                             "uuid from "
-                                                             "index state: {}",
-                                                             error));
-      auto part_path = partition_path(partition_uuid);
-      auto synopsis_path = partition_synopsis_path(partition_uuid);
-      if (!exists(part_path)) {
-        VAST_WARN("{} found partition {}"
-                  "in the index state but not on disk; this may have been "
-                  "caused by an unclean shutdown",
-                  *self, partition_uuid);
-        continue;
-      }
-      VAST_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid, idx,
-                 total);
-      // Generate external partition synopsis file if it doesn't exist.
-      if (!exists(synopsis_path)) {
-        if (auto error = extract_partition_synopsis(part_path, synopsis_path))
-          return error;
-      }
-    retry:
-      auto chunk = chunk::mmap(synopsis_path);
-      if (!chunk) {
-        VAST_WARN("{} could not mmap partition at {}", *self, part_path);
-        continue;
-      }
-      const auto* ps_flatbuffer
-        = fbs::GetPartitionSynopsis(chunk->get()->data());
-      partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
-      if (ps_flatbuffer->partition_synopsis_type()
-          != fbs::partition_synopsis::PartitionSynopsis::legacy)
-        return caf::make_error(ec::format_error, "invalid partition synopsis "
-                                                 "version");
-      const auto& synopsis_legacy
-        = *ps_flatbuffer->partition_synopsis_as_legacy();
-      // Re-write old partition synopses that were created before the offset and
-      // id were saved.
-      if (!synopsis_legacy.id_range()) {
-        VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
-                     partition_uuid);
-        if (auto error = extract_partition_synopsis(part_path, synopsis_path))
-          return error;
-        // TODO: There is probably a good way to rewrite this without the jump,
-        // but in the meantime I defer to Knuth:
-        //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
-        goto retry;
-      }
-      if (auto error = unpack(synopsis_legacy, ps.unshared()))
-        return error;
-      persisted_partitions.insert(partition_uuid);
-      synopses->emplace(partition_uuid, std::move(ps));
-    }
-    // We collect all synopses to send them in bulk, since the `await` interface
-    // doesn't lend itself to a huge number of awaited messages: Only the tip of
-    // the current awaited list is considered, leading to an O(n**2) worst-case
-    // behavior if the responses arrive in the same order to how they were sent.
-    VAST_DEBUG("{} requesting bulk merge of {} partitions", *self,
-               synopses->size());
-    this->accept_queries = false;
-    self
-      ->request(catalog, caf::infinite, atom::merge_v,
-                std::exchange(synopses, {}))
-      .then(
-        [this](atom::ok) {
-          VAST_INFO("{} finished initializing and is ready to accept queries",
-                    *self);
-          this->accept_queries = true;
-        },
-        [this](caf::error& err) {
-          VAST_ERROR("{} could not load catalog state from disk, shutting "
-                     "down with error {}",
-                     *self, err);
-          self->send_exit(self, std::move(err));
-        });
     const auto* stats = index_v0->stats();
     if (!stats)
       return caf::make_error(ec::format_error, "no stats in persisted index "
@@ -371,10 +397,9 @@ caf::error index_state::load_from_disk() {
       this->stats.layouts[stat->name()->str()]
         = layout_statistics{stat->count()};
     }
-  } else {
-    VAST_DEBUG("{} found existing database dir {} without index "
-               "statefile, "
-               "will start with fresh state",
+  } else if (!persisted_partitions.empty()) {
+    VAST_DEBUG("{} found existing database dir {} without index statefile, the "
+               "index statistics in the status output will be incorrect",
                *self, dir);
   }
   return caf::none;
@@ -1426,6 +1451,7 @@ index(index_actor::stateful_pointer<index_state> self,
                      result = std::move(result)](atom::ok) mutable {
                       self->state.persisted_partitions.insert(
                         new_partition_ids.begin(), new_partition_ids.end());
+                      self->state.flush_to_disk();
                       deliver(std::move(result));
                     },
                     [deliver](const caf::error& e) mutable {
@@ -1442,6 +1468,7 @@ index(index_actor::stateful_pointer<index_state> self,
                    result](atom::ok) mutable {
                     self->state.persisted_partitions.insert(
                       new_partition_ids.begin(), new_partition_ids.end());
+                    self->state.flush_to_disk();
                     self
                       ->request(static_cast<index_actor>(self), caf::infinite,
                                 atom::erase_v, old_partition_ids)

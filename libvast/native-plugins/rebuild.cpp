@@ -141,8 +141,8 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
         if (undersized)
           std::erase_if(
             result.partitions, [=](const partition_info& partition) {
-              return !partition.schema
-                     || partition.events <= self->state.max_partition_size / 2;
+              return static_cast<bool>(partition.schema)
+                     && partition.events > self->state.max_partition_size / 2;
             });
         if (result.partitions.empty()) {
           fmt::print("no partitions need to be rebuilt\n", *self);
