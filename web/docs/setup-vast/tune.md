@@ -1,6 +1,7 @@
 ---
 sidebar_position: 5
 ---
+
 # Tune
 
 This section describes tuning knobs that have a notable effect on system
@@ -54,15 +55,16 @@ later.
 
 ## Persistent Storage
 
-In VAST, data is stored in _partitions_, storing multiple, homogeneous table
-slices in a single file. VAST currently offers two different storage formats:
+VAST arranges data in horizontal _partitions_ for sharding. The persistent
+representation of partition is a single file consists containing a set table
+slices all having the same schema. The `store` plugin defines the on-disk
+format. VAST currently ships with two implementations:
 
-1. Segment store format, based on a thin wrapper around Apache Arrow IPC and
-2. Apache Parquet file format
+1. **Segment**: writes Apache Arrow IPC with a thin wrapper
+2. **Apache Parquet**: writes [Parquet](https://parquet.apache.org/) files
 
-At the moment, the default format is the segment store. The parquet format is
-implemented as a bundled, open source plugin and can be enabled for the VAST
-server via:
+VAST defaults to the Segment store. Enable the Parquet store by loading the
+plugin and adjusting `vast.store-backend`:
 
 ```yaml
 vast:
@@ -71,31 +73,30 @@ vast:
   store-backend: parquet
 ```
 
-Choosing parquet has a few trade-offs, and depending on your use case, can be
-a better choice:
-1. Requires about 40% less storage for the same data
-2. Is slightly more expensive to serialize, with a small performance hit (+10%
-   CPU consumption in ingest path)
-3. Is more expensive to deserialize, increasing CPU utilization for query
-   execution
-4. Reduced storage requirements reduce the amount of I/O required for reading
-5. Standard format compatible with a wide variety of other systems
+There's an inherent space-time tradeoff between the Segment and Parquet store
+that affects CPU, memory, and storage characteristics. Compared to the Segment
+store, Parquet differs as follows:
 
-Depending on the actual system setup (type of disks, size of storage, CPU) and
-the typical workloads (type of queries, selectivity, more live queries vs.
-retro queries), parquet can be the right choice. In particular, we recommend
-parquet when:
+1. Parquet files occupy ~40% less space, which also reduces I/O pressure during
+   querying.
+2. Parquet utilizes more CPU cycles during ingest (~10%) and querying.
 
-1. Storage is limited, and you want to increase retention time
-2. Your VAST system is limited by I/O, and not by CPU
-3. Retro query performance is not your current limitation
-4. You want to be able to read the data with off-the-shelf data science tools
+Parquet has the major advantage that it's the de-facto standard for
+encoding columnar data in modern data architectures. This allows other
+applications that support reading from Parquet *native* access to the data.
 
-:::tip 
-`vast rebuild` rewrites the entire database, and can be used to switch an
-existing instance to a different storage backend. However, VAST works perfectly
-fine with a mixed-storage configuration, so a full rebuild is not required.
+:::tip Recommendation
+
+Use Parquet when:
+
+1. Storage is scarce, and you want to increase data retention
+2. Workloads are I/O-bound and you have available CPU
+3. Reading data with with off-the-shelf data science tools is a use case
 :::
+
+VAST supports [rebuilding the entire database](#rebuild-partitions) in case you
+want to switch to a different store format. However, VAST works perfectly fine
+with a mixed-storage configuration, so a full rebuild is not required.
 
 ## Memory usage and caching
 
