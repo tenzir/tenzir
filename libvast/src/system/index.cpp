@@ -342,6 +342,17 @@ caf::error index_state::load_from_disk() {
     persisted_partitions.insert(partition_uuid);
     synopses->emplace(partition_uuid, std::move(ps));
   }
+  // Recommend the user to run 'vast rebuild' if any partition syopses are
+  // outdated. We need to nudge them a bit so we can drop support for older
+  // partition versions more freely.
+  const auto num_outdated = std::count_if(
+    synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
+      return id_and_synopsis.second->version < version::partition_version;
+    });
+  if (num_outdated > 0)
+    VAST_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
+              "rebuild' to upgrade existing partitions in the background",
+              *self, num_outdated, synopses->size());
   // We collect all synopses to send them in bulk, since the `await` interface
   // doesn't lend itself to a huge number of awaited messages: Only the tip of
   // the current awaited list is considered, leading to an O(n**2) worst-case
