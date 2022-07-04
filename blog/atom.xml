@@ -280,19 +280,19 @@ the export path once all workers were stuck.</li></ul><p>Thanks to <a href="http
 which ships with exciting new features: <em>query language plugins</em> to exchange the
 query expression frontend, and <em>compaction</em> as a mechanism for expressing
 fine-grained data retention policies and gradually aging out data instead of
-simply deleting it.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="query-language-plugins">Query Language Plugins<a class="hash-link" href="#query-language-plugins" title="Direct link to heading">​</a></h2><p>VAST features <a href="https://docs.tenzir.com/vast/architecture/plugins#query-language" target="_blank" rel="noopener noreferrer">a new query language plugin
-type</a> that
-makes it possible to exchange the querying frontend, that is, replace the
+simply deleting it.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="query-language-plugins">Query Language Plugins<a class="hash-link" href="#query-language-plugins" title="Direct link to heading">​</a></h2><p>VAST features <a href="https://vast.io/docs/understand-vast/architecture/plugins#query-language" target="_blank" rel="noopener noreferrer">a new query language plugin
+type</a>
+that makes it possible to exchange the querying frontend, that is, replace the
 language in which the user writes queries. This makes it easier to integrate
 VAST into specific domains without compromising the policy-neutral system core.</p><p>The first instance of the query language plugin is the <a href="https://github.com/tenzir/vast/tree/master/plugins/sigma" target="_blank" rel="noopener noreferrer"><code>sigma</code>
 plugin</a>, which make it
-possible to pass <a href="https://docs.tenzir.com/vast/query-language/sigma" target="_blank" rel="noopener noreferrer">Sigma
-rules</a> as input instead of a
-standard VAST query expression. Prior to this plugin, VAST attempted to parse a
-query as Sigma rule first, and if that failed, tried to parse it as a VAST
-expression. The behavior changed in that VAST now always tries to interpret user
-input as VAST expression, and if that fails, goes through all other loaded query
-language plugins.</p><p>Moving forward, we will make it easier for integrators to BYO query language and
+possible to pass <a href="https://vast.io/docs/understand-vast/query-language/frontends/sigma" target="_blank" rel="noopener noreferrer">Sigma
+rules</a> as
+input instead of a standard VAST query expression. Prior to this plugin, VAST
+attempted to parse a query as Sigma rule first, and if that failed, tried to
+parse it as a VAST expression. The behavior changed in that VAST now always
+tries to interpret user input as VAST expression, and if that fails, goes
+through all other loaded query language plugins.</p><p>Moving forward, we will make it easier for integrators to BYO query language and
 leverage VAST as an execution engine. We have already
 <a href="https://github.com/tenzir/vast/pull/2075" target="_blank" rel="noopener noreferrer">experimented</a> with
 <a href="https://substrait.io" target="_blank" rel="noopener noreferrer">Substrait</a>, a cross-language protobuf spec for query
@@ -370,12 +370,12 @@ warns on startup if it’s configured to run aging.</p>]]></content>
         <summary type="html"><![CDATA[VAST v1.0 – New Year, New Versioning Scheme]]></summary>
         <content type="html"><![CDATA[<p>We are happy to announce <a href="https://github.com/tenzir/vast/releases/tag/v1.0.0" target="_blank" rel="noopener noreferrer">VAST v1.0</a>!</p><p>This release brings a new approach to software versioning for Tenzir. We laid
 out the semantics in detail in a new <a href="https://github.com/tenzir/vast/blob/v1.0.0/VERSIONING.md" target="_blank" rel="noopener noreferrer">VERSIONING</a>
-document.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="query-events-based-on-their-import-time">Query events based on their import time<a class="hash-link" href="#query-events-based-on-their-import-time" title="Direct link to heading">​</a></h2><p>The new <a href="https://docs.tenzir.com/vast/query-language/expressions/#meta-extractor" target="_blank" rel="noopener noreferrer"><code>#import_time</code> extractor</a> allows for exporting
+document.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="query-events-based-on-their-import-time">Query events based on their import time<a class="hash-link" href="#query-events-based-on-their-import-time" title="Direct link to heading">​</a></h2><p>The new <a href="https://vast.io/docs/understand-vast/query-language/expressions#meta-extractor" target="_blank" rel="noopener noreferrer"><code>#import_time</code> extractor</a> allows for exporting
 events based on the time they arrived at VAST. Most of the time, this timestamp
 is not far away from the timestamp of when the event occurred, but in certain
 cases the two may deviate substantially, e.g., when ingesting historical events
 from several years ago.</p><p>For example, to export all Suricata alerts that arrived at VAST on New Years Eve
-as JSON, run this command:</p><div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token plain">vast </span><span class="token builtin class-name">export</span><span class="token plain"> json </span><span class="token string" style="color:#e3116c">'#type == "suricata.alert" &amp;&amp; #import_time &gt;= 2021-12-31 &amp;&amp; #import_time &lt; 2022-01-01'</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg class="copyButtonIcon_y97N" viewBox="0 0 24 24"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg class="copyButtonSuccessIcon_LjdS" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>This differs from the <a href="https://docs.tenzir.com/vast/query-language/expressions#type-extractor" target="_blank" rel="noopener noreferrer"><code>:timestamp</code> type extractor</a> that
+as JSON, run this command:</p><div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token plain">vast </span><span class="token builtin class-name">export</span><span class="token plain"> json </span><span class="token string" style="color:#e3116c">'#type == "suricata.alert" &amp;&amp; #import_time &gt;= 2021-12-31 &amp;&amp; #import_time &lt; 2022-01-01'</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg class="copyButtonIcon_y97N" viewBox="0 0 24 24"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg class="copyButtonSuccessIcon_LjdS" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>This differs from the <a href="https://vast.io/docs/understand-vast/query-language/expressions#type-extractor" target="_blank" rel="noopener noreferrer"><code>:timestamp</code> type extractor</a> that
 queries all events that contain a type <code>timestamp</code>, which is an alias for the
 <code>time</code> type.  By convention, the <code>timestamp</code> type represents the event time
 embedded in the data itself. However, the import time  is not part of the event
