@@ -19,20 +19,20 @@ simply deleting it.
 ## Query Language Plugins
 
 VAST features [a new query language plugin
-type](https://docs.tenzir.com/vast/architecture/plugins#query-language) that
-makes it possible to exchange the querying frontend, that is, replace the
+type](https://vast.io/docs/understand-vast/architecture/plugins#query-language)
+that makes it possible to exchange the querying frontend, that is, replace the
 language in which the user writes queries. This makes it easier to integrate
 VAST into specific domains without compromising the policy-neutral system core.
 
 The first instance of the query language plugin is the [`sigma`
 plugin](https://github.com/tenzir/vast/tree/master/plugins/sigma), which make it
 possible to pass [Sigma
-rules](https://docs.tenzir.com/vast/query-language/sigma) as input instead of a
-standard VAST query expression. Prior to this plugin, VAST attempted to parse a
-query as Sigma rule first, and if that failed, tried to parse it as a VAST
-expression. The behavior changed in that VAST now always tries to interpret user
-input as VAST expression, and if that fails, goes through all other loaded query
-language plugins.
+rules](https://vast.io/docs/understand-vast/query-language/frontends/sigma) as
+input instead of a standard VAST query expression. Prior to this plugin, VAST
+attempted to parse a query as Sigma rule first, and if that failed, tried to
+parse it as a VAST expression. The behavior changed in that VAST now always
+tries to interpret user input as VAST expression, and if that fails, goes
+through all other loaded query language plugins.
 
 Moving forward, we will make it easier for integrators to BYO query language and
 leverage VAST as an execution engine. We have already

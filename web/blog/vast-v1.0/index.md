@@ -39,8 +39,8 @@ embedded in the data itself. However, the import time  is not part of the event
 data itself, but rather part of metadata of every batch of events that VAST
 creates.
 
-[docs-meta-extractor]: https://docs.tenzir.com/vast/query-language/expressions/#meta-extractor
-[docs-type-extractor]: https://docs.tenzir.com/vast/query-language/expressions#type-extractor
+[docs-meta-extractor]: https://vast.io/docs/understand-vast/query-language/expressions#meta-extractor
+[docs-type-extractor]: https://vast.io/docs/understand-vast/query-language/expressions#type-extractor
 
 ## Omit `null` fields in the JSON export
 

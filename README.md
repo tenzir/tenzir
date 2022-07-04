@@ -142,7 +142,7 @@ proceedings][nsdi-proceedings].
   Developed with ❤️ by <strong><a href="https://tenzir.com">Tenzir</a></strong>
 </p>
 
-[docs]: https://docs.tenzir.com/vast
+[docs]: https://vast.io
 [chat-badge]: https://img.shields.io/badge/Slack-Tenzir%20Community%20Chat-brightgreen?logo=slack&color=purple&style=flat
 [chat-url]: http://slack.tenzir.com
 [ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AVAST
@@ -159,7 +159,7 @@ proceedings][nsdi-proceedings].
 [since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [since-release-url]: https://github.com/tenzir/vast/compare/2021.06.24...master
 [latest-release]: https://github.com/tenzir/vast/releases/latest
-[installation-url]: https://docs.tenzir.com/vast/installation/overview
+[installation-url]: https://vast.io/docs/setup-vast/install
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions

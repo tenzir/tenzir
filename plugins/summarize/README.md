@@ -7,7 +7,7 @@ transformation, which for import and export is the size of a single batch
 (configurable as `vast.import.batch-size`), and for compaction is the size of a
 partition (configurable as `vast.max-partition-size`).
 
-[docs-compaction]: https://docs.tenzir.com/vast/features/compaction
+[docs-compaction]: https://vast.io/docs/about-vast/use-cases/data-aging
 
 ## Configuration Options
 
