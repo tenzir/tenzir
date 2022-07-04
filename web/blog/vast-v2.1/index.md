@@ -16,6 +16,14 @@ take full advantage of the improvements after upgrading.
 
 <!--truncate-->
 
+## Documentation Overhaul
+
+Thanks to a monumental effort of [@mavam][github-mavam], VAST's documentation
+received an overhaul. The new site is live on [vast.io](https://vast.io). Check
+it out!
+
+[github-mavam]: https://github.com/mavam
+
 ## Performance Improvements
 
 VAST now compresses data with Zstd. When persisting data to the segment store,
@@ -78,7 +86,7 @@ background.
 
 We recommend running `vast rebuild` to upgrade your VAST v1.x partitions to VAST
 v2.x partitions to take advantage of the new compression and an improved
-internal representation. 
+internal representation.
 
 This is how you run it:
 
