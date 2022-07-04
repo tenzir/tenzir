@@ -91,7 +91,7 @@ from compression to be smaller when using compressed filesystems like
 
 The new changes to VAST's internal data format only apply to newly ingested
 data. To retrofit changes, we introduce a new `rebuild` command with this
-release. A rebuild effectively re-ingesting events from existing partitions and
+release. A rebuild effectively re-ingests events from existing partitions and
 atomically replaces them with partitions of the new format.
 
 This makes it possible to upgrade persistent state to a newer version, or
@@ -111,7 +111,7 @@ This is how you run it:
 vast rebuild [--all] [--undersized] [--parallel=<number>] [<expression>]
 ```
 
-A rebuild is not useful when upgrading outdated partitions, but also when
+A rebuild is not only useful when upgrading outdated partitions, but also when
 changing parameters of up-to-date partitions. Use the `--all` flag to extend a
 rebuild operation to _all_ partitions. (Internally, VAST versions the partition
 state via FlatBuffers. An outdated partition is one whose version number is not
