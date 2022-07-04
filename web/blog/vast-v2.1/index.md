@@ -46,8 +46,20 @@ to tune this space-time tradeoff.
 
 To benchmark this, we used [`speeve`][speeve] to generate 20 EVE JSON files
 containing 8,388,608 events each[^2]. We spawned a VAST server process and ran
-20 VAST client processes in parallel, with one process per file. We observed the
-following improvements:
+20 VAST client processes in parallel, with one process per file.
+
+We observed a reduction of **up to 73%** of disk space utilization:
+
+![Database Size](storage-light.png#gh-light-mode-only)
+![Database Size](storage-dark.png#gh-dark-mode-only)
+
+In addition, we were able to scale the ingest rate by almost **6x** due to the
+higher batch size and the reduced memory usage per batch:
+
+![Ingest Rate](rate-light.png#gh-light-mode-only)
+![Ingest Rate](rate-dark.png#gh-dark-mode-only)
+
+The table below summaries the benchmarks:
 
 ||VAST v2.0|VAST v2.1|Change|
 |-:|:-|:-|:-|
