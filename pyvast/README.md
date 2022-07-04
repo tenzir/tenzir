@@ -8,9 +8,8 @@ asynchronously.
 All VAST commands can be used with the wrapper. However, the wrapper does not
 implement any commands itself. It simply passes all received arguments to the
 `vast` binary. It is hence very easy to make mistakes in form of typos, given
-this minimalistic implementation. Please refer to the
-[vast documentation](https://docs.tenzir.com/) for details about valid `vast`
-commands.
+this minimalistic implementation. Please refer to the [vast
+documentation](https://vast.io) for details about valid `vast` commands.
 
 ## Installation
 
