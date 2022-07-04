@@ -63,14 +63,49 @@ from compression to be smaller when using compressed filesystems like
   `suricata.dns`, 5.35% `suricata.http`, 4.57% `suricata.fileinfo`, 1.04%
   `suricata.tls`, 0.41% `suricata.ftp`, and 0.04% `suricata.smtp`.
 
-## Optimizing VAST Databases
+## Optimize VAST Databases
 
-TODO: This is just copy-pasted from the changelog entry.
+The new changes to VAST's internal data format only apply to newly ingested
+data. However, the newly introduced `rebuild` command allows for effectively
+re-ingesting events from existing partitions and atomically replacing them with
+new partitions.
 
-The new rebuild command allows for rebuilding old partitions to take advantage
-of improvements by newer VAST versions. The rebuilding takes place in the VAST
-server in the background. This process merges partitions up to the configured
-`vast.max-partition-size,` turns VAST v1.x's heterogeneous into VAST v2.x's
-homogenous partitions, migrates all data to the currently configured
-store-backend, and upgrades to the most recent internal batch encoding and
-indexes.
+This makes it possible to upgrade persistent state to a newer version, or
+recreate persistent state after changing configuration parameters, e.g.,
+switching from the Feather to the Parquet store backend. Rebuilding partitions
+also recreates their sketches. The process takes place asynchronously in the
+background.
+
+We recommend running `vast rebuild` to upgrade your VAST v1.x partitions to VAST
+v2.x partitions to take advantage of the new compression and an improved
+internal representation. 
+
+This is how you run it:
+
+```bash
+vast rebuild [--all] [--undersized] [--parallel=<number>] [<expression>]
+```
+
+The on-disk format of VAST's partitions is versioned. By default, the `rebuild`
+command only considers partitions whose version number is not the newest
+version. The `--all` flag makes the command instead consider _all_ partitions
+rather than only outdated ones. This is useful when you change configuration
+options and want to regenerate all partitions. The `--undersized` flag causes
+VAST to only rebuild partitions that are under the configured partition size
+limit.
+
+The `--parallel` options is a performance tuning knob. The parallelism level
+controls how many sets of partitions to rebuild in parallel. This value defaults
+to 1 to limit the CPU and memory requirements of the rebuilding process, which
+grow linearly with the selected parallelism level.
+
+An optional expression allows for restricting the set of partitions to rebuild.
+VAST performs a catalog lookup with the expression to identify the set of
+candidate partitions. This process may yield false positives, as with regular
+queries, which in this case causes potentially unaffected partitions to undergo
+a rebuild process. For example, to rebuild outdated partitions containing
+`suricata.flow` events older than 2 weeks, run the following command:
+
+```bash
+vast rebuild '#type == "suricata.flow" && #import_time < 2 weeks ago'
+```
