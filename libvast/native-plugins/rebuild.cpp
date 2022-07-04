@@ -82,7 +82,7 @@ struct rebuilder_state {
     if (num_heterogeneous > 0)
       indicator->set_option(indicators::option::PostfixText{fmt::format(
         "[{}/{}] Splitting {}/{} heterogeneous partitions...", num_transformed,
-        num_total, num_heterogeneous, num_transforming + num_heterogeneous)});
+        num_total, num_transforming, num_transforming + num_heterogeneous)});
     else
       indicator->set_option(indicators::option::PostfixText{
         fmt::format("[{}/{}] Merging {}/{} partitions...", num_transformed,
