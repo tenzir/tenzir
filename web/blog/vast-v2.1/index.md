@@ -16,20 +16,24 @@ take full advantage of the improvements after upgrading.
 
 <!--truncate-->
 
-## Documentation Overhaul
+## New Project Site
 
-Thanks to a monumental effort of [@mavam][github-mavam], VAST's documentation
-received an overhaul. The new site is live on [vast.io](https://vast.io). Check
-it out!
+VAST has new project site: [vast.io](https://vast.io). We ported all
+documentation from `https://docs.tenzir.com`, added a lot of new content, and
+restructured the reading experience along the user journey.
 
-[github-mavam]: https://github.com/mavam
+You can find the Threat Bus documentation in [Use VAST → Integrate → Threat
+Bus](/docs/use-vast/integrate/threatbus). Threat Bus is now officially in
+maintainance mode: we are only supporting existing features with bugfixes. That
+said, Threat Bus will resurface in a new shape and the existing functionality.
+Stay tuned.
 
 ## Performance Improvements
 
-VAST now compresses data with Zstd. When persisting data to the segment store,
-the default configuration achieves over 2x space savings. When transferring data
-between client and server processes, compression reduces the amount of
-transferred data by up to 5x.
+VAST now compresses data with [Zstd](http://www.zstd.net). The default
+configuration achieves over 2x space savings. When transferring data between
+client and server processes, compression reduces the amount of transferred data
+by up to 5x.
 
 Additionally, VAST now compresses on-disk indexes with Zstd, resulting in a
 50-80% size reduction depending on the type of indexes used.
@@ -50,7 +54,7 @@ following improvements:
 |Ingest Duration|1,650 s|242 s|-85.3%|
 |Ingest Rate|101,680 events/s|693,273 events/s|+581.8%|
 |Index Size|14,791 MiB|5,721 MiB|-61.3%|
-|Store Size|37,656 MiB|8,49 1MiB|-77.5%|
+|Store Size|37,656 MiB|8,491 MiB|-77.5%|
 |Database Size|52,446 MiB|14,212 MiB|-72.9%|
 
 :::note Compressed Filesystems
@@ -71,17 +75,18 @@ from compression to be smaller when using compressed filesystems like
   `suricata.dns`, 5.35% `suricata.http`, 4.57% `suricata.fileinfo`, 1.04%
   `suricata.tls`, 0.41% `suricata.ftp`, and 0.04% `suricata.smtp`.
 
-## Optimize VAST Databases
+## Rebuild VAST Databases
 
 The new changes to VAST's internal data format only apply to newly ingested
-data. However, the newly introduced `rebuild` command allows for effectively
-re-ingesting events from existing partitions and atomically replacing them with
-new partitions.
+data. To retrofit changes, we introduce a new `rebuild` command with this
+release. A rebuild effectively re-ingesting events from existing partitions and
+atomically replaces them with partitions of the new format.
 
 This makes it possible to upgrade persistent state to a newer version, or
 recreate persistent state after changing configuration parameters, e.g.,
-switching from the Feather to the Parquet store backend. Rebuilding partitions
-also recreates their sketches. The process takes place asynchronously in the
+switching from the Feather to the Parquet store backend (that will land in
+v2.2). Rebuilding partitions also recreates their sparse indexes that
+accellerate query execution. The process takes place asynchronously in the
 background.
 
 We recommend running `vast rebuild` to upgrade your VAST v1.x partitions to VAST
@@ -94,13 +99,14 @@ This is how you run it:
 vast rebuild [--all] [--undersized] [--parallel=<number>] [<expression>]
 ```
 
-The on-disk format of VAST's partitions is versioned. By default, the `rebuild`
-command only considers partitions whose version number is not the newest
-version. The `--all` flag makes the command instead consider _all_ partitions
-rather than only outdated ones. This is useful when you change configuration
-options and want to regenerate all partitions. The `--undersized` flag causes
-VAST to only rebuild partitions that are under the configured partition size
-limit.
+A rebuild is not useful when upgrading outdated partitions, but also when
+changing parameters of up-to-date partitions. Use the `--all` flag to extend a
+rebuild operation to _all_ partitions. (Internally, VAST versions the partition
+state via FlatBuffers. An outdated partition is one whose version number is not
+the newest.)
+
+The `--undersized` flag causes VAST to only rebuild partitions that are under
+the configured partition size limit `vast.max-partition-size`.
 
 The `--parallel` options is a performance tuning knob. The parallelism level
 controls how many sets of partitions to rebuild in parallel. This value defaults
@@ -110,9 +116,9 @@ grow linearly with the selected parallelism level.
 An optional expression allows for restricting the set of partitions to rebuild.
 VAST performs a catalog lookup with the expression to identify the set of
 candidate partitions. This process may yield false positives, as with regular
-queries, which in this case causes potentially unaffected partitions to undergo
-a rebuild process. For example, to rebuild outdated partitions containing
-`suricata.flow` events older than 2 weeks, run the following command:
+queries, which may cause unaffected partitions to undergo a rebuild. For
+example, to rebuild outdated partitions containing `suricata.flow` events
+older than 2 weeks, run the following command:
 
 ```bash
 vast rebuild '#type == "suricata.flow" && #import_time < 2 weeks ago'
