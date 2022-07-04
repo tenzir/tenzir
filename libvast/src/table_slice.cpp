@@ -142,7 +142,7 @@ arrow::FieldPath make_path(const offset& index) noexcept {
   for (auto x : index)
     intermediate.push_back(detail::narrow_cast<int>(x));
   return arrow::FieldPath{std::move(intermediate)};
-};
+}
 
 } // namespace
 
