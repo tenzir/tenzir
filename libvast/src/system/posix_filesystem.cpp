@@ -32,9 +32,9 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
       if (chk == nullptr)
-        return caf::make_error(
-          ec::invalid_argument,
-          fmt::format("{} tried to write a nullptr to disk {}", *self, path));
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("{} tried to write a nullptr to {}",
+                                           *self, path));
       if (auto err = io::save(path, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;
@@ -74,7 +74,8 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       } else {
         ++self->state.stats.checks.failed;
         return caf::make_error(ec::no_such_file,
-                               fmt::format("{} no such file: {}", *self, path));
+                               fmt::format("{} {}: {}", *self, path,
+                                           err.message()));
       }
       if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
