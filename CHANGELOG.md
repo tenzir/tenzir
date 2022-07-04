@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.1.0-rc3][v2.1.0-rc3]
+## [v2.1.0-rc4][v2.1.0-rc4]
 
 ### Breaking Changes
 
@@ -101,6 +101,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST component will no longer terminate when it can't write any more data to disk. Incoming data will still be accepted but discarded. We encourage all users to enable the disk-monitor or compaction features as a proper solution to this problem.
   [#2376](https://github.com/tenzir/vast/pull/2376)
+
+- VAST no longer ignores environment variables for plugin-specific options. E.g., the environment variable `VAST_PLUGINS__FOO__BAR` now correctly refers to the `bar` option of the `foo` plugin, i.e., `plugins.foo.bar`.
+  [#2390](https://github.com/tenzir/vast/pull/2390)
+
+- We improved the mechanism to recover the database state after an unclean shutdown.
+  [#2394](https://github.com/tenzir/vast/pull/2394)
 
 ## [v2.0.0][v2.0.0]
 
@@ -1795,7 +1801,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.1.0-rc3]: https://github.com/tenzir/vast/releases/tag/v2.1.0-rc3
+[v2.1.0-rc4]: https://github.com/tenzir/vast/releases/tag/v2.1.0-rc4
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/tenzir/vast/releases/tag/v1.1.1
