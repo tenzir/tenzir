@@ -18,7 +18,7 @@ ingesting a file or running query. We map such actions to Lambda functions.
 The provided Terraform script creates the following architecture within a given
 VPC:
 
-![VAST VPC Architecture](https://user-images.githubusercontent.com/7913347/174257909-7b098d57-e34c-4f39-b2cb-e0adf3392530.png)
+![VAST VPC Architecture](https://user-images.githubusercontent.com/7913347/177141492-b99cce77-3c10-4740-bbdc-4fc2f43b8abc.png)
 
 The assumption is that the VPC has an Internet Gateway attached. Given a CIDR
 block within this VPC, Terraform creates two subnets:
@@ -28,8 +28,8 @@ block within this VPC, Terraform creates two subnets:
 2. **Gateway Subnet**: a public subnet to talk to other AWS services and the
    Internet
 
-We provision a load balancer in front of the Fargate Task to give it a fixed and
-predifined IP in the VAST Subnet.
+To resolve the IP address of the VAST server and other appliances, we use AWS
+Cloudmap as a service discovery provider.
 
 ## Images and Registries
 
