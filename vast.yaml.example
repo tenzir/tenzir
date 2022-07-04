@@ -155,13 +155,13 @@ vast:
   index:
     # The default false-positive rate for type synopses.
     default-fp-rate: 0.01
-    rules:
-      # Every rule adjusts the false-positive rate of a set of targets.
-      # VAST creates one synopsis per target. Targets can be either types
-      # or field names. All rules for types other than string and address
-      # are currently ignored.
-      - targets: [:string, :address]
-        fp-rate: 0.0001
+    # rules:
+    #   Every rule adjusts the false-positive rate of a set of targets.
+    #   VAST creates one synopsis per target. Targets can be either types
+    #   or field names. All rules for types other than string and address
+    #   are currently ignored.
+    #   - targets: [:string, :address]
+    #     fp-rate: 0.01
 
   # The `vast start` command starts a new VAST server process.
   start:
