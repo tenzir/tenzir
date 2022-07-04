@@ -15,9 +15,9 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@docusaurus/core": "^0.0.0-5044",
-    "@docusaurus/plugin-sitemap": "0.0.0-5044",
-    "@docusaurus/preset-classic": "^0.0.0-5044",
+    "@docusaurus/core": "0.0.0-5169",
+    "@docusaurus/plugin-sitemap": "0.0.0-5169",
+    "@docusaurus/preset-classic": "0.0.0-5169",
     "@mdx-js/react": "^1.6.22",
     "clsx": "^1.1.1",
     "docusaurus-plugin-sass": "^0.2.2",
@@ -29,7 +29,7 @@
     "sass": "^1.52.1"
   },
   "devDependencies": {
-    "@docusaurus/module-type-aliases": "0.0.0-5044",
+    "@docusaurus/module-type-aliases": "0.0.0-5169",
     "@tsconfig/docusaurus": "^1.0.5",
     "typescript": "^4.6.4"
   },
