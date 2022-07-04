@@ -184,7 +184,7 @@ asynchronously in the background.
 
 :::info Upgrade from VAST v1.x partitions
 You can use the `rebuild` command to upgrade your VAST v1.x partitions to v2.x,
-which yields better compression and have a streamlined representation. We
+which yield better compression and have a streamlined representation. We
 recommend this to be able to use newer features that do not work with v1.x
 partitions.
 :::

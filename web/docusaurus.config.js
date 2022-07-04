@@ -104,12 +104,6 @@ const config = {
           },
         ],
       },
-      announcementBar: {
-        content:
-        'This site is under construction. Help us by leaving <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/discussions">feedback</a> and a <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">GitHub Star</a>.',
-        backgroundColor: '#f1f2f2',
-        isCloseable: true,
-      },
       footer: {
         links: [
           {
