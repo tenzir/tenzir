@@ -23,16 +23,17 @@ counter_state::counter_state(caf::event_based_actor* self) : super(self) {
 
 void counter_state::init(expression expr, index_actor index,
                          bool skip_candidate_check) {
-  auto q = vast::query_context::make_count(self_,
-                                           skip_candidate_check
-                                             ? query_context::count::estimate
-                                             : query_context::count::exact,
-                                           std::move(expr));
+  auto query_context
+    = vast::query_context::make_count(self_,
+                                      skip_candidate_check
+                                        ? query_context::count::estimate
+                                        : query_context::count::exact,
+                                      std::move(expr));
   // Transition from idle state when receiving 'run' and client handle.
-  behaviors_[idle].assign([=, this, q = std::move(q)](atom::run,
-                                                      caf::actor client) {
+  behaviors_[idle].assign([=, this, query_context = std::move(query_context)](
+                            atom::run, caf::actor client) {
     client_ = std::move(client);
-    start(q, index);
+    start(query_context, index);
     // Stop immediately when losing the client.
     self_->monitor(client_);
     self_->set_down_handler([this](caf::down_msg& dm) {
@@ -44,7 +45,9 @@ void counter_state::init(expression expr, index_actor index,
     behaviors_[await_results_until_done].as_behavior_impl()};
   behaviors_[await_results_until_done] = base.or_else(
     // Forward results to the sink.
-    [this](uint64_t num_results) { self_->send(client_, num_results); });
+    [this](uint64_t num_results) {
+      self_->send(client_, num_results);
+    });
 }
 
 void counter_state::process_done() {

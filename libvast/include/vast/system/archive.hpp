@@ -30,9 +30,9 @@ namespace vast::system {
 /// @relates archive
 struct archive_state {
   struct request_state {
-    request_state(vast::query_context query_,
+    request_state(vast::query_context query_context,
                   std::pair<ids, caf::typed_response_promise<uint64_t>> ids_)
-      : query_context{std::move(query_)} {
+      : query_context{std::move(query_context)} {
       ids_queue.push(std::move(ids_));
     }
     vast::query_context query_context;
@@ -61,7 +61,8 @@ struct archive_state {
   /// Updates an existing request with additional ids or inserts a new request
   /// if the query client hasn't been seen before.
   /// @param query The type of request.
-  caf::typed_response_promise<uint64_t> file_request(vast::query_context query);
+  caf::typed_response_promise<uint64_t>
+  file_request(vast::query_context query_context);
 
   vast::system::measurement measurement;
   accountant_actor accountant;

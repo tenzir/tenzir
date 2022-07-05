@@ -55,7 +55,7 @@ std::vector<uuid> cands(uint32_t start, uint32_t end) {
 }
 
 // We need to be able to generate queries with random query ids.
-query_context rand_query() {
+query_context make_random_query_context() {
   auto result = query_context::make_count(
     caf::actor{}, query_context::count::estimate, expression{});
   result.id = uuid::random();
@@ -64,27 +64,27 @@ query_context rand_query() {
 
 uuid make_insert(query_queue& q, std::vector<uuid>&& candidates) {
   uint32_t cands_size = candidates.size();
-  auto qc = rand_query();
-  REQUIRE_SUCCESS(q.insert(query_state{.query_context = qc,
+  auto query_context = make_random_query_context();
+  REQUIRE_SUCCESS(q.insert(query_state{.query_context = query_context,
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
                                        .requested_partitions = cands_size},
                            std::move(candidates)));
-  return qc.id;
+  return query_context.id;
 }
 
 uuid make_insert(query_queue& q, std::vector<uuid>&& candidates,
                  uint32_t taste_size,
                  uint8_t priority = query_context::priority::normal) {
   uint32_t cands_size = candidates.size();
-  auto qc = rand_query();
-  qc.priority = priority;
-  REQUIRE_SUCCESS(q.insert(query_state{.query_context = qc,
+  auto query_context = make_random_query_context();
+  query_context.priority = priority;
+  REQUIRE_SUCCESS(q.insert(query_state{.query_context = query_context,
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
                                        .requested_partitions = taste_size},
                            std::move(candidates)));
-  return qc.id;
+  return query_context.id;
 }
 
 } // namespace

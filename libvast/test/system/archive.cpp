@@ -39,7 +39,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     run();
   }
 
-  std::vector<table_slice> query_context(const ids& ids) {
+  std::vector<table_slice> make_query_context(const ids& ids) {
     bool done = false;
     uint64_t tally = 0;
     uint64_t rows = 0;
@@ -64,8 +64,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   std::vector<table_slice>
-  query_context(std::initializer_list<id_range> ranges) {
-    return query_context(make_ids(ranges));
+  make_query_context(std::initializer_list<id_range> ranges) {
+    return make_query_context(make_ids(ranges));
   }
 };
 
@@ -75,7 +75,7 @@ FIXTURE_SCOPE(archive_tests, fixture)
 
 TEST(zeek conn logs slices) {
   push_to_archive(zeek_conn_log);
-  auto result = query_context({{10, 15}});
+  auto result = make_query_context({{10, 15}});
   CHECK_EQUAL(rows(result), 5u);
 }
 
@@ -90,7 +90,7 @@ TEST(archiving and querying) {
   // conn.log = [0, 20)
   // dns.log  = [20, 52)
   // http.log = [1052, 1092)
-  auto result = query_context(make_ids({{24, 56}, {1076, 1096}}));
+  auto result = make_query_context(make_ids({{24, 56}, {1076, 1096}}));
   REQUIRE_EQUAL(rows(result), (52u - 24) + (1092 - 1076));
   // ID 20 is the first entry in the dns.log; then add 4 more.
   auto id_type
