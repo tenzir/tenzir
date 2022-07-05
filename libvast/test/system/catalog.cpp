@@ -16,7 +16,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/system/actors.hpp"
@@ -181,7 +181,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     expr += hhmmss;
     expr += ".0";
     std::vector<uuid> result;
-    auto q = vast::query::make_extract(self, unbox(to<expression>(expr)));
+    auto q
+      = vast::query_context::make_extract(self, unbox(to<expression>(expr)));
     auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
                             std::move(q));
     run();
@@ -203,7 +204,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   auto lookup(catalog_actor& meta_idx, expression expr) {
     std::vector<uuid> result;
-    auto q = vast::query::make_extract(self, std::move(expr));
+    auto q = vast::query_context::make_extract(self, std::move(expr));
     auto rp
       = self->request(meta_idx, caf::infinite, vast::atom::candidates_v, q);
     run();
@@ -403,8 +404,8 @@ TEST(catalog messages) {
   // so this selects everything but the first partition.
   auto expr = unbox(to<expression>("content == \"foo\" && :timestamp >= @25"));
   // Sending an expression should return candidate partition ids
-  auto q = query::make_count(system::receiver_actor<uint64_t>{},
-                             query::count::estimate, expr);
+  auto q = query_context::make_count(system::receiver_actor<uint64_t>{},
+                                     query_context::count::estimate, expr);
   auto expr_response
     = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
   run();

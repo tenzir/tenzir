@@ -526,30 +526,31 @@ active_partition_actor::behavior_type active_partition(
             });
       }
     },
-    [self](vast::query query) -> caf::result<uint64_t> {
+    [self](vast::query_context query_context) -> caf::result<uint64_t> {
       auto rp = self->make_response_promise<uint64_t>();
       // Don't bother with with indexers, etc. if we already have an id set.
-      if (!query.ids.empty()) {
+      if (!query_context.ids.empty()) {
         // TODO: Depending on the selectivity of the query and the rank of the
         // ids, it may still be beneficial to load some of the indexers to prune
         // the ids before hitting the store.
-        rp.delegate(self->state.store, std::move(query));
+        rp.delegate(self->state.store, std::move(query_context));
         return rp;
       }
       auto start = std::chrono::steady_clock::now();
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
-      auto triples = detail::evaluate(self->state, query.expr);
+      auto triples = detail::evaluate(self->state, query_context.expr);
       if (triples.empty()) {
         rp.deliver(uint64_t{0});
         return rp;
       }
-      auto eval = self->spawn(evaluator, query.expr, triples);
+      auto eval = self->spawn(evaluator, query_context.expr, triples);
       self->request(eval, caf::infinite, atom::run_v)
         .then(
-          [self, rp, start, query = std::move(query)](const ids& hits) mutable {
+          [self, rp, start,
+           query_context = std::move(query_context)](const ids& hits) mutable {
             duration runtime = std::chrono::steady_clock::now() - start;
-            auto id_str = fmt::to_string(query.id);
+            auto id_str = fmt::to_string(query_context.id);
             self->send(self->state.accountant, "partition.lookup.runtime",
                        runtime,
                        metrics_metadata{{"query", id_str},
@@ -560,13 +561,13 @@ active_partition_actor::behavior_type active_partition(
                                         {"partition-type", "active"}});
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
-            auto* count = caf::get_if<query::count>(&query.cmd);
-            if (count && count->mode == query::count::estimate) {
+            auto* count = caf::get_if<query_context::count>(&query_context.cmd);
+            if (count && count->mode == query_context::count::estimate) {
               self->send(count->sink, rank(hits));
               rp.deliver(rank(hits));
             } else {
-              query.ids = hits;
-              rp.delegate(self->state.store, std::move(query));
+              query_context.ids = hits;
+              rp.delegate(self->state.store, std::move(query_context));
             }
           },
           [rp](caf::error& err) mutable {

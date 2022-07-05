@@ -10,7 +10,7 @@
 
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/logger.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/event_based_actor.hpp>
@@ -23,9 +23,11 @@ counter_state::counter_state(caf::event_based_actor* self) : super(self) {
 
 void counter_state::init(expression expr, index_actor index,
                          bool skip_candidate_check) {
-  auto q = vast::query::make_count(
-    self_, skip_candidate_check ? query::count::estimate : query::count::exact,
-    std::move(expr));
+  auto q = vast::query_context::make_count(self_,
+                                           skip_candidate_check
+                                             ? query_context::count::estimate
+                                             : query_context::count::exact,
+                                           std::move(expr));
   // Transition from idle state when receiving 'run' and client handle.
   behaviors_[idle].assign([=, this, q = std::move(q)](atom::run,
                                                       caf::actor client) {

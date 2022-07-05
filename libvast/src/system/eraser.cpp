@@ -13,7 +13,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/logger.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/make_transforms.hpp"

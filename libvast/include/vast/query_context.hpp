@@ -19,7 +19,7 @@
 namespace vast {
 
 /// A wrapper for an expression related command.
-struct query {
+struct query_context {
   // -- nested type definitions ------------------------------------------------
 
   /// A count query to collect the number of hits for the expression.
@@ -57,43 +57,43 @@ struct query {
 
   // -- constructor & destructor -----------------------------------------------
 
-  query() = default;
-  query(query&&) = default;
-  query(const query&) = default;
+  query_context() = default;
+  query_context(query_context&&) = default;
+  query_context(const query_context&) = default;
 
-  query(command cmd, expression expr)
+  query_context(command cmd, expression expr)
     : cmd(std::move(cmd)), expr(std::move(expr)) {
   }
 
-  query& operator=(query&&) = default;
-  query& operator=(const query&) = default;
+  query_context& operator=(query_context&&) = default;
+  query_context& operator=(const query_context&) = default;
 
-  ~query() = default;
+  ~query_context() = default;
 
   // -- helper functions to make query creation less boiler-platey -------------
 
   template <class Actor>
-  static query
+  static query_context
   make_count(const Actor& sink, enum count::mode m, expression expr) {
     return {count{caf::actor_cast<system::receiver_actor<uint64_t>>(sink), m},
             std::move(expr)};
   }
 
   template <class Actor>
-  static query make_extract(const Actor& sink, expression expr) {
+  static query_context make_extract(const Actor& sink, expression expr) {
     return {extract{caf::actor_cast<system::receiver_actor<table_slice>>(sink)},
             std::move(expr)};
   }
 
   // -- misc -------------------------------------------------------------------
 
-  friend bool operator==(const query& lhs, const query& rhs) {
+  friend bool operator==(const query_context& lhs, const query_context& rhs) {
     return lhs.cmd == rhs.cmd && lhs.expr == rhs.expr
            && lhs.priority == rhs.priority;
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, query& q) {
+  friend auto inspect(Inspector& f, query_context& q) {
     return f(caf::meta::type_name("vast.query"), q.id, q.cmd, q.expr, q.ids,
              q.priority);
   }
@@ -127,29 +127,29 @@ struct query {
 namespace fmt {
 
 template <>
-struct formatter<vast::query> {
+struct formatter<vast::query_context> {
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto format(const vast::query& value, FormatContext& ctx)
+  auto format(const vast::query_context& value, FormatContext& ctx)
     -> decltype(ctx.out()) {
     auto out = ctx.out();
     auto f = vast::detail::overload{
-      [&](const vast::query::count& cmd) {
+      [&](const vast::query_context::count& cmd) {
         out = format_to(out, "count(");
         switch (cmd.mode) {
-          case vast::query::count::estimate:
+          case vast::query_context::count::estimate:
             out = format_to(out, "estimate, ");
             break;
-          case vast::query::count::exact:
+          case vast::query_context::count::exact:
             out = format_to(out, "exact, ");
             break;
         }
       },
-      [&](const vast::query::extract&) {
+      [&](const vast::query_context::extract&) {
         out = format_to(out, "extract(");
       },
     };

@@ -161,7 +161,7 @@ struct partition_info;
 struct legacy_pattern_type;
 struct predicate;
 struct qualified_record_field;
-struct query;
+struct query_context;
 struct layout_statistics;
 struct legacy_real_type;
 struct legacy_record_type;
@@ -384,7 +384,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::port_type))
   VAST_ADD_TYPE_ID((vast::predicate))
   VAST_ADD_TYPE_ID((vast::qualified_record_field))
-  VAST_ADD_TYPE_ID((vast::query))
+  VAST_ADD_TYPE_ID((vast::query_context))
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
   VAST_ADD_TYPE_ID((vast::module))

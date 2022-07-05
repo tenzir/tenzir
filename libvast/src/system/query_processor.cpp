@@ -30,8 +30,8 @@ query_processor::query_processor(caf::event_based_actor* self)
   };
   behaviors_[idle].assign(
     // Our default init state simply waits for a query to execute.
-    [this](vast::query& query, const index_actor& index) {
-      start(std::move(query), index);
+    [this](vast::query_context& query_context, const index_actor& index) {
+      start(std::move(query_context), index);
     },
     status_handler);
   behaviors_[await_query_id].assign(
@@ -60,9 +60,10 @@ query_processor::~query_processor() = default;
 
 // -- convenience functions ----------------------------------------------------
 
-void query_processor::start(vast::query query, index_actor index) {
+void query_processor::start(vast::query_context query_context,
+                            index_actor index) {
   index_ = std::move(index);
-  self_->send(index_, atom::evaluate_v, std::move(query));
+  self_->send(index_, atom::evaluate_v, std::move(query_context));
   transition_to(await_query_id);
 }
 

@@ -13,7 +13,7 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
@@ -37,9 +37,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     uint64_t tally = 0;
     uint64_t rows = 0;
     std::vector<vast::table_slice> result;
-    auto query = vast::query::make_extract(self, vast::expression{});
-    query.ids = ids;
-    self->send(actor, query);
+    auto query_context
+      = vast::query_context::make_extract(self, vast::expression{});
+    query_context.ids = ids;
+    self->send(actor, query_context);
     run();
     std::this_thread::sleep_for(std::chrono::seconds{1});
 

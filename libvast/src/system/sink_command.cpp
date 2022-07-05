@@ -193,19 +193,20 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
 #endif
       },
       [&]([[maybe_unused]] const std::string& name,
-          [[maybe_unused]] const query_status& query) {
+          [[maybe_unused]] const query_status& query_status) {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         if (auto rate
-            = measurement{query.runtime, query.processed}.rate_per_sec();
+            = measurement{query_status.runtime, query_status.processed}
+                .rate_per_sec();
             std::isfinite(rate))
           VAST_INFO("{} processed {} candidates at a rate of {} candidates/sec "
                     "and shipped {} results in {}",
-                    name, query.processed, static_cast<uint64_t>(rate),
-                    query.shipped, to_string(query.runtime));
+                    name, query_status.processed, static_cast<uint64_t>(rate),
+                    query_status.shipped, to_string(query_status.runtime));
         else
           VAST_INFO("{} processed {} candidates and shipped {} results in {}",
-                    name, query.processed, query.shipped,
-                    to_string(query.runtime));
+                    name, query_status.processed, query_status.shipped,
+                    to_string(query_status.runtime));
 #endif
         if (waiting_for_final_report)
           stop = true;

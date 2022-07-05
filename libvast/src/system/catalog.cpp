@@ -20,7 +20,7 @@
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/prune.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
@@ -488,22 +488,22 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                  metrics_metadata{{"query", std::move(id_str)}});
       return result;
     },
-    [=](atom::candidates,
-        const vast::query& query) -> caf::result<catalog_result> {
-      VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query));
+    [=](atom::candidates, const vast::query_context& query_context)
+      -> caf::result<catalog_result> {
+      VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
       catalog_result expression_candidates;
       std::vector<vast::uuid> ids_candidates;
-      bool has_expression = query.expr != vast::expression{};
-      bool has_ids = !query.ids.empty();
+      bool has_expression = query_context.expr != vast::expression{};
+      bool has_ids = !query_context.ids.empty();
       if (!has_expression && !has_ids)
         return caf::make_error(ec::invalid_argument, "query had neither an "
                                                      "expression nor ids");
       auto start = std::chrono::steady_clock::now();
       if (has_expression) {
-        expression_candidates = self->state.lookup(query.expr);
+        expression_candidates = self->state.lookup(query_context.expr);
       }
       if (has_ids) {
-        for (auto id : select(query.ids)) {
+        for (auto id : select(query_context.ids)) {
           const auto* x = self->state.offset_map.lookup(id);
           if (x)
             ids_candidates.push_back(*x);
@@ -538,7 +538,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         }
       }
       duration runtime = std::chrono::steady_clock::now() - start;
-      auto id_str = fmt::to_string(query.id);
+      auto id_str = fmt::to_string(query_context.id);
       self->send(self->state.accountant, "catalog.lookup.runtime", runtime,
                  metrics_metadata{{"query", id_str}});
       self->send(self->state.accountant, "catalog.lookup.candidates",

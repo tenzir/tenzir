@@ -114,7 +114,7 @@
 // the disk monitor, who looks at the file system and identifies those partitions
 // that shall be removed. This is done by the `atom::erase` handler.
 //
-// The other is data-driven and comes from the `eraser`, who sends us a `vast::query`
+// The other is data-driven and comes from the `eraser`, who sends us a `vast::query_context`
 // whose results shall be deleted from disk.
 //
 // clang-format on
@@ -663,7 +663,7 @@ void index_state::schedule_lookups() {
       };
       self
         ->request(partition_actor, defaults::system::scheduler_timeout,
-                  it->second.query)
+                  it->second.query_context)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
             VAST_DEBUG("{} received {} results for query {} from partition {}",
@@ -695,9 +695,9 @@ struct query_counters {
 auto get_query_counters(const query_queue& pending_queries) {
   auto result = query_counters{};
   for (const auto& [_, q] : pending_queries.queries()) {
-    if (q.query.priority == query::priority::low)
+    if (q.query_context.priority == query_context::priority::low)
       result.num_low_prio++;
-    else if (q.query.priority == query::priority::normal)
+    else if (q.query_context.priority == query_context::priority::normal)
       result.num_normal_prio++;
     else
       result.num_custom_prio++;
@@ -1086,7 +1086,8 @@ index(index_actor::stateful_pointer<index_state> self,
                       e);
           });
     },
-    [self](atom::evaluate, vast::query query) -> caf::result<query_cursor> {
+    [self](atom::evaluate,
+           vast::query_context query_context) -> caf::result<query_cursor> {
       // Query handling
       auto sender = self->current_sender();
       // Sanity check.
@@ -1097,25 +1098,25 @@ index(index_actor::stateful_pointer<index_state> self,
       // Abort if the index is already shutting down.
       if (!self->state.stage->running()) {
         VAST_WARN("{} ignores query {} because it is shutting down", *self,
-                  query);
+                  query_context);
         return ec::remote_node_down;
       }
       // Allows the client to query further results after initial taste.
-      VAST_ASSERT(query.id == uuid::nil());
-      query.id = self->state.pending_queries.create_query_id();
+      VAST_ASSERT(query_context.id == uuid::nil());
+      query_context.id = self->state.pending_queries.create_query_id();
       // Monitor the sender so we can cancel the query in case it goes down.
       if (const auto it = self->state.monitored_queries.find(sender->address());
           it == self->state.monitored_queries.end()) {
         self->state.monitored_queries.emplace_hint(
-          it, sender->address(), std::unordered_set{query.id});
+          it, sender->address(), std::unordered_set{query_context.id});
         self->monitor(sender);
       } else {
         auto& [_, ids] = *it;
-        ids.emplace(query.id);
+        ids.emplace(query_context.id);
       }
       if (!self->state.accept_queries) {
         VAST_VERBOSE("{} delays query {} because it is still starting up",
-                     *self, query);
+                     *self, query_context);
         return caf::skip;
       }
       auto rp = self->make_response_promise<query_cursor>();
@@ -1125,7 +1126,8 @@ index(index_actor::stateful_pointer<index_state> self,
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
       self
-        ->request(self->state.catalog, caf::infinite, atom::candidates_v, query)
+        ->request(self->state.catalog, caf::infinite, atom::candidates_v,
+                  query_context)
         .then([=, candidates = std::move(candidates)](
                 catalog_result& midx_result) mutable {
           auto& midx_candidates = midx_result.partitions;
@@ -1138,7 +1140,7 @@ index(index_actor::stateful_pointer<index_state> self,
                 == initial_candidates.end())
               candidates.push_back(midx_candidate.uuid);
           // Allows the client to query further results after initial taste.
-          auto query_id = query.id;
+          auto query_id = query_context.id;
           auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
           if (candidates.empty()) {
             VAST_DEBUG("{} returns without result: no partitions qualify",
@@ -1151,7 +1153,7 @@ index(index_actor::stateful_pointer<index_state> self,
           auto scheduled
             = std::min(num_candidates, self->state.taste_partitions);
           if (auto err = self->state.pending_queries.insert(
-                query_state{.query = query,
+                query_state{.query_context = query_context,
                             .client = client,
                             .candidate_partitions = num_candidates,
                             .requested_partitions = scheduled},
@@ -1385,14 +1387,15 @@ index(index_actor::stateful_pointer<index_state> self,
       static const auto match_everything
         = vast::predicate{meta_extractor{meta_extractor::type},
                           relational_operator::ni, data{""}};
-      auto query = query::make_extract(partition_transfomer, match_everything);
-      query.id = self->state.pending_queries.create_query_id();
-      query.priority = 100;
-      VAST_DEBUG("{} emplaces {} for transform {}", *self, query,
+      auto query_context
+        = query_context::make_extract(partition_transfomer, match_everything);
+      query_context.id = self->state.pending_queries.create_query_id();
+      query_context.priority = 100;
+      VAST_DEBUG("{} emplaces {} for transform {}", *self, query_context,
                  transform->name());
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
       auto err = self->state.pending_queries.insert(
-        query_state{.query = query,
+        query_state{.query_context = query_context,
                     .client = caf::actor_cast<receiver_actor<atom::done>>(
                       partition_transfomer),
                     .candidate_partitions = input_size,

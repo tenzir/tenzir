@@ -326,12 +326,12 @@ partition_actor::behavior_type passive_partition(
         self->quit(std::move(err));
       });
   return {
-    [self](vast::query query) -> caf::result<uint64_t> {
-      VAST_DEBUG("{} received query {}", *self, query);
+    [self](vast::query_context query_context) -> caf::result<uint64_t> {
+      VAST_DEBUG("{} received query {}", *self, query_context);
       if (!self->state.partition_chunk) {
         VAST_DEBUG("{} waits for its state", *self);
         return std::get<1>(self->state.deferred_evaluations.emplace_back(
-          std::move(query), self->make_response_promise<uint64_t>()));
+          std::move(query_context), self->make_response_promise<uint64_t>()));
       }
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
@@ -345,27 +345,28 @@ partition_actor::behavior_type passive_partition(
       auto rp = self->make_response_promise<uint64_t>();
       // Don't bother with the indexers etc. if we already know the ids
       // we want to retrieve.
-      if (!query.ids.empty()) {
-        if (query.expr != vast::expression{})
+      if (!query_context.ids.empty()) {
+        if (query_context.expr != vast::expression{})
           return caf::make_error(ec::invalid_argument, "query may only contain "
                                                        "either expression or "
                                                        "ids");
-        rp.delegate(self->state.store, query);
+        rp.delegate(self->state.store, query_context);
         return rp;
       }
       auto start = std::chrono::steady_clock::now();
-      auto triples = detail::evaluate(self->state, query.expr);
+      auto triples = detail::evaluate(self->state, query_context.expr);
       if (triples.empty()) {
         rp.deliver(uint64_t{0});
         return rp;
       }
-      auto eval = self->spawn(evaluator, query.expr, triples);
+      auto eval = self->spawn(evaluator, query_context.expr, triples);
       self->request(eval, caf::infinite, atom::run_v)
         .then(
-          [self, rp, start, query = std::move(query)](const ids& hits) mutable {
+          [self, rp, start,
+           query_context = std::move(query_context)](const ids& hits) mutable {
             VAST_DEBUG("{} received results from the evaluator", *self);
             duration runtime = std::chrono::steady_clock::now() - start;
-            auto id_str = fmt::to_string(query.id);
+            auto id_str = fmt::to_string(query_context.id);
             self->send(self->state.accountant, "partition.lookup.runtime",
                        runtime,
                        metrics_metadata{{"query", id_str},
@@ -376,13 +377,13 @@ partition_actor::behavior_type passive_partition(
                                         {"partition-type", "passive"}});
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
-            auto* count = caf::get_if<query::count>(&query.cmd);
-            if (count && count->mode == query::count::estimate) {
+            auto* count = caf::get_if<query_context::count>(&query_context.cmd);
+            if (count && count->mode == query_context::count::estimate) {
               self->send(count->sink, rank(hits));
               rp.deliver(rank(hits));
             } else {
-              query.ids = hits;
-              rp.delegate(self->state.store, std::move(query));
+              query_context.ids = hits;
+              rp.delegate(self->state.store, std::move(query_context));
             }
           },
           [rp](caf::error& err) mutable {

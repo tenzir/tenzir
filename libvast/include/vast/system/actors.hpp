@@ -115,7 +115,7 @@ using store_actor = typed_actor_fwd<
   // implement query handling. It may be better to have an API that exposes
   // an mmapped view of the contained table slices; or to provide an opaque
   // callback that the store can use for that.
-  caf::replies_to<query>::with<uint64_t>,
+  caf::replies_to<query_context>::with<uint64_t>,
   // TODO: Replace usage of `atom::erase` with `query::erase` in call sites.
   caf::replies_to<atom::erase, ids>::with<uint64_t>>::unwrap;
 
@@ -129,7 +129,7 @@ using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
-  caf::replies_to<query>::with<uint64_t>,
+  caf::replies_to<query_context>::with<uint64_t>,
   // Delete the whole partition from disk and from the archive
   caf::replies_to<atom::erase>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
@@ -218,7 +218,7 @@ using catalog_actor = typed_actor_fwd<
   caf::replies_to<atom::candidates, vast::uuid, vast::expression,
                   uint64_t>::with<catalog_result>,
   // Return the candidate partitions for a query.
-  caf::replies_to<atom::candidates, vast::query>::with<catalog_result>,
+  caf::replies_to<atom::candidates, vast::query_context>::with<catalog_result>,
   // Internal telemetry loop.
   caf::reacts_to<atom::telemetry>>
   // Conform to the procotol of the STATUS CLIENT actor.
@@ -262,7 +262,7 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<atom::subscribe, atom::create,
                  partition_creation_listener_actor, send_initial_dbstate>,
   // Evaluates a query, ie. sends matching events to the caller.
-  caf::replies_to<atom::evaluate, query>::with<query_cursor>,
+  caf::replies_to<atom::evaluate, query_context>::with<query_cursor>,
   // Resolves a query to its candidate partitions.
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
@@ -367,7 +367,7 @@ using partition_transformer_actor = typed_actor_fwd<
   caf::replies_to<atom::persist>::with<std::vector<augmented_partition_synopsis>>,
   // INTERNAL: Continuation handler for `atom::done`.
   caf::reacts_to<atom::internal, atom::resume, atom::done, vast::id>>
-  // query::extract API
+  // query_context::extract API
   ::extend_with<receiver_actor<table_slice>>
   // Receive a completion signal for the input stream.
   ::extend_with<receiver_actor<atom::done>>::unwrap;

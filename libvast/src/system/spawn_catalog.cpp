@@ -8,7 +8,7 @@
 
 #include "vast/system/spawn_catalog.hpp"
 
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
