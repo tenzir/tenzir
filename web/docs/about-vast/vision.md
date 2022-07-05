@@ -77,7 +77,7 @@ converting it to STIX and then routing it via the backbone.
 
 [intel-soc]: https://www.intel.com.au/content/www/au/en/it-management/intel-it-best-practices/modern-scalable-cyber-intelligence-platform-kafka.html
 
-Not that you know our vision, let us level-set where we are today and describe
+Now that you know our vision, let us level-set where we are today and describe
 our chartered course to make our vision real.
 
 ## The SOC Architecture Maze
