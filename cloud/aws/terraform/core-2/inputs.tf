@@ -40,6 +40,7 @@ locals {
   id     = substr(md5(local.id_raw), 0, 6)
   # this namespace will be specific to this region
   service_namespace = "${local.id}.vast.local"
+  vast_port         = 42000
 }
 
 module "env" {

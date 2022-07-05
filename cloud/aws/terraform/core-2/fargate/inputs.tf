@@ -46,22 +46,26 @@ variable "entrypoint" {
 
 variable "port" {}
 
-variable "storage_type" {
-  default = "ATTACHED"
 
-  validation {
-    condition     = contains(["EFS", "ATTACHED"], var.storage_type)
-    error_message = "Allowed values for vast_server_storage are \"EFS\" or \"ATTACHED\"."
-  }
+variable "efs_access_point_id" {
+  description = "Leave empty if you don't want to attache EFS."
+  default     = ""
+}
+
+variable "elastic_file_system_id" {
+  description = "Leave empty if you don't want to attache EFS."
+  default     = ""
 }
 
 variable "storage_mount_point" {
   description = "The path of the storage volume within the container."
 }
 
-variable "service_discov_namespace" {
-  description = "The name of the private service discovery dns namespace."
+variable "service_discov_namespace_id" {
+  description = "The id of the private service discovery dns namespace."
 }
+
+variable "security_group_id" {}
 
 locals {
   id_raw = "${var.name}-${module.env.stage}-${var.region_name}"

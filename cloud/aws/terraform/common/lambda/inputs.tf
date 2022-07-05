@@ -34,3 +34,5 @@ variable "vpc_id" {
 variable "subnets" {
   default = []
 }
+
+variable "security_group_id" {}
