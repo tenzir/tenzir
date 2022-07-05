@@ -25,8 +25,8 @@ restructured the reading experience along the user journey.
 You can find the Threat Bus documentation in [Use VAST → Integrate → Threat
 Bus](/docs/use-vast/integrate/threatbus). Threat Bus is now officially in
 maintainance mode: we are only supporting existing features with bugfixes. That
-said, Threat Bus will resurface in a new shape and the existing functionality.
-Stay tuned.
+said, Threat Bus will resurface in a new shape with its existing functionality
+integrated into VAST itself. Stay tuned.
 
 ## Performance Improvements
 
