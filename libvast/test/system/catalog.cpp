@@ -16,7 +16,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/system/actors.hpp"
@@ -181,9 +181,10 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     expr += hhmmss;
     expr += ".0";
     std::vector<uuid> result;
-    auto q = vast::query::make_extract(self, unbox(to<expression>(expr)));
+    auto query_context
+      = vast::query_context::make_extract(self, unbox(to<expression>(expr)));
     auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
-                            std::move(q));
+                            std::move(query_context));
     run();
     rp.receive(
       [&](catalog_result mdx_result) {
@@ -203,9 +204,10 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   auto lookup(catalog_actor& meta_idx, expression expr) {
     std::vector<uuid> result;
-    auto q = vast::query::make_extract(self, std::move(expr));
-    auto rp
-      = self->request(meta_idx, caf::infinite, vast::atom::candidates_v, q);
+    auto query_context
+      = vast::query_context::make_extract(self, std::move(expr));
+    auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
+                            query_context);
     run();
     rp.receive(
       [&](catalog_result candidates) {
@@ -403,10 +405,10 @@ TEST(catalog messages) {
   // so this selects everything but the first partition.
   auto expr = unbox(to<expression>("content == \"foo\" && :timestamp >= @25"));
   // Sending an expression should return candidate partition ids
-  auto q = query::make_count(system::receiver_actor<uint64_t>{},
-                             query::count::estimate, expr);
+  auto query_context = query_context::make_count(
+    system::receiver_actor<uint64_t>{}, query_context::count::estimate, expr);
   auto expr_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
+    = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
   run();
   expr_response.receive(
     [this](catalog_result& candidates) {
@@ -422,10 +424,10 @@ TEST(catalog messages) {
       FAIL(msg);
     });
   // Sending ids should return the partition ids containing these ids
-  q.expr = vast::expression{};
-  q.ids = lookup_ids;
+  query_context.expr = vast::expression{};
+  query_context.ids = lookup_ids;
   auto ids_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
+    = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
   run();
   ids_response.receive(
     [this](catalog_result& candidates) {
@@ -441,10 +443,10 @@ TEST(catalog messages) {
       FAIL(msg);
     });
   // Sending BOTH an expression and ids should return the intersection.
-  q.expr = expr;
-  q.ids = lookup_ids;
+  query_context.expr = expr;
+  query_context.ids = lookup_ids;
   auto both_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
+    = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
   run();
   both_response.receive(
     [this](const catalog_result& candidates) {
@@ -459,10 +461,10 @@ TEST(catalog messages) {
       FAIL(msg);
     });
   // Sending NEITHER an expression nor ids should return an error.
-  q.expr = vast::expression{};
-  q.ids = vast::ids{};
+  query_context.expr = vast::expression{};
+  query_context.ids = vast::ids{};
   auto neither_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v, q);
+    = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
   run();
   neither_response.receive(
     [](const catalog_result&) {

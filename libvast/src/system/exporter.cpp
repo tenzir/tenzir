@@ -22,7 +22,7 @@
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
@@ -99,7 +99,7 @@ void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
         {"exporter.runtime", st.query_status.runtime},
       },
       .metadata = {
-        {"query", fmt::to_string(self->state.query.id)},
+        {"query", fmt::to_string(self->state.query_context.id)},
       },
     };
     self->send(st.accountant, std::move(msg));
@@ -162,7 +162,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   auto layout = slice.layout();
   auto it = self->state.checkers.find(layout);
   if (it == self->state.checkers.end()) {
-    auto x = tailor(self->state.query.expr, layout);
+    auto x = tailor(self->state.query_context.expr, layout);
     if (!x) {
       VAST_ERROR("{} failed to tailor expression: {}", *self,
                  render(x.error()));
@@ -195,10 +195,12 @@ exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options, std::vector<transform>&& transforms) {
   self->state.options = options;
-  self->state.query = vast::query::make_extract(self, std::move(expr));
-  self->state.query.priority = has_low_priority_option(self->state.options)
-                                 ? query::priority::low
-                                 : query::priority::normal;
+  self->state.query_context
+    = vast::query_context::make_extract(self, std::move(expr));
+  self->state.query_context.priority
+    = has_low_priority_option(self->state.options)
+        ? query_context::priority::low
+        : query_context::priority::normal;
   self->state.transformer = transformation_engine{std::move(transforms)};
   if (auto err = self->state.transformer.validate(
         transformation_engine::allow_aggregate_transforms::no)) {
@@ -274,13 +276,13 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->monitor(self->state.sink);
     },
     [self](atom::run) {
-      VAST_VERBOSE("{} executes query: {}", *self, self->state.query);
+      VAST_VERBOSE("{} executes query: {}", *self, self->state.query_context);
       self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
       self
         ->request(self->state.index, caf::infinite, atom::evaluate_v,
-                  self->state.query)
+                  self->state.query_context)
         .then(
           [=](const query_cursor& cursor) {
             VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
@@ -326,7 +328,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       auto result = record{};
       if (v >= status_verbosity::info) {
         record exp;
-        exp["expression"] = to_string(self->state.query.expr);
+        exp["expression"] = to_string(self->state.query_context.expr);
         if (v >= status_verbosity::detailed) {
           exp["start"] = caf::deep_to_string(self->state.start);
           auto transform_names = list{};
@@ -373,7 +375,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         if (self->state.accountant)
           self->send(
             self->state.accountant, "exporter.hits.runtime", runtime,
-            metrics_metadata{{"query", fmt::to_string(self->state.query.id)}});
+            metrics_metadata{
+              {"query", fmt::to_string(self->state.query_context.id)}});
         shutdown(self);
       }
       return {};

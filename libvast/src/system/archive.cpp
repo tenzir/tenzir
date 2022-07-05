@@ -73,14 +73,14 @@ std::unique_ptr<segment_store::lookup> archive_state::next_session() {
 }
 
 caf::typed_response_promise<uint64_t>
-archive_state::file_request(vast::query query) {
+archive_state::file_request(vast::query_context query_context) {
   auto rp = self->make_response_promise<uint64_t>();
   auto it
     = std::find_if(requests.begin(), requests.end(), [&](const auto& request) {
-        return request.query == query;
+        return request.query_context == query_context;
       });
   if (it != requests.end()) {
-    VAST_ASSERT(query == it->query);
+    VAST_ASSERT(query_context == it->query_context);
     // Down messages are sent with high prio so the request might still be
     // in the queue but cancelled. In case the first request has already been
     // cleaned up, we are in the else branch.
@@ -88,23 +88,23 @@ archive_state::file_request(vast::query query) {
       rp.deliver(uint64_t{0});
       return rp;
     }
-    it->ids_queue.emplace(query.ids, rp);
+    it->ids_queue.emplace(query_context.ids, rp);
   } else {
     // Monitor the sink. We can cancel query execution for it when it goes down.
     // In case we already cleaned up a previous request we're doing unnecessary
     // work.
     // TODO: Figure out a way to avoid this.
     caf::visit(detail::overload{
-                 [&](query::count& count) {
+                 [&](query_context::count& count) {
                    self->monitor(count.sink);
                  },
-                 [&](query::extract& extract) {
+                 [&](query_context::extract& extract) {
                    self->monitor(extract.sink);
                  },
                },
-               query.cmd);
-    auto xs = query.ids;
-    requests.emplace_back(std::move(query), std::make_pair(xs, rp));
+               query_context.cmd);
+    auto xs = query_context.ids;
+    requests.emplace_back(std::move(query_context), std::make_pair(xs, rp));
   }
   if (!session) {
     session = next_session();
@@ -143,28 +143,29 @@ archive(archive_actor::stateful_pointer<archive_state> self,
   });
   self->set_down_handler([self](const caf::down_msg& msg) {
     VAST_DEBUG("{} received DOWN from {}", *self, msg.source);
-    auto it
-      = std::find_if(self->state.requests.begin(), self->state.requests.end(),
-                     [&](const auto& request) {
-                       return caf::visit(detail::overload{
-                                           [&](const query::count& count) {
-                                             return count.sink == msg.source;
-                                           },
-                                           [&](const query::extract& extract) {
-                                             return extract.sink == msg.source;
-                                           },
-                                         },
-                                         request.query.cmd);
-                     });
+    auto it = std::find_if(
+      self->state.requests.begin(), self->state.requests.end(),
+      [&](const auto& request) {
+        return caf::visit(detail::overload{
+                            [&](const query_context::count& count) {
+                              return count.sink == msg.source;
+                            },
+                            [&](const query_context::extract& extract) {
+                              return extract.sink == msg.source;
+                            },
+                          },
+                          request.query_context.cmd);
+      });
     if (it != self->state.requests.end())
       it->cancelled = true;
   });
   return {
-    [self](vast::query query) -> caf::result<uint64_t> {
-      const auto& xs = query.ids;
+    [self](vast::query_context query_context) -> caf::result<uint64_t> {
+      const auto& xs = query_context.ids;
       VAST_DEBUG("{} got a request with the query {} and {} hints [{},  {})",
-                 *self, query, rank(xs), select(xs, 1), select(xs, -1) + 1);
-      return self->state.file_request(std::move(query));
+                 *self, query_context, rank(xs), select(xs, 1),
+                 select(xs, -1) + 1);
+      return self->state.file_request(std::move(query_context));
     },
     [self](atom::internal, atom::resume) {
       VAST_ASSERT(self->state.session);
@@ -182,8 +183,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       if (slice) {
         // Add an lru cache for checkers in the archive state.
         auto checker = expression{};
-        if (request.query.expr != expression{}) {
-          auto c = tailor(request.query.expr, slice->layout());
+        if (request.query_context.expr != expression{}) {
+          auto c = tailor(request.query_context.expr, slice->layout());
           if (!c) {
             VAST_ERROR("{} {}", *self, c.error());
             request.cancelled = true;
@@ -196,14 +197,14 @@ archive(archive_actor::stateful_pointer<archive_state> self,
           checker = prune_meta_predicates(std::move(*c));
         }
         caf::visit(detail::overload{
-                     [&](const query::count& count) {
-                       if (count.mode == query::count::estimate)
+                     [&](const query_context::count& count) {
+                       if (count.mode == query_context::count::estimate)
                          die("logic error detected");
                        auto result = count_matching(*slice, checker,
                                                     self->state.session_ids);
                        self->send(count.sink, result);
                      },
-                     [&](const query::extract& extract) {
+                     [&](const query_context::extract& extract) {
                        auto final_slice
                          = filter(*slice, checker, self->state.session_ids);
                        if (final_slice) {
@@ -212,7 +213,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                        }
                      },
                    },
-                   request.query.cmd);
+                   request.query_context.cmd);
       } else {
         // We didn't get a slice from the segment store.
         if (slice.error() != caf::no_error) {

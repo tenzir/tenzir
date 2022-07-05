@@ -10,7 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/uuid.hpp"
 
@@ -20,7 +20,7 @@ namespace vast {
 
 struct query_state {
   /// The query expression.
-  vast::query query;
+  vast::query_context query_context;
 
   /// The query client.
   system::receiver_actor<atom::done> client = {};
@@ -39,7 +39,7 @@ struct query_state {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.query, x.client,
+    return f(caf::meta::type_name("query_state"), x.query_context, x.client,
              x.candidate_partitions, x.requested_partitions,
              x.scheduled_partitions, x.completed_partitions);
   }

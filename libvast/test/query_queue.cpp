@@ -55,36 +55,36 @@ std::vector<uuid> cands(uint32_t start, uint32_t end) {
 }
 
 // We need to be able to generate queries with random query ids.
-query rand_query() {
-  auto result
-    = query::make_count(caf::actor{}, query::count::estimate, expression{});
+query_context make_random_query_context() {
+  auto result = query_context::make_count(
+    caf::actor{}, query_context::count::estimate, expression{});
   result.id = uuid::random();
   return result;
 }
 
 uuid make_insert(query_queue& q, std::vector<uuid>&& candidates) {
   uint32_t cands_size = candidates.size();
-  auto query = rand_query();
-  REQUIRE_SUCCESS(q.insert(query_state{.query = query,
+  auto query_context = make_random_query_context();
+  REQUIRE_SUCCESS(q.insert(query_state{.query_context = query_context,
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
                                        .requested_partitions = cands_size},
                            std::move(candidates)));
-  return query.id;
+  return query_context.id;
 }
 
 uuid make_insert(query_queue& q, std::vector<uuid>&& candidates,
                  uint32_t taste_size,
-                 uint8_t priority = query::priority::normal) {
+                 uint8_t priority = query_context::priority::normal) {
   uint32_t cands_size = candidates.size();
-  auto query = rand_query();
-  query.priority = priority;
-  REQUIRE_SUCCESS(q.insert(query_state{.query = query,
+  auto query_context = make_random_query_context();
+  query_context.priority = priority;
+  REQUIRE_SUCCESS(q.insert(query_state{.query_context = query_context,
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
                                        .requested_partitions = taste_size},
                            std::move(candidates)));
-  return query.id;
+  return query_context.id;
 }
 
 } // namespace
@@ -116,7 +116,7 @@ TEST(single query) {
 TEST(2 overlapping queries) {
   query_queue q;
   auto qid1 = make_insert(q, cands(3));
-  auto qid2 = make_insert(q, cands(1, 4), 3, query::priority::low);
+  auto qid2 = make_insert(q, cands(1, 4), 3, query_context::priority::low);
   CHECK_EQUAL(q.queries().size(), 2u);
   auto a = unbox(q.next());
   CHECK_EQUAL(q.handle_completion(a.queries.at(0)), std::nullopt);

@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#define SUITE archive
+
 #include "vast/system/archive.hpp"
 
 #include "vast/concept/printable/stream.hpp"
@@ -13,7 +15,6 @@
 #include "vast/ids.hpp"
 #include "vast/table_slice.hpp"
 
-#define SUITE archive
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
@@ -38,14 +39,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     run();
   }
 
-  std::vector<table_slice> query(const ids& ids) {
+  std::vector<table_slice> make_query_context(const ids& ids) {
     bool done = false;
     uint64_t tally = 0;
     uint64_t rows = 0;
     std::vector<table_slice> result;
-    auto query = query::make_extract(self, expression{});
-    query.ids = ids;
-    self->send(a, query);
+    auto query_context = query_context::make_extract(self, expression{});
+    query_context.ids = ids;
+    self->send(a, query_context);
     run();
     self
       ->do_receive(
@@ -62,8 +63,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return result;
   }
 
-  std::vector<table_slice> query(std::initializer_list<id_range> ranges) {
-    return query(make_ids(ranges));
+  std::vector<table_slice>
+  make_query_context(std::initializer_list<id_range> ranges) {
+    return make_query_context(make_ids(ranges));
   }
 };
 
@@ -73,7 +75,7 @@ FIXTURE_SCOPE(archive_tests, fixture)
 
 TEST(zeek conn logs slices) {
   push_to_archive(zeek_conn_log);
-  auto result = query({{10, 15}});
+  auto result = make_query_context({{10, 15}});
   CHECK_EQUAL(rows(result), 5u);
 }
 
@@ -88,7 +90,7 @@ TEST(archiving and querying) {
   // conn.log = [0, 20)
   // dns.log  = [20, 52)
   // http.log = [1052, 1092)
-  auto result = query(make_ids({{24, 56}, {1076, 1096}}));
+  auto result = make_query_context(make_ids({{24, 56}, {1076, 1096}}));
   REQUIRE_EQUAL(rows(result), (52u - 24) + (1092 - 1076));
   // ID 20 is the first entry in the dns.log; then add 4 more.
   auto id_type

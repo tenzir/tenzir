@@ -14,7 +14,7 @@
 #include <vast/ids.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
-#include <vast/query.hpp>
+#include <vast/query_context.hpp>
 #include <vast/segment_store.hpp>
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
@@ -84,7 +84,7 @@ struct passive_store_state {
   /// Holds requests that did arrive while the segment data
   /// was still being loaded from disk.
   using request
-    = std::tuple<vast::query, caf::typed_response_promise<uint64_t>>;
+    = std::tuple<vast::query_context, caf::typed_response_promise<uint64_t>>;
   std::vector<request> deferred_requests = {};
 
   /// Holds erase requests that did arrive while the segment data
@@ -115,24 +115,25 @@ private:
 // Returns a the number of events that match the query.
 // Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
-caf::expected<uint64_t> handle_lookup(Actor& self, const vast::query& query,
-                                      const std::vector<table_slice>& slices) {
-  const auto& ids = query.ids;
+caf::expected<uint64_t>
+handle_lookup(Actor& self, const vast::query_context& query_context,
+              const std::vector<table_slice>& slices) {
+  const auto& ids = query_context.ids;
   std::vector<expression> checkers;
   uint64_t num_hits = 0ull;
   for (const auto& slice : slices) {
-    if (query.expr == expression{}) {
+    if (query_context.expr == expression{}) {
       checkers.emplace_back();
     } else {
-      auto c = tailor(query.expr, slice.layout());
+      auto c = tailor(query_context.expr, slice.layout());
       if (!c)
         return c.error();
       checkers.emplace_back(prune_meta_predicates(std::move(*c)));
     }
   }
   auto handle_query = detail::overload{
-    [&](const query::count& count) {
-      if (count.mode == query::count::estimate)
+    [&](const query_context::count& count) {
+      if (count.mode == query_context::count::estimate)
         die("logic error detected");
       for (size_t i = 0; i < slices.size(); ++i) {
         const auto& slice = slices.at(i);
@@ -142,7 +143,7 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const vast::query& query,
         self->send(count.sink, result);
       }
     },
-    [&](const query::extract& extract) {
+    [&](const query_context::extract& extract) {
       VAST_ASSERT(slices.size() == checkers.size());
       for (size_t i = 0; i < slices.size(); ++i) {
         const auto& slice = slices[i];
@@ -155,7 +156,7 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const vast::query& query,
       }
     },
   };
-  caf::visit(handle_query, query.cmd);
+  caf::visit(handle_query, query_context.cmd);
   return num_hits;
 }
 
@@ -222,22 +223,22 @@ system::store_actor::behavior_type passive_local_store(
         self->quit(std::move(err));
       });
   return {
-    [self](query query) -> caf::result<uint64_t> {
-      VAST_DEBUG("{} handles new query {}", *self, query.id);
+    [self](query_context query_context) -> caf::result<uint64_t> {
+      VAST_DEBUG("{} handles new query {}", *self, query_context.id);
       if (!self->state.segment) {
         auto rp = self->make_response_promise<uint64_t>();
-        self->state.deferred_requests.emplace_back(query, rp);
+        self->state.deferred_requests.emplace_back(query_context, rp);
         return rp;
       }
       auto start = std::chrono::steady_clock::now();
-      auto slices = self->state.segment->lookup(query.ids);
+      auto slices = self->state.segment->lookup(query_context.ids);
       if (!slices)
         return slices.error();
-      auto num_hits = handle_lookup(self, query, *slices);
+      auto num_hits = handle_lookup(self, query_context, *slices);
       if (!num_hits)
         return num_hits.error();
       duration runtime = std::chrono::steady_clock::now() - start;
-      auto id_str = fmt::to_string(query.id);
+      auto id_str = fmt::to_string(query_context.id);
       self->send(
         self->state.accountant, "segment-store.lookup.runtime", runtime,
         system::metrics_metadata{{"query", id_str}, {"store-type", "passive"}});
@@ -334,22 +335,22 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   });
   auto result = local_store_actor::behavior_type{
     // store api
-    [self](const query& query) -> caf::result<uint64_t> {
+    [self](const query_context& query_context) -> caf::result<uint64_t> {
       auto start = std::chrono::steady_clock::now();
       caf::expected<std::vector<table_slice>> slices = caf::error{};
       if (self->state.builder) {
-        slices = self->state.builder->lookup(query.ids);
+        slices = self->state.builder->lookup(query_context.ids);
       } else {
         VAST_ASSERT(self->state.segment.has_value());
-        slices = self->state.segment->lookup(query.ids);
+        slices = self->state.segment->lookup(query_context.ids);
       }
       if (!slices)
         return slices.error();
-      auto num_hits = handle_lookup(self, query, *slices);
+      auto num_hits = handle_lookup(self, query_context, *slices);
       if (!num_hits)
         return num_hits.error();
       duration runtime = std::chrono::steady_clock::now() - start;
-      auto id_str = fmt::to_string(query.id);
+      auto id_str = fmt::to_string(query_context.id);
       self->send(
         self->state.accountant, "segment_store.lookup.runtime", runtime,
         system::metrics_metadata{{"query", id_str}, {"store_type", "active"}});

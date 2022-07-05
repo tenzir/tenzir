@@ -16,7 +16,7 @@
 #include "vast/index_config.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"

@@ -10,7 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/uuid.hpp"
 
@@ -91,7 +91,7 @@ public:
   /// Sends the query `expr` to `index` and transitions from `idle` to
   /// `await_query_id`.
   /// @pre `state() == idle`
-  void start(vast::query query, index_actor index);
+  void start(vast::query_context query_context, index_actor index);
 
   /// @pre `state() == collect_hits`
   /// @returns false if there are no more partitions to schedule.

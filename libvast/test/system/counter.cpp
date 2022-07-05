@@ -113,7 +113,7 @@ TEST(count IP point query with partition - local stores) {
   anon_send(counter, atom::run_v, client);
   sched.run_once();
   // Once started, the COUNTER reaches out to the INDEX.
-  expect((atom::evaluate, query), from(counter).to(index));
+  expect((atom::evaluate, query_context), from(counter).to(index));
   run();
   auto& client_state = deref<mock_client_actor>(client).state;
   // The magic number 133 was taken from the first unit test.
@@ -149,7 +149,7 @@ TEST(count meta extractor import time 1) {
   anon_send(counter, atom::run_v, client);
   sched.run_once();
   // Once started, the COUNTER reaches out to the INDEX.
-  expect((atom::evaluate, query), from(counter).to(index));
+  expect((atom::evaluate, query_context), from(counter).to(index));
   run();
   auto& client_state = deref<mock_client_actor>(client).state;
   // We're expecting the full 400 events here; import time must be lower than
@@ -186,7 +186,7 @@ TEST(count meta extractor import time 2) {
   anon_send(counter, atom::run_v, client);
   sched.run_once();
   // Once started, the COUNTER reaches out to the INDEX.
-  expect((atom::evaluate, query), from(counter).to(index));
+  expect((atom::evaluate, query_context), from(counter).to(index));
   run();
   auto& client_state = deref<mock_client_actor>(client).state;
   // We're expecting the zero events here, because all data was imported

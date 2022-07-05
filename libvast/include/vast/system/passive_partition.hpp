@@ -15,7 +15,7 @@
 #include "vast/ids.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"
@@ -95,7 +95,7 @@ struct passive_partition_state {
   chunk_ptr partition_chunk = {};
 
   /// Stores a list of expressions that could not be answered immediately.
-  std::vector<std::tuple<query, caf::typed_response_promise<uint64_t>>>
+  std::vector<std::tuple<query_context, caf::typed_response_promise<uint64_t>>>
     deferred_evaluations = {};
 
   /// Actor handle of the accountant.

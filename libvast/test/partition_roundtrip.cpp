@@ -17,7 +17,7 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/catalog.hpp"
@@ -39,12 +39,14 @@
 #include <span>
 
 vast::system::store_actor::behavior_type dummy_store() {
-  return {[](const vast::query&) {
-            return uint64_t{0};
-          },
-          [](const vast::atom::erase&, const vast::ids&) {
-            return uint64_t{0};
-          }};
+  return {
+    [](const vast::query_context&) {
+      return uint64_t{0};
+    },
+    [](const vast::atom::erase&, const vast::ids&) {
+      return uint64_t{0};
+    },
+  };
 }
 
 using std::span;
@@ -211,9 +213,9 @@ TEST(empty partition roundtrip) {
   auto expr = vast::expression{vast::predicate{vast::field_extractor{"x"},
                                                vast::relational_operator::equal,
                                                vast::data{0u}}};
-  auto q = vast::query::make_extract(self, std::move(expr));
+  auto query_context = vast::query_context::make_extract(self, std::move(expr));
   auto rp2 = self->request(catalog, caf::infinite, vast::atom::candidates_v,
-                           std::move(q));
+                           std::move(query_context));
   run();
   rp2.receive(
     [&](const vast::system::catalog_result& result) {
@@ -304,8 +306,8 @@ TEST(full partition roundtrip) {
         auto dummy = self->spawn(dummy_client, result);
         auto rp = self->request(
           readonly_partition, caf::infinite,
-          vast::query::make_count(dummy, vast::query::count::mode::estimate,
-                                  expression));
+          vast::query_context::make_count(
+            dummy, vast::query_context::count::mode::estimate, expression));
         run();
         rp.receive(
           [&tally](uint64_t x) {

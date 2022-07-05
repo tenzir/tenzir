@@ -15,7 +15,7 @@
 #include "vast/fbs/index.hpp"
 #include "vast/index_statistics.hpp"
 #include "vast/plugin.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/query_queue.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
