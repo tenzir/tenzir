@@ -62,14 +62,14 @@ of the caching, catalog and disk monitor features.
 ### Caching
 
 VAST groups table slices with the same schema in a *partition*. When building a
-partition, the parameter `max-partition-size` sets an upper bound on the number
-of records in a partition, across all table slices. The parameter
-`active-partition-timeout` provides a time-based upper bound: once reached, VAST
-considers the partition as complete, regardless of the number of records.
+partition, the parameter `vast.max-partition-size` sets an upper bound on the
+number of records in a partition, across all table slices. The parameter
+`vast.active-partition-timeout` provides a time-based upper bound: once reached,
+VAST considers the partition as complete, regardless of the number of records.
 
 A LRU cache of partitions accelerates queries to recently used partitions. The
-parameter `max-resident-partitions` controls the number of partitions in the LRU
-cache.
+parameter `vast.max-resident-partitions` controls the number of partitions in
+the LRU cache.
 
 ### Catalog
 
@@ -195,13 +195,14 @@ This is how you run it:
 vast rebuild [--all] [--undersized] [--parallel=<number>] [<expression>]
 ```
 
-The on-disk format of VAST's partitions is versioned. By default, the `rebuild`
-command only considers partitions whose version number is not the newest
-version. The `--all` flag makes the command instead consider _all_ partitions
-rather than only outdated ones. This is useful when you change configuration
-options and want to regenerate all partitions. The `--undersized` flag causes
-VAST to only rebuild partitions that are under the configured partition size
-limit.
+A rebuild is not only useful when upgrading outdated partitions, but also when
+changing parameters of up-to-date partitions. Use the `--all` flag to extend a
+rebuild operation to _all_ partitions. (Internally, VAST versions the partition
+state via FlatBuffers. An outdated partition is one whose version number is not
+the newest.)
+
+The `--undersized` flag causes VAST to only rebuild partitions that are under
+the configured partition size limit `vast.max-partition-size`.
 
 The `--parallel` options is a performance tuning knob. The parallelism level
 controls how many sets of partitions to rebuild in parallel. This value defaults
@@ -211,9 +212,9 @@ grow linearly with the selected parallelism level.
 An optional expression allows for restricting the set of partitions to rebuild.
 VAST performs a catalog lookup with the expression to identify the set of
 candidate partitions. This process may yield false positives, as with regular
-queries, which in this case causes potentially unaffected partitions to undergo
-a rebuild process. For example, to rebuild outdated partitions containing
-`suricata.flow` events older than 2 weeks, run the following command:
+queries, which may cause unaffected partitions to undergo a rebuild. For
+example, to rebuild outdated partitions containing `suricata.flow` events
+older than 2 weeks, run the following command:
 
 ```bash
 vast rebuild '#type == "suricata.flow" && #import_time < 2 weeks ago'
