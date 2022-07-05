@@ -37,8 +37,10 @@ module "vast_server" {
   task_memory = 4096
 
   docker_image           = var.vast_server_image
-  efs_access_point_id    = var.vast_server_storage_type == "EFS" ? module.efs[0].access_point_id : ""
-  elastic_file_system_id = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
+  efs = {
+    access_point_id    = var.vast_server_storage_type == "EFS" ? module.efs[0].access_point_id : ""
+    file_system_id = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
+  }
   storage_mount_point    = "/var/lib/vast"
 
   entrypoint = "vast start"

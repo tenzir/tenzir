@@ -17,12 +17,12 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
   volume {
     name = "storage"
     dynamic "efs_volume_configuration" {
-      for_each = var.efs_access_point_id == null ? [] : [1]
+      for_each = var.efs.file_system_id == "" ? [] : [1]
       content {
-        file_system_id     = var.elastic_file_system_id
+        file_system_id     = var.efs.file_system_id
         transit_encryption = "ENABLED"
         authorization_config {
-          access_point_id = var.efs_access_point_id
+          access_point_id = var.efs.access_point_id
           iam             = "ENABLED"
         }
       }

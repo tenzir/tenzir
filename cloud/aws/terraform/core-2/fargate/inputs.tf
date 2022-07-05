@@ -24,10 +24,6 @@ variable "subnet_id" {
   description = "Resources will only accept traffic from within this subnet"
 }
 
-data "aws_subnet" "selected" {
-  id = var.subnet_id
-}
-
 variable "task_cpu" {}
 
 variable "task_memory" {}
@@ -41,20 +37,20 @@ variable "ecs_task_execution_role_arn" {}
 variable "docker_image" {}
 
 variable "entrypoint" {
+  description = "The command to execute when the task starts"
   type = string
 }
 
 variable "port" {}
 
-
-variable "efs_access_point_id" {
-  description = "Leave empty if you don't want to attache EFS."
-  default     = ""
-}
-
-variable "elastic_file_system_id" {
-  description = "Leave empty if you don't want to attache EFS."
-  default     = ""
+variable "efs" {
+  description = "Leave fields empty if you don't want to attache EFS."
+  type        = object({ access_point_id = string, file_system_id = string })
+  default     = { access_point_id = "", file_system_id = "" }
+  validation {
+    condition     = (var.efs.file_system_id == "" && var.efs.access_point_id == "") || (var.efs.file_system_id != "" && var.efs.access_point_id != "")
+    error_message = "Both file_system_id and access_point_id must be empty or non-empty at the same time."
+  }
 }
 
 variable "storage_mount_point" {
