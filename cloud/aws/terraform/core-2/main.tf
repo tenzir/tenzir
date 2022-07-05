@@ -25,7 +25,3 @@ provider "aws" {
 }
 
 provider "time" {}
-
-module "env" {
-  source = "../common/env"
-}

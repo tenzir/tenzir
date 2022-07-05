@@ -4,7 +4,12 @@ module "env" {
 
 variable "region_name" {}
 
-variable "name" {}
+variable "name" {
+  validation {
+    condition     = can(regex("^[a-z\\-0-9]+$", var.name))
+    error_message = "Must be a valid domain prefix."
+  }
+}
 
 variable "environment" {
   type = list(object({
@@ -15,18 +20,12 @@ variable "environment" {
 
 variable "vpc_id" {}
 
-// 
 variable "subnet_id" {
   description = "Resources will only accept traffic from within this subnet"
 }
 
 data "aws_subnet" "selected" {
   id = var.subnet_id
-}
-
-// 
-variable "service_ip" {
-  description = "An IP that should belong to the subnet var.subnet_id"
 }
 
 variable "task_cpu" {}
@@ -58,6 +57,10 @@ variable "storage_type" {
 
 variable "storage_mount_point" {
   description = "The path of the storage volume within the container."
+}
+
+variable "service_discov_namespace" {
+  description = "The name of the private service discovery dns namespace."
 }
 
 locals {

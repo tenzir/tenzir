@@ -17,3 +17,7 @@ output "vast_service_name" {
 output "log_group_name" {
   value = aws_cloudwatch_log_group.fargate_logging.name
 }
+
+output "service_address" {
+  value = "${var.name}.${data.aws_service_discovery_dns_namespace.current_ns.name}"
+}

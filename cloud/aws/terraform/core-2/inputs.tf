@@ -34,3 +34,14 @@ variable "vast_lambda_image" {
 variable "vast_server_image" {
   description = "The VAST server Docker image in ECR"
 }
+
+locals {
+  id_raw = "${module.env.module_name}-${module.env.stage}-${var.region_name}"
+  id     = substr(md5(local.id_raw), 0, 6)
+  # this namespace will be specific to this region
+  service_namespace = "${local.id}.vast.local"
+}
+
+module "env" {
+  source = "../common/env"
+}

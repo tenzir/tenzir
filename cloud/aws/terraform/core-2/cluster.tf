@@ -60,3 +60,9 @@ resource "aws_iam_role_policy" "fargate_task_execution_policy" {
 }
 EOF
 }
+
+resource "aws_service_discovery_private_dns_namespace" "main" {
+  name        = local.service_namespace
+  description = "Service names for ${module.env.module_name}/${module.env.stage} in ${var.region_name}"
+  vpc         = module.network.new_vpc_id
+}

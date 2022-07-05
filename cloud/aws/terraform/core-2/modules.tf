@@ -10,11 +10,6 @@ module "network" {
   }
 }
 
-locals {
-  // note that host numbers 1, 2 and 3 are reserved by AWS
-  vast_server_ip = cidrhost(module.network.private_subnet_cidr, 4)
-}
-
 module "vast_server" {
   source = "./fargate"
 
@@ -26,7 +21,7 @@ module "vast_server" {
   ecs_cluster_id              = aws_ecs_cluster.fargate_cluster.id
   ecs_cluster_name            = aws_ecs_cluster.fargate_cluster.name
   ecs_task_execution_role_arn = aws_iam_role.fargate_task_execution_role.arn
-  service_ip                  = local.vast_server_ip
+  service_discov_namespace    = local.service_namespace
 
   task_cpu    = 2048
   task_memory = 4096
@@ -58,7 +53,7 @@ module "vast_client" {
 
   additional_policies = []
   environment = {
-    VAST_ENDPOINT = local.vast_server_ip
+    VAST_ENDPOINT = module.vast_server.service_address
   }
 
 }
