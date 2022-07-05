@@ -38,7 +38,7 @@ variable "docker_image" {}
 
 variable "entrypoint" {
   description = "The command to execute when the task starts"
-  type = string
+  type        = string
 }
 
 variable "port" {}

@@ -36,12 +36,12 @@ module "vast_server" {
   task_cpu    = 2048
   task_memory = 4096
 
-  docker_image           = var.vast_server_image
+  docker_image = var.vast_server_image
   efs = {
-    access_point_id    = var.vast_server_storage_type == "EFS" ? module.efs[0].access_point_id : ""
-    file_system_id = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
+    access_point_id = var.vast_server_storage_type == "EFS" ? module.efs[0].access_point_id : ""
+    file_system_id  = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
   }
-  storage_mount_point    = "/var/lib/vast"
+  storage_mount_point = "/var/lib/vast"
 
   entrypoint = "vast start"
   port       = local.vast_port
