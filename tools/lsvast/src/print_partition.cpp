@@ -136,7 +136,7 @@ void print_partition_legacy(
     }
   }
   // Print column indices.
-  std::cout << indent << "Column Indices\n";
+  // std::cout << indent << "Column Indices\n";
   vast::legacy_record_type intermediate;
   vast::fbs::deserialize_bytes(partition->combined_layout(), intermediate);
   auto combined_layout

@@ -76,6 +76,7 @@ segment::lookup(const vast::ids& xs) const {
   auto segment = flatbuffer_->segment_as_v0();
   if (!segment)
     return caf::make_error(ec::format_error, "invalid segment version");
+
   VAST_ASSERT(segment->ids()->size() == segment->slices()->size());
   auto f = [&](const auto& zip) noexcept {
     auto&& interval = std::get<0>(zip);
@@ -93,6 +94,7 @@ segment::lookup(const vast::ids& xs) const {
     result.push_back(std::move(slice));
     return caf::none;
   };
+
   // TODO: We cannot iterate over `*segment->ids()` and `*segment->slices()`
   // directly here, because the `flatbuffers::Vector<Offset<T>>` iterator
   // dereferences to a temporary pointer. This works for normal iteration, but
@@ -103,6 +105,15 @@ segment::lookup(const vast::ids& xs) const {
   auto flat_slices
     = std::vector(segment->slices()->begin(), segment->slices()->end());
   auto zipped = detail::zip(intervals, flat_slices);
+
+  if (xs.empty()) {
+    for (const auto& pair : zipped) {
+      g(pair);
+    }
+
+    return result;
+  }
+
   if (auto error = select_with(xs, zipped.begin(), zipped.end(), f, g))
     return error;
   return result;

@@ -120,19 +120,19 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
     state.store_header = std::span{
       reinterpret_cast<const std::byte*>(store_header->data()->data()),
       store_header->data()->size()};
-  auto indexes = partition.indexes();
-  if (!indexes)
-    return caf::make_error(ec::format_error, //
-                           "missing 'indexes' field in partition flatbuffer");
-  for (auto qualified_index : *indexes) {
-    if (!qualified_index->field_name())
-      return caf::make_error(ec::format_error, //
-                             "missing field name in qualified index");
-    auto index = qualified_index->index();
-    if (!index)
-      return caf::make_error(ec::format_error, //
-                             "missing index field in qualified index");
-  }
+  // auto indexes = partition.indexes();
+  // if (!indexes)
+  //   return caf::make_error(ec::format_error, //
+  //                          "missing 'indexes' field in partition flatbuffer");
+  // for (auto qualified_index : *indexes) {
+  //   if (!qualified_index->field_name())
+  //     return caf::make_error(ec::format_error, //
+  //                            "missing field name in qualified index");
+  //   auto index = qualified_index->index();
+  //   if (!index)
+  //     return caf::make_error(ec::format_error, //
+  //                            "missing index field in qualified index");
+  // }
   if (auto error = unpack(*partition.uuid(), state.id))
     return error;
   state.events = partition.events();
@@ -144,19 +144,21 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   state.combined_layout_ = caf::get<record_type>(type::from_legacy_type(lrt));
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
-  if (state.combined_layout_->num_fields() < indexes->size()) {
-    VAST_ERROR("{} found incoherent number of indexers in deserialized state; "
-               "{} fields for {} indexes",
-               state.name, state.combined_layout_->num_fields(),
-               indexes->size());
-    return caf::make_error(ec::format_error, "incoherent number of indexers");
-  }
+  // if (state.combined_layout_->num_fields() < indexes->size()) {
+  //   VAST_ERROR("{} found incoherent number of indexers in deserialized state;
+  //   "
+  //              "{} fields for {} indexes",
+  //              state.name, state.combined_layout_->num_fields(),
+  //              indexes->size());
+  //   return caf::make_error(ec::format_error, "incoherent number of
+  //   indexers");
+  // }
   // We only create dummy entries here, since the positions of the `indexers`
   // vector must be the same as in `combined_layout`. The actual indexers are
   // deserialized and spawned lazily on demand.
-  state.indexers.resize(indexes->size());
-  VAST_DEBUG("{} found {} indexers for partition {}", state.name,
-             indexes->size(), state.id);
+  // state.indexers.resize(indexes->size());
+  // VAST_DEBUG("{} found {} indexers for partition {}", state.name,
+  //            indexes->size(), state.id);
   auto type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto type_ids_tuple = type_ids->Get(i);
@@ -339,20 +341,24 @@ partition_actor::behavior_type passive_partition(
       // Don't handle queries after we already received an exit message, while
       // the terminator is running. Since we require every partition to have at
       // least one indexer, we can use this to check.
-      if (self->state.indexers.empty())
-        return caf::make_error(ec::system_error, "can not handle query because "
-                                                 "shutdown was requested");
+      // if (self->state.indexers.empty())
+      //   return caf::make_error(ec::system_error, "can not handle query
+      //   because "
+      //                                            "shutdown was requested");
       auto rp = self->make_response_promise<uint64_t>();
       // Don't bother with the indexers etc. if we already know the ids
       // we want to retrieve.
-      if (!query.ids.empty()) {
-        if (query.expr != vast::expression{})
-          return caf::make_error(ec::invalid_argument, "query may only contain "
-                                                       "either expression or "
-                                                       "ids");
-        rp.delegate(self->state.store, query);
-        return rp;
-      }
+      // if (!query.ids.empty()) {
+      // if (query.expr != vast::expression{})
+      // {
+      //   VAST_ERROR("query exp jest inny niz expresion");
+      //   return caf::make_error(ec::invalid_argument, "query may only contain "
+      //                                                "either expression or "
+      //                                                "ids");
+      // }
+      rp.delegate(self->state.store, query);
+      return rp;
+
       auto start = std::chrono::steady_clock::now();
       auto triples = detail::evaluate(self->state, query.expr);
       if (triples.empty()) {

@@ -135,7 +135,7 @@ pack(flatbuffers::FlatBufferBuilder& builder,
     auto qindex = qbuilder.Finish();
     indices.push_back(qindex);
   }
-  auto indexes = builder.CreateVector(indices);
+  // auto indexes = builder.CreateVector(indices);
   // Serialize layout.
   auto legacy_combined_layout
     = caf::get<legacy_record_type>(type{combined_layout}.to_legacy_type());
@@ -172,7 +172,7 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   legacy_builder.add_uuid(*uuid);
   legacy_builder.add_offset(x.offset);
   legacy_builder.add_events(x.events);
-  legacy_builder.add_indexes(indexes);
+  // legacy_builder.add_indexes(indexes);
   legacy_builder.add_partition_synopsis(*maybe_ps);
   legacy_builder.add_combined_layout(*combined_layout_offset);
   legacy_builder.add_type_ids(type_ids);
@@ -378,7 +378,7 @@ active_partition_actor::behavior_type active_partition(
       }
       auto& indexers = self->state.indexers;
       auto valid_count
-        = std::count_if(indexers.begin(), indexers.end(), [](auto& idx) {
+        = std::count_if(indexers.begin(), indexers.end(), [](const auto& idx) {
             return idx.second != nullptr;
           });
       VAST_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);

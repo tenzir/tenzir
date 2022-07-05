@@ -143,11 +143,14 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const vast::query& query,
       }
     },
     [&](const query::extract& extract) {
+      VAST_DEBUG("query::extract overload slices {} checkers {}", slices.size(),
+                 checkers.size());
       VAST_ASSERT(slices.size() == checkers.size());
       for (size_t i = 0; i < slices.size(); ++i) {
         const auto& slice = slices[i];
         const auto& checker = checkers[i];
         auto final_slice = filter(slice, checker, ids);
+        VAST_DEBUG("final slice ? : {}", final_slice);
         if (final_slice) {
           num_hits += final_slice->rows();
           self->send(extract.sink, *final_slice);
@@ -186,6 +189,7 @@ system::store_actor::behavior_type passive_local_store(
   self->request(self->state.fs, caf::infinite, atom::mmap_v, self->state.path)
     .then(
       [self](chunk_ptr chunk) {
+        VAST_DEBUG("{} mmap_v REQUESTED", *self);
         auto seg = segment::make(std::move(chunk));
         if (!seg) {
           VAST_ERROR("{} couldn't create segment from chunk: {}", *self,
@@ -225,25 +229,33 @@ system::store_actor::behavior_type passive_local_store(
     [self](query query) -> caf::result<uint64_t> {
       VAST_DEBUG("{} handles new query {}", *self, query.id);
       if (!self->state.segment) {
+        VAST_DEBUG("{} no segment in state {}", *self, query.id);
         auto rp = self->make_response_promise<uint64_t>();
         self->state.deferred_requests.emplace_back(query, rp);
         return rp;
       }
+      VAST_DEBUG("{} sagment created sztyglic qids: {}", *self, query.ids);
       auto start = std::chrono::steady_clock::now();
       auto slices = self->state.segment->lookup(query.ids);
-      if (!slices)
+      if (!slices) {
+        VAST_DEBUG("{} no slices sztyglic {}", *self, query.id);
         return slices.error();
+      }
       auto num_hits = handle_lookup(self, query, *slices);
       if (!num_hits)
         return num_hits.error();
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
+      VAST_DEBUG("{} sending to accountant {}", *self, query.id);
       self->send(
         self->state.accountant, "segment-store.lookup.runtime", runtime,
         system::metrics_metadata{{"query", id_str}, {"store-type", "passive"}});
       self->send(self->state.accountant, "segment-store.lookup.hits", *num_hits,
                  system::metrics_metadata{{"query", id_str},
                                           {"store-type", "passive"}});
+
+      VAST_DEBUG("{} return num hits {} sztyglic {}", *self, *num_hits,
+                 query.id);
       return *num_hits;
     },
     [self](atom::erase, ids xs) -> caf::result<uint64_t> {
