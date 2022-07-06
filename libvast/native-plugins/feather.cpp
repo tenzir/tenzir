@@ -27,16 +27,19 @@ namespace {
 
 class passive_feather_store final : public passive_store {
   [[nodiscard]] caf::error load(chunk_ptr chunk) override {
-    std::shared_ptr<arrow::Table> table = {};
     auto file = as_arrow_file(std::move(chunk));
-    auto reader = arrow::ipc::feather::Reader::Open(file).ValueOrDie();
-    auto status = reader->Read(&table);
-    VAST_ASSERT(status.ok());
+    auto reader = arrow::ipc::feather::Reader::Open(file);
+    if (!reader.ok())
+      return caf::make_error(ec::system_error, reader.status().ToString());
+    auto table = std::shared_ptr<arrow::Table>{};
+    const auto read_status = reader.ValueUnsafe()->Read(&table);
+    if (!read_status.ok())
+      return caf::make_error(ec::system_error, read_status.ToString());
     for (auto rb : arrow::TableBatchReader(*table)) {
-      /// TODO: layout should be computed once, as we're seeing many batches
-      /// with the same
       if (!rb.ok())
         return caf::make_error(ec::system_error, rb.status().ToString());
+      /// TODO: Compute the VAST schema from the Arrow schema ahead of time
+      /// exactly once, and then pass it to the table slice constructor here.
       slices_.emplace_back(rb.MoveValueUnsafe());
     }
     return {};
@@ -68,8 +71,9 @@ class active_feather_store final : public active_store {
     record_batches.reserve(slices_.size());
     for (const auto& slice : slices_)
       record_batches.push_back(to_record_batch(slice));
-    const auto table
-      = ::arrow::Table::FromRecordBatches(record_batches).ValueOrDie();
+    const auto table = ::arrow::Table::FromRecordBatches(record_batches);
+    if (!table.ok())
+      return caf::make_error(ec::system_error, table.status().ToString());
     auto output_stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
     auto write_properties = arrow::ipc::feather::WriteProperties::Defaults();
     // TODO: Set write_properties.chunksize to the expected batch size
@@ -77,10 +81,14 @@ class active_feather_store final : public active_store {
     write_properties.compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
           .ValueOrDie();
-    auto status = ::arrow::ipc::feather::WriteTable(*table, output_stream.get(),
-                                                    write_properties);
-    VAST_ASSERT(status.ok());
-    return chunk::make(output_stream->Finish().ValueOrDie());
+    const auto write_status = ::arrow::ipc::feather::WriteTable(
+      *table.ValueUnsafe(), output_stream.get(), write_properties);
+    if (!write_status.ok())
+      return caf::make_error(ec::system_error, write_status.ToString());
+    auto buffer = output_stream->Finish();
+    if (!buffer.ok())
+      return caf::make_error(ec::system_error, buffer.status().ToString());
+    return chunk::make(buffer.MoveValueUnsafe());
   }
 
   [[nodiscard]] const std::vector<table_slice>& slices() const override {
@@ -92,14 +100,10 @@ private:
 };
 
 class plugin final : public virtual store_plugin {
-  /// Initializes a plugin with its respective entries from the YAML config
-  /// file, i.e., `plugin.<NAME>`.
-  /// @param config The relevant subsection of the configuration.
   [[nodiscard]] caf::error initialize([[maybe_unused]] data config) override {
     return {};
   }
 
-  /// Returns the unique name of the plugin.
   [[nodiscard]] const char* name() const override {
     return "feather";
   }
@@ -109,8 +113,6 @@ class plugin final : public virtual store_plugin {
     return std::make_unique<passive_feather_store>();
   }
 
-  /// Create a store for the active partition.
-  /// FIXME: docs
   [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
   make_active_store() const override {
     return std::make_unique<active_feather_store>();
