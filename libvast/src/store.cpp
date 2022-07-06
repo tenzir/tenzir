@@ -13,17 +13,20 @@
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/attach_stream_sink.hpp>
+
 namespace vast {
 
 namespace {
 
 /// Handler for `vast::query` that is shared between active and passive stores.
+/// @pre !slices.empty()
 /// @returns the number of events that match the query.
 template <class Actor>
 caf::expected<uint64_t> handle_lookup(Actor& self, const query& query,
                                       const std::vector<table_slice>& slices) {
-  if (slices.empty())
-    return 0;
+  VAST_ASSERT(!slices.empty());
+  const auto start = std::chrono::steady_clock::now();
   // We're moving away from a global ID space; since new partitions can only
   // have a 1:1 mapping between partition and store, we no longer need to make
   // use of it and can simply evaluate the query for all events in this
@@ -58,7 +61,24 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const query& query,
       return num_hits;
     },
   };
-  return caf::visit(handle_query, query.cmd);
+  auto num_hits = caf::visit(handle_query, query.cmd);
+  if (!num_hits)
+    return std::move(num_hits.error());
+  const auto runtime = std::chrono::steady_clock::now() - start;
+  const auto id_str = fmt::to_string(query.id);
+  self->send(self->state.accountant, fmt::format("{}.lookup.runtime", *self),
+             runtime,
+             system::metrics_metadata{
+               {"query", id_str},
+               {"store-type", self->state.store_type},
+             });
+  self->send(self->state.accountant, fmt::format("{}.lookup.hits", *self),
+             *num_hits,
+             system::metrics_metadata{
+               {"query", id_str},
+               {"store-type", self->state.store_type},
+             });
+  return *num_hits;
 }
 
 } // namespace
@@ -84,30 +104,14 @@ system::store_actor::behavior_type default_passive_store(
         auto load_error = self->state.store->load(std::move(chunk));
         if (load_error)
           self->quit(std::move(load_error));
+        VAST_ASSERT(!self->state.store->slices().empty());
       },
       [self](caf::error& error) {
         self->quit(std::move(error));
       });
   return {
     [self](const query& query) -> caf::expected<uint64_t> {
-      const auto start = std::chrono::steady_clock::now();
-      auto num_hits = handle_lookup(self, query, self->state.store->slices());
-      if (!num_hits)
-        return std::move(num_hits.error());
-      const auto runtime = std::chrono::steady_clock::now() - start;
-      const auto id_str = fmt::to_string(query.id);
-      self->send(self->state.accountant, "passive-store.lookup.runtime",
-                 runtime,
-                 system::metrics_metadata{
-                   {"query", id_str},
-                   {"store-type", self->state.store_type},
-                 });
-      self->send(self->state.accountant, "passive-store.lookup.hits", *num_hits,
-                 system::metrics_metadata{
-                   {"query", id_str},
-                   {"store-type", self->state.store_type},
-                 });
-      return *num_hits;
+      return handle_lookup(self, query, self->state.store->slices());
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
       // For new, partition-local stores we know that we always erase
@@ -133,27 +137,84 @@ system::store_actor::behavior_type default_passive_store(
 system::store_builder_actor::behavior_type default_active_store(
   system::store_builder_actor::stateful_pointer<default_active_store_state> self,
   std::unique_ptr<active_store> store, system::filesystem_actor filesystem,
-  system::accountant_actor accountant) {
+  system::accountant_actor accountant, std::filesystem::path path,
+  std::string store_type) {
   // Configure our actor state.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
   self->state.accountant = std::move(accountant);
   self->state.store = std::move(store);
+  self->state.path = std::move(path);
+  self->state.store_type = std::move(store_type);
   return {
-    [](const query& query) -> caf::result<uint64_t> {
-      // FIXME: Handle query lookup
-      return ec::unimplemented;
+    [self](const query& query) -> caf::expected<uint64_t> {
+      return handle_lookup(self, query, self->state.store->slices());
     },
-    [](atom::erase, const ids& selection) -> caf::result<uint64_t> {
-      // FIXME: Handle erasure
-      return ec::unimplemented;
+    [self](atom::erase, const ids& selection) -> caf::expected<uint64_t> {
+      // For new, partition-local stores we know that we always erase
+      // everything.
+      const auto num_events = rows(self->state.store->slices());
+      VAST_ASSERT(rank(selection) == 0 || rank(selection) == num_events);
+      auto clear_error = self->state.store->clear();
+      if (clear_error)
+        return clear_error;
+      return num_events;
     },
-    [](caf::stream<table_slice> stream)
+    [self](caf::stream<table_slice> stream)
       -> caf::inbound_stream_slot<table_slice> {
-      return {};
+      struct stream_state {
+        // We intentionally store a strong reference here: The store lifetime
+        // is ref-counted, it should exit after all currently active queries
+        // for this store have finished, its partition has dropped out of the
+        // cache, and it received all data from the incoming stream. This
+        // pointer serves to keep the ref-count alive for the last part, and
+        // is reset after the data has been written to disk.
+        system::store_builder_actor strong_self;
+      };
+      auto attach_sink_result = caf::attach_stream_sink(
+        self, stream,
+        [self](stream_state& stream_state) {
+          stream_state.strong_self = self;
+        },
+        [self]([[maybe_unused]] stream_state& stream_state,
+               std::vector<table_slice>& slices) {
+          if (auto error = self->state.store->add(std::move(slices)))
+            self->quit(std::move(error));
+        },
+        [self](stream_state& stream_state, caf::error& error) {
+          if (error) {
+            self->quit(std::move(error));
+            return;
+          }
+          auto chunk = self->state.store->finish();
+          if (!chunk) {
+            self->quit(std::move(chunk.error()));
+            return;
+          }
+          self
+            ->request(self->state.filesystem, caf::infinite, atom::write_v,
+                      self->state.path, std::move(*chunk))
+            .then(
+              [self, stream_state](atom::ok) {
+                static_cast<void>(stream_state);
+                VAST_INFO("{} ({}) persisted itself to {}", *self,
+                          self->state.store_type, self->state.path);
+              },
+              [self, stream_state](caf::error& error) {
+                static_cast<void>(stream_state);
+                self->quit(std::move(error));
+                // TODO: Do we need to call store->clear() here?
+              });
+        });
+      return attach_sink_result.inbound_slot();
     },
-    [](atom::status, status_verbosity verbosity) -> caf::result<record> {
-      return ec::unimplemented;
+    [self](atom::status,
+           [[maybe_unused]] system::status_verbosity verbosity) -> record {
+      return {
+        {"events", rows(self->state.store->slices())},
+        {"path", self->state.path.string()},
+        {"store-type", self->state.store_type},
+      };
     },
   };
 }

@@ -22,7 +22,13 @@ public:
   [[nodiscard]] virtual const std::vector<table_slice>& slices() const = 0;
 };
 
-class active_store {};
+class active_store {
+public:
+  [[nodiscard]] virtual caf::error add(std::vector<table_slice> slices) = 0;
+  [[nodiscard]] virtual caf::error clear() = 0;
+  [[nodiscard]] virtual caf::expected<chunk_ptr> finish() = 0;
+  [[nodiscard]] virtual const std::vector<table_slice>& slices() const = 0;
+};
 
 struct default_passive_store_state {
   static constexpr auto name = "passive-store";
@@ -42,6 +48,7 @@ struct default_active_store_state {
   system::filesystem_actor filesystem = {};
   system::accountant_actor accountant = {};
   std::unique_ptr<active_store> store = {};
+  std::filesystem::path path = {};
   std::string store_type = {};
 };
 

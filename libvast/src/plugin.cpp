@@ -311,8 +311,11 @@ store_plugin::make_store_builder(system::accountant_actor accountant,
   auto store = make_active_store();
   if (!store)
     return store.error();
+  auto path
+    = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
   auto store_builder
-    = fs->home_system().spawn(default_active_store, std::move(*store));
+    = fs->home_system().spawn(default_active_store, std::move(*store), fs,
+                              std::move(accountant), std::move(path), name());
   auto header = chunk::copy(id);
   return builder_and_header{store_builder, header};
 }
