@@ -258,7 +258,7 @@ public:
 
 /// A base class for plugins that add new store backends.
 //  NOTE: This plugin type is currently considered experimental.
-class store_plugin : public virtual plugin {
+class store_actor_plugin : public virtual plugin {
 public:
   using builder_and_header = std::pair<system::store_builder_actor, chunk_ptr>;
 

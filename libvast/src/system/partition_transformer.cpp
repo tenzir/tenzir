@@ -315,8 +315,9 @@ partition_transformer_actor::behavior_type partition_transformer(
       // ...otherwise, prepare for writing out the transformed data by creating
       // new stores, sending out the slices and requesting new idspace.
       auto store_id = self->state.store_id;
-      auto const* store_plugin = plugins::find<vast::store_plugin>(store_id);
-      if (!store_plugin) {
+      auto const* store_actor_plugin
+        = plugins::find<vast::store_actor_plugin>(store_id);
+      if (!store_actor_plugin) {
         self->state.stream_error
           = caf::make_error(ec::invalid_argument,
                             "could not find a store plugin named {}", store_id);
@@ -335,7 +336,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       for (auto& [layout, partition_data] : self->state.data) {
         if (partition_data.events == 0)
           continue;
-        auto builder_and_header = store_plugin->make_store_builder(
+        auto builder_and_header = store_actor_plugin->make_store_builder(
           self->state.accountant, self->state.fs, partition_data.id);
         if (!builder_and_header) {
           self->state.stream_error

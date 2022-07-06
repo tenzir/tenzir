@@ -480,9 +480,9 @@ void index_state::create_active_partition(const type& schema) {
   // the archive itself so it can handle multiple input streams.)
   std::string store_name = {};
   chunk_ptr store_header = chunk::make_empty();
-  store_name = store_plugin->name();
+  store_name = store_actor_plugin->name();
   auto builder_and_header
-    = store_plugin->make_store_builder(accountant, filesystem, id);
+    = store_actor_plugin->make_store_builder(accountant, filesystem, id);
   if (!builder_and_header) {
     VAST_ERROR("could not create new active partition: {}",
                render(builder_and_header.error()));
@@ -881,8 +881,9 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accept_queries = true;
   self->state.max_concurrent_partition_lookups
     = max_concurrent_partition_lookups;
-  self->state.store_plugin = plugins::find<store_plugin>(store_backend);
-  if (!self->state.store_plugin) {
+  self->state.store_actor_plugin
+    = plugins::find<store_actor_plugin>(store_backend);
+  if (!self->state.store_actor_plugin) {
     auto error = caf::make_error(ec::invalid_configuration,
                                  fmt::format("could not find "
                                              "store plugin '{}'",
@@ -1345,7 +1346,7 @@ index(index_actor::stateful_pointer<index_state> self,
         return caf::make_error(ec::invalid_argument, "no partitions given");
       VAST_DEBUG("{} applies a transform to partitions {}", *self,
                  old_partition_ids);
-      if (!self->state.store_plugin)
+      if (!self->state.store_actor_plugin)
         return caf::make_error(ec::invalid_configuration,
                                "partition transforms are not supported for the "
                                "global archive");
@@ -1379,7 +1380,7 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       if (old_partition_ids.empty())
         return std::vector<partition_info>{};
-      auto store_id = std::string{self->state.store_plugin->name()};
+      auto store_id = std::string{self->state.store_actor_plugin->name()};
       auto partition_path_template = self->state.partition_path_template();
       auto partition_synopsis_path_template
         = self->state.partition_synopsis_path_template();

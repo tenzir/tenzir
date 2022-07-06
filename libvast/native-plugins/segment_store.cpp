@@ -424,9 +424,9 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   return result;
 }
 
-class plugin final : public virtual store_plugin {
+class plugin final : public virtual store_actor_plugin {
 public:
-  using store_plugin::builder_and_header;
+  using store_actor_plugin::builder_and_header;
 
   // plugin API
   caf::error initialize(data) override {

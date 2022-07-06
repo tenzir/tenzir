@@ -116,7 +116,7 @@ store(system::store_actor::stateful_pointer<store_state> self,
       const configuration& config);
 
 /// The plugin entrypoint for the parquet store plugin.
-class plugin final : public store_plugin {
+class plugin final : public store_actor_plugin {
 public:
   /// Initializes the parquet plugin. This plugin has no general configuration.
   /// @param options the plugin options. Must be empty.
