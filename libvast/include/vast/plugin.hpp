@@ -290,6 +290,29 @@ public:
              std::span<const std::byte> header) const = 0;
 };
 
+class store_plugin : public virtual store_actor_plugin {
+public:
+  /// Create a store for the passive partition.
+  /// FIXME: docs
+  [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>
+  make_passive_store() const = 0;
+
+  /// Create a store for the active partition.
+  /// FIXME: docs
+  [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
+  make_active_store() const = 0;
+
+private:
+  [[nodiscard]] caf::expected<builder_and_header>
+  make_store_builder(system::accountant_actor accountant,
+                     system::filesystem_actor fs,
+                     const vast::uuid& id) const final;
+
+  [[nodiscard]] caf::expected<system::store_actor>
+  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
+             std::span<const std::byte> header) const final;
+};
+
 // -- query language plugin ---------------------------------------------------
 
 /// A query language parser to pass query in a custom language to VAST.

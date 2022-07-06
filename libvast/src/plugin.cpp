@@ -18,6 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
+#include "vast/store.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"
 
@@ -297,6 +298,31 @@ system::analyzer_plugin_actor analyzer_plugin::analyzer(
 system::component_plugin_actor analyzer_plugin::make_component(
   system::node_actor::stateful_pointer<system::node_state> node) const {
   return analyzer(node);
+}
+
+// -- store plugin -------------------------------------------------------------
+
+caf::expected<store_actor_plugin::builder_and_header>
+store_plugin::make_store_builder(system::accountant_actor accountant,
+                                 system::filesystem_actor fs,
+                                 const vast::uuid& id) const {
+  auto store = make_active_store();
+  if (!store)
+    return store.error();
+  auto store_builder
+    = fs->home_system().spawn(default_active_store, std::move(*store));
+  // FIXME: impl
+  return ec::unimplemented;
+}
+
+caf::expected<system::store_actor>
+store_plugin::make_store(system::accountant_actor accountant,
+                         system::filesystem_actor fs,
+                         std::span<const std::byte> header) const {
+  auto store = make_passive_store();
+  if (!store)
+    return store.error();
+  return fs->home_system().spawn(default_passive_store, std::move(*store));
 }
 
 // -- plugin_ptr ---------------------------------------------------------------
