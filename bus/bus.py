@@ -1,15 +1,27 @@
-from backbone import Backbone, IN_MEMORY_BACKBONE_SINGLETON
+from typing import Dict
+from backbone import Backbone
+from collections.abc import Callable
+
+
+class Message:
+    def __init__(self, b: bytes):
+        self.data = b
+
+    def from_bytes(b: bytes):
+        return Message(b)
+
+    def to_bytes(self) -> bytes:
+        return self.data
 
 
 class VASTBus:
-    def __init__(self, backbone="memory", **kwargs):
-        if backbone == "memory":
-            self.backbone_impl: Backbone = IN_MEMORY_BACKBONE_SINGLETON
-        else:
-            raise NotImplementedError(f"Unknown backbone {backbone}")
+    def __init__(self, backbone: Backbone):
+        self.backbone_impl = backbone
 
-    async def publish(self, channel: str, data: dict):
-        await self.backbone_impl.publish(channel, data)
+    async def publish(self, topic: str, data: Message):
+        # serialize data
+        await self.backbone_impl.publish(topic, data)
 
-    async def subscribe(self, channel: str, callback):
-        await self.backbone_impl.subscribe(channel, callback)
+    # callback: Callable[[Message], None]
+    async def subscribe(self, topic: str, callback):
+        await self.backbone_impl.subscribe(topic, callback)

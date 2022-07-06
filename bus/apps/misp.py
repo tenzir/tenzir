@@ -2,9 +2,8 @@ import asyncio
 from bus import VASTBus
 
 
-async def start():
+async def start(vast: VASTBus):
     print("VAST DB App started")
-    vast = VASTBus()
-    await vast.publish("greeting-channel", {"message": "hello misp"})
+    await vast.publish("greeting-topic", {"message": "hello misp"})
     while True:
         await asyncio.sleep(1)
