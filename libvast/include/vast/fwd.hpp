@@ -47,6 +47,12 @@ class StructType;
 class TimestampType;
 class UInt64Type;
 
+namespace io {
+
+class RandomAccessFile;
+
+} // namespace io
+
 } // namespace arrow
 
 // -- flatbuffers -------------------------------------------------------------

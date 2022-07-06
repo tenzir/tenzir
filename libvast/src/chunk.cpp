@@ -17,7 +17,9 @@
 #include "vast/logger.hpp"
 
 #include <arrow/buffer.h>
+#include <arrow/io/memory.h>
 #include <arrow/util/compression.h>
+#include <arrow/util/future.h>
 #include <caf/deserializer.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/serializer.hpp>
@@ -35,11 +37,155 @@
 
 namespace vast {
 
+namespace {
+
+class chunk_random_access_file final : public arrow::io::RandomAccessFile {
+public:
+  /// Construct a random access file from a chunk.
+  explicit chunk_random_access_file(chunk_ptr chunk)
+    : chunk_{std::move(chunk)} {
+    // nop
+  }
+
+private:
+  // Return the size of the buffer.
+  arrow::Result<int64_t> GetSize() override {
+    return detail::narrow_cast<int64_t>(chunk_->size());
+  }
+
+  /// Read data.
+  arrow::Result<int64_t>
+  ReadAt(int64_t position, int64_t nbytes, void* out) override {
+    if (detail::narrow_cast<size_t>(position) > chunk_->size())
+      return arrow::Status::Invalid("index out of bounds");
+    const auto clamped_size
+      = std::min(chunk_->size() - detail::narrow_cast<size_t>(position),
+                 detail::narrow_cast<size_t>(nbytes));
+    const auto bytes = as_bytes(chunk_).subspan(position, clamped_size);
+    std::memcpy(out, bytes.data(), bytes.size());
+    return bytes.size();
+  }
+
+  /// Read data.
+  arrow::Result<std::shared_ptr<arrow::Buffer>>
+  ReadAt(int64_t position, int64_t nbytes) override {
+    if (detail::narrow_cast<size_t>(position) > chunk_->size())
+      return arrow::Status::Invalid("index out of bounds");
+    const auto clamped_size
+      = std::min(chunk_->size() - detail::narrow_cast<size_t>(position),
+                 detail::narrow_cast<size_t>(nbytes));
+    return as_arrow_buffer(chunk_->slice(position, clamped_size));
+  }
+
+  /// Read data asynchronously.
+  arrow::Future<std::shared_ptr<arrow::Buffer>>
+  ReadAsync(const arrow::io::IOContext&, int64_t position,
+            int64_t nbytes) override {
+    return arrow::Future<std::shared_ptr<arrow::Buffer>>::MakeFinished(
+      ReadAt(position, nbytes));
+  }
+
+  /// Pre-fetch memory.
+  arrow::Status WillNeed(const std::vector<arrow::io::ReadRange>&) override {
+    return arrow::Status::OK();
+  }
+
+  /// Advance the stream position.
+  arrow::Status Seek(int64_t position) override {
+    if (detail::narrow_cast<size_t>(position) > chunk_->size())
+      return arrow::Status::Invalid("index out of bounds");
+    position_ = position;
+    return arrow::Status::OK();
+  }
+
+  /// Peek at the next bytes.
+  arrow::Result<arrow::util::string_view> Peek(int64_t nbytes) override {
+    const auto clamped_size = std::min(chunk_->size() - position_,
+                                       detail::narrow_cast<size_t>(nbytes));
+    const auto bytes = as_bytes(chunk_).subspan(position_, clamped_size);
+    return arrow::util::string_view{reinterpret_cast<const char*>(bytes.data()),
+                                    bytes.size()};
+  }
+
+  /// Return true if the stream is capable of zero copy Buffer reads.
+  bool supports_zero_copy() const override {
+    return true;
+  }
+
+  /// Read stream metadata.
+  arrow::Result<std::shared_ptr<const arrow::KeyValueMetadata>>
+  ReadMetadata() override {
+    return nullptr;
+  }
+
+  /// Read stream metadata asynchronously.
+  arrow::Future<std::shared_ptr<const arrow::KeyValueMetadata>>
+  ReadMetadataAsync(const arrow::io::IOContext&) override {
+    return arrow::Future<
+      std::shared_ptr<const arrow::KeyValueMetadata>>::MakeFinished(nullptr);
+  }
+
+  /// Close the stream.
+  arrow::Status Close() override {
+    closed_ = true;
+    return arrow::Status::OK();
+  }
+
+  /// Close the stream asynchronously.
+  arrow::Future<> CloseAsync() override {
+    return arrow::Future<>::MakeFinished(Close());
+  };
+
+  /// Close the stream abruptly.
+  arrow::Status Abort() override {
+    return Close();
+  }
+
+  /// Return the position in this stream.
+  arrow::Result<int64_t> Tell() const override {
+    return detail::narrow_cast<int64_t>(position_);
+  }
+
+  /// Return whether the stream is closed.
+  bool closed() const override {
+    return closed_;
+  }
+
+  /// Read data from current file position.
+  arrow::Result<int64_t> Read(int64_t nbytes, void* out) override {
+    auto result = ReadAt(detail::narrow_cast<int64_t>(position_), nbytes, out);
+    if (result.ok())
+      position_ += result.ValueUnsafe();
+    return result;
+  }
+
+  /// Read data from current file position.
+  arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override {
+    auto result = ReadAt(detail::narrow_cast<int64_t>(position_), nbytes);
+    if (result.ok())
+      position_ += result.ValueUnsafe()->size();
+    return result;
+  }
+
+  /// The IOContext associated with this file. Since chunks don't do I/O, we
+  /// just return the default context.
+  const arrow::io::IOContext& io_context() const override {
+    return arrow::io::default_io_context();
+  }
+
+  /// The underlying state of the random access file wrapper for chunks.
+  chunk_ptr chunk_;
+  size_t position_ = {};
+  bool closed_ = false;
+};
+
+} // namespace
+
 // -- constructors, destructors, and assignment operators ----------------------
 
 chunk::~chunk() noexcept {
-  auto data = view_.data();
-  auto sz = view_.size();
+  const auto* data = view_.data();
+  const auto sz = view_.size();
   VAST_TRACEPOINT(chunk_delete, data, sz);
   if (deleter_)
     std::invoke(deleter_);
@@ -83,11 +229,12 @@ caf::expected<chunk_ptr> chunk::mmap(const std::filesystem::path& filename,
                                          filename, err.message()));
   }
   // Open and memory-map the file.
-  auto fd = ::open(filename.c_str(), O_RDONLY, 0644);
+  const auto fd = ::open(filename.c_str(), O_RDONLY, 0644);
   if (fd == -1)
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to open file {}", filename));
-  auto map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, offset);
+  auto* map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd,
+                     detail::narrow_cast<::off_t>(offset));
   auto mmap_errno = errno;
   ::close(fd);
   if (map == MAP_FAILED)
@@ -226,6 +373,11 @@ std::shared_ptr<arrow::Buffer> as_arrow_buffer(chunk_ptr chunk) noexcept {
             buffer = {};
             chunk = {};
           }};
+}
+
+std::shared_ptr<arrow::io::RandomAccessFile>
+as_arrow_file(chunk_ptr chunk) noexcept {
+  return std::make_shared<chunk_random_access_file>(std::move(chunk));
 }
 
 // -- concepts -----------------------------------------------------------------

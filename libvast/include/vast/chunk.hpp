@@ -213,6 +213,11 @@ public:
   friend std::shared_ptr<arrow::Buffer>
   as_arrow_buffer(chunk_ptr chunk) noexcept;
 
+  /// Create an Arrow RandomAccessFile with zero-copy support that structurally
+  /// shares the lifetime of the chunk.
+  friend std::shared_ptr<arrow::io::RandomAccessFile>
+  as_arrow_file(chunk_ptr chunk) noexcept;
+
   // -- concepts --------------------------------------------------------------
 
   friend std::span<const std::byte> as_bytes(const chunk_ptr& x) noexcept;
