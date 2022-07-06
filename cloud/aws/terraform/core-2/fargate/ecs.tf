@@ -3,35 +3,6 @@ resource "aws_cloudwatch_log_group" "fargate_logging" {
 }
 
 
-resource "aws_security_group" "ecs_tasks" {
-  name        = "${module.env.module_name}_${var.name}_task_${module.env.stage}"
-  description = "Allow local inbound access"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    protocol    = "tcp"
-    from_port   = var.port
-    to_port     = var.port
-    cidr_blocks = [data.aws_subnet.selected.cidr_block]
-  }
-
-  egress {
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-module "efs" {
-  source                    = "./efs"
-  count                     = var.storage_type == "EFS" ? 1 : 0
-  name                      = var.name
-  vpc_id                    = var.vpc_id
-  subnet_id                 = var.subnet_id
-  ingress_security_group_id = aws_security_group.ecs_tasks.id
-}
-
 resource "aws_ecs_task_definition" "fargate_task_def" {
   family                   = "${module.env.module_name}-${var.name}-${module.env.stage}"
   network_mode             = "awsvpc"
@@ -46,12 +17,12 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
   volume {
     name = "storage"
     dynamic "efs_volume_configuration" {
-      for_each = var.storage_type == "EFS" ? [1] : []
+      for_each = var.efs.file_system_id == "" ? [] : [1]
       content {
-        file_system_id     = module.efs[0].file_system_id
+        file_system_id     = var.efs.file_system_id
         transit_encryption = "ENABLED"
         authorization_config {
-          access_point_id = module.efs[0].access_point_id
+          access_point_id = var.efs.access_point_id
           iam             = "ENABLED"
         }
       }
@@ -59,16 +30,11 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
   }
 }
 
-data "aws_service_discovery_dns_namespace" "current_ns" {
-  name = var.service_discov_namespace
-  type = "DNS_PRIVATE"
-}
-
 resource "aws_service_discovery_service" "fargate_svc" {
   name = var.name
 
   dns_config {
-    namespace_id = data.aws_service_discovery_dns_namespace.current_ns.id
+    namespace_id = var.service_discov_namespace_id
 
     dns_records {
       ttl  = 5
@@ -98,7 +64,7 @@ resource "aws_ecs_service" "fargate_service" {
 
   network_configuration {
     subnets          = [var.subnet_id]
-    security_groups  = [aws_security_group.ecs_tasks.id]
+    security_groups  = [var.security_group_id]
     assign_public_ip = false
   }
 

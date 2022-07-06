@@ -16,7 +16,7 @@ resource "aws_lambda_function" "lambda" {
   }
 
   vpc_config {
-    security_group_ids = [aws_security_group.lambda_sg.id]
+    security_group_ids = [var.security_group_id]
     subnet_ids         = var.subnets
   }
 
@@ -33,17 +33,4 @@ resource "aws_lambda_function_event_invoke_config" "lambda_conf" {
 resource "aws_cloudwatch_log_group" "lambda_log_group" {
   name              = "/aws/lambda/${aws_lambda_function.lambda.function_name}"
   retention_in_days = 14
-}
-
-resource "aws_security_group" "lambda_sg" {
-  name        = "${module.env.module_name}-${var.function_base_name}-${module.env.stage}"
-  description = "allow outbound access"
-  vpc_id      = var.vpc_id
-
-  egress {
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 }
