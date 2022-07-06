@@ -1,5 +1,5 @@
-import db
-import misp
+import apps.db as db
+import apps.misp as misp
 import asyncio
 
 
