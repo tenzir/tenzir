@@ -1,4 +1,6 @@
 pyvast >= 2.0
 coloredlogs>=10.0
+pymisp
 threatbus
 vast-threatbus
+zmq
