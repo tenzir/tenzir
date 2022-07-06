@@ -215,8 +215,14 @@ class active_feather_store final : public active_store {
     const auto table
       = ::arrow::Table::FromRecordBatches(record_batches).ValueOrDie();
     auto output_stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
-    auto status
-      = ::arrow::ipc::feather::WriteTable(*table, output_stream.get());
+    auto write_properties = arrow::ipc::feather::WriteProperties::Defaults();
+    // TODO: Set write_properties.chunksize to the expected batch size
+    write_properties.compression = arrow::Compression::ZSTD;
+    write_properties.compression_level
+      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie();
+    auto status = ::arrow::ipc::feather::WriteTable(*table, output_stream.get(),
+                                                    write_properties);
     VAST_ASSERT(status.ok());
     return chunk::make(output_stream->Finish().ValueOrDie());
   }
