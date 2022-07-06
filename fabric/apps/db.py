@@ -22,8 +22,8 @@ class DB:
     async def start_server(self):
         self.db.call_stack = ["--plugins=matcher"]
         proc = await self.db.start().exec()
-        self.db.call_stack = ["--plugins=matcher", "matcher", "start", self.matcher_name]
-        await self.db.exec()
+        self.db.call_stack = ["--plugins=matcher", "matcher", "start", "--match-types=[:string]", self.matcher_name]
+        proc2 = await self.db.exec()
         while proc.returncode is None:
             line = await proc.stdout.readline()
             logger.info(f"db server: {line}")
