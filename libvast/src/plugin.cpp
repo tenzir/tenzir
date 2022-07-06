@@ -8,6 +8,7 @@
 
 #include "vast/plugin.hpp"
 
+#include "vast/chunk.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
@@ -21,6 +22,7 @@
 #include "vast/store.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
@@ -311,8 +313,8 @@ store_plugin::make_store_builder(system::accountant_actor accountant,
     return store.error();
   auto store_builder
     = fs->home_system().spawn(default_active_store, std::move(*store));
-  // FIXME: impl
-  return ec::unimplemented;
+  auto header = chunk::copy(id);
+  return builder_and_header{store_builder, header};
 }
 
 caf::expected<system::store_actor>
@@ -322,7 +324,15 @@ store_plugin::make_store(system::accountant_actor accountant,
   auto store = make_passive_store();
   if (!store)
     return store.error();
-  return fs->home_system().spawn(default_passive_store, std::move(*store));
+  if (header.size() != uuid::num_bytes)
+    return caf::make_error(ec::invalid_argument, "header must have size of "
+                                                 "single uuid");
+  const auto id = uuid{header.subspan<0, uuid::num_bytes>()};
+  auto path
+    = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
+  return fs->home_system().spawn(default_passive_store, std::move(*store), fs,
+                                 std::move(accountant), std::move(path),
+                                 name());
 }
 
 // -- plugin_ptr ---------------------------------------------------------------

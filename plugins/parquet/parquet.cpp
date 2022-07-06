@@ -430,8 +430,6 @@ handle_lookup(Actor& self, const vast::query& query,
     return 0;
   // table slices from parquet can't utilize query hints because we don't retain
   // the global ids.
-  const auto& ids = vast::ids{};
-  auto expr = expression{};
   if (auto e = tailor(query.expr, table_slices[0].layout()); e) {
     expr = *e;
   }
@@ -660,7 +658,6 @@ store(system::store_actor::stateful_pointer<store_state> self,
         return rp;
       }
       auto start = std::chrono::steady_clock::now();
-      auto slices = std::vector<table_slice>{};
       auto num_hits = handle_lookup(self, query, *self->state.table_slices_);
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query.id);
@@ -688,7 +685,7 @@ store(system::store_actor::stateful_pointer<store_state> self,
           [rp, num_rows](atom::done) mutable {
             rp.deliver(num_rows);
           },
-          [&](caf::error& err) mutable {
+          [rp](caf::error& err) mutable {
             rp.deliver(std::move(err));
           });
       return rp;
