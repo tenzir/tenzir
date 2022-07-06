@@ -176,12 +176,12 @@ class passive_feather_store final : public passive_store {
     auto reader = arrow::ipc::feather::Reader::Open(file).ValueOrDie();
     auto status = reader->Read(&table);
     VAST_ASSERT(status.ok());
-    for (const auto& rb : arrow::TableBatchReader(*table)) {
+    for (auto rb : arrow::TableBatchReader(*table)) {
       /// TODO: layout should be computed once, as we're seeing many batches
       /// with the same
       if (!rb.ok())
         return caf::make_error(ec::system_error, rb.status().ToString());
-      slices_.emplace_back(*rb);
+      slices_.emplace_back(rb.MoveValueUnsafe());
     }
     return {};
   }
