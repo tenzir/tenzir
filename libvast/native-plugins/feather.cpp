@@ -38,8 +38,9 @@ public:
 
   arrow::Result<int64_t>
   ReadAt(int64_t position, int64_t nbytes, void* out) override {
-    const auto clamped_size = std::min(chunk_->size() - position,
-                                       detail::narrow_cast<size_t>(nbytes));
+    const auto clamped_size
+      = std::min(chunk_->size() - detail::narrow_cast<size_t>(position),
+                 detail::narrow_cast<size_t>(nbytes));
     const auto bytes = as_bytes(chunk_).subspan(position, clamped_size);
     std::memcpy(out, bytes.data(), bytes.size());
     return bytes.size();
@@ -47,8 +48,9 @@ public:
 
   arrow::Result<std::shared_ptr<arrow::Buffer>>
   ReadAt(int64_t position, int64_t nbytes) override {
-    const auto clamped_size = std::min(chunk_->size() - position,
-                                       detail::narrow_cast<size_t>(nbytes));
+    const auto clamped_size
+      = std::min(chunk_->size() - detail::narrow_cast<size_t>(position),
+                 detail::narrow_cast<size_t>(nbytes));
     return as_arrow_buffer(chunk_->slice(position, clamped_size));
   }
 
