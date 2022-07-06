@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/aliases.hpp"
+#include "vast/detail/stable_set.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
 #include "vast/index_config.hpp"
@@ -86,12 +87,11 @@ struct active_partition_state {
 
     /// A mapping from qualified field name to serialized indexer state
     /// for each indexer in the partition.
-    std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
+    // std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
   };
 
   // -- utility functions ------------------------------------------------------
 
-  active_indexer_actor indexer_at(size_t position) const;
 
   void add_flush_listener(flush_listener_actor listener);
 
@@ -140,12 +140,15 @@ struct active_partition_state {
 
   /// Maps qualified fields to indexer actors.
   //  TODO: Should we use the tsl map here for heterogeneous key lookup?
-  detail::stable_map<qualified_record_field, active_indexer_actor> indexers
-    = {};
+  // detail::stable_map<qualified_record_field, active_indexer_actor> indexers
+  //   = {};
 
-  /// Counts how many indexers have already responded to the `snapshot` atom
-  /// with a serialized chunk.
-  size_t persisted_indexers = {};
+  // TEMP SZTYGLIC
+  detail::stable_set<qualified_record_field> layout_helper = {};
+
+  // /// Counts how many indexers have already responded to the `snapshot` atom
+  // /// with a serialized chunk.
+  // size_t persisted_indexers = {};
 
   /// The store to retrieve the data from. Either the legacy global archive or a
   /// local component that holds the data for this partition.

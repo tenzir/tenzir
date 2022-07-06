@@ -389,9 +389,6 @@ partition_transformer_actor::behavior_type partition_transformer(
         mutable_synopsis.offset = data.offset;
         mutable_synopsis.events = data.events;
         // Create the value indices.
-        for (auto& [qf, idx] :
-             self->state.partition_buildup.at(data.id).indexers)
-          data.indexer_chunks.emplace_back(qf.name(), chunkify(idx));
       }
       detail::shutdown_stream_stage(self->state.stage);
       auto stream_data = partition_transformer_state::stream_data{

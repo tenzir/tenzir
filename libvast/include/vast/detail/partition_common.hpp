@@ -148,16 +148,10 @@ evaluate(const PartitionState& state, const expression& expr) {
     // For each fitted predicate, look up the corresponding INDEXER
     // according to the specified type of extractor.
     auto& pred = kvp.second;
-    auto get_indexer_handle = [&](const auto& ext, const data& x) {
-      return fetch_indexer(state, ext, pred.op, x);
-    };
+    // auto get_indexer_handle = [&](const auto& ext, const data& x) {
+    //   return fetch_indexer(state, ext, pred.op, x);
+    // };
     auto v = detail::overload{
-      [&](const meta_extractor& ex, const data& x) {
-        return get_indexer_handle(ex, x);
-      },
-      [&](const data_extractor& dx, const data& x) {
-        return get_indexer_handle(dx, x);
-      },
       [](const auto&, const auto&) {
         return system::indexer_actor{}; // clang-format fix
       },

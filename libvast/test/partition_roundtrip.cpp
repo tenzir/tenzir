@@ -149,7 +149,6 @@ TEST(empty partition roundtrip) {
     },
   };
   auto qf = vast::qualified_record_field{layout, vast::offset{0}};
-  state.indexers[qf] = nullptr;
   auto slice_builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, layout);
   REQUIRE(slice_builder);
