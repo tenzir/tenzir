@@ -132,8 +132,8 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const vast::query& query,
   }
   auto handle_query = detail::overload{
     [&](const query::count& count) {
-      if (count.mode == query::count::estimate)
-        die("logic error detected");
+      // if (count.mode == query::count::estimate)
+      // die("logic error detected");
       for (size_t i = 0; i < slices.size(); ++i) {
         const auto& slice = slices.at(i);
         const auto& checker = checkers.at(i);

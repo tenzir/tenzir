@@ -325,7 +325,8 @@ active_partition_actor::behavior_type active_partition(
     // on 'std::vector<caf::actor>' only. That should probably be generalized
     // in the future.
     // auto indexers = std::vector<caf::actor>{};
-    // shutdown<policy::parallel>(self, std::move(indexers));
+    // shutdown<policy::parallel>(self, {});
+    self->quit();
   });
   return {
     [self](atom::erase) -> caf::result<atom::done> {
