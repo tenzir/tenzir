@@ -1,0 +1,4 @@
+pyvast >= 2.0
+coloredlogs>=10.0
+threatbus
+vast-threatbus
