@@ -251,7 +251,7 @@ TEST(active parquet store fetchall query) {
   const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
   REQUIRE(plugin);
   auto builder
-    = plugin->make_store_builder(accountant, filesystem, uuid)->first;
+    = plugin->make_store_builder(accountant, filesystem, uuid)->store_builder;
   auto slices = std::vector<table_slice>{slice};
   vast::detail::spawn_container_source(sys, slices, builder);
   run();
@@ -371,7 +371,7 @@ TEST(active parquet store erase) {
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, vast::uuid::random())
-        ->first;
+        ->store_builder;
   auto slices = std::vector<table_slice>{slice};
   vast::detail::spawn_container_source(sys, slices, builder);
   run();
@@ -395,7 +395,7 @@ TEST(active parquet store status) {
   REQUIRE(plugin);
   auto uuid = vast::uuid::random();
   auto builder
-    = plugin->make_store_builder(accountant, filesystem, uuid)->first;
+    = plugin->make_store_builder(accountant, filesystem, uuid)->store_builder;
   auto slices = std::vector<table_slice>{slice};
   vast::detail::spawn_container_source(sys, slices, builder);
   run();

@@ -346,12 +346,13 @@ partition_transformer_actor::behavior_type partition_transformer(
           store_or_fulfill(self, std::move(stream_data));
           return;
         }
-        partition_data.store_header = builder_and_header->second;
+        partition_data.store_header = builder_and_header->header;
         // Empirically adding the outbound path and pushing data to it
         // need to be separated by a continuation, although I'm not
         // completely sure why.
         self->state.partition_buildup.at(partition_data.id).slot
-          = self->state.stage->add_outbound_path(builder_and_header->first);
+          = self->state.stage->add_outbound_path(
+            builder_and_header->store_builder);
       }
       VAST_DEBUG("{} received all table slices", *self);
       self
