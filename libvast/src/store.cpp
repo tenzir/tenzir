@@ -9,6 +9,7 @@
 #include "vast/store.hpp"
 
 #include "vast/error.hpp"
+#include "vast/ids.hpp"
 #include "vast/query.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
@@ -181,9 +182,9 @@ system::store_builder_actor::behavior_type default_active_store(
           if (auto error = self->state.store->add(std::move(slices)))
             self->quit(std::move(error));
         },
-        [self](stream_state& stream_state, caf::error& error) {
+        [self](stream_state& stream_state, const caf::error& error) {
           if (error) {
-            self->quit(std::move(error));
+            self->quit(error);
             return;
           }
           auto chunk = self->state.store->finish();

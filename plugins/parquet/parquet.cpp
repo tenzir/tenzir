@@ -430,6 +430,7 @@ handle_lookup(Actor& self, const vast::query& query,
     return 0;
   // table slices from parquet can't utilize query hints because we don't retain
   // the global ids.
+  auto expr = expression{};
   if (auto e = tailor(query.expr, table_slices[0].layout()); e) {
     expr = *e;
   }
@@ -439,7 +440,7 @@ handle_lookup(Actor& self, const vast::query& query,
       VAST_ASSERT(count.mode != query::count::estimate);
       std::shared_ptr<arrow::RecordBatch> batch{};
       for (const auto& slice : table_slices) {
-        auto result = count_matching(slice, expr, ids);
+        auto result = count_matching(slice, expr, {});
         num_hits += result;
         self->send(count.sink, result);
       }
@@ -447,7 +448,7 @@ handle_lookup(Actor& self, const vast::query& query,
     },
     [&](const query::extract& extract) -> caf::expected<uint64_t> {
       for (const auto& slice : table_slices) {
-        auto final_slice = filter(slice, expr, ids);
+        auto final_slice = filter(slice, expr, {});
         if (final_slice) {
           num_hits += final_slice->rows();
           self->send(extract.sink, *final_slice);

@@ -294,12 +294,12 @@ class store_plugin : public virtual store_actor_plugin {
 public:
   /// Create a store for the passive partition.
   /// FIXME: docs
-  [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
   make_passive_store() const = 0;
 
   /// Create a store for the active partition.
   /// FIXME: docs
-  [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
   make_active_store() const = 0;
 
 private:

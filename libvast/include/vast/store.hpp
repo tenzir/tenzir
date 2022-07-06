@@ -20,6 +20,7 @@ class passive_store {
 public:
   [[nodiscard]] virtual caf::error load(chunk_ptr chunk) = 0;
   [[nodiscard]] virtual const std::vector<table_slice>& slices() const = 0;
+  virtual ~passive_store() noexcept = default;
 };
 
 class active_store {
@@ -28,6 +29,7 @@ public:
   [[nodiscard]] virtual caf::error clear() = 0;
   [[nodiscard]] virtual caf::expected<chunk_ptr> finish() = 0;
   [[nodiscard]] virtual const std::vector<table_slice>& slices() const = 0;
+  virtual ~active_store() noexcept = default;
 };
 
 struct default_passive_store_state {
@@ -61,6 +63,7 @@ system::store_actor::behavior_type default_passive_store(
 system::store_builder_actor::behavior_type default_active_store(
   system::store_builder_actor::stateful_pointer<default_active_store_state> self,
   std::unique_ptr<active_store> store, system::filesystem_actor filesystem,
-  system::accountant_actor accountant);
+  system::accountant_actor accountant, std::filesystem::path path,
+  std::string store_type);
 
 } // namespace vast
