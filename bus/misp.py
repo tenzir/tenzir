@@ -1,7 +1,4 @@
-from bus import VASTBus
 import asyncio
-
-vast = VASTBus()
 
 
 async def start():
