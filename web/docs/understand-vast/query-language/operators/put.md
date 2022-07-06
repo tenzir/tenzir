@@ -13,8 +13,8 @@ fields from the output.
 ## Example
 
 ```yaml
-- put:
-    fields:
-      - ip
-      - timestamp
+put:
+  fields:
+    - ip
+    - timestamp
 ```

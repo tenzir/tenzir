@@ -10,7 +10,6 @@ input.
 ## Example
 
 ```yaml
-select_row:
-  - where:
-      expression: "dest_port == 53"
+where:
+  expression: "dest_port == 53"
 ```
