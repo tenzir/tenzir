@@ -40,10 +40,6 @@ public:
   /// @returns An error on failure.
   [[nodiscard]] virtual caf::error add(std::vector<table_slice> slices) = 0;
 
-  /// Clear the store contents.
-  /// @returns An error on failure.
-  [[nodiscard]] virtual caf::error clear() = 0;
-
   /// Persist the store contents to a contiguous buffer.
   /// @returns A chunk containing the serialized store contents, or an error on
   /// failure.
@@ -89,6 +85,7 @@ struct default_active_store_state {
   std::unique_ptr<active_store> store = {};
   std::filesystem::path path = {};
   std::string store_type = {};
+  bool erased = false;
 };
 
 /// Spawns a store builder actor for an active store.

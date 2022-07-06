@@ -61,11 +61,6 @@ class active_feather_store final : public active_store {
     return {};
   }
 
-  [[nodiscard]] caf::error clear() override {
-    slices_.clear();
-    return {};
-  }
-
   [[nodiscard]] caf::expected<chunk_ptr> finish() override {
     auto record_batches = arrow::RecordBatchVector{};
     record_batches.reserve(slices_.size());

@@ -156,9 +156,10 @@ system::store_builder_actor::behavior_type default_active_store(
       // everything.
       const auto num_events = rows(self->state.store->slices());
       VAST_ASSERT(rank(selection) == 0 || rank(selection) == num_events);
-      auto clear_error = self->state.store->clear();
-      if (clear_error)
-        return clear_error;
+      // We don't actually need to erase anything in the store itself, but
+      // rather just don't need to persist when shutting down the stream, so we
+      // set a flag for that in the actor state.
+      self->state.erased = true;
       return num_events;
     },
     [self](caf::stream<table_slice> stream)
@@ -179,6 +180,10 @@ system::store_builder_actor::behavior_type default_active_store(
         },
         [self]([[maybe_unused]] stream_state& stream_state,
                std::vector<table_slice>& slices) {
+          // If the store is marked for erasure we don't actually need to
+          // add any further slices.
+          if (self->state.erased)
+            return;
           if (auto error = self->state.store->add(std::move(slices)))
             self->quit(std::move(error));
         },
@@ -187,6 +192,10 @@ system::store_builder_actor::behavior_type default_active_store(
             self->quit(error);
             return;
           }
+          // If the store is marked for erasure we don't actually need to
+          // persist anything.
+          if (self->state.erased)
+            return;
           auto chunk = self->state.store->finish();
           if (!chunk) {
             self->quit(std::move(chunk.error()));
@@ -204,7 +213,6 @@ system::store_builder_actor::behavior_type default_active_store(
               [self, stream_state](caf::error& error) {
                 static_cast<void>(stream_state);
                 self->quit(std::move(error));
-                // TODO: Do we need to call store->clear() here?
               });
         });
       return attach_sink_result.inbound_slot();
