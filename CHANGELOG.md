@@ -22,12 +22,12 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `vast.use-legacy-query-scheduler` option is now ignored because the legacy query scheduler has been removed.
   [#2312](https://github.com/tenzir/vast/pull/2312)
 
-- VAST will from now on always format `time` and `timestamp` values with six decimal places (microsecond precision) instead of the old value dependent dynamic precision. This may require action for downstream tooling like metrics collectors that expect nanosecond granularity.
+- VAST will from now on always format `time` and `timestamp` values with six decimal places (microsecond precision). The old behavior used a precision that depended on the actual value. This may require action for downstream tooling like metrics collectors that expect nanosecond granularity.
   [#2380](https://github.com/tenzir/vast/pull/2380)
 
 ### Features
 
-- The `lsvast` tool can now print contents of individual `.mdx` files. It now has an option to print raw Bloom filter contents of string and address synopses.
+- The `lsvast` tool can now print contents of individual `.mdx` files. It now has an option to print raw Bloom filter contents of string and IP address synopses.
   [#2260](https://github.com/tenzir/vast/pull/2260)
 
 - The `mdx-regenerate` tool was renamed to `vast-regenerate` and can now also regenerate an index file from a list of partition UUIDs.
@@ -67,10 +67,10 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### Bug Fixes
 
-- VAST no longer crashes when importing map or pattern data annotated with the `#skip` attribute.
+- VAST no longer crashes when importing `map` or `pattern` data annotated with the `#skip` attribute.
   [#2286](https://github.com/tenzir/vast/pull/2286)
 
-- The `--plugins`, `--plugin-dirs`, and `--schema-dirs` command-line options now correctly overwrite their corresponding configuration options.
+- The command-line options `--plugins`, `--plugin-dirs`, and `--schema-dirs` now correctly overwrite their corresponding configuration options.
   [#2289](https://github.com/tenzir/vast/pull/2289)
 
 - VAST no longer crashes when a query arrives at a newly created active partition in the time window between the partition creation and the first event arriving at the partition.
@@ -97,7 +97,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The JSON import now treats `time` and `duration` fields correctly for JSON strings containing a number, i.e., the JSON string `"1654735756"` now behaves just like the JSON number `1654735756` and for a `time` field results in the value `2022-06-09T00:49:16.000Z`.
   [#2340](https://github.com/tenzir/vast/pull/2340)
 
-- VAST component will no longer terminate when it can't write any more data to disk. Incoming data will still be accepted but discarded. We encourage all users to enable the disk-monitor or compaction features as a proper solution to this problem.
+- VAST will no longer terminate when it can't write any more data to disk. Incoming data will still be accepted but discarded. We encourage all users to enable the disk-monitor or compaction features as a proper solution to this problem.
   [#2376](https://github.com/tenzir/vast/pull/2376)
 
 - VAST no longer ignores environment variables for plugin-specific options. E.g., the environment variable `VAST_PLUGINS__FOO__BAR` now correctly refers to the `bar` option of the `foo` plugin, i.e., `plugins.foo.bar`.
