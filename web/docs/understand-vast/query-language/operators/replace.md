@@ -10,7 +10,7 @@ Replaces a field with a constant value.
 #### Example
 
 ```yaml
-- replace:
-    field: uid
-    value: "xxx"
+replace:
+  field: uid
+  value: "xxx"
 ```

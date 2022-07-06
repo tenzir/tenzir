@@ -12,10 +12,11 @@ Renames schemas and fields according to a configured mapping.
 ## Example
 
 ```yaml
-- schemas:
+rename:
+  schemas:
     - from: suricata.flow
       to: suricata.renamed-flow
-- fields:
+  fields:
     - from: src_port
       to: source_port
     - from: src_ip

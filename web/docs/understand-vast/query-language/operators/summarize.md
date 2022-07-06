@@ -28,25 +28,25 @@ suffix of a nested field instead spelling out the full name.
 ## Example
 
 ```yaml
-- summarize:
-    group-by:
-      - timestamp
-      - src_ip
-      - dest_ip
-      - dest_port
-      - proto
-      - event_type
-    time-resolution: 1 minute
-    sum:
-      - pcap_cnt
-      - flow.pkts_toserver
-      - flow.pkts_toclient
-      - flow.bytes_toserver
-      - flow.bytes_toclient
-    min:
-      - flow.start
-    max:
-      - flow.end
-    any:
-      - flow.alerted
+summarize:
+  group-by:
+    - timestamp
+    - src_ip
+    - dest_ip
+    - dest_port
+    - proto
+    - event_type
+  time-resolution: 1 minute
+  sum:
+    - pcap_cnt
+    - flow.pkts_toserver
+    - flow.pkts_toclient
+    - flow.bytes_toserver
+    - flow.bytes_toclient
+  min:
+    - flow.start
+  max:
+    - flow.end
+  any:
+    - flow.alerted
 ```

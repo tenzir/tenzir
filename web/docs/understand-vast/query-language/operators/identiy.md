@@ -10,5 +10,5 @@ debugging.)
 ## Example
 
 ```yaml
-- identity:
+identity:
 ```

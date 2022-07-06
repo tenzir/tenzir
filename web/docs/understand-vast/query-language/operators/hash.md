@@ -11,8 +11,8 @@ Computes a SHA256 hash digest of a given field.
 ## Example
 
 ```yaml
-- hash:
-    field: username
-    out: pseudonym
-    salt: "B3IwnumKPEJDAA4u"
+hash:
+  field: username
+  out: pseudonym
+  salt: "B3IwnumKPEJDAA4u"
 ```

@@ -12,7 +12,7 @@ fields from the output.
 ## Example
 
 ```yaml
-- drop:
-    fields:
-      - source_ip
+drop:
+  fields:
+    - source_ip
 ```
