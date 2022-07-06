@@ -38,8 +38,6 @@ class passive_feather_store final : public passive_store {
     for (auto rb : arrow::TableBatchReader(*table)) {
       if (!rb.ok())
         return caf::make_error(ec::system_error, rb.status().ToString());
-      /// TODO: Compute the VAST schema from the Arrow schema ahead of time
-      /// exactly once, and then pass it to the table slice constructor here.
       slices_.emplace_back(rb.MoveValueUnsafe());
     }
     return {};
