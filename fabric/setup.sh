@@ -20,5 +20,7 @@ unset VASTCLOUD_REBUILD
 [[ $(docker ps -f "name=vast-pro" --format '{{.Names}}') == vast-pro ]] || \
    docker run --name vast-pro --rm -d tenzir/vast-pro:latest start
 
-echo "Starting ssh tunnel on port 5000 and 50000"
-./vast-cloud pro.key | ssh -N -L 5000:localhost:5000 -L 50000:localhost:50000 ubuntu@51.91.208.2
+echo "Connect to MISP with:"
+echo "ssh -i /dev/stdin -N -L 5000:localhost:5000 -L 50000:localhost:50000 ubuntu@51.91.208.2"
+echo "And the following key:"
+VASTCLOUD_NOTTY=1 ./vast-cloud pro.key
