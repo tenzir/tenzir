@@ -1,4 +1,5 @@
 git+https://github.com/tenzir/vast@1e3c224bf0f66f982678e64577e932b08f56e625#egg=pyvast&subdirectory=pyvast
+git+https://github.com/tenzir/misp-stix@1a6daea8c17033392f0bd44df8dc8866f3abef96#egg=misp_stix_converter
 coloredlogs>=10.0
 pymisp
 threatbus
