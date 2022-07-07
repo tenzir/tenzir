@@ -7,22 +7,29 @@ import json
 import logging
 import misp_stix_converter
 
+from vast_threatbus.message_mapping import stix2_sighting_to_misp
+
 # The MISP wrapper as seen from the fabric.
 class MISP:
     def __init__(self, config: dict, fabric: fabric.Fabric):
         self.config = config
         self.fabric = fabric
         self.logger = logging.getLogger("MISP")
-        self.subscriptions = ["stix.indicator"]
         self.logger.info("MISP App started")
-
-    async def subscribe(self, topic: str):
-        await self.fabric.subscribe(topic, self._callback)
+        self.misp = pymisp.ExpandedPyMISP(
+            url=self.config['api.host'],
+            key=self.config['api.key'],
+            ssl=False,
+        )
 
     async def run(self):
+        # Setup subscriptions.
+        await self.fabric.subscribe("vast.sighting", self._callback)
+        # Hook into event feed via 0mq.
         socket = zmq.asyncio.Context().socket(zmq.SUB)
-        # TODO: configure according to self.config
-        socket.connect("tcp://localhost:50000")
+        zmq_host = self.config['zmq.host']
+        zmq_port = self.config['zmq.port']
+        socket.connect(f"tcp://{zmq_host}:{zmq_port}")
         socket.setsockopt(zmq.SUBSCRIBE, b"misp_json")
         try:
             while True:
@@ -52,15 +59,23 @@ class MISP:
             socket.close()
 
     async def _callback(self, msg: fabric.Message):
-        self.logger.debug(msg)
+        data = msg.to_bytes
+        self.logger.debug(f"got data: {data}")
+        sighting = stix2_sighting_to_misp(data)
+        response = self.misp.add_sighting(sighting)
+        if not response or type(response) is dict and response.get("message", None):
+           self.logger.error(f"failed to add sighting to MISP: '{sighting}' ({response})")
+        else:
+            self.logger.info(f"reported sighting: {response}")
 
 
 async def start(fabric: fabric.Fabric):
+    # Should by DynaConf or so eventually...
     config = {
-        "api_host": "localhost",
-        "api_port": 5000,
-        "zmq_host": "localhost",
-        "zmq_port": 50000
+        "api.host": "http://localhost:5000",
+        "api.key": "demodemodemodemodemodemodemodemodemodemo",
+        "zmq.host": "localhost",
+        "zmq.port": 50000
         }
     misp = MISP(config, fabric)
     await misp.run()
