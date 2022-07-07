@@ -74,8 +74,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     filesystem = self->spawn(memory_filesystem);
   }
 
-  std::vector<table_slice> query(const system::store_actor& actor,
-                                 const ids& ids, const expression& expr = {}) {
+  std::vector<table_slice>
+  query(const system::store_actor& actor, const ids& ids,
+        const expression& expr = expression{
+          predicate{meta_extractor{meta_extractor::type},
+                    relational_operator::not_equal, data{std::string{}}}}) {
     bool done = false;
     uint64_t tally = 0;
     uint64_t rows = 0;
@@ -404,11 +407,13 @@ TEST(active parquet store status) {
   run();
   r.receive(
     [uuid](record& status) {
-      auto stps = caf::get<record>(status["parquet-store"]);
-      CHECK_EQUAL(std::filesystem::path{"archive"}
-                    / fmt::format("{}.parquet", uuid),
-                  stps["path"]);
-      CHECK_EQUAL(4_c, stps["events"]);
+      const auto expected = record{
+        {"events", 4_c},
+        {"path",
+         std::filesystem::path{"archive"} / fmt::format("{}.parquet", uuid)},
+        {"store-type", "parquet"},
+      };
+      CHECK_EQUAL(expected, status);
     },
     [](caf::error&) {
       FAIL("failed status request");
