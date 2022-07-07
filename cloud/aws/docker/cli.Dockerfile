@@ -6,7 +6,7 @@ ARG TERRAGRUNT_VERSION=0.36.0
 RUN apt-get update
 
 # Install Terraform
-RUN apt-get install -y gnupg software-properties-common curl unzip git wget expect && \
+RUN apt-get install -y gnupg software-properties-common curl unzip git wget && \
     curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add - && \
     apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
     apt-get update && \
@@ -63,4 +63,8 @@ RUN owneddir() { mkdir -p $1 && chown $UNAME $1 ; } && \
 USER $UNAME
 
 # Install Python dependencies
-RUN pip install boto3==1.24.27 dynaconf==3.1.9 invoke==1.7.1 requests==2.28.1 
+RUN pip install boto3 dynaconf invoke requests
+
+WORKDIR /vast/cloud/aws
+
+ENTRYPOINT [ "python", "./cli/main.py" ]

@@ -7,6 +7,8 @@ ABSOLUTE_DIRNAME=$(dirname $(readlink -f  $0))
 cd $ABSOLUTE_DIRNAME/../cloud/aws/
 
 export VAST_VERSION=latest
+export VAST_AWS_REGION=eu-west-1
+export VASTCLOUD_REBUILD=1
 
 ./vast-cloud pro.login pro.pull-image 
 
