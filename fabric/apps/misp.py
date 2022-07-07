@@ -12,9 +12,8 @@ class MISP:
         self.config = config
         self.fabric = fabric
         self.logger = logging.getLogger("MISP")
-        self.logger.info("MISP App started")
-        self.stix_parser = misp_stix_converter.MISPtoSTIX21Parser()
         self.subscriptions = ["stix.indicator"]
+        self.logger.info("MISP App started")
 
     async def subscribe(self, topic: str):
         await self.fabric.subscribe(topic, self._callback)
@@ -23,8 +22,7 @@ class MISP:
         socket = zmq.Context().socket(zmq.SUB)
         # TODO: configure according to self.config
         socket.connect("tcp://localhost:50000")
-        socket.setsockopt(zmq.SUBSCRIBE, b"misp_json") # events
-        #socket.setsockopt(zmq.SUBSCRIBE, b"misp_json_attribute")
+        socket.setsockopt(zmq.SUBSCRIBE, b"misp_json")
         poller = zmq.Poller()
         poller.register(socket, zmq.POLLIN)
         while True:
@@ -42,20 +40,17 @@ class MISP:
                 continue
             event = json_msg.get("Event", None)
             attribute = json_msg.get("Attribute", None)
+            # Only consider events, not Attributes that ship with Events
             if not event or attribute:
                 continue
-            #attribute = json_msg.get("Attribute", None)
-            stix = self.stix_parser.parse_misp_event(event)
-            self.logger.info(stix)
-            if isinstance(stix, dict):
-                # We have a single object and can publish it, in case of
-                # subscription.
-                topic = f"stix.{stix['type']}"
-                if topic in self.subscriptions:
-                    await self.fabric.publish(topic, fabric.Message(stix))
-            elif isinstance(stix, list):
-                # We have a STIX Bundle and therefore multiple objects.
-                self.logger.error("ignoring STIX Bundle")
+            parser = misp_stix_converter.MISPtoSTIX21Parser()
+            try:
+                parser.parse_misp_event(event)
+                self.logger.info(parser.bundle.serialize(pretty=True))
+                await self.fabric.publish("stix.bundle", fabric.Message(parser.bundle))
+            except Exception as e:
+                self.logger.error(f"failed to parse MISP event as STIX: {e}")
+                continue
 
     async def _callback(self, msg: fabric.Message):
         self.logger.debug(msg)
