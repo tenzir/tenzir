@@ -5,14 +5,17 @@ import logging
 import json
 
 import stix2
-from vast_threatbus.message_mapping import (indicator_to_vast_matcher_ioc, matcher_result_to_sighting)
+from vast_threatbus.message_mapping import (
+    indicator_to_vast_matcher_ioc,
+    matcher_result_to_sighting,
+)
 
 logger = logging.getLogger("db-app")
 
 
 class DB:
     def __init__(self, fabric):
-        self.db = pyvast.VAST(binary="../build/bin/vast")
+        self.db = pyvast.VAST(container={"runtime": "docker", "name": "vast-pro"})
         self.matcher_name = "vast-app-matcher"
         self.fabric = fabric
 
@@ -22,7 +25,13 @@ class DB:
     async def start_server(self):
         self.db.call_stack = ["--plugins=matcher"]
         proc = await self.db.start().exec()
-        self.db.call_stack = ["--plugins=matcher", "matcher", "start", "--match-types=[:string]", self.matcher_name]
+        self.db.call_stack = [
+            "--plugins=matcher",
+            "matcher",
+            "start",
+            "--match-types=[:string]",
+            self.matcher_name,
+        ]
         proc2 = await self.db.exec()
         while proc.returncode is None:
             line = await proc.stdout.readline()
@@ -62,9 +71,14 @@ class DB:
         retro_match = db.export(max_events=10).json(ioc["value"]).exec()
         # Add the ioc to the matcher
         self.db.call_stack = ["--plugins=matcher"]
-        matcher_addition = await db.matcher().add(self.matcher_name, ioc["value"], ioc["reference"]).exec()
-        for result in retro_match: # FIXME
+        matcher_addition = (
+            await db.matcher()
+            .add(self.matcher_name, ioc["value"], ioc["reference"])
+            .exec()
+        )
+        for result in retro_match:  # FIXME
             vast.publish("vast.sighting", result)
+
 
 async def start(vast: fabric.Fabric):
     global logger
@@ -72,7 +86,7 @@ async def start(vast: fabric.Fabric):
     # await db.test_connection()
     logger.info("VAST DB App started")
     server_process = asyncio.create_task(db.start_server())
-    
+
     await asyncio.sleep(1)
     await db.attach_matcher("vast.sighting")
     await vast.subscribe("stix.indicator", db.handle_sighting)
@@ -80,4 +94,4 @@ async def start(vast: fabric.Fabric):
     # Wait forever
     # cond = asyncio.Condition()
     # async with cond:
-        # await cond.wait()
+    # await cond.wait()
