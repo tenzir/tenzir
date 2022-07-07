@@ -4,10 +4,74 @@
         <title>VAST Blog</title>
         <link>https://vast.io/blog</link>
         <description>VAST Blog</description>
-        <lastBuildDate>Fri, 17 Jun 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 07 Jul 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[VAST v2.1]]></title>
+            <link>https://vast.io/blog/vast-v2.1</link>
+            <guid>/vast-v2.1</guid>
+            <pubDate>Thu, 07 Jul 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[VAST v2.1 - Tune VAST Databases]]></description>
+            <content:encoded><![CDATA[<p><a href="https://github.com/tenzir/vast/releases/tag/v2.1.0" target="_blank" rel="noopener noreferrer">VAST v2.1</a> is out! This release comes with a particular
+focus on performance and reducing the size of VAST databases. It brings a new
+utility for optimizing databases in production, allowing existing deployments to
+take full advantage of the improvements after upgrading.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="new-project-site">New Project Site<a class="hash-link" href="#new-project-site" title="Direct link to heading">​</a></h2><p>VAST has new project site: <a href="https://vast.io" target="_blank" rel="noopener noreferrer">vast.io</a>. We ported all
+documentation from <code>https://docs.tenzir.com</code>, added a lot of new content, and
+restructured the reading experience along the user journey.</p><p>You can find the Threat Bus documentation in <a href="/docs/use-vast/integrate/threatbus">Use VAST → Integrate → Threat
+Bus</a>. Threat Bus is now officially in
+maintainance mode: we are only supporting existing features with bugfixes. That
+said, Threat Bus will resurface in a new shape with its existing functionality
+integrated into VAST itself. Stay tuned.</p><h2 class="anchor anchorWithStickyNavbar_LWe7" id="performance-improvements">Performance Improvements<a class="hash-link" href="#performance-improvements" title="Direct link to heading">​</a></h2><p>VAST now compresses data with <a href="http://www.zstd.net" target="_blank" rel="noopener noreferrer">Zstd</a>. The default
+configuration achieves over 2x space savings. When transferring data between
+client and server processes, compression reduces the amount of transferred data
+by up to 5x.</p><p>Additionally, VAST now compresses on-disk indexes with Zstd, resulting in a
+50-80% size reduction depending on the type of indexes used.</p><p>This allowed us to increase the default partition size from 1,048,576 to
+4,194,304 events<sup id="fnref-1-11be5a"><a href="#fn-1-11be5a" class="footnote-ref">1</a></sup>, and the default number of events in a single batch from 1,024
+to 65,536, resulting in a massive performance increase at the cost of a ~20%
+larger memory footprint at peak loads. Use the option <code>vast.max-partition-size</code>
+to tune this space-time tradeoff.</p><p>To benchmark this, we used <a href="https://github.com/satta/speeve" target="_blank" rel="noopener noreferrer"><code>speeve</code></a> to generate 20 EVE JSON files
+containing 8,388,608 events each<sup id="fnref-2-11be5a"><a href="#fn-2-11be5a" class="footnote-ref">2</a></sup>. We spawned a VAST server process and ran
+20 VAST client processes in parallel, with one process per file.</p><p>We observed a reduction of <strong>up to 73%</strong> of disk space utilization:</p><p><img loading="lazy" alt="Database Size" src="/assets/images/storage-light-cdbfe9d3c7df930476bfdabb5e5f4df8.png#gh-light-mode-only" width="3000" height="2100" class="img_ev3q">
+<img loading="lazy" alt="Database Size" src="/assets/images/storage-dark-701aea7c53efb6a69eeb91d2903dbe29.png#gh-dark-mode-only" width="3000" height="2100" class="img_ev3q"></p><p>In addition, we were able to scale the ingest rate by almost <strong>6x</strong> due to the
+higher batch size and the reduced memory usage per batch:</p><p><img loading="lazy" alt="Ingest Rate" src="/assets/images/rate-light-0c19006b81ccac4f390f70ba73d0072a.png#gh-light-mode-only" width="3000" height="2100" class="img_ev3q">
+<img loading="lazy" alt="Ingest Rate" src="/assets/images/rate-dark-026fc75f7f0a93ae2734813a1c870feb.png#gh-dark-mode-only" width="3000" height="2100" class="img_ev3q"></p><p>The table below summaries the benchmarks:</p><table><thead><tr><th align="right"></th><th align="left">VAST v2.0</th><th align="left">VAST v2.1</th><th align="left">Change</th></tr></thead><tbody><tr><td align="right">Ingest Duration</td><td align="left">1,650 s</td><td align="left">242 s</td><td align="left">-85.3%</td></tr><tr><td align="right">Ingest Rate</td><td align="left">101,680 events/s</td><td align="left">693,273 events/s</td><td align="left">+581.8%</td></tr><tr><td align="right">Index Size</td><td align="left">14,791 MiB</td><td align="left">5,721 MiB</td><td align="left">-61.3%</td></tr><tr><td align="right">Store Size</td><td align="left">37,656 MiB</td><td align="left">8,491 MiB</td><td align="left">-77.5%</td></tr><tr><td align="right">Database Size</td><td align="left">52,446 MiB</td><td align="left">14,212 MiB</td><td align="left">-72.9%</td></tr></tbody></table><div class="theme-admonition theme-admonition-note alert alert--secondary admonition_LlT9"><div class="admonitionHeading_tbUL"><span class="admonitionIcon_kALy"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M6.3 5.69a.942.942 0 0 1-.28-.7c0-.28.09-.52.28-.7.19-.18.42-.28.7-.28.28 0 .52.09.7.28.18.19.28.42.28.7 0 .28-.09.52-.28.7a1 1 0 0 1-.7.3c-.28 0-.52-.11-.7-.3zM8 7.99c-.02-.25-.11-.48-.31-.69-.2-.19-.42-.3-.69-.31H6c-.27.02-.48.13-.69.31-.2.2-.3.44-.31.69h1v3c.02.27.11.5.31.69.2.2.42.31.69.31h1c.27 0 .48-.11.69-.31.2-.19.3-.42.31-.69H8V7.98v.01zM7 2.3c-3.14 0-5.7 2.54-5.7 5.68 0 3.14 2.56 5.7 5.7 5.7s5.7-2.55 5.7-5.7c0-3.15-2.56-5.69-5.7-5.69v.01zM7 .98c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.12-7-7 3.14-7 7-7z"></path></svg></span>Compressed Filesystems</div><div class="admonitionContent_S0QG"><p>The above benchmarks ran on filesystems without compression. We expect the gain
+from compression to be smaller when using compressed filesystems like
+<a href="https://btrfs.wiki.kernel.org/index.php/Main_Page" target="_blank" rel="noopener noreferrer"><code>btrfs</code></a>.</p></div></div><h2 class="anchor anchorWithStickyNavbar_LWe7" id="rebuild-vast-databases">Rebuild VAST Databases<a class="hash-link" href="#rebuild-vast-databases" title="Direct link to heading">​</a></h2><p>The new changes to VAST's internal data format only apply to newly ingested
+data. To retrofit changes, we introduce a new <code>rebuild</code> command with this
+release. A rebuild effectively re-ingests events from existing partitions and
+atomically replaces them with partitions of the new format.</p><p>This makes it possible to upgrade persistent state to a newer version, or
+recreate persistent state after changing configuration parameters, e.g.,
+switching from the Feather to the Parquet store backend (that will land in
+v2.2). Rebuilding partitions also recreates their sparse indexes that
+accellerate query execution. The process takes place asynchronously in the
+background.</p><p>We recommend running <code>vast rebuild</code> to upgrade your VAST v1.x partitions to VAST
+v2.x partitions to take advantage of the new compression and an improved
+internal representation.</p><p>This is how you run it:</p><div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token plain">vast rebuild </span><span class="token punctuation" style="color:#393A34">[</span><span class="token plain">--all</span><span class="token punctuation" style="color:#393A34">]</span><span class="token plain"> </span><span class="token punctuation" style="color:#393A34">[</span><span class="token plain">--undersized</span><span class="token punctuation" style="color:#393A34">]</span><span class="token plain"> </span><span class="token punctuation" style="color:#393A34">[</span><span class="token plain">--parallel</span><span class="token operator" style="color:#393A34">=</span><span class="token operator" style="color:#393A34">&lt;</span><span class="token plain">number</span><span class="token operator" style="color:#393A34">&gt;</span><span class="token punctuation" style="color:#393A34">]</span><span class="token plain"> </span><span class="token punctuation" style="color:#393A34">[</span><span class="token operator" style="color:#393A34">&lt;</span><span class="token plain">expression</span><span class="token operator" style="color:#393A34">&gt;</span><span class="token punctuation" style="color:#393A34">]</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg class="copyButtonIcon_y97N" viewBox="0 0 24 24"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg class="copyButtonSuccessIcon_LjdS" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>A rebuild is not only useful when upgrading outdated partitions, but also when
+changing parameters of up-to-date partitions. Use the <code>--all</code> flag to extend a
+rebuild operation to <em>all</em> partitions. (Internally, VAST versions the partition
+state via FlatBuffers. An outdated partition is one whose version number is not
+the newest.)</p><p>The <code>--undersized</code> flag causes VAST to only rebuild partitions that are under
+the configured partition size limit <code>vast.max-partition-size</code>.</p><p>The <code>--parallel</code> options is a performance tuning knob. The parallelism level
+controls how many sets of partitions to rebuild in parallel. This value defaults
+to 1 to limit the CPU and memory requirements of the rebuilding process, which
+grow linearly with the selected parallelism level.</p><p>An optional expression allows for restricting the set of partitions to rebuild.
+VAST performs a catalog lookup with the expression to identify the set of
+candidate partitions. This process may yield false positives, as with regular
+queries, which may cause unaffected partitions to undergo a rebuild. For
+example, to rebuild outdated partitions containing <code>suricata.flow</code> events
+older than 2 weeks, run the following command:</p><div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token plain">vast rebuild </span><span class="token string" style="color:#e3116c">'#type == "suricata.flow" &amp;&amp; #import_time &lt; 2 weeks ago'</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg class="copyButtonIcon_y97N" viewBox="0 0 24 24"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg class="copyButtonSuccessIcon_LjdS" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><div class="footnotes"><hr><ol><li id="fn-1-11be5a">VAST v2.0 failed to write its partitions to disk with the defaults for
+v2.1 because the on-disk size exceeded the maximum possible size of a
+FlatBuffers table, which VAST internally uses to have an open standard for its
+persistent state.<a href="#fnref-1-11be5a" class="footnote-backref">↩</a></li><li id="fn-2-11be5a">This resulted in 167,772,160 events, with a total of 200'917'930 unique
+values with a schema distribution of 80.74% <code>suricata.flow</code>, 7.85%
+<code>suricata.dns</code>, 5.35% <code>suricata.http</code>, 4.57% <code>suricata.fileinfo</code>, 1.04%
+<code>suricata.tls</code>, 0.41% <code>suricata.ftp</code>, and 0.04% <code>suricata.smtp</code>.<a href="#fnref-2-11be5a" class="footnote-backref">↩</a></li></ol></div>]]></content:encoded>
+            <author>dominik@tenzir.com (Dominik Lohmann)</author>
+            <category>release</category>
+            <category>performance</category>
+        </item>
         <item>
             <title><![CDATA[Apache Arrow as Platform for Security Data Engineering]]></title>
             <link>https://vast.io/blog/apache-arrow-as-platform-for-security-data-engineering</link>
