@@ -2,13 +2,17 @@ from invoke import Context
 import dynaconf
 import json
 import re
+import inspect
 from boto3.session import Session
 
-AWS_REGIONS = Session().get_available_regions("s3")
+AWS_REGION_VALIDATOR = dynaconf.Validator(
+    "VAST_AWS_REGION", must_exist=True, is_in=Session().get_available_regions("s3")
+)
 
-# Note: an empty variable is considered as existing
+# Common validators should always have defaults to avoid forcing a variable on a
+# plugin that doesn't need it
+# Side note: an empty variable is considered as existing
 COMMON_VALIDATORS = [
-    dynaconf.Validator("VAST_AWS_REGION", must_exist=True, is_in=AWS_REGIONS),
     dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
     dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
     # if we use tf cloud as backend, the right variable must be configured
@@ -60,7 +64,6 @@ def tf_version(c: Context):
 
 
 # Aliases
-AWS_REGION = conf(COMMON_VALIDATORS)["VAST_AWS_REGION"]
 CLOUDROOT = "."
 REPOROOT = "../.."
 TFDIR = f"{CLOUDROOT}/terraform"
