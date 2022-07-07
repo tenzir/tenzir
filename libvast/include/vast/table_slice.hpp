@@ -217,13 +217,8 @@ public:
     return f(caf::meta::type_name("vast.table_slice"),
              caf::meta::save_callback([&]() noexcept -> caf::error {
                if (!x.is_serialized()) {
-                 const auto start = std::chrono::steady_clock::now();
                  x = table_slice{to_record_batch(x), true};
                  chunk = x.chunk_;
-                 const auto end = std::chrono::steady_clock::now();
-                 VAST_WARN(
-                   "serializing {} events during save callback in {}", x.rows(),
-                   data{std::chrono::duration_cast<duration>(end - start)});
                }
                VAST_ASSERT(x.is_serialized());
                return caf::none;
