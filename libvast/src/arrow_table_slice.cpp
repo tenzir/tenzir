@@ -754,9 +754,12 @@ index_column_arrays(const std::shared_ptr<arrow::RecordBatch>& record_batch) {
 
 template <class FlatBuffer>
 arrow_table_slice<FlatBuffer>::arrow_table_slice(
-  const FlatBuffer& slice, [[maybe_unused]] const chunk_ptr& parent) noexcept
+  const FlatBuffer& slice, [[maybe_unused]] const chunk_ptr& parent,
+  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept
   : slice_{slice}, state_{} {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>) {
+    VAST_ASSERT(!batch, "pre-existing record batches are only supported for "
+                        "the most recent encoding");
     VAST_DIAGNOSTIC_PUSH
     VAST_DIAGNOSTIC_IGNORE_DEPRECATED
     // This legacy type has to stay; it is deserialized from disk.
@@ -770,6 +773,8 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
       as_arrow_buffer(parent->slice(as_bytes(*slice.record_batch()))));
     VAST_DIAGNOSTIC_POP
   } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v1>) {
+    VAST_ASSERT(!batch, "pre-existing record batches are only supported for "
+                        "the most recent encoding");
     VAST_DIAGNOSTIC_PUSH
     VAST_DIAGNOSTIC_IGNORE_DEPRECATED
     // We decouple the sliced type from the layout intentionally. This is an
@@ -790,9 +795,15 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     // table slice's chunk, and storing a sliced chunk in there would cause a
     // cyclic reference. In the future, we should just not store the sliced
     // chunk at all, but rather create it on the fly only.
-    auto decoder = record_batch_decoder{};
-    state_.record_batch = decoder.decode(
-      as_arrow_buffer(parent->slice(as_bytes(*slice.arrow_ipc()))));
+    if (batch) {
+      state_.record_batch = batch;
+      state_.is_serialized = false;
+    } else {
+      auto decoder = record_batch_decoder{};
+      state_.record_batch = decoder.decode(
+        as_arrow_buffer(parent->slice(as_bytes(*slice.arrow_ipc()))));
+      state_.is_serialized = true;
+    }
     state_.layout = type::from_arrow(*state_.record_batch->schema());
     VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
     state_.flat_columns = index_column_arrays(state_.record_batch);
@@ -841,6 +852,19 @@ table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
                                                       "slice version");
   }
   return 0;
+}
+
+template <class FlatBuffer>
+bool arrow_table_slice<FlatBuffer>::is_serialized() const noexcept {
+  if constexpr (detail::is_any_v<FlatBuffer, fbs::table_slice::arrow::v0,
+                                 fbs::table_slice::arrow::v1>) {
+    return true;
+  } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
+    return state_.is_serialized;
+  } else {
+    static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
+                                                      "slice version");
+  }
 }
 
 // -- data access ------------------------------------------------------------
