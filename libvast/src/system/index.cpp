@@ -484,7 +484,7 @@ void index_state::create_active_partition(const type& schema) {
   VAST_DEBUG("{} created new partition {}", *self, id);
 }
 
-void index_state::decomission_active_partition(
+void index_state::decommission_active_partition(
   const type& schema, std::function<void(const caf::error&)> completion) {
   auto active_partition = active_partitions.find(schema);
   VAST_ASSERT(active_partition != active_partitions.end());
@@ -908,7 +908,7 @@ index(index_actor::stateful_pointer<index_state> self,
         VAST_VERBOSE("{} flushes active partition {} with {}/{} events", *self,
                      layout, self->state.partition_capacity - active.capacity,
                      self->state.partition_capacity);
-        self->state.decomission_active_partition(layout, {});
+        self->state.decommission_active_partition(layout, {});
         self->state.flush_to_disk();
         self->state.create_active_partition(layout);
       }
@@ -952,7 +952,7 @@ index(index_actor::stateful_pointer<index_state> self,
     // Bring down active partition.
     for (auto& [layout, partinfo] : self->state.active_partitions) {
       if (partinfo.actor)
-        self->state.decomission_active_partition(layout, {});
+        self->state.decommission_active_partition(layout, {});
     }
     // Collect partitions for termination.
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
@@ -1020,7 +1020,7 @@ index(index_actor::stateful_pointer<index_state> self,
       if (self->state.accountant)
         self->state.send_report();
       if (self->state.active_partition_timeout.count() > 0) {
-        auto decomissioned = std::vector<type>{};
+        auto decommissioned = std::vector<type>{};
         for (const auto& [layout, active_partition] :
              self->state.active_partitions) {
           if (active_partition.spawn_time + self->state.active_partition_timeout
@@ -1032,12 +1032,12 @@ index(index_actor::stateful_pointer<index_state> self,
                            - active_partition.capacity,
                          self->state.partition_capacity,
                          data{self->state.active_partition_timeout});
-            self->state.decomission_active_partition(layout, {});
-            decomissioned.push_back(layout);
+            self->state.decommission_active_partition(layout, {});
+            decommissioned.push_back(layout);
           }
         }
-        if (!decomissioned.empty()) {
-          for (const auto& layout : decomissioned)
+        if (!decommissioned.empty()) {
+          for (const auto& layout : decommissioned)
             self->state.active_partitions.erase(layout);
           self->state.flush_to_disk();
         }
@@ -1497,7 +1497,7 @@ index(index_actor::stateful_pointer<index_state> self,
         });
       for (const auto& [schema, active_partition] :
            self->state.active_partitions) {
-        self->state.decomission_active_partition(
+        self->state.decommission_active_partition(
           schema, [counter](const caf::error& err) mutable {
             if (err)
               counter->receive_error(err);

@@ -196,10 +196,10 @@ struct index_state {
   void create_active_partition(const type& schema);
 
   /// Decommissions the active partition.
-  /// @param schema The schema of the active partition to decomission.
-  /// @param completion The completeion handler; called when the partition was
-  /// decomissioned successfully.
-  void decomission_active_partition(
+  /// @param schema The schema of the active partition to decommission.
+  /// @param completion The completion handler; called in the actor context of
+  /// the index when the partition was decommissioned.
+  void decommission_active_partition(
     const type& schema, std::function<void(const caf::error&)> completion);
 
   /// Adds a new partition creation listener.
