@@ -67,7 +67,7 @@ handle_lookup(Actor& self, const query_context& query_context,
   if (!num_hits)
     return std::move(num_hits.error());
   const auto runtime = std::chrono::steady_clock::now() - start;
-  const auto id_str = fmt::to_string(query.id);
+  const auto id_str = fmt::to_string(query_context.id);
   self->send(self->state.accountant,
              fmt::format("{}.lookup.runtime", self->name()), runtime,
              system::metrics_metadata{
