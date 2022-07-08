@@ -241,6 +241,19 @@ public:
   make_transform_step(const vast::record& options) const = 0;
 };
 
+// -- aggregation function plugin ---------------------------------------------
+
+/// A base class for plugins that add new aggregation functions.
+class aggregation_function_plugin : public virtual plugin {
+public:
+  /// Creates a new aggregation function that maps incrementally added input to
+  /// a single output value.
+  /// @param input_types The input types for which to create the aggregation
+  /// function.
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<aggregation_function>>
+  make_aggregation_function(const type& input_type) const = 0;
+};
+
 // -- store plugin ------------------------------------------------------------
 
 /// A base class for plugins that add new store backends.

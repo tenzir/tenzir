@@ -12,13 +12,17 @@ namespace vast {
 
 integer::integer() = default;
 integer::integer(const integer&) = default;
-integer::integer(integer&&) = default;
+integer::integer(integer&&) noexcept = default;
 
 integer::integer(int64_t v) : value(v) {
 }
 
 integer& integer::operator=(const integer&) = default;
-integer& integer::operator=(integer&&) = default;
+integer& integer::operator=(integer&&) noexcept = default;
+
+integer operator+(integer lhs, integer rhs) {
+  return integer{lhs.value + rhs.value};
+}
 
 bool operator==(integer lhs, integer rhs) {
   return lhs.value == rhs.value;

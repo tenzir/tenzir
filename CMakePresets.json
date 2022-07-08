@@ -23,7 +23,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "VAST_ENABLE_BUNDLED_CAF": "ON",
-        "VAST_PLUGINS": "${sourceDir}/plugins/pcap;${sourceDir}/plugins/sigma;${sourceDir}/plugins/summarize"
+        "VAST_PLUGINS": "${sourceDir}/plugins/*"
       }
     },
     {

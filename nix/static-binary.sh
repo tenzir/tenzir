@@ -32,7 +32,6 @@ plugins=(
   "${toplevel}/plugins/broker"
   "${toplevel}/plugins/pcap"
   "${toplevel}/plugins/sigma"
-  "${toplevel}/plugins/summarize"
 )
 
 while [ $# -ne 0 ]; do

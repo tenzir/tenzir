@@ -23,6 +23,7 @@
 namespace vast {
 
 namespace {
+
 const auto agg_test_layout = vast::type{
   "aggtestdata",
   vast::record_type{
@@ -38,6 +39,8 @@ const auto agg_test_layout = vast::type{
     {"all_true", vast::bool_type{}},
     {"any_false", vast::bool_type{}},
     {"all_false", vast::bool_type{}},
+    {"alternating_number", vast::count_type{}},
+    {"alternating_number_list", vast::list_type{vast::count_type{}}},
   },
 };
 
@@ -60,8 +63,16 @@ table_slice make_testdata(table_slice_encoding encoding
     auto all_true = true;
     auto any_false = false;
     auto all_false = i != 0;
+    auto alternating_number = detail::narrow_cast<count>(i % 3);
+    auto alternating_number_list = list{
+      detail::narrow_cast<count>(i % 3),
+      detail::narrow_cast<count>(i % 5),
+    };
+    if (i == 8)
+      alternating_number_list.emplace_back();
     REQUIRE(builder->add(time, ip, port, sum, sum_null, min, max, any_true,
-                         all_true, any_false, all_false));
+                         all_true, any_false, all_false, alternating_number,
+                         alternating_number_list));
   }
   vast::table_slice slice = builder->finish();
   return slice;
@@ -84,12 +95,19 @@ struct fixture : fixtures::events {
 FIXTURE_SCOPE(summarize_tests, fixture)
 
 TEST(summarize Zeek conn log) {
-  auto opts = record{
-    {"group-by", list{"ts"}},
+  const auto opts = record{
+    {"group-by",
+     list{
+       "ts",
+     }},
     {"time-resolution", duration{std::chrono::days(1)}},
-    {"sum", list{"duration", "resp_pkts"}},
-    {"min", list{"orig_ip_bytes"}},
-    {"max", list{"resp_ip_bytes"}},
+    {"aggregate",
+     record{
+       {"duration", "sum"},
+       {"orig_ip_bytes", "min"},
+       {"resp_pkts", "sum"},
+       {"resp_ip_bytes", "max"},
+     }},
   };
   auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
@@ -131,14 +149,30 @@ TEST(summarize Zeek conn log) {
 }
 
 TEST(summarize test) {
-  auto opts = record{
+  const auto opts = record{
+    {"group-by",
+     list{
+       "time",
+       "ip",
+       "port",
+     }},
     {"time-resolution", duration{std::chrono::minutes(1)}},
-    {"group-by", list{"time", "ip", "port"}},
-    {"sum", list{"sum", "sum_null"}},
-    {"min", list{"min"}},
-    {"max", list{"max"}},
-    {"any", list{"any_true", "any_false"}},
-    {"all", list{"all_true", "all_false"}},
+    {"aggregate",
+     record{
+       {"sum", "sum"},
+       {"sum_null", "sum"},
+       {"min", "min"},
+       {"max", "max"},
+       {"any_true", "any"},
+       {"any_false", "any"},
+       {"all_true", "all"},
+       {"all_false", "all"},
+       {"time_min", record{{"min", "time"}}},
+       {"time_max", record{{"max", "time"}}},
+       {"ports", record{{"distinct", "port"}}},
+       {"alternating_number", "distinct"},
+       {"alternating_number_list", "distinct"},
+     }},
   };
   auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
   REQUIRE_SUCCESS(
@@ -155,21 +189,44 @@ TEST(summarize test) {
   CHECK_EQUAL(summarized_slice.at(0, 5), data_view{integer{0}});
   CHECK_EQUAL(summarized_slice.at(0, 6), data_view{integer{9}});
   CHECK_EQUAL(summarized_slice.at(0, 7), data_view{true});
-  CHECK_EQUAL(summarized_slice.at(0, 8), data_view{true});
-  CHECK_EQUAL(summarized_slice.at(0, 9), data_view{false});
+  CHECK_EQUAL(summarized_slice.at(0, 8), data_view{false});
+  CHECK_EQUAL(summarized_slice.at(0, 9), data_view{true});
   CHECK_EQUAL(summarized_slice.at(0, 10), data_view{false});
+  CHECK_EQUAL(summarized_slice.at(0, 11),
+              data_view{vast::time{std::chrono::seconds(1258329600)}});
+  CHECK_EQUAL(summarized_slice.at(0, 12),
+              data_view{vast::time{std::chrono::seconds(1258329609)}});
+  const auto expected_ports = list{count{443}};
+  CHECK_EQUAL(summarized_slice.at(0, 13), make_data_view(expected_ports));
+  const auto expected_alternating_numbers = list{count{0}, count{1}, count{2}};
+  const auto expected_alternating_numbers_list
+    = list{caf::none, count{0}, count{1}, count{2}, count{3}, count{4}};
+  CHECK_EQUAL(summarized_slice.at(0, 14),
+              make_data_view(expected_alternating_numbers));
+  CHECK_EQUAL(summarized_slice.at(0, 15),
+              make_data_view(expected_alternating_numbers_list));
 }
 
 TEST(summarize test fully qualified field names) {
-  auto opts = record{
+  const auto opts = record{
     {"time-resolution", duration{std::chrono::minutes(1)}},
     {"group-by",
-     list{"aggtestdata.time", "aggtestdata.ip", "aggtestdata.port"}},
-    {"sum", list{"aggtestdata.sum", "aggtestdata.sum_null"}},
-    {"min", list{"aggtestdata.min"}},
-    {"max", list{"aggtestdata.max"}},
-    {"any", list{"aggtestdata.any_true", "aggtestdata.any_false"}},
-    {"all", list{"aggtestdata.all_true", "aggtestdata.all_false"}},
+     list{
+       "aggtestdata.time",
+       "aggtestdata.ip",
+       "aggtestdata.port",
+     }},
+    {"aggregate",
+     record{
+       {"sum", record{{"sum", "aggtestdata.sum"}}},
+       {"sum_null", record{{"sum", "aggtestdata.sum_null"}}},
+       {"min", record{{"min", "aggtestdata.min"}}},
+       {"max", record{{"max", "aggtestdata.max"}}},
+       {"any_true", record{{"any", "aggtestdata.any_true"}}},
+       {"any_false", record{{"any", "aggtestdata.any_false"}}},
+       {"all_true", record{{"any", "aggtestdata.any_true"}}},
+       {"all_false", record{{"any", "aggtestdata.any_false"}}},
+     }},
   };
   auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
   const auto test_batch = to_record_batch(make_testdata());
@@ -177,6 +234,7 @@ TEST(summarize test fully qualified field names) {
   const auto result = unbox(summarize_step->finish());
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
+  REQUIRE_EQUAL(summarized_slice.columns(), 11u);
   CHECK_EQUAL(summarized_slice.at(0, 0),
               data_view{vast::time{std::chrono::seconds(1258329600)}});
   CHECK_EQUAL(summarized_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
@@ -186,8 +244,8 @@ TEST(summarize test fully qualified field names) {
   CHECK_EQUAL(summarized_slice.at(0, 5), data_view{integer{0}});
   CHECK_EQUAL(summarized_slice.at(0, 6), data_view{integer{9}});
   CHECK_EQUAL(summarized_slice.at(0, 7), data_view{true});
-  CHECK_EQUAL(summarized_slice.at(0, 8), data_view{true});
-  CHECK_EQUAL(summarized_slice.at(0, 9), data_view{false});
+  CHECK_EQUAL(summarized_slice.at(0, 8), data_view{false});
+  CHECK_EQUAL(summarized_slice.at(0, 9), data_view{true});
   CHECK_EQUAL(summarized_slice.at(0, 10), data_view{false});
 }
 
@@ -201,12 +259,22 @@ TEST(summarize test wrong config) {
   const auto summarize_opts = record{
     {"time-resolution", duration{std::chrono::minutes(1)}},
     {"group-by",
-     list{"aggtestdata.time", "aggtestdata.ip", "aggtestdata.port"}},
-    {"sum", list{"aggtestdata.sum", "aggtestdata.sum_null"}},
-    {"min", list{"aggtestdata.min"}},
-    {"max", list{"aggtestdata.max"}},
-    {"any", list{"aggtestdata.any_true", "aggtestdata.any_false"}},
-    {"all", list{"aggtestdata.all_true", "aggtestdata.all_false"}},
+     list{
+       "aggtestdata.time",
+       "aggtestdata.ip",
+       "aggtestdata.port",
+     }},
+    {"aggregate",
+     record{
+       {"sum", record{{"sum", "aggtestdata.sum"}}},
+       {"sum_null", record{{"sum", "aggtestdata.sum_null"}}},
+       {"min", record{{"min", "aggtestdata.min"}}},
+       {"max", record{{"max", "aggtestdata.max"}}},
+       {"any_true", record{{"any", "aggtestdata.any_true"}}},
+       {"any_false", record{{"any", "aggtestdata.any_false"}}},
+       {"all_true", record{{"any", "aggtestdata.any_true"}}},
+       {"all_false", record{{"any", "aggtestdata.any_false"}}},
+     }},
   };
   auto rename_step = unbox(rename_plugin->make_transform_step(rename_opts));
   auto summarize_step
@@ -218,8 +286,8 @@ TEST(summarize test wrong config) {
   const auto result = unbox(test_transform.finish());
   REQUIRE_EQUAL(result.size(), 1u);
   // Following the renaming the output data should not be touched by the
-  // summarize step, so we expect the underlying data to be unchanged, although
-  // the layout will be renamed.
+  // summarize step, so we expect the underlying data to be unchanged,
+  // although the layout will be renamed.
   const auto expected_data = make_testdata();
   CHECK(to_record_batch(result[0])->ToStructArray().ValueOrDie()->Equals(
     to_record_batch(expected_data)->ToStructArray().ValueOrDie()));
