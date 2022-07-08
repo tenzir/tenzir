@@ -229,9 +229,9 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: import -b zeek
         input: data/zeek/dns.log.gz
-      - command: flush
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
       - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
@@ -242,7 +242,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: export ascii 'conn.duration <= 1.0s'
       - command: export json 'duration >= 10.0s && duration < 15s'
       - command: export json --numeric-durations 'duration >= 1.8s && duration < 2.0s'
@@ -362,9 +361,9 @@ tests:
     steps:
       - command: import -b zeek
         input: data/pcap/zeek/conn.log.gz
+      - command: flush
       - command: import -b suricata
         input: data/pcap/suricata/eve.json.gz
-      - command: flush
       - command: count "net.src.ip == 192.168.168.100"
       - command: count "net.connection == <192.168.168.100, _, 72.247.178.18, _, _>"
       # We omit the whitespace after the colon on purpose, otherwise pyyaml
@@ -510,9 +509,9 @@ tests:
     fixture: ServerTester
     steps:
       - command: spawn source -r @./data/suricata/eve.json suricata
+      - command: flush
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: count '#type ~ /suricata.*/'
   Example config file:
     tags: [import-export, zeek]
@@ -572,9 +571,9 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
+      - command: flush
       - command: import -b zeek
         input: data/zeek/dns.log.gz
-      - command: flush
       - command: export --timeout=0ms json
         expected_result: error
       - command: export --timeout=0ms json
