@@ -471,9 +471,9 @@ bool i_partition_selector::operator()(const type& filter,
   return filter == slice.layout();
 }
 
-void index_state::create_active_partition(const type& layout) {
+void index_state::create_active_partition(const type& schema) {
   auto id = uuid::random();
-  auto& active_partition = active_partitions[layout];
+  auto& active_partition = active_partitions[schema];
   // If we're using the global store, the importer already sends the table
   // slices. (In the long run, this should probably be streamlined so that all
   // data moves through the index. However, that requires some refactoring of
@@ -494,7 +494,7 @@ void index_state::create_active_partition(const type& layout) {
   active_partition.store = builder;
   active_partition.store_slot
     = stage->add_outbound_path(active_partition.store);
-  stage->out().set_filter(active_partition.store_slot, layout);
+  stage->out().set_filter(active_partition.store_slot, schema);
   active_partition.spawn_time = std::chrono::steady_clock::now();
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
@@ -503,14 +503,15 @@ void index_state::create_active_partition(const type& layout) {
                   store_header);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
-  stage->out().set_filter(active_partition.stream_slot, layout);
+  stage->out().set_filter(active_partition.stream_slot, schema);
   active_partition.capacity = partition_capacity;
   active_partition.id = id;
   VAST_DEBUG("{} created new partition {}", *self, id);
 }
 
-void index_state::decomission_active_partition(const type& layout) {
-  auto active_partition = active_partitions.find(layout);
+void index_state::decommission_active_partition(
+  const type& schema, std::function<void(const caf::error&)> completion) {
+  auto active_partition = active_partitions.find(schema);
   VAST_ASSERT(active_partition != active_partitions.end());
   auto id = active_partition->second.id;
   auto actor = std::exchange(active_partition->second.actor, {});
@@ -523,11 +524,11 @@ void index_state::decomission_active_partition(const type& layout) {
   // Persist active partition asynchronously.
   auto part_dir = partition_path(id);
   auto synopsis_dir = partition_synopsis_path(id);
-  VAST_DEBUG("{} persists active partition {} to {}", *self, layout, part_dir);
+  VAST_DEBUG("{} persists active partition {} to {}", *self, schema, part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
-        VAST_DEBUG("{} successfully persisted partition {} {}", *self, layout,
+        VAST_DEBUG("{} successfully persisted partition {} {}", *self, schema,
                    id);
         // Send a metric to the accountant.
         if (accountant) {
@@ -536,7 +537,7 @@ void index_state::decomission_active_partition(const type& layout) {
               {"partition.events-written", ps->events},
             },
             .metadata = {
-              {"schema", std::string{layout.name()}},
+              {"schema", std::string{schema.name()}},
             },
           };
           self->send(accountant, report);
@@ -550,22 +551,28 @@ void index_state::decomission_active_partition(const type& layout) {
             [=, this](atom::ok) {
               VAST_DEBUG("{} received ok for request to persist partition {} "
                          "{}",
-                         *self, layout, id);
+                         *self, schema, id);
               for (auto& listener : partition_creation_listeners)
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
               persisted_partitions.insert(id);
+              if (completion)
+                completion(caf::none);
             },
             [=, this](const caf::error& err) {
               VAST_DEBUG("{} received error for request to persist partition "
                          "{} {}: {}",
-                         *self, layout, id, err);
+                         *self, schema, id, err);
+              if (completion)
+                completion(err);
             });
       },
       [=, this](caf::error& err) {
         VAST_ERROR("{} failed to persist partition {} {} with error: {}", *self,
-                   layout, id, err);
+                   schema, id, err);
+        if (completion)
+          completion(err);
       });
 }
 
@@ -926,7 +933,7 @@ index(index_actor::stateful_pointer<index_state> self,
         VAST_VERBOSE("{} flushes active partition {} with {}/{} events", *self,
                      layout, self->state.partition_capacity - active.capacity,
                      self->state.partition_capacity);
-        self->state.decomission_active_partition(layout);
+        self->state.decommission_active_partition(layout, {});
         self->state.flush_to_disk();
         self->state.create_active_partition(layout);
       }
@@ -970,7 +977,7 @@ index(index_actor::stateful_pointer<index_state> self,
     // Bring down active partition.
     for (auto& [layout, partinfo] : self->state.active_partitions) {
       if (partinfo.actor)
-        self->state.decomission_active_partition(layout);
+        self->state.decommission_active_partition(layout, {});
     }
     // Collect partitions for termination.
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
@@ -1038,7 +1045,7 @@ index(index_actor::stateful_pointer<index_state> self,
       if (self->state.accountant)
         self->state.send_report();
       if (self->state.active_partition_timeout.count() > 0) {
-        auto decomissioned = std::vector<type>{};
+        auto decommissioned = std::vector<type>{};
         for (const auto& [layout, active_partition] :
              self->state.active_partitions) {
           if (active_partition.spawn_time + self->state.active_partition_timeout
@@ -1050,12 +1057,12 @@ index(index_actor::stateful_pointer<index_state> self,
                            - active_partition.capacity,
                          self->state.partition_capacity,
                          data{self->state.active_partition_timeout});
-            self->state.decomission_active_partition(layout);
-            decomissioned.push_back(layout);
+            self->state.decommission_active_partition(layout, {});
+            decommissioned.push_back(layout);
           }
         }
-        if (!decomissioned.empty()) {
-          for (const auto& layout : decomissioned)
+        if (!decommissioned.empty()) {
+          for (const auto& layout : decommissioned)
             self->state.active_partitions.erase(layout);
           self->state.flush_to_disk();
         }
@@ -1504,6 +1511,31 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->delegate(static_cast<index_actor>(self), atom::apply_v,
                             std::move(transform), std::move(old_partition_ids),
                             keep_original_partition::no);
+    },
+    [self](atom::flush) -> caf::result<void> {
+      // If we've got nothing to flush we can just exit immediately.
+      if (self->state.active_partitions.empty())
+        return {};
+      auto rp = self->make_response_promise<void>();
+      auto counter = detail::make_fanout_counter(
+        self->state.active_partitions.size(),
+        [rp]() mutable {
+          static_cast<caf::response_promise&>(rp).deliver(caf::unit);
+        },
+        [rp](caf::error error) mutable {
+          rp.deliver(std::move(error));
+        });
+      for (const auto& [schema, active_partition] :
+           self->state.active_partitions) {
+        self->state.decommission_active_partition(
+          schema, [counter](const caf::error& err) mutable {
+            if (err)
+              counter->receive_error(err);
+            else
+              counter->receive_success();
+          });
+      }
+      return rp;
     },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v) { //
