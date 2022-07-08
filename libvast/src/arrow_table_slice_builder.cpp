@@ -62,7 +62,7 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
 #if VAST_ENABLE_ASSERTIONS
   // NOTE: There's also a ValidateFull function, but that always errors when
   // using nested struct arrays. Last tested with Arrow 7.0.0. -- DL.
-  auto validate_status = record_batch.Validate();
+  auto validate_status = record_batch->Validate();
   VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
 #endif // VAST_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};

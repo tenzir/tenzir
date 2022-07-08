@@ -10,7 +10,7 @@
 
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
@@ -24,8 +24,9 @@ namespace {
 /// @pre !slices.empty()
 /// @returns the number of events that match the query.
 template <class Actor>
-caf::expected<uint64_t> handle_lookup(Actor& self, const query& query,
-                                      const std::vector<table_slice>& slices) {
+caf::expected<uint64_t>
+handle_lookup(Actor& self, const query_context& query_context,
+              const std::vector<table_slice>& slices) {
   VAST_ASSERT(!slices.empty());
   const auto start = std::chrono::steady_clock::now();
   // We're moving away from a global ID space; since new partitions can only
@@ -34,12 +35,12 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const query& query,
   // store, as we already know it only affects events for its corresponding
   // partition. Additionally, we can assume homogeneous partitions here, so we
   // just take the first schema we get.
-  auto expr = tailor(query.expr, slices.front().layout());
+  auto expr = tailor(query_context.expr, slices.front().layout());
   if (!expr)
     return expr.error();
   auto handle_query = detail::overload{
-    [&](const query::count& count) -> caf::expected<uint64_t> {
-      VAST_ASSERT(count.mode != query::count::estimate,
+    [&](const query_context::count& count) -> caf::expected<uint64_t> {
+      VAST_ASSERT(count.mode != query_context::count::estimate,
                   "estimate counts should not evaluate expressions");
       std::shared_ptr<arrow::RecordBatch> batch{};
       auto num_hits = uint64_t{};
@@ -50,7 +51,7 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const query& query,
       }
       return num_hits;
     },
-    [&](const query::extract& extract) -> caf::expected<uint64_t> {
+    [&](const query_context::extract& extract) -> caf::expected<uint64_t> {
       auto num_hits = uint64_t{};
       for (const auto& slice : slices) {
         auto final_slice = filter(slice, *expr, {});
@@ -62,11 +63,11 @@ caf::expected<uint64_t> handle_lookup(Actor& self, const query& query,
       return num_hits;
     },
   };
-  auto num_hits = caf::visit(handle_query, query.cmd);
+  auto num_hits = caf::visit(handle_query, query_context.cmd);
   if (!num_hits)
     return std::move(num_hits.error());
   const auto runtime = std::chrono::steady_clock::now() - start;
-  const auto id_str = fmt::to_string(query.id);
+  const auto id_str = fmt::to_string(query_context.id);
   self->send(self->state.accountant, fmt::format("{}.lookup.runtime", *self),
              runtime,
              system::metrics_metadata{
@@ -111,8 +112,8 @@ system::store_actor::behavior_type default_passive_store(
         self->quit(std::move(error));
       });
   return {
-    [self](const query& query) -> caf::expected<uint64_t> {
-      return handle_lookup(self, query, self->state.store->slices());
+    [self](const query_context& query_context) -> caf::expected<uint64_t> {
+      return handle_lookup(self, query_context, self->state.store->slices());
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
       // For new, partition-local stores we know that we always erase
@@ -148,8 +149,8 @@ system::store_builder_actor::behavior_type default_active_store(
   self->state.path = std::move(path);
   self->state.store_type = std::move(store_type);
   return {
-    [self](const query& query) -> caf::expected<uint64_t> {
-      return handle_lookup(self, query, self->state.store->slices());
+    [self](const query_context& query_context) -> caf::expected<uint64_t> {
+      return handle_lookup(self, query_context, self->state.store->slices());
     },
     [self](atom::erase, const ids& selection) -> caf::expected<uint64_t> {
       // For new, partition-local stores we know that we always erase

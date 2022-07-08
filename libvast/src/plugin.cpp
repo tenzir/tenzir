@@ -20,7 +20,7 @@
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
-#include "vast/query.hpp"
+#include "vast/query_context.hpp"
 #include "vast/store.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"

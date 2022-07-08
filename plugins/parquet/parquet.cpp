@@ -10,7 +10,6 @@
 #include <vast/concept/convertible/data.hpp>
 #include <vast/detail/base64.hpp>
 #include <vast/plugin.hpp>
-#include <vast/query.hpp>
 #include <vast/store.hpp>
 
 #include <arrow/array.h>
