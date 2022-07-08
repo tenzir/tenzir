@@ -67,15 +67,15 @@ handle_lookup(Actor& self, const query_context& query_context,
   if (!num_hits)
     return std::move(num_hits.error());
   const auto runtime = std::chrono::steady_clock::now() - start;
-  const auto id_str = fmt::to_string(query_context.id);
-  self->send(self->state.accountant, fmt::format("{}.lookup.runtime", *self),
-             runtime,
+  const auto id_str = fmt::to_string(query.id);
+  self->send(self->state.accountant,
+             fmt::format("{}.lookup.runtime", self->name()), runtime,
              system::metrics_metadata{
                {"query", id_str},
                {"store-type", self->state.store_type},
              });
-  self->send(self->state.accountant, fmt::format("{}.lookup.hits", *self),
-             *num_hits,
+  self->send(self->state.accountant,
+             fmt::format("{}.lookup.hits", self->name()), *num_hits,
              system::metrics_metadata{
                {"query", id_str},
                {"store-type", self->state.store_type},
