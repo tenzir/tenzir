@@ -1,0 +1,252 @@
+---
+vast:
+  pipelines:
+    aggregate-flows:
+      - summarize:
+          group-by:
+            - timestamp
+            - src_ip
+            - dest_ip
+            - dest_port
+            - proto
+          time-resolution: 1 hour
+          aggregate:
+            timestamp_min:
+              min: timestamp
+            timestamp_max:
+              max: timestamp
+            flow.pkts_toserver: sum
+            flow.pkts_toclient: sum
+            flow.bytes_toserver: sum
+            flow.bytes_toclient: sum
+            flow.start: min
+            flow.end: max
+            flow.alerted: any
+            src_port: distinct
+            community_id: distinct
+            count:
+              count: event_type
+      - extend:
+          fields:
+            event_type: flow_agg
+      - rename:
+          schemas:
+            - from: suricata.flow
+              to: suricata.flow_agg
+
+    aggregate-dns:
+      - summarize:
+          group-by:
+            - timestamp
+            - src_ip
+            - dest_ip
+            - dest_port
+            - proto
+            - dns.rrname
+            - dns.rrtype
+            - dns.type
+          time-resolution: 1 hour
+          aggregate:
+            timestamp_min:
+              min: timestamp
+            timestamp_max:
+              max: timestamp
+            src_port: distinct
+            community_id: distinct
+            dns.rcode: distinct
+            dns.answers: distinct
+            count:
+              count: event_type
+      - extend:
+          fields:
+            event_type: dns_agg
+      - rename:
+          schemas:
+            - from: suricata.dns
+              to: suricata.dns_agg
+
+    aggregate-snmp:
+      - summarize:
+          group-by:
+            - timestamp
+            - src_ip
+            - dest_ip
+            - dest_port
+            - proto
+            - snmp
+          time-resolution: 1 hour
+          aggregate:
+            timestamp_min:
+              min: timestamp
+            timestamp_max:
+              max: timestamp
+            community_id: distinct
+            count:
+              count: event_type
+      - extend:
+          fields:
+            event_type: snmp_agg
+      - rename:
+          schemas:
+            - from: suricata.snmp
+              to: suricata.snmp_agg
+
+    aggregate-smb:
+      - summarize:
+          group-by:
+            - timestamp
+            - src_ip
+            - dest_ip
+            - dest_port
+            - proto
+            - smb.session_id
+          time-resolution: 1 hour
+          aggregate:
+            timestamp_min:
+              min: timestamp
+            timestamp_max:
+              max: timestamp
+            smb.id: max
+            smb.size: sum
+            smb.command: distinct
+            smb.filename: distinct
+            smb.disposition: distinct
+            smb.share: distinct
+            smb.ntlmssp.host: distinct
+            smb.ntlmssp.domain: distinct
+            smb.ntlmssp.user: distinct
+            smb.named_pipe: distinct
+            smb.share_type: distinct
+            count:
+              count: event_type
+      - extend:
+          fields:
+            event_type: smb_agg
+      - rename:
+          schemas:
+            - from: suricata.smb
+              to: suricata.smb_agg
+
+    aggregate-http:
+      - summarize:
+          group-by:
+            - timestamp
+            - src_ip
+            - dest_ip
+            - dest_port
+            - proto
+            - http.hostname
+            - http.url
+            - http.http_port
+            - http.http_method
+          time-resolution: 1 hour
+          aggregate:
+            timestamp_min:
+              min: timestamp
+            timestamp_max:
+              max: timestamp
+            http.length: sum
+            http.user_agent: distinct
+            http.content_type: distinct
+            http.referer: distinct
+            http.status: distinct
+            count:
+              count: event_type
+      - extend:
+          fields:
+            event_type: http_agg
+      - rename:
+          schemas:
+            - from: suricata.http
+              to: suricata.http_agg
+
+    aggregate-tls:
+      - summarize:
+          group-by:
+            - timestamp
+            - src_ip
+            - dest_ip
+            - dest_port
+            - proto
+            - tls.sni
+            - tls.fingerprint
+          time-resolution: 1 hour
+          aggregate:
+            timestamp_min:
+              min: timestamp
+            timestamp_max:
+              max: timestamp
+            smb.size: sum
+            tls.ja3.hash: distinct
+            tls.ja3s.hash: distinct
+            tls.subject: sample
+            tls.issuerdn: sample
+            tls.serial: sample
+            tls.notbefore: sample
+            tls.notafter: sample
+            count:
+              count: event_type
+      - extend:
+          fields:
+            event_type: tls_agg
+      - rename:
+          schemas:
+            - from: suricata.tls
+              to: suricata.tls_agg
+
+plugins:
+  compaction:
+    time:
+      interval: 1 day
+      step-size: 3
+      rules:
+        - after: 1 day
+          name: flow-reduction
+          pipeline: aggregate-flows
+          types:
+            - suricata.flow
+        - after: 1 day
+          name: dns-reduction
+          pipeline: aggregate-dns
+          types:
+            - suricata.dns
+        - after: 1 day
+          name: snmp-reduction
+          pipeline: aggregate-snmp
+          types:
+            - suricata.snmp
+        - after: 1 day
+          name: smb-reduction
+          pipeline: aggregate-smb
+          types:
+            - suricata.smb
+        - after: 7 days
+          name: http-reduction
+          pipeline: aggregate-http
+          types:
+            - suricata.http
+        - after: 7 days
+          name: tls-reduction
+          pipeline: aggregate-tls
+          types:
+            - suricata.tls
+    space:
+      interval: 1 hour
+      step-size: 3
+      mode: weighted-age
+      disk-budget-high: 70
+      disk-budget-low: 60
+      scan-binary: /opt/vast/dbsize.sh
+      weights:
+        # Keep aggregated flow, fns, snmp and smb logs 5x longer
+        - weight: 5
+          types:
+            - suricata.flow_agg
+            - suricata.dns_agg
+            - suricata.snmp_agg
+            - suricata.smb_agg
+        # Keep aggregated http and tls logs 10x longer
+        - weight: 10
+          types:
+            - suricata.http_agg
+            - suricata.tls_agg
