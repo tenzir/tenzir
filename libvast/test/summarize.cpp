@@ -172,6 +172,7 @@ TEST(summarize test) {
        {"ports", record{{"distinct", "port"}}},
        {"alternating_number", "distinct"},
        {"alternating_number_list", "distinct"},
+       {"sample_time", record{{"sample", "time"}}},
      }},
   };
   auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
@@ -205,6 +206,8 @@ TEST(summarize test) {
               make_data_view(expected_alternating_numbers));
   CHECK_EQUAL(summarized_slice.at(0, 15),
               make_data_view(expected_alternating_numbers_list));
+  CHECK_EQUAL(summarized_slice.at(0, 16),
+              make_data_view(vast::time{std::chrono::seconds(1258329600)}));
 }
 
 TEST(summarize test fully qualified field names) {

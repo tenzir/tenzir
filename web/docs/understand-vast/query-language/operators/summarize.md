@@ -43,7 +43,7 @@ Aggregate functions compute a single value of one or more columns in a given
 group. Fields that neither occur in an aggregation function nor in the
 `group-by` list are dropped from the output.
 
-The foollowing aggregation functions are available:
+The following aggregation functions are available:
 - `sum`: Computes the sum of all grouped values.
 - `min`: Computes the minimum of all grouped values.
 - `max`: Computes the maxiumum of all grouped values.
@@ -54,6 +54,7 @@ The foollowing aggregation functions are available:
 - `distinct`: Creates a sorted list of all unique grouped values. If the values
   are lists, operates on the all values inside the lists rather than the lists
   themselves.
+- `sample`: Takes the first of all grouped values.
 
 ## Example
 
