@@ -1,48 +1,60 @@
 # summarize
 
-The `summarize` operator for VAST adds a generic transformation step that allows
-for flexible grouping and aggregation.
+The `summarize` operator bundles input records according to a grouping
+expression and applies an aggregation function over the each group.
 
-The aggregation operates on the scope of the transformation, which for import
-and export is the size of a single batch (configurable as
-`vast.import.batch-size`), and for compaction is the size of a partition
+The extent of a group depends on the pipeline input. For import and export
+pipelines, a group comprises a single batch (configurable as
+`vast.import.batch-size`). For compaction, a group comprises an entire partition
 (configurable as `vast.max-partition-size`).
 
 ## Parameters
 
-The `summarize` transform step has multiple configuration options. In the places
-where the configuration refers to a field name, it is also possible to specify a
-suffix of a nested field instead spelling out the full name.
+The `summarize` operator has grouping and aggregation options. The general
+structure looks as follows:
+
+```yaml
+summarize:
+  group-by:
+    # inputs
+  time-resolution:
+    # bucketing for temporal grouping
+  aggregate:
+    # output 
+```
 
 ### Grouping
 
- The `group-by` option specifies a list of columns to group by. VAST internally
- calculates the combined hash for all the configured columns for every row, and
- sorts the data into buckets for aggregation.
+The `group-by` option specifies a of
+[extractors](/docs/understand-vast/query-language/expressions#extractors) that
+should form a group. VAST internally calculates the combined hash for all
+extractors for every row and puts the data into buckets for subsequent
+aggregation.
 
- ### Time Resolution
+### Time Resolution
 
- The `time-resolution` option specifies an optional duration value that specifies
- the tolerance when comparing time values in the `group-by` section. For example,
- `01:48` is rounded down to `01:00` when a 1-hour `time-resolution` is used.
+The `time-resolution` option specifies an optional duration value that specifies
+the tolerance when comparing time values in the `group-by` section. For example,
+`01:48` is rounded down to `01:00` when a 1-hour `time-resolution` is used.
 
- ### Aggregate Functions
+### Aggregate Functions
 
- A list of columns to perform the respective aggregation function on the grouped
- buckets. Fields that have no such function specified and are not part of the
- `group-by` columns are dropped from the output.
+Aggregate functions compute a single value of one or more columns in a given
+group. Fields that neither occur in an aggregation function nor in the
+`group-by` list are dropped from the output.
 
- Here's how the individual aggregation functions operate:
- - `sum`: Computes the sum of all grouped values.
- - `min`: Computes the minimum of all grouped values.
- - `max`: Computes the maxiumum of all grouped values.
- - `any`: Computes the disjunction (OR) of all grouped values. Requires the
-   values to be booleans.
- - `all`: Computes the conjunction (AND) of all grouped values. Requires the
-   values to be booleans.
- - `distinct`: Creates a sorted list of all unique grouped values. If the values
-   are lists, operates on the all values inside the lists rather than the lists
-   themselves.
+The foollowing aggregation functions are available:
+- `sum`: Computes the sum of all grouped values.
+- `min`: Computes the minimum of all grouped values.
+- `max`: Computes the maxiumum of all grouped values.
+- `any`: Computes the disjunction (OR) of all grouped values. Requires the
+  values to be booleans.
+- `all`: Computes the conjunction (AND) of all grouped values. Requires the
+  values to be booleans.
+- `distinct`: Creates a sorted list of all unique grouped values. If the values
+  are lists, operates on the all values inside the lists rather than the lists
+  themselves.
+
 ## Example
 
 ```yaml
