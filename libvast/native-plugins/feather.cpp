@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/arrow_table_slice_builder.hpp>
+#include <vast/arrow_table_slice.hpp>
 #include <vast/chunk.hpp>
 #include <vast/data.hpp>
 #include <vast/detail/narrow.hpp>
@@ -19,11 +19,57 @@
 #include <arrow/io/memory.h>
 #include <arrow/ipc/feather.h>
 #include <arrow/table.h>
-#include <arrow/util/future.h>
+#include <arrow/util/key_value_metadata.h>
 
 namespace vast::plugins::feather {
 
 namespace {
+
+auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
+  return value_at(time_type{}, *time_col, time_col->length() - 1);
+}
+
+/// Extract event column from record batch and transform into new record batch.
+/// The record batch contains a message envelope with the actual event data
+/// alongside VAST-related meta data (currently limited to the import time).
+/// Message envelope is unwrapped and the metadata, attached to the to-level
+/// schema the input record batch is copied to the newly created record batch.
+std::shared_ptr<arrow::RecordBatch>
+unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
+  auto event_col = rb->GetColumnByName("event");
+  auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
+  auto event_rb = arrow::RecordBatch::FromStructArray(event_col).ValueOrDie();
+  return event_rb->ReplaceSchemaMetadata(schema_metadata);
+}
+
+/// Create a constant column for the given import time with `rows` rows
+auto make_import_time_col(const time& import_time, int64_t rows) {
+  auto v = import_time.time_since_epoch().count();
+  auto builder = time_type::make_arrow_builder(arrow::default_memory_pool());
+  if (auto status = builder->Reserve(rows); !status.ok())
+    die(fmt::format("make time column failed: '{}'", status.ToString()));
+  for (int i = 0; i < rows; ++i) {
+    auto status = builder->Append(v);
+    VAST_ASSERT(status.ok());
+  }
+  return builder->Finish().ValueOrDie();
+}
+
+/// Wrap a record batch into an event envelope containing the event data
+/// as a nested struct alongside metadata as separate columns, containing
+/// the `import_time`.
+auto wrap_record_batch(const table_slice& slice)
+  -> std::shared_ptr<arrow::RecordBatch> {
+  auto rb = to_record_batch(slice);
+  auto event_array = rb->ToStructArray().ValueOrDie();
+  auto time_col = make_import_time_col(slice.import_time(), rb->num_rows());
+  auto schema = arrow::schema(
+    {arrow::field("import_time", time_type::to_arrow_type()),
+     arrow::field("event", event_array->type(), rb->schema()->metadata())});
+  auto new_rb
+    = arrow::RecordBatch::Make(schema, rb->num_rows(), {time_col, event_array});
+  return new_rb;
+}
 
 class passive_feather_store final : public passive_store {
   [[nodiscard]] caf::error load(chunk_ptr chunk) override {
@@ -38,7 +84,10 @@ class passive_feather_store final : public passive_store {
     for (auto rb : arrow::TableBatchReader(*table)) {
       if (!rb.ok())
         return caf::make_error(ec::system_error, rb.status().ToString());
-      slices_.emplace_back(rb.MoveValueUnsafe());
+      auto unwrapped_rb = unwrap_record_batch(*rb);
+      auto time_col = (*rb)->GetColumnByName("import_time");
+      auto& slice = slices_.emplace_back(unwrapped_rb);
+      slice.import_time(derive_import_time(time_col));
     }
     return {};
   }
@@ -63,7 +112,7 @@ class active_feather_store final : public active_store {
     auto record_batches = arrow::RecordBatchVector{};
     record_batches.reserve(slices_.size());
     for (const auto& slice : slices_)
-      record_batches.push_back(to_record_batch(slice));
+      record_batches.push_back(wrap_record_batch(slice));
     const auto table = ::arrow::Table::FromRecordBatches(record_batches);
     if (!table.ok())
       return caf::make_error(ec::system_error, table.status().ToString());

@@ -6,14 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/arrow_table_slice_builder.hpp>
+#include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/detail/base64.hpp>
 #include <vast/plugin.hpp>
 #include <vast/store.hpp>
 
 #include <arrow/array.h>
-#include <arrow/compute/api.h>
+#include <arrow/compute/cast.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 #include <arrow/table.h>
@@ -244,20 +244,8 @@ align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
 }
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
-  auto min_max_time = arrow::compute::MinMax(time_col).ValueOrDie();
-  auto max_value = min_max_time.scalar_as<arrow::StructScalar>().value[1];
-  auto f = detail::overload{
-    [&](const arrow::TimestampScalar& ts) -> vast::time {
-      return time{duration{ts.value}};
-    },
-    [&](const arrow::Scalar& scalar) -> vast::time {
-      die(fmt::format("import_time is not a time column, got {} instead",
-                      scalar.type->ToString()));
-      return time{duration{0}};
-    },
-  };
-  return caf::visit(f, *max_value);
-} // namespace vast::plugins::parquet
+  return value_at(time_type{}, *time_col, time_col->length() - 1);
+}
 
 /// Extract event column from record batch and transform into new record batch.
 /// The record batch contains a message envelope with the actual event data
@@ -265,26 +253,26 @@ auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
 /// Message envelope is unwrapped and the metadata, attached to the to-level
 /// schema the input record batch is copied to the newly created record batch.
 std::shared_ptr<arrow::RecordBatch>
-prepare_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
+unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
   auto event_col = rb->GetColumnByName("event");
   auto schema_metadata = rb->schema()->GetFieldByName("event")->metadata();
   auto event_rb = arrow::RecordBatch::FromStructArray(event_col).ValueOrDie();
   return event_rb->ReplaceSchemaMetadata(schema_metadata);
 }
 
+/// Create multiple table slices for a record batch, splitting at `max_slice_size`
 std::vector<table_slice>
 create_table_slices(const std::shared_ptr<arrow::RecordBatch>& rb,
                     int64_t max_slice_size) {
-  auto final_rb = prepare_record_batch(rb);
+  auto final_rb = unwrap_record_batch(rb);
   auto time_col = rb->GetColumnByName("import_time");
   auto slices = std::vector<table_slice>{};
   slices.reserve(rb->num_rows() / max_slice_size + 1);
   for (int64_t offset = 0; offset < rb->num_rows(); offset += max_slice_size) {
     auto rb_sliced = final_rb->Slice(offset, max_slice_size);
-    auto slice = arrow_table_slice_builder::create(rb_sliced);
+    auto& slice = slices.emplace_back(rb_sliced);
     slice.import_time(
       derive_import_time(time_col->Slice(offset, max_slice_size)));
-    slices.push_back(slice);
   }
   return slices;
 }
@@ -342,6 +330,7 @@ std::shared_ptr<::parquet::ArrowWriterProperties> arrow_writer_properties() {
   return builder.build();
 }
 
+/// Create a constant column for the given import time with `rows` rows
 auto make_import_time_col(const time& import_time, int64_t rows) {
   auto v = import_time.time_since_epoch().count();
   auto builder = time_type::make_arrow_builder(arrow::default_memory_pool());
@@ -354,10 +343,12 @@ auto make_import_time_col(const time& import_time, int64_t rows) {
   return builder->Finish().ValueOrDie();
 }
 
-auto create_record_batch(const table_slice& slice)
+/// Wrap a record batch into an event envelope containing the event data
+/// as a nested struct alongside metadata as separate columns, containing
+/// the `import_time`.
+auto wrap_record_batch(const table_slice& slice)
   -> std::shared_ptr<arrow::RecordBatch> {
   auto rb = to_record_batch(slice);
-  auto md = rb->schema()->metadata();
   auto event_array = rb->ToStructArray().ValueOrDie();
   auto time_col = make_import_time_col(slice.import_time(), rb->num_rows());
   auto schema = arrow::schema(
@@ -373,7 +364,7 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices,
   auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto batches = arrow::RecordBatchVector{};
   for (const auto& slice : slices)
-    batches.push_back(create_record_batch(slice));
+    batches.push_back(wrap_record_batch(slice));
   auto table = arrow::Table::FromRecordBatches(batches).ValueOrDie();
   auto writer_props = writer_properties(config);
   auto arrow_writer_props = arrow_writer_properties();

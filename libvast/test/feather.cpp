@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE parquet
+#define SUITE feather
 
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/chunk.hpp>
@@ -28,7 +28,7 @@
 
 #include <chrono>
 
-namespace vast::plugins::parquet {
+namespace vast::plugins::feather {
 
 namespace {
 
@@ -110,11 +110,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(filesystem_tests, fixture)
 
-TEST(parquet store roundtrip) {
+TEST(feather store roundtrip) {
   auto xs = std::vector<vast::table_slice>{suricata_dns_log[0]};
   xs[0].offset(23u);
   auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -122,7 +122,7 @@ TEST(parquet store roundtrip) {
   auto& [builder, header] = *builder_and_header;
   vast::detail::spawn_container_source(sys, xs, builder);
   run();
-  // The parquet store expects a single stream source, so the data should be
+  // The feather store expects a single stream source, so the data should be
   // flushed to disk after the source disconnected.
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
@@ -246,12 +246,12 @@ struct table_slice_fixture {
 
 } // namespace
 
-TEST(active parquet store fetchall query) {
+TEST(active feather store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   slice.offset(23);
   auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, uuid)->store_builder;
@@ -264,41 +264,12 @@ TEST(active parquet store fetchall query) {
   compare_table_slices(slice, results[0]);
 }
 
-TEST(passive parquet store fetchall small row group size) {
+TEST(passive feather store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   slice.offset(23);
   auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
-  REQUIRE(plugin);
-  // We know that initialize may be called multiple times for this plugin.
-  auto _
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-    = const_cast<store_actor_plugin*>(plugin)->initialize(
-      record{{"row-group-size", 512u}});
-  auto builder_and_header
-    = plugin->make_store_builder(accountant, filesystem, uuid);
-  REQUIRE_NOERROR(builder_and_header);
-  auto& [builder, header] = *builder_and_header;
-  auto slices = std::vector<table_slice>{1024, slice}; // 4096 elements
-  vast::detail::spawn_container_source(sys, slices, builder);
-  run();
-  auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
-  REQUIRE_NOERROR(store);
-  run();
-  auto results = query(*store, vast::ids{});
-  run();
-  // 4096 elements with row group size of 512 is 8 table slices
-  CHECK_EQUAL(results.size(), 8ull);
-  // compare_table_slices(slice, results[0]);
-}
-
-TEST(passive parquet store fetchall query) {
-  auto f = table_slice_fixture();
-  auto slice = f.slice;
-  slice.offset(23);
-  auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -318,13 +289,13 @@ TEST(passive parquet store fetchall query) {
   compare_table_slices(slice, results[0]);
 }
 
-TEST(passive parquet store selective query) {
+TEST(passive feather store selective query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
   slice.offset(23);
   auto uuid = vast::uuid::random();
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -346,10 +317,10 @@ TEST(passive parquet store selective query) {
   compare_table_slices(*expected_slice, results[0]);
 }
 
-TEST(passive parquet store erase) {
+TEST(passive feather store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, vast::uuid::random());
@@ -367,10 +338,10 @@ TEST(passive parquet store erase) {
   run();
 }
 
-TEST(active parquet store erase) {
+TEST(active feather store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, vast::uuid::random())
@@ -391,10 +362,10 @@ TEST(active parquet store erase) {
   run();
 }
 
-TEST(active parquet store status) {
+TEST(active feather store status) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("parquet");
+  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
   auto uuid = vast::uuid::random();
   auto builder
@@ -410,8 +381,8 @@ TEST(active parquet store status) {
       const auto expected = record{
         {"events", 4_c},
         {"path",
-         std::filesystem::path{"archive"} / fmt::format("{}.parquet", uuid)},
-        {"store-type", "parquet"},
+         std::filesystem::path{"archive"} / fmt::format("{}.feather", uuid)},
+        {"store-type", "feather"},
       };
       CHECK_EQUAL(expected, status);
     },
@@ -423,4 +394,4 @@ TEST(active parquet store status) {
 
 FIXTURE_SCOPE_END()
 
-} // namespace vast::plugins::parquet
+} // namespace vast::plugins::feather
