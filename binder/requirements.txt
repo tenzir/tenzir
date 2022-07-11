@@ -2,3 +2,4 @@ pandas
 pyvast
 requests
 pyarrow
+jupytext
