@@ -7,42 +7,47 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/aggregation_function.hpp>
-#include <vast/aliases.hpp>
 #include <vast/arrow_table_slice.hpp>
-#include <vast/fwd.hpp>
 #include <vast/plugin.hpp>
 
-namespace vast::plugins::count {
+namespace vast::plugins::sample {
 
 namespace {
 
-class count_function final : public aggregation_function {
+class sample_function final : public aggregation_function {
 public:
-  explicit count_function(type input_type) noexcept
+  explicit sample_function(type input_type) noexcept
     : aggregation_function(std::move(input_type)) {
     // nop
   }
 
 private:
   [[nodiscard]] type output_type() const override {
-    return type{count_type{}};
+    return input_type();
   }
 
   void add(const data_view& view) override {
-    if (!caf::holds_alternative<caf::none_t>(view))
+    if (!caf::holds_alternative<caf::none_t>(sample_))
       return;
-    count_ += 1;
+    sample_ = materialize(view);
   }
 
   void add(const arrow::Array& array) override {
-    count_ += array.length() - array.null_count();
+    if (!caf::holds_alternative<caf::none_t>(sample_))
+      return;
+    for (const auto& value : values(input_type(), array)) {
+      if (!caf::holds_alternative<caf::none_t>(value)) {
+        sample_ = materialize(value);
+        return;
+      }
+    }
   }
 
   [[nodiscard]] caf::expected<data> finish() && override {
-    return count_;
+    return std::move(sample_);
   }
 
-  vast::count count_ = {};
+  data sample_ = {};
 };
 
 class plugin : public virtual aggregation_function_plugin {
@@ -51,17 +56,17 @@ class plugin : public virtual aggregation_function_plugin {
   }
 
   [[nodiscard]] const char* name() const override {
-    return "count";
+    return "sample";
   };
 
   [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
   make_aggregation_function(const type& input_type) const override {
-    return std::make_unique<count_function>(input_type);
+    return std::make_unique<sample_function>(input_type);
   }
 };
 
 } // namespace
 
-} // namespace vast::plugins::count
+} // namespace vast::plugins::sample
 
-VAST_REGISTER_PLUGIN(vast::plugins::count::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::sample::plugin)

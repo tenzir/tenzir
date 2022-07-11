@@ -78,6 +78,13 @@ The transform plugin adds a new [transform
 step](/docs/understand-vast/query-language/operators) that users can reference in
 a [transform definition](/docs/understand-vast/query-language/pipelines).
 
+### Aggregation Function
+
+The aggregation function plugin adds a new [aggregation
+function](/docs/understand-vast/query-language/operators/summarize#aggregate-functions)
+for the `summarize` transform step that performs an incremental aggregation over
+a set of grouped input values of a single type.
+
 ### Store
 
 Inside a partition, the store plugin implements the conversion from in-memory

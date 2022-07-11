@@ -610,9 +610,6 @@ jobs:
             target: example-transform
             path: examples/plugins/transform
             dependencies:
-          - name: Summarize
-            target: summarize
-            path: plugins/summarize
           - name: Broker
             target: broker
             path: plugins/broker

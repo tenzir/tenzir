@@ -25,12 +25,14 @@ struct integer : detail::totally_ordered<integer> {
 
   integer();
   integer(const integer&);
-  integer(integer&&);
+  integer(integer&&) noexcept;
 
   explicit integer(int64_t v);
 
   integer& operator=(const integer&);
-  integer& operator=(integer&&);
+  integer& operator=(integer&&) noexcept;
+
+  friend integer operator+(integer lhs, integer rhs);
 
   friend bool operator==(integer lhs, integer rhs);
 

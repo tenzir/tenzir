@@ -2,7 +2,7 @@
 title: VAST v2.1
 description: VAST v2.1 - Tune VAST Databases
 authors: dominiklohmann
-date: 2022-07.07
+date: 2022-07-07
 tags: [release, performance]
 ---
 

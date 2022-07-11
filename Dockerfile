@@ -91,7 +91,7 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
-      -D VAST_PLUGINS:STRING="plugins/summarize;plugins/broker;plugins/pcap;plugins/sigma" && \
+      -D VAST_PLUGINS:STRING="plugins/*" && \
     cmake --build build --parallel && \
     cmake --install build --strip && \
     rm -rf build
