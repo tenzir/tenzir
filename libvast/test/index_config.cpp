@@ -28,6 +28,7 @@ rules:
     fp-rate: 0.005
   - targets:
       - zeek.conn.id.orig_h
+    create-dense-index: false
 )__";
 
 } // namespace
@@ -45,4 +46,6 @@ TEST(example configuration) {
   REQUIRE_EQUAL(rule1.targets.size(), 1u);
   CHECK_EQUAL(rule1.targets[0], "zeek.conn.id.orig_h");
   CHECK_EQUAL(rule1.fp_rate, 0.01); // default
+  CHECK_EQUAL(rule0.create_dense_index, true); // default
+  CHECK_EQUAL(rule1.create_dense_index, false);
 }

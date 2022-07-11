@@ -23,16 +23,18 @@ struct index_config {
   struct rule {
     std::vector<std::string> targets = {};
     double fp_rate = defaults::system::fp_rate;
+    bool create_dense_index = defaults::system::create_dense_index;
 
     template <class Inspector>
     friend auto inspect(Inspector& f, rule& x) {
-      return f(x.targets, x.fp_rate);
+      return f(x.targets, x.fp_rate, x.create_dense_index);
     }
 
     static inline const record_type& layout() noexcept {
       static auto result = record_type{
         {"targets", list_type{string_type{}}},
         {"fp-rate", real_type{}},
+        {"create-dense-index", bool_type{}},
       };
       return result;
     }
