@@ -1,7 +1,7 @@
 # summarize
 
 The `summarize` operator bundles input records according to a grouping
-expression and applies an aggregation function over the each group.
+expression and applies an aggregation function over each group.
 
 The extent of a group depends on the pipeline input. For import and export
 pipelines, a group comprises a single batch (configurable as
@@ -25,7 +25,7 @@ summarize:
 
 ### Grouping
 
-The `group-by` option specifies a of
+The `group-by` option specifies a list of
 [extractors](/docs/understand-vast/query-language/expressions#extractors) that
 should form a group. VAST internally calculates the combined hash for all
 extractors for every row and puts the data into buckets for subsequent
