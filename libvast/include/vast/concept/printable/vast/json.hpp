@@ -49,7 +49,7 @@ struct json_printer
 
   template <class Iterator>
   struct print_visitor {
-    print_visitor(Iterator& out) : out_{out} {
+    explicit print_visitor(Iterator& out) : out_{out} {
     }
 
     bool operator()(const caf::none_t&) {
@@ -85,13 +85,11 @@ struct json_printer
         if (!std::isfinite(x))
           return printers::str.print(out_, "null");
         auto str = std::to_string(x);
-        real i;
         if constexpr (std::is_floating_point_v<T>) {
-          if (std::modf(x, &i) == 0.0)
-            // Do not show 0 as 0.0.
-            str.erase(str.find('.'), std::string::npos);
+          // Avoid trailing zeros.
+          if (real i; std::modf(x, &i) == 0.0)
+            str.erase(str.find('.') + 2, std::string::npos);
           else
-            // Avoid trailing zeros.
             str.erase(str.find_last_not_of('0') + 1, std::string::npos);
         }
         return printers::str.print(out_, str);
