@@ -4,7 +4,6 @@ import asyncio
 import logging
 from signal import SIGINT, SIGTERM
 import sys
-from typing import Any
 
 from vast import VAST
 import apps.misp
