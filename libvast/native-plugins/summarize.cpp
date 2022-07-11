@@ -226,10 +226,11 @@ struct group_by_column {
   static caf::expected<std::vector<group_by_column>>
   make(const type& schema, const configuration& config) {
     auto result = std::vector<group_by_column>{};
+    const auto& schema_rt = caf::get<record_type>(schema);
     for (const auto& extractor : config.group_by_extractors) {
-      for (auto offset : caf::get<record_type>(schema).resolve_key_suffix(
-             extractor, schema.name())) {
-        auto field = caf::get<record_type>(schema).field(offset);
+      for (auto offset :
+           schema_rt.resolve_key_suffix(extractor, schema.name())) {
+        auto field = schema_rt.field(offset);
         auto& column = result.emplace_back();
         column.input = std::move(offset);
         column.time_resolution
@@ -237,7 +238,7 @@ struct group_by_column {
                 && caf::holds_alternative<time_type>(field.type)
               ? *config.time_resolution
               : std::optional<duration>{};
-        column.name = caf::get<record_type>(schema).key(offset);
+        column.name = schema_rt.key(offset);
         column.type = field.type;
       }
     }
@@ -284,6 +285,7 @@ struct aggregation_column {
   static caf::expected<std::vector<aggregation_column>>
   make(const type& schema, const configuration& config) {
     auto result = std::vector<aggregation_column>{};
+    const auto& schema_rt = caf::get<record_type>(schema);
     for (const auto& aggregation : config.aggregations) {
       // Sanity-check that the configured aggregation function actually
       // exists.
@@ -295,8 +297,8 @@ struct aggregation_column {
                                            aggregation.function_name));
       auto inputs = std::vector<offset>{};
       for (const auto& extractor : aggregation.input_extractors) {
-        for (auto offset : caf::get<record_type>(schema).resolve_key_suffix(
-               extractor, schema.name()))
+        for (auto offset :
+             schema_rt.resolve_key_suffix(extractor, schema.name()))
           inputs.push_back(std::move(offset));
       }
       // If we did not find any input columns we can skip this aggregation for
@@ -313,12 +315,10 @@ struct aggregation_column {
           },
           type);
       };
-      auto input_type
-        = prune(caf::get<record_type>(schema).field(inputs.front()).type);
+      auto input_type = prune(schema_rt.field(inputs.front()).type);
       const auto type_mismatch = std::any_of(
         inputs.begin() + 1, inputs.end(), [&](const offset& input) noexcept {
-          return input_type
-                 != prune(caf::get<record_type>(schema).field(input).type);
+          return input_type != prune(schema_rt.field(input).type);
         });
       if (type_mismatch)
         return caf::make_error(ec::invalid_configuration,
@@ -675,6 +675,9 @@ private:
   /// add for the lazily created aggregation for the schema.
   [[nodiscard]] caf::error
   add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+    VAST_ASSERT(schema);
+    VAST_ASSERT(caf::holds_alternative<record_type>(schema));
+    VAST_ASSERT(batch);
     // Try to find whether we have an aggregation already for the schema to
     // forward the batch to it.
     if (auto aggregation = aggregations_.find(schema);
