@@ -204,6 +204,24 @@ TEST(replace step) {
   CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
 }
 
+TEST(extend step) {
+  auto slice = make_transforms_testdata();
+  auto replace_step = unbox(vast::make_transform_step(
+    "extend", {{"fields", vast::record{{"secret", "xxx"}}}}));
+  auto add_failed = replace_step->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!add_failed);
+  auto replaced = unbox(replace_step->finish());
+  REQUIRE_EQUAL(replaced.size(), 1ull);
+  REQUIRE_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
+    4ull);
+  CHECK_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(3).name,
+    "secret");
+  const auto table_slice = as_table_slice(replaced);
+  CHECK_EQUAL(table_slice.at(0, 3), vast::data_view{"xxx"sv});
+}
+
 TEST(where step) {
   auto [slice, single_row_slice, multi_row_slice]
     = make_where_testdata(vast::defaults::import::table_slice_type);
