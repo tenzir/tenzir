@@ -1,19 +1,17 @@
-import asyncio
-import fabric
+from vast import VAST
 import pymisp
 import zmq
 import zmq.asyncio
 import json
 import logging
 import misp_stix_converter
+from typing import Any
 
-from vast_threatbus.message_mapping import stix2_sighting_to_misp
-
-# The MISP wrapper as seen from the fabric.
+# The MISP app.
 class MISP:
-    def __init__(self, config: dict, fabric: fabric.Fabric):
+    def __init__(self, config: dict, vast: VAST):
         self.config = config
-        self.fabric = fabric
+        self.vast = vast
         self.logger = logging.getLogger("MISP")
         self.logger.info("MISP App started")
         self.misp = pymisp.ExpandedPyMISP(
@@ -24,7 +22,7 @@ class MISP:
 
     async def run(self):
         # Setup subscriptions.
-        await self.fabric.subscribe("vast.sighting", self._callback)
+        await self.vast.subscribe("vast.sighting", self._on_sighting)
         # Hook into event feed via 0mq.
         socket = zmq.asyncio.Context().socket(zmq.SUB)
         zmq_host = self.config['zmq.host']
@@ -43,14 +41,14 @@ class MISP:
                     continue
                 event = json_msg.get("Event", None)
                 attribute = json_msg.get("Attribute", None)
-                # Only consider events, not Attributes that ship with Events
+                # Only consider events, not Attributes that ship within Events.
                 if not event or attribute:
                     continue
                 parser = misp_stix_converter.MISPtoSTIX21Parser()
                 try:
                     parser.parse_misp_event(event)
                     self.logger.info(parser.bundle.serialize(pretty=True))
-                    await self.fabric.publish("stix.bundle", fabric.Message(parser.bundle))
+                    await self.vast.publish("stix.bundle", parser.bundle)
                 except Exception as e:
                     self.logger.error(f"failed to parse MISP event as STIX: {e}")
                     continue
@@ -58,18 +56,17 @@ class MISP:
             socket.setsockopt(zmq.LINGER, 0)
             socket.close()
 
-    async def _callback(self, msg: fabric.Message):
-        data = msg.to_bytes
-        self.logger.debug(f"got data: {data}")
-        sighting = stix2_sighting_to_misp(data)
-        response = self.misp.add_sighting(sighting)
-        if not response or type(response) is dict and response.get("message", None):
-           self.logger.error(f"failed to add sighting to MISP: '{sighting}' ({response})")
-        else:
-            self.logger.info(f"reported sighting: {response}")
+    async def _on_sighting(self, message: Any):
+        self.logger.debug(f"got data: {message}")
+        # TODO: exctract sighting
+        #response = self.misp.add_sighting(...)
+        #if not response or type(response) is dict and response.get("message", None):
+        #   self.logger.error(f"failed to add sighting to MISP: '{sighting}' ({response})")
+        #else:
+        #    self.logger.info(f"reported sighting: {response}")
 
 
-async def start(fabric: fabric.Fabric):
+async def start(config: dict, vast: VAST):
     # Should by DynaConf or so eventually...
     config = {
         "api.host": "http://localhost:5000",
@@ -77,5 +74,5 @@ async def start(fabric: fabric.Fabric):
         "zmq.host": "localhost",
         "zmq.port": 50000
         }
-    misp = MISP(config, fabric)
+    misp = MISP(config, vast)
     await misp.run()

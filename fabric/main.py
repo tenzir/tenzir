@@ -1,19 +1,49 @@
-import apps.db as db
-import apps.misp as misp
+from dynaconf import Dynaconf
+import argparse
 import asyncio
 import logging
-from backbone import InMemoryBackbone
-from fabric import Fabric
+from signal import SIGINT, SIGTERM
+import sys
+from typing import Any
 
-async def main():
-    backbone = InMemoryBackbone()
-    fabric = Fabric(backbone)
+from vast import VAST
+import apps.misp
+import backbones.inmemory
 
-    # run all the apps in parallel
-    db_task = asyncio.create_task(db.start(fabric))
-    misp_task = asyncio.create_task(misp.start(fabric))
-    await db_task
-    await misp_task
+async def main(config):
+    # Spawn VAST.
+    backbone = backbones.inmemory.InMemory()
+    vast = VAST(config, backbone)
+    # Spawn plugins.
+    try:
+        await asyncio.gather(apps.misp.start(config, vast))
+    except asyncio.CancelledError:
+        pass # TODO: log
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Parse config file
+    settings_files = ["config.yaml", "config.yml"]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", "-c", help="path to a configuration file")
+    args = parser.parse_args()
+    if args.config:
+        if not args.config.endswith("yaml") and not args.config.endswith("yml"):
+            sys.exit("please provide a `yaml` or `yml` configuration file.")
+        settings_files = [args.config]
+    config = Dynaconf(
+        settings_files=settings_files,
+        load_dotenv=True,
+        envvar_prefix="VAST",
+    )
+    # Setup logger.
+    # TODO: do nicely with colors.
+    logging.basicConfig(level = logging.DEBUG)
+    # Configure event loop to exit gracefully on CTRL+C.
+    loop = asyncio.get_event_loop()
+    main_task = asyncio.ensure_future(main(config))
+    for signal in [SIGINT, SIGTERM]:
+        loop.add_signal_handler(signal, main_task.cancel)
+    try:
+        loop.run_until_complete(main_task)
+    finally:
+        loop.close()
