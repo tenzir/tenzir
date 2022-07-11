@@ -232,7 +232,7 @@ struct group_by_column {
            schema_rt.resolve_key_suffix(extractor, schema.name())) {
         auto field = schema_rt.field(offset);
         auto& column = result.emplace_back();
-        column.input = std::move(offset);
+        column.input = offset;
         column.time_resolution
           = config.time_resolution.has_value()
                 && caf::holds_alternative<time_type>(field.type)
