@@ -25,6 +25,7 @@ public:
   virtual ~aggregation_function() noexcept = default;
 
   /// Return the output type of the function.
+  /// @post result must not be the null type.
   [[nodiscard]] virtual type output_type() const = 0;
 
   /// Add data to the aggregation function.

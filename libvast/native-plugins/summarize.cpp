@@ -340,11 +340,10 @@ struct aggregation_column {
                                            input_type, instance.error()));
       auto output_type = (*instance)->output_type();
       if (!output_type)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("aggregation function {} does not "
-                                           "support input type {}",
-                                           aggregation.function_name,
-                                           input_type));
+        return caf::make_error(
+          ec::logic_error, fmt::format("aggregation function {} returned null "
+                                       "type output for input type {}",
+                                       aggregation.function_name, input_type));
       auto& column = result.emplace_back();
       column.function_name = aggregation.function_name;
       column.inputs = std::move(inputs);
