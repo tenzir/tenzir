@@ -27,6 +27,9 @@ struct configuration {
   /// The key suffixes of the fields to drop.
   std::vector<std::string> fields = {};
 
+  /// The key suffixes of the schemas to drop.
+  std::vector<std::string> schemas = {};
+
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
@@ -37,6 +40,7 @@ struct configuration {
   static inline const record_type& layout() noexcept {
     static auto result = record_type{
       {"fields", list_type{string_type{}}},
+      {"schemas", list_type{string_type{}}},
     };
     return result;
   }
@@ -53,6 +57,14 @@ public:
   caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
     VAST_DEBUG("drop step adds batch");
+    // Determine whether we want to drop the entire batch first.
+    const auto drop_schema
+      = std::any_of(config_.schemas.begin(), config_.schemas.end(),
+                    [&](const auto& dropped_schema) {
+                      return dropped_schema == layout.name();
+                    });
+    if (drop_schema)
+      return caf::none;
     // Apply the transformation.
     auto transform_fn
       = [&](struct record_type::field, std::shared_ptr<arrow::Array>) noexcept
@@ -107,10 +119,10 @@ public:
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const record& options) const override {
-    if (!options.contains("fields"))
+    if (!options.contains("fields") && !options.contains("schemas"))
       return caf::make_error(ec::invalid_configuration,
-                             "key 'fields' is missing in configuration for "
-                             "drop step");
+                             "key 'fields' or 'schemas' is missing in "
+                             "configuration for drop step");
     auto config = to<configuration>(options);
     if (!config)
       return config.error();
