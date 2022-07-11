@@ -104,14 +104,14 @@ The following list describes all available metrics keys:
 |`json-reader.unknown-layout`|The number if NDJSON lines with an unknown layout.|#event||
 |`json-writer.rate`|The rate of events processed by the JSON sink.|#events/second||
 |`catalog.lookup.candidates`|The number of candidate partitions considered for a query.|#partitions|🔎|
-|`catalog.lookup.runtime`|The duration of a query evaluation in the catalog.|#nanoseconds|🔎|
+|`catalog.lookup.runtime`|The duration of a query evaluation in the catalog.|#milliseconds|🔎|
 |`catalog.lookup.hits`|The number of results of a query in the catalog.|#events|🔎|
 |`catalog.num-partitions`|The number of partitions registered in the catalog per schema.|#partitions|🗂️#️⃣|
 |`catalog.num-events`|The number of events registered in the catalog per schema.|#events|🗂️#️⃣|
 |`node_throughput.rate`|The rate of events processed by the node component.|#events/second||
 |`null-writer.rate`|The rate of events processed by the null sink.|#events/second||
 |`partition.events-written`|The number of events written in one partition.|#events|🗂|
-|`partition.lookup.runtime`|The duration of a query evaluation in one partition.|#nanoseconds|🔎💽|
+|`partition.lookup.runtime`|The duration of a query evaluation in one partition.|#milliseconds|🔎💽|
 |`partition.lookup.hits`|The number of results of a query in one partition.|#events|🔎💽|
 |`pcap-reader.discard-rate`|The rate of packets discarded.|#events-dropped/#events-received||
 |`pcap-reader.discard`|The number of packets discarded by the reader.|#events||
@@ -130,9 +130,9 @@ The following list describes all available metrics keys:
 |`scheduler.partition.pending`|The number of queued partitions.|#partitions||
 |`scheduler.partition.remaining-capacity`|The number of partition lookups that could be scheduled immediately.|#workers||
 |`scheduler.partition.scheduled`|The number of scheduled partitions.|#partitions||
-|`segment-store.lookup.runtime`|The duration of a query evaluation in a partition store.|#nanoseconds|🔎💾|
+|`segment-store.lookup.runtime`|The duration of a query evaluation in a partition store.|#milliseconds|🔎💾|
 |`segment-store.lookup.hits`|The number of results of a query in a partition store.|#events|🔎💾|
-|`parquet-store.lookup.runtime`|The duration of a query evaluation in a parquet store.|#nanoseconds|🔎→
+|`parquet-store.lookup.runtime`|The duration of a query evaluation in a parquet store.|#milliseconds|🔎→
 |`parquet-store.lookup.hits`|The number of results of a query in a parquet store.|#events|🔎💾|
 |`source.start`|Timepoint when the source started.|nanoseconds since epoch||
 |`source.stop`|Timepoint when the source stopped.|nanoseconds since epoch||
