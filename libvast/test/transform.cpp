@@ -178,6 +178,13 @@ TEST(drop_step) {
   auto not_dropped = unbox(invalid_drop_step->finish());
   REQUIRE_EQUAL(not_dropped.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(not_dropped), slice);
+  auto schema_drop_step = unbox(
+    drop_plugin->make_transform_step({{"schemas", vast::list{"testdata"}}}));
+  auto schema_add_failed
+    = schema_drop_step->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!schema_add_failed);
+  auto dropped = unbox(invalid_drop_step->finish());
+  CHECK(dropped.empty());
 }
 
 TEST(project step) {
