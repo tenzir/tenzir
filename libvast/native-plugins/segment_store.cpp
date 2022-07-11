@@ -204,7 +204,8 @@ system::store_actor::behavior_type passive_local_store(
              std::exchange(self->state.deferred_requests, {})) {
           VAST_TRACE("{} delegates {} (pending: {})", *self, query,
                      rp.pending());
-          rp.delegate(static_cast<system::store_actor>(self), std::move(query));
+          rp.delegate(static_cast<system::store_actor>(self), atom::query_v,
+                      std::move(query));
         }
         for (auto&& [ids, rp] :
              std::exchange(self->state.deferred_erasures, {})) {
@@ -223,7 +224,7 @@ system::store_actor::behavior_type passive_local_store(
         self->quit(std::move(err));
       });
   return {
-    [self](query_context query_context) -> caf::result<uint64_t> {
+    [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
       VAST_DEBUG("{} handles new query {}", *self, query_context.id);
       if (!self->state.segment) {
         auto rp = self->make_response_promise<uint64_t>();
@@ -335,7 +336,8 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   });
   auto result = local_store_actor::behavior_type{
     // store api
-    [self](const query_context& query_context) -> caf::result<uint64_t> {
+    [self](atom::query,
+           const query_context& query_context) -> caf::result<uint64_t> {
       auto start = std::chrono::steady_clock::now();
       caf::expected<std::vector<table_slice>> slices = caf::error{};
       if (self->state.builder) {

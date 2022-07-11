@@ -310,7 +310,8 @@ partition_actor::behavior_type passive_partition(
                    self->state.deferred_evaluations.size());
         for (auto&& [expr, rp] :
              std::exchange(self->state.deferred_evaluations, {}))
-          rp.delegate(static_cast<partition_actor>(self), std::move(expr));
+          rp.delegate(static_cast<partition_actor>(self), atom::query_v,
+                      std::move(expr));
       },
       [=](caf::error err) {
         VAST_ERROR("{} failed to load partition: {}", *self, render(err));
@@ -326,7 +327,8 @@ partition_actor::behavior_type passive_partition(
         self->quit(std::move(err));
       });
   return {
-    [self](vast::query_context query_context) -> caf::result<uint64_t> {
+    [self](atom::query,
+           vast::query_context query_context) -> caf::result<uint64_t> {
       VAST_DEBUG("{} received query {}", *self, query_context);
       if (!self->state.partition_chunk) {
         VAST_DEBUG("{} waits for its state", *self);
@@ -350,7 +352,7 @@ partition_actor::behavior_type passive_partition(
           return caf::make_error(ec::invalid_argument, "query may only contain "
                                                        "either expression or "
                                                        "ids");
-        rp.delegate(self->state.store, query_context);
+        rp.delegate(self->state.store, atom::query_v, query_context);
         return rp;
       }
       auto start = std::chrono::steady_clock::now();
@@ -383,7 +385,8 @@ partition_actor::behavior_type passive_partition(
               rp.deliver(rank(hits));
             } else {
               query_context.ids = hits;
-              rp.delegate(self->state.store, std::move(query_context));
+              rp.delegate(self->state.store, atom::query_v,
+                          std::move(query_context));
             }
           },
           [rp](caf::error& err) mutable {

@@ -40,7 +40,7 @@
 
 vast::system::store_actor::behavior_type dummy_store() {
   return {
-    [](const vast::query_context&) {
+    [](vast::atom::query, const vast::query_context&) {
       return uint64_t{0};
     },
     [](const vast::atom::erase&, const vast::ids&) {
@@ -305,7 +305,7 @@ TEST(full partition roundtrip) {
         auto result = std::make_shared<uint64_t>();
         auto dummy = self->spawn(dummy_client, result);
         auto rp = self->request(
-          readonly_partition, caf::infinite,
+          readonly_partition, caf::infinite, vast::atom::query_v,
           vast::query_context::make_count(
             dummy, vast::query_context::count::mode::estimate, expression));
         run();

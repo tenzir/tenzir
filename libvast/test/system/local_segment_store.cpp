@@ -8,6 +8,7 @@
 
 #define SUITE local_segment_store
 
+#include "vast/atoms.hpp"
 #include "vast/chunk.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/expression.hpp"
@@ -40,7 +41,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto query_context
       = vast::query_context::make_extract(self, vast::expression{});
     query_context.ids = ids;
-    self->send(actor, query_context);
+    self->send(actor, vast::atom::query_v, query_context);
     run();
     std::this_thread::sleep_for(std::chrono::seconds{1});
 
