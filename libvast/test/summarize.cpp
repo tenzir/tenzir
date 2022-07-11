@@ -201,7 +201,7 @@ TEST(summarize test) {
   CHECK_EQUAL(summarized_slice.at(0, 13), make_data_view(expected_ports));
   const auto expected_alternating_numbers = list{count{0}, count{1}, count{2}};
   const auto expected_alternating_numbers_list
-    = list{caf::none, count{0}, count{1}, count{2}, count{3}, count{4}};
+    = list{count{0}, count{1}, count{2}, count{3}, count{4}};
   CHECK_EQUAL(summarized_slice.at(0, 14),
               make_data_view(expected_alternating_numbers));
   CHECK_EQUAL(summarized_slice.at(0, 15),

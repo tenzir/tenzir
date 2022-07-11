@@ -66,10 +66,8 @@ private:
   void add(const data_view& view) override {
     using view_type = vast::view<type_to_data_t<Type>>;
     const auto handle_value_view = [&](const data_view& view) {
-      if (caf::holds_alternative<caf::none_t>(view)) {
-        any_null_ = true;
+      if (caf::holds_alternative<caf::none_t>(view))
         return;
-      }
       const auto& typed_view = caf::get<view_type>(view);
       if (!distinct_.contains(typed_view)) {
         const auto [it, inserted] = distinct_.insert(materialize(typed_view));
@@ -88,16 +86,13 @@ private:
 
   [[nodiscard]] caf::expected<data> finish() && override {
     auto result = list{};
-    result.reserve(distinct_.size() + (any_null_ ? 0 : 1));
-    if (any_null_)
-      result.emplace_back();
+    result.reserve(distinct_.size());
     for (auto& value : distinct_)
       result.emplace_back(std::move(value));
     std::sort(result.begin(), result.end());
     return data{std::move(result)};
   }
 
-  bool any_null_ = {};
   tsl::robin_set<type_to_data_t<Type>, heterogeneous_data_hash<Type>,
                  heterogeneous_data_equal<Type>>
     distinct_ = {};

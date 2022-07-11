@@ -51,10 +51,10 @@ The following aggregation functions are available:
   values to be booleans.
 - `all`: Computes the conjunction (AND) of all grouped values. Requires the
   values to be booleans.
-- `distinct`: Creates a sorted list of all unique grouped values. If the values
-  are lists, operates on the all values inside the lists rather than the lists
-  themselves.
-- `sample`: Takes the first of all grouped values.
+- `distinct`: Creates a sorted list of all unique grouped values that are not
+  nil. If the values are lists, operates on the all values inside the lists
+  rather than the lists themselves.
+- `sample`: Takes the first of all grouped values that is not nil.
 
 ## Example
 
