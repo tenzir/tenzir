@@ -55,6 +55,7 @@ The following aggregation functions are available:
   nil. If the values are lists, operates on the all values inside the lists
   rather than the lists themselves.
 - `sample`: Takes the first of all grouped values that is not nil.
+- `count`: Counts all grouped values that are not nil.
 
 ## Example
 
