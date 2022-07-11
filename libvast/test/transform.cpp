@@ -167,11 +167,11 @@ TEST(drop_step) {
   CHECK(dropped.empty());
 }
 
-TEST(project step) {
+TEST(select step) {
   auto project_step = unbox(
-    vast::make_transform_step("put", {{"fields", vast::list{"index", "uid"}}}));
+    vast::make_transform_step("select", {{"fields", vast::list{"index", "uid"}}}));
   auto invalid_project_step
-    = unbox(vast::make_transform_step("put", {{"fields", vast::list{"xxx"}}}));
+    = unbox(vast::make_transform_step("select", {{"fields", vast::list{"xxx"}}}));
   // Arrow test:
   auto [slice, expected_slice] = make_proj_and_del_testdata();
   auto add_failed = project_step->add(slice.layout(), to_record_batch(slice));
