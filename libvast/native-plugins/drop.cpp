@@ -119,7 +119,7 @@ public:
   // transform plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
   make_transform_step(const record& options) const override {
-    if (!options.contains("fields") && !options.contains("schemas"))
+    if (!(options.contains("fields") || options.contains("schemas")))
       return caf::make_error(ec::invalid_configuration,
                              "key 'fields' or 'schemas' is missing in "
                              "configuration for drop step");
