@@ -55,13 +55,33 @@ stdout, _ = await proc.communicate()
 print(stdout.decode().strip())
 ```
 
-We can export these events to `pandas` directly through Arrow:
+We can export these events to Arrow tables:
 
 ```python
 proc = await vast.export().arrow().exec()
 stdout, _ = await proc.communicate()
 
-rec_batch_reader = pyarrow.ipc.open_stream(stdout)
-arrow_table = rec_batch_reader.read_all()
-arrow_table.to_pandas()
+istream = pyarrow.input_stream(io.BytesIO(stdout))
+total_row_count = 0
+tables = []
+
+# An Arrow reader consumes a stream of batches with the same schema. When
+# reading the result for a query that returns multiple schemas, VAST will use
+# multiple writers. Hence, we try to open record batch readers until an
+# exception occurs.
+try:
+    while True:
+        print("open next reader")
+        reader = pyarrow.ipc.RecordBatchStreamReader(istream)
+        table = reader.read_all()
+        total_row_count += table.num_rows
+        tables.append(tables)
+except pyarrow.ArrowInvalid:
+    print(f"All {len(tables)} readers iterated, {total_row_count} records read")
+```
+
+These in turn can be converted into `pandas` dataframes:
+
+```python
+tables[0].to_pandas()
 ```
