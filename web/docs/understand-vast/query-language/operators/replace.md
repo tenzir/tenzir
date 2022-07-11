@@ -1,16 +1,19 @@
-# replace
+# extend
 
-Replaces a field with a constant value.
+Adds the configured fields with fixed values.
 
 #### Parameters
 
-- `field: string`: The field name to be replaced.
-- `value: any`: The new field value.
+- `fields: {field: value, ...}`: The fields to add with fixed values.
 
 #### Example
 
 ```yaml
-replace:
-  field: uid
-  value: "xxx"
+extend:
+  fields:
+    secret: xxx
+    ints:
+      - 1
+      - 2
+      - 3
 ```

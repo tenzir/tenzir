@@ -3,8 +3,8 @@
 Drops individual fields having the configured extractors from the input or
 entire schemas.
 
-The `drop` operator is the dual to [`put`](put), which selects a given set of
-fields from the output.
+The `drop` operator is the dual to [`select`](select), which selects a given set
+of fields from the output.
 
 ## Parameters
 
