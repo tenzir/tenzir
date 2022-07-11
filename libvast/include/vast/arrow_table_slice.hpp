@@ -320,6 +320,11 @@ struct indexed_transformation {
   offset index;      ///< The index of the field to transform.
   function_type fun; ///< The transformation function to apply.
 
+  friend auto operator==(const indexed_transformation& lhs,
+                         const indexed_transformation& rhs) noexcept {
+    return lhs.index == rhs.index;
+  }
+
   friend auto operator<=>(const indexed_transformation& lhs,
                           const indexed_transformation& rhs) noexcept {
     return lhs.index <=> rhs.index;

@@ -8,13 +8,9 @@
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
-#include <vast/concept/convertible/data.hpp>
-#include <vast/concept/convertible/to.hpp>
-#include <vast/concept/parseable/vast/data.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/plugin.hpp>
-#include <vast/table_slice_builder_factory.hpp>
 #include <vast/transform.hpp>
 #include <vast/type.hpp>
 
@@ -25,62 +21,71 @@ namespace vast::plugins::replace {
 
 namespace {
 
-/// The configuration of a replace transform step.
+/// The parsed configuration.
 struct configuration {
-  std::string field;
-  std::string value;
-
-  /// Support type inspection for easy parsing with convertible.
-  template <class Inspector>
-  friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.field, x.value);
-  }
-
-  /// Enable parsing from a record via convertible.
-  static inline const record_type& layout() noexcept {
-    static auto result = record_type{
-      {"field", string_type{}},
-      {"value", string_type{}},
-    };
+  static caf::expected<configuration> make(const record& config) {
+    if (config.size() != 1 || !config.contains("fields"))
+      return caf::make_error(ec::invalid_configuration, "replace configuration "
+                                                        "must contain only the "
+                                                        "'fields' key");
+    const auto* fields = caf::get_if<record>(&config.at("fields"));
+    if (!fields)
+      return caf::make_error(ec::invalid_configuration, "'fields' key in "
+                                                        "replace configuration "
+                                                        "must be a record");
+    auto result = configuration{};
+    for (const auto& [key, value] : *fields)
+      result.extractor_to_value.emplace(key, value);
     return result;
   }
+
+  std::unordered_map<std::string, data> extractor_to_value = {};
 };
 
-class replace_step : public transform_step {
-public:
-  explicit replace_step(configuration config, data value) noexcept
-    : value_{std::move(value)}, config_{std::move(config)} {
-    // nop
+/// The confguration bound to a specific schema.
+struct bound_configuration {
+  /// Bind a *configuration* to a given schema.
+  /// @param schema The schema to bind to.
+  /// @param config The parsed configuration.
+  static caf::expected<bound_configuration>
+  make(const type& schema, const configuration& config) {
+    auto result = bound_configuration{};
+    const auto& schema_rt = caf::get<record_type>(schema);
+    for (const auto& [extractor, value] : config.extractor_to_value)
+      for (const auto& index :
+           schema_rt.resolve_key_suffix(extractor, schema.name()))
+        result.transformations.push_back({index, make_transformation(value)});
+    std::sort(result.transformations.begin(), result.transformations.end());
+    result.transformations.erase(std::unique(result.transformations.begin(),
+                                             result.transformations.end()),
+                                 result.transformations.end());
+    return result;
   }
 
-  caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_TRACE("replace step adds batch");
-    // Get the target field if it exists.
-    const auto& layout_rt = caf::get<record_type>(layout);
-    auto column_index = layout_rt.resolve_key(config_.field);
-    if (!column_index) {
-      transformed_.emplace_back(layout, std::move(batch));
-      return caf::none;
-    }
-    // Apply the transformation.
-    auto transform_fn = [&](struct record_type::field field,
-                            std::shared_ptr<arrow::Array> array) noexcept
+  /// Create a transformation function for a single value.
+  static indexed_transformation::function_type make_transformation(data value) {
+    auto inferred_type = type::infer(value);
+    return
+      [inferred_type = std::move(inferred_type),
+       value = std::move(value)](struct record_type::field field,
+                                 std::shared_ptr<arrow::Array> array) noexcept
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-      field.type = type::infer(value_);
+      field.type = inferred_type;
       auto builder
         = field.type.make_arrow_builder(arrow::default_memory_pool());
       auto f = [&]<concrete_type Type>(const Type& type) {
-        for (int i = 0; i < array->length(); ++i) {
-          if (caf::holds_alternative<caf::none_t>(value_)) {
+        if (caf::holds_alternative<caf::none_t>(value)) {
+          for (int i = 0; i < array->length(); ++i) {
             const auto append_status = builder->AppendNull();
             VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
-          } else {
-            VAST_ASSERT(caf::holds_alternative<type_to_data_t<Type>>(value_));
+          }
+        } else {
+          for (int i = 0; i < array->length(); ++i) {
+            VAST_ASSERT(caf::holds_alternative<type_to_data_t<Type>>(value));
             const auto append_status = append_builder(
               type, caf::get<type_to_arrow_builder_t<Type>>(*builder),
-              make_view(caf::get<type_to_data_t<Type>>(value_)));
+              make_view(caf::get<type_to_data_t<Type>>(value)));
             VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
           }
         }
@@ -94,8 +99,33 @@ public:
         },
       };
     };
-    auto [adjusted_layout, adjusted_batch] = transform_columns(
-      layout, batch, {{*column_index, std::move(transform_fn)}});
+  }
+
+  /// The list of configured transformations.
+  std::vector<indexed_transformation> transformations = {};
+};
+
+class replace_step : public transform_step {
+public:
+  explicit replace_step(configuration config) noexcept
+    : config_{std::move(config)} {
+    // nop
+  }
+
+  caf::error
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+    auto config = bound_config_.find(schema);
+    if (config == bound_config_.end()) {
+      auto new_config = bound_configuration::make(schema, config_);
+      if (!new_config)
+        return new_config.error();
+      auto [it, inserted] = bound_config_.emplace(type{chunk::copy(schema)},
+                                                  std::move(*new_config));
+      VAST_ASSERT(inserted);
+      config = it;
+    }
+    auto [adjusted_layout, adjusted_batch]
+      = transform_columns(schema, batch, config->second.transformations);
     VAST_ASSERT(adjusted_layout);
     VAST_ASSERT(adjusted_batch);
     transformed_.emplace_back(std::move(adjusted_layout),
@@ -104,25 +134,22 @@ public:
   }
 
   caf::expected<std::vector<transform_batch>> finish() override {
-    VAST_DEBUG("replace step finished transformation");
-    auto retval = std::move(transformed_);
-    transformed_.clear();
-    return retval;
+    return std::exchange(transformed_, {});
   }
 
 private:
-  data value_ = {};
-
-  /// The slices being transformed.
+  /// The transformed slices.
   std::vector<transform_batch> transformed_ = {};
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};
+
+  /// The configuration bound to a specific schema.
+  std::unordered_map<type, bound_configuration> bound_config_ = {};
 };
 
 class plugin final : public virtual transform_plugin {
 public:
-  // Plugin API
   caf::error initialize(data) override {
     return {};
   }
@@ -131,27 +158,12 @@ public:
     return "replace";
   };
 
-  // Transform Plugin API
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& options) const override {
-    if (!options.contains("field"))
-      return caf::make_error(ec::invalid_configuration,
-                             "key 'field' is missing in configuration for "
-                             "replace step");
-    if (!options.contains("value"))
-      return caf::make_error(ec::invalid_configuration,
-                             "key 'value' is missing in configuration for "
-                             "replace step");
-    auto config = to<configuration>(options);
-    if (!config)
-      return config.error();
-    auto data = from_yaml(config->value);
-    if (!data)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("could not parse '{}' as valid data "
-                                         "object: {}",
-                                         config->value, data.error()));
-    return std::make_unique<replace_step>(std::move(*config), std::move(*data));
+  make_transform_step(const record& config) const override {
+    auto parsed_config = configuration::make(config);
+    if (!parsed_config)
+      return parsed_config.error();
+    return std::make_unique<replace_step>(std::move(*parsed_config));
   }
 };
 
