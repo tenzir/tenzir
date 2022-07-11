@@ -46,7 +46,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     std::vector<table_slice> result;
     auto query_context = query_context::make_extract(self, expression{});
     query_context.ids = ids;
-    self->send(a, query_context);
+    self->send(a, atom::query_v, query_context);
     run();
     self
       ->do_receive(

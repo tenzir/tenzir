@@ -160,7 +160,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       it->cancelled = true;
   });
   return {
-    [self](vast::query_context query_context) -> caf::result<uint64_t> {
+    [self](atom::query,
+           vast::query_context query_context) -> caf::result<uint64_t> {
       const auto& xs = query_context.ids;
       VAST_DEBUG("{} got a request with the query {} and {} hints [{},  {})",
                  *self, query_context, rank(xs), select(xs, 1),

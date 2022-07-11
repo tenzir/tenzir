@@ -526,14 +526,14 @@ active_partition_actor::behavior_type active_partition(
             });
       }
     },
-    [self](vast::query_context query_context) -> caf::result<uint64_t> {
+    [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
       auto rp = self->make_response_promise<uint64_t>();
       // Don't bother with with indexers, etc. if we already have an id set.
       if (!query_context.ids.empty()) {
         // TODO: Depending on the selectivity of the query and the rank of the
         // ids, it may still be beneficial to load some of the indexers to prune
         // the ids before hitting the store.
-        rp.delegate(self->state.store, std::move(query_context));
+        rp.delegate(self->state.store, atom::query_v, std::move(query_context));
         return rp;
       }
       auto start = std::chrono::steady_clock::now();
@@ -567,7 +567,8 @@ active_partition_actor::behavior_type active_partition(
               rp.deliver(rank(hits));
             } else {
               query_context.ids = hits;
-              rp.delegate(self->state.store, std::move(query_context));
+              rp.delegate(self->state.store, atom::query_v,
+                          std::move(query_context));
             }
           },
           [rp](caf::error& err) mutable {

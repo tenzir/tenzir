@@ -670,7 +670,7 @@ void index_state::schedule_lookups() {
       };
       self
         ->request(partition_actor, defaults::system::scheduler_timeout,
-                  it->second.query_context)
+                  atom::query_v, it->second.query_context)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
             VAST_DEBUG("{} received {} results for query {} from partition {}",
