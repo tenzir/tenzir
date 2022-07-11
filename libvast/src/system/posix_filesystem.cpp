@@ -29,19 +29,19 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
   return {
     [self](atom::write, const std::filesystem::path& filename,
            const chunk_ptr& chk) -> caf::result<atom::ok> {
-      if (chk == nullptr)
-        return caf::make_error(ec::logic_error, "tried to write a nullptr to "
-                                                "disk");
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
+      if (chk == nullptr)
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("{} tried to write a nullptr to {}",
+                                           *self, path));
       if (auto err = io::save(path, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;
-      } else {
-        ++self->state.stats.writes.successful;
-        self->state.stats.writes.bytes += chk->size();
-        return atom::ok_v;
       }
+      ++self->state.stats.writes.successful;
+      self->state.stats.writes.bytes += chk->size();
+      return atom::ok_v;
     },
     [self](atom::read,
            const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
@@ -52,7 +52,8 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         ++self->state.stats.checks.successful;
       } else {
         ++self->state.stats.checks.failed;
-        return caf::make_error(ec::no_such_file, err.message());
+        return caf::make_error(ec::no_such_file,
+                               fmt::format("{} no such file: {}", *self, path));
       }
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
@@ -72,7 +73,9 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         ++self->state.stats.checks.successful;
       } else {
         ++self->state.stats.checks.failed;
-        return caf::make_error(ec::no_such_file, err.message());
+        return caf::make_error(ec::no_such_file,
+                               fmt::format("{} {}: {}", *self, path,
+                                           err.message()));
       }
       if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
