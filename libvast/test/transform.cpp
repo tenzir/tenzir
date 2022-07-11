@@ -139,26 +139,6 @@ as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
 
 FIXTURE_SCOPE(transform_tests, transforms_fixture)
 
-TEST(count step) {
-  auto slice1 = make_transforms_testdata();
-  auto slice2 = make_transforms_testdata();
-  auto count = unbox(vast::make_transform_step("count", {}));
-  auto slice1_err = count->add(slice1.layout(), to_record_batch(slice1));
-  REQUIRE_SUCCESS(slice1_err);
-  auto slice2_err = count->add(slice2.layout(), to_record_batch(slice2));
-  REQUIRE_SUCCESS(slice2_err);
-  auto counted = unbox(count->finish());
-  REQUIRE_EQUAL(counted.size(), 1ull);
-  REQUIRE_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(counted).layout()).num_fields(),
-    1ull);
-  CHECK_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(counted).layout()).field(0).name,
-    "count");
-  CHECK_EQUAL((as_table_slice(counted)).at(0, 0),
-              vast::data_view{vast::count{20}});
-}
-
 TEST(drop_step) {
   auto [slice, expected_slice] = make_proj_and_del_testdata();
   const auto* drop_plugin = vast::plugins::find<vast::transform_plugin>("drop");
@@ -405,7 +385,8 @@ TEST(transformation engine - multiple matching transforms) {
 TEST(transformation engine - aggregate validation transforms) {
   std::vector<vast::transform> transforms;
   transforms.emplace_back("t", std::vector<std::string>{"testdata"});
-  transforms.at(0).add_step(unbox(vast::make_transform_step("count", {})));
+  transforms.at(0).add_step(
+    unbox(vast::make_transform_step("summarize", {{"group-by", {"foo"}}})));
   vast::transformation_engine engine(std::move(transforms));
   auto validation1 = engine.validate(
     vast::transformation_engine::allow_aggregate_transforms::yes);
