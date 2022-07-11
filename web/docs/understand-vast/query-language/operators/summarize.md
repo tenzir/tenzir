@@ -57,6 +57,24 @@ The following aggregation functions are available:
 - `sample`: Takes the first of all grouped values that is not nil.
 - `count`: Counts all grouped values that are not nil.
 
+There exist three ways to configure an aggregation function:
+
+```yaml
+# Long form: Specify a list of input extractors explicitly.
+output_field_name:
+  aggregation_function:
+    - input_extractor_1
+    - ...
+    - input_extractor_n
+
+# Long form: Specify a single input extractor.
+output_field_name:
+  aggregation_function: input_extractor
+
+# Short form: Input extractor equals output field name.
+output_field_name: aggregation_function
+```
+
 ## Example
 
 ```yaml
