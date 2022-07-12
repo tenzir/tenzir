@@ -230,7 +230,9 @@ def restart_vast_server(c):
     """Stop the running VAST server Fargate task, the service starts a new one"""
     task_id = stop_vast_task(c)
     print(f"Stopped task {task_id}")
-    task_id = get_vast_server(c, max_wait_time_sec=120)
+    # 120 seconds corresponding to the task stopTimeout grace period
+    # + 120 seconds for the new task to start
+    task_id = get_vast_server(c, max_wait_time_sec=240)
     print(f"Started task {task_id}")
 
 

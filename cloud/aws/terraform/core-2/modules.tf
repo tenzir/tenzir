@@ -43,7 +43,7 @@ module "vast_server" {
   }
   storage_mount_point = "/var/lib/vast"
 
-  entrypoint = "vast start"
+  entrypoint = "exec vast start"
   port       = local.vast_port
 
   environment = [{
