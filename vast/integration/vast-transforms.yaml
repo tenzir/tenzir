@@ -15,8 +15,8 @@ vast:
             - alert.action
     replace_rrname:
       - replace:
-          field: dns.rrname
-          value: "foobar.net"
+          fields: 
+            dns.rrname: "foobar.net"
     select_row:
       - where:
           expression: "dest_port > 53"
@@ -25,7 +25,7 @@ vast:
           field: fileinfo.filename
           out: filename_hash
     project_fields:
-      - put:
+      - select:
           fields:
             - ip
             - alert.category
