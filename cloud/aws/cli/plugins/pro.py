@@ -28,9 +28,3 @@ def pull_image(c):
     print("VAST Pro image successfully pulled")
     print(f"Set the variable VAST_IMAGE={output_tag}")
     print("Then run `./vast-cloud deploy` to deploy VAST with the pulled Pro version")
-
-
-VALIDATORS = [
-    *COMMON_VALIDATORS,
-    dynaconf.Validator("VAST_VERSION", must_exist=True, ne=""),
-]
