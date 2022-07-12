@@ -112,7 +112,8 @@ system::store_actor::behavior_type default_passive_store(
         self->quit(std::move(error));
       });
   return {
-    [self](const query_context& query_context) -> caf::expected<uint64_t> {
+    [self](atom::query,
+           const query_context& query_context) -> caf::expected<uint64_t> {
       return handle_lookup(self, query_context, self->state.store->slices());
     },
     [self](atom::erase, const ids& selection) -> caf::result<uint64_t> {
@@ -149,7 +150,8 @@ system::store_builder_actor::behavior_type default_active_store(
   self->state.path = std::move(path);
   self->state.store_type = std::move(store_type);
   return {
-    [self](const query_context& query_context) -> caf::expected<uint64_t> {
+    [self](atom::query,
+           const query_context& query_context) -> caf::expected<uint64_t> {
       return handle_lookup(self, query_context, self->state.store->slices());
     },
     [self](atom::erase, const ids& selection) -> caf::expected<uint64_t> {
