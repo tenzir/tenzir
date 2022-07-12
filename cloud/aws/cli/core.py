@@ -1,4 +1,4 @@
-from invoke import task, Context, Exit
+from vast_invoke import pty_task, task, Context, Exit
 import boto3
 import botocore.client
 import dynaconf
@@ -111,18 +111,17 @@ def init_step(c, step):
     )
 
 
-@task
+@pty_task
 def deploy_step(c, step, auto_approve=False):
     """Deploy only one step of the stack"""
     init_step(c, step)
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
         env=env(c),
-        pty=True,
     )
 
 
-@task
+@pty_task
 def deploy(c, auto_approve=False):
     """One liner build and deploy of the stack to AWS"""
     deploy_step(c, "core-1", auto_approve)
@@ -286,7 +285,7 @@ def run_lambda(c, cmd):
     return resp_payload
 
 
-@task(help=CMD_HELP)
+@pty_task(help=CMD_HELP)
 def execute_command(c, cmd="/bin/bash"):
     """Run ad-hoc or interactive commands from the VAST server Fargate task"""
     task_id = get_vast_server(c)
@@ -302,22 +301,20 @@ def execute_command(c, cmd="/bin/bash"):
 		--interactive \
 		--command "{cmd}" \
         --region {AWS_REGION()} """,
-        pty=True,
     )
 
 
-@task
+@pty_task
 def destroy_step(c, step, auto_approve=False):
     """Destroy resources of the specified step. Resources depending on it should be cleaned up first."""
     init_step(c, step)
     c.run(
         f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
         env=env(c),
-        pty=True,
     )
 
 
-@task
+@pty_task
 def destroy(c, auto_approve=False):
     """Tear down the entire terraform stack"""
     try:
@@ -328,5 +325,4 @@ def destroy(c, auto_approve=False):
     c.run(
         f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}",
         env=env(c),
-        pty=True,
     )

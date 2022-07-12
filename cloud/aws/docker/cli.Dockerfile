@@ -63,7 +63,7 @@ RUN owneddir() { mkdir -p $1 && chown $UNAME $1 ; } && \
 USER $UNAME
 
 # Install Python dependencies
-RUN pip install boto3 dynaconf invoke requests
+RUN pip install boto3==1.24.27 dynaconf==3.1.9 invoke==1.7.1 requests==2.28.1 
 
 WORKDIR /vast/cloud/aws
 

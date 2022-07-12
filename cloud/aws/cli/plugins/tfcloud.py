@@ -1,4 +1,4 @@
-from invoke import task
+from vast_invoke import task
 import dynaconf
 import requests
 from common import conf, COMMON_VALIDATORS, list_modules, tf_version
