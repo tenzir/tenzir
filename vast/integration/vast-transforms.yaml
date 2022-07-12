@@ -15,7 +15,7 @@ vast:
             - alert.action
     replace_rrname:
       - replace:
-          fields: 
+          fields:
             dns.rrname: "foobar.net"
     select_row:
       - where:
@@ -24,7 +24,7 @@ vast:
       - hash:
           field: fileinfo.filename
           out: filename_hash
-    project_fields:
+    select_fields:
       - select:
           fields:
             - ip
@@ -55,7 +55,7 @@ vast:
         events: [suricata.fileinfo]
         location: client
 
-      - transform: project_fields
+      - transform: select_fields
         events: [suricata.alert]
         location: client
 
