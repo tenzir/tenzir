@@ -124,7 +124,10 @@ auto make_export_command() {
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
                           opts("?vast.export.null"));
-  export_->add_subcommand("arrow", "exports query results in Arrow format",
+  export_->add_subcommand("arrow",
+                          "exports query results in Arrow format with separate "
+                          "IPC streams for each schema, all concatenated "
+                          "together",
                           opts("?vast.export.arrow"));
 
   for (const auto& plugin : plugins::get()) {
