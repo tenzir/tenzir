@@ -28,6 +28,8 @@ class _Task(invoke.Task):
         if is_check_pty_call():
             return "0"
         else:
+            # specify no PTY for recursive calls to the CLI
+            args[0].config.run.env["VASTCLOUD_NO_PTY"] = "1"
             return super().__call__(*args, **kwargs)
 
 
@@ -40,10 +42,7 @@ class _PTYTask(invoke.Task):
             print("1", end="")
             return ""
         else:
-            try:
-                args[0].config.run.pty = True
-            except:
-                print("Failed to set PTY config")
+            args[0].config.run.pty = True
             return super().__call__(*args, **kwargs)
 
 

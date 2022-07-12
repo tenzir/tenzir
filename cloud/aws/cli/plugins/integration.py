@@ -63,7 +63,7 @@ def vast_data_import(c):
     assert 7 == new_count - init_count, "Wrong count"
 
 
-@task()
+@task
 def all(c):
     """Run the entire testbook. VAST needs to be deployed beforehand.
     Warning: This will affect the state of the current stack"""
