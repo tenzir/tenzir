@@ -35,8 +35,8 @@ vast:
             - uid
     replace_uid:
       - replace:
-          field: uid
-          value: "xxx"
+          fields:
+            uid: xxx
 
   transform-triggers:
     import:

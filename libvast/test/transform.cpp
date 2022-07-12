@@ -167,11 +167,11 @@ TEST(drop_step) {
   CHECK(dropped.empty());
 }
 
-TEST(project step) {
-  auto project_step = unbox(
-    vast::make_transform_step("put", {{"fields", vast::list{"index", "uid"}}}));
-  auto invalid_project_step
-    = unbox(vast::make_transform_step("put", {{"fields", vast::list{"xxx"}}}));
+TEST(select step) {
+  auto project_step = unbox(vast::make_transform_step(
+    "select", {{"fields", vast::list{"index", "uid"}}}));
+  auto invalid_project_step = unbox(
+    vast::make_transform_step("select", {{"fields", vast::list{"xxx"}}}));
   // Arrow test:
   auto [slice, expected_slice] = make_proj_and_del_testdata();
   auto add_failed = project_step->add(slice.layout(), to_record_batch(slice));
@@ -188,8 +188,8 @@ TEST(project step) {
 
 TEST(replace step) {
   auto slice = make_transforms_testdata();
-  auto replace_step = unbox(
-    vast::make_transform_step("replace", {{"field", "uid"}, {"value", "xxx"}}));
+  auto replace_step = unbox(vast::make_transform_step(
+    "replace", {{"fields", vast::record{{"uid", "xxx"}}}}));
   auto add_failed = replace_step->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
   auto replaced = unbox(replace_step->finish());
@@ -202,6 +202,24 @@ TEST(replace step) {
     "uid");
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
+}
+
+TEST(extend step) {
+  auto slice = make_transforms_testdata();
+  auto replace_step = unbox(vast::make_transform_step(
+    "extend", {{"fields", vast::record{{"secret", "xxx"}}}}));
+  auto add_failed = replace_step->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!add_failed);
+  auto replaced = unbox(replace_step->finish());
+  REQUIRE_EQUAL(replaced.size(), 1ull);
+  REQUIRE_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
+    4ull);
+  CHECK_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(3).name,
+    "secret");
+  const auto table_slice = as_table_slice(replaced);
+  CHECK_EQUAL(table_slice.at(0, 3), vast::data_view{"xxx"sv});
 }
 
 TEST(where step) {
@@ -273,7 +291,7 @@ TEST(anonymize step) {
 TEST(transform with multiple steps) {
   vast::transform transform("test_transform", {{"testdata"}});
   transform.add_step(unbox(vast::make_transform_step(
-    "replace", {{"field", "uid"}, {"value", "xxx"}})));
+    "replace", {{"fields", vast::record{{"uid", "xxx"}}}})));
   transform.add_step(unbox(
     vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
   auto slice = make_transforms_testdata();

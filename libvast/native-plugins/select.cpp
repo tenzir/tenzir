@@ -21,11 +21,11 @@
 #include <algorithm>
 #include <utility>
 
-namespace vast::plugins::put {
+namespace vast::plugins::select {
 
 namespace {
 
-/// The configuration of a put transform step.
+/// The configuration of a select transform step.
 struct configuration {
   /// The key suffixes of the fields to keep.
   std::vector<std::string> fields = {};
@@ -45,9 +45,9 @@ struct configuration {
   }
 };
 
-class put_step : public transform_step {
+class select_step : public transform_step {
 public:
-  explicit put_step(configuration config) noexcept
+  explicit select_step(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
@@ -56,7 +56,7 @@ public:
   /// @returns The new layout and the projected record batch.
   caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_TRACE("put step adds batch");
+    VAST_TRACE("select step adds batch");
     auto indices = std::vector<offset>{};
     for (const auto& field : config_.fields)
       for (auto&& index : caf::get<record_type>(layout).resolve_key_suffix(
@@ -74,7 +74,7 @@ public:
   }
 
   caf::expected<std::vector<transform_batch>> finish() override {
-    VAST_TRACE("put step finished transformation");
+    VAST_TRACE("select step finished transformation");
     return std::exchange(transformed_, {});
   }
 
@@ -94,7 +94,7 @@ public:
   }
 
   [[nodiscard]] const char* name() const override {
-    return "put";
+    return "select";
   };
 
   // transform plugin API
@@ -103,16 +103,16 @@ public:
     if (!options.contains("fields"))
       return caf::make_error(ec::invalid_configuration,
                              "key 'fields' is missing in configuration for "
-                             "put step");
+                             "select step");
     auto config = to<configuration>(options);
     if (!config)
       return config.error();
-    return std::make_unique<put_step>(std::move(*config));
+    return std::make_unique<select_step>(std::move(*config));
   }
 };
 
 } // namespace
 
-} // namespace vast::plugins::put
+} // namespace vast::plugins::select
 
-VAST_REGISTER_PLUGIN(vast::plugins::put::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::select::plugin)
