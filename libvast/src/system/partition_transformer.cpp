@@ -237,7 +237,6 @@ partition_transformer_actor::behavior_type partition_transformer(
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  idspace_distributor_actor idspace_distributor,
   type_registry_actor type_registry, filesystem_actor fs,
   transform_ptr transform, std::string partition_path_template,
   std::string synopsis_path_template) {
@@ -250,7 +249,6 @@ partition_transformer_actor::behavior_type partition_transformer(
     index_opts, "cardinality", defaults::system::max_partition_size);
   self->state.index_opts = index_opts;
   self->state.accountant = std::move(accountant);
-  self->state.idspace_distributor = std::move(idspace_distributor);
   self->state.fs = std::move(fs);
   self->state.type_registry = std::move(type_registry);
   // transform can be an aggregate transform here
@@ -287,7 +285,6 @@ partition_transformer_actor::behavior_type partition_transformer(
           partition_data.id = vast::uuid::random();
           partition_data.store_id = self->state.store_id;
           partition_data.events = 0ull;
-          partition_data.offset = invalid_id;
           partition_data.synopsis
             = caf::make_copy_on_write<partition_synopsis>();
         }
@@ -355,28 +352,15 @@ partition_transformer_actor::behavior_type partition_transformer(
             builder_and_header->store_builder);
       }
       VAST_DEBUG("{} received all table slices", *self);
-      self
-        ->request(self->state.idspace_distributor, caf::infinite,
-                  atom::reserve_v, self->state.events)
-        .then(
-          [self](vast::id id) {
-            self->send(self, atom::internal_v, atom::resume_v, atom::done_v,
-                       id);
-          },
-          [self](const caf::error& e) {
-            self->state.stream_error = e;
-          });
     },
     [self](atom::internal, atom::resume, atom::done, vast::id offset) {
       VAST_DEBUG("{} got new offset {}", *self, offset);
       for (auto& [layout, data] : self->state.data) {
-        data.offset = offset;
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
         auto& buildup = self->state.partition_buildup.at(data.id);
         auto slot = buildup.slot;
         for (auto& slice : buildup.slices) {
-          slice.offset(offset);
           offset += slice.rows();
           push_to(self->state.stage->out(), slot, slice);
           self->state.update_type_ids_and_indexers(data.type_ids, data.id,
@@ -388,7 +372,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         // TODO: It would make more sense if the partition
         // synopsis keeps track of offset/events internally.
         mutable_synopsis.shrink();
-        mutable_synopsis.offset = data.offset;
+        mutable_synopsis.offset = 0;
         mutable_synopsis.events = data.events;
         // Create the value indices.
         for (auto& [qf, idx] :

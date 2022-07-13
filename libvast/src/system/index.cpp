@@ -1332,11 +1332,6 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       return rp;
     },
-    // We can't pass this as spawn argument since the importer already
-    // needs to know the index actor when spawning.
-    [self](atom::importer, idspace_distributor_actor idspace_distributor) {
-      self->state.importer = std::move(idspace_distributor);
-    },
     [self](atom::apply, transform_ptr transform,
            std::vector<vast::uuid> old_partition_ids,
            keep_original_partition keep)
@@ -1387,7 +1382,6 @@ index(index_actor::stateful_pointer<index_state> self,
       partition_transformer_actor partition_transfomer = self->spawn(
         system::partition_transformer, store_id, self->state.synopsis_opts,
         self->state.index_opts, self->state.accountant,
-        static_cast<idspace_distributor_actor>(self->state.importer),
         self->state.type_registry, self->state.filesystem, transform,
         std::move(partition_path_template),
         std::move(partition_synopsis_path_template));

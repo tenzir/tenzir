@@ -170,7 +170,7 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   store_header = store_builder.Finish();
   fbs::partition::LegacyPartitionBuilder legacy_builder(builder);
   legacy_builder.add_uuid(*uuid);
-  legacy_builder.add_offset(x.offset);
+  legacy_builder.add_offset(0);
   legacy_builder.add_events(x.events);
   legacy_builder.add_indexes(indexes);
   legacy_builder.add_partition_synopsis(*maybe_ps);
@@ -199,7 +199,6 @@ active_partition_actor::behavior_type active_partition(
   self->state.filesystem = std::move(filesystem);
   self->state.streaming_initiated = false;
   self->state.data.id = id;
-  self->state.data.offset = invalid_id;
   self->state.data.events = 0;
   self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
   self->state.data.store_id = store_id;
@@ -219,6 +218,7 @@ active_partition_actor::behavior_type active_partition(
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
       VAST_TRACE_SCOPE("partition {} got table slice {} {}",
                        self->state.data.id, VAST_ARG(out), VAST_ARG(x));
+      x.offset(self->state.data.events);
       // Adjust the import time range iff necessary.
       auto& mutable_synopsis = self->state.data.synopsis.unshared();
       mutable_synopsis.min_import_time
@@ -238,7 +238,6 @@ active_partition_actor::behavior_type active_partition(
       // Mark the ids of this table slice for the current type.
       ids.append_bits(false, first - ids.size());
       ids.append_bits(true, last - first);
-      self->state.data.offset = std::min(x.offset(), self->state.data.offset);
       self->state.data.events += x.rows();
       self->state.data.synopsis.unshared().add(
         x, self->state.partition_capacity, self->state.synopsis_index_config);
@@ -417,7 +416,7 @@ active_partition_actor::behavior_type active_partition(
               mutable_synopsis.shrink();
               // TODO: It would probably make more sense if the partition
               // synopsis keeps track of offset/events internally.
-              mutable_synopsis.offset = self->state.data.offset;
+              mutable_synopsis.offset = 0;
               mutable_synopsis.events = self->state.data.events;
               for (auto& [qf, actor] : self->state.indexers) {
                 if (actor == nullptr) {

@@ -273,6 +273,7 @@ create_table_slices(const std::shared_ptr<arrow::RecordBatch>& rb,
     auto& slice = slices.emplace_back(rb_sliced);
     slice.import_time(
       derive_import_time(time_col->Slice(offset, max_slice_size)));
+    slice.offset(offset);
   }
   return slices;
 }
@@ -399,21 +400,26 @@ public:
       slices_.insert(slices_.end(),
                      std::make_move_iterator(slices_for_batch.begin()),
                      std::make_move_iterator(slices_for_batch.end()));
-      num_rows_ += (*rb)->num_rows();
+      num_events_ += (*rb)->num_rows();
     }
     return {};
   }
 
   /// Retrieve all of the store's slices.
   /// @returns The store's slices.
-  [[nodiscard]] const std::vector<table_slice>& slices() const override {
-    return slices_;
+  [[nodiscard]] detail::generator<table_slice> slices() const override {
+    for (const auto& slice : slices_)
+      co_yield slice;
+  }
+
+  [[nodiscard]] size_t num_events() const override {
+    return num_events_;
   }
 
 private:
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
-  size_t num_rows_ = {};
+  size_t num_events_ = {};
 };
 
 class active_parquet_store final : public active_store {
@@ -426,8 +432,11 @@ public:
   /// @returns An error on failure.
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     slices_.reserve(new_slices.size() + slices_.size());
-    slices_.insert(slices_.end(), std::make_move_iterator(new_slices.begin()),
-                   std::make_move_iterator(new_slices.end()));
+    for (auto& slice : new_slices) {
+      slice.offset(num_events_);
+      num_events_ += slice.rows();
+      slices_.push_back(std::move(slice));
+    }
     return {};
   }
 
@@ -442,11 +451,17 @@ public:
 
   /// Retrieve all of the store's slices.
   /// @returns The store's slices.
-  [[nodiscard]] const std::vector<table_slice>& slices() const override {
-    return slices_;
+  [[nodiscard]] detail::generator<table_slice> slices() const override {
+    for (const auto& slice : slices_)
+      co_yield slice;
+  }
+
+  [[nodiscard]] size_t num_events() const override {
+    return num_events_;
   }
 
 private:
+  size_t num_events_ = {};
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
 };

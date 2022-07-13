@@ -31,6 +31,8 @@ segment_builder::segment_builder(size_t initial_buffer_size,
 }
 
 caf::error segment_builder::add(table_slice x) {
+  VAST_ASSERT(x.offset() == invalid_id);
+  x.offset(num_events_);
   if (x.offset() < min_table_slice_offset_)
     return caf::make_error(ec::unspecified, "slice offsets not increasing");
   if (!x.is_serialized())

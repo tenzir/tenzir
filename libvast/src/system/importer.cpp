@@ -54,7 +54,6 @@ public:
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
     for (auto&& slice : std::exchange(slices, {})) {
-      VAST_ASSERT(slice.rows() <= static_cast<size_t>(state.available_ids()));
       auto rows = slice.rows();
       events += rows;
       auto name = slice.layout().name();
@@ -63,7 +62,6 @@ public:
         it.value() += rows;
       else
         state.schema_counters.emplace(std::string{name}, rows);
-      slice.offset(state.next_id(rows));
       slice.import_time(time::clock::now());
       out.push(std::move(slice));
     }
@@ -119,83 +117,7 @@ importer_state::importer_state(importer_actor::pointer self) : self{self} {
   // nop
 }
 
-importer_state::~importer_state() {
-  write_state(write_mode::with_next);
-}
-
-caf::error importer_state::read_state() {
-  const auto file = dir / "current_id_block";
-  std::error_code err{};
-  const auto file_exists = std::filesystem::exists(file, err);
-  if (err)
-    return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to read state from import "
-                                       "directory {}: {}",
-                                       file, err.message()));
-  if (file_exists) {
-    VAST_VERBOSE("{} reads persistent state from {}", *self, file);
-    std::ifstream state_file{file.string()};
-    state_file >> current.end;
-    if (!state_file)
-      return caf::make_error(
-        ec::parse_error, "unable to read importer state file", file.string());
-    state_file >> current.next;
-    if (!state_file) {
-      VAST_WARN("{} did not find next ID position in state file; "
-                "irregular shutdown detected",
-                *self);
-      current.next = current.end;
-    }
-  } else {
-    VAST_VERBOSE("{} did not find a state file at {}", *self, file);
-    current.end = 0;
-    current.next = 0;
-  }
-  return get_next_block();
-}
-
-caf::error importer_state::write_state(write_mode mode) {
-  std::error_code err{};
-  const auto dir_exists = std::filesystem::exists(dir, err);
-  if (!dir_exists)
-    if (const auto created_dir = std::filesystem::create_directories(dir, err);
-        !created_dir)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to create importer directory "
-                                         "{}: {}",
-                                         dir, err.message()));
-  const auto block = dir / "current_id_block";
-  std::ofstream state_file{block.string()};
-  state_file << current.end;
-  if (mode == write_mode::with_next) {
-    state_file << " " << current.next;
-    VAST_VERBOSE("{} persisted next available ID at {}", *self, current.next);
-  } else {
-    VAST_VERBOSE("{} persisted ID block boundary at {}", *self, current.end);
-  }
-  return caf::none;
-}
-
-caf::error importer_state::get_next_block(uint64_t required) {
-  using namespace si_literals;
-  while (current.next + required >= current.end)
-    current.end += 8_Mi;
-  return write_state(write_mode::without_next);
-}
-
-id importer_state::next_id(uint64_t advance) {
-  id pre = current.next;
-  id post = pre + advance;
-  if (post >= current.end)
-    get_next_block(advance);
-  current.next = post;
-  VAST_ASSERT(current.next < current.end);
-  return pre;
-}
-
-id importer_state::available_ids() const noexcept {
-  return max_id - current.next;
-}
+importer_state::~importer_state() = default;
 
 caf::typed_response_promise<record>
 importer_state::status(status_verbosity v) const {
@@ -205,15 +127,7 @@ importer_state::status(status_verbosity v) const {
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
   record result;
-  result["ids.available"] = count{available_ids()};
   if (v >= status_verbosity::detailed) {
-    auto ids = record{};
-    ids["available"] = count{available_ids()};
-    auto block = record{};
-    block["next"] = count{current.next};
-    block["end"] = count{current.end};
-    ids["block"] = std::move(block);
-    rs->content["ids"] = std::move(ids);
     auto sources_status = list{};
     sources_status.reserve(inbound_descriptions.size());
     for (const auto& kv : inbound_descriptions)
@@ -273,15 +187,9 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   VAST_TRACE_SCOPE("importer {} {}", VAST_ARG(self->id()), VAST_ARG(dir));
   for (const auto& x : input_transformations)
     VAST_VERBOSE("{} loaded import transformation {}", *self, x.name());
-  self->state.dir = dir;
-  auto err = self->state.read_state();
-  if (err) {
-    VAST_ERROR("{} failed to load state: {}", *self, render(err));
-    self->quit(std::move(err));
-    return importer_actor::behavior_type::make_empty_behavior();
-  }
-  self->send(index, atom::importer_v,
-             static_cast<idspace_distributor_actor>(self));
+  if (auto ec = std::error_code{};
+      std::filesystem::exists(dir / "current_id_block", ec))
+    std::filesystem::remove(dir / "current_id_block", ec);
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
@@ -305,7 +213,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
                   std::move(input_transformations));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", *self);
-    self->quit(std::move(err));
+    self->quit();
     return importer_actor::behavior_type::make_empty_behavior();
   }
   self->state.stage->add_outbound_path(self->state.transformer);
@@ -357,12 +265,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       VAST_ASSERT(self->state.stage != nullptr);
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
-    },
-    // Reserve a part of the id space.
-    [self](atom::reserve, uint64_t n) {
-      VAST_ASSERT(n <= static_cast<size_t>(self->state.available_ids()),
-                  "id space overflow");
-      return self->state.next_id(n);
     },
     // The internal telemetry loop of the IMPORTER.
     [self](atom::telemetry) {

@@ -14,6 +14,7 @@
 #include <vast/fwd.hpp>
 #include <vast/plugin.hpp>
 #include <vast/store.hpp>
+#include <vast/table_slice.hpp>
 
 #include <arrow/io/file.h>
 #include <arrow/io/memory.h>
@@ -78,33 +79,44 @@ class passive_feather_store final : public passive_store {
     if (!reader.ok())
       return caf::make_error(ec::system_error, reader.status().ToString());
     auto table = std::shared_ptr<arrow::Table>{};
-    const auto read_status = reader.ValueUnsafe()->Read(&table);
+    const auto read_status = reader.MoveValueUnsafe()->Read(&table);
     if (!read_status.ok())
       return caf::make_error(ec::system_error, read_status.ToString());
     for (auto rb : arrow::TableBatchReader(*table)) {
-      if (!rb.ok())
-        return caf::make_error(ec::system_error, rb.status().ToString());
-      auto unwrapped_rb = unwrap_record_batch(*rb);
-      auto time_col = (*rb)->GetColumnByName("import_time");
-      auto& slice = slices_.emplace_back(unwrapped_rb);
+      VAST_ASSERT(rb.ok(), rb.status().ToString().c_str());
+      auto time_col = rb.ValueUnsafe()->GetColumnByName("import_time");
+      auto unwrapped_rb = unwrap_record_batch(rb.MoveValueUnsafe());
+      auto slice = table_slice{unwrapped_rb};
+      slice.offset(num_events_);
+      num_events_ += slice.rows();
       slice.import_time(derive_import_time(time_col));
+      slices_.push_back(std::move(slice));
     }
     return {};
   }
 
-  [[nodiscard]] const std::vector<table_slice>& slices() const override {
-    return slices_;
+  [[nodiscard]] detail::generator<table_slice> slices() const override {
+    for (const auto& slice : slices_)
+      co_yield slice;
+  }
+
+  [[nodiscard]] size_t num_events() const override {
+    return num_events_;
   }
 
 private:
+  size_t num_events_ = {};
   std::vector<table_slice> slices_ = {};
 };
 
 class active_feather_store final : public active_store {
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     slices_.reserve(new_slices.size() + slices_.size());
-    slices_.insert(slices_.end(), std::make_move_iterator(new_slices.begin()),
-                   std::make_move_iterator(new_slices.end()));
+    for (auto& slice : new_slices) {
+      slice.offset(num_events_);
+      num_events_ += slice.rows();
+      slices_.push_back(std::move(slice));
+    }
     return {};
   }
 
@@ -133,12 +145,18 @@ class active_feather_store final : public active_store {
     return chunk::make(buffer.MoveValueUnsafe());
   }
 
-  [[nodiscard]] const std::vector<table_slice>& slices() const override {
-    return slices_;
+  [[nodiscard]] detail::generator<table_slice> slices() const override {
+    for (const auto& slice : slices_)
+      co_yield slice;
+  }
+
+  [[nodiscard]] size_t num_events() const override {
+    return num_events_;
   }
 
 private:
   std::vector<table_slice> slices_ = {};
+  size_t num_events_ = {};
 };
 
 class plugin final : public virtual store_plugin {
