@@ -177,7 +177,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   auto& checker = it->second;
   // Perform candidate check, splitting the slice into subsets if needed.
   self->state.query_status.processed += slice.rows();
-  auto selection = evaluate(checker, slice);
+  auto selection = evaluate(checker, slice, {});
   auto selection_size = rank(selection);
   if (selection_size == 0) {
     // No rows qualify.

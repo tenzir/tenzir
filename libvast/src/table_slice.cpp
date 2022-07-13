@@ -10,10 +10,12 @@
 
 #include "vast/arrow_table_slice.hpp"
 #include "vast/arrow_table_slice_builder.hpp"
+#include "vast/bitmap_algorithms.hpp"
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/passthrough.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -565,71 +567,26 @@ uint64_t rows(const std::vector<table_slice>& slices) {
 
 namespace {
 
-struct row_evaluator {
-  row_evaluator(const table_slice& slice, size_t row)
-    : slice_{slice}, row_{row} {
-    // nop
-  }
-
-  template <class T>
-  bool operator()(const data& d, const T& x) {
-    return (*this)(x, d);
-  }
-
-  template <class T, class U>
-  bool operator()(const T&, const U&) {
-    return false;
-  }
-
-  bool operator()(caf::none_t) {
-    return false;
-  }
-
-  bool operator()(const conjunction& c) {
-    return std::all_of(c.begin(), c.end(), [&](const auto& op) {
-      return caf::visit(*this, op);
-    });
-  }
-
-  bool operator()(const disjunction& d) {
-    return std::any_of(d.begin(), d.end(), [&](const auto& op) {
-      return caf::visit(*this, op);
-    });
-  }
-
-  bool operator()(const negation& n) {
-    return !caf::visit(*this, n.expr());
-  }
-
-  bool operator()(const predicate& p) {
-    op_ = p.op;
-    return caf::visit(*this, p.lhs, p.rhs);
-  }
-
-  bool operator()(const meta_extractor& e, const data& d) {
-    // TODO: Transform this AST node into a constant-time lookup node (e.g.,
-    // data_extractor). It's not necessary to iterate over the schema for
-    // every row; this should happen upfront.
-    const auto layout = slice_.layout();
-    // TODO: type and field queries don't produce false positives in the
-    // partition. Is there actually any reason to do the check here?
-    if (e.kind == meta_extractor::type)
-      return evaluate(std::string{layout.name()}, op_, d);
-    if (e.kind == meta_extractor::field) {
-      const auto* s = caf::get_if<std::string>(&d);
+bool evaluate_meta_extractor(const table_slice& slice,
+                             const meta_extractor& lhs, relational_operator op,
+                             const data& rhs) {
+  switch (lhs.kind) {
+    case meta_extractor::kind::type:
+      return evaluate(materialize(slice.layout().name()), op, rhs);
+    case meta_extractor::kind::field: {
+      const auto* s = caf::get_if<std::string>(&rhs);
       if (!s) {
         VAST_WARN("#field can only compare with string");
         return false;
       }
       auto result = false;
-      auto neg = is_negated(op_);
-      // auto abs_op = neg ? negate(op_) : op_;
-      for (const auto& layout_rt = caf::get<record_type>(layout);
+      auto neg = is_negated(op);
+      for (const auto& layout_rt = caf::get<record_type>(slice.layout());
            const auto& [field, index] : layout_rt.leaves()) {
         const auto fqn
-          = fmt::format("{}.{}", layout.name(), layout_rt.key(index));
-        // This is essentially s->ends_with(fqn), except that it also checks the
-        // dot separators correctly (modulo quoting).
+          = fmt::format("{}.{}", slice.layout().name(), layout_rt.key(index));
+        // This is essentially s->ends_with(fqn), except that it also checks
+        // the dot separators correctly (modulo quoting).
         const auto [fqn_mismatch, s_mismatch]
           = std::mismatch(fqn.rbegin(), fqn.rend(), s->rbegin(), s->rend());
         if (s_mismatch == s->rend()
@@ -638,42 +595,127 @@ struct row_evaluator {
           break;
         }
       }
-      return neg ? !result : result;
+      return neg != result;
     }
-    if (e.kind == meta_extractor::import_time)
-      return evaluate(slice_.import_time(), op_, d);
-    return false;
+    case meta_extractor::kind::import_time:
+      return evaluate(data{slice.import_time()}, op, rhs);
   }
-
-  bool operator()(const type_extractor&, const data&) {
-    die("type extractor should have been resolved at this point");
-  }
-
-  bool operator()(const field_extractor&, const data&) {
-    die("field extractor should have been resolved at this point");
-  }
-
-  bool operator()(const data_extractor& e, const data& d) {
-    auto lhs = to_canonical(e.type, slice_.at(row_, e.column, e.type));
-    auto rhs = make_data_view(d);
-    return evaluate_view(lhs, op_, rhs);
-  }
-
-  const table_slice& slice_;
-  size_t row_;
-  relational_operator op_ = {};
-};
+  __builtin_unreachable();
+}
 
 } // namespace
 
-ids evaluate(const expression& expr, const table_slice& slice) {
-  // TODO: switch to a column-based evaluation strategy where it makes sense.
-  ids result;
-  result.append(false, slice.offset());
-  for (size_t row = 0; row != slice.rows(); ++row) {
-    auto x = caf::visit(row_evaluator{slice, row}, expr);
-    result.append_bit(x);
+ids evaluate(const expression& expr, const table_slice& slice,
+             const ids& hints) {
+  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
+  const auto num_rows = slice.rows();
+  const auto make_path = [](const struct offset& index) noexcept {
+    auto intermediate = std::vector<int>{};
+    intermediate.reserve(index.size());
+    for (auto x : index)
+      intermediate.push_back(detail::narrow_cast<int>(x));
+    return arrow::FieldPath{std::move(intermediate)};
+  };
+  auto make_empty_result = [&] {
+    auto result = ids{};
+    result.append(false, offset + num_rows);
+    return result;
+  };
+  const auto evaluate_predicate = detail::overload{
+    [](const auto&, relational_operator, const auto&, const ids&) -> ids {
+      die("predicates must be normalized and bound for evaluation");
+    },
+    [&](const meta_extractor& lhs, relational_operator op, const data& rhs,
+        ids selection) -> ids {
+      if (!any(selection))
+        return selection;
+      if (evaluate_meta_extractor(slice, lhs, op, rhs))
+        return selection;
+      return make_empty_result();
+    },
+    [&](const data_extractor& lhs, relational_operator op, const data& rhs,
+        const ids& selection) -> ids {
+      if (!any(selection))
+        return make_empty_result();
+      const auto index
+        = caf::get<record_type>(slice.layout()).resolve_flat_index(lhs.column);
+      const auto type = caf::get<record_type>(slice.layout()).field(index).type;
+      const auto array
+        = make_path(index).Get(*to_record_batch(slice)).ValueOrDie();
+      auto result = ids{};
+      for (auto id : select(selection)) {
+        VAST_ASSERT(id >= offset);
+        const auto row = id - offset;
+        result.append(false, id - result.size());
+        // FIXME: This materializes unnecessarily because `evaluate_view` is
+        // broken and does not do the same thing as `evaluate`. We must align
+        // their behavior and add tests for `evaluate_view`, or, which would be
+        // even better, operate on the Arrow Arrays directly here.
+        const bool matches
+          = evaluate(materialize(value_at(type, *array,
+                                          detail::narrow_cast<int64_t>(row))),
+                     op, rhs);
+        result.append(matches, 1);
+      }
+      result.append(false, offset + num_rows - result.size());
+      return result;
+    },
+  };
+  const auto evaluate_expression
+    = [&](const auto& self, const expression& expr, ids selection) -> ids {
+    const auto evaluate_expression_impl = detail::overload{
+      [&](const caf::none_t&, const ids&) {
+        return make_empty_result();
+      },
+      [&](const negation& negation, const ids& selection) {
+        return selection ^ self(self, negation.expr(), selection);
+      },
+      [&](const conjunction& conjunction, const ids& selection) {
+        auto result = selection;
+        for (const auto& connective : conjunction) {
+          if (!any(selection))
+            return selection;
+          result = self(self, connective, std::move(result));
+        }
+        return result;
+      },
+      [&](const disjunction& disjunction, const ids& selection) {
+        auto mask = selection;
+        for (const auto& connective : disjunction) {
+          if (!any(mask))
+            return selection;
+          mask &= ~self(self, connective, mask);
+        }
+        return selection & ~mask;
+      },
+      [&](const predicate& predicate, const ids& selection) -> ids {
+        return caf::visit(evaluate_predicate, predicate.lhs,
+                          detail::passthrough(predicate.op), predicate.rhs,
+                          detail::passthrough(selection));
+      },
+    };
+    return caf::visit(evaluate_expression_impl, expr,
+                      detail::passthrough(selection));
+  };
+  auto selection = ids{};
+  selection.append(false, offset);
+  if (hints.empty()) {
+    selection.append(true, num_rows);
+  } else {
+    for (auto hint : select(hints)) {
+      if (hint < offset)
+        continue;
+      if (hint >= offset + num_rows)
+        break;
+      selection.append(false, hint - selection.size());
+      selection.append<true>();
+    }
+    selection.append(false, offset + num_rows - selection.size());
   }
+  VAST_ASSERT(selection.size() == offset + num_rows);
+  auto result
+    = evaluate_expression(evaluate_expression, expr, std::move(selection));
+  VAST_ASSERT(result.size() == offset + num_rows);
   return result;
 }
 
@@ -696,7 +738,7 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
       return slice;
   } else {
     // Tailor the expression to the type; this is required for using the
-    // row_evaluator, which expects field and type extractors to be resolved
+    // evaluate function, which expects field and type extractors to be resolved
     // already.
     auto tailored_expr = tailor(expr, slice.layout());
     if (!tailored_expr)
@@ -718,15 +760,6 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   auto builder
     = factory<table_slice_builder>::make(implementation_id, slice.layout());
   VAST_ASSERT(builder);
-  auto check = [&](size_t row) {
-    // If no expression was provided, we rely on the provided hints only.
-    if (!has_expr)
-      return true;
-    // Check if the expression was unable to be tailored to the type.
-    if (expr == expression{})
-      return false;
-    return caf::visit(row_evaluator{slice, row}, expr);
-  };
   const auto& layout = caf::get<record_type>(slice.layout());
   const auto column_types = [&]() noexcept {
     auto result = std::vector<type>{};
@@ -735,16 +768,16 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
       result.emplace_back(field.type);
     return result;
   }();
+  if (has_expr)
+    selection = evaluate(expr, slice, selection);
   for (auto id : select(selection)) {
     VAST_ASSERT(id >= offset);
     auto row = id - offset;
     VAST_ASSERT(row < slice.rows());
-    if (check(row)) {
-      for (size_t column = 0; column < column_types.size(); ++column) {
-        auto cell_value = slice.at(row, column, column_types[column]);
-        auto ret = builder->add(cell_value);
-        VAST_ASSERT(ret);
-      }
+    for (size_t column = 0; column < column_types.size(); ++column) {
+      auto cell_value = slice.at(row, column, column_types[column]);
+      auto ret = builder->add(cell_value);
+      VAST_ASSERT(ret);
     }
   }
   if (builder->rows() == 0)
@@ -769,33 +802,25 @@ std::optional<table_slice> filter(const table_slice& slice, const ids& hints) {
 uint64_t count_matching(const table_slice& slice, const expression& expr,
                         const ids& hints) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  const auto offset = slice.offset();
-  auto slice_ids = make_ids({{offset, offset + slice.rows()}});
-  auto selection = slice_ids;
-  if (!hints.empty())
-    selection &= hints;
-  // Do no rows qualify?
-  auto selection_rank = rank(selection);
-  if (selection_rank == 0)
-    return 0;
+  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   if (expr == expression{}) {
-    // Do all rows qualify?
-    if (rank(slice_ids) == selection_rank)
-      return slice.rows();
+    auto result = uint64_t{};
+    for (auto id : select(hints)) {
+      if (id < offset)
+        continue;
+      if (id >= offset + slice.rows())
+        break;
+      ++result;
+    }
+    return result;
   }
-  auto check = [&](row_evaluator eval) -> uint64_t {
-    if (expr == expression{})
-      return 1u;
-    return static_cast<uint64_t>(caf::visit(eval, expr));
-  };
-  uint64_t cnt = 0u;
-  for (auto id : select(selection)) {
-    VAST_ASSERT(id >= offset);
-    auto row = id - offset;
-    VAST_ASSERT(row < slice.rows());
-    cnt += check(row_evaluator{slice, row});
-  }
-  return cnt;
+  // Tailor the expression to the type; this is required for using the
+  // evaluate function, which expects field and type extractors to be resolved
+  // already.
+  auto tailored_expr = tailor(expr, slice.layout());
+  if (!tailored_expr)
+    return 0;
+  return rank(evaluate(expr, slice, hints));
 }
 
 } // namespace vast
