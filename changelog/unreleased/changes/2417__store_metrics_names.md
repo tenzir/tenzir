@@ -8,4 +8,3 @@ Store metrics have been modified. Every store now emits the following metrics:
 The store type, previously containing `active` or `passive` is now used to
 distinguish between the various supported store types, e.g. `parquet`,
 `feather`, and `segment-store`.
-
