@@ -38,6 +38,7 @@
 #include "vast/io/save.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/segment_store.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/partition_transformer.hpp"
@@ -1238,32 +1239,81 @@ index(index_actor::stateful_pointer<index_state> self,
                   }
                   // Adjust layout stats by subtracting the events of the
                   // removed partition.
-                  const auto* partition = fbs::GetPartition(chunk->data());
-                  if (partition->partition_type()
-                      != fbs::partition::Partition::legacy) {
-                    rp.deliver(caf::make_error(ec::format_error, "unexpected "
-                                                                 "format "
-                                                                 "version"));
-                    return;
-                  }
-                  vast::ids all_ids;
-                  const auto* partition_legacy
-                    = partition->partition_as_legacy();
-                  for (const auto* partition_stats :
-                       *partition_legacy->type_ids()) {
-                    const auto* name = partition_stats->name();
-                    vast::ids ids;
-                    if (auto error
-                        = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
-                      rp.deliver(caf::make_error(ec::format_error,
-                                                 "could not deserialize "
-                                                 "ids: "
-                                                   + render(error)));
+                  if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+                    VAST_WARN("failed to load partition for deletion at {} "
+                              "because its size of {} exceeds the maximum "
+                              "allowed size of {}. The index statistics will "
+                              "be incorrect until the database has been "
+                              "rebuilt and restarted",
+                              path, chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
+                    // !!! Fallback path. We try to erase the corresponding
+                    // segment store file if it exists.
+                    // TODO: Also attempt to erase parquet stores once that
+                    // implementation is merged.
+                    auto store_path = store_path_for_partition(partition_id);
+                    self
+                      ->request<caf::message_priority::high>(
+                        self->state.filesystem, caf::infinite, atom::erase_v,
+                        path)
+                      .then(
+                        [self, partition_id](atom::done) {
+                          VAST_DEBUG("{} erased partition {} from filesystem",
+                                     *self, partition_id);
+                        },
+                        [self, partition_id, path](const caf::error& err) {
+                          VAST_WARN("{} failed to erase partition {} at {}: {}",
+                                    *self, partition_id, path, err);
+                        });
+                    self
+                      ->request<caf::message_priority::high>(
+                        self->state.filesystem, caf::infinite, atom::erase_v,
+                        store_path)
+                      .then(
+                        [self, partition_id, store_path](atom::done) {
+                          VAST_DEBUG("{} erased partition store {} from "
+                                     "filesystem",
+                                     *self, partition_id);
+                        },
+                        [self, partition_id,
+                         store_path](const caf::error& err) {
+                          VAST_DEBUG("{} failed to erase store {} at {}, "
+                                     "possibly because the data is in the "
+                                     "global archive: {}",
+                                     *self, partition_id, store_path, err);
+                        });
+                  } else {
+                    const auto* partition = fbs::GetPartition(chunk->data());
+                    if (partition->partition_type()
+                        != fbs::partition::Partition::legacy) {
+                      rp.deliver(caf::make_error(ec::format_error, "unexpected "
+                                                                   "format "
+                                                                   "version"));
                       return;
                     }
-                    all_ids |= ids;
-                    if (adjust_stats)
-                      self->state.stats.layouts[name->str()].count -= rank(ids);
+                    vast::ids all_ids;
+                    const auto* partition_legacy
+                      = partition->partition_as_legacy();
+                    for (const auto* partition_stats :
+                         *partition_legacy->type_ids()) {
+                      const auto* name = partition_stats->name();
+                      vast::ids ids;
+                      if (auto error = fbs::deserialize_bytes(
+                            partition_stats->ids(), ids)) {
+                        VAST_WARN("{} could not deserialize ids to adjust "
+                                  "statistics: {}",
+                                  *self, error);
+                        continue;
+                      }
+                      all_ids |= ids;
+                      if (adjust_stats)
+                        self->state.stats.layouts[name->str()].count
+                          -= rank(ids);
+                    }
+                    // TODO: We could send `all_ids` as the second argument
+                    // here, which doesn't really make sense from an interface
+                    // perspective but would save the partition from recomputing
+                    // the same bitmap.
+                    rp.delegate(partition_actor, atom::erase_v);
                   }
                   // Note that mmap's will increase the reference count of a
                   // file, so unlinking should not affect indexers that are
@@ -1284,11 +1334,6 @@ index(index_actor::stateful_pointer<index_state> self,
                                   "synopsis {} at {}: {}",
                                   *self, partition_id, synopsis_path, err);
                       });
-                  // TODO: We could send `all_ids` as the second argument
-                  // here, which doesn't really make sense from an interface
-                  // perspective but would save the partition from recomputing
-                  // the same bitmap.
-                  rp.delegate(partition_actor, atom::erase_v);
                 },
                 [=](caf::error& err) mutable {
                   VAST_WARN("{} failed to erase partition {} from filesystem: "
