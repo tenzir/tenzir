@@ -45,9 +45,8 @@ public:
   /// Constructs a MessagePack-encoded table slice from a FlatBuffers table.
   /// @param slice The encoding-specific FlatBuffers table.
   /// @param parent The surrounding chunk.
-  /// @param batch A pre-existing record batch. Must always be nullptr.
-  msgpack_table_slice(const FlatBuffer& slice, const chunk_ptr& parent,
-                      const std::shared_ptr<arrow::RecordBatch>& batch) noexcept;
+  msgpack_table_slice(const FlatBuffer& slice,
+                      const chunk_ptr& parent) noexcept;
 
   /// Destroys a MessagePack-encoded table slice.
   ~msgpack_table_slice() noexcept;
@@ -70,9 +69,6 @@ public:
 
   /// @returns The number of columns in the slice.
   [[nodiscard]] table_slice::size_type columns() const noexcept;
-
-  /// @returns Whether the underlying buffer is serialized.
-  [[nodiscard]] bool is_serialized() const noexcept;
 
   // -- data access ------------------------------------------------------------
 

@@ -54,37 +54,31 @@ namespace {
 /// Create a table slice from a record batch.
 /// @param record_batch The record batch to encode.
 /// @param builder The flatbuffers builder to use.
-/// @param serialize Embed the IPC format in the FlatBuffers table.
-table_slice
-create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                   flatbuffers::FlatBufferBuilder& builder, bool serialize) {
-  VAST_ASSERT(record_batch);
+table_slice create_table_slice(const arrow::RecordBatch& record_batch,
+                               flatbuffers::FlatBufferBuilder& builder) {
 #if VAST_ENABLE_ASSERTIONS
   // NOTE: There's also a ValidateFull function, but that always errors when
   // using nested struct arrays. Last tested with Arrow 7.0.0. -- DL.
-  auto validate_status = record_batch->Validate();
+  auto validate_status = record_batch.Validate();
   VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
 #endif // VAST_ENABLE_ASSERTIONS
-  auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
-  if (serialize) {
-    auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
-    auto opts = arrow::ipc::IpcWriteOptions::Defaults();
-    opts.codec
-      = arrow::util::Codec::Create(
-          arrow::Compression::ZSTD,
-          arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-            .ValueOrDie())
-          .ValueOrDie();
-    auto stream_writer
-      = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema(), opts)
-          .ValueOrDie();
-    auto status = stream_writer->WriteRecordBatch(*record_batch);
-    if (!status.ok())
-      VAST_ERROR("failed to write record batch: {}", status);
-    auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
-    fbs_ipc_buffer = builder.CreateVector(arrow_ipc_buffer->data(),
-                                          arrow_ipc_buffer->size());
-  }
+  auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  auto opts = arrow::ipc::IpcWriteOptions::Defaults();
+  opts.codec
+    = arrow::util::Codec::Create(
+        arrow::Compression::ZSTD,
+        arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie())
+        .ValueOrDie();
+  auto stream_writer
+    = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch.schema(), opts)
+        .ValueOrDie();
+  auto status = stream_writer->WriteRecordBatch(record_batch);
+  if (!status.ok())
+    VAST_ERROR("failed to write record batch: {}", status);
+  auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
+  auto fbs_ipc_buffer
+    = builder.CreateVector(arrow_ipc_buffer->data(), arrow_ipc_buffer->size());
   // Create Arrow-encoded table slices. We need to set the import time to
   // something other than 0, as it cannot be modified otherwise. We then later
   // reset it to the clock's epoch.
@@ -98,9 +92,7 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder);
-  auto result = table_slice{std::move(chunk), table_slice::verify::no,
-                            serialize ? std::shared_ptr<arrow::RecordBatch>{}
-                                      : record_batch};
+  auto result = table_slice{std::move(chunk), table_slice::verify::no};
   result.import_time(time{});
   return result;
 }
@@ -141,15 +133,15 @@ table_slice arrow_table_slice_builder::finish() {
     caf::get<type_to_arrow_array_t<record_type>>(*combined_array).fields());
   // Reset the builder state.
   num_rows_ = {};
-  return create_table_slice(record_batch, this->builder_, true);
+  return create_table_slice(*record_batch, this->builder_);
 }
 
 table_slice arrow_table_slice_builder::create(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, bool serialize,
+  const std::shared_ptr<arrow::RecordBatch>& record_batch,
   size_t initial_buffer_size) {
   verify_record_batch(*record_batch);
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
-  return create_table_slice(record_batch, builder, serialize);
+  return create_table_slice(*record_batch, builder);
 }
 
 size_t arrow_table_slice_builder::rows() const noexcept {

@@ -33,9 +33,6 @@ segment_builder::segment_builder(size_t initial_buffer_size,
 caf::error segment_builder::add(table_slice x) {
   if (x.offset() < min_table_slice_offset_)
     return caf::make_error(ec::unspecified, "slice offsets not increasing");
-  if (!x.is_serialized())
-    x = table_slice{to_record_batch(x), true};
-  VAST_ASSERT(x.is_serialized());
   auto bytes = fbs::pack_bytes(builder_, x);
   auto slice = fbs::CreateFlatTableSlice(builder_, bytes);
   flat_slices_.push_back(slice);
