@@ -12,15 +12,15 @@
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
-#include <vast/transform_step.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/table.h>
 
 namespace vast::plugins::rename {
 
-/// The configuration of the rename transform step.
+/// The configuration of the rename pipeline operator.
 struct configuration {
   struct name_mapping {
     std::string from = {};
@@ -65,9 +65,9 @@ struct configuration {
   }
 };
 
-class rename_step : public transform_step {
+class rename_operator : public pipeline_operator {
 public:
-  rename_step(configuration config) : config_{std::move(config)} {
+  rename_operator(configuration config) : config_{std::move(config)} {
     // nop
   }
 
@@ -123,13 +123,13 @@ public:
   } // namespace vast::plugins::rename
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
     return std::exchange(transformed_batches_, {});
   }
 
 private:
   /// Cache for transformed batches.
-  std::vector<transform_batch> transformed_batches_ = {};
+  std::vector<pipeline_batch> transformed_batches_ = {};
 
   /// Step-specific configuration, including the layout name mapping.
   configuration config_ = {};
@@ -137,7 +137,7 @@ private:
 
 // -- plugin ------------------------------------------------------------------
 
-class plugin final : public virtual transform_plugin {
+class plugin final : public virtual pipeline_operator_plugin {
 public:
   caf::error initialize(data options) override {
     // We don't use any plugin-specific configuration under
@@ -152,20 +152,21 @@ public:
                                                       "vast.plugins.rename");
   }
 
-  /// The name is how the transform step is addressed in a transform definition.
+  /// The name is how the pipeline operator is addressed in a transform
+  /// definition.
   [[nodiscard]] const char* name() const override {
     return "rename";
   };
 
-  /// This is called once for every time this transform step appears in a
+  /// This is called once for every time this pipeline operator appears in a
   /// transform definition. The configuration for the step is opaquely
   /// passed as the first argument.
-  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& options) const override {
+  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  make_pipeline_operator(const record& options) const override {
     auto config = to<configuration>(options);
     if (!config)
       return config.error();
-    return std::make_unique<rename_step>(std::move(*config));
+    return std::make_unique<rename_operator>(std::move(*config));
   }
 };
 

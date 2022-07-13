@@ -53,7 +53,7 @@ make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
             type_registry_actor type_registry,
             stream_sink_actor<table_slice, std::string> importer,
-            std::vector<transform>&& transforms, bool detached) {
+            std::vector<pipeline>&& pipelines, bool detached) {
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
   // Placeholder thingies.
@@ -138,7 +138,7 @@ make_source(caf::actor_system& sys, const std::string& format,
       return sys.spawn(source, std::forward<decltype(args)>(args)...);
     }(std::move(*reader), slice_size, max_events, std::move(type_registry),
       std::move(local_module), std::move(type_filter), std::move(accountant),
-      std::move(transforms));
+      std::move(pipelines));
   VAST_ASSERT(src);
   // Attempt to parse the remainder as an expression.
   if (!inv.arguments.empty()) {

@@ -167,8 +167,8 @@ int main(int argc, char** argv) {
   // Eagerly verify the export transform configuration, to avoid hidden
   // configuration errors that pop up the first time a user tries to run
   // `vast export`.
-  if (auto export_transforms = make_transforms(
-        system::transforms_location::server_export, cfg.content);
+  if (auto export_transforms
+      = make_pipelines(system::pipelines_location::server_export, cfg.content);
       !export_transforms) {
     VAST_ERROR("invalid export transform configuration: {}",
                export_transforms.error());

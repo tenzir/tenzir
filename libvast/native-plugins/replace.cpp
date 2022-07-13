@@ -10,8 +10,8 @@
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
-#include <vast/transform.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/array.h>
@@ -105,9 +105,9 @@ struct bound_configuration {
   std::vector<indexed_transformation> transformations = {};
 };
 
-class replace_step : public transform_step {
+class replace_operator : public pipeline_operator {
 public:
-  explicit replace_step(configuration config) noexcept
+  explicit replace_operator(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
@@ -133,13 +133,13 @@ public:
     return caf::none;
   }
 
-  caf::expected<std::vector<transform_batch>> finish() override {
+  caf::expected<std::vector<pipeline_batch>> finish() override {
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The transformed slices.
-  std::vector<transform_batch> transformed_ = {};
+  std::vector<pipeline_batch> transformed_ = {};
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};
@@ -148,7 +148,7 @@ private:
   std::unordered_map<type, bound_configuration> bound_config_ = {};
 };
 
-class plugin final : public virtual transform_plugin {
+class plugin final : public virtual pipeline_operator_plugin {
 public:
   caf::error initialize(data) override {
     return {};
@@ -158,12 +158,12 @@ public:
     return "replace";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& config) const override {
+  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  make_pipeline_operator(const record& config) const override {
     auto parsed_config = configuration::make(config);
     if (!parsed_config)
       return parsed_config.error();
-    return std::make_unique<replace_step>(std::move(*parsed_config));
+    return std::make_unique<replace_operator>(std::move(*parsed_config));
   }
 };
 

@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/transform.hpp"
+#include "vast/pipeline.hpp"
 
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -22,42 +22,42 @@
 
 namespace vast {
 
-transform::transform(std::string name, std::vector<std::string>&& schema_names)
+pipeline::pipeline(std::string name, std::vector<std::string>&& schema_names)
   : name_(std::move(name)), schema_names_(std::move(schema_names)) {
 }
 
-void transform::add_step(std::unique_ptr<transform_step> step) {
+void pipeline::add_operator(std::unique_ptr<pipeline_operator> step) {
   steps_.emplace_back(std::move(step));
 }
 
-const std::string& transform::name() const {
+const std::string& pipeline::name() const {
   return name_;
 }
 
-const std::vector<std::string>& transform::schema_names() const {
+const std::vector<std::string>& pipeline::schema_names() const {
   return schema_names_;
 }
 
-bool transform::is_aggregate() const {
+bool pipeline::is_aggregate() const {
   return std::any_of(steps_.begin(), steps_.end(), [](const auto& step) {
     return step->is_aggregate();
   });
 }
 
-bool transform::applies_to(std::string_view event_name) const {
+bool pipeline::applies_to(std::string_view event_name) const {
   return schema_names_.empty()
          || std::find(schema_names_.begin(), schema_names_.end(), event_name)
               != schema_names_.end();
 }
 
-caf::error transform::add(table_slice&& x) {
+caf::error pipeline::add(table_slice&& x) {
   VAST_DEBUG("transform {} adds a slice", name_);
   import_timestamps_.push_back(x.import_time());
   auto batch = to_record_batch(x);
   return add_batch(x.layout(), batch);
 }
 
-caf::expected<std::vector<table_slice>> transform::finish() {
+caf::expected<std::vector<table_slice>> pipeline::finish() {
   VAST_DEBUG("transform {} retrieves results from {} steps", name_,
              steps_.size());
   auto guard = caf::detail::make_scope_guard([this]() {
@@ -92,16 +92,17 @@ caf::expected<std::vector<table_slice>> transform::finish() {
   return result;
 }
 
-caf::error transform::add_batch(vast::type layout,
-                                std::shared_ptr<arrow::RecordBatch> batch) {
+caf::error pipeline::add_batch(vast::type layout,
+                               std::shared_ptr<arrow::RecordBatch> batch) {
   VAST_TRACE("add arrow data to transform {}", name_);
   to_transform_.emplace_back(std::move(layout), std::move(batch));
   return caf::none;
 }
 
-caf::error transform::process_queue(const std::unique_ptr<transform_step>& step,
-                                    std::vector<transform_batch>& result,
-                                    bool check_layout) {
+caf::error
+pipeline::process_queue(const std::unique_ptr<pipeline_operator>& step,
+                        std::vector<pipeline_batch>& result,
+                        bool check_layout) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {
@@ -135,10 +136,10 @@ caf::error transform::process_queue(const std::unique_ptr<transform_step>& step,
   return caf::none;
 }
 
-caf::expected<std::vector<transform_batch>> transform::finish_batch() {
+caf::expected<std::vector<pipeline_batch>> pipeline::finish_batch() {
   VAST_DEBUG("applying {} transform {}", steps_.size(), name_);
   bool first_run = true;
-  std::vector<transform_batch> result{};
+  std::vector<pipeline_batch> result{};
   for (const auto& step : steps_) {
     auto failed = process_queue(step, result, first_run);
     first_run = false;
@@ -155,27 +156,27 @@ caf::expected<std::vector<transform_batch>> transform::finish_batch() {
   return result;
 }
 
-transformation_engine::transformation_engine(std::vector<transform>&& transforms)
-  : transforms_(std::move(transforms)) {
-  for (size_t i = 0; i < transforms_.size(); ++i) {
-    auto const& schema_names = transforms_[i].schema_names();
+pipeline_engine::pipeline_engine(std::vector<pipeline>&& pipelines)
+  : pipelines_(std::move(pipelines)) {
+  for (size_t i = 0; i < pipelines_.size(); ++i) {
+    auto const& schema_names = pipelines_[i].schema_names();
     if (!schema_names.empty())
       for (const auto& type : schema_names)
         layout_mapping_[type].push_back(i);
     else
-      general_transforms_.push_back(i);
+      general_pipelines_.push_back(i);
   }
 }
 
-caf::error transformation_engine::validate(
-  enum allow_aggregate_transforms allow_aggregates) {
+caf::error
+pipeline_engine::validate(enum allow_aggregate_pipelines allow_aggregates) {
   const auto first_aggregate = std::find_if(
-    transforms_.begin(), transforms_.end(), [](const auto& transform) {
+    pipelines_.begin(), pipelines_.end(), [](const auto& transform) {
       return transform.is_aggregate();
     });
-  bool is_aggregate = first_aggregate != transforms_.end();
+  bool is_aggregate = first_aggregate != pipelines_.end();
   auto is_aggregate_allowed
-    = allow_aggregates == allow_aggregate_transforms::yes;
+    = allow_aggregates == allow_aggregate_pipelines::yes;
   if (is_aggregate && !is_aggregate_allowed) {
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("the transform {} is an aggregate",
@@ -184,17 +185,16 @@ caf::error transformation_engine::validate(
   return caf::none;
 }
 
-/// Apply relevant transformations to the table slice.
-caf::error transformation_engine::add(table_slice&& x) {
-  VAST_TRACE("transformation engine adds a slice");
+/// Apply relevant pipelines to the table slice.
+caf::error pipeline_engine::add(table_slice&& x) {
+  VAST_TRACE("pipeline engine adds a slice");
   auto layout = x.layout();
   to_transform_[layout].emplace_back(std::move(x));
   return caf::none;
 }
 
-caf::error
-transformation_engine::process_queue(transform& transform,
-                                     std::deque<transform_batch>& queue) {
+caf::error pipeline_engine::process_queue(pipeline& transform,
+                                          std::deque<pipeline_batch>& queue) {
   caf::error failed{};
   const auto size = queue.size();
   for (size_t i = 0; i < size; ++i) {
@@ -218,16 +218,16 @@ transformation_engine::process_queue(transform& transform,
   return caf::none;
 }
 
-/// Apply relevant transformations to the table slice.
-caf::expected<std::vector<table_slice>> transformation_engine::finish() {
-  VAST_TRACE("transformation engine retrieves results");
+/// Apply relevant pipelines to the table slice.
+caf::expected<std::vector<table_slice>> pipeline_engine::finish() {
+  VAST_TRACE("pipeline engine retrieves results");
   auto to_transform = std::exchange(to_transform_, {});
-  std::unordered_map<vast::type, std::deque<transform_batch>> batches{};
+  std::unordered_map<vast::type, std::deque<pipeline_batch>> batches{};
   std::vector<table_slice> result{};
   for (auto& [layout, queue] : to_transform) {
     // TODO: Consider using a tsl robin map instead for transparent key lookup.
     const auto& matching = layout_mapping_.find(std::string{layout.name()});
-    if (matching == layout_mapping_.end() && general_transforms_.empty()) {
+    if (matching == layout_mapping_.end() && general_pipelines_.empty()) {
       if (!layout_mapping_.empty())
         VAST_TRACE("transform_engine cannot find a transform for layout {}",
                    layout);
@@ -244,23 +244,23 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
     queue.clear();
     auto indices = matching == layout_mapping_.end() ? std::vector<size_t>{}
                                                      : matching->second;
-    // If we have transforms that always apply, make some effort
+    // If we have pipelines that always apply, make some effort
     // to apply them in the same order as they appear in the
     // configuration. While we do not officially guarantee this
     // currently, some kind of rule is required so the user is
     // able to reason about the behavior.
-    if (!general_transforms_.empty()) {
+    if (!general_pipelines_.empty()) {
       std::vector<size_t> all_indices;
-      all_indices.reserve(indices.size() + general_transforms_.size());
-      std::merge(indices.begin(), indices.end(), general_transforms_.begin(),
-                 general_transforms_.end(), std::back_inserter(all_indices));
+      all_indices.reserve(indices.size() + general_pipelines_.size());
+      std::merge(indices.begin(), indices.end(), general_pipelines_.begin(),
+                 general_pipelines_.end(), std::back_inserter(all_indices));
       indices = std::move(all_indices);
     }
-    VAST_DEBUG("transformation engine applies {} transforms on received table "
+    VAST_DEBUG("pipeline engine applies {} pipelines on received table "
                "slices with layout {}",
                indices.size(), layout);
     for (auto idx : indices) {
-      auto& t = transforms_.at(idx);
+      auto& t = pipelines_.at(idx);
       auto failed = process_queue(t, bq);
       if (failed)
         return failed;
@@ -274,8 +274,8 @@ caf::expected<std::vector<table_slice>> transformation_engine::finish() {
   return result;
 }
 
-const std::vector<transform>& transformation_engine::transforms() {
-  return transforms_;
+const std::vector<pipeline>& pipeline_engine::pipelines() {
+  return pipelines_;
 }
 
 } // namespace vast

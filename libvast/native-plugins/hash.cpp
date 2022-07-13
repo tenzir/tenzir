@@ -15,9 +15,9 @@
 #include <vast/hash/default_hash.hpp>
 #include <vast/hash/hash_append.hpp>
 #include <vast/optional.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder_factory.hpp>
-#include <vast/transform.hpp>
 
 #include <arrow/array/builder_binary.h>
 #include <arrow/scalar.h>
@@ -27,7 +27,7 @@ namespace vast::plugins::hash {
 
 namespace {
 
-/// The configuration of the hash transform step.
+/// The configuration of the hash pipeline operator.
 struct configuration {
   std::string field;
   std::string out;
@@ -50,9 +50,9 @@ struct configuration {
   }
 };
 
-class hash_step : public transform_step {
+class hash_operator : public pipeline_operator {
 public:
-  explicit hash_step(configuration configuration);
+  explicit hash_operator(configuration configuration);
 
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
@@ -109,24 +109,24 @@ public:
     return caf::none;
   }
 
-  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
     VAST_DEBUG("hash step finished transformation");
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<transform_batch> transformed_;
+  std::vector<pipeline_batch> transformed_;
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};
 };
 
-hash_step::hash_step(configuration configuration)
+hash_operator::hash_operator(configuration configuration)
   : config_(std::move(configuration)) {
 }
 
-class plugin final : public virtual transform_plugin {
+class plugin final : public virtual pipeline_operator_plugin {
 public:
   // plugin API
   caf::error initialize(data) override {
@@ -138,8 +138,8 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& options) const override {
+  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  make_pipeline_operator(const record& options) const override {
     if (!options.contains("field"))
       return caf::make_error(ec::invalid_configuration,
                              "key 'field' is missing in configuration for hash "
@@ -151,7 +151,7 @@ public:
     auto config = to<configuration>(options);
     if (!config)
       return config.error();
-    return std::make_unique<hash_step>(std::move(*config));
+    return std::make_unique<hash_operator>(std::move(*config));
   }
 };
 

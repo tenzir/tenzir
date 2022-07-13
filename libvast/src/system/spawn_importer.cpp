@@ -13,7 +13,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/importer.hpp"
-#include "vast/system/make_transforms.hpp"
+#include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/uuid.hpp"
@@ -36,10 +36,10 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
     = caf::get_or(args.inv.options, "vast.store-backend",
                   std::string{defaults::system::store_backend});
   auto partition_local_stores = store_backend != "archive";
-  auto transforms
-    = make_transforms(transforms_location::server_import, args.inv.options);
-  if (!transforms)
-    return transforms.error();
+  auto pipelines
+    = make_pipelines(pipelines_location::server_import, args.inv.options);
+  if (!pipelines)
+    return pipelines.error();
   // Don't send incoming data to the global archive if we use partition-local
   // stores.
   if (partition_local_stores)
@@ -51,7 +51,7 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   if (!type_registry)
     return caf::make_error(ec::missing_component, "type-registry");
   auto handle = self->spawn(importer, args.dir / args.label, archive, index,
-                            type_registry, std::move(*transforms));
+                            type_registry, std::move(*pipelines));
   VAST_VERBOSE("{} spawned the importer", *self);
   if (accountant) {
     self->send(handle, atom::telemetry_v);

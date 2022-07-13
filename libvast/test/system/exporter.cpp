@@ -71,14 +71,13 @@ struct fixture : fixture_base {
   }
 
   void spawn_importer() {
-    importer
-      = self->spawn(system::importer, directory / "importer", archive, index,
-                    type_registry, std::vector<vast::transform>{});
+    importer = self->spawn(system::importer, directory / "importer", archive,
+                           index, type_registry, std::vector<vast::pipeline>{});
   }
 
   void spawn_exporter(query_options opts) {
     exporter = self->spawn(system::exporter, expr, opts,
-                           std::vector<vast::transform>{});
+                           std::vector<vast::pipeline>{});
   }
 
   void importer_setup() {

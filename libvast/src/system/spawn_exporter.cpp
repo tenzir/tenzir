@@ -14,7 +14,7 @@
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/exporter.hpp"
-#include "vast/system/make_transforms.hpp"
+#include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/transformer.hpp"
@@ -36,10 +36,10 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   auto expr = get_expression(args);
   if (!expr)
     return expr.error();
-  auto transforms
-    = make_transforms(transforms_location::server_export, args.inv.options);
-  if (!transforms)
-    return transforms.error();
+  auto pipelines
+    = make_pipelines(pipelines_location::server_export, args.inv.options);
+  if (!pipelines)
+    return pipelines.error();
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))
@@ -52,8 +52,7 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   // Mark the query as low priority if explicitly requested.
   if (get_or(args.inv.options, "vast.export.low-priority", false))
     query_opts = query_opts + low_priority;
-  auto handle
-    = self->spawn(exporter, *expr, query_opts, std::move(*transforms));
+  auto handle = self->spawn(exporter, *expr, query_opts, std::move(*pipelines));
   VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(*expr));
   // Wire the exporter to all components.
   auto [accountant, importer, index]
