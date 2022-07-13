@@ -63,7 +63,7 @@ public:
   /// layout.
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_TRACE("where step adds batch");
+    VAST_TRACE("where operator adds batch");
     auto tailored_expr = tailor(expr_, layout);
     if (!tailored_expr) {
       transformed_.clear();
@@ -80,7 +80,7 @@ public:
 
   /// Retrieves the result of the transformation.
   [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
-    VAST_DEBUG("where step finished transformation");
+    VAST_DEBUG("where operator finished transformation");
     return std::exchange(transformed_, {});
   }
 

@@ -295,7 +295,7 @@ TEST(summarize test wrong config) {
   const auto result = unbox(test_transform.finish());
   REQUIRE_EQUAL(result.size(), 1u);
   // Following the renaming the output data should not be touched by the
-  // summarize step, so we expect the underlying data to be unchanged,
+  // summarize operator, so we expect the underlying data to be unchanged,
   // although the layout will be renamed.
   const auto expected_data = make_testdata();
   CHECK(to_record_batch(result[0])->ToStructArray().ValueOrDie()->Equals(

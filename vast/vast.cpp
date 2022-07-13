@@ -25,7 +25,7 @@
 #include "vast/plugin.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
-#include "vast/system/make_transforms.hpp"
+#include "vast/system/make_pipelines.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>

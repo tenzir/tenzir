@@ -139,8 +139,8 @@ caf::expected<std::vector<pipeline_batch>> pipeline::finish_batch() {
   VAST_DEBUG("applying {} pipeline {}", operators_.size(), name_);
   bool first_run = true;
   std::vector<pipeline_batch> result{};
-  for (const auto& step : operators_) {
-    auto failed = process_queue(step, result, first_run);
+  for (const auto& op : operators_) {
+    auto failed = process_queue(op, result, first_run);
     first_run = false;
     if (failed) {
       to_transform_.clear();

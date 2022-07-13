@@ -56,7 +56,7 @@ public:
 
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_TRACE("hash step adds batch");
+    VAST_TRACE("hash operator adds batch");
     // Get the target field if it exists.
     const auto& layout_rt = caf::get<record_type>(layout);
     auto column_index = layout_rt.resolve_key(config_.field);
@@ -110,7 +110,7 @@ public:
   }
 
   [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
-    VAST_DEBUG("hash step finished transformation");
+    VAST_DEBUG("hash operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
@@ -143,11 +143,11 @@ public:
     if (!options.contains("field"))
       return caf::make_error(ec::invalid_configuration,
                              "key 'field' is missing in configuration for hash "
-                             "step");
+                             "operator");
     if (!options.contains("out"))
-      return caf::make_error(ec::invalid_configuration, "key 'out' is missing "
-                                                        "in configuration for "
-                                                        "hash step");
+      return caf::make_error(ec::invalid_configuration,
+                             "key 'out' is missing "
+                             "in configuration for hash operator");
     auto config = to<configuration>(options);
     if (!config)
       return config.error();

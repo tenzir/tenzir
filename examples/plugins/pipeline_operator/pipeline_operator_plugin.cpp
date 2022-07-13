@@ -11,15 +11,15 @@
 
 namespace vast::plugins {
 
-// This example transform shows the necessary scaffolding in order to
-// use the `transform_plugin` API.
+// This example pipeline shows the necessary scaffolding in order to
+// use the `pipeline_plugin` API.
 
-// The main job of a transform plugin is to create a `transform_step`
-// when required. A transform step is a function that gets a table
+// The main job of a pipeline plugin is to create a `pipeline_opeartor`
+// when required. A pipeline step is a function that gets a table
 // slice and returns the slice with a transformation applied.
-class example_transform_step : public transform_step {
+class example_pipeline_operator : public pipeline_operator {
 public:
-  example_transform_step() = default;
+  example_pipeline_operator() = default;
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
   /// VAST layout.
@@ -31,23 +31,23 @@ public:
   }
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<transform_batch> transformed_;
+  std::vector<pipeline_batch> transformed_;
 };
 
 // The plugin definition itself is below.
-class example_transform_plugin final : public virtual transform_plugin {
+class example_pipeline_plugin final : public virtual pipeline_operator_plugin {
 public:
   caf::error initialize(data) override {
     return {};
   }
 
-  // The name is how the transform step is addressed in a transform
+  // The name is how the pipeline step is addressed in a pipeline
   // definition, for example:
   //
   //     vast:
@@ -62,16 +62,16 @@ public:
     return "example-transform";
   };
 
-  // This is called once for every time this transform step appears in a
-  // transform definition. The configuration for the step is opaquely
+  // This is called once for every time this pipeline step appears in a
+  // pipeline definition. The configuration for the step is opaquely
   // passed as the first argument.
-  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
+  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
   make_pipeline_operator(const vast::record&) const override {
-    return std::make_unique<vast::plugins::example_transform_step>();
+    return std::make_unique<vast::plugins::example_pipeline_operator>();
   }
 };
 
 } // namespace vast::plugins
 
 // Finally, register our plugin.
-VAST_REGISTER_PLUGIN(vast::plugins::example_transform_plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::example_pipeline_plugin)

@@ -168,7 +168,7 @@ TEST(drop operator) {
   CHECK(dropped.empty());
 }
 
-TEST(select step) {
+TEST(select operator) {
   auto project_operator = unbox(vast::make_pipeline_operator(
     "select", {{"fields", vast::list{"index", "uid"}}}));
   auto invalid_project_operator = unbox(
@@ -188,7 +188,7 @@ TEST(select step) {
   CHECK(not_projected.empty());
 }
 
-TEST(replace step) {
+TEST(replace operator) {
   auto slice = make_pipelines_testdata();
   auto replace_operator = unbox(vast::make_pipeline_operator(
     "replace", {{"fields", vast::record{{"uid", "xxx"}}}}));
@@ -207,7 +207,7 @@ TEST(replace step) {
   CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
 }
 
-TEST(extend step) {
+TEST(extend operator) {
   auto slice = make_pipelines_testdata();
   auto replace_operator = unbox(vast::make_pipeline_operator(
     "extend", {{"fields", vast::record{{"secret", "xxx"}}}}));
@@ -226,7 +226,7 @@ TEST(extend step) {
   CHECK_EQUAL(table_slice.at(0, 3), vast::data_view{"xxx"sv});
 }
 
-TEST(where step) {
+TEST(where operator) {
   auto [slice, single_row_slice, multi_row_slice]
     = make_where_testdata(vast::defaults::import::table_slice_type);
   CHECK_EQUAL(slice.rows(), 10ull);
@@ -282,7 +282,7 @@ TEST(where step) {
   CHECK_EQUAL(selected5->size(), 0ull);
 }
 
-TEST(anonymize step) {
+TEST(anonymize operator) {
   auto slice = make_pipelines_testdata();
   auto hash_operator = unbox(vast::make_pipeline_operator(
     "hash", {{"field", "uid"}, {"out", "hashed_uid"}}));

@@ -10,11 +10,11 @@
 // does not contain any meaningful tests for the example plugin. It merely
 // exists to show how to setup unit tests.
 
-#define SUITE transform_plugin
+#define SUITE pipeline_plugin
 
 #include <vast/concept/convertible/to.hpp>
 #include <vast/data.hpp>
-#include <vast/system/make_transforms.hpp>
+#include <vast/system/make_pipelines.hpp>
 #include <vast/test/test.hpp>
 
 #include <caf/settings.hpp>
@@ -36,7 +36,7 @@ vast:
 
 } // namespace
 
-// Verify that we can use the transform names to load
+// Verify that we can use the pipeline names to load
 TEST(load plugins from config) {
   auto yaml = vast::from_yaml(config);
   REQUIRE(yaml);
@@ -44,16 +44,16 @@ TEST(load plugins from config) {
   REQUIRE(rec);
   auto settings = vast::to<caf::settings>(*rec);
   REQUIRE(settings);
-  auto client_source_transforms = vast::system::make_transforms(
+  auto client_source_pipelines = vast::system::make_pipelines(
     vast::system::pipelines_location::client_source, *settings);
-  CHECK(client_source_transforms);
-  auto server_import_transforms = vast::system::make_transforms(
+  CHECK(client_source_pipelines);
+  auto server_import_pipelines = vast::system::make_pipelines(
     vast::system::pipelines_location::server_import, *settings);
-  CHECK(server_import_transforms);
-  auto server_export_transforms = vast::system::make_transforms(
+  CHECK(server_import_pipelines);
+  auto server_export_pipelines = vast::system::make_pipelines(
     vast::system::pipelines_location::server_export, *settings);
-  REQUIRE(server_export_transforms);
-  auto client_sink_transforms = vast::system::make_transforms(
+  REQUIRE(server_export_pipelines);
+  auto client_sink_pipelines = vast::system::make_pipelines(
     vast::system::pipelines_location::client_sink, *settings);
-  REQUIRE(client_sink_transforms);
+  REQUIRE(client_sink_pipelines);
 }

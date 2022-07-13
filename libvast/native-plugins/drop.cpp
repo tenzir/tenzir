@@ -56,7 +56,7 @@ public:
 
   caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_DEBUG("drop step adds batch");
+    VAST_DEBUG("drop operator adds batch");
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
       = std::any_of(config_.schemas.begin(), config_.schemas.end(),
@@ -93,7 +93,7 @@ public:
   }
 
   caf::expected<std::vector<pipeline_batch>> finish() override {
-    VAST_DEBUG("drop step finished transformation");
+    VAST_DEBUG("drop operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
@@ -122,7 +122,7 @@ public:
     if (!(options.contains("fields") || options.contains("schemas")))
       return caf::make_error(ec::invalid_configuration,
                              "key 'fields' or 'schemas' is missing in "
-                             "configuration for drop step");
+                             "configuration for drop operator");
     auto config = to<configuration>(options);
     if (!config)
       return config.error();

@@ -56,7 +56,7 @@ public:
   /// @returns The new layout and the projected record batch.
   caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_TRACE("select step adds batch");
+    VAST_TRACE("select operator adds batch");
     auto indices = std::vector<offset>{};
     for (const auto& field : config_.fields)
       for (auto&& index : caf::get<record_type>(layout).resolve_key_suffix(
@@ -74,7 +74,7 @@ public:
   }
 
   caf::expected<std::vector<pipeline_batch>> finish() override {
-    VAST_TRACE("select step finished transformation");
+    VAST_TRACE("select operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
@@ -103,7 +103,7 @@ public:
     if (!options.contains("fields"))
       return caf::make_error(ec::invalid_configuration,
                              "key 'fields' is missing in configuration for "
-                             "select step");
+                             "select operator");
     auto config = to<configuration>(options);
     if (!config)
       return config.error();

@@ -236,7 +236,7 @@ public:
   /// Creates a new pipeline operator that maps input to output table
   /// slices. This will be called when constructing plugins from the
   /// VAST configuration.
-  /// @param options The settings configured for this step.
+  /// @param options The settings configured for this operator.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<pipeline_operator>>
   make_pipeline_operator(const vast::record& options) const = 0;
 };

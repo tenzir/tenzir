@@ -25,13 +25,13 @@ public:
 
   caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_TRACE("identity step adds batch");
+    VAST_TRACE("identity operator adds batch");
     transformed_.emplace_back(layout, std::move(batch));
     return caf::none;
   }
 
   caf::expected<std::vector<pipeline_batch>> finish() override {
-    VAST_DEBUG("identity step finished transformation");
+    VAST_DEBUG("identity operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
