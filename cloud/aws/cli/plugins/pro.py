@@ -1,4 +1,4 @@
-from vast_invoke import task
+from vast_invoke import pty_task, task
 import dynaconf
 from common import COMMON_VALIDATORS, conf
 
@@ -8,7 +8,7 @@ VALIDATORS = [
 ]
 
 
-@task
+@pty_task
 def login(c):
     """Login to the registry where the VAST Pro images are stored"""
     c.run("gcloud auth login --no-launch-browser")
