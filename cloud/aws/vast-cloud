@@ -53,6 +53,7 @@ run () {
     -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
+    -e VASTCLOUD_NO_PTY \
     --env-file <(env | grep VAST_) \
     --env-file <(env | grep TF_) \
     --env-file <(env | grep HOST_) \
@@ -60,16 +61,12 @@ run () {
     tenzir/vast-cloud-cli "${@:2}"
 }
 
-# If VASTCLOUD_NO_PTY is not set, use the VASTCLOUD_CHECK_PTY to execute the
-# command in a dry run mode that checks whether the docker PTY flag if required
-PTY_FLAG=""
-if [[ -z $VASTCLOUD_NO_PTY ]];
-then
-  PTY_CHECK_RESULT=$(run '-e VASTCLOUD_CHECK_PTY=1' "$@")
-  [[ $? == 0 ]] || exit 1
-  # if one task needs a PTY, the whole command needs one
-  PTY_FLAG=$([[ $PTY_CHECK_RESULT =~ "1" ]] && echo "-t")
-fi
+# Use the VASTCLOUD_CHECK_PTY to execute the command in a dry run mode that
+# checks whether the docker PTY flag if required
+PTY_CHECK_RESULT=$(run '-e VASTCLOUD_CHECK_PTY=1' "$@")
+[[ $? == 0 ]] || exit 1
+# if one task needs a PTY, the whole command needs one
+PTY_FLAG=$([[ $PTY_CHECK_RESULT =~ "1" ]] && echo "-t")
 
 # The command is then executed with the resulting PTY_FLAG
 run "$PTY_FLAG" "$@"

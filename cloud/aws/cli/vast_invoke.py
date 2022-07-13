@@ -12,13 +12,22 @@ environment variable.
 - for each task in the command, the dry run mode prints 0 if not PTY is required
 and 1 otherwise. For a command running 3 tasks, the output might be "100" if only
 the first tasks requires a PTY.
+- the VASTCLOUD_NO_PTY force-disables the use of PTY, effectively making the dry
+mode return 0s only
 """
 import invoke
 import os
 
+CHECK_PTY_FLAG_VAR = "VASTCLOUD_CHECK_PTY"
+NO_PTY_FLAG_VAR = "VASTCLOUD_NO_PTY"
+
 
 def is_check_pty_call():
-    return "VASTCLOUD_CHECK_PTY" in os.environ
+    return CHECK_PTY_FLAG_VAR in os.environ
+
+
+def has_no_pty_flag():
+    return NO_PTY_FLAG_VAR in os.environ
 
 
 class _Task(invoke.Task):
@@ -29,7 +38,7 @@ class _Task(invoke.Task):
             return "0"
         else:
             # specify no PTY for recursive calls to the CLI
-            args[0].config.run.env["VASTCLOUD_NO_PTY"] = "1"
+            args[0].config.run.env[NO_PTY_FLAG_VAR] = "1"
             return super().__call__(*args, **kwargs)
 
 
@@ -54,7 +63,8 @@ def task(*args, **kwargs):
 def pty_task(*args, **kwargs):
     """PyInvoke task decorator specific to commands that need PTY. Also supports
     PTY checking calls"""
-    return invoke.task(*args, **kwargs, klass=_PTYTask)
+    task_class = _Task if has_no_pty_flag() else _PTYTask
+    return invoke.task(*args, **kwargs, klass=task_class)
 
 
 # Re-export important classes to keep only one interface to PyInvoke
