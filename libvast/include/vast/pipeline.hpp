@@ -28,7 +28,7 @@ public:
   pipeline& operator=(const pipeline&) = delete;
   pipeline& operator=(pipeline&&) = default;
 
-  void add_operator(std::unique_ptr<pipeline_operator> step);
+  void add_operator(std::unique_ptr<pipeline_operator> op);
 
   /// Returns true if any of the pipeline operators is aggregate.
   [[nodiscard]] bool is_aggregate() const;
@@ -60,18 +60,18 @@ private:
 
   /// Applies the pipeline operator to every batch in the queue.
   caf::error
-  process_queue(const std::unique_ptr<pipeline_operator>& step,
+  process_queue(const std::unique_ptr<pipeline_operator>& op,
                 std::vector<pipeline_batch>& result, bool check_layout);
 
   /// Grant access to the pipelines engine so it can call
   /// add_batch/finsih_batch.
-  friend class pipeline_engine;
+  friend class pipeline_executor;
 
   /// Name assigned to this pipelines.
   std::string name_;
 
   /// Sequence of pipelines steps
-  std::vector<std::unique_ptr<pipeline_operator>> steps_;
+  std::vector<std::unique_ptr<pipeline_operator>> operators_;
 
   /// Triggers for this transform
   std::vector<std::string> schema_names_;
@@ -83,7 +83,7 @@ private:
   std::vector<time> import_timestamps_ = {};
 };
 
-class pipeline_engine {
+class pipeline_executor {
 public:
   /// Controls the validation of the pipelines Engine.
   enum class allow_aggregate_pipelines {
@@ -94,8 +94,8 @@ public:
   // member functions
 
   /// Constructor.
-  pipeline_engine() = default;
-  explicit pipeline_engine(std::vector<pipeline>&&);
+  pipeline_executor() = default;
+  explicit pipeline_executor(std::vector<pipeline>&&);
 
   /// Returns an error if any of the pipelines is an aggregate and
   /// aggregates are not allowed.

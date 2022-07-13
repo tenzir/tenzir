@@ -364,7 +364,7 @@ TEST(pipeline rename layout) {
     caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
 }
 
-TEST(Pipeline engine - single matching pipeline) {
+TEST(Pipeline executor - single matching pipeline) {
   std::vector<vast::pipeline> pipelines;
   pipelines.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
   pipelines.emplace_back("t2", std::vector<std::string>{"foo"});
@@ -374,11 +374,11 @@ TEST(Pipeline engine - single matching pipeline) {
     vast::make_pipeline_operator("drop", {{"fields", vast::list{"uid"}}})));
   pipeline2.add_operator(unbox(
     vast::make_pipeline_operator("drop", {{"fields", vast::list{"index"}}})));
-  vast::pipeline_engine engine(std::move(pipelines));
+  vast::pipeline_executor executor(std::move(pipelines));
   auto slice = make_pipelines_testdata();
-  auto add_failed = engine.add(std::move(slice));
+  auto add_failed = executor.add(std::move(slice));
   REQUIRE(!add_failed);
-  auto transformed = engine.finish();
+  auto transformed = executor.finish();
   REQUIRE_EQUAL(transformed->size(), 1ull);
   // We expect that only one pipeline has been applied.
   REQUIRE_EQUAL(
@@ -391,7 +391,7 @@ TEST(Pipeline engine - single matching pipeline) {
     "index");
 }
 
-TEST(pipeline engine - multiple matching pipelines) {
+TEST(pipeline executor - multiple matching pipelines) {
   std::vector<vast::pipeline> pipelines;
   pipelines.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
   pipelines.emplace_back("t2", std::vector<std::string>{"testdata"});
@@ -401,13 +401,13 @@ TEST(pipeline engine - multiple matching pipelines) {
     vast::make_pipeline_operator("drop", {{"fields", vast::list{"uid"}}})));
   pipeline2.add_operator(unbox(
     vast::make_pipeline_operator("drop", {{"fields", vast::list{"index"}}})));
-  vast::pipeline_engine engine(std::move(pipelines));
+  vast::pipeline_executor executor(std::move(pipelines));
   auto slice
     = make_pipelines_testdata(vast::defaults::import::table_slice_type);
   REQUIRE_EQUAL(slice.encoding(), vast::defaults::import::table_slice_type);
-  auto add_failed = engine.add(std::move(slice));
+  auto add_failed = executor.add(std::move(slice));
   REQUIRE(!add_failed);
-  auto transformed = engine.finish();
+  auto transformed = executor.finish();
   REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->size(), 1ull);
   REQUIRE_EQUAL((*transformed)[0].encoding(),
@@ -416,17 +416,17 @@ TEST(pipeline engine - multiple matching pipelines) {
     caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 1ull);
 }
 
-TEST(pipeline engine - aggregate validation pipelines) {
+TEST(pipeline executor - aggregate validation pipelines) {
   std::vector<vast::pipeline> pipelines;
   pipelines.emplace_back("t", std::vector<std::string>{"testdata"});
   pipelines.at(0).add_operator(
     unbox(vast::make_pipeline_operator("summarize", {{"group-by", {"foo"}}})));
-  vast::pipeline_engine engine(std::move(pipelines));
-  auto validation1
-    = engine.validate(vast::pipeline_engine::allow_aggregate_pipelines::yes);
+  vast::pipeline_executor executor(std::move(pipelines));
+  auto validation1 = executor.validate(
+    vast::pipeline_executor::allow_aggregate_pipelines::yes);
   CHECK_SUCCESS(validation1);
   auto validation2
-    = engine.validate(vast::pipeline_engine::allow_aggregate_pipelines::no);
+    = executor.validate(vast::pipeline_executor::allow_aggregate_pipelines::no);
   CHECK_FAILURE(validation2);
 }
 

@@ -43,8 +43,8 @@ struct exporter_state {
   /// Stores a handle to the INDEX for querying results.
   index_actor index = {};
 
-  /// Stores a pipeline_engine for transforming the results.
-  pipeline_engine transformer = {};
+  /// Stores a pipeline_executor for transforming the results.
+  pipeline_executor pipeline_executor = {};
 
   /// Stores a handle to the SINK that processes results.
   caf::actor sink = {};

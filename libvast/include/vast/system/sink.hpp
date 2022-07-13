@@ -34,7 +34,7 @@ struct sink_state {
   accountant_actor accountant;
   vast::system::measurement measurement;
   format::writer_ptr writer;
-  pipeline_engine pipeline_engine;
+  pipeline_executor pipeline_executor;
   const char* name = "writer";
 
   explicit sink_state(caf::event_based_actor* self_ptr);

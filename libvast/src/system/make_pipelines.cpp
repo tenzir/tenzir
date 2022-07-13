@@ -32,7 +32,7 @@ namespace vast::system {
 
 namespace {
 
-// An example of a transform with two steps:
+// An example of a pipeline with two steps:
 //
 // remove_action:
 //   - delete:
@@ -41,27 +41,29 @@ namespace {
 //       field: dns.rrname
 //       value: "foobar.net"
 //
-caf::error parse_pipeline_operators(pipeline& transform,
+caf::error parse_pipeline_operators(pipeline& pipeline,
                                     const caf::config_value::list& operators) {
   for (auto config_operator : operators) {
     auto* dict = caf::get_if<caf::config_value::dictionary>(&config_operator);
     if (!dict)
-      return caf::make_error(ec::invalid_configuration, "step is not a dict");
+      return caf::make_error(ec::invalid_configuration, "operator is not a "
+                                                        "dict");
     if (dict->size() != 1)
-      return caf::make_error(ec::invalid_configuration, "step has more than 1 "
-                                                        "entry");
+      return caf::make_error(ec::invalid_configuration, "operator has more "
+                                                        "than 1 entry");
     auto& [name, value] = *dict->begin();
     auto* opts = caf::get_if<caf::config_value::dictionary>(&value);
     if (!opts)
       return caf::make_error(ec::invalid_configuration,
-                             "expected step configuration to be a dict");
+                             "expected pipeline operator configuration to be a "
+                             "dict");
     auto rec = to<record>(*opts);
     if (!rec)
       return rec.error();
-    auto step = make_pipeline_operator(name, *rec);
-    if (!step)
-      return step.error();
-    transform.add_operator(std::move(*step));
+    auto pipeline_operator = make_pipeline_operator(name, *rec);
+    if (!pipeline_operator)
+      return pipeline_operator.error();
+    pipeline.add_operator(std::move(*pipeline_operator));
   }
   return caf::none;
 }
@@ -69,11 +71,11 @@ caf::error parse_pipeline_operators(pipeline& transform,
 } // namespace
 
 caf::expected<std::vector<pipeline>>
-make_pipelines(pipelines_location loc, const caf::settings& opts) {
+make_pipelines(pipelines_location location, const caf::settings& settings) {
   std::vector<pipeline> result;
   std::string key;
   bool server = true;
-  switch (loc) {
+  switch (location) {
     case pipelines_location::server_import:
       key = "vast.transform-triggers.import";
       server = true;
@@ -91,7 +93,7 @@ make_pipelines(pipelines_location loc, const caf::settings& opts) {
       server = false;
       break;
   }
-  auto pipelines_list = caf::get_if<caf::config_value::list>(&opts, key);
+  auto pipelines_list = caf::get_if<caf::config_value::list>(&settings, key);
   if (!pipelines_list) {
     // TODO: Distinguish between the case where no pipelines were specified
     // (= return) and where there is something other than a list (= error).
@@ -102,33 +104,32 @@ make_pipelines(pipelines_location loc, const caf::settings& opts) {
   std::vector<std::pair<std::string, std::vector<std::string>>>
     transform_triggers;
   for (auto list_item : *pipelines_list) {
-    auto transform = caf::get_if<caf::config_value::dictionary>(&list_item);
-    if (!transform)
-      return caf::make_error(ec::invalid_configuration, "transform definition "
+    auto pipeline = caf::get_if<caf::config_value::dictionary>(&list_item);
+    if (!pipeline)
+      return caf::make_error(ec::invalid_configuration, "pipeline definition "
                                                         "must be dict");
-    if (transform->find("location") == transform->end())
+    if (pipeline->find("location") == pipeline->end())
       return caf::make_error(ec::invalid_configuration,
-                             "missing 'location' key for transform trigger");
-    if (transform->find("transform") == transform->end())
+                             "missing 'location' key for pipeline trigger");
+    if (pipeline->find("transform") == pipeline->end())
       return caf::make_error(ec::invalid_configuration,
-                             "missing 'transform' key for transform trigger");
-    if (transform->find("events") == transform->end())
-      return caf::make_error(ec::invalid_configuration,
-                             "missing 'events' key for transform trigger");
-    auto* location = caf::get_if<std::string>(&(*transform)["location"]);
+                             "missing 'pipeline' key for pipeline trigger");
+    if (pipeline->find("events") == pipeline->end())
+      return caf::make_error(ec::invalid_configuration, "missing 'events' key "
+                                                        "for pipeline trigger");
+    auto* location = caf::get_if<std::string>(&(*pipeline)["location"]);
     if (!location || (*location != "server" && *location != "client"))
-      return caf::make_error(ec::invalid_configuration, "transform location "
+      return caf::make_error(ec::invalid_configuration, "pipeline location "
                                                         "must be either "
                                                         "'server' or 'client'");
-    auto* name = caf::get_if<std::string>(&(*transform)["transform"]);
+    auto* name = caf::get_if<std::string>(&(*pipeline)["transform"]);
     if (!name)
-      return caf::make_error(ec::invalid_configuration, "transform name must "
+      return caf::make_error(ec::invalid_configuration, "pipeline name must "
                                                         "be a string");
-    auto events
-      = caf::get_if<std::vector<std::string>>(&(*transform)["events"]);
+    auto events = caf::get_if<std::vector<std::string>>(&(*pipeline)["events"]);
     if (!events)
       return caf::make_error(ec::invalid_configuration,
-                             "transform event types must be a list of strings");
+                             "pipeline event types must be a list of strings");
     auto server_transform = *location == "server";
     if (server != server_transform)
       continue;
@@ -139,7 +140,7 @@ make_pipelines(pipelines_location loc, const caf::settings& opts) {
   }
   result.reserve(transform_triggers.size());
   auto transform_definitions
-    = caf::get_if<caf::config_value::dictionary>(&opts, "vast.transforms");
+    = caf::get_if<caf::config_value::dictionary>(&settings, "vast.transforms");
   if (!transform_definitions) {
     return caf::make_error(ec::invalid_configuration, "invalid");
   }
@@ -155,10 +156,10 @@ make_pipelines(pipelines_location loc, const caf::settings& opts) {
   for (auto [name, event_types] : transform_triggers) {
     if (!pipelines.contains(name)) {
       return caf::make_error(ec::invalid_configuration,
-                             fmt::format("unknown transform '{}'", name));
+                             fmt::format("unknown pipeline '{}'", name));
     }
-    auto& transform = result.emplace_back(name, std::move(event_types));
-    if (auto err = parse_pipeline_operators(transform, pipelines.at(name)))
+    auto& pipeline = result.emplace_back(name, std::move(event_types));
+    if (auto err = parse_pipeline_operators(pipeline, pipelines.at(name)))
       return err;
   }
   return result;
@@ -170,17 +171,17 @@ make_pipeline(const std::string& name,
               const caf::settings& pipelines) {
   if (!pipelines.contains(name))
     return caf::make_error(ec::invalid_configuration,
-                           fmt::format("unknown transform '{}'", name));
-  auto transform = std::make_shared<vast::pipeline>(
+                           fmt::format("unknown pipeline '{}'", name));
+  auto pipeline = std::make_shared<vast::pipeline>(
     name, std::vector<std::string>{event_types});
   auto list = caf::get_if<caf::config_value::list>(&pipelines, name);
   if (!list)
     return caf::make_error(
       ec::invalid_configuration,
-      fmt::format("expected a list of steps in transform '{}'", name));
-  if (auto err = parse_pipeline_operators(*transform, *list))
+      fmt::format("expected a list of steps in pipeline '{}'", name));
+  if (auto err = parse_pipeline_operators(*pipeline, *list))
     return err;
-  return transform;
+  return pipeline;
 }
 
 } // namespace vast::system

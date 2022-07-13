@@ -41,12 +41,12 @@ transformer_stream_stage_ptr attach_pipeline_stage(
       }
       auto offset = x.body.offset();
       auto rows = x.body.rows();
-      if (auto err = self->state.pipelines.add(std::move(x.body))) {
+      if (auto err = self->state.pipeline_executor.add(std::move(x.body))) {
         VAST_WARN("{} skips slice because add failed: {}",
                   self->state.transformer_name, err);
         return;
       }
-      auto transformed = self->state.pipelines.finish();
+      auto transformed = self->state.pipeline_executor.finish();
       if (!transformed) {
         VAST_WARN("{} skips slice because of an error in pipeline: {}",
                   self->state.transformer_name, transformed.error());
@@ -83,9 +83,9 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
     pipeline_names.emplace_back(t.name());
   self->state.source_requires_shutdown = false;
   self->state.status["pipelines"] = std::move(pipeline_names);
-  self->state.pipelines = pipeline_engine{std::move(pipelines)};
-  if (auto err = self->state.pipelines.validate(
-        pipeline_engine::allow_aggregate_pipelines::no)) {
+  self->state.pipeline_executor = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.pipeline_executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::no)) {
     VAST_ERROR("transformer is not allowed to use aggregate pipeline {}", err);
     self->quit();
     return transformer_actor::behavior_type::make_empty_behavior();

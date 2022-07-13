@@ -52,9 +52,9 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
              VAST_ARG(max_events));
   using namespace std::chrono;
   self->state.writer = std::move(writer);
-  self->state.pipeline_engine = pipeline_engine{std::move(pipelines)};
-  if (auto err = self->state.pipeline_engine.validate(
-        pipeline_engine::allow_aggregate_pipelines::no)) {
+  self->state.pipeline_executor = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.pipeline_executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::no)) {
     VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
     self->quit();
     return {};
@@ -82,11 +82,11 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
         VAST_INFO("{} received first result with a latency of {}",
                   self->state.name, to_string(time_since_flush));
       }
-      if (auto err = self->state.pipeline_engine.add(std::move(slice))) {
+      if (auto err = self->state.pipeline_executor.add(std::move(slice))) {
         VAST_ERROR("sink failed to add slice: {}", err);
         return;
       }
-      auto transformed = self->state.pipeline_engine.finish();
+      auto transformed = self->state.pipeline_executor.finish();
       if (!transformed) {
         VAST_WARN("discarding slice; error in output transformation: {}",
                   transformed.error());

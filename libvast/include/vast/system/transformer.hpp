@@ -29,7 +29,7 @@ using transformer_stream_stage_ptr
 
 struct transformer_state {
   /// The pipelines that can be applied.
-  pipeline_engine pipelines;
+  pipeline_executor pipeline_executor;
 
   /// The stream stage.
   transformer_stream_stage_ptr stage;
@@ -51,8 +51,8 @@ struct transformer_state {
   static constexpr const char* name = "transformer";
 };
 
-/// An actor containing a transform_stream_stage, which is just a stream
-/// stream stage that applies a `pipeline_engine` to every table slice.
+/// An actor containing a pipeline_stream_stage, which is just a stream
+/// stream stage that applies a `pipeline_executor` to every table slice.
 /// @param self The actor handle.
 /// @param pipelines The set of pipelines to be applied.
 transformer_actor::behavior_type

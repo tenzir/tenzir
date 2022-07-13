@@ -26,8 +26,8 @@ pipeline::pipeline(std::string name, std::vector<std::string>&& schema_names)
   : name_(std::move(name)), schema_names_(std::move(schema_names)) {
 }
 
-void pipeline::add_operator(std::unique_ptr<pipeline_operator> step) {
-  steps_.emplace_back(std::move(step));
+void pipeline::add_operator(std::unique_ptr<pipeline_operator> op) {
+  operators_.emplace_back(std::move(op));
 }
 
 const std::string& pipeline::name() const {
@@ -39,8 +39,8 @@ const std::vector<std::string>& pipeline::schema_names() const {
 }
 
 bool pipeline::is_aggregate() const {
-  return std::any_of(steps_.begin(), steps_.end(), [](const auto& step) {
-    return step->is_aggregate();
+  return std::any_of(operators_.begin(), operators_.end(), [](const auto& op) {
+    return op->is_aggregate();
   });
 }
 
@@ -59,7 +59,7 @@ caf::error pipeline::add(table_slice&& x) {
 
 caf::expected<std::vector<table_slice>> pipeline::finish() {
   VAST_DEBUG("transform {} retrieves results from {} steps", name_,
-             steps_.size());
+             operators_.size());
   auto guard = caf::detail::make_scope_guard([this]() {
     this->to_transform_.clear();
     this->import_timestamps_.clear();
@@ -99,10 +99,9 @@ caf::error pipeline::add_batch(vast::type layout,
   return caf::none;
 }
 
-caf::error
-pipeline::process_queue(const std::unique_ptr<pipeline_operator>& step,
-                        std::vector<pipeline_batch>& result,
-                        bool check_layout) {
+caf::error pipeline::process_queue(const std::unique_ptr<pipeline_operator>& op,
+                                   std::vector<pipeline_batch>& result,
+                                   bool check_layout) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {
@@ -115,7 +114,7 @@ pipeline::process_queue(const std::unique_ptr<pipeline_operator>& step,
       result.emplace_back(std::move(layout), std::move(batch));
       continue;
     }
-    if (auto err = step->add(std::move(layout), std::move(batch))) {
+    if (auto err = op->add(std::move(layout), std::move(batch))) {
       failed = caf::make_error(
         static_cast<vast::ec>(err.code()),
         fmt::format("transform aborts because of an error: {}", err));
@@ -124,7 +123,7 @@ pipeline::process_queue(const std::unique_ptr<pipeline_operator>& step,
     }
   }
   // Finish frees up resource inside the plugin.
-  auto finished = step->finish();
+  auto finished = op->finish();
   if (!finished && !failed)
     failed = std::move(finished.error());
   if (failed) {
@@ -137,10 +136,10 @@ pipeline::process_queue(const std::unique_ptr<pipeline_operator>& step,
 }
 
 caf::expected<std::vector<pipeline_batch>> pipeline::finish_batch() {
-  VAST_DEBUG("applying {} transform {}", steps_.size(), name_);
+  VAST_DEBUG("applying {} pipeline {}", operators_.size(), name_);
   bool first_run = true;
   std::vector<pipeline_batch> result{};
-  for (const auto& step : steps_) {
+  for (const auto& step : operators_) {
     auto failed = process_queue(step, result, first_run);
     first_run = false;
     if (failed) {
@@ -156,7 +155,7 @@ caf::expected<std::vector<pipeline_batch>> pipeline::finish_batch() {
   return result;
 }
 
-pipeline_engine::pipeline_engine(std::vector<pipeline>&& pipelines)
+pipeline_executor::pipeline_executor(std::vector<pipeline>&& pipelines)
   : pipelines_(std::move(pipelines)) {
   for (size_t i = 0; i < pipelines_.size(); ++i) {
     auto const& schema_names = pipelines_[i].schema_names();
@@ -169,38 +168,38 @@ pipeline_engine::pipeline_engine(std::vector<pipeline>&& pipelines)
 }
 
 caf::error
-pipeline_engine::validate(enum allow_aggregate_pipelines allow_aggregates) {
+pipeline_executor::validate(enum allow_aggregate_pipelines allow_aggregates) {
   const auto first_aggregate = std::find_if(
-    pipelines_.begin(), pipelines_.end(), [](const auto& transform) {
-      return transform.is_aggregate();
+    pipelines_.begin(), pipelines_.end(), [](const auto& pipeline) {
+      return pipeline.is_aggregate();
     });
   bool is_aggregate = first_aggregate != pipelines_.end();
   auto is_aggregate_allowed
     = allow_aggregates == allow_aggregate_pipelines::yes;
   if (is_aggregate && !is_aggregate_allowed) {
     return caf::make_error(ec::invalid_configuration,
-                           fmt::format("the transform {} is an aggregate",
+                           fmt::format("the pipeline {} is an aggregate",
                                        first_aggregate->name()));
   }
   return caf::none;
 }
 
 /// Apply relevant pipelines to the table slice.
-caf::error pipeline_engine::add(table_slice&& x) {
+caf::error pipeline_executor::add(table_slice&& x) {
   VAST_TRACE("pipeline engine adds a slice");
   auto layout = x.layout();
   to_transform_[layout].emplace_back(std::move(x));
   return caf::none;
 }
 
-caf::error pipeline_engine::process_queue(pipeline& transform,
-                                          std::deque<pipeline_batch>& queue) {
+caf::error pipeline_executor::process_queue(pipeline& pipeline,
+                                            std::deque<pipeline_batch>& queue) {
   caf::error failed{};
   const auto size = queue.size();
   for (size_t i = 0; i < size; ++i) {
     auto [layout, batch] = std::move(queue.front());
     queue.pop_front();
-    if (auto err = transform.add_batch(layout, batch)) {
+    if (auto err = pipeline.add_batch(layout, batch)) {
       failed = err;
       while (!queue.empty())
         queue.pop_front();
@@ -208,7 +207,7 @@ caf::error pipeline_engine::process_queue(pipeline& transform,
     }
   }
   // Finish frees up resource inside the plugin.
-  auto finished = transform.finish_batch();
+  auto finished = pipeline.finish_batch();
   if (!finished && !failed)
     failed = std::move(finished.error());
   if (failed)
@@ -219,7 +218,7 @@ caf::error pipeline_engine::process_queue(pipeline& transform,
 }
 
 /// Apply relevant pipelines to the table slice.
-caf::expected<std::vector<table_slice>> pipeline_engine::finish() {
+caf::expected<std::vector<table_slice>> pipeline_executor::finish() {
   VAST_TRACE("pipeline engine retrieves results");
   auto to_transform = std::exchange(to_transform_, {});
   std::unordered_map<vast::type, std::deque<pipeline_batch>> batches{};
@@ -274,7 +273,7 @@ caf::expected<std::vector<table_slice>> pipeline_engine::finish() {
   return result;
 }
 
-const std::vector<pipeline>& pipeline_engine::pipelines() {
+const std::vector<pipeline>& pipeline_executor::pipelines() {
   return pipelines_;
 }
 

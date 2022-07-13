@@ -63,11 +63,11 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
     st.query_status.cached -= rows;
     st.query_status.requested -= rows;
     st.query_status.shipped += rows;
-    if (auto err = self->state.transformer.add(std::move(slice))) {
+    if (auto err = self->state.pipeline_executor.add(std::move(slice))) {
       VAST_ERROR("exporter failed to apply the transformation: {}", err);
       return;
     }
-    auto transformed = self->state.transformer.finish();
+    auto transformed = self->state.pipeline_executor.finish();
     if (!transformed) {
       VAST_ERROR("exporter failed to finish the transformation: {}",
                  transformed.error());
@@ -201,9 +201,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     = has_low_priority_option(self->state.options)
         ? query_context::priority::low
         : query_context::priority::normal;
-  self->state.transformer = pipeline_engine{std::move(pipelines)};
-  if (auto err = self->state.transformer.validate(
-        pipeline_engine::allow_aggregate_pipelines::no)) {
+  self->state.pipeline_executor = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.pipeline_executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::no)) {
     VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
     self->quit();
     return exporter_actor::behavior_type::make_empty_behavior();
@@ -332,7 +332,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         if (v >= status_verbosity::detailed) {
           exp["start"] = caf::deep_to_string(self->state.start);
           auto pipeline_names = list{};
-          for (const auto& t : self->state.transformer.pipelines())
+          for (const auto& t : self->state.pipeline_executor.pipelines())
             pipeline_names.emplace_back(t.name());
           exp["pipelines"] = std::move(pipeline_names);
           if (v >= status_verbosity::debug)
