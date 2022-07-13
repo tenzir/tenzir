@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE transform
+#define SUITE pipeline
 
-#include "vast/transform.hpp"
+#include "vast/pipeline.hpp"
 
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -53,15 +53,15 @@ const auto testresult_layout2 = vast::type{
   },
 };
 
-struct transforms_fixture {
-  transforms_fixture() {
+struct pipelines_fixture {
+  pipelines_fixture() {
     vast::factory<vast::table_slice_builder>::initialize();
   }
 
   // Creates a table slice with a single string field and random data.
   static vast::table_slice
-  make_transforms_testdata(vast::table_slice_encoding encoding
-                           = vast::defaults::import::table_slice_type) {
+  make_pipelines_testdata(vast::table_slice_encoding encoding
+                          = vast::defaults::import::table_slice_type) {
     auto builder = vast::factory<vast::table_slice_builder>::make(
       encoding, testdata_layout);
     REQUIRE(builder);
@@ -124,75 +124,78 @@ struct transforms_fixture {
     return {builder->finish(), builder2->finish(), builder3->finish()};
   }
 
-  const vast::transform_plugin* rename_plugin
-    = vast::plugins::find<vast::transform_plugin>("rename");
+  const vast::pipeline_operator_plugin* rename_plugin
+    = vast::plugins::find<vast::pipeline_operator_plugin>("rename");
 };
 
-vast::type layout(caf::expected<std::vector<vast::transform_batch>> batches) {
+vast::type layout(caf::expected<std::vector<vast::pipeline_batch>> batches) {
   return (*batches)[0].layout;
 }
 
 vast::table_slice
-as_table_slice(caf::expected<std::vector<vast::transform_batch>> batches) {
+as_table_slice(caf::expected<std::vector<vast::pipeline_batch>> batches) {
   return vast::table_slice{(*batches)[0].batch};
 }
 
-FIXTURE_SCOPE(transform_tests, transforms_fixture)
+FIXTURE_SCOPE(pipeline_tests, pipelines_fixture)
 
-TEST(drop_step) {
+TEST(drop operator) {
   auto [slice, expected_slice] = make_proj_and_del_testdata();
-  const auto* drop_plugin = vast::plugins::find<vast::transform_plugin>("drop");
+  const auto* drop_plugin
+    = vast::plugins::find<vast::pipeline_operator_plugin>("drop");
   REQUIRE(drop_plugin);
-  auto drop_step = unbox(
-    drop_plugin->make_transform_step({{"fields", vast::list{"desc", "note"}}}));
-  auto add_failed = drop_step->add(slice.layout(), to_record_batch(slice));
+  auto drop_operator = unbox(drop_plugin->make_pipeline_operator(
+    {{"fields", vast::list{"desc", "note"}}}));
+  auto add_failed = drop_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto deleted = unbox(drop_step->finish());
+  auto deleted = unbox(drop_operator->finish());
   REQUIRE_EQUAL(deleted.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(deleted), expected_slice);
-  auto invalid_drop_step
-    = unbox(drop_plugin->make_transform_step({{"fields", vast::list{"xxx"}}}));
+  auto invalid_drop_operator = unbox(
+    drop_plugin->make_pipeline_operator({{"fields", vast::list{"xxx"}}}));
   auto invalid_add_failed
-    = invalid_drop_step->add(slice.layout(), to_record_batch(slice));
+    = invalid_drop_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
-  auto not_dropped = unbox(invalid_drop_step->finish());
+  auto not_dropped = unbox(invalid_drop_operator->finish());
   REQUIRE_EQUAL(not_dropped.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(not_dropped), slice);
-  auto schema_drop_step = unbox(
-    drop_plugin->make_transform_step({{"schemas", vast::list{"testdata"}}}));
+  auto schema_drop_operator = unbox(
+    drop_plugin->make_pipeline_operator({{"schemas", vast::list{"testdata"}}}));
   auto schema_add_failed
-    = schema_drop_step->add(slice.layout(), to_record_batch(slice));
+    = schema_drop_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!schema_add_failed);
-  auto dropped = unbox(invalid_drop_step->finish());
+  auto dropped = unbox(invalid_drop_operator->finish());
   CHECK(dropped.empty());
 }
 
 TEST(select step) {
-  auto project_step = unbox(vast::make_transform_step(
+  auto project_operator = unbox(vast::make_pipeline_operator(
     "select", {{"fields", vast::list{"index", "uid"}}}));
-  auto invalid_project_step = unbox(
-    vast::make_transform_step("select", {{"fields", vast::list{"xxx"}}}));
+  auto invalid_project_operator = unbox(
+    vast::make_pipeline_operator("select", {{"fields", vast::list{"xxx"}}}));
   // Arrow test:
   auto [slice, expected_slice] = make_proj_and_del_testdata();
-  auto add_failed = project_step->add(slice.layout(), to_record_batch(slice));
+  auto add_failed
+    = project_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto projected = unbox(project_step->finish());
+  auto projected = unbox(project_operator->finish());
   REQUIRE_EQUAL(projected.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(projected), expected_slice);
   auto invalid_add_failed
-    = invalid_project_step->add(slice.layout(), to_record_batch(slice));
+    = invalid_project_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
-  auto not_projected = unbox(invalid_project_step->finish());
+  auto not_projected = unbox(invalid_project_operator->finish());
   CHECK(not_projected.empty());
 }
 
 TEST(replace step) {
-  auto slice = make_transforms_testdata();
-  auto replace_step = unbox(vast::make_transform_step(
+  auto slice = make_pipelines_testdata();
+  auto replace_operator = unbox(vast::make_pipeline_operator(
     "replace", {{"fields", vast::record{{"uid", "xxx"}}}}));
-  auto add_failed = replace_step->add(slice.layout(), to_record_batch(slice));
+  auto add_failed
+    = replace_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto replaced = unbox(replace_step->finish());
+  auto replaced = unbox(replace_operator->finish());
   REQUIRE_EQUAL(replaced.size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
@@ -205,12 +208,13 @@ TEST(replace step) {
 }
 
 TEST(extend step) {
-  auto slice = make_transforms_testdata();
-  auto replace_step = unbox(vast::make_transform_step(
+  auto slice = make_pipelines_testdata();
+  auto replace_operator = unbox(vast::make_pipeline_operator(
     "extend", {{"fields", vast::record{{"secret", "xxx"}}}}));
-  auto add_failed = replace_step->add(slice.layout(), to_record_batch(slice));
+  auto add_failed
+    = replace_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto replaced = unbox(replace_step->finish());
+  auto replaced = unbox(replace_operator->finish());
   REQUIRE_EQUAL(replaced.size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
@@ -228,58 +232,63 @@ TEST(where step) {
   CHECK_EQUAL(slice.rows(), 10ull);
   CHECK_EQUAL(single_row_slice.rows(), 1ull);
   CHECK_EQUAL(multi_row_slice.rows(), 4ull);
-  auto where_plugin = vast::plugins::find<vast::transform_plugin>("where");
+  auto where_plugin
+    = vast::plugins::find<vast::pipeline_operator_plugin>("where");
   REQUIRE(where_plugin);
-  auto where_step
-    = unbox(where_plugin->make_transform_step({{"expression", "index == +2"}}));
-  REQUIRE(where_step);
-  auto add_failed = where_step->add(slice.layout(), to_record_batch(slice));
+  auto where_operator = unbox(
+    where_plugin->make_pipeline_operator({{"expression", "index == +2"}}));
+  REQUIRE(where_operator);
+  auto add_failed = where_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto selected = where_step->finish();
+  auto selected = where_operator->finish();
   REQUIRE_NOERROR(selected);
   REQUIRE_EQUAL(selected->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected), single_row_slice);
-  auto where_step2
-    = unbox(where_plugin->make_transform_step({{"expression", "index > +5"}}));
-  REQUIRE(where_step2);
-  auto add2_failed = where_step2->add(slice.layout(), to_record_batch(slice));
+  auto where_operator2 = unbox(
+    where_plugin->make_pipeline_operator({{"expression", "index > +5"}}));
+  REQUIRE(where_operator2);
+  auto add2_failed
+    = where_operator2->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add2_failed);
-  auto selected2 = where_step2->finish();
+  auto selected2 = where_operator2->finish();
   REQUIRE_NOERROR(selected2);
   REQUIRE_EQUAL(selected2->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected2), multi_row_slice);
-  auto where_step3
-    = unbox(where_plugin->make_transform_step({{"expression", "index > +9"}}));
-  REQUIRE(where_step3);
-  auto add3_failed = where_step3->add(slice.layout(), to_record_batch(slice));
+  auto where_operator3 = unbox(
+    where_plugin->make_pipeline_operator({{"expression", "index > +9"}}));
+  REQUIRE(where_operator3);
+  auto add3_failed
+    = where_operator3->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add3_failed);
-  auto selected3 = where_step3->finish();
+  auto selected3 = where_operator3->finish();
   REQUIRE_NOERROR(selected3);
   CHECK_EQUAL(selected3->size(), 0ull);
-  auto where_step4 = unbox(where_plugin->make_transform_step(
+  auto where_operator4 = unbox(where_plugin->make_pipeline_operator(
     {{"expression", "#type == \"testdata\""}}));
-  auto add4_failed = where_step4->add(slice.layout(), to_record_batch(slice));
+  auto add4_failed
+    = where_operator4->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add4_failed);
-  auto selected4 = where_step4->finish();
+  auto selected4 = where_operator4->finish();
   REQUIRE_NOERROR(selected4);
   REQUIRE_EQUAL(selected4->size(), 1ull);
   CHECK_EQUAL(as_table_slice(selected4), slice);
-  auto where_step5 = unbox(where_plugin->make_transform_step(
+  auto where_operator5 = unbox(where_plugin->make_pipeline_operator(
     {{"expression", "#type != \"testdata\""}}));
-  auto add5_failed = where_step5->add(slice.layout(), to_record_batch(slice));
+  auto add5_failed
+    = where_operator5->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add5_failed);
-  auto selected5 = where_step5->finish();
+  auto selected5 = where_operator5->finish();
   REQUIRE_NOERROR(selected5);
   CHECK_EQUAL(selected5->size(), 0ull);
 }
 
 TEST(anonymize step) {
-  auto slice = make_transforms_testdata();
-  auto hash_step = unbox(vast::make_transform_step(
+  auto slice = make_pipelines_testdata();
+  auto hash_operator = unbox(vast::make_pipeline_operator(
     "hash", {{"field", "uid"}, {"out", "hashed_uid"}}));
-  auto add_failed = hash_step->add(slice.layout(), to_record_batch(slice));
+  auto add_failed = hash_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto anonymized = unbox(hash_step->finish());
+  auto anonymized = unbox(hash_operator->finish());
   REQUIRE_EQUAL(anonymized.size(), 1ull);
   REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).num_fields(),
                 4ull);
@@ -288,16 +297,16 @@ TEST(anonymize step) {
   // TODO: not sure how we can check that the data was correctly hashed.
 }
 
-TEST(transform with multiple steps) {
-  vast::transform transform("test_transform", {{"testdata"}});
-  transform.add_step(unbox(vast::make_transform_step(
+TEST(pipeline with multiple steps) {
+  vast::pipeline pipeline("test_pipeline", {{"testdata"}});
+  pipeline.add_operator(unbox(vast::make_pipeline_operator(
     "replace", {{"fields", vast::record{{"uid", "xxx"}}}})));
-  transform.add_step(unbox(
-    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
-  auto slice = make_transforms_testdata();
-  auto add_failed = transform.add(std::move(slice));
+  pipeline.add_operator(unbox(
+    vast::make_pipeline_operator("drop", {{"fields", vast::list{"index"}}})));
+  auto slice = make_pipelines_testdata();
+  auto add_failed = pipeline.add(std::move(slice));
   REQUIRE(!add_failed);
-  auto transformed = transform.finish();
+  auto transformed = pipeline.finish();
   REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->size(), 1ull);
   REQUIRE_EQUAL(
@@ -312,9 +321,9 @@ TEST(transform with multiple steps) {
     vast::defaults::import::table_slice_type, wrong_layout);
   REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));
   auto wrong_slice = builder->finish();
-  auto add2_failed = transform.add(std::move(wrong_slice));
+  auto add2_failed = pipeline.add(std::move(wrong_slice));
   REQUIRE(!add2_failed);
-  auto not_transformed = transform.finish();
+  auto not_transformed = pipeline.finish();
   REQUIRE_NOERROR(not_transformed);
   REQUIRE_EQUAL(not_transformed->size(), 1ull);
   REQUIRE_EQUAL(
@@ -334,44 +343,44 @@ TEST(transform with multiple steps) {
   CHECK_EQUAL((*not_transformed)[0].at(0, 2), vast::data{vast::integer{23}});
 }
 
-TEST(transform rename layout) {
-  vast::transform transform("test_transform", {{"testdata"}});
+TEST(pipeline rename layout) {
+  vast::pipeline pipeline("test_pipeline", {{"testdata"}});
   auto rename_settings = vast::record{
     {"schemas", vast::list{vast::record{
                   {"from", std::string{"testdata"}},
                   {"to", std::string{"testdata_renamed"}},
                 }}},
   };
-  transform.add_step(
-    unbox(rename_plugin->make_transform_step(rename_settings)));
-  transform.add_step(unbox(
-    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
-  auto slice = make_transforms_testdata();
-  REQUIRE_SUCCESS(transform.add(std::move(slice)));
-  auto transformed = transform.finish();
+  pipeline.add_operator(
+    unbox(rename_plugin->make_pipeline_operator(rename_settings)));
+  pipeline.add_operator(unbox(
+    vast::make_pipeline_operator("drop", {{"fields", vast::list{"index"}}})));
+  auto slice = make_pipelines_testdata();
+  REQUIRE_SUCCESS(pipeline.add(std::move(slice)));
+  auto transformed = pipeline.finish();
   REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
 }
 
-TEST(transformation engine - single matching transform) {
-  std::vector<vast::transform> transforms;
-  transforms.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
-  transforms.emplace_back("t2", std::vector<std::string>{"foo"});
-  auto& transform1 = transforms.at(0);
-  auto& transform2 = transforms.at(1);
-  transform1.add_step(
-    unbox(vast::make_transform_step("drop", {{"fields", vast::list{"uid"}}})));
-  transform2.add_step(unbox(
-    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
-  vast::transformation_engine engine(std::move(transforms));
-  auto slice = make_transforms_testdata();
+TEST(Pipeline engine - single matching pipeline) {
+  std::vector<vast::pipeline> pipelines;
+  pipelines.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
+  pipelines.emplace_back("t2", std::vector<std::string>{"foo"});
+  auto& pipeline1 = pipelines.at(0);
+  auto& pipeline2 = pipelines.at(1);
+  pipeline1.add_operator(unbox(
+    vast::make_pipeline_operator("drop", {{"fields", vast::list{"uid"}}})));
+  pipeline2.add_operator(unbox(
+    vast::make_pipeline_operator("drop", {{"fields", vast::list{"index"}}})));
+  vast::pipeline_engine engine(std::move(pipelines));
+  auto slice = make_pipelines_testdata();
   auto add_failed = engine.add(std::move(slice));
   REQUIRE(!add_failed);
   auto transformed = engine.finish();
   REQUIRE_EQUAL(transformed->size(), 1ull);
-  // We expect that only one transformation has been applied.
+  // We expect that only one pipeline has been applied.
   REQUIRE_EQUAL(
     caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
   CHECK_EQUAL(
@@ -382,19 +391,19 @@ TEST(transformation engine - single matching transform) {
     "index");
 }
 
-TEST(transformation engine - multiple matching transforms) {
-  std::vector<vast::transform> transforms;
-  transforms.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
-  transforms.emplace_back("t2", std::vector<std::string>{"testdata"});
-  auto& transform1 = transforms.at(0);
-  auto& transform2 = transforms.at(1);
-  transform1.add_step(
-    unbox(vast::make_transform_step("drop", {{"fields", vast::list{"uid"}}})));
-  transform2.add_step(unbox(
-    vast::make_transform_step("drop", {{"fields", vast::list{"index"}}})));
-  vast::transformation_engine engine(std::move(transforms));
+TEST(pipeline engine - multiple matching pipelines) {
+  std::vector<vast::pipeline> pipelines;
+  pipelines.emplace_back("t1", std::vector<std::string>{"foo", "testdata"});
+  pipelines.emplace_back("t2", std::vector<std::string>{"testdata"});
+  auto& pipeline1 = pipelines.at(0);
+  auto& pipeline2 = pipelines.at(1);
+  pipeline1.add_operator(unbox(
+    vast::make_pipeline_operator("drop", {{"fields", vast::list{"uid"}}})));
+  pipeline2.add_operator(unbox(
+    vast::make_pipeline_operator("drop", {{"fields", vast::list{"index"}}})));
+  vast::pipeline_engine engine(std::move(pipelines));
   auto slice
-    = make_transforms_testdata(vast::defaults::import::table_slice_type);
+    = make_pipelines_testdata(vast::defaults::import::table_slice_type);
   REQUIRE_EQUAL(slice.encoding(), vast::defaults::import::table_slice_type);
   auto add_failed = engine.add(std::move(slice));
   REQUIRE(!add_failed);
@@ -407,17 +416,17 @@ TEST(transformation engine - multiple matching transforms) {
     caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 1ull);
 }
 
-TEST(transformation engine - aggregate validation transforms) {
-  std::vector<vast::transform> transforms;
-  transforms.emplace_back("t", std::vector<std::string>{"testdata"});
-  transforms.at(0).add_step(
-    unbox(vast::make_transform_step("summarize", {{"group-by", {"foo"}}})));
-  vast::transformation_engine engine(std::move(transforms));
-  auto validation1 = engine.validate(
-    vast::transformation_engine::allow_aggregate_transforms::yes);
+TEST(pipeline engine - aggregate validation pipelines) {
+  std::vector<vast::pipeline> pipelines;
+  pipelines.emplace_back("t", std::vector<std::string>{"testdata"});
+  pipelines.at(0).add_operator(
+    unbox(vast::make_pipeline_operator("summarize", {{"group-by", {"foo"}}})));
+  vast::pipeline_engine engine(std::move(pipelines));
+  auto validation1
+    = engine.validate(vast::pipeline_engine::allow_aggregate_pipelines::yes);
   CHECK_SUCCESS(validation1);
-  auto validation2 = engine.validate(
-    vast::transformation_engine::allow_aggregate_transforms::no);
+  auto validation2
+    = engine.validate(vast::pipeline_engine::allow_aggregate_pipelines::no);
   CHECK_FAILURE(validation2);
 }
 

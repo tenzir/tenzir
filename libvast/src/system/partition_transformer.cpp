@@ -13,8 +13,8 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
-#include "vast/transform.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>
@@ -239,7 +239,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   const caf::settings& index_opts, accountant_actor accountant,
   idspace_distributor_actor idspace_distributor,
   type_registry_actor type_registry, filesystem_actor fs,
-  transform_ptr transform, std::string partition_path_template,
+  pipeline_ptr transform, std::string partition_path_template,
   std::string synopsis_path_template) {
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);

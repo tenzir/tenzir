@@ -14,11 +14,11 @@
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/module.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
-#include "vast/transform.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/stream_source.hpp>
@@ -126,6 +126,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
        const type_registry_actor& type_registry, vast::module local_module,
        std::string type_filter, accountant_actor accountant,
-       std::vector<transform>&& input_transformations);
+       std::vector<pipeline>&& input_transformations);
 
 } // namespace vast::system

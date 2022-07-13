@@ -45,15 +45,15 @@ TEST(load plugins from config) {
   auto settings = vast::to<caf::settings>(*rec);
   REQUIRE(settings);
   auto client_source_transforms = vast::system::make_transforms(
-    vast::system::transforms_location::client_source, *settings);
+    vast::system::pipelines_location::client_source, *settings);
   CHECK(client_source_transforms);
   auto server_import_transforms = vast::system::make_transforms(
-    vast::system::transforms_location::server_import, *settings);
+    vast::system::pipelines_location::server_import, *settings);
   CHECK(server_import_transforms);
   auto server_export_transforms = vast::system::make_transforms(
-    vast::system::transforms_location::server_export, *settings);
+    vast::system::pipelines_location::server_export, *settings);
   REQUIRE(server_export_transforms);
   auto client_sink_transforms = vast::system::make_transforms(
-    vast::system::transforms_location::client_sink, *settings);
+    vast::system::pipelines_location::client_sink, *settings);
   REQUIRE(client_sink_transforms);
 }

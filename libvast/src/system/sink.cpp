@@ -40,21 +40,21 @@ void sink_state::send_report() {
 
 caf::behavior sink(caf::stateful_actor<sink_state>* self,
                    format::writer_ptr&& writer, uint64_t max_events) {
-  return transforming_sink(self, std::move(writer), std::vector<transform>{},
+  return transforming_sink(self, std::move(writer), std::vector<pipeline>{},
                            max_events);
 }
 
 caf::behavior
 transforming_sink(caf::stateful_actor<sink_state>* self,
                   format::writer_ptr&& writer,
-                  std::vector<transform>&& transforms, uint64_t max_events) {
+                  std::vector<pipeline>&& pipelines, uint64_t max_events) {
   VAST_DEBUG("{} spawned ({}, {})", *self, writer->name(),
              VAST_ARG(max_events));
   using namespace std::chrono;
   self->state.writer = std::move(writer);
-  self->state.transforms = transformation_engine{std::move(transforms)};
-  if (auto err = self->state.transforms.validate(
-        transformation_engine::allow_aggregate_transforms::no)) {
+  self->state.pipeline_engine = pipeline_engine{std::move(pipelines)};
+  if (auto err = self->state.pipeline_engine.validate(
+        pipeline_engine::allow_aggregate_pipelines::no)) {
     VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
     self->quit();
     return {};
@@ -82,11 +82,11 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
         VAST_INFO("{} received first result with a latency of {}",
                   self->state.name, to_string(time_since_flush));
       }
-      if (auto err = self->state.transforms.add(std::move(slice))) {
+      if (auto err = self->state.pipeline_engine.add(std::move(slice))) {
         VAST_ERROR("sink failed to add slice: {}", err);
         return;
       }
-      auto transformed = self->state.transforms.finish();
+      auto transformed = self->state.pipeline_engine.finish();
       if (!transformed) {
         VAST_WARN("discarding slice; error in output transformation: {}",
                   transformed.error());

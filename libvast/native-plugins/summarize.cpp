@@ -13,9 +13,9 @@
 #include <vast/concept/convertible/to.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder_factory.hpp>
-#include <vast/transform.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/compute/api_scalar.h>
@@ -547,7 +547,7 @@ public:
   }
 
   /// Finish the buckets into a new batch.
-  [[nodiscard]] caf::expected<transform_batch> finish() {
+  [[nodiscard]] caf::expected<pipeline_batch> finish() {
     auto builder = caf::get<record_type>(output_schema)
                      .make_arrow_builder(arrow::default_memory_pool());
     VAST_ASSERT(builder);
@@ -598,7 +598,7 @@ public:
       output_schema.to_arrow_schema(), num_rows,
       caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
         .fields());
-    return transform_batch{output_schema, std::move(batch)};
+    return pipeline_batch{output_schema, std::move(batch)};
   }
 
 private:
@@ -654,7 +654,7 @@ private:
 };
 
 /// The summarize pipeline operator implementation.
-class summarize_operator : public transform_step {
+class summarize_operator : public pipeline_operator {
 public:
   /// Creates a pipeline operator from its configuration.
   /// @param config The parsed configuration of the summarize operator.
@@ -701,7 +701,7 @@ private:
                 "events unchanged: {}",
                 schema, aggregation.error());
       auto blacklist_entry
-        = std::vector<transform_batch>{{std::move(schema), std::move(batch)}};
+        = std::vector<pipeline_batch>{{std::move(schema), std::move(batch)}};
       blacklist_.emplace(std::move(decoupled_schema),
                          std::move(blacklist_entry));
       return {};
@@ -714,8 +714,8 @@ private:
   }
 
   /// Retrieves the results of all configured aggregations.
-  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
-    auto result = std::vector<transform_batch>{};
+  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
+    auto result = std::vector<pipeline_batch>{};
     result.reserve(aggregations_.size());
     for (auto& [schema, aggregation] : aggregations_) {
       auto batch = aggregation.finish();
@@ -739,11 +739,11 @@ private:
   std::unordered_map<type, aggregation> aggregations_ = {};
 
   /// Batches that do not apply to any aggregation.
-  std::unordered_map<type, std::vector<transform_batch>> blacklist_ = {};
+  std::unordered_map<type, std::vector<pipeline_batch>> blacklist_ = {};
 };
 
 /// The summarize pipeline operator plugin.
-class plugin final : public virtual transform_plugin {
+class plugin final : public virtual pipeline_operator_plugin {
 public:
   caf::error initialize([[maybe_unused]] data config) override {
     // Native plugins never have any plugin-specific configuration, so there's
@@ -755,8 +755,8 @@ public:
     return "summarize";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& config) const override {
+  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  make_pipeline_operator(const record& config) const override {
     auto parsed_config = configuration::make(config);
     if (!parsed_config)
       return parsed_config.error();

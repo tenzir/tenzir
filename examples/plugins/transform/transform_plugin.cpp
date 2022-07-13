@@ -6,8 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
-#include <vast/transform_step.hpp>
 
 namespace vast::plugins {
 
@@ -66,7 +66,7 @@ public:
   // transform definition. The configuration for the step is opaquely
   // passed as the first argument.
   [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const vast::record&) const override {
+  make_pipeline_operator(const vast::record&) const override {
     return std::make_unique<vast::plugins::example_transform_step>();
   }
 };

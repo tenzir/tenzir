@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/make_transforms.hpp"
+#include "vast/system/make_pipelines.hpp"
 
 #include "vast/concept/convertible/to.hpp"
 #include "vast/error.hpp"
@@ -41,10 +41,10 @@ namespace {
 //       field: dns.rrname
 //       value: "foobar.net"
 //
-caf::error parse_transform_steps(transform& transform,
-                                 const caf::config_value::list& steps) {
-  for (auto config_step : steps) {
-    auto* dict = caf::get_if<caf::config_value::dictionary>(&config_step);
+caf::error parse_pipeline_operators(pipeline& transform,
+                                    const caf::config_value::list& operators) {
+  for (auto config_operator : operators) {
+    auto* dict = caf::get_if<caf::config_value::dictionary>(&config_operator);
     if (!dict)
       return caf::make_error(ec::invalid_configuration, "step is not a dict");
     if (dict->size() != 1)
@@ -58,42 +58,42 @@ caf::error parse_transform_steps(transform& transform,
     auto rec = to<record>(*opts);
     if (!rec)
       return rec.error();
-    auto step = make_transform_step(name, *rec);
+    auto step = make_pipeline_operator(name, *rec);
     if (!step)
       return step.error();
-    transform.add_step(std::move(*step));
+    transform.add_operator(std::move(*step));
   }
   return caf::none;
 }
 
 } // namespace
 
-caf::expected<std::vector<transform>>
-make_transforms(transforms_location loc, const caf::settings& opts) {
-  std::vector<transform> result;
+caf::expected<std::vector<pipeline>>
+make_pipelines(pipelines_location loc, const caf::settings& opts) {
+  std::vector<pipeline> result;
   std::string key;
   bool server = true;
   switch (loc) {
-    case transforms_location::server_import:
+    case pipelines_location::server_import:
       key = "vast.transform-triggers.import";
       server = true;
       break;
-    case transforms_location::server_export:
+    case pipelines_location::server_export:
       key = "vast.transform-triggers.export";
       server = true;
       break;
-    case transforms_location::client_sink:
+    case pipelines_location::client_sink:
       key = "vast.transform-triggers.export";
       server = false;
       break;
-    case transforms_location::client_source:
+    case pipelines_location::client_source:
       key = "vast.transform-triggers.import";
       server = false;
       break;
   }
-  auto transforms_list = caf::get_if<caf::config_value::list>(&opts, key);
-  if (!transforms_list) {
-    // TODO: Distinguish between the case where no transforms were specified
+  auto pipelines_list = caf::get_if<caf::config_value::list>(&opts, key);
+  if (!pipelines_list) {
+    // TODO: Distinguish between the case where no pipelines were specified
     // (= return) and where there is something other than a list (= error).
     VAST_DEBUG("unable to find transformations for key {}", key);
     return result;
@@ -101,7 +101,7 @@ make_transforms(transforms_location loc, const caf::settings& opts) {
   // (name, [event_type]), ...
   std::vector<std::pair<std::string, std::vector<std::string>>>
     transform_triggers;
-  for (auto list_item : *transforms_list) {
+  for (auto list_item : *pipelines_list) {
     auto transform = caf::get_if<caf::config_value::dictionary>(&list_item);
     if (!transform)
       return caf::make_error(ec::invalid_configuration, "transform definition "
@@ -115,12 +115,12 @@ make_transforms(transforms_location loc, const caf::settings& opts) {
     if (transform->find("events") == transform->end())
       return caf::make_error(ec::invalid_configuration,
                              "missing 'events' key for transform trigger");
-    auto location = caf::get_if<std::string>(&(*transform)["location"]);
+    auto* location = caf::get_if<std::string>(&(*transform)["location"]);
     if (!location || (*location != "server" && *location != "client"))
       return caf::make_error(ec::invalid_configuration, "transform location "
                                                         "must be either "
                                                         "'server' or 'client'");
-    auto name = caf::get_if<std::string>(&(*transform)["transform"]);
+    auto* name = caf::get_if<std::string>(&(*transform)["transform"]);
     if (!name)
       return caf::make_error(ec::invalid_configuration, "transform name must "
                                                         "be a string");
@@ -143,42 +143,42 @@ make_transforms(transforms_location loc, const caf::settings& opts) {
   if (!transform_definitions) {
     return caf::make_error(ec::invalid_configuration, "invalid");
   }
-  std::map<std::string, caf::config_value::list> transforms;
+  std::map<std::string, caf::config_value::list> pipelines;
   for (auto [name, value] : *transform_definitions) {
-    auto* transform_steps = caf::get_if<caf::config_value::list>(&value);
-    if (!transform_steps) {
+    auto* pipeline_operators = caf::get_if<caf::config_value::list>(&value);
+    if (!pipeline_operators) {
       return caf::make_error(ec::invalid_configuration,
-                             "could not interpret transform steps as list");
+                             "could not interpret pipeline operators as list");
     }
-    transforms[name] = *transform_steps;
+    pipelines[name] = *pipeline_operators;
   }
   for (auto [name, event_types] : transform_triggers) {
-    if (!transforms.contains(name)) {
+    if (!pipelines.contains(name)) {
       return caf::make_error(ec::invalid_configuration,
                              fmt::format("unknown transform '{}'", name));
     }
     auto& transform = result.emplace_back(name, std::move(event_types));
-    if (auto err = parse_transform_steps(transform, transforms.at(name)))
+    if (auto err = parse_pipeline_operators(transform, pipelines.at(name)))
       return err;
   }
   return result;
 }
 
-caf::expected<transform_ptr>
-make_transform(const std::string& name,
-               const std::vector<std::string>& event_types,
-               const caf::settings& transforms) {
-  if (!transforms.contains(name))
+caf::expected<pipeline_ptr>
+make_pipeline(const std::string& name,
+              const std::vector<std::string>& event_types,
+              const caf::settings& pipelines) {
+  if (!pipelines.contains(name))
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("unknown transform '{}'", name));
-  auto transform = std::make_shared<vast::transform>(
+  auto transform = std::make_shared<vast::pipeline>(
     name, std::vector<std::string>{event_types});
-  auto list = caf::get_if<caf::config_value::list>(&transforms, name);
+  auto list = caf::get_if<caf::config_value::list>(&pipelines, name);
   if (!list)
     return caf::make_error(
       ec::invalid_configuration,
       fmt::format("expected a list of steps in transform '{}'", name));
-  if (auto err = parse_transform_steps(*transform, *list))
+  if (auto err = parse_pipeline_operators(*transform, *list))
     return err;
   return transform;
 }

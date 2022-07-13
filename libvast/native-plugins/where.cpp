@@ -14,9 +14,9 @@
 #include <vast/error.hpp>
 #include <vast/expression.hpp>
 #include <vast/logger.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder_factory.hpp>
-#include <vast/transform.hpp>
 
 #include <arrow/type.h>
 #include <caf/expected.hpp>
@@ -25,7 +25,7 @@ namespace vast::plugins::where {
 
 namespace {
 
-/// The configuration of the *where* transform step.
+/// The configuration of the *where* pipeline operator.
 struct configuration {
   // The expression in the config file.
   std::string expression;
@@ -46,11 +46,11 @@ struct configuration {
 };
 
 // Selects matching rows from the input.
-class where_step : public transform_step {
+class where_operator : public pipeline_operator {
 public:
-  /// Constructs a *where* transform step.
+  /// Constructs a *where* pipeline operator.
   /// @pre *expr* must be normalized and validated
-  explicit where_step(expression expr) : expr_{std::move(expr)} {
+  explicit where_operator(expression expr) : expr_{std::move(expr)} {
 #if VAST_ENABLE_ASSERTIONS
     const auto normalized_and_validated_expr = normalize_and_validate(expr_);
     VAST_ASSERT(normalized_and_validated_expr,
@@ -79,7 +79,7 @@ public:
   }
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<std::vector<transform_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
     VAST_DEBUG("where step finished transformation");
     return std::exchange(transformed_, {});
   }
@@ -88,10 +88,10 @@ private:
   expression expr_ = {};
 
   /// The slices being transformed.
-  std::vector<transform_batch> transformed_ = {};
+  std::vector<pipeline_batch> transformed_ = {};
 };
 
-class plugin final : public virtual transform_plugin {
+class plugin final : public virtual pipeline_operator_plugin {
 public:
   [[nodiscard]] caf::error initialize(data) override {
     return {};
@@ -101,18 +101,20 @@ public:
     return "where";
   };
 
-  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& options) const override {
+  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  make_pipeline_operator(const record& options) const override {
     auto config = to<configuration>(options);
     if (!config)
       return caf::make_error(ec::invalid_configuration,
-                             fmt::format("where transform step failed to parse "
+                             fmt::format("where pipeline operator failed to "
+                                         "parse "
                                          "configuration {}: {}",
                                          options, config.error()));
     auto expr = to<expression>(config->expression);
     if (!expr)
       return caf::make_error(ec::invalid_configuration,
-                             fmt::format("where transform step failed to parse "
+                             fmt::format("where pipeline operator failed to "
+                                         "parse "
                                          "expression '{}': {}",
                                          config->expression, expr.error()));
     auto normalized_and_validated_expr
@@ -120,10 +122,10 @@ public:
     if (!normalized_and_validated_expr)
       return caf::make_error(
         ec::invalid_configuration,
-        fmt::format("where transform step failed to normalized and validate "
+        fmt::format("where pipeline operator failed to normalized and validate "
                     "expression '{}': {}",
                     *expr, normalized_and_validated_expr.error()));
-    return std::make_unique<where_step>(
+    return std::make_unique<where_operator>(
       std::move(*normalized_and_validated_expr));
   }
 };

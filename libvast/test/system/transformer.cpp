@@ -17,7 +17,7 @@
 #include "vast/detail/framed.hpp"
 #include "vast/detail/logger_formatters.hpp"
 #include "vast/detail/spawn_container_source.hpp"
-#include "vast/system/make_transforms.hpp"
+#include "vast/system/make_pipelines.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
@@ -79,7 +79,7 @@ struct transformer_fixture
 
   // Creates a table slice with a single string field and random data.
   static std::vector<vast::detail::framed<vast::table_slice>>
-  make_transforms_testdata() {
+  make_pipelines_testdata() {
     auto layout = vast::type{
       "vast.test",
       vast::record_type{
@@ -99,52 +99,52 @@ struct transformer_fixture
   }
 };
 
-std::vector<vast::transform>
-transforms_from_string(vast::system::transforms_location location,
-                       const std::string& str) {
+std::vector<vast::pipeline>
+pipelines_from_string(vast::system::pipelines_location location,
+                      const std::string& str) {
   auto yaml = vast::from_yaml(str);
   REQUIRE(yaml);
   auto* rec = caf::get_if<vast::record>(&*yaml);
   REQUIRE(rec);
   auto settings = vast::to<caf::settings>(*rec);
   REQUIRE(settings);
-  auto transforms = make_transforms(location, *settings);
-  REQUIRE_NOERROR(transforms);
-  return std::move(*transforms);
+  auto pipelines = make_pipelines(location, *settings);
+  REQUIRE_NOERROR(pipelines);
+  return std::move(*pipelines);
 }
 
 FIXTURE_SCOPE(transformer_tests, transformer_fixture)
 
 TEST(transformer config) {
-  auto client_sink_transforms = transforms_from_string(
-    vast::system::transforms_location::client_sink, transform_config);
-  auto client_source_transforms = transforms_from_string(
-    vast::system::transforms_location::client_source, transform_config);
-  auto server_import_transforms = transforms_from_string(
-    vast::system::transforms_location::server_import, transform_config);
-  auto server_export_transforms = transforms_from_string(
-    vast::system::transforms_location::server_export, transform_config);
+  auto client_sink_pipelines = pipelines_from_string(
+    vast::system::pipelines_location::client_sink, transform_config);
+  auto client_source_pipelines = pipelines_from_string(
+    vast::system::pipelines_location::client_source, transform_config);
+  auto server_import_pipelines = pipelines_from_string(
+    vast::system::pipelines_location::server_import, transform_config);
+  auto server_export_pipelines = pipelines_from_string(
+    vast::system::pipelines_location::server_export, transform_config);
 
-  CHECK_EQUAL(client_sink_transforms.size(), 1ull);
-  CHECK_EQUAL(client_source_transforms.size(), 0ull);
-  CHECK_EQUAL(server_import_transforms.size(), 1ull);
-  CHECK_EQUAL(server_export_transforms.size(), 0ull);
+  CHECK_EQUAL(client_sink_pipelines.size(), 1ull);
+  CHECK_EQUAL(client_source_pipelines.size(), 0ull);
+  CHECK_EQUAL(server_import_pipelines.size(), 1ull);
+  CHECK_EQUAL(server_export_pipelines.size(), 0ull);
 }
 
 TEST(transformer) {
   vast::table_slice result;
   auto snk = this->self->spawn(dummy_sink, &result);
   // This should return one transform, `delete_uid`.
-  auto transforms = transforms_from_string(
-    vast::system::transforms_location::server_import, transform_config);
-  REQUIRE_EQUAL(transforms.size(), 1ull);
-  CHECK_EQUAL(transforms[0].name(), "delete_uid");
-  CHECK(transforms[0].applies_to("vast.test"));
+  auto pipelines = pipelines_from_string(
+    vast::system::pipelines_location::server_import, transform_config);
+  REQUIRE_EQUAL(pipelines.size(), 1ull);
+  CHECK_EQUAL(pipelines[0].name(), "delete_uid");
+  CHECK(pipelines[0].applies_to("vast.test"));
   auto transformer = self->spawn(vast::system::transformer, "test_transformer",
-                                 std::move(transforms));
+                                 std::move(pipelines));
   this->self->send(transformer, snk);
   run();
-  auto slices = make_transforms_testdata();
+  auto slices = make_pipelines_testdata();
   REQUIRE_EQUAL(slices.size(), 1ull);
   vast::detail::spawn_container_source(self->system(), slices, transformer);
   run(); // The dummy_sink should store the transformed table slice in `result`.

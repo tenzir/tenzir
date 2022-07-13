@@ -122,6 +122,6 @@ importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, const store_builder_actor& store,
          index_actor index, const type_registry_actor& type_registry,
-         std::vector<transform>&& input_transformations = {});
+         std::vector<pipeline>&& input_transformations = {});
 
 } // namespace vast::system
