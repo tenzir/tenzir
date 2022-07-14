@@ -43,3 +43,43 @@ summarize:
 In SQL, this would be the `AS` token: `SELECT min(ts) AS min_ts`.
 
 [summarize]: /docs/understand-vast/query-language/operators/summarize
+
+## Transform is now Pipeline
+
+We reconsidered our naming decisions of the various concepts related to query
+execution and data transformation, and came up with a naming convention that we
+believe does a better job in capturing the underlying concepts. A data
+transformation is now represented as a _pipeline_ which is itself a sequence of
+_pipeline operators_ data flows through while being transformed into the
+desired form.
+
+The associated configuration keys have changed. Here's the updated example from
+a previous [blog][blog1.0] announcing VAST v1.0:
+
+[blog1.0]: http://localhost:3000/blog/vast-v1.0#selection-and-projection-transform-steps
+
+```yaml
+vast:
+  # Specify and name our pipelines, each of which are a list of configured
+  # pipeline operators. Pipeline operators are plugins, enabling users to 
+  # write complex transformations in native code using C++ and Apache Arrow.
+  pipelines:
+     # Prevent events with certain strings to be exported, e.g., 
+     # "tenzir" or "secret-username".
+     remove-events-with-secrets:
+       - select:
+           expression: ':string !in ["tenzir", "secret-username"]'
+
+  # Specify whether to trigger each pipeline at server- or client-side, on
+  # import or export, and restrict them to a list of event types.
+  pipeline-triggers:
+    export:
+      # Apply the remove-events-with-secrets transformation server-side on
+      # export to the suricata.dns and suricata.http event types.
+      - pipeline: remove-events-with-secrets
+        location: server
+        events:
+          - suricata.dns
+          - suricata.http
+```
+

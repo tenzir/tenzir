@@ -81,9 +81,24 @@ Compaction supersedes both the disk monitor and aging, being able to cover the
 entire functionality of their behaviors in a more configurable way. The disk
 monitor remains unchanged and the experimental aging feature is deprecated (see
 below).
+
 ## Updates to Transform Steps
 
 ### Aggregate Step
+
+:::info Configuration changes in VAST v2.2: 
+
+`transform` has been renamed to `pipeline`, which is reflected in all
+configuration options in the example below. Additionally, `aggregate` has been
+renamed to [`summarize`][summarize].
+
+Please consult our current [documentation][transform-docs] and the release
+[blog][blogv2.2] post for VAST v2.2.
+
+[blogv2.2]: http://localhost:3000/blog/vast-v2.2
+[summarize]: /docs/understand-vast/query-language/operators/summarize
+[transform-docs]: https://vast.io/docs/use-vast/transform#modify-data-in-motion
+:::
 
 The new `aggregate` transform step plugin allows for reducing data with an
 aggregation operation over a group of columns.

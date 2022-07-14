@@ -59,7 +59,7 @@ public:
   //           - step3:
   //
   [[nodiscard]] const char* name() const override {
-    return "example-transform";
+    return "example-pipeline";
   };
 
   // This is called once for every time this pipeline step appears in a

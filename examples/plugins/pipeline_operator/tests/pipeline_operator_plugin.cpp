@@ -23,12 +23,12 @@ namespace {
 
 const std::string config = R"_(
 vast:
-  transforms:
-    my-transform:
-      - example-transform: {}
-  transform-triggers:
+  pipelines:
+    my-pipeline:
+      - example-pipeline: {}
+  pipeline-triggers:
     import:
-      - transform: my-transform
+      - pipeline: my-pipeline
         location: server
         events:
           - vast.test

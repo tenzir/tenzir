@@ -77,19 +77,19 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
   bool server = true;
   switch (location) {
     case pipelines_location::server_import:
-      key = "vast.transform-triggers.import";
+      key = "vast.pipeline-triggers.import";
       server = true;
       break;
     case pipelines_location::server_export:
-      key = "vast.transform-triggers.export";
+      key = "vast.pipeline-triggers.export";
       server = true;
       break;
     case pipelines_location::client_sink:
-      key = "vast.transform-triggers.export";
+      key = "vast.pipeline-triggers.export";
       server = false;
       break;
     case pipelines_location::client_source:
-      key = "vast.transform-triggers.import";
+      key = "vast.pipeline-triggers.import";
       server = false;
       break;
   }
@@ -102,7 +102,7 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
   }
   // (name, [event_type]), ...
   std::vector<std::pair<std::string, std::vector<std::string>>>
-    transform_triggers;
+    pipeline_triggers;
   for (auto list_item : *pipelines_list) {
     auto pipeline = caf::get_if<caf::config_value::dictionary>(&list_item);
     if (!pipeline)
@@ -111,7 +111,7 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
     if (pipeline->find("location") == pipeline->end())
       return caf::make_error(ec::invalid_configuration,
                              "missing 'location' key for pipeline trigger");
-    if (pipeline->find("transform") == pipeline->end())
+    if (pipeline->find("pipeline") == pipeline->end())
       return caf::make_error(ec::invalid_configuration,
                              "missing 'pipeline' key for pipeline trigger");
     if (pipeline->find("events") == pipeline->end())
@@ -122,7 +122,7 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
       return caf::make_error(ec::invalid_configuration, "pipeline location "
                                                         "must be either "
                                                         "'server' or 'client'");
-    auto* name = caf::get_if<std::string>(&(*pipeline)["transform"]);
+    auto* name = caf::get_if<std::string>(&(*pipeline)["pipeline"]);
     if (!name)
       return caf::make_error(ec::invalid_configuration, "pipeline name must "
                                                         "be a string");
@@ -130,22 +130,22 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
     if (!events)
       return caf::make_error(ec::invalid_configuration,
                              "pipeline event types must be a list of strings");
-    auto server_transform = *location == "server";
-    if (server != server_transform)
+    auto server_pipeline = *location == "server";
+    if (server != server_pipeline)
       continue;
-    transform_triggers.emplace_back(*name, *events);
+    pipeline_triggers.emplace_back(*name, *events);
   }
-  if (transform_triggers.empty()) {
+  if (pipeline_triggers.empty()) {
     return result;
   }
-  result.reserve(transform_triggers.size());
-  auto transform_definitions
-    = caf::get_if<caf::config_value::dictionary>(&settings, "vast.transforms");
-  if (!transform_definitions) {
+  result.reserve(pipeline_triggers.size());
+  auto pipeline_definitions
+    = caf::get_if<caf::config_value::dictionary>(&settings, "vast.pipelines");
+  if (!pipeline_definitions) {
     return caf::make_error(ec::invalid_configuration, "invalid");
   }
   std::map<std::string, caf::config_value::list> pipelines;
-  for (auto [name, value] : *transform_definitions) {
+  for (auto [name, value] : *pipeline_definitions) {
     auto* pipeline_operators = caf::get_if<caf::config_value::list>(&value);
     if (!pipeline_operators) {
       return caf::make_error(ec::invalid_configuration,
@@ -153,7 +153,7 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
     }
     pipelines[name] = *pipeline_operators;
   }
-  for (auto [name, event_types] : transform_triggers) {
+  for (auto [name, event_types] : pipeline_triggers) {
     if (!pipelines.contains(name)) {
       return caf::make_error(ec::invalid_configuration,
                              fmt::format("unknown pipeline '{}'", name));

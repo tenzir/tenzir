@@ -59,7 +59,7 @@ transformer_actor::behavior_type
 transformer(transformer_actor::stateful_pointer<transformer_state> self,
             std::string name, std::vector<pipeline>&&);
 
-/// A transformer actor that is attached to a system component. This reassings
+/// A transformer actor that is attached to a system component. This reassigns
 /// correct offsets to the transformed table slices.
 transformer_actor::behavior_type
 importer_transformer(transformer_actor::stateful_pointer<transformer_state> self,

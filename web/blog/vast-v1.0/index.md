@@ -3,6 +3,7 @@ title: VAST v1.0
 description: VAST v1.0 – New Year, New Versioning Scheme
 authors: dominiklohmann
 date: 2022-01-27
+last_updated: 2022-07-14
 tags: [release, transforms, query]
 ---
 
@@ -66,6 +67,13 @@ vast:
 ```
 
 ## Selection and Projection Transform Steps
+
+:::info Configuration changes in VAST v2.2: 
+`transform` has been renamed to `pipeline`, which is reflected in all configuration
+options. Please consult our current [documentation][transform-docs].
+
+[transform-docs]: https://vast.io/docs/use-vast/transform#modify-data-in-motion
+:::
 
 Reshaping data during import and export is a common use case that VAST now
 supports. The two new built-in transform steps allow for filtering columns and

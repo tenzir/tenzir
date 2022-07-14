@@ -26,9 +26,9 @@
 
 namespace {
 
-const std::string transform_config = R"_(
+const std::string pipeline_config = R"_(
 vast:
-  transforms:
+  pipelines:
     delete_uid:
       - drop:
           fields:
@@ -38,13 +38,13 @@ vast:
           fields:
             uid: xxx
 
-  transform-triggers:
+  pipeline-triggers:
     import:
-      - transform: delete_uid
+      - pipeline: delete_uid
         location: server
         events: [vast.test]
     export:
-      - transform: replace_uid
+      - pipeline: replace_uid
         location: client
         events: [vast.test]
 )_";
@@ -117,13 +117,13 @@ FIXTURE_SCOPE(transformer_tests, transformer_fixture)
 
 TEST(transformer config) {
   auto client_sink_pipelines = pipelines_from_string(
-    vast::system::pipelines_location::client_sink, transform_config);
+    vast::system::pipelines_location::client_sink, pipeline_config);
   auto client_source_pipelines = pipelines_from_string(
-    vast::system::pipelines_location::client_source, transform_config);
+    vast::system::pipelines_location::client_source, pipeline_config);
   auto server_import_pipelines = pipelines_from_string(
-    vast::system::pipelines_location::server_import, transform_config);
+    vast::system::pipelines_location::server_import, pipeline_config);
   auto server_export_pipelines = pipelines_from_string(
-    vast::system::pipelines_location::server_export, transform_config);
+    vast::system::pipelines_location::server_export, pipeline_config);
 
   CHECK_EQUAL(client_sink_pipelines.size(), 1ull);
   CHECK_EQUAL(client_source_pipelines.size(), 0ull);
@@ -134,9 +134,9 @@ TEST(transformer config) {
 TEST(transformer) {
   vast::table_slice result;
   auto snk = this->self->spawn(dummy_sink, &result);
-  // This should return one transform, `delete_uid`.
+  // This should return one pipeline, `delete_uid`.
   auto pipelines = pipelines_from_string(
-    vast::system::pipelines_location::server_import, transform_config);
+    vast::system::pipelines_location::server_import, pipeline_config);
   REQUIRE_EQUAL(pipelines.size(), 1ull);
   CHECK_EQUAL(pipelines[0].name(), "delete_uid");
   CHECK(pipelines[0].applies_to("vast.test"));
