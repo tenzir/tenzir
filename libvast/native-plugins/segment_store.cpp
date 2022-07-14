@@ -68,7 +68,9 @@ struct active_store_state {
   std::unique_ptr<vast::segment_builder> builder = {};
 
   /// The serialized segment.
-  std::optional<vast::segment> segment = {};
+  //  This is one "logical" segments, but may have been split
+  //  into multiple parts due to the 2GiB flatbuffer limit.
+  std::optional<std::vector<vast::segment>> segments = {};
 
   /// Number of events in this store.
   size_t events = {};
@@ -343,8 +345,11 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
       if (self->state.builder) {
         slices = self->state.builder->lookup(query_context.ids);
       } else {
-        VAST_ASSERT(self->state.segment.has_value());
-        slices = self->state.segment->lookup(query_context.ids);
+        VAST_ASSERT(self->state.segments.has_value());
+        slices = std::vector<table_slice>{};
+        for (auto const& segment : *self->state.segments) {
+          auto slices = segment.lookup(query_context.ids);
+        }
       }
       if (!slices)
         return slices.error();
@@ -365,6 +370,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
       // TODO: There is a race here when ids are erased while we're waiting
       // for the filesystem actor to finish.
       auto seg = self->state.builder->finish();
+
       auto id = seg.id();
       auto slices = seg.erase(ids);
       if (!slices)

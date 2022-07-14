@@ -38,8 +38,10 @@ caf::error segment_builder::add(const table_slice& x) {
   constexpr auto REASONABLE_SIZE
     = detail::narrow_cast<size_t>(0.95 * FLATBUFFERS_MAX_BUFFER_SIZE);
   if (last_fb_offset + as_bytes(x).size() >= REASONABLE_SIZE) [[unlikely]] {
-    VAST_ERROR("discarding table slices due to flatbuffers size limit");
-    return caf::make_error(ec::format_error, "too much data for segment");
+    VAST_DEBUG("segment_builder splits overfull segment");
+    auto segment = finish_single();
+    reset();
+    overflow_segments_.emplace_back(std::move(segment));
   }
   auto bytes = fbs::pack_bytes(builder_, x);
   auto slice = fbs::CreateFlatTableSlice(builder_, bytes);
@@ -50,7 +52,14 @@ caf::error segment_builder::add(const table_slice& x) {
   return caf::none;
 }
 
-segment segment_builder::finish() {
+std::vector<segment> segment_builder::finish() {
+  auto last = finish_single();
+  reset();
+  overflow_segments_.emplace_back(std::move(last));
+  return std::exchange(overflow_segments_, {});
+}
+
+segment segment_builder::finish_single() {
   auto table_slices_offset = builder_.CreateVector(flat_slices_);
   auto uuid_offset = pack(builder_, id_);
   auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
@@ -66,7 +75,6 @@ segment segment_builder::finish() {
   auto segment_offset = segment_builder.Finish();
   auto segment_flatbuffer = flatbuffer<fbs::Segment>{builder_, segment_offset,
                                                      fbs::SegmentIdentifier()};
-  reset();
   return segment{std::move(segment_flatbuffer)};
 }
 

@@ -17,6 +17,11 @@ table v0 {
 
   /// The number of events in the store.
   events: ulong;
+
+  /// Whether this segment has an "overflow" segment.
+  //  An overflow segment is required when the total
+  //  size of the flatbuffer exceeds 2GiB.
+  overflow: bool;
 }
 
 union Segment {

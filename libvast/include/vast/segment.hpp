@@ -56,8 +56,7 @@ public:
   /// Locates the table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
-  [[nodiscard]] caf::expected<std::vector<table_slice>>
-  lookup(const vast::ids& xs) const;
+  [[nodiscard]] std::vector<table_slice> lookup(const vast::ids& xs) const;
 
   /// Creates new table slices that contain all events *not*
   /// included in `xs`.

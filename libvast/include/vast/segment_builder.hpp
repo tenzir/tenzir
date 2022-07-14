@@ -41,7 +41,7 @@ public:
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
-  segment finish();
+  std::vector<segment> finish();
 
   /// Locates previously added table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
@@ -67,6 +67,8 @@ public:
   void reset(const std::optional<uuid>& id = std::nullopt);
 
 private:
+  segment finish_single();
+
   uuid id_;
   vast::id min_table_slice_offset_;
   uint64_t num_events_;
@@ -74,6 +76,7 @@ private:
   std::vector<flatbuffers::Offset<fbs::FlatTableSlice>> flat_slices_;
   std::vector<table_slice> slices_; // For queries to an unfinished segment.
   std::vector<fbs::uinterval> intervals_;
+  std::vector<segment> overflow_segments_;
 };
 
 } // namespace vast

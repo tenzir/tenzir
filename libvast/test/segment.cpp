@@ -29,16 +29,18 @@ TEST(construction and querying) {
   for (auto& slice : zeek_conn_log)
     if (auto err = builder.add(slice))
       FAIL(err);
-  auto x = builder.finish();
+  auto xs = builder.finish();
+  REQUIRE_EQUAL(xs.size(), 1ull);
+  auto& x = xs[0];
   CHECK_EQUAL(x.num_slices(), zeek_conn_log.size());
   MESSAGE("lookup IDs for some segments");
-  auto slices = unbox(x.lookup(make_ids({0, 6, 19, 21})));
+  auto slices = x.lookup(make_ids({0, 6, 19, 21}));
   REQUIRE_EQUAL(slices.size(), 2u); // [0,8), [16,24)
   CHECK_EQUAL(slices[0], zeek_conn_log[0]);
   CHECK_EQUAL(slices[1], zeek_conn_log[2]);
   auto y = segment::copy_without(x, make_ids({19, 21}));
   REQUIRE_NOERROR(y);
-  auto slices2 = unbox(y->lookup(make_ids({0, 6, 19, 21})));
+  auto slices2 = y->lookup(make_ids({0, 6, 19, 21}));
   REQUIRE_EQUAL(slices2.size(), 1u); // [0,8)
   CHECK_EQUAL(slices2[0], zeek_conn_log[0]);
 }
@@ -47,7 +49,9 @@ TEST(serialization) {
   segment_builder builder{1024};
   auto slice = zeek_conn_log[0];
   REQUIRE(!builder.add(slice));
-  auto x = builder.finish();
+  auto xs = builder.finish();
+  REQUIRE_EQUAL(xs.size(), 1ull);
+  auto& x = builder[0];
   chunk_ptr chk;
   std::vector<char> buf;
   REQUIRE_EQUAL(detail::serialize(buf, x.chunk()), caf::none);

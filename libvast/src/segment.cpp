@@ -70,12 +70,10 @@ chunk_ptr segment::chunk() const {
   return flatbuffer_.chunk();
 }
 
-caf::expected<std::vector<table_slice>>
-segment::lookup(const vast::ids& xs) const {
+std::vector<table_slice> segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice> result;
-  auto segment = flatbuffer_->segment_as_v0();
-  if (!segment)
-    return caf::make_error(ec::format_error, "invalid segment version");
+  auto const* segment = flatbuffer_->segment_as_v0();
+  VAST_ASSERT(segment, "invalid segment version");
   VAST_ASSERT(segment->ids()->size() == segment->slices()->size());
   auto f = [&](const auto& zip) noexcept {
     auto&& interval = std::get<0>(zip);
@@ -103,8 +101,9 @@ segment::lookup(const vast::ids& xs) const {
   auto flat_slices
     = std::vector(segment->slices()->begin(), segment->slices()->end());
   auto zipped = detail::zip(intervals, flat_slices);
-  if (auto error = select_with(xs, zipped.begin(), zipped.end(), f, g))
-    return error;
+  auto error = select_with(xs, zipped.begin(), zipped.end(), f, g);
+  // `select_with()` only returns an error when `g` does.
+  VAST_ASSERT(!error);
   return result;
 }
 
@@ -144,14 +143,21 @@ segment::copy_without(const vast::segment& segment, const vast::ids& xs) {
   // TODO: Add a `segment::size` field so we can get a better upper bound on
   // the segment size from the old segment.
   segment_builder builder(defaults::system::max_segment_size, segment.id());
-  if (is_subset(segment.ids(), xs))
-    return builder.finish();
+  if (is_subset(segment.ids(), xs)) {
+    auto segments = builder.finish();
+    VAST_ASSERT(segments.size() == 1);
+    return std::move(segments[0]);
+  }
   auto slices = segment.erase(xs);
   if (!slices)
     return slices.error();
   for (auto&& slice : std::exchange(*slices, {}))
-    builder.add(std::move(slice));
-  return builder.finish();
+    builder.add(slice);
+  auto segments = builder.finish();
+  // All slices did fit into a single segment before and we copied a subset
+  // so they should again fit afterwards.
+  VAST_ASSERT(segments.size() == 1);
+  return std::move(segments[0]);
 }
 
 } // namespace vast

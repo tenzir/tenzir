@@ -504,6 +504,8 @@ auto select(const IDs& ids) {
 ///          values falls into *(x, y)*, where `(x, y) = f(*begin)` .
 /// @pre The range delimited by *begin* and *end* must be sorted in ascending
 ///      order.
+/// @returns If `g` returns an error that is returned, otherwise returns
+/// `caf::none`.
 template <class Bitmap, class Iterator, class F, class G>
 caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
   auto pred = [&](const auto& x, auto y) { return f(x).second <= y; };
