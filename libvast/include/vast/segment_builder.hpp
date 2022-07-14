@@ -37,7 +37,7 @@ public:
   /// @pre The table slice offset (`x.offset()`) must be greater than the
   ///      offset of the previously added table slice. This requirement enables
   ///      efficient lookup of table slices from a sequence of IDs.
-  caf::error add(table_slice x);
+  caf::error add(const table_slice& x);
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
