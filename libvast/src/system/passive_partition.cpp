@@ -280,7 +280,7 @@ partition_actor::behavior_type passive_partition(
           self->state.store = self->state.archive;
         } else {
           const auto* plugin
-            = plugins::find<store_plugin>(self->state.store_id);
+            = plugins::find<store_actor_plugin>(self->state.store_id);
           if (!plugin) {
             auto error = caf::make_error(ec::format_error,
                                          "encountered unhandled store backend");

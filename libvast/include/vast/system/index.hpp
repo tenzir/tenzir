@@ -319,7 +319,7 @@ struct index_state {
   idspace_distributor_actor importer = {};
 
   /// Plugin responsible for spawning new partition-local stores.
-  const vast::store_plugin* store_plugin = {};
+  const vast::store_actor_plugin* store_actor_plugin = {};
 
   /// The partitions currently being transformed.
   detail::stable_set<uuid> partitions_in_transformation = {};

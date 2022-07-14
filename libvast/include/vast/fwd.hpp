@@ -47,6 +47,12 @@ class StructType;
 class TimestampType;
 class UInt64Type;
 
+namespace io {
+
+class RandomAccessFile;
+
+} // namespace io
+
 } // namespace arrow
 
 // -- flatbuffers -------------------------------------------------------------
@@ -84,6 +90,7 @@ class stringification_inspector;
 
 namespace vast {
 
+class active_store;
 class address;
 class address_type;
 class aggregation_function;
@@ -102,8 +109,10 @@ class legacy_abstract_type;
 class legacy_type;
 class list_type;
 class map_type;
+class module;
 class msgpack_table_slice_builder;
 class null_bitmap;
+class passive_store;
 class pattern;
 class pattern_type;
 class plugin;
@@ -111,11 +120,9 @@ class plugin_ptr;
 class port;
 class real_type;
 class record_type;
-class module;
 class segment;
 class segment_builder;
 class segment_store;
-class store;
 class string_type;
 class subnet;
 class subnet_type;

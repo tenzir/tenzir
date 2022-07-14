@@ -1,6 +1,7 @@
 ---
 sidebar_position: 5
 ---
+
 # Tune
 
 This section describes tuning knobs that have a notable effect on system
@@ -51,6 +52,51 @@ and ship immediately.
 The `vast.import.read-timeout` option determines how long a call to read data
 from the input will block. After the read timeout elapses, VAST tries again at a
 later.
+
+## Persistent Storage
+
+VAST arranges data in horizontal _partitions_ for sharding. The persistent
+representation of partition is a single file consists containing a set table
+slices all having the same schema. The `store` plugin defines the on-disk
+format. VAST currently ships with two implementations:
+
+1. **Segment**: writes Apache Arrow IPC with a thin wrapper
+2. **Apache Parquet**: writes [Parquet](https://parquet.apache.org/) files
+
+VAST defaults to the Segment store. Enable the Parquet store by loading the
+plugin and adjusting `vast.store-backend`:
+
+```yaml
+vast:
+  plugins:
+    - parquet
+  store-backend: parquet
+```
+
+There's an inherent space-time tradeoff between the Segment and Parquet store
+that affects CPU, memory, and storage characteristics. Compared to the Segment
+store, Parquet differs as follows:
+
+1. Parquet files occupy ~40% less space, which also reduces I/O pressure during
+   querying.
+2. Parquet utilizes more CPU cycles during ingest (~10%) and querying.
+
+Parquet has the major advantage that it's the de-facto standard for
+encoding columnar data in modern data architectures. This allows other
+applications that support reading from Parquet *native* access to the data.
+
+:::tip Recommendation
+
+Use Parquet when:
+
+1. Storage is scarce, and you want to increase data retention
+2. Workloads are I/O-bound and you have available CPU
+3. Reading data with with off-the-shelf data science tools is a use case
+:::
+
+VAST supports [rebuilding the entire database](#rebuild-partitions) in case you
+want to switch to a different store format. However, VAST works perfectly fine
+with a mixed-storage configuration, so a full rebuild is not required.
 
 ## Memory usage and caching
 
