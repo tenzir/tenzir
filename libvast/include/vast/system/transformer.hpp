@@ -29,7 +29,7 @@ using transformer_stream_stage_ptr
 
 struct transformer_state {
   /// The pipelines that can be applied.
-  pipeline_executor pipeline_executor;
+  pipeline_executor executor;
 
   /// The stream stage.
   transformer_stream_stage_ptr stage;
