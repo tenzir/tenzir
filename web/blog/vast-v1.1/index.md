@@ -86,7 +86,7 @@ below).
 
 ### Aggregate Step
 
-:::info Configuration changes in VAST v2.2: 
+:::info Configuration changes in VAST v2.2:
 
 `transform` has been renamed to `pipeline`, which is reflected in all
 configuration options in the example below. Additionally, `aggregate` has been

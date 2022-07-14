@@ -82,4 +82,3 @@ vast:
           - suricata.dns
           - suricata.http
 ```
-

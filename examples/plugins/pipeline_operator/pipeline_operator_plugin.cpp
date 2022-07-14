@@ -51,10 +51,10 @@ public:
   // definition, for example:
   //
   //     vast:
-  //       transforms:
-  //         transform1:
+  //       pipelines:
+  //         pipeline1:
   //           - step1:
-  //           - example-transform:
+  //           - example-pipeline:
   //              setting: value
   //           - step3:
   //

@@ -68,11 +68,12 @@ vast:
 
 ## Selection and Projection Transform Steps
 
-:::info Configuration changes in VAST v2.2: 
+:::info Configuration changes in VAST v2.2:
 `transform` has been renamed to `pipeline`, which is reflected in all configuration
 options. Please consult our current [documentation][transform-docs].
 
-[transform-docs]: https://vast.io/docs/use-vast/transform#modify-data-in-motion
+Please consult our current [documentation][transform-docs] and the release
+[blog][blogv2.2] post for VAST v2.2.
 :::
 
 Reshaping data during import and export is a common use case that VAST now
