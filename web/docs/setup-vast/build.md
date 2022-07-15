@@ -72,6 +72,11 @@ Building VAST involves the following steps:
   cd vast
   cmake -B build
   ```
+  
+  By default, a `Debug` build will be compiled. If you need performance (e.g., in a production environment), you should use the `Release` build type:
+  ```bash
+  cmake -B build -DCMAKE_BUILD_TYPE=Release  
+  ```
 
   Optionally, you can use the CMake TUI to visually configure the build:
   ```bash
@@ -111,3 +116,11 @@ verify that your build works as expected:
   # Optional: Install to a custom prefix
   cmake --install build --prefix /path/to/install/prefix
   ```
+
+## Cleaning
+
+If want to clean the previous build (for example, to switch between a `Release` and `Debug` build):
+  ```bash
+  rm -rf build
+  ```
+  
