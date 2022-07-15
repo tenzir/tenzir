@@ -72,6 +72,37 @@ try_handle_deprecations(vast::system::default_configuration& cfg) {
               "automatically using 'segment-store' instead");
     caf::put(cfg.content, "vast.store-backend", "segment-store");
   }
+  const auto transforms
+    = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.transforms");
+  const auto pipelines
+    = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.pipelines");
+  if (transforms) {
+    if (pipelines) {
+      VAST_ERROR("the 'vast.transforms' key is deprecated; please remove it "
+                 "from your configuration and use 'vast.pipelines' instead");
+      return EXIT_FAILURE;
+    }
+    VAST_WARN("key 'vast.transforms' is deprecated; automatically setting the "
+              "replacement 'vast.pipelines' instead");
+    caf::put(cfg.content, "vast.pipelines", *transforms);
+  }
+  const auto transform_triggers
+    = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.transform-"
+                                                       "triggers");
+  const auto pipeline_triggers
+    = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.pipeline-"
+                                                       "triggers");
+  if (transform_triggers) {
+    if (pipeline_triggers) {
+      VAST_ERROR("the 'vast.transform-triggers' key is deprecated; please "
+                 "remove it from your configuration and use "
+                 "'vast.pipeline-triggers' instead");
+      return EXIT_FAILURE;
+    }
+    VAST_WARN("key 'vast.transform-triggers' is deprecated; automatically "
+              "setting the replacement 'vast.pipeline-triggers' instead");
+    caf::put(cfg.content, "vast.pipeline-triggers", *transform_triggers);
+  }
   return std::nullopt;
 }
 

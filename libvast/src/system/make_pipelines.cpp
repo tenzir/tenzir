@@ -104,16 +104,23 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
   std::vector<std::pair<std::string, std::vector<std::string>>>
     pipeline_triggers;
   for (auto list_item : *pipelines_list) {
-    auto pipeline = caf::get_if<caf::config_value::dictionary>(&list_item);
+    auto* pipeline = caf::get_if<caf::config_value::dictionary>(&list_item);
     if (!pipeline)
       return caf::make_error(ec::invalid_configuration, "pipeline definition "
                                                         "must be dict");
     if (pipeline->find("location") == pipeline->end())
       return caf::make_error(ec::invalid_configuration,
                              "missing 'location' key for pipeline trigger");
-    if (pipeline->find("pipeline") == pipeline->end())
-      return caf::make_error(ec::invalid_configuration,
-                             "missing 'pipeline' key for pipeline trigger");
+    // For backwards compatibility, we also support 'transform' as a key to
+    // specify the pipeline.
+    auto pipeline_key = std::string{"pipeline"};
+    if (pipeline->find("pipeline") == pipeline->end()) {
+      if (pipeline->find("transform") != pipeline->end())
+        pipeline_key = "transform";
+      else
+        return caf::make_error(ec::invalid_configuration,
+                               "missing 'pipeline' key for pipeline trigger");
+    }
     if (pipeline->find("events") == pipeline->end())
       return caf::make_error(ec::invalid_configuration, "missing 'events' key "
                                                         "for pipeline trigger");
@@ -122,7 +129,7 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
       return caf::make_error(ec::invalid_configuration, "pipeline location "
                                                         "must be either "
                                                         "'server' or 'client'");
-    auto* name = caf::get_if<std::string>(&(*pipeline)["pipeline"]);
+    auto* name = caf::get_if<std::string>(&(*pipeline)[pipeline_key]);
     if (!name)
       return caf::make_error(ec::invalid_configuration, "pipeline name must "
                                                         "be a string");

@@ -44,7 +44,9 @@ vast:
         location: server
         events: [vast.test]
     export:
-      - pipeline: replace_uid
+      # Using the deprecated 'transform' key instead of 'pipeline'
+      # to ensure that is still supported.
+      - transform: replace_uid
         location: client
         events: [vast.test]
 )_";
