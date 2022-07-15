@@ -3,7 +3,7 @@ title: VAST v1.0
 description: VAST v1.0 – New Year, New Versioning Scheme
 authors: dominiklohmann
 date: 2022-01-27
-last_updated: 2022-07-14
+last_updated: 2022-07-15
 tags: [release, transforms, query]
 ---
 
@@ -68,12 +68,12 @@ vast:
 
 ## Selection and Projection Transform Steps
 
-:::info Configuration changes in VAST v2.2:
-`transform` has been renamed to `pipeline`, which is reflected in all configuration
-options. Please consult our current [documentation][transform-docs].
-
-Please consult our current [documentation][transform-docs] and the release
-[blog][blogv2.2] post for VAST v2.2.
+:::info Transforms → Pipelines
+In [VAST v2.2](/blog/vast-v2.2), we renamed *transforms* to *pipelines*, and
+*transform steps* to *pipeline operators*. This caused several configuration key
+changes. Please keep this in mind when reading the example below and consult the
+[documentation](/docs/understand-vast/query-language/pipelines) for the
+up-to-date syntax.
 :::
 
 Reshaping data during import and export is a common use case that VAST now
@@ -113,6 +113,7 @@ vast:
 ```
 
 ## Threat Bus 2022.01.27
+
 Thanks to a contribution from Sascha Steinbiss
 ([@satta](https://github.com/satta)), Threat Bus only reports failure when
 transforming a sighting context if the return code of the transforming program

@@ -3,6 +3,7 @@ title: VAST v1.1
 description: VAST v1.1 - Compaction & Query Language Frontends
 authors: dominiklohmann
 date: 2022-03-03
+last_updated: 2022-07-15
 tags: [release, compaction, query]
 ---
 
@@ -86,18 +87,15 @@ below).
 
 ### Aggregate Step
 
-:::info Configuration changes in VAST v2.2:
-
-`transform` has been renamed to `pipeline`, which is reflected in all
-configuration options in the example below. Additionally, `aggregate` has been
-renamed to [`summarize`][summarize].
-
-Please consult our current [documentation][transform-docs] and the release
-[blog][blogv2.2] post for VAST v2.2.
-
-[blogv2.2]: http://localhost:3000/blog/vast-v2.2
+:::info Transforms → Pipelines
+In [VAST v2.2](/blog/vast-v2.2), we renamed *transforms* to *pipelines*, and
+*transform steps* to *pipeline operators*. This caused several configuration key
+changes. Additionally, we renamed the `aggregate` operator to
+[`summarize`][summarize]. Please keep this in mind when reading the example
+below and consult the
+[documentation](/docs/understand-vast/query-language/pipelines) for the
+up-to-date syntax.
 [summarize]: /docs/understand-vast/query-language/operators/summarize
-[transform-docs]: https://vast.io/docs/use-vast/transform#modify-data-in-motion
 :::
 
 The new `aggregate` transform step plugin allows for reducing data with an
