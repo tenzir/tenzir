@@ -1,62 +1,45 @@
 ---
 draft: true
 title: VAST v2.2
-description: VAST v2.2 - TBD
+description: Pipelines
 authors: dominiklohmann
-date: 2022-08-07
-tags: [release, summarize]
+date: 2022-07-30
+tags: [release, summarize, pipelines]
 ---
 
-We released [VAST v2.2][github-vast-release] 🙌!
+We released [VAST v2.2][github-vast-release] 🙌! Transforms now have a new name:
+[pipelines](/blog/vast-v2.2#transforms-are-now-pipelines). The [summarize
+operator](/blog/vast-v2.2#summarization-improvements) also underwent a facelift,
+making aggregation functions pluggable and allowing for assigning names to
+output fields.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 
 <!--truncate-->
 
-## Summarization Improvements
+## Transforms are now Pipelines
 
-We've improved the behavior of the [`summarize`][summarize] operator. It is now
-possible to specify an explicit name for the output fields. This is helpful when
-the downstream processing needs a predictable schema. Previously, VAST took
-simply the name of the input field. The syntax was as follows:
+After carefully reconsidering our naming decisions related to query execution
+and data transformation, we came up with a naming convention that does a better
+job in capturing the underlying concepts.
 
-```yaml
-summarize:
-  group-by:
-    - ...
-  aggregate:
-    min:
-      - ts # implied name for aggregate field
-```
+Most notably, we renamed *transforms* to *pipelines*. A transform *step* is no a
+pipeline *operator*. This nomenclature is much more familiar to users coming
+from dataflow and collection-based query engines. The implementation underneath
+hasn't changed. As in the [Volcano model][volcano], data still flows through
+operators, each of which consumes input from upstream operators and produces
+output for downstream operators. What we term a pipeline is the sequence of such
+chained operators.
 
-We now switched the syntax such that the new field name is at the beginning:
+[volcano]: https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf
 
-```yaml
-summarize:
-  group-by:
-    - ...
-  aggregate:
-    ts_min: # explicit name for aggregate field
-      min: ts
-```
+While pipelines are not yet available at the query layer, they soon will be.
+Until then, you can deploy pipelines at load-time to [transform data in motion
+or data at rest](/docs/use-vast/transform).
 
-In SQL, this would be the `AS` token: `SELECT min(ts) AS min_ts`.
-
-[summarize]: /docs/understand-vast/query-language/operators/summarize
-
-## Transform is now Pipeline
-
-We reconsidered our naming decisions of the various concepts related to query
-execution and data transformation, and came up with a naming convention that we
-believe does a better job in capturing the underlying concepts. A data
-transformation is now represented as a _pipeline_ which is itself a sequence of
-_pipeline operators_ data flows through while being transformed into the
-desired form.
-
-The associated configuration keys have changed. Here's the updated example from
-a previous [blog][blog1.0] announcing VAST v1.0:
-
-[blog1.0]: http://localhost:3000/blog/vast-v1.0#selection-and-projection-transform-steps
+From a user perspective, the configuration keys associated with transforms have
+changed. Here's the updated example from our previous [VAST v1.0 release
+blog](/blog/vast-v1.0).
 
 ```yaml
 vast:
@@ -82,3 +65,35 @@ vast:
           - suricata.dns
           - suricata.http
 ```
+
+## Summarization Improvements
+
+In line with the above nomenclature changes, we've improved the behavior of the
+[`summarize`][summarize] operator. It is now possible to specify an explicit
+name for the output fields. This is helpful when the downstream processing needs
+a predictable schema. Previously, VAST took simply the name of the input field.
+The syntax was as follows:
+
+```yaml
+summarize:
+  group-by:
+    - ...
+  aggregate:
+    min:
+      - ts # implied name for aggregate field
+```
+
+We now switched the syntax such that the new field name is at the beginning:
+
+```yaml
+summarize:
+  group-by:
+    - ...
+  aggregate:
+    ts_min: # explicit name for aggregate field
+      min: ts
+```
+
+In SQL, this would be the `AS` token: `SELECT min(ts) AS min_ts`.
+
+[summarize]: /docs/understand-vast/query-language/operators/summarize
