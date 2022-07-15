@@ -117,4 +117,15 @@ in
     buildType = "CI";
     arrow-cpp = final.arrow-cpp-no-simd;
   };
+  speeve = final.buildGoModule rec {
+    pname = "speeve";
+    version  = "0.1.3";
+    vendorSha256 = "sha256-Mw1cRIwmDS2Canljkuw96q2+e+z14MUcU5EtupUcTDQ=";
+    src = final.fetchFromGitHub {
+      rev = "v${version}";
+      owner = "satta";
+      repo = pname;
+      hash = "sha256-75QrtuOduUNT9g2RJRWUow8ESBqsDDXCMGVNQKFc+SE=";
+    };
+  };
 }
