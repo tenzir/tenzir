@@ -33,7 +33,7 @@ segment_builder::segment_builder(size_t initial_buffer_size,
 caf::error segment_builder::add(const table_slice& x) {
   if (x.offset() < min_table_slice_offset_)
     return caf::make_error(ec::unspecified, "slice offsets not increasing");
-  auto last_fb_offset = flat_slices_.back().o;
+  auto last_fb_offset = flat_slices_.empty() ? 0ull : flat_slices_.back().o;
   // Allow ca. 100MiB of extra space for the non-table data.
   constexpr auto REASONABLE_SIZE
     = detail::narrow_cast<size_t>(0.95 * FLATBUFFERS_MAX_BUFFER_SIZE);
