@@ -197,6 +197,7 @@ class [[nodiscard]] generator {
 public:
   using promise_type = internal::generator_promise<T>;
   using iterator = internal::generator_iterator<T>;
+  using value_type = T;
 
   generator() noexcept : m_coroutine(nullptr) {
   }
