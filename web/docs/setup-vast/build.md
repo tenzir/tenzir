@@ -123,4 +123,3 @@ If want to clean the previous build (for example, to switch between a `Release` 
   ```bash
   rm -rf build
   ```
-  
