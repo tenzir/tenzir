@@ -307,7 +307,7 @@ caf::error index_state::load_from_disk() {
   // be there in the first place.
   VAST_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
   for (auto& orphan : orphans)
-    std::filesystem::remove(dir / fmt::to_string(orphan) / ".mdx", err);
+    std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
   // Now try to load the partitions - with a progress indicator.
   for (size_t idx = 0; idx < partitions.size(); ++idx) {
     auto partition_uuid = partitions[idx];
