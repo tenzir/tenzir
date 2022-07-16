@@ -10,10 +10,10 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/sink.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/transform.hpp"
 
 #include <caf/settings.hpp>
 #include <caf/stream_stage.hpp>
@@ -28,8 +28,8 @@ using transformer_stream_stage_ptr
                           caf::broadcast_downstream_manager<table_slice>>;
 
 struct transformer_state {
-  /// The transforms that can be applied.
-  transformation_engine transforms;
+  /// The pipelines that can be applied.
+  pipeline_executor executor;
 
   /// The stream stage.
   transformer_stream_stage_ptr stage;
@@ -51,19 +51,19 @@ struct transformer_state {
   static constexpr const char* name = "transformer";
 };
 
-/// An actor containing a transform_stream_stage, which is just a stream
-/// stream stage that applies a `transformation_engine` to every table slice.
+/// An actor containing a pipeline_stream_stage, which is just a stream
+/// stream stage that applies a `pipeline_executor` to every table slice.
 /// @param self The actor handle.
-/// @param transforms The set of transforms to be applied.
+/// @param pipelines The set of pipelines to be applied.
 transformer_actor::behavior_type
 transformer(transformer_actor::stateful_pointer<transformer_state> self,
-            std::string name, std::vector<transform>&&);
+            std::string name, std::vector<pipeline>&&);
 
-/// A transformer actor that is attached to a system component. This reassings
+/// A transformer actor that is attached to a system component. This reassigns
 /// correct offsets to the transformed table slices.
 transformer_actor::behavior_type
 importer_transformer(transformer_actor::stateful_pointer<transformer_state> self,
-                     std::string name, std::vector<transform>&&);
+                     std::string name, std::vector<pipeline>&&);
 
 /// An actor that hosts a no-op stream sink for table slices, that the SOURCE
 /// and IMPORTER attach to their respective TRANSFORMER actors on shutdown.

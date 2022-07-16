@@ -43,8 +43,8 @@ struct exporter_state {
   /// Stores a handle to the INDEX for querying results.
   index_actor index = {};
 
-  /// Stores a transformation_engine for transforming the results.
-  transformation_engine transformer = {};
+  /// Stores a pipeline_executor for transforming the results.
+  pipeline_executor pipeline = {};
 
   /// Stores a handle to the SINK that processes results.
   caf::actor sink = {};
@@ -82,9 +82,9 @@ struct exporter_state {
 /// @param self The actor handle of the exporter.
 /// @param expr The AST of the query.
 /// @param options The query options.
-/// @param transforms The applied transforms.
+/// @param pipelines The applied pipelines.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<transform>&& transforms);
+         query_options options, std::vector<pipeline>&& pipelines);
 
 } // namespace vast::system

@@ -17,22 +17,22 @@
 
 namespace vast {
 
-struct transform_batch {
-  transform_batch(type layout, std::shared_ptr<arrow::RecordBatch> batch)
+struct pipeline_batch {
+  pipeline_batch(type layout, std::shared_ptr<arrow::RecordBatch> batch)
     : layout(std::move(layout)), batch(std::move(batch)) {
   }
   vast::type layout;
   std::shared_ptr<arrow::RecordBatch> batch;
 };
 
-/// An individual transform step. This is mainly used in the plugin API,
+/// An individual pipeline operator. This is mainly used in the plugin API,
 /// later code deals with a complete `transform`.
-class transform_step {
+class pipeline_operator {
 public:
-  virtual ~transform_step() = default;
+  virtual ~pipeline_operator() = default;
 
-  /// Returns true for aggregate transform steps.
-  /// @note Transform steps are not aggregate by default.
+  /// Returns true for aggregate pipeline operators.
+  /// @note pipeline operators are not aggregate by default.
   [[nodiscard]] virtual bool is_aggregate() const {
     return false;
   }
@@ -46,11 +46,10 @@ public:
   /// Retrieves the result of the transformation, resets the internal state.
   /// TODO: add another function abort() to free up internal resources.
   /// NOTE: If there is nothing to transform return an empty vector.
-  [[nodiscard]] virtual caf::expected<std::vector<transform_batch>> finish()
-    = 0;
+  [[nodiscard]] virtual caf::expected<std::vector<pipeline_batch>> finish() = 0;
 };
 
-caf::expected<std::unique_ptr<transform_step>>
-make_transform_step(const std::string& name, const vast::record& options);
+caf::expected<std::unique_ptr<pipeline_operator>>
+make_pipeline_operator(const std::string& name, const vast::record& options);
 
 } // namespace vast

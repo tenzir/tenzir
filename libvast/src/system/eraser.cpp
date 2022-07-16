@@ -16,7 +16,7 @@
 #include "vast/query_context.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/make_transforms.hpp"
+#include "vast/system/make_pipelines.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -70,15 +70,16 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
         return caf::make_error(
           ec::invalid_query,
           fmt::format("{} failed to normalize and validate {}", *self, query));
-      const auto* where_plugin = plugins::find<transform_plugin>("where");
+      const auto* where_plugin
+        = plugins::find<pipeline_operator_plugin>("where");
       VAST_ASSERT(where_plugin);
-      auto where_step = where_plugin->make_transform_step(
+      auto where_operator = where_plugin->make_pipeline_operator(
         {{"expression", fmt::to_string(expression{negation{*expr}})}});
-      if (!where_step)
-        return where_step.error();
-      auto transform = std::make_shared<vast::transform>(
+      if (!where_operator)
+        return where_operator.error();
+      auto transform = std::make_shared<vast::pipeline>(
         "eraser_transform", std::vector<std::string>{});
-      transform->add_step(std::move(*where_step));
+      transform->add_operator(std::move(*where_operator));
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(

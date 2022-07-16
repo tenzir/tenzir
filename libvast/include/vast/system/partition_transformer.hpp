@@ -74,7 +74,7 @@ struct partition_transformer_state {
   filesystem_actor fs = {};
 
   /// The transform to be applied to the data.
-  transform_ptr transform = {};
+  pipeline_ptr transform = {};
 
   using stage_type
     = caf::stream_stage<table_slice,
@@ -161,7 +161,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   const caf::settings& index_opts, accountant_actor accountant,
   idspace_distributor_actor idspace_distributor,
   type_registry_actor type_registry, filesystem_actor fs,
-  transform_ptr transform, std::string partition_path_template,
+  pipeline_ptr transform, std::string partition_path_template,
   std::string synopsis_path_template);
 
 } // namespace vast::system

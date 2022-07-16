@@ -1337,14 +1337,14 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::importer, idspace_distributor_actor idspace_distributor) {
       self->state.importer = std::move(idspace_distributor);
     },
-    [self](atom::apply, transform_ptr transform,
+    [self](atom::apply, pipeline_ptr pipeline,
            std::vector<vast::uuid> old_partition_ids,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
       const auto current_sender = self->current_sender();
       if (old_partition_ids.empty())
         return caf::make_error(ec::invalid_argument, "no partitions given");
-      VAST_DEBUG("{} applies a transform to partitions {}", *self,
+      VAST_DEBUG("{} applies a pipeline to partitions {}", *self,
                  old_partition_ids);
       if (!self->state.store_actor_plugin)
         return caf::make_error(ec::invalid_configuration,
@@ -1354,8 +1354,8 @@ index(index_actor::stateful_pointer<index_state> self,
         if (self->state.persisted_partitions.contains(old_partition_id)) {
           return false;
         }
-        VAST_WARN("{} skips unknown partition {} for transform {}", *self,
-                  old_partition_id, transform->name());
+        VAST_WARN("{} skips unknown partition {} for pipeline {}", *self,
+                  old_partition_id, pipeline->name());
         return true;
       });
       {
@@ -1373,7 +1373,7 @@ index(index_actor::stateful_pointer<index_state> self,
             // synchronize.
             VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
                       "because it is currently being transformed",
-                      *self, transform->name(), partition);
+                      *self, pipeline->name(), partition);
           }
         }
         old_partition_ids = std::move(corrected_old_partition_ids);
@@ -1388,7 +1388,7 @@ index(index_actor::stateful_pointer<index_state> self,
         system::partition_transformer, store_id, self->state.synopsis_opts,
         self->state.index_opts, self->state.accountant,
         static_cast<idspace_distributor_actor>(self->state.importer),
-        self->state.type_registry, self->state.filesystem, transform,
+        self->state.type_registry, self->state.filesystem, pipeline,
         std::move(partition_path_template),
         std::move(partition_synopsis_path_template));
       // match_everything == '"" in #type'
@@ -1399,8 +1399,8 @@ index(index_actor::stateful_pointer<index_state> self,
         = query_context::make_extract(partition_transfomer, match_everything);
       query_context.id = self->state.pending_queries.create_query_id();
       query_context.priority = 100;
-      VAST_DEBUG("{} emplaces {} for transform {}", *self, query_context,
-                 transform->name());
+      VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
+                 pipeline->name());
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
       auto err = self->state.pending_queries.insert(
         query_state{.query_context = query_context,
@@ -1503,14 +1503,14 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     [self](atom::rebuild, std::vector<vast::uuid> old_partition_ids)
       -> caf::result<std::vector<partition_info>> {
-      auto transform = std::make_shared<vast::transform>(
+      auto pipeline = std::make_shared<vast::pipeline>(
         "rebuild", std::vector<std::string>{});
-      auto identity_step = make_transform_step("identity", {});
-      if (!identity_step)
-        return identity_step.error();
-      transform->add_step(std::move(*identity_step));
+      auto identity_operator = make_pipeline_operator("identity", {});
+      if (!identity_operator)
+        return identity_operator.error();
+      pipeline->add_operator(std::move(*identity_operator));
       return self->delegate(static_cast<index_actor>(self), atom::apply_v,
-                            std::move(transform), std::move(old_partition_ids),
+                            std::move(pipeline), std::move(old_partition_ids),
                             keep_original_partition::no);
     },
     [self](atom::flush) -> caf::result<void> {

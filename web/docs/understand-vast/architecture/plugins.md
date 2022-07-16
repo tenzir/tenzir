@@ -72,17 +72,17 @@ For example, you could write a SQL plugin that takes an expression like
 `SELECT * FROM zeek.conn WHERE id.orig_h = "1.2.3.4"` and executes it on
 historical data or runs it as live query.
 
-### Transform
+### Pipeline
 
-The transform plugin adds a new [transform
-step](/docs/understand-vast/query-language/operators) that users can reference in
-a [transform definition](/docs/understand-vast/query-language/pipelines).
+The pipeline operator plugin adds a new [pipeline
+operator](/docs/understand-vast/query-language/operators) that users can reference in
+a [pipeline definition](/docs/understand-vast/query-language/pipelines).
 
 ### Aggregation Function
 
 The aggregation function plugin adds a new [aggregation
 function](/docs/understand-vast/query-language/operators/summarize#aggregate-functions)
-for the `summarize` transform step that performs an incremental aggregation over
+for the `summarize` pipeline operator that performs an incremental aggregation over
 a set of grouped input values of a single type.
 
 ### Store

@@ -202,7 +202,7 @@ static auto make_expression_parser() {
   using namespace parser_literals;
   using chain = std::vector<std::tuple<bool_operator, expression>>;
   using raw_expr = std::tuple<expression, chain>;
-  // Converts a "raw" chain of sub-expressions and transforms it into an
+  // Converts a "raw" chain of sub-expressions and pipelines it into an
   // expression tree.
   auto to_expr = [](raw_expr expr) -> expression {
     auto& [x, xs] = expr;

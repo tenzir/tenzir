@@ -230,15 +230,15 @@ public:
 
 // -- transform plugin ---------------------------------------------------------
 
-/// A base class for plugins that add new transform steps.
-class transform_plugin : public virtual plugin {
+/// A base class for plugins that add new pipeline operators.
+class pipeline_operator_plugin : public virtual plugin {
 public:
-  /// Creates a new transform step that maps input to output table
+  /// Creates a new pipeline operator that maps input to output table
   /// slices. This will be called when constructing plugins from the
   /// VAST configuration.
-  /// @param options The settings configured for this step.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const vast::record& options) const = 0;
+  /// @param options The settings configured for this operator.
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<pipeline_operator>>
+  make_pipeline_operator(const vast::record& options) const = 0;
 };
 
 // -- aggregation function plugin ---------------------------------------------
