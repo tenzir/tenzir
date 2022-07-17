@@ -25,8 +25,8 @@ $(IPYNB) $(MD): $(VENV)
 $(VENV):
 	@python3 -m venv $(VENV)
 	@[ -n "$$FISH_VERSION" ] && \
-    source $(VENV)/bin/activate.fish || \
-    source $(VENV)/bin/activate && \
+    . $(VENV)/bin/activate.fish || \
+    . $(VENV)/bin/activate && \
 		cd $(VENV) && \
 		pip install jupytext ipykernel bash_kernel && \
 		python -m bash_kernel.install && \
@@ -38,16 +38,16 @@ $(BUILD)/ipynb/%.ipynb: %.md
 	@echo "==> $@"
 	@mkdir -p $(BUILD)/ipynb
 	@[ -n "$$FISH_VERSION" ] && \
-    source $(VENV)/bin/activate.fish || \
-    source $(VENV)/bin/activate && \
+    . $(VENV)/bin/activate.fish || \
+    . $(VENV)/bin/activate && \
     jupytext --to notebook --execute -o $@ $<
 
 $(BUILD)/md/%.md: $(BUILD)/ipynb/%.ipynb
 	@echo "==> $@"
 	@mkdir -p $(BUILD)/md
 	@[ -n "$$FISH_VERSION" ] && \
-    source $(VENV)/bin/activate.fish || \
-    source $(VENV)/bin/activate && \
+    . $(VENV)/bin/activate.fish || \
+    . $(VENV)/bin/activate && \
 	  jupyter nbconvert --to markdown --output-dir $(BUILD)/md $<
 
 clean:
