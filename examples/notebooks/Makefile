@@ -14,7 +14,7 @@ NOTEBOOKS = $(wildcard *.md)
 MD = $(addprefix $(BUILD)/md/, $(NOTEBOOKS))
 IPYNB = $(addprefix $(BUILD)/ipynb/, $(NOTEBOOKS:.md=.ipynb))
 
-all: md ipynb
+all: md
 
 md: $(MD)
 

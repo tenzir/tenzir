@@ -52,5 +52,6 @@ cd web
 make notebooks
 ```
 
-This triggers the notebook execution as described in the previous section. You
-can now [build the website](documentation) with updated notebooks as usual.
+This triggers the notebook execution as described in the previous section
+and copies the output markdown files over to the website directory. You can now
+[build the website](documentation) with updated notebooks as usual.
