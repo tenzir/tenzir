@@ -361,29 +361,28 @@ caf::error index_state::load_from_disk() {
   // lot simpler to implement, so we go with that.
   detail::spawn_container_source(
     self->system(),
-    [](std::vector<uuid> xs,
-       std::filesystem::path dir) -> detail::generator<table_slice> {
+    [self](std::vector<uuid> xs,
+           std::filesystem::path dir) -> detail::generator<table_slice> {
       for (const auto& id : xs) {
-        VAST_INFO("index recovers {}", id);
+        VAST_INFO("{} recovers corrupted partition {}", *self, id);
         auto store_path = dir / ".." / store_path_for_partition(id);
         auto part_path = dir / to_string(id);
         auto chk = chunk::mmap(store_path);
         if (!chk) {
-          VAST_WARN("index failed to recover data from {}: {}\n"
+          VAST_WARN("{} failed to recover data from {}: {}\n"
                     "You can try to manually recover the data with\n"
                     "$ lsvast {} | vast import json",
-                    store_path, store_path, chk.error());
+                    *self, store_path, store_path, chk.error());
           continue;
         }
         auto seg = segment::make(std::move(*chk));
         std::error_code err{};
         if (!std::filesystem::remove(store_path, err))
-          VAST_WARN("index failed to remove store file {} after recovery: {}",
-                    store_path, err);
+          VAST_WARN("{} failed to remove store file {} after recovery: {}",
+                    *self, store_path, err);
         if (!std::filesystem::remove(part_path, err))
-          VAST_WARN("index failed to remove partition file {} after recovery: "
-                    "{}",
-                    part_path, err);
+          VAST_WARN("{} failed to remove partition file {} after recovery: {}",
+                    *self, part_path, err);
         for (auto slice : *seg)
           co_yield slice;
       }
