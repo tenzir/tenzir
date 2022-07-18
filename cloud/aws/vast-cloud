@@ -30,7 +30,8 @@ build () {
     --build-arg CALLER_UID \
     --build-arg CALLER_GID \
     --build-arg DOCKER_GID \
-    .
+    . \
+  || exit $? # call exit to fail CLI if build fails
 }
 
 # if image exists and VASTCLOUD_REBUILD not set, don't rebuild
@@ -43,6 +44,7 @@ docker run -i $([[ -z $VASTCLOUD_NOTTY ]] && echo "-t") \
     --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
     --mount type=bind,source=$HOST_DIRNAME/../..,target=/vast \
     $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "--mount type=bind,source=$HOST_CREDENTIALS_FILE,target=/.aws/credentials,readonly") \
+    --mount source=vastcloud-cli-persistant-configs,target=/etc/persistant-configs \
     -e AWS_PROFILE \
     -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
     -e AWS_ACCESS_KEY_ID \
@@ -50,4 +52,5 @@ docker run -i $([[ -z $VASTCLOUD_NOTTY ]] && echo "-t") \
     --env-file <(env | grep VAST_) \
     --env-file <(env | grep TF_) \
     --env-file <(env | grep HOST_) \
+    --rm \
     tenzir/vast-cloud-cli "$@"

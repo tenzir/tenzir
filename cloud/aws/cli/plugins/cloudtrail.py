@@ -1,11 +1,12 @@
 from invoke import task
 import dynaconf
 import core
-from common import COMMON_VALIDATORS, auto_app_fmt, conf, TFDIR
+from common import COMMON_VALIDATORS, auto_app_fmt, conf, TFDIR, AWS_REGION_VALIDATOR
 
 
 VALIDATORS = [
     *COMMON_VALIDATORS,
+    AWS_REGION_VALIDATOR,
     dynaconf.Validator("VAST_CLOUDTRAIL_BUCKET_NAME", must_exist=True, ne=""),
     dynaconf.Validator("VAST_CLOUDTRAIL_BUCKET_REGION", must_exist=True, ne=""),
 ]

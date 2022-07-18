@@ -10,7 +10,7 @@ from common import (
     COMMON_VALIDATORS,
     conf,
     TFDIR,
-    AWS_REGION,
+    AWS_REGION_VALIDATOR,
     auto_app_fmt,
     REPOROOT,
     DOCKERDIR,
@@ -19,8 +19,10 @@ from common import (
 
 VALIDATORS = [
     *COMMON_VALIDATORS,
+    AWS_REGION_VALIDATOR,
     dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
+    dynaconf.Validator("VAST_IMAGE", default="tenzir/vast"),
     dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
     dynaconf.Validator(
         "VAST_SERVER_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]
@@ -28,12 +30,16 @@ VALIDATORS = [
 ]
 
 CMD_HELP = {
-    "cmd": "A bash command to be executed. We recommand wrapping it with single quotes to avoid unexpected interpolations."
+    "cmd": "A bash command to be executed. We recommend wrapping it with single quotes to avoid unexpected interpolations."
 }
 
 
 ##  Aliases
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
+
+
+def AWS_REGION():
+    return conf(AWS_REGION_VALIDATOR)["VAST_AWS_REGION"]
 
 
 ## Helper functions
@@ -42,7 +48,7 @@ EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
 def aws(service):
     # timeout set to 1000 to be larger than lambda max duration
     config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
-    return boto3.client(service, region_name=AWS_REGION, config=config)
+    return boto3.client(service, region_name=AWS_REGION(), config=config)
 
 
 def terraform_output(c: Context, step, key) -> str:
@@ -153,13 +159,19 @@ def deploy_image(c, type):
     except:
         old_digest = "current-image-not-found"
     # build the image and get the new digest
+    base_image = env(c)["VAST_IMAGE"]
     image_tag = int(time.time())
     version = VAST_VERSION(c)
-    if version == "latest":
-        c.run(f"docker build -t tenzir/vast:{image_tag} {REPOROOT}")
+    if version == "build":
+        c.run(f"docker build -t {base_image}:{image_tag} {REPOROOT}")
         version = image_tag
     c.run(
-        f"docker build --build-arg VAST_VERSION={version} -f {DOCKERDIR}/{type}.Dockerfile -t {image_url}:{image_tag} {DOCKERDIR}"
+        f"""docker build \
+            --build-arg VAST_VERSION={version} \
+            --build-arg BASE_IMAGE={base_image} \
+            -f {DOCKERDIR}/{type}.Dockerfile \
+            -t {image_url}:{image_tag} \
+            {DOCKERDIR}"""
     )
     new_digest = c.run(
         f"docker inspect --format='{{{{.RepoDigests}}}}' {image_url}:{image_tag}",
@@ -289,7 +301,7 @@ def execute_command(c, cmd="/bin/bash"):
 		--task {task_id} \
 		--interactive \
 		--command "{cmd}" \
-        --region {AWS_REGION} """,
+        --region {AWS_REGION()} """,
         pty=True,
     )
 

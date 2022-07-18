@@ -1,9 +1,12 @@
 from invoke import task, Context
 import time
 import json
-from common import COMMON_VALIDATORS
+from common import COMMON_VALIDATORS, AWS_REGION_VALIDATOR
 
-VALIDATORS = COMMON_VALIDATORS
+VALIDATORS = [
+    *COMMON_VALIDATORS,
+    AWS_REGION_VALIDATOR,
+]
 
 INVOKE_CONFIG = {"run": {"env": {"VASTCLOUD_NOTTY": "1"}}}
 
