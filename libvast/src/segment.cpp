@@ -35,13 +35,14 @@ namespace vast {
 using namespace binary_byte_literals;
 
 segment::iterator::iterator(flat_slice_iterator nested,
-                            interval_iterator intervals, chunk_ptr chunk)
-  : nested_{nested}, intervals_{intervals}, chunk_{std::move(chunk)} {
+                            interval_iterator intervals, const segment* parent)
+  : nested_{nested}, intervals_{intervals}, parent_{parent} {
   // nop
 }
 
 [[nodiscard]] table_slice segment::iterator::dereference() const {
-  auto slice = table_slice{**nested_, chunk_, table_slice::verify::yes};
+  auto slice
+    = table_slice{**nested_, parent_->chunk(), table_slice::verify::yes};
   slice.offset((*intervals_)->begin());
   VAST_ASSERT(slice.offset() + slice.rows() == (*intervals_)->end());
   return slice;
@@ -105,7 +106,7 @@ size_t segment::num_slices() const {
 
 segment::iterator segment::begin() const {
   auto v0 = flatbuffer_->segment_as_v0();
-  return segment::iterator{v0->slices()->begin(), v0->ids()->begin(), chunk()};
+  return segment::iterator{v0->slices()->begin(), v0->ids()->begin(), this};
 }
 
 segment::iterator segment::end() const {

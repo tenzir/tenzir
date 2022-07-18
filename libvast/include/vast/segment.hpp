@@ -45,7 +45,7 @@ public:
 
   public:
     iterator(flat_slice_iterator nested, interval_iterator intervals,
-             chunk_ptr chunk);
+             const segment* parent);
 
     [[nodiscard]] table_slice dereference() const;
 
@@ -63,7 +63,7 @@ public:
   private:
     flat_slice_iterator nested_;
     interval_iterator intervals_;
-    chunk_ptr chunk_;
+    const segment* parent_;
   };
 
   /// Constructs a segment.
