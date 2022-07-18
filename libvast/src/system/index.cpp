@@ -361,7 +361,7 @@ caf::error index_state::load_from_disk() {
   // lot simpler to implement, so we go with that.
   detail::spawn_container_source(
     self->system(),
-    [self](std::vector<uuid> xs,
+    [self = this->self](std::vector<uuid> xs,
            std::filesystem::path dir) -> detail::generator<table_slice> {
       for (const auto& id : xs) {
         VAST_INFO("{} recovers corrupted partition {}", *self, id);
@@ -376,6 +376,11 @@ caf::error index_state::load_from_disk() {
           continue;
         }
         auto seg = segment::make(std::move(*chk));
+        if (!seg) {
+          VAST_WARN("{} failed to construct a segment from  {}: {}", *self,
+                    store_path, seg.error());
+          continue;
+        }
         std::error_code err{};
         if (!std::filesystem::remove(store_path, err))
           VAST_WARN("{} failed to remove store file {} after recovery: {}",
@@ -1321,10 +1326,14 @@ index(index_actor::stateful_pointer<index_state> self,
                         },
                         [self, partition_id,
                          store_path](const caf::error& err) {
-                          VAST_DEBUG("{} failed to erase store {} at {}, "
-                                     "possibly because the data is in the "
-                                     "global archive: {}",
-                                     *self, partition_id, store_path, err);
+                          if (err == ec::no_such_file)
+                            VAST_DEBUG("{} failed to erase store {} at {}, "
+                                       "possibly because the data is in the "
+                                       "global archive: {}",
+                                       *self, partition_id, store_path, err);
+                          else
+                            VAST_WARN("{} failed to erase store {} at {}: {}",
+                                      *self, partition_id, store_path, err);
                         });
                   } else {
                     const auto* partition = fbs::GetPartition(chunk->data());
