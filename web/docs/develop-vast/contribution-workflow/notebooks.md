@@ -14,6 +14,24 @@ changes, it suffices to invoke `make` in the directory
 
 [notebooks]: https://github.com/tenzir/vast/tree/master/examples/notebooks
 
+### Add a notebook
+
+To add a new notebook, follow these steps:
+
+1. Place the notebook in the directory [`examples/notebooks`][notebooks].
+2. Add potential dependencies that the notebook requires to the Makefile in the
+   same directory.
+3. Convert the notebook to Markdown via `jupytext --to markdown notebook.ipynb`.
+4. Run the notebook as mentioned in the next section.
+
+:::info Markdown Notebooks
+All notebooks in our repository are in [Jupytext Markdown][jupytext-markdown]
+format. This format is a subset of the Docusaurus Markdown of this
+documentation, which makes for a harmonious experience of writing docs and user
+guides.
+[jupytext-markdown]: https://jupytext.readthedocs.io/en/latest/formats.html#jupytext-markdown
+:::
+
 ### Run the notebooks
 
 Our notebook stack consists of Jupyter, [jupytext][jupytext], and
@@ -37,9 +55,9 @@ Thereafter, you can convert the notebook with outputs into Markdown:
 make md
 ```
 
-Just running `make` performs both steps in order.
+Just running `make` executes both steps in order.
 
-## Embedding notebooks
+## Embed the notebooks in the website
 
 To integrate notebooks including outputs into the website, we leverage the
 Markdown conversion from above.
