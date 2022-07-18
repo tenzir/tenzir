@@ -1,51 +1,56 @@
 # Notebooks
 
 We use [Jupyter notebooks](https://jupyter.org/) as vehicle for self-contained
-guides of using VAST. These notebooks (will) run in CI and produce outputs as
-side effect, which we capture and include in the documentation under the section
+guides that illustrate how to use VAST. These notebooks (will) run in CI and
+produce outputs as side effect, which we capture and include in the
+documentation under the section
 [Try VAST](/docs/try-vast).
 
 :::tip TL;DR
 If you just want to make sure the notebooks still work after having made any
-changes, it suffices to invoke `make` in the `web` directory.
+changes, it suffices to invoke `make` in the directory
+[`examples/notebooks`][notebooks].
 :::
 
-### Setup local environment
+[notebooks]: https://github.com/tenzir/vast/tree/master/examples/notebooks
 
-We use a Python virtual env that contains the tooling needed to run the
-notebooks and convert them. This happens in the context of building the site,
-which is why the scaffolding is in the `web` directory. We use Make to automate
-the process:
+### Run the notebooks
+
+Our notebook stack consists of Jupyter, [jupytext][jupytext], and
+[nbconvert][nbconvert] to run notebooks and convert their outputs.
+
+[jupytext]: https://github.com/mwouts/jupytext
+[nbconvert]: https://nbconvert.readthedocs.io/en/latest/
+
+The Makefile in [`examples/notebooks`][notebooks] sets up Python virtual
+environment with all needed dependencies. To run the notebooks and capture their
+output, use the `ipynb` target:
 
 ```bash
-cd web
-# Setup the Python virtual env.
-make env
+cd examples/notebooks
+make ipynb
 ```
 
-Thereafter, you can use other Make targets to work with the notebooks.
+Thereafter, you can convert the notebook with outputs into Markdown:
 
-## Running notebooks
+```bash
+make md
+```
 
-All notebooks that show up on the site serve as independent examples, and are
-therefore located in the directory [examples/notebooks][examples] in the
-top-level of the repository.
-
-[examples]: https://github.com/tenzir/vast/tree/master/examples/notebooks
-
-The notebooks do not come with outputs, i.e., they just contain the commands to
-run. This is by design so that CI must first successfully execute the notebook
-prior to green-lighting a change.
-
-:::caution TODO
-Notebook execution is not yet implemented.
-:::
+Just running `make` performs both steps in order.
 
 ## Embedding notebooks
 
-We use [nbconvert](https://nbconvert.readthedocs.io/en/latest/) to convert the
-native Jupyter notebook into Markdown, which Docusaurus then integrates
-seamlessly into the site.
+To integrate notebooks including outputs into the website, we leverage the
+Markdown conversion from above.
 
-This happens automatically when you run `yarn start` to [build the
-website](documentation).
+To recreate the outputs from a notebook run with Markdown, go to the `web`
+directory and execute the `notebooks` target:
+
+```bash
+cd web
+make notebooks
+```
+
+This triggers the notebook execution as described in the previous section. You
+can now [build the website](documentation) with updated notebooks as usual.

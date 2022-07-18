@@ -14,7 +14,7 @@ NOTEBOOKS = $(wildcard *.md)
 MD = $(addprefix $(BUILD)/md/, $(NOTEBOOKS))
 IPYNB = $(addprefix $(BUILD)/ipynb/, $(NOTEBOOKS:.md=.ipynb))
 
-all: markdown ipynb
+all: md ipynb
 
 md: $(MD)
 
@@ -28,11 +28,8 @@ $(VENV):
     . $(VENV)/bin/activate.fish || \
     . $(VENV)/bin/activate && \
 		cd $(VENV) && \
-		pip install jupytext ipykernel bash_kernel && \
-		python -m bash_kernel.install && \
-		git clone https://github.com/jupyter/nbconvert.git && \
-		cd nbconvert && \
-		pip install -e .
+		pip install nbconvert jupytext ipykernel bash_kernel && \
+		python -m bash_kernel.install
 
 $(BUILD)/ipynb/%.ipynb: %.md
 	@echo "==> $@"
