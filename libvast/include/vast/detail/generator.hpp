@@ -214,8 +214,13 @@ public:
     }
   }
 
-  generator& operator=(generator other) noexcept {
-    swap(other);
+  generator& operator=(const generator& other) = delete;
+
+  generator& operator=(generator&& other) noexcept {
+    if (m_coroutine)
+      m_coroutine.destroy();
+    m_coroutine = other.m_coroutine;
+    other.m_coroutine = nullptr;
     return *this;
   }
 
