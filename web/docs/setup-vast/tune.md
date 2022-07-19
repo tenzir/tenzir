@@ -160,7 +160,6 @@ and consists of the following components:
 
 VAST does not create field-level sketches unless a dedicated rule with a
 matching target configuration exists.
-
 #### Example
 
 ```yaml
@@ -183,6 +182,34 @@ includes a field extractor and the second a type extractor. The first rule
 applies to a single field, `suricata.http.http.url`, and has false-positive rate
 of 0.5%. The second rule creates one sketch for all fields of type `addr` that
 has a false-positive rate of 10%.
+
+### Skip dense index creation
+
+Dense indexes can improve export speed. However they will increase the database
+size. VAST provides an option to not create the indexes and save the disk space.
+
+Dense indexes can be disabled for specific fields or types in the configuration
+section `vast.index`
+
+- `targets` a list of types and fully qualified field names to which the index
+  creation rule should be applied.
+- `create-dense-index` Doesn't create dense indexes for given targets if set to
+  false. By default the value is set to true.
+#### Example
+
+```yaml
+vast:
+  index:
+    rules:
+        # don't create dense indexes for suricata.http.http.url fields
+      - targets:
+          - suricata.http.http.url
+        create-dense-index: false
+        # don't create dense indexes for addr type columns
+      - targets:
+          - :addr
+        create-dense-index: false
+```
 
 ## Shutdown
 
