@@ -365,8 +365,8 @@ caf::error index_state::load_from_disk() {
   // lot simpler to implement, so we go with that.
   detail::spawn_container_source(
     self->system(),
-    [self = this->self](std::vector<uuid> xs,
-           std::filesystem::path dir) -> detail::generator<table_slice> {
+    [self = this->self](std::vector<uuid> xs, std::filesystem::path dir)
+      -> detail::generator<table_slice> {
       for (const auto& id : xs) {
         VAST_INFO("{} recovers corrupted partition {}", *self, id);
         auto store_path = dir / ".." / store_path_for_partition(id);
