@@ -769,7 +769,7 @@ std::optional<table_slice> filter(const table_slice& slice, const ids& hints) {
 uint64_t count_matching(const table_slice& slice, const expression& expr,
                         const ids& hints) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  const auto offset = slice.offset();
+  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   auto slice_ids = make_ids({{offset, offset + slice.rows()}});
   auto selection = slice_ids;
   if (!hints.empty())
