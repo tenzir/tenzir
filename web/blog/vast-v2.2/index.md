@@ -23,7 +23,7 @@ After carefully reconsidering our naming decisions related to query execution
 and data transformation, we came up with a naming convention that does a better
 job in capturing the underlying concepts.
 
-Most notably, we renamed *transforms* to *pipelines*. A transform *step* is no a
+Most notably, we renamed *transforms* to *pipelines*. A transform *step* is now a
 pipeline *operator*. This nomenclature is much more familiar to users coming
 from dataflow and collection-based query engines. The implementation underneath
 hasn't changed. As in the [Volcano model][volcano], data still flows through
@@ -54,7 +54,7 @@ vast:
            expression: ':string !in ["tenzir", "secret-username"]'
 
   # Specify whether to trigger each pipeline at server- or client-side, on
-  # import or export, and restrict them to a list of event types.
+  # `import` or `export`, and restrict them to a list of event types.
   pipeline-triggers:
     export:
       # Apply the remove-events-with-secrets transformation server-side on
