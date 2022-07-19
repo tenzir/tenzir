@@ -292,6 +292,10 @@ caf::error index_state::load_from_disk() {
         auto store_path = dir / ".." / store_path_for_partition(partition_uuid);
         if (std::filesystem::exists(store_path, err))
           oversized_partitions.push_back(partition_uuid);
+        else
+          VAST_WARN("{} didn't not find a store file for the oversized "
+                    "partition {} and won't attempt to recover the data",
+                    *self, partition_uuid);
       } else
         partitions.push_back(partition_uuid);
     } else if (ext == std::filesystem::path{".mdx"})
@@ -1298,8 +1302,7 @@ index(index_actor::stateful_pointer<index_state> self,
                               path, chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
                     // !!! Fallback path. We try to erase the corresponding
                     // segment store file if it exists.
-                    // TODO: Also attempt to erase parquet stores once that
-                    // implementation is merged.
+                    // TODO: Also attempt to erase parquet / feather stores.
                     auto store_path = store_path_for_partition(partition_id);
                     self
                       ->request<caf::message_priority::high>(
