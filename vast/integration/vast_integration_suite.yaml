@@ -592,3 +592,15 @@ tests:
         expected_result: ignore
       - command: export --timeout=800ms json
         expected_result: ignore
+
+  Self Repair:
+    tags: [fault]
+    steps:
+      - command: -N import zeek
+        input: data/zeek/conn.log.gz
+        transformation: "@./misc/scripts/break-sizelimit.sh"
+      # We use an extra import step to trigger the repair because querying
+      # directly would not wait for the repair step.
+      - command: -N import suricata
+        input: data/suricata/eve.json
+      - command: -N count "zeek.conn.id.orig_h == 192.168.1.104"
