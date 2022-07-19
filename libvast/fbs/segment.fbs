@@ -17,6 +17,12 @@ table v0 {
 
   /// The number of events in the store.
   events: ulong;
+
+  /// How many additional slices are belonging
+  /// to this segment that are not stored inline in `slices`.
+  /// If this is >0, implies that this segment must
+  /// be embedded into a flatbuffer container.
+  overflow_slices: ulong;
 }
 
 union Segment {

@@ -34,56 +34,68 @@ namespace vast {
 
 using namespace binary_byte_literals;
 
-segment::iterator::iterator(flat_slice_iterator nested,
-                            interval_iterator intervals, const segment* parent)
-  : nested_{nested}, intervals_{intervals}, parent_{parent} {
+segment::iterator::iterator(size_t slice_idx, interval_iterator intervals,
+                            const segment* parent)
+  : slice_idx_{slice_idx}, intervals_{intervals}, parent_{parent} {
   // nop
 }
 
 [[nodiscard]] table_slice segment::iterator::dereference() const {
-  auto slice
-    = table_slice{**nested_, parent_->chunk(), table_slice::verify::yes};
+  auto slice = table_slice{*parent_->get_slice_ptr_(slice_idx_),
+                           parent_->chunk(), table_slice::verify::yes};
   slice.offset((*intervals_)->begin());
   VAST_ASSERT(slice.offset() + slice.rows() == (*intervals_)->end());
   return slice;
 }
 
 void segment::iterator::increment() {
-  ++nested_;
+  ++slice_idx_;
   ++intervals_;
 }
 
 void segment::iterator::decrement() {
-  --nested_;
+  --slice_idx_;
   --intervals_;
 }
 
 void segment::iterator::advance(size_t n) {
-  nested_ += n;
+  slice_idx_ += n;
   intervals_ += n;
 }
 
 [[nodiscard]] bool segment::iterator::equals(segment::iterator other) const {
-  return nested_ == other.nested_;
+  return intervals_ == other.intervals_;
 }
 
 [[nodiscard]] segment::iterator::difference_type
 segment::iterator::distance_to(segment::iterator other) const {
-  return other.nested_ - nested_;
+  return other.intervals_ - intervals_;
 }
 
 caf::expected<segment> segment::make(chunk_ptr&& chunk) {
-  auto s = flatbuffer<fbs::Segment>::make(std::move(chunk));
-  if (!s)
-    return s.error();
-  if ((*s)->segment_type() != fbs::segment::Segment::v0)
-    return caf::make_error(ec::format_error, "unsupported segment version");
-  return segment{std::move(*s)};
+  auto const* id = flatbuffers::GetBufferIdentifier(chunk->data());
+  if (::strcmp(id, fbs::SegmentIdentifier()) == 0) {
+    auto s = flatbuffer<fbs::Segment>::make(std::move(chunk));
+    if (!s)
+      return s.error();
+    if ((*s)->segment_type() != fbs::segment::Segment::v0)
+      return caf::make_error(ec::format_error, "unsupported segment version");
+    return segment{std::move(*s)};
+  } else if (::strcmp(id, fbs::SegmentedFileHeaderIdentifier()) == 0) {
+    auto container = fbs::flatbuffer_container{std::move(chunk)};
+    if (!container)
+      return caf::make_error(ec::format_error, "unable to create container "
+                                               "from chunk");
+    return segment{std::move(container)};
+  } else {
+    return caf::make_error(ec::format_error,
+                           fmt::format("unknown segment identifier {}", id));
+  }
 }
 
 uuid segment::id() const {
-  auto segment_v0 = flatbuffer_->segment_as_v0();
-  uuid result;
+  auto const* segment_v0 = flatbuffer_->segment_as_v0();
+  auto result = vast::uuid{};
   if (auto error = unpack(*segment_v0->uuid(), result))
     VAST_ERROR("couldnt get uuid from segment: {}", error);
   return result;
@@ -100,18 +112,18 @@ vast::ids segment::ids() const {
 }
 
 size_t segment::num_slices() const {
-  auto segment_v0 = flatbuffer_->segment_as_v0();
-  return segment_v0->slices()->size();
+  auto const* segment_v0 = flatbuffer_->segment_as_v0();
+  return segment_v0->slices()->size() + segment_v0->overflow_slices();
 }
 
 segment::iterator segment::begin() const {
-  auto v0 = flatbuffer_->segment_as_v0();
-  return segment::iterator{v0->slices()->begin(), v0->ids()->begin(), this};
+  auto const* v0 = flatbuffer_->segment_as_v0();
+  return segment::iterator{0, v0->ids()->begin(), this};
 }
 
 segment::iterator segment::end() const {
-  auto v0 = flatbuffer_->segment_as_v0();
-  return segment::iterator{v0->slices()->end(), v0->ids()->end(), nullptr};
+  auto const* v0 = flatbuffer_->segment_as_v0();
+  return segment::iterator{num_slices(), v0->ids()->end(), nullptr};
 }
 
 chunk_ptr segment::chunk() const {
@@ -121,7 +133,7 @@ chunk_ptr segment::chunk() const {
 caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice> result;
-  auto segment = flatbuffer_->segment_as_v0();
+  auto const* segment = flatbuffer_->segment_as_v0();
   if (!segment)
     return caf::make_error(ec::format_error, "invalid segment version");
   VAST_ASSERT(segment->ids()->size() == segment->slices()->size());
@@ -148,8 +160,7 @@ segment::lookup(const vast::ids& xs) const {
   // cannot work. We could improve this by adding a `select_with` overload that
   // iterates over multiple ranges in lockstep.
   auto intervals = std::vector(segment->ids()->begin(), segment->ids()->end());
-  auto flat_slices
-    = std::vector(segment->slices()->begin(), segment->slices()->end());
+  auto flat_slices = flat_slices_();
   auto zipped = detail::zip(intervals, flat_slices);
   if (auto error = select_with(xs, zipped.begin(), zipped.end(), f, g))
     return error;
@@ -160,9 +171,9 @@ caf::expected<std::vector<table_slice>>
 segment::erase(const vast::ids& xs) const {
   const auto* segment = flatbuffer_->segment_as_v0();
   auto intervals = std::vector(segment->ids()->begin(), segment->ids()->end());
-  auto flat_slices
-    = std::vector(segment->slices()->begin(), segment->slices()->end());
-  VAST_ASSERT(segment->ids()->size() == segment->slices()->size(),
+  auto flat_slices = flat_slices_();
+  VAST_ASSERT(segment->ids()->size()
+                == segment->slices()->size() + segment->overflow_slices(),
               "inconsistent number of ids and slices");
   // We have IDs we wish to delete in `xs`, but we need a bitmap of what to
   // keep for `select` in order to fill `new_slices` with the table slices
@@ -182,9 +193,44 @@ segment::erase(const vast::ids& xs) const {
   return result;
 }
 
+[[nodiscard]] const vast::fbs::FlatTableSlice*
+segment::get_slice_ptr_(size_t idx) const {
+  VAST_ASSERT_CHEAP(idx < num_slices());
+  const auto* segment = flatbuffer_->segment_as_v0();
+  if (idx < segment->slices()->size())
+    return segment->slices()->Get(idx);
+  else
+    return container_->get<fbs::FlatTableSlice>(1 + idx);
+}
+
+std::vector<const vast::fbs::FlatTableSlice*> segment::flat_slices_() const {
+  auto result = std::vector<const vast::fbs::FlatTableSlice*>{};
+  const auto* segment = flatbuffer_->segment_as_v0();
+  result.reserve(num_slices());
+  result.insert(result.end(), segment->slices()->begin(),
+                segment->slices()->end());
+  VAST_ASSERT_CHEAP(!container_
+                    || container_->size() == segment->overflow_slices() + 1);
+  for (size_t i = 0; i < segment->overflow_slices(); ++i)
+    // Chunk 0 is the segment itself, so we apply an offset of 1
+    result.push_back(container_->get<fbs::FlatTableSlice>(1 + i));
+  return result;
+}
+
 segment::segment(flatbuffer<fbs::Segment> flatbuffer)
   : flatbuffer_{std::move(flatbuffer)} {
   // nop
+}
+
+segment::segment(fbs::flatbuffer_container container)
+  : container_(std::move(container)) {
+  // For a segment stored in a flatbuffer container, the format is that
+  // the actual segment is contained in chunk 0 and all table slices
+  // that could not be fit into that segment are stored sequentially in
+  // chunks 1..n afterwards.
+  auto segment_chunk = container_->get_raw(0);
+  // FIXME: Error handling
+  flatbuffer_ = *flatbuffer<fbs::Segment>::make(std::move(segment_chunk));
 }
 
 caf::expected<segment>
