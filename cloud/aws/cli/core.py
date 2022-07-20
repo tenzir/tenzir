@@ -1,6 +1,4 @@
 from vast_invoke import pty_task, task, Context, Exit
-import boto3
-import botocore.client
 import dynaconf
 import time
 import base64
@@ -14,6 +12,8 @@ from common import (
     auto_app_fmt,
     REPOROOT,
     DOCKERDIR,
+    terraform_output,
+    aws,
 )
 
 
@@ -43,18 +43,6 @@ def AWS_REGION():
 
 
 ## Helper functions
-
-
-def aws(service):
-    # timeout set to 1000 to be larger than lambda max duration
-    config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
-    return boto3.client(service, region_name=AWS_REGION(), config=config)
-
-
-def terraform_output(c: Context, step, key) -> str:
-    return c.run(
-        f"terraform -chdir={TFDIR}/{step} output --raw {key}", hide="out"
-    ).stdout
 
 
 def VAST_VERSION(c: Context):
