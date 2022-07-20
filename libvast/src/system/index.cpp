@@ -471,9 +471,14 @@ bool i_partition_selector::operator()(const type& filter,
   return filter == slice.layout();
 }
 
-void index_state::create_active_partition(const type& schema) {
+caf::expected<std::unordered_map<type, active_partition_info>::iterator>
+index_state::create_active_partition(const type& schema) {
+  VAST_ASSERT(schema);
   auto id = uuid::random();
-  auto& active_partition = active_partitions[schema];
+  const auto [active_partition, inserted]
+    = active_partitions.emplace(schema, active_partition_info{});
+  VAST_ASSERT(inserted);
+  VAST_ASSERT(active_partition != active_partitions.end());
   // If we're using the global store, the importer already sends the table
   // slices. (In the long run, this should probably be streamlined so that all
   // data moves through the index. However, that requires some refactoring of
@@ -483,30 +488,27 @@ void index_state::create_active_partition(const type& schema) {
   store_name = store_actor_plugin->name();
   auto builder_and_header
     = store_actor_plugin->make_store_builder(accountant, filesystem, id);
-  if (!builder_and_header) {
-    VAST_ERROR("could not create new active partition: {}",
-               render(builder_and_header.error()));
-    self->quit(builder_and_header.error());
-    return;
-  }
+  if (!builder_and_header)
+    return builder_and_header.error();
   auto& [builder, header] = *builder_and_header;
   store_header = header;
-  active_partition.store = builder;
-  active_partition.store_slot
-    = stage->add_outbound_path(active_partition.store);
-  stage->out().set_filter(active_partition.store_slot, schema);
-  active_partition.spawn_time = std::chrono::steady_clock::now();
-  active_partition.actor
+  active_partition->second.store = builder;
+  active_partition->second.store_slot
+    = stage->add_outbound_path(active_partition->second.store);
+  stage->out().set_filter(active_partition->second.store_slot, schema);
+  active_partition->second.spawn_time = std::chrono::steady_clock::now();
+  active_partition->second.actor
     = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
                   index_opts, synopsis_opts,
-                  static_cast<store_actor>(active_partition.store), store_name,
-                  store_header);
-  active_partition.stream_slot
-    = stage->add_outbound_path(active_partition.actor);
-  stage->out().set_filter(active_partition.stream_slot, schema);
-  active_partition.capacity = partition_capacity;
-  active_partition.id = id;
+                  static_cast<store_actor>(active_partition->second.store),
+                  store_name, store_header);
+  active_partition->second.stream_slot
+    = stage->add_outbound_path(active_partition->second.actor);
+  stage->out().set_filter(active_partition->second.stream_slot, schema);
+  active_partition->second.capacity = partition_capacity;
+  active_partition->second.id = id;
   VAST_DEBUG("{} created new partition {}", *self, id);
+  return active_partition;
 }
 
 void index_state::decommission_active_partition(
@@ -927,29 +929,47 @@ index(index_actor::stateful_pointer<index_state> self,
       // transparent key lookup with string views, avoding the copy of the name
       // here.
       self->state.stats.layouts[std::string{layout.name()}].count += x.rows();
-      auto& active = self->state.active_partitions[layout];
-      if (!active.actor) {
-        self->state.create_active_partition(layout);
-      } else if (x.rows() > active.capacity) {
+      auto active_partition = self->state.active_partitions.find(layout);
+      if (active_partition == self->state.active_partitions.end()) {
+        auto part = self->state.create_active_partition(layout);
+        if (!part) {
+          self->quit(caf::make_error(ec::logic_error,
+                                     fmt::format("{} failed to create active "
+                                                 "partition: {}",
+                                                 *self, part.error())));
+          return;
+        }
+        active_partition = *part;
+      } else if (x.rows() > active_partition->second.capacity) {
         VAST_DEBUG("{} exceeds active capacity by {} rows", *self,
-                   x.rows() - active.capacity);
-        VAST_VERBOSE("{} flushes active partition {} with {}/{} events", *self,
-                     layout, self->state.partition_capacity - active.capacity,
-                     self->state.partition_capacity);
+                   x.rows() - active_partition->second.capacity);
+        VAST_VERBOSE(
+          "{} flushes active partition {} with {}/{} events", *self, layout,
+          self->state.partition_capacity - active_partition->second.capacity,
+          self->state.partition_capacity);
         self->state.decommission_active_partition(layout, {});
         self->state.flush_to_disk();
-        self->state.create_active_partition(layout);
+        auto part = self->state.create_active_partition(layout);
+        if (!part) {
+          self->quit(caf::make_error(ec::logic_error,
+                                     fmt::format("{} failed to create active "
+                                                 "partition: {}",
+                                                 *self, part.error())));
+          return;
+        }
+        active_partition = *part;
       }
+      VAST_ASSERT(active_partition->second.actor);
       out.push(x);
-      if (active.capacity == self->state.partition_capacity
-          && x.rows() > active.capacity) {
+      if (active_partition->second.capacity == self->state.partition_capacity
+          && x.rows() > active_partition->second.capacity) {
         VAST_WARN("{} got table slice with {} rows that exceeds the "
                   "default partition capacity of {} rows",
                   *self, x.rows(), self->state.partition_capacity);
-        active.capacity = 0;
+        active_partition->second.capacity = 0;
       } else {
-        VAST_ASSERT(active.capacity >= x.rows());
-        active.capacity -= x.rows();
+        VAST_ASSERT(active_partition->second.capacity >= x.rows());
+        active_partition->second.capacity -= x.rows();
       }
     },
     [self](caf::unit_t&, const caf::error& err) {
@@ -977,11 +997,14 @@ index(index_actor::stateful_pointer<index_state> self,
                msg.reason);
     // Flush buffered batches and end stream.
     detail::shutdown_stream_stage(self->state.stage);
-    // Bring down active partition.
-    for (auto& [layout, partinfo] : self->state.active_partitions) {
-      if (partinfo.actor)
-        self->state.decommission_active_partition(layout, {});
-    }
+    // We gather the schemas first before we call decomission active partition
+    // on every active partition to avoid iterator invalidation.
+    auto schemas = std::vector<type>{};
+    schemas.reserve(self->state.active_partitions.size());
+    for (const auto& [schema, _] : self->state.active_partitions)
+      schemas.push_back(schema);
+    for (const auto& schema : schemas)
+      self->state.decommission_active_partition(schema, {});
     // Collect partitions for termination.
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
     // on 'std::vector<caf::actor>' only. That should probably be generalized

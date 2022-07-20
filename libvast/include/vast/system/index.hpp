@@ -193,12 +193,16 @@ struct index_state {
   /// Creates a new active partition.
   /// @param schema The schema of the new partition. All events routed to the
   /// partition are assumed to have the exact same schema.
-  void create_active_partition(const type& schema);
+  /// @returns An iterator to the new active partition.
+  [[nodiscard]] caf::expected<
+    std::unordered_map<type, active_partition_info>::iterator>
+  create_active_partition(const type& schema);
 
   /// Decommissions the active partition.
   /// @param schema The schema of the active partition to decommission.
   /// @param completion The completion handler; called in the actor context of
   /// the index when the partition was decommissioned.
+  /// @note This invalidates iterators to the *active_partitions* map.
   void decommission_active_partition(
     const type& schema, std::function<void(const caf::error&)> completion);
 
