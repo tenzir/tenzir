@@ -3,6 +3,8 @@ import dynaconf
 import json
 import re
 from boto3.session import Session
+import boto3
+import botocore.client
 
 AWS_REGION_VALIDATOR = dynaconf.Validator(
     "VAST_AWS_REGION", must_exist=True, is_in=Session().get_available_regions("s3")
@@ -22,7 +24,11 @@ COMMON_VALIDATORS = [
     ),
 ]
 
-## Helper functions
+# Path aliases
+CLOUDROOT = "."
+REPOROOT = "../.."
+TFDIR = f"{CLOUDROOT}/terraform"
+DOCKERDIR = f"{CLOUDROOT}/docker"
 
 
 def conf(validators=[]) -> dict:
@@ -62,8 +68,16 @@ def tf_version(c: Context):
     return json.loads(version_json)["terraform_version"]
 
 
-# Aliases
-CLOUDROOT = "."
-REPOROOT = "../.."
-TFDIR = f"{CLOUDROOT}/terraform"
-DOCKERDIR = f"{CLOUDROOT}/docker"
+def terraform_output(c: Context, step, key) -> str:
+    return c.run(
+        f"terraform -chdir={TFDIR}/{step} output --raw {key}", hide="out"
+    ).stdout
+
+
+AWS_REGION = conf(COMMON_VALIDATORS)["VAST_AWS_REGION"]
+
+
+def aws(service):
+    # timeout set to 1000 to be larger than lambda max duration
+    config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
+    return boto3.client(service, region_name=AWS_REGION, config=config)
