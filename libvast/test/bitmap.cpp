@@ -392,8 +392,8 @@ struct bitmap_test_harness {
 
   void test_all() {
     MESSAGE("all");
-    CHECK(!all<0>(Bitmap{}));
-    CHECK(!all<1>(Bitmap{}));
+    CHECK(all<0>(Bitmap{}));
+    CHECK(all<1>(Bitmap{}));
     CHECK(!all<0>(a));
     CHECK(!all<0>(b));
     CHECK(!all<1>(a));
