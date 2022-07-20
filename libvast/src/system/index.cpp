@@ -27,6 +27,7 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/shutdown_stream_stage.hpp"
+#include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/index.hpp"
@@ -38,6 +39,7 @@
 #include "vast/io/save.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/segment_store.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/partition_transformer.hpp"
@@ -48,6 +50,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
+#include <caf/attach_stream_source.hpp>
 #include <caf/error.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <caf/response_promise.hpp>
@@ -274,6 +277,7 @@ caf::error index_state::load_from_disk() {
                                        "{}: {}",
                                        dir, err.message()));
   auto partitions = std::vector<uuid>{};
+  auto oversized_partitions = std::vector<uuid>{};
   auto synopsis_files = std::vector<uuid>{};
   auto synopses = std::make_shared<std::map<uuid, partition_synopsis_ptr>>();
   for (const auto& entry : dir_iter) {
@@ -283,9 +287,18 @@ caf::error index_state::load_from_disk() {
     if (!parsers::uuid(stem.string(), partition_uuid))
       continue;
     auto ext = entry.path().extension();
-    if (ext.empty())
-      partitions.push_back(partition_uuid);
-    else if (ext == std::filesystem::path{".mdx"})
+    if (ext.empty()) {
+      if (entry.file_size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+        auto store_path = dir / ".." / store_path_for_partition(partition_uuid);
+        if (std::filesystem::exists(store_path, err))
+          oversized_partitions.push_back(partition_uuid);
+        else
+          VAST_WARN("{} didn't not find a store file for the oversized "
+                    "partition {} and won't attempt to recover the data",
+                    *self, partition_uuid);
+      } else
+        partitions.push_back(partition_uuid);
+    } else if (ext == std::filesystem::path{".mdx"})
       synopsis_files.push_back(partition_uuid);
   }
   std::sort(partitions.begin(), partitions.end());
@@ -298,7 +311,7 @@ caf::error index_state::load_from_disk() {
   // be there in the first place.
   VAST_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
   for (auto& orphan : orphans)
-    std::filesystem::remove(dir / fmt::to_string(orphan) / ".mdx", err);
+    std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
   // Now try to load the partitions - with a progress indicator.
   for (size_t idx = 0; idx < partitions.size(); ++idx) {
     auto partition_uuid = partitions[idx];
@@ -342,9 +355,51 @@ caf::error index_state::load_from_disk() {
     persisted_partitions.insert(partition_uuid);
     synopses->emplace(partition_uuid, std::move(ps));
   }
-  // Recommend the user to run 'vast rebuild' if any partition syopses are
-  // outdated. We need to nudge them a bit so we can drop support for older
-  // partition versions more freely.
+  // Reimport oversized partitions to rescue the data.
+  // We can either go through a regular import or a partition transformer here.
+  // The former has the advantage that we would use streaming with proper
+  // back-pressure, but the drawback that we're mixing the events with regular
+  // ingest and create partitions with large import time ranges, thereby messing
+  // up compaction. The latter has the inverse properties.
+  // While I think a dedicated transform is cleaner, the re-ingest approach is a
+  // lot simpler to implement, so we go with that.
+  detail::spawn_container_source(
+    self->system(),
+    [](index_actor index, std::vector<uuid> xs,
+       std::filesystem::path dir) -> detail::generator<table_slice> {
+      for (const auto& id : xs) {
+        VAST_INFO("{} recovers corrupted partition {}", index, id);
+        auto store_path = dir / ".." / store_path_for_partition(id);
+        auto part_path = dir / to_string(id);
+        auto chk = chunk::mmap(store_path);
+        if (!chk) {
+          VAST_WARN("{} failed to recover data from {}: {}\n"
+                    "You can try to manually recover the data with\n"
+                    "$ lsvast {} | vast import json",
+                    index, store_path, store_path, chk.error());
+          continue;
+        }
+        auto seg = segment::make(std::move(*chk));
+        if (!seg) {
+          VAST_WARN("{} failed to construct a segment from  {}: {}", index,
+                    store_path, seg.error());
+          continue;
+        }
+        std::error_code err{};
+        if (!std::filesystem::remove(store_path, err))
+          VAST_WARN("{} failed to remove store file {} after recovery: {}",
+                    index, store_path, err);
+        if (!std::filesystem::remove(part_path, err))
+          VAST_WARN("{} failed to remove partition file {} after recovery: {}",
+                    index, part_path, err);
+        for (auto slice : *seg)
+          co_yield std::move(slice);
+      }
+    }(self, std::move(oversized_partitions), this->dir),
+    static_cast<index_actor>(self));
+  //  Recommend the user to run 'vast rebuild' if any partition syopses are
+  //  outdated. We need to nudge them a bit so we can drop support for older
+  //  partition versions more freely.
   const auto num_outdated = std::count_if(
     synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
       return id_and_synopsis.second->version < version::partition_version;
@@ -906,13 +961,6 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
-  // Read persistent state.
-  if (auto err = self->state.load_from_disk()) {
-    VAST_ERROR("{} failed to load index state from disk: {}", *self,
-               render(err));
-    self->quit(err);
-    return index_actor::behavior_type::make_empty_behavior();
-  }
   // Setup stream manager.
   self->state.stage = detail::attach_notifying_stream_stage(
     self,
@@ -992,6 +1040,13 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     caf::policy::arg<caf::broadcast_downstream_manager<
       table_slice, vast::type, i_partition_selector>>{});
+  // Read persistent state.
+  if (auto err = self->state.load_from_disk()) {
+    VAST_ERROR("{} failed to load index state from disk: {}", *self,
+               render(err));
+    self->quit(err);
+    return index_actor::behavior_type::make_empty_behavior();
+  }
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
@@ -1263,32 +1318,84 @@ index(index_actor::stateful_pointer<index_state> self,
                   }
                   // Adjust layout stats by subtracting the events of the
                   // removed partition.
-                  const auto* partition = fbs::GetPartition(chunk->data());
-                  if (partition->partition_type()
-                      != fbs::partition::Partition::legacy) {
-                    rp.deliver(caf::make_error(ec::format_error, "unexpected "
-                                                                 "format "
-                                                                 "version"));
-                    return;
-                  }
-                  vast::ids all_ids;
-                  const auto* partition_legacy
-                    = partition->partition_as_legacy();
-                  for (const auto* partition_stats :
-                       *partition_legacy->type_ids()) {
-                    const auto* name = partition_stats->name();
-                    vast::ids ids;
-                    if (auto error
-                        = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
-                      rp.deliver(caf::make_error(ec::format_error,
-                                                 "could not deserialize "
-                                                 "ids: "
-                                                   + render(error)));
+                  if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+                    VAST_WARN("failed to load partition for deletion at {} "
+                              "because its size of {} exceeds the maximum "
+                              "allowed size of {}. The index statistics will "
+                              "be incorrect until the database has been "
+                              "rebuilt and restarted",
+                              path, chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
+                    // !!! Fallback path. We try to erase the corresponding
+                    // segment store file if it exists.
+                    // TODO: Also attempt to erase parquet / feather stores.
+                    auto store_path = store_path_for_partition(partition_id);
+                    self
+                      ->request<caf::message_priority::high>(
+                        self->state.filesystem, caf::infinite, atom::erase_v,
+                        path)
+                      .then(
+                        [self, partition_id](atom::done) {
+                          VAST_DEBUG("{} erased partition {} from filesystem",
+                                     *self, partition_id);
+                        },
+                        [self, partition_id, path](const caf::error& err) {
+                          VAST_WARN("{} failed to erase partition {} at {}: {}",
+                                    *self, partition_id, path, err);
+                        });
+                    self
+                      ->request<caf::message_priority::high>(
+                        self->state.filesystem, caf::infinite, atom::erase_v,
+                        store_path)
+                      .then(
+                        [self, partition_id, store_path](atom::done) {
+                          VAST_DEBUG("{} erased partition store {} from "
+                                     "filesystem",
+                                     *self, partition_id);
+                        },
+                        [self, partition_id,
+                         store_path](const caf::error& err) {
+                          if (err == ec::no_such_file)
+                            VAST_DEBUG("{} failed to erase store {} at {}, "
+                                       "possibly because the data is in the "
+                                       "global archive: {}",
+                                       *self, partition_id, store_path, err);
+                          else
+                            VAST_WARN("{} failed to erase store {} at {}: {}",
+                                      *self, partition_id, store_path, err);
+                        });
+                  } else {
+                    const auto* partition = fbs::GetPartition(chunk->data());
+                    if (partition->partition_type()
+                        != fbs::partition::Partition::legacy) {
+                      rp.deliver(caf::make_error(ec::format_error, "unexpected "
+                                                                   "format "
+                                                                   "version"));
                       return;
                     }
-                    all_ids |= ids;
-                    if (adjust_stats)
-                      self->state.stats.layouts[name->str()].count -= rank(ids);
+                    vast::ids all_ids;
+                    const auto* partition_legacy
+                      = partition->partition_as_legacy();
+                    for (const auto* partition_stats :
+                         *partition_legacy->type_ids()) {
+                      const auto* name = partition_stats->name();
+                      vast::ids ids;
+                      if (auto error = fbs::deserialize_bytes(
+                            partition_stats->ids(), ids)) {
+                        VAST_WARN("{} could not deserialize ids to adjust "
+                                  "statistics: {}",
+                                  *self, error);
+                        continue;
+                      }
+                      all_ids |= ids;
+                      if (adjust_stats)
+                        self->state.stats.layouts[name->str()].count
+                          -= rank(ids);
+                    }
+                    // TODO: We could send `all_ids` as the second argument
+                    // here, which doesn't really make sense from an interface
+                    // perspective but would save the partition from recomputing
+                    // the same bitmap.
+                    rp.delegate(partition_actor, atom::erase_v);
                   }
                   // Note that mmap's will increase the reference count of a
                   // file, so unlinking should not affect indexers that are
@@ -1309,11 +1416,6 @@ index(index_actor::stateful_pointer<index_state> self,
                                   "synopsis {} at {}: {}",
                                   *self, partition_id, synopsis_path, err);
                       });
-                  // TODO: We could send `all_ids` as the second argument
-                  // here, which doesn't really make sense from an interface
-                  // perspective but would save the partition from recomputing
-                  // the same bitmap.
-                  rp.delegate(partition_actor, atom::erase_v);
                 },
                 [=](caf::error& err) mutable {
                   VAST_WARN("{} failed to erase partition {} from filesystem: "

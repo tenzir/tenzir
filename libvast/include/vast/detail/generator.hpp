@@ -197,6 +197,7 @@ class [[nodiscard]] generator {
 public:
   using promise_type = internal::generator_promise<T>;
   using iterator = internal::generator_iterator<T>;
+  using value_type = T;
 
   generator() noexcept : m_coroutine(nullptr) {
   }
@@ -208,14 +209,12 @@ public:
   generator(const generator& other) = delete;
 
   ~generator() {
-    if (m_coroutine)
+    if (m_coroutine) {
       m_coroutine.destroy();
+    }
   }
 
-  generator& operator=(generator other) noexcept {
-    swap(other);
-    return *this;
-  }
+  generator& operator=(const generator& other) = delete;
 
   generator& operator=(generator&& other) noexcept {
     if (m_coroutine)

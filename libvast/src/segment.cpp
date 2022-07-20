@@ -34,6 +34,44 @@ namespace vast {
 
 using namespace binary_byte_literals;
 
+segment::iterator::iterator(flat_slice_iterator nested,
+                            interval_iterator intervals, const segment* parent)
+  : nested_{nested}, intervals_{intervals}, parent_{parent} {
+  // nop
+}
+
+[[nodiscard]] table_slice segment::iterator::dereference() const {
+  auto slice
+    = table_slice{**nested_, parent_->chunk(), table_slice::verify::yes};
+  slice.offset((*intervals_)->begin());
+  VAST_ASSERT(slice.offset() + slice.rows() == (*intervals_)->end());
+  return slice;
+}
+
+void segment::iterator::increment() {
+  ++nested_;
+  ++intervals_;
+}
+
+void segment::iterator::decrement() {
+  --nested_;
+  --intervals_;
+}
+
+void segment::iterator::advance(size_t n) {
+  nested_ += n;
+  intervals_ += n;
+}
+
+[[nodiscard]] bool segment::iterator::equals(segment::iterator other) const {
+  return nested_ == other.nested_;
+}
+
+[[nodiscard]] segment::iterator::difference_type
+segment::iterator::distance_to(segment::iterator other) const {
+  return other.nested_ - nested_;
+}
+
 caf::expected<segment> segment::make(chunk_ptr&& chunk) {
   auto s = flatbuffer<fbs::Segment>::make(std::move(chunk));
   if (!s)
@@ -64,6 +102,16 @@ vast::ids segment::ids() const {
 size_t segment::num_slices() const {
   auto segment_v0 = flatbuffer_->segment_as_v0();
   return segment_v0->slices()->size();
+}
+
+segment::iterator segment::begin() const {
+  auto v0 = flatbuffer_->segment_as_v0();
+  return segment::iterator{v0->slices()->begin(), v0->ids()->begin(), this};
+}
+
+segment::iterator segment::end() const {
+  auto v0 = flatbuffer_->segment_as_v0();
+  return segment::iterator{v0->slices()->end(), v0->ids()->end(), nullptr};
 }
 
 chunk_ptr segment::chunk() const {
