@@ -67,17 +67,10 @@ jobs:
         run: ./vast-cloud tfcloud.config --auto
 
       - name: Deploy
-        id: deploy
-        continue-on-error: true
         run: ./vast-cloud deploy --auto-approve
 
-      - name: Retry deploy
-        if: steps.deploy.outcome=='failure'
-        run: |
-          echo "Deploy sometimes fails for an unexplained reason."
-          echo "Retrying after a few minutes usually works."
-          sleep 200
-          ./vast-cloud deploy --auto-approve
+      - name: Deploy bucket
+        run: ./vast-cloud workbucket.deploy --auto-approve
 
       - name: Run integration.all playbook
         run: |

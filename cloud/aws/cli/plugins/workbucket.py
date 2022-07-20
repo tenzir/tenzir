@@ -1,20 +1,21 @@
-from vast_invoke import task
+from vast_invoke import pty_task, task
 import core
 from common import (
+    AWS_REGION_VALIDATOR,
     COMMON_VALIDATORS,
-    HOSTROOT,
     auto_app_fmt,
     conf,
     TFDIR,
+    container_path,
     terraform_output,
     aws,
 )
 
 
-VALIDATORS = COMMON_VALIDATORS
+VALIDATORS = [*COMMON_VALIDATORS, AWS_REGION_VALIDATOR]
 
 
-@task
+@pty_task
 def deploy(c, auto_approve=False):
     """Deploy a bucket that can be used to persist data from the client"""
     core.init_step(c, "workbucket")
@@ -58,7 +59,7 @@ def upload(c, source, key):
     """Upload a file to the specified key in the bucket
 
     This is a simplified helper, for more advanced features use the AWS CLI directly"""
-    aws("s3").upload_file(f"{HOSTROOT}{source}", name(c), key)
+    aws("s3").upload_file(container_path(source), name(c), key)
 
 
 @task(help={"destination": "Absolute path to the file"})
@@ -66,7 +67,7 @@ def download(c, key, destination):
     """Download a file to the specified key in the bucket
 
     This is a simplified helper, for more advanced features use the AWS CLI directly"""
-    aws("s3").download_file(name(c), key, f"{HOSTROOT}{destination}")
+    aws("s3").download_file(name(c), key, container_path(destination))
 
 
 @task

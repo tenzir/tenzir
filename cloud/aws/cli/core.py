@@ -6,6 +6,7 @@ import base64
 import json
 import io
 from common import (
+    AWS_REGION,
     COMMON_VALIDATORS,
     conf,
     TFDIR,
@@ -43,10 +44,6 @@ CMD_HELP = {
 
 ##  Aliases
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
-
-
-def AWS_REGION():
-    return conf(AWS_REGION_VALIDATOR)["VAST_AWS_REGION"]
 
 
 ## Helper functions

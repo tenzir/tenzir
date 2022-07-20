@@ -1,4 +1,4 @@
-from vast_invoke import Context
+from vast_invoke import Context, Exit
 import dynaconf
 import json
 import re
@@ -70,18 +70,30 @@ def tf_version(c: Context):
 
 
 def terraform_output(c: Context, step, key) -> str:
-    return c.run(
+    output = c.run(
         f"terraform -chdir={TFDIR}/{step} output --raw {key}", hide="out"
     ).stdout
+    if "No outputs found" in output:
+        raise Exit(
+            f"The step '{step}' was not deployed or is improperly initialized (No outputs found)",
+            code=1,
+        )
+    return output
 
 
-AWS_REGION = conf(COMMON_VALIDATORS)["VAST_AWS_REGION"]
+def AWS_REGION():
+    return conf(AWS_REGION_VALIDATOR)["VAST_AWS_REGION"]
 
 
 def aws(service):
     # timeout set to 1000 to be larger than lambda max duration
     config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
-    return boto3.client(service, region_name=AWS_REGION, config=config)
+    return boto3.client(service, region_name=AWS_REGION(), config=config)
+
+
+def container_path(host_path: str):
+    """Convert the given path on the host its location once mounted in the CLI container"""
+    return f"{HOSTROOT}{host_path}"
 
 
 def load_cmd(cmd: str) -> bytes:
@@ -89,7 +101,7 @@ def load_cmd(cmd: str) -> bytes:
 
     Must be an absolute path (e.g file:///etc/mycommands)"""
     if cmd.startswith("file:///"):
-        with open(f"{HOSTROOT}/{cmd[8:]}", "rb") as f:
+        with open(container_path(cmd[8:]), "rb") as f:
             return f.read()
     if cmd.startswith("s3://"):
         chunks = cmd[5:].split("/", 1)

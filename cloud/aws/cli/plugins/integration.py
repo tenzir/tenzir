@@ -1,7 +1,7 @@
 from vast_invoke import task, Context
 import time
 import json
-from common import COMMON_VALIDATORS, AWS_REGION_VALIDATOR
+from common import COMMON_VALIDATORS, AWS_REGION_VALIDATOR, container_path
 
 VALIDATORS = [
     *COMMON_VALIDATORS,
@@ -64,8 +64,50 @@ def vast_data_import(c):
 
 
 @task
+def workbucket_up_down(c):
+    prefix = "testobject"
+    key = f"{prefix}_key"
+    src = f"/tmp/{prefix}"
+    dst = f"/tmp/{prefix}"
+    c.run(f"echo 'hello world' > {container_path(src)}")
+
+    print("List before upload")
+    c.run(f"./vast-cloud workbucket.delete --key={key}", hide="out")
+    empty_ls = c.run(
+        f"./vast-cloud workbucket.list --prefix={prefix}", hide="out"
+    ).stdout
+    assert empty_ls == "", f"Expected empty list, got {empty_ls}"
+
+    print(f"Upload from {src} to object {key}")
+    c.run(
+        f"echo 'hello world' | ./vast-cloud workbucket.upload --source={src} --key={key}"
+    )
+    ls = c.run(f"./vast-cloud workbucket.list --prefix {prefix}", hide="out").stdout
+    assert ls == f"{key}\n", f"Expected only {key}<newline> in list, got {ls}"
+
+    print(f"Download object {key} to {dst}")
+    c.run(
+        f"./vast-cloud workbucket.download --destination={dst} --key={key}",
+        hide="out",
+    )
+    c.run(f"diff {container_path(src)} {container_path(dst)}")
+
+    print(f"Delete object {key}")
+    c.run(f"rm -f {container_path(src)} {container_path(dst)}")
+    c.run(f"./vast-cloud workbucket.delete --key={key}", hide="out")
+    empty_ls = c.run(
+        f"./vast-cloud workbucket.list --prefix {prefix}", hide="out"
+    ).stdout
+    assert empty_ls == "", f"Expected empty list, got {empty_ls}"
+
+
+@task
 def all(c):
-    """Run the entire testbook. VAST needs to be deployed beforehand.
-    Warning: This will affect the state of the current stack"""
+    """Run the entire testbook.
+
+    Notes:
+    - VAST needs to be deployed beforehand with the workbucket plugin
+    - This will affect the state of the current stack"""
+    workbucket_up_down(c)
     vast_start_restart(c)
     vast_data_import(c)
