@@ -71,8 +71,10 @@ Building VAST involves the following steps:
   ```bash
   cd vast
   cmake -B build
+  # CMake defaults to a "Debug" build. When performance matters, use "Release"
+  cmake -B build -DCMAKE_BUILD_TYPE=Release  
   ```
-
+  
   Optionally, you can use the CMake TUI to visually configure the build:
   ```bash
   ccmake build
@@ -111,3 +113,17 @@ verify that your build works as expected:
   # Optional: Install to a custom prefix
   cmake --install build --prefix /path/to/install/prefix
   ```
+
+## Clean
+
+In case you want to make changes to your build environment, we recommend
+deleting the build tree entirely:
+
+```bash
+rm -rf build
+```
+
+This avoids subtle configuration glitches of transitive dependencies. For
+example, CMake doesn't disable assertions when switching from a `Debug` to
+a `Release` build, but would do so when starting with a fresh build of type
+`Release`.

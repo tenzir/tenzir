@@ -10,7 +10,7 @@
 
 #include "vast/defaults.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/system/make_transforms.hpp"
+#include "vast/system/make_pipelines.hpp"
 #include "vast/system/sink.hpp"
 
 #include <caf/actor.hpp>
@@ -31,11 +31,11 @@ make_sink(caf::actor_system& sys, const std::string& output_format,
     return writer.error();
   auto max_events
     = get_or(options, "vast.export.max-events", defaults::export_::max_events);
-  auto transforms = make_transforms(transforms_location::client_sink, options);
-  if (!transforms)
-    return transforms.error();
-  return sys.spawn(transforming_sink, std::move(*writer),
-                   std::move(*transforms), max_events);
+  auto pipelines = make_pipelines(pipelines_location::client_sink, options);
+  if (!pipelines)
+    return pipelines.error();
+  return sys.spawn(transforming_sink, std::move(*writer), std::move(*pipelines),
+                   max_events);
 }
 
 } // namespace vast::system

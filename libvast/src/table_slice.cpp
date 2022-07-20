@@ -142,9 +142,7 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
 
 table_slice::table_slice() noexcept = default;
 
-table_slice::table_slice(
-  chunk_ptr&& chunk, enum verify verify,
-  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept
+table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   VAST_ASSERT(!chunk_ || chunk_->unique());
   if (chunk_) {
@@ -156,7 +154,7 @@ table_slice::table_slice(
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
         auto state = std::make_unique<std::decay_t<decltype(*state_ptr)>>(
-          encoded, chunk_, batch);
+          encoded, chunk_);
         state_ptr = state.get();
         const auto bytes = as_bytes(chunk_);
         // We create a second chunk with an intentionally decoupled reference
@@ -188,8 +186,8 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, bool serialize) {
-  *this = arrow_table_slice_builder::create(record_batch, serialize);
+  const std::shared_ptr<arrow::RecordBatch>& record_batch) {
+  *this = arrow_table_slice_builder::create(record_batch);
 }
 
 table_slice::table_slice(const table_slice& other) noexcept = default;
@@ -341,18 +339,6 @@ void table_slice::import_time(time import_time) noexcept {
   visit(f, as_flatbuffer(chunk_));
 }
 
-bool table_slice::is_serialized() const noexcept {
-  auto f = detail::overload{
-    []() noexcept {
-      return true;
-    },
-    [&](const auto& encoded) noexcept {
-      return state(encoded, state_)->is_serialized();
-    },
-  };
-  return visit(f, as_flatbuffer(chunk_));
-}
-
 size_t table_slice::instances() noexcept {
   return num_instances_;
 }
@@ -440,7 +426,6 @@ std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
 // -- concepts -----------------------------------------------------------------
 
 std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
-  VAST_ASSERT(slice.is_serialized());
   return as_bytes(slice.chunk_);
 }
 

@@ -20,25 +20,25 @@
 
 namespace vast::system {
 
-enum class transforms_location {
+enum class pipelines_location {
   server_import,
   server_export,
   client_source,
   client_sink,
 };
 
-/// Validates the passed `settings` and creates the set of transforms
+/// Validates the passed `settings` and creates the set of pipelines
 /// that were configured for the desired location.
 /// @param location Selects which part of the config file should be parsed.
 /// @param settings The VAST settings objects including transform configuration.
-caf::expected<std::vector<transform>>
-make_transforms(transforms_location location, const caf::settings& settings);
+caf::expected<std::vector<pipeline>>
+make_pipelines(pipelines_location location, const caf::settings& settings);
 
 /// Validates the passed `caf::settings` and creates the transform of the given
 /// name.
-caf::expected<transform_ptr>
-make_transform(const std::string& name,
-               const std::vector<std::string>& event_types,
-               const caf::settings& transforms);
+caf::expected<pipeline_ptr>
+make_pipeline(const std::string& name,
+              const std::vector<std::string>& event_types,
+              const caf::settings& pipelines);
 
 } // namespace vast::system

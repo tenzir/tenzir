@@ -24,7 +24,7 @@
 
 namespace vast::system {
 
-transformer_stream_stage_ptr attach_transform_stage(
+transformer_stream_stage_ptr attach_pipeline_stage(
   transformer_actor::stateful_pointer<transformer_state> self) {
   return caf::attach_continuous_stream_stage(
     self,
@@ -41,14 +41,14 @@ transformer_stream_stage_ptr attach_transform_stage(
       }
       auto offset = x.body.offset();
       auto rows = x.body.rows();
-      if (auto err = self->state.transforms.add(std::move(x.body))) {
+      if (auto err = self->state.executor.add(std::move(x.body))) {
         VAST_WARN("{} skips slice because add failed: {}",
                   self->state.transformer_name, err);
         return;
       }
-      auto transformed = self->state.transforms.finish();
+      auto transformed = self->state.executor.finish();
       if (!transformed) {
-        VAST_WARN("{} skips slice because of an error in transform: {}",
+        VAST_WARN("{} skips slice because of an error in pipeline: {}",
                   self->state.transformer_name, transformed.error());
         return;
       }
@@ -60,7 +60,7 @@ transformer_stream_stage_ptr attach_transform_stage(
         }
         if (next_offset > offset + rows) {
           VAST_WARN(caf::make_error(ec::invalid_result,
-                                    "transform returned a slice "
+                                    "pipeline returned a slice "
                                     "with an offset outside the "));
           return;
         }
@@ -75,22 +75,22 @@ transformer_stream_stage_ptr attach_transform_stage(
 
 transformer_actor::behavior_type
 transformer(transformer_actor::stateful_pointer<transformer_state> self,
-            std::string name, std::vector<transform>&& transforms) {
+            std::string name, std::vector<pipeline>&& pipelines) {
   VAST_TRACE_SCOPE("transformer {} {}", VAST_ARG(self->id()), VAST_ARG(name));
   self->state.transformer_name = std::move(name);
-  auto transform_names = list{};
-  for (const auto& t : transforms)
-    transform_names.emplace_back(t.name());
+  auto pipeline_names = list{};
+  for (const auto& t : pipelines)
+    pipeline_names.emplace_back(t.name());
   self->state.source_requires_shutdown = false;
-  self->state.status["transforms"] = std::move(transform_names);
-  self->state.transforms = transformation_engine{std::move(transforms)};
-  if (auto err = self->state.transforms.validate(
-        transformation_engine::allow_aggregate_transforms::no)) {
-    VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
+  self->state.status["pipelines"] = std::move(pipeline_names);
+  self->state.executor = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::no)) {
+    VAST_ERROR("transformer is not allowed to use aggregate pipeline {}", err);
     self->quit();
     return transformer_actor::behavior_type::make_empty_behavior();
   }
-  self->state.stage = attach_transform_stage(self);
+  self->state.stage = attach_pipeline_stage(self);
   return {
     [self](const stream_sink_actor<table_slice>& out)
       -> caf::outbound_stream_slot<table_slice> {
@@ -156,8 +156,8 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
 
 transformer_actor::behavior_type
 importer_transformer(transformer_actor::stateful_pointer<transformer_state> self,
-                     std::string name, std::vector<transform>&& transforms) {
-  auto handle = transformer(self, std::move(name), std::move(transforms));
+                     std::string name, std::vector<pipeline>&& pipelines) {
+  auto handle = transformer(self, std::move(name), std::move(pipelines));
   self->state.source_requires_shutdown = true;
   self->state.reassign_offset_ranges = true;
   return handle;

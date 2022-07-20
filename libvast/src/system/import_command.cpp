@@ -15,8 +15,8 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/make_pipelines.hpp"
 #include "vast/system/make_source.hpp"
-#include "vast/system/make_transforms.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
@@ -55,10 +55,10 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   if (!importer)
     return caf::make_message(caf::make_error( //
       ec::missing_component, "importer"));
-  auto transforms
-    = make_transforms(transforms_location::client_source, inv.options);
-  if (!transforms)
-    return caf::make_message(transforms.error());
+  auto pipelines
+    = make_pipelines(pipelines_location::client_source, inv.options);
+  if (!pipelines)
+    return caf::make_message(pipelines.error());
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
@@ -66,7 +66,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   const auto format = std::string{inv.name()};
   // Start the source.
   auto src_result = make_source(sys, format, inv, accountant, type_registry,
-                                importer, std::move(*transforms));
+                                importer, std::move(*pipelines));
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(*src_result);
@@ -77,7 +77,9 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
       [&](atom::ok) {
         VAST_DEBUG("{} registered source at node", __PRETTY_FUNCTION__);
       },
-      [&](caf::error error) { err = std::move(error); });
+      [&](caf::error error) {
+        err = std::move(error);
+      });
   if (err) {
     self->send_exit(src, caf::exit_reason::user_shutdown);
     return caf::make_message(std::move(err));

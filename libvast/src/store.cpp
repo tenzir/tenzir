@@ -47,10 +47,9 @@ handle_lookup(Actor& self, const query_context& query_context,
             return expr.error();
           tailored_expr = std::move(*expr);
         }
-        auto result = count_matching(slice, *tailored_expr, query_context.ids);
-        num_hits += result;
-        self->send(count.sink, result);
+        num_hits += count_matching(slice, *tailored_expr, query_context.ids);
       }
+      self->send(count.sink, num_hits);
       return num_hits;
     },
     [&](const query_context::extract& extract) -> caf::expected<uint64_t> {

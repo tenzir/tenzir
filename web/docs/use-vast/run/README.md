@@ -12,8 +12,7 @@ can operate in two modes:
 A server contains a special component called the *node* that acts as container
 for pluggable components implemented as
 [actors](/docs/understand-vast/architecture/actor-model). In the future, VAST
-you will be able to connect multiple nodes together to create a distributed
-system.
+will be able to connect multiple nodes together to create a distributed system.
 :::
 
 A standard deployment consists of a server close to the data sources and

@@ -570,6 +570,8 @@ auto frame(const Bitmap& bm) {
 /// @relates all
 template <bool Bit = true, class Bitmap>
 bool any(const Bitmap& bm) {
+  if (bm.empty())
+    return false;
   if constexpr (Bit) {
     for (auto b : bit_range(bm))
       if (b.data())
@@ -595,8 +597,6 @@ bool any(const Bitmap& bm) {
 /// @relates any
 template <bool Bit = true, class Bitmap>
 auto all(const Bitmap& bm) {
-  if (bm.empty())
-    return false;
   return !any<!Bit>(bm);
 }
 

@@ -10,9 +10,9 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/source.hpp"
-#include "vast/transform.hpp"
 
 #include <caf/io/typed_broker.hpp>
 
@@ -57,6 +57,6 @@ caf::behavior datagram_source(
   size_t table_slice_size, std::optional<size_t> max_events,
   const type_registry_actor& type_registry, vast::module local_module,
   std::string type_filter, accountant_actor accountant,
-  std::vector<transform>&& transforms);
+  std::vector<pipeline>&& pipelines);
 
 } // namespace vast::system

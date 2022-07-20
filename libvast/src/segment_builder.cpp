@@ -35,9 +35,14 @@ caf::error segment_builder::add(table_slice x) {
   x.offset(num_events_);
   if (x.offset() < min_table_slice_offset_)
     return caf::make_error(ec::unspecified, "slice offsets not increasing");
-  if (!x.is_serialized())
-    x = table_slice{to_record_batch(x), true};
-  VAST_ASSERT(x.is_serialized());
+  auto last_fb_offset = flat_slices_.empty() ? 0ull : flat_slices_.back().o;
+  // Allow ca. 100MiB of extra space for the non-table data.
+  constexpr auto REASONABLE_SIZE
+    = detail::narrow_cast<size_t>(0.95 * FLATBUFFERS_MAX_BUFFER_SIZE);
+  if (last_fb_offset + as_bytes(x).size() >= REASONABLE_SIZE) [[unlikely]] {
+    VAST_ERROR("discarding table slices due to flatbuffers size limit");
+    return caf::make_error(ec::format_error, "too much data for segment");
+  }
   auto bytes = fbs::pack_bytes(builder_, x);
   auto slice = fbs::CreateFlatTableSlice(builder_, bytes);
   flat_slices_.push_back(slice);

@@ -33,15 +33,13 @@ vast:
            group-by:
              - src_ip
              - dest_ip
-           sum:
-             - flow.pkts_toserver
-             - flow.pkts_toclient
-             - flow.bytes_toserver
-             - flow.bytes_toclient
-           min:
-             - flow.start
-           max:
-             - flow.end
+           aggregate:
+             flow.pkts_toserver: sum
+             flow.pkts_toclient: sum
+             flow.bytes_toserver: sum
+             flow.bytes_toclient: sum
+             flow.start: min
+             flow.end: max
 ```
 
 The above `example` pipeline consists of two operators, `hash` and `summarize`

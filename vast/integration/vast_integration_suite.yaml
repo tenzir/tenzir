@@ -28,12 +28,12 @@ fixtures:
     exit: | # python
       node.stop()
 
-  TransformsTester:
+  PipelinesTester:
     enter: | # python
       node = Server(self.cmd,
                     ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
                     work_dir, name='node', port=VAST_PORT,
-                    config_file='vast-transforms.yaml')
+                    config_file='vast-pipelines.yaml')
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
@@ -537,11 +537,11 @@ tests:
       - command: version
         transformation: sleep 4
       - command: count '#type == /zeek.*/'
-  Transforms:
+  Pipelines:
     tags: [server, client, import-export, transforms, suricata]
-    fixture: TransformsTester
+    fixture: PipelinesTester
     steps:
-      - command: --config=@./vast-transforms.yaml import -b suricata
+      - command: --config=@./vast-pipelines.yaml import -b suricata
         input: data/suricata/eve.json
       - command: flush
       - command: export json '#type == "suricata.http"'
@@ -549,9 +549,9 @@ tests:
       - command: export json '#type == "suricata.dns"'
       - command: export json '#type == "suricata.fileinfo"'
       - command: export json '#type == "suricata.alert"'
-      - command: --config=@./vast-transforms.yaml export json '#type == "suricata.alert"'
-      - command: --config=@./vast-transforms.yaml export json '#type == "suricata.dns"'
-      - command: --config=@./vast-transforms.yaml export json '#type == "suricata.fileinfo"'
+      - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.alert"'
+      - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.dns"'
+      - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.fileinfo"'
 
   # TODO Reinstate negative test cases from compaction after story 31232 is completed
 

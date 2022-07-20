@@ -2,7 +2,7 @@
 
 # Input:
 # - VASTCLOUD_REBUILD: set to any value to force docker rebuild
-# - VASTCLOUD_NOTTY: set to any value to disable TTY
+# - VASTCLOUD_NO_PTY: set to any value to force-disable PTY
 
 # The CLI runs Docker commands from Docker, so it needs to have access to the
 # Docker socket. The calling user id and group id as well as the docker group id
@@ -30,7 +30,8 @@ build () {
     --build-arg CALLER_UID \
     --build-arg CALLER_GID \
     --build-arg DOCKER_GID \
-    .
+    . \
+  || exit $? # call exit to fail CLI if build fails
 }
 
 # if image exists and VASTCLOUD_REBUILD not set, don't rebuild
@@ -39,15 +40,33 @@ docker image inspect tenzir/vast-cloud-cli > /dev/null \
     || build
 
 # Run image with both AWS credentials file and env credentials if available
-docker run -i $([[ -z $VASTCLOUD_NOTTY ]] && echo "-t") \
+# First argument passed to docker as flags
+# Second argument passed to the container as command arguments
+run () {
+  docker run -i \
+    $(echo "$1") \
     --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
     --mount type=bind,source=$HOST_DIRNAME/../..,target=/vast \
     $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "--mount type=bind,source=$HOST_CREDENTIALS_FILE,target=/.aws/credentials,readonly") \
+    --mount source=vastcloud-cli-persistant-configs,target=/etc/persistant-configs \
     -e AWS_PROFILE \
     -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
+    -e VASTCLOUD_NO_PTY \
     --env-file <(env | grep VAST_) \
     --env-file <(env | grep TF_) \
     --env-file <(env | grep HOST_) \
-    tenzir/vast-cloud-cli "$@"
+    --rm \
+    tenzir/vast-cloud-cli "${@:2}"
+}
+
+# Use the VASTCLOUD_CHECK_PTY to execute the command in a dry run mode that
+# checks whether the docker PTY flag if required
+PTY_CHECK_RESULT=$(run '-e VASTCLOUD_CHECK_PTY=1' "$@")
+[[ $? == 0 ]] || exit 1
+# if one task needs a PTY, the whole command needs one
+PTY_FLAG=$([[ $PTY_CHECK_RESULT =~ "1" ]] && echo "-t")
+
+# The command is then executed with the resulting PTY_FLAG
+run "$PTY_FLAG" "$@"

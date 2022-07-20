@@ -55,9 +55,6 @@ struct arrow_table_slice_state<fbs::table_slice::arrow::v2> {
 
   /// Mapping from column offset to nested Arrow array
   arrow::ArrayVector flat_columns;
-
-  /// Whether the record batch points to outside data.
-  bool is_serialized;
 };
 
 /// A table slice that stores elements encoded in the [Arrow](https://arrow.org)
@@ -70,9 +67,7 @@ public:
   /// Constructs an Arrow-encoded table slice from a FlatBuffers table.
   /// @param slice The encoding-specific FlatBuffers table.
   /// @param parent The surrounding chunk.
-  /// @param batch A pre-existing record batch.
-  arrow_table_slice(const FlatBuffer& slice, const chunk_ptr& parent,
-                    const std::shared_ptr<arrow::RecordBatch>& batch) noexcept;
+  arrow_table_slice(const FlatBuffer& slice, const chunk_ptr& parent) noexcept;
 
   /// Destroys a Arrow-encoded table slice.
   ~arrow_table_slice() noexcept;
@@ -95,9 +90,6 @@ public:
 
   /// @returns The number of columns in the slice.
   [[nodiscard]] table_slice::size_type columns() const noexcept;
-
-  /// @returns Whether the underlying buffer is serialized.
-  [[nodiscard]] bool is_serialized() const noexcept;
 
   // -- data access ------------------------------------------------------------
 

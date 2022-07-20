@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.18...3.23 FATAL_ERROR)
 
 project(
-  example-transform
+  example-pipeline-operator
   VERSION 1.0.0
-  DESCRIPTION "Example transform plugin for VAST"
+  DESCRIPTION "Example pipeline operator plugin for VAST"
   LANGUAGES CXX)
 
 # Enable unit testing. Note that it is necessary to include CTest in the
@@ -14,8 +14,8 @@ include(CTest)
 
 find_package(VAST REQUIRED)
 VASTRegisterPlugin(
-  TARGET example-transform
-  ENTRYPOINT transform_plugin.cpp
+  TARGET example-pipeline-operator
+  ENTRYPOINT pipeline_operator_plugin.cpp
   # SOURCES
   #   list additional source files here
-  TEST_SOURCES tests/transform_plugin.cpp)
+  TEST_SOURCES tests/pipeline_operator_plugin.cpp)

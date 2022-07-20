@@ -266,17 +266,17 @@ using index_actor = typed_actor_fwd<
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
   // Erases the given set of partitions from the INDEX.
   caf::replies_to<atom::erase, std::vector<uuid>>::with<atom::done>,
-  // Applies the given transformation to the partition.
+  // Applies the given pipelineation to the partition.
   // When keep_original_partition is yes: erases the existing partition and
   // returns the synopsis of the new partition. If the partition is completely
   // erased, returns the nil uuid. When keep_original_partition is no: does an
-  // in-place transform keeping the old ids, and makes a new partition
+  // in-place pipeline keeping the old ids, and makes a new partition
   // preserving the old one(s).
-  caf::replies_to<atom::apply, transform_ptr, std::vector<uuid>,
+  caf::replies_to<atom::apply, pipeline_ptr, std::vector<uuid>,
                   keep_original_partition>::with<std::vector<partition_info>>,
   // A shorthand to the above handler that runs an identity transformation on
   // the provided partitions without keeping the originals. This is a necessity,
-  // because transform_ptr's cannot be send across the wire.
+  // because pipeline_ptr's cannot be send across the wire.
   caf::replies_to<atom::rebuild,
                   std::vector<uuid>>::with<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
@@ -531,7 +531,7 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::partition_synopsis_pair>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::augmented_partition_synopsis)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::augmented_partition_synopsis>)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::transform_ptr)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::pipeline_ptr)
 #undef vast_uuid_synopsis_map
 
 #undef VAST_ADD_TYPE_ID

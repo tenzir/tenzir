@@ -606,9 +606,9 @@ jobs:
             target: example-analyzer
             path: examples/plugins/analyzer
             dependencies:
-          - name: Example Transform
-            target: example-transform
-            path: examples/plugins/transform
+          - name: Example Pipeline Operator
+            target: example-pipeline-operator
+            path: examples/plugins/pipeline_operator
             dependencies:
           - name: Broker
             target: broker
@@ -789,7 +789,12 @@ jobs:
         working-directory: cloud/aws
         run: |
           docker build docker/ -f docker/lambda.Dockerfile -t tenzir/vast-lambda:latest \
-            --build-arg VAST_VERSION=latest
+            --build-arg VAST_VERSION=latest --build-arg BASE_IMAGE=tenzir/vast
+      - name: Build Fargate Docker Image
+        working-directory: cloud/aws
+        run: |
+          docker build docker/ -f docker/fargate.Dockerfile -t tenzir/vast-fargate:latest \
+            --build-arg VAST_VERSION=latest --build-arg BASE_IMAGE=tenzir/vast
       - name: Login to Docker Hub
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         uses: docker/login-action@v2

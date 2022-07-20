@@ -63,7 +63,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::send_initial_dbstate) {
       FAIL("no mock implementation available");
     },
-    [=](atom::apply, transform_ptr, std::vector<uuid>,
+    [=](atom::apply, pipeline_ptr, std::vector<uuid>,
         system::keep_original_partition) -> std::vector<partition_info> {
       FAIL("no mock implementation available");
     },
