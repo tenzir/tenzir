@@ -643,6 +643,8 @@ ids evaluate(const expression& expr, const table_slice& slice,
       const auto array
         = make_path(index).Get(*to_record_batch(slice)).ValueOrDie();
       auto result = ids{};
+      const auto rhs_internal
+        = materialize(to_internal(type, make_data_view(rhs)));
       for (auto id : select(selection)) {
         VAST_ASSERT(id >= offset);
         const auto row = id - offset;
@@ -651,10 +653,9 @@ ids evaluate(const expression& expr, const table_slice& slice,
         // broken and does not do the same thing as `evaluate`. We must align
         // their behavior and add tests for `evaluate_view`, or, which would be
         // even better, operate on the Arrow Arrays directly here.
-        const bool matches
-          = evaluate(materialize(value_at(type, *array,
-                                          detail::narrow_cast<int64_t>(row))),
-                     op, rhs);
+        auto lhs = materialize(
+          value_at(type, *array, detail::narrow_cast<int64_t>(row)));
+        const bool matches = evaluate(lhs, op, rhs_internal);
         result.append(matches, 1);
       }
       result.append(false, offset + num_rows - result.size());
