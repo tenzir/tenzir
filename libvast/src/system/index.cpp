@@ -365,10 +365,10 @@ caf::error index_state::load_from_disk() {
   // lot simpler to implement, so we go with that.
   detail::spawn_container_source(
     self->system(),
-    [self = this->self](std::vector<uuid> xs, std::filesystem::path dir)
-      -> detail::generator<table_slice> {
+    [](index_actor index, std::vector<uuid> xs,
+       std::filesystem::path dir) -> detail::generator<table_slice> {
       for (const auto& id : xs) {
-        VAST_INFO("{} recovers corrupted partition {}", *self, id);
+        VAST_INFO("{} recovers corrupted partition {}", index, id);
         auto store_path = dir / ".." / store_path_for_partition(id);
         auto part_path = dir / to_string(id);
         auto chk = chunk::mmap(store_path);
@@ -376,26 +376,26 @@ caf::error index_state::load_from_disk() {
           VAST_WARN("{} failed to recover data from {}: {}\n"
                     "You can try to manually recover the data with\n"
                     "$ lsvast {} | vast import json",
-                    *self, store_path, store_path, chk.error());
+                    index, store_path, store_path, chk.error());
           continue;
         }
         auto seg = segment::make(std::move(*chk));
         if (!seg) {
-          VAST_WARN("{} failed to construct a segment from  {}: {}", *self,
+          VAST_WARN("{} failed to construct a segment from  {}: {}", index,
                     store_path, seg.error());
           continue;
         }
         std::error_code err{};
         if (!std::filesystem::remove(store_path, err))
           VAST_WARN("{} failed to remove store file {} after recovery: {}",
-                    *self, store_path, err);
+                    index, store_path, err);
         if (!std::filesystem::remove(part_path, err))
           VAST_WARN("{} failed to remove partition file {} after recovery: {}",
-                    *self, part_path, err);
+                    index, part_path, err);
         for (auto slice : *seg)
           co_yield slice;
       }
-    }(std::move(oversized_partitions), this->dir),
+    }(self, std::move(oversized_partitions), this->dir),
     static_cast<index_actor>(self));
   //  Recommend the user to run 'vast rebuild' if any partition syopses are
   //  outdated. We need to nudge them a bit so we can drop support for older
