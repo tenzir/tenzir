@@ -28,18 +28,21 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include <filesystem>
+#include <map>
 #include <span>
 
 namespace {
 
-vast::system::filesystem_actor::behavior_type dummy_filesystem(
-  std::reference_wrapper<std::vector<vast::chunk_ptr>> last_written_chunks) {
+vast::system::filesystem_actor::behavior_type
+dummy_filesystem(std::reference_wrapper<
+                 std::map<std::filesystem::path, std::vector<vast::chunk_ptr>>>
+                   last_written_chunks) {
   return {
     [last_written_chunks](
-      vast::atom::write, const std::filesystem::path&,
+      vast::atom::write, const std::filesystem::path& path,
       const vast::chunk_ptr& chk) mutable -> caf::result<vast::atom::ok> {
-      MESSAGE("dummy_filesystem write");
-      last_written_chunks.get().push_back(chk);
+      MESSAGE("Received write request for path: " + path.string());
+      last_written_chunks.get()[path].push_back(chk);
       return vast::atom::ok_v;
     },
     [](vast::atom::read,
@@ -95,13 +98,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   };
 
   vast::index_config index_config_{
-    .rules = {{.targets = {"y.x"}, .create_dense_index = false}}};
+    .rules = {{.targets = {"y.x"}, .create_partition_index = false}}};
 };
 
 FIXTURE_SCOPE(active_partition_tests, fixture)
 
 TEST(No dense indexes serialization when create dense index in config is false) {
-  std::vector<vast::chunk_ptr> last_written_chunks;
+  std::map<std::filesystem::path, std::vector<vast::chunk_ptr>>
+    last_written_chunks;
   auto filesystem = sys.spawn(dummy_filesystem, std::ref(last_written_chunks));
 
   const auto partition_id = vast::uuid::random();
@@ -130,14 +134,14 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   REQUIRE(src);
   run();
 
-  auto promise
-    = self->request(sut, caf::infinite, vast::atom::persist_v,
-                    std::filesystem::path{}, std::filesystem::path{});
+  auto persist_path = std::filesystem::path{"/persist"};
+  auto synopsis_path = std::filesystem::path{"/synopsis"};
+  auto promise = self->request(sut, caf::infinite, vast::atom::persist_v,
+                               persist_path, synopsis_path);
   run();
 
   promise.receive(
     [](vast::partition_synopsis_ptr&) {
-      MESSAGE("persisting done");
     },
     [](const caf::error& err) {
       FAIL(err);
@@ -145,10 +149,10 @@ TEST(No dense indexes serialization when create dense index in config is false) 
 
   //  1 chunk for partition synopsis and one for partition itself
   REQUIRE_EQUAL(last_written_chunks.size(), 2u);
+  REQUIRE_EQUAL(last_written_chunks.at(persist_path).size(), 1u);
+  REQUIRE_EQUAL(last_written_chunks.at(synopsis_path).size(), 1u);
 
-  //  due to UT being synchronous synopsis_chunk will be received first. If the
-  //  fixture is changed to async then the order might change
-  const auto& synopsis_chunk = last_written_chunks.front();
+  const auto& synopsis_chunk = last_written_chunks.at(synopsis_path).front();
   auto* synopsis_fbs = vast::fbs::GetPartitionSynopsis(synopsis_chunk->data());
 
   vast::partition_synopsis synopsis;
@@ -164,7 +168,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(synopsis.type_synopses_.size(), 1u);
   CHECK_EQUAL(synopsis.offset, 0u);
 
-  const auto& partition_chunk = last_written_chunks.back();
+  const auto& partition_chunk = last_written_chunks.at(persist_path).front();
   const auto part_fb
     = vast::fbs::GetPartition(partition_chunk->data())
         ->partition_as<vast::fbs::partition::LegacyPartition>();
@@ -172,7 +176,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   vast::system::passive_partition_state passive_state;
   const auto err = unpack(*part_fb, passive_state);
 
-  REQUIRE(not err);
+  REQUIRE(!err);
   CHECK_EQUAL(passive_state.id, partition_id);
   REQUIRE(passive_state.combined_layout_);
   CHECK_EQUAL(*passive_state.combined_layout_,

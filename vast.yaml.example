@@ -160,8 +160,8 @@ vast:
     #   VAST creates one synopsis per target. Targets can be either types
     #   or field names.
     #
-    #   fp-rate - false positive rate. Only string and address type targets
-    #             are supported
+    #   fp-rate - false positive rate. Has effect on string and address type
+    #             targets
     #
     #   create-dense-index - VAST will not create dense index when set to false
     #   - targets: [:string, :address]

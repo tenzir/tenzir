@@ -25,18 +25,18 @@ struct index_config {
   struct rule {
     std::vector<std::string> targets = {};
     double fp_rate = defaults::system::fp_rate;
-    bool create_dense_index = defaults::system::create_dense_index;
+    bool create_partition_index = defaults::system::create_partition_index;
 
     template <class Inspector>
     friend auto inspect(Inspector& f, rule& x) {
-      return f(x.targets, x.fp_rate, x.create_dense_index);
+      return f(x.targets, x.fp_rate, x.create_partition_index);
     }
 
     static inline const record_type& layout() noexcept {
       static auto result = record_type{
         {"targets", list_type{string_type{}}},
         {"fp-rate", real_type{}},
-        {"create-dense-index", bool_type{}},
+        {"partition-index", bool_type{}},
       };
       return result;
     }
@@ -59,7 +59,7 @@ struct index_config {
   }
 };
 
-bool should_create_dense_index(const qualified_record_field& index_qf,
-                               const std::vector<index_config::rule>& rules);
+bool should_create_partition_index(const qualified_record_field& index_qf,
+                                   const std::vector<index_config::rule>& rules);
 
 } // namespace vast

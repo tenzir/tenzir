@@ -67,19 +67,16 @@ namespace {
 bool should_skip_index_creation(const type& type,
                                 const qualified_record_field& qf,
                                 const std::vector<index_config::rule>& rules) {
-  if (type.attribute("skip").has_value()) {
+  if (type.attribute("skip").has_value())
     return true;
-  }
-
-  return not should_create_dense_index(qf, rules);
+  return !should_create_partition_index(qf, rules);
 }
 
 chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
   flatbuffers::FlatBufferBuilder synopsis_builder;
   const auto ps = pack(synopsis_builder, synopsis);
-  if (not ps)
+  if (!ps)
     return {};
-
   fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
   ps_builder.add_partition_synopsis_type(
     fbs::partition_synopsis::PartitionSynopsis::legacy);
@@ -89,6 +86,7 @@ chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
   return fbs::release(synopsis_builder);
 }
 
+/// Delivers persistance promise and calculates indexer_chunks
 void serialize(
   active_partition_actor::stateful_pointer<active_partition_state> self) {
   auto& mutable_synopsis = self->state.data.synopsis.unshared();
@@ -512,9 +510,8 @@ active_partition_actor::behavior_type active_partition(
             return idx.second != nullptr;
           });
 
-      if (0u == valid_count) {
+      if (0u == valid_count)
         return serialize(self);
-      }
       VAST_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);
       for (auto& [field, indexer] : self->state.indexers) {
         if (indexer == nullptr)
@@ -574,7 +571,6 @@ active_partition_actor::behavior_type active_partition(
         rp.deliver(uint64_t{0});
         return rp;
       }
-
       auto ids_for_evaluation
         = detail::get_ids_for_evaluation(self->state.type_ids(), triples);
       auto eval = self->spawn(evaluator, query_context.expr, std::move(triples),

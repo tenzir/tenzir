@@ -26,7 +26,8 @@ namespace {
 /// conjunctions, disjunctions, and negations.
 class ids_evaluator {
 public:
-  ids_evaluator(const evaluator_state::predicate_hits_map& xs) : hits_(xs) {
+  explicit ids_evaluator(const evaluator_state::predicate_hits_map& xs)
+    : hits_(xs) {
     push();
   }
 
@@ -120,7 +121,7 @@ void evaluator_state::handle_missing_result(
 }
 
 void evaluator_state::handle_no_indexer(const offset& position) {
-  handle_result(position, all_possible_ids_for_partition);
+  handle_result(position, ids_to_use_for_no_indexer);
 }
 
 void evaluator_state::evaluate() {
@@ -149,20 +150,19 @@ evaluator_state::hits_for(const offset& position) {
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           expression expr, std::vector<evaluation_triple> eval,
-          ids all_possible_ids_for_partition) {
+          ids ids_to_use_for_no_indexer) {
   VAST_TRACE_SCOPE("{} {}", VAST_ARG(expr), caf::deep_to_string(eval));
   VAST_ASSERT(!eval.empty());
   self->state.expr = std::move(expr);
   self->state.eval = std::move(eval);
-  self->state.all_possible_ids_for_partition
-    = std::move(all_possible_ids_for_partition);
+  self->state.ids_to_use_for_no_indexer = std::move(ids_to_use_for_no_indexer);
   return {
     [self](atom::run) {
       self->state.promise = self->make_response_promise<ids>();
       self->state.pending_responses += self->state.eval.size();
       for (auto& [pos, curried_pred, indexer] : self->state.eval) {
         ++self->state.predicate_hits[pos].first;
-        if (not indexer) {
+        if (!indexer) {
           self->state.handle_no_indexer(pos);
           continue;
         }

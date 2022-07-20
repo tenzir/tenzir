@@ -29,7 +29,7 @@ rules:
     fp-rate: 0.005
   - targets:
       - zeek.conn.id.orig_h
-    create-dense-index: false
+    partition-index: false
 )__";
 
 const vast::type schema{
@@ -54,42 +54,42 @@ TEST(example configuration) {
   REQUIRE_EQUAL(rule1.targets.size(), 1u);
   CHECK_EQUAL(rule1.targets[0], "zeek.conn.id.orig_h");
   CHECK_EQUAL(rule1.fp_rate, 0.01); // default
-  CHECK_EQUAL(rule0.create_dense_index, true); // default
-  CHECK_EQUAL(rule1.create_dense_index, false);
+  CHECK_EQUAL(rule0.create_partition_index, true); // default
+  CHECK_EQUAL(rule1.create_partition_index, false);
 }
 
-TEST(should_create_dense_index will return true for empty rules)
+TEST(should_create_partition_index will return true for empty rules)
 {
-  CHECK_EQUAL(should_create_dense_index({}, {}), true);
+  CHECK_EQUAL(should_create_partition_index({}, {}), true);
 }
 
-TEST(should_create_dense_index will return true if no field name in rules) {
+TEST(should_create_partition_index will return true if no field name in rules) {
   qualified_record_field in{schema, {0u}};
-  CHECK_EQUAL(should_create_dense_index(in, {}), true);
+  CHECK_EQUAL(should_create_partition_index(in, {}), true);
 }
 
-TEST(should_create_dense_index will use create_dense_index from
+TEST(should_create_partition_index will use create_partition_index from
        config if field name is in the rule) {
   qualified_record_field in{schema, {0u}};
   auto rules = std::vector{
-    index_config::rule{.targets = {"y.x"}, .create_dense_index = false}};
-  CHECK_EQUAL(should_create_dense_index(in, rules),
-              rules.front().create_dense_index);
-
-  rules.front().create_dense_index = true;
-  CHECK_EQUAL(should_create_dense_index(in, rules),
-              rules.front().create_dense_index);
+    index_config::rule{.targets = {"y.x"}, .create_partition_index = false}};
+  CHECK_EQUAL(should_create_partition_index(in, rules),
+              rules.front().create_partition_index);
+  // change config to true
+  rules.front().create_partition_index = true;
+  CHECK_EQUAL(should_create_partition_index(in, rules),
+              rules.front().create_partition_index);
 }
 
-TEST(should_create_dense_index will will use create_dense_index from
+TEST(should_create_partition_index will will use create_partition_index from
        config if type is in the rule) {
   qualified_record_field in{schema, {0u}};
   auto rules = std::vector{
-    index_config::rule{.targets = {":count"}, .create_dense_index = false}};
-  CHECK_EQUAL(should_create_dense_index(in, rules),
-              rules.front().create_dense_index);
-
-  rules.front().create_dense_index = true;
-  CHECK_EQUAL(should_create_dense_index(in, rules),
-              rules.front().create_dense_index);
+    index_config::rule{.targets = {":count"}, .create_partition_index = false}};
+  CHECK_EQUAL(should_create_partition_index(in, rules),
+              rules.front().create_partition_index);
+  // change config to true
+  rules.front().create_partition_index = true;
+  CHECK_EQUAL(should_create_partition_index(in, rules),
+              rules.front().create_partition_index);
 }

@@ -59,8 +59,8 @@ struct evaluator_state {
   /// Stores hits for the expression.
   ids hits;
 
-  // Stores all ids for the partition. Required when no indexer is available
-  ids all_possible_ids_for_partition;
+  // Ids to be used as a result when no indexer is involved
+  ids ids_to_use_for_no_indexer;
 
   /// Points to the parent actor.
   evaluator_actor::pointer self;
@@ -84,6 +84,6 @@ struct evaluator_state {
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           expression expr, std::vector<evaluation_triple> eval,
-          ids all_possible_ids_for_partition);
+          ids ids_to_use_for_no_indexer);
 
 } // namespace vast::system

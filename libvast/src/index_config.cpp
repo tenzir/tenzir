@@ -28,7 +28,6 @@ bool is_target_applicable(const qualified_record_field& index_qf,
       = std::string_view{cbegin(target) + rule_prefix.size(), cend(target)};
     return fmt::format("{}", index_qf.type()) == type;
   }
-
   return target == index_qf.name();
 }
 
@@ -42,14 +41,13 @@ bool should_use_rule(const std::vector<std::string>& targets,
 
 } // namespace
 
-bool should_create_dense_index(const qualified_record_field& index_qf,
-                               const std::vector<index_config::rule>& rules) {
+bool should_create_partition_index(
+  const qualified_record_field& index_qf,
+  const std::vector<index_config::rule>& rules) {
   for (const auto& rule : rules) {
-    if (should_use_rule(rule.targets, index_qf)) {
-      return rule.create_dense_index;
-    }
+    if (should_use_rule(rule.targets, index_qf))
+      return rule.create_partition_index;
   }
-
   return true;
 }
 

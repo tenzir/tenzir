@@ -19,7 +19,7 @@ namespace {
 bool needs_evaluation_without_indexer(
   const std::vector<system::evaluation_triple>& t) {
   return std::any_of(cbegin(t), cend(t), [](const auto& triple) {
-    return not std::get<system::indexer_actor>(triple);
+    return !std::get<system::indexer_actor>(triple);
   });
 }
 } // namespace
@@ -29,9 +29,8 @@ ids get_ids_for_evaluation(
   const std::vector<system::evaluation_triple>& evaluation_triples) {
   if (needs_evaluation_without_indexer(evaluation_triples)) {
     auto all_ids = vast::ids{};
-    for (const auto& [_, ids] : type_ids) {
+    for (const auto& [_, ids] : type_ids)
       all_ids |= ids;
-    }
 
     return all_ids;
   }
