@@ -1,14 +1,19 @@
-from invoke import Context
+from vast_invoke import Context
 import dynaconf
 import json
 import re
 from boto3.session import Session
+import boto3
+import botocore.client
 
-AWS_REGIONS = Session().get_available_regions("s3")
+AWS_REGION_VALIDATOR = dynaconf.Validator(
+    "VAST_AWS_REGION", must_exist=True, is_in=Session().get_available_regions("s3")
+)
 
-# Note: an empty variable is considered as existing
+# Common validators should always have defaults to avoid forcing a variable on a
+# plugin that doesn't need it
+# Side note: an empty variable is considered as existing
 COMMON_VALIDATORS = [
-    dynaconf.Validator("VAST_AWS_REGION", must_exist=True, is_in=AWS_REGIONS),
     dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
     dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
     # if we use tf cloud as backend, the right variable must be configured
@@ -19,7 +24,11 @@ COMMON_VALIDATORS = [
     ),
 ]
 
-## Helper functions
+# Path aliases
+CLOUDROOT = "."
+REPOROOT = "../.."
+TFDIR = f"{CLOUDROOT}/terraform"
+DOCKERDIR = f"{CLOUDROOT}/docker"
 
 
 def conf(validators=[]) -> dict:
@@ -59,9 +68,16 @@ def tf_version(c: Context):
     return json.loads(version_json)["terraform_version"]
 
 
-# Aliases
+def terraform_output(c: Context, step, key) -> str:
+    return c.run(
+        f"terraform -chdir={TFDIR}/{step} output --raw {key}", hide="out"
+    ).stdout
+
+
 AWS_REGION = conf(COMMON_VALIDATORS)["VAST_AWS_REGION"]
-CLOUDROOT = "."
-REPOROOT = "../.."
-TFDIR = f"{CLOUDROOT}/terraform"
-DOCKERDIR = f"{CLOUDROOT}/docker"
+
+
+def aws(service):
+    # timeout set to 1000 to be larger than lambda max duration
+    config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
+    return boto3.client(service, region_name=AWS_REGION, config=config)

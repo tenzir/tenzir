@@ -47,6 +47,12 @@ class StructType;
 class TimestampType;
 class UInt64Type;
 
+namespace io {
+
+class RandomAccessFile;
+
+} // namespace io
+
 } // namespace arrow
 
 // -- flatbuffers -------------------------------------------------------------
@@ -84,6 +90,7 @@ class stringification_inspector;
 
 namespace vast {
 
+class active_store;
 class address;
 class address_type;
 class aggregation_function;
@@ -102,8 +109,10 @@ class legacy_abstract_type;
 class legacy_type;
 class list_type;
 class map_type;
+class module;
 class msgpack_table_slice_builder;
 class null_bitmap;
+class passive_store;
 class pattern;
 class pattern_type;
 class plugin;
@@ -111,11 +120,9 @@ class plugin_ptr;
 class port;
 class real_type;
 class record_type;
-class module;
 class segment;
 class segment_builder;
 class segment_store;
-class store;
 class string_type;
 class subnet;
 class subnet_type;
@@ -124,8 +131,8 @@ class table_slice;
 class table_slice_builder;
 class table_slice_column;
 class time_type;
-class transform;
-class transform_step;
+class pipeline;
+class pipeline_operator;
 class type;
 class uuid;
 class value_index;
@@ -213,7 +220,7 @@ using ids = bitmap; // temporary; until we have a real type for 'ids'
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
 using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
-using transform_ptr = std::shared_ptr<transform>;
+using pipeline_ptr = std::shared_ptr<pipeline>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 /// A duration in time with nanosecond resolution.

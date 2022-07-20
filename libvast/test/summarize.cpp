@@ -10,12 +10,12 @@
 
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast.hpp>
+#include <vast/pipeline.hpp>
+#include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder_factory.hpp>
 #include <vast/test/fixtures/events.hpp>
 #include <vast/test/test.hpp>
-#include <vast/transform.hpp>
-#include <vast/transform_step.hpp>
 
 #include <caf/settings.hpp>
 #include <caf/test/dsl.hpp>
@@ -80,14 +80,14 @@ table_slice make_testdata(table_slice_encoding encoding
 
 struct fixture : fixtures::events {
   fixture() {
-    summarize_plugin = plugins::find<transform_plugin>("summarize");
+    summarize_plugin = plugins::find<pipeline_operator_plugin>("summarize");
     REQUIRE(summarize_plugin);
-    rename_plugin = plugins::find<transform_plugin>("rename");
+    rename_plugin = plugins::find<pipeline_operator_plugin>("rename");
     REQUIRE(rename_plugin);
   }
 
-  const transform_plugin* summarize_plugin = nullptr;
-  const transform_plugin* rename_plugin = nullptr;
+  const pipeline_operator_plugin* summarize_plugin = nullptr;
+  const pipeline_operator_plugin* rename_plugin = nullptr;
 };
 
 } // namespace
@@ -109,12 +109,13 @@ TEST(summarize Zeek conn log) {
        {"resp_ip_bytes", "max"},
      }},
   };
-  auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
+  auto summarize_operator
+    = unbox(summarize_plugin->make_pipeline_operator(opts));
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
   for (const auto& slice : zeek_conn_log_full)
-    CHECK_EQUAL(summarize_step->add(slice.layout(), to_record_batch(slice)),
+    CHECK_EQUAL(summarize_operator->add(slice.layout(), to_record_batch(slice)),
                 caf::none);
-  const auto result = unbox(summarize_step->finish());
+  const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
   // NOTE: I calculated this data ahead of time using jq, so it can safely be
@@ -176,10 +177,11 @@ TEST(summarize test) {
        {"num_sums", record{{"count", list{"sum", "sum_null"}}}},
      }},
   };
-  auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
+  auto summarize_operator
+    = unbox(summarize_plugin->make_pipeline_operator(opts));
   REQUIRE_SUCCESS(
-    summarize_step->add(agg_test_layout, to_record_batch(make_testdata())));
-  const auto result = unbox(summarize_step->finish());
+    summarize_operator->add(agg_test_layout, to_record_batch(make_testdata())));
+  const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
   CHECK_EQUAL(summarized_slice.at(0, 0),
@@ -233,10 +235,11 @@ TEST(summarize test fully qualified field names) {
        {"all_false", record{{"any", "aggtestdata.any_false"}}},
      }},
   };
-  auto summarize_step = unbox(summarize_plugin->make_transform_step(opts));
+  auto summarize_operator
+    = unbox(summarize_plugin->make_pipeline_operator(opts));
   const auto test_batch = to_record_batch(make_testdata());
-  REQUIRE_SUCCESS(summarize_step->add(agg_test_layout, test_batch));
-  const auto result = unbox(summarize_step->finish());
+  REQUIRE_SUCCESS(summarize_operator->add(agg_test_layout, test_batch));
+  const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
   REQUIRE_EQUAL(summarized_slice.columns(), 11u);
@@ -281,17 +284,18 @@ TEST(summarize test wrong config) {
        {"all_false", record{{"any", "aggtestdata.any_false"}}},
      }},
   };
-  auto rename_step = unbox(rename_plugin->make_transform_step(rename_opts));
-  auto summarize_step
-    = unbox(summarize_plugin->make_transform_step(summarize_opts));
-  auto test_transform = transform{"test", {}};
-  test_transform.add_step(std::move(rename_step));
-  test_transform.add_step(std::move(summarize_step));
+  auto rename_operator
+    = unbox(rename_plugin->make_pipeline_operator(rename_opts));
+  auto summarize_operator
+    = unbox(summarize_plugin->make_pipeline_operator(summarize_opts));
+  auto test_transform = pipeline{"test", {}};
+  test_transform.add_operator(std::move(rename_operator));
+  test_transform.add_operator(std::move(summarize_operator));
   REQUIRE_SUCCESS(test_transform.add(make_testdata()));
   const auto result = unbox(test_transform.finish());
   REQUIRE_EQUAL(result.size(), 1u);
   // Following the renaming the output data should not be touched by the
-  // summarize step, so we expect the underlying data to be unchanged,
+  // summarize operator, so we expect the underlying data to be unchanged,
   // although the layout will be renamed.
   const auto expected_data = make_testdata();
   CHECK(to_record_batch(result[0])->ToStructArray().ValueOrDie()->Equals(

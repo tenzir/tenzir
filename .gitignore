@@ -33,8 +33,10 @@ __pycache__/
 # VAST example artifacts
 /examples/**/venv/
 /examples/**/.ipynb_checkpoints/
+/examples/notebooks/output
 
 # Website
+/web/env
 /web/node_modules
 /web/build
 /web/.docusaurus
@@ -47,3 +49,5 @@ __pycache__/
 /web/yarn-debug.log*
 /web/yarn-error.log*
 /web/src/pages/changelog.md
+/web/docs/try-vast/*.md
+/web/docs/try-vast/*_files

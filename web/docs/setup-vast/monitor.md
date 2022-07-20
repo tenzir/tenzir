@@ -130,10 +130,10 @@ The following list describes all available metrics keys:
 |`scheduler.partition.pending`|The number of queued partitions.|#partitions||
 |`scheduler.partition.remaining-capacity`|The number of partition lookups that could be scheduled immediately.|#workers||
 |`scheduler.partition.scheduled`|The number of scheduled partitions.|#partitions||
-|`segment-store.lookup.runtime`|The duration of a query evaluation in a partition store.|#milliseconds|🔎💾|
-|`segment-store.lookup.hits`|The number of results of a query in a partition store.|#events|🔎💾|
-|`parquet-store.lookup.runtime`|The duration of a query evaluation in a parquet store.|#milliseconds|🔎→
-|`parquet-store.lookup.hits`|The number of results of a query in a parquet store.|#events|🔎💾|
+|active-store.lookup.runtime|The number of results of a query in an active store.|#events|🔎💾|
+|active-store.lookup.hits|The number of results of a query in an active store.|#events|🔎💾|
+|passive-store.lookup.runtime|The number of results of a query in a passive store.|#events|🔎💾|
+|passive-store.lookup.hits|The number of results of a query in a passive store.|#events|🔎💾|
 |`source.start`|Timepoint when the source started.|nanoseconds since epoch||
 |`source.stop`|Timepoint when the source stopped.|nanoseconds since epoch||
 |`syslog-reader.rate`|The rate of events processed by the syslog source.|#events/second||
@@ -147,7 +147,7 @@ The metadata symbols have the following meaning:
 |🔎|`query`|A UUID to identify the query.|
 |💽|`partition-type`|One of "active" or "passive".|
 |#️⃣|`partition-version`|The internal partition version.|
-|💾|`store-type`|One of "active" or "passive".|
+|💾|`store-type`|One of "parquet", "feather" or "segment-store".|
 |🗂️|`schema`|The schema name.|
 
 For all keys that show throughput rates in #events/second, e.g.,

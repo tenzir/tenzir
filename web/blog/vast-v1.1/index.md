@@ -3,6 +3,7 @@ title: VAST v1.1
 description: VAST v1.1 - Compaction & Query Language Frontends
 authors: dominiklohmann
 date: 2022-03-03
+last_updated: 2022-07-15
 tags: [release, compaction, query]
 ---
 
@@ -81,9 +82,21 @@ Compaction supersedes both the disk monitor and aging, being able to cover the
 entire functionality of their behaviors in a more configurable way. The disk
 monitor remains unchanged and the experimental aging feature is deprecated (see
 below).
+
 ## Updates to Transform Steps
 
 ### Aggregate Step
+
+:::info Transforms → Pipelines
+In VAST v2.2, we will rename *transforms* to *pipelines*, and
+*transform steps* to *pipeline operators*. This causes several configuration key
+changes. Additionally, we will rename the `aggregate` operator to
+[`summarize`][summarize]. Please keep this in mind when reading the example
+below and consult the
+[documentation](/docs/understand-vast/query-language/pipelines) for the
+up-to-date syntax.
+[summarize]: /docs/understand-vast/query-language/operators/summarize
+:::
 
 The new `aggregate` transform step plugin allows for reducing data with an
 aggregation operation over a group of columns.

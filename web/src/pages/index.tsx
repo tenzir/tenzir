@@ -38,7 +38,7 @@ export default function Home(): JSX.Element {
   return (
     <Layout
       title={`Visibility Across Space and Time`}
-      description="Description will go into a meta tag in <head />">
+      description="The network telemetry engine for data-driven security investigations.">
       <HomepageHeader />
       <main>
         <HomepageFeatures />

@@ -144,7 +144,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
        const type_registry_actor& type_registry, vast::module local_module,
        std::string type_filter, accountant_actor accountant,
-       std::vector<transform>&& transforms) {
+       std::vector<pipeline>&& pipelines) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(*self));
   // Initialize state.
   self->state.self = self;
@@ -157,7 +157,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.has_sink = false;
   self->state.done = false;
   self->state.transformer
-    = self->spawn(transformer, "source-transformer", std::move(transforms));
+    = self->spawn(transformer, "source-transformer", std::move(pipelines));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", *self);
     self->quit();

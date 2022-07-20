@@ -13,8 +13,8 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
-#include "vast/transform.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/attach_continuous_stream_stage.hpp>
@@ -239,7 +239,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   const caf::settings& index_opts, accountant_actor accountant,
   idspace_distributor_actor idspace_distributor,
   type_registry_actor type_registry, filesystem_actor fs,
-  transform_ptr transform, std::string partition_path_template,
+  pipeline_ptr transform, std::string partition_path_template,
   std::string synopsis_path_template) {
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);
@@ -315,8 +315,9 @@ partition_transformer_actor::behavior_type partition_transformer(
       // ...otherwise, prepare for writing out the transformed data by creating
       // new stores, sending out the slices and requesting new idspace.
       auto store_id = self->state.store_id;
-      auto const* store_plugin = plugins::find<vast::store_plugin>(store_id);
-      if (!store_plugin) {
+      auto const* store_actor_plugin
+        = plugins::find<vast::store_actor_plugin>(store_id);
+      if (!store_actor_plugin) {
         self->state.stream_error
           = caf::make_error(ec::invalid_argument,
                             "could not find a store plugin named {}", store_id);
@@ -335,7 +336,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       for (auto& [layout, partition_data] : self->state.data) {
         if (partition_data.events == 0)
           continue;
-        auto builder_and_header = store_plugin->make_store_builder(
+        auto builder_and_header = store_actor_plugin->make_store_builder(
           self->state.accountant, self->state.fs, partition_data.id);
         if (!builder_and_header) {
           self->state.stream_error
@@ -345,12 +346,13 @@ partition_transformer_actor::behavior_type partition_transformer(
           store_or_fulfill(self, std::move(stream_data));
           return;
         }
-        partition_data.store_header = builder_and_header->second;
+        partition_data.store_header = builder_and_header->header;
         // Empirically adding the outbound path and pushing data to it
         // need to be separated by a continuation, although I'm not
         // completely sure why.
         self->state.partition_buildup.at(partition_data.id).slot
-          = self->state.stage->add_outbound_path(builder_and_header->first);
+          = self->state.stage->add_outbound_path(
+            builder_and_header->store_builder);
       }
       VAST_DEBUG("{} received all table slices", *self);
       self

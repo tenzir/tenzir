@@ -10,9 +10,9 @@
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/error.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder_factory.hpp>
-#include <vast/transform.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/type.h>
@@ -25,7 +25,7 @@ namespace vast::plugins::select {
 
 namespace {
 
-/// The configuration of a select transform step.
+/// The configuration of a select pipeline operator.
 struct configuration {
   /// The key suffixes of the fields to keep.
   std::vector<std::string> fields = {};
@@ -45,9 +45,9 @@ struct configuration {
   }
 };
 
-class select_step : public transform_step {
+class select_operator : public pipeline_operator {
 public:
-  explicit select_step(configuration config) noexcept
+  explicit select_operator(configuration config) noexcept
     : config_{std::move(config)} {
     // nop
   }
@@ -56,7 +56,7 @@ public:
   /// @returns The new layout and the projected record batch.
   caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_TRACE("select step adds batch");
+    VAST_TRACE("select operator adds batch");
     auto indices = std::vector<offset>{};
     for (const auto& field : config_.fields)
       for (auto&& index : caf::get<record_type>(layout).resolve_key_suffix(
@@ -73,20 +73,20 @@ public:
     return caf::none;
   }
 
-  caf::expected<std::vector<transform_batch>> finish() override {
-    VAST_TRACE("select step finished transformation");
+  caf::expected<std::vector<pipeline_batch>> finish() override {
+    VAST_TRACE("select operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<transform_batch> transformed_ = {};
+  std::vector<pipeline_batch> transformed_ = {};
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};
 };
 
-class plugin final : public virtual transform_plugin {
+class plugin final : public virtual pipeline_operator_plugin {
 public:
   // plugin API
   caf::error initialize(data) override {
@@ -98,16 +98,16 @@ public:
   };
 
   // transform plugin API
-  [[nodiscard]] caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const record& options) const override {
+  [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
+  make_pipeline_operator(const record& options) const override {
     if (!options.contains("fields"))
       return caf::make_error(ec::invalid_configuration,
                              "key 'fields' is missing in configuration for "
-                             "select step");
+                             "select operator");
     auto config = to<configuration>(options);
     if (!config)
       return config.error();
-    return std::make_unique<select_step>(std::move(*config));
+    return std::make_unique<select_operator>(std::move(*config));
   }
 };
 

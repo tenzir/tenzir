@@ -4,7 +4,7 @@ vast:
   export:
     zeek:
       disable-timestamp-tags: true
-  transforms:
+  pipelines:
     remove_flow:
       - drop:
           fields:
@@ -32,37 +32,37 @@ vast:
             - timestamp
             - alert.action
 
-  transform-triggers:
+  pipeline-triggers:
     import:
-      - transform: remove_flow
+      - pipeline: remove_flow
         events: [suricata.http]
         location: server
 
-      - transform: remove_flow
+      - pipeline: remove_flow
         events: [suricata.netflow]
         location: client
 
     export:
-      - transform: replace_rrname
+      - pipeline: replace_rrname
         events: [suricata.dns]
         location: server
 
-      - transform: remove_flow
+      - pipeline: remove_flow
         events: [suricata.dns]
         location: server
 
-      - transform: hash_uid
+      - pipeline: hash_uid
         events: [suricata.fileinfo]
         location: client
 
-      - transform: select_fields
+      - pipeline: select_fields
         events: [suricata.alert]
         location: client
 
-      - transform: remove_action
+      - pipeline: remove_action
         events: [suricata.alert]
         location: server
 
-      - transform: select_row
+      - pipeline: select_row
         events: [suricata.dns]
         location: client

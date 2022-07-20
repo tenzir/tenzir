@@ -45,7 +45,7 @@ Optionally, you can also define the following variables:
 - `VAST_VERSION`: the version of VAST that should be used. By default it is set
   to the latest release. Can be any tag available on the tenzir/vast Dockerhub
   as long as it is more recent than `v1.1.0`. You can also build from source
-  using `latest`.
+  using `build`.
 
 - `VAST_SERVER_STORAGE_TYPE`: the type of volume to use for the VAST server. Can
   be set to either
