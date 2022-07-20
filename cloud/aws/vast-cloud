@@ -46,11 +46,10 @@ run () {
   docker run -i \
     $(echo "$1") \
     --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
-    --mount type=bind,source=$HOST_DIRNAME/../..,target=/vast \
-    $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "--mount type=bind,source=$HOST_CREDENTIALS_FILE,target=/.aws/credentials,readonly") \
+    --mount type=bind,source=/,target=/host \
     --mount source=vastcloud-cli-persistant-configs,target=/etc/persistant-configs \
     -e AWS_PROFILE \
-    -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
+    $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "-e AWS_SHARED_CREDENTIALS_FILE=/host$HOST_CREDENTIALS_FILE") \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
     -e VASTCLOUD_NO_PTY \
@@ -58,6 +57,7 @@ run () {
     --env-file <(env | grep TF_) \
     --env-file <(env | grep HOST_) \
     --rm \
+    --workdir /host$HOST_DIRNAME \
     tenzir/vast-cloud-cli "${@:2}"
 }
 

@@ -1,6 +1,14 @@
 from vast_invoke import task
 import core
-from common import COMMON_VALIDATORS, auto_app_fmt, conf, TFDIR, terraform_output, aws
+from common import (
+    COMMON_VALIDATORS,
+    HOSTROOT,
+    auto_app_fmt,
+    conf,
+    TFDIR,
+    terraform_output,
+    aws,
+)
 
 
 VALIDATORS = COMMON_VALIDATORS
@@ -45,20 +53,20 @@ def list(c, prefix=""):
             print(obj["Key"])
 
 
-@task
+@task(help={"source": "Absolute path to the file"})
 def upload(c, source, key):
     """Upload a file to the specified key in the bucket
 
     This is a simplified helper, for more advanced features use the AWS CLI directly"""
-    aws("s3").upload_file(source, name(c), key)
+    aws("s3").upload_file(f"{HOSTROOT}{source}", name(c), key)
 
 
-@task
+@task(help={"destination": "Absolute path to the file"})
 def download(c, key, destination):
     """Download a file to the specified key in the bucket
 
     This is a simplified helper, for more advanced features use the AWS CLI directly"""
-    aws("s3").download_file(name(c), key, destination)
+    aws("s3").download_file(name(c), key, f"{HOSTROOT}{destination}")
 
 
 @task

@@ -29,6 +29,7 @@ CLOUDROOT = "."
 REPOROOT = "../.."
 TFDIR = f"{CLOUDROOT}/terraform"
 DOCKERDIR = f"{CLOUDROOT}/docker"
+HOSTROOT = "/host"
 
 
 def conf(validators=[]) -> dict:
@@ -81,3 +82,17 @@ def aws(service):
     # timeout set to 1000 to be larger than lambda max duration
     config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
     return boto3.client(service, region_name=AWS_REGION, config=config)
+
+
+def load_cmd(cmd: str) -> bytes:
+    """Load the command as bytes. If cmd starts with file:// or s3://, load commands from a file.
+
+    Must be an absolute path (e.g file:///etc/mycommands)"""
+    if cmd.startswith("file:///"):
+        with open(f"{HOSTROOT}/{cmd[8:]}", "rb") as f:
+            return f.read()
+    if cmd.startswith("s3://"):
+        chunks = cmd[5:].split("/", 1)
+        return aws("s3").get_object(Bucket=chunks[0], Key=chunks[1])["Body"].read()
+    else:
+        return cmd.encode()

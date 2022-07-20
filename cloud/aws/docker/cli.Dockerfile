@@ -65,6 +65,4 @@ USER $UNAME
 # Install Python dependencies
 RUN pip install boto3==1.24.27 dynaconf==3.1.9 invoke==1.7.1 requests==2.28.1 
 
-WORKDIR /vast/cloud/aws
-
 ENTRYPOINT [ "python", "./cli/main.py" ]

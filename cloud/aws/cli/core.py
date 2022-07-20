@@ -1,3 +1,4 @@
+from typing import List, Tuple
 from vast_invoke import pty_task, task, Context, Exit
 import dynaconf
 import time
@@ -12,6 +13,7 @@ from common import (
     auto_app_fmt,
     REPOROOT,
     DOCKERDIR,
+    load_cmd,
     terraform_output,
     aws,
 )
@@ -30,7 +32,12 @@ VALIDATORS = [
 ]
 
 CMD_HELP = {
-    "cmd": "A bash command to be executed. We recommend wrapping it with single quotes to avoid unexpected interpolations."
+    "cmd": "Bash commands to be executed. Can be either a plain command\
+ (we recommend wrapping it with single quotes to avoid unexpected\
+ interpolations), a local absolute file path (e.g file:///etc/mycommands)\
+ or an s3 location (e.g s3://mybucket/key)",
+    "env": "List of environment variables to be passed to the execution context,\
+ name and values are separated by = (e.g --env BUCKET=mybucketname)",
 }
 
 
@@ -60,6 +67,17 @@ def env(c: Context) -> dict:
         **conf(VALIDATORS),
         "VAST_VERSION": VAST_VERSION(c),
     }
+
+
+def parse_env(env: List[str]) -> Tuple[str, str]:
+    def split_name_val(name_val):
+        env_split = name_val.split("=")
+        if len(env_split) != 2:
+            raise Exit(f"{name_val} should have exactly one '=' char", 1)
+        return env_split[0], env_split[1]
+
+    name_val_list = [split_name_val(v) for v in env]
+    return {v[0]: v[1] for v in name_val_list}
 
 
 ## Tasks
@@ -244,17 +262,17 @@ def list_all_tasks(c):
     return task_ids
 
 
-@task(autoprint=True, help=CMD_HELP)
-def run_lambda(c, cmd):
+@task(autoprint=True, help=CMD_HELP, iterable=["env"])
+def run_lambda(c, cmd, env=[]):
     """Run ad-hoc VAST client commands from AWS Lambda
 
     Returns an object containing the standard and error outputs as well as the
     parsed command that was executed"""
     lambda_name = terraform_output(c, "core-2", "vast_lambda_name")
-    cmd_b64 = base64.b64encode(cmd.encode()).decode()
+    cmd_b64 = base64.b64encode(load_cmd(cmd)).decode()
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
-        Payload=json.dumps({"cmd": cmd_b64}).encode(),
+        Payload=json.dumps({"cmd": cmd_b64, "env": parse_env(env)}).encode(),
         InvocationType="RequestResponse",
     )
     resp_payload = lambda_res["Payload"].read().decode()
@@ -273,14 +291,16 @@ def run_lambda(c, cmd):
     return resp_payload
 
 
-@pty_task(help=CMD_HELP)
-def execute_command(c, cmd="/bin/bash"):
+@pty_task(help=CMD_HELP, iterable=["env"])
+def execute_command(c, cmd="/bin/bash", env=[]):
     """Run ad-hoc or interactive commands from the VAST server Fargate task"""
     task_id = get_vast_server(c)
     cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues
     if cmd != "/bin/bash":
-        cmd = f"/bin/bash -c 'echo {base64.b64encode(cmd.encode()).decode()} | base64 -d | /bin/bash'"
+        cmd_bytes = load_cmd(cmd)
+        parse_env(env)  # validate format of env list items
+        cmd = f"{' '.join(env)} /bin/bash -c 'echo {base64.b64encode(cmd_bytes).decode()} | base64 -d | /bin/bash'"
     # we use the CLI here because boto does not know how to use the session-manager-plugin
     c.run(
         f"""aws ecs execute-command \
