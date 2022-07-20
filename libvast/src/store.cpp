@@ -44,11 +44,9 @@ handle_lookup(Actor& self, const query_context& query_context,
                   "estimate counts should not evaluate expressions");
       std::shared_ptr<arrow::RecordBatch> batch{};
       auto num_hits = uint64_t{};
-      for (const auto& slice : slices) {
-        auto result = count_matching(slice, *expr, {});
-        num_hits += result;
-        self->send(count.sink, result);
-      }
+      for (const auto& slice : slices)
+        num_hits += count_matching(slice, *expr, {});
+      self->send(count.sink, num_hits);
       return num_hits;
     },
     [&](const query_context::extract& extract) -> caf::expected<uint64_t> {

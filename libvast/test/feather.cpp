@@ -102,6 +102,38 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     REQUIRE_EQUAL(rows, tally);
     return result;
   }
+
+  // received_messages must match the number of table slices in the store
+  uint64_t count(const system::store_actor& actor, const ids& ids,
+                 const expression& expr = expression{predicate{
+                   meta_extractor{meta_extractor::type},
+                   relational_operator::not_equal, data{std::string{}}}}) {
+    bool done = false;
+    uint64_t tally = 0;
+    uint64_t rows = 0;
+    auto query = query_context::make_count(
+      self, query_context::count::mode::exact, expr);
+    query.ids = ids;
+    self->send(actor, atom::query_v, query);
+    run();
+    std::this_thread::sleep_for(std::chrono::seconds{1});
+    auto received_messages = uint64_t{};
+    self
+      // we can't distinguish the "final tally" message from the individual
+      // results
+      ->do_receive([&](uint64_t x) {
+        // first message is for the query actor, second one back to sender
+        if (++received_messages >= 2) {
+          done = true;
+          tally = x;
+        } else {
+          rows += x;
+        }
+      })
+      .until(done);
+    REQUIRE_EQUAL(rows, tally);
+    return tally;
+  }
   vast::system::accountant_actor accountant = {};
   vast::system::filesystem_actor filesystem;
 };
@@ -287,6 +319,32 @@ TEST(passive feather store fetchall query) {
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
   compare_table_slices(slice, results[0]);
+}
+
+TEST(passive feather store selective count query) {
+  auto f = table_slice_fixture();
+  auto slice = f.slice;
+  auto expr = to<expression>("f1 == \"n1\"");
+  slice.offset(23);
+  auto uuid = vast::uuid::random();
+  const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
+  REQUIRE(plugin);
+  auto builder_and_header
+    = plugin->make_store_builder(accountant, filesystem, uuid);
+  REQUIRE_NOERROR(builder_and_header);
+  auto& [builder, header] = *builder_and_header;
+  auto slices = std::vector<table_slice>{slice};
+  vast::detail::spawn_container_source(sys, slices, builder);
+  run();
+  // The local store expects a single stream source, so the data should be
+  // flushed to disk after the source disconnected.
+  auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
+  REQUIRE_NOERROR(store);
+  run();
+  auto ids = ::vast::make_ids({23});
+  auto results = count(*store, ids, *expr);
+  run();
+  REQUIRE_EQUAL(results, 1ull);
 }
 
 TEST(passive feather store selective query) {
