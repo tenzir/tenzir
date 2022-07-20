@@ -1,4 +1,4 @@
-from invoke import task
+from vast_invoke import task
 import core
 from common import COMMON_VALIDATORS, auto_app_fmt, conf, TFDIR, terraform_output, aws
 
