@@ -511,19 +511,21 @@ void index_state::create_active_partition(const type& schema) {
 
 void index_state::decommission_active_partition(
   const type& schema, std::function<void(const caf::error&)> completion) {
-  auto active_partition = active_partitions.find(schema);
+  const auto active_partition = active_partitions.find(schema);
   VAST_ASSERT(active_partition != active_partitions.end());
-  auto id = active_partition->second.id;
-  auto actor = std::exchange(active_partition->second.actor, {});
-  unpersisted[id] = actor;
+  const auto id = active_partition->second.id;
+  const auto actor = std::exchange(active_partition->second.actor, {});
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
   stage->out().close(active_partition->second.stream_slot);
   stage->out().close(active_partition->second.store_slot);
   stage->out().force_emit_batches();
+  // Move the active partition to the list of unpersisted partitions.
+  unpersisted[id] = active_partition->second.actor;
+  active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
-  auto part_dir = partition_path(id);
-  auto synopsis_dir = partition_synopsis_path(id);
+  const auto part_dir = partition_path(id);
+  const auto synopsis_dir = partition_synopsis_path(id);
   VAST_DEBUG("{} persists active partition {} to {}", *self, schema, part_dir);
   self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
@@ -1526,8 +1528,13 @@ index(index_actor::stateful_pointer<index_state> self,
         [rp](caf::error error) mutable {
           rp.deliver(std::move(error));
         });
-      for (const auto& [schema, active_partition] :
-           self->state.active_partitions) {
+      // We gather the schemas first before we call decomission active partition
+      // on every active partition to avoid iterator invalidation.
+      auto schemas = std::vector<type>{};
+      schemas.reserve(self->state.active_partitions.size());
+      for (const auto& [schema, _] : self->state.active_partitions)
+        schemas.push_back(schema);
+      for (const auto& schema : schemas) {
         self->state.decommission_active_partition(
           schema, [counter](const caf::error& err) mutable {
             if (err)
