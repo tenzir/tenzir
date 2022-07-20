@@ -115,6 +115,8 @@ public:
   [[nodiscard]] std::optional<system::receiver_actor<atom::done>>
   handle_completion(const uuid& qid);
 
+  size_t memusage() const;
+
 private:
   /// Maps query IDs to pending queries lookup state.
   std::unordered_map<uuid, query_state> queries_ = {};

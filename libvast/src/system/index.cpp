@@ -998,10 +998,37 @@ void index_state::send_report() {
        max_concurrent_partition_lookups - running_partition_lookups},
       {"scheduler.partition.current-lookups", running_partition_lookups},
     }};
+  msg.data.push_back(data_point{
+          .key = "memory-usage",
+          .value = memusage(),
+          .metadata = {
+            {"component", std::string{name}},
+          },
+        });
   self->send(accountant, atom::metrics_v, std::move(msg));
   auto r = performance_report{.data = {{{"scheduler", scheduler_measurement}}}};
   self->send(accountant, atom::metrics_v, std::move(r));
   scheduler_measurement = measurement{};
+}
+
+std::size_t index_state::memusage() const {
+  auto calculate_usage = []<class T>(const T& collection) -> std::size_t {
+    return collection.size() * sizeof(typename T::value_type);
+  };
+  auto usage = std::size_t{0u};
+  for (const auto& [type, partition_info] : active_partitions) {
+    usage += as_bytes(type).size() + sizeof(partition_info);
+  }
+  usage += persisted_partitions.size()
+           * sizeof(decltype(persisted_partitions)::key_type);
+  usage += pending_queries.memusage();
+  for (const auto& [addr, uuids] : monitored_queries) {
+    usage += sizeof(addr) + calculate_usage(uuids);
+  }
+  usage += calculate_usage(flush_listeners);
+  usage += calculate_usage(partition_creation_listeners);
+  usage += calculate_usage(partitions_in_transformation);
+  return usage;
 }
 
 caf::typed_response_promise<record>

@@ -236,4 +236,15 @@ query_queue::handle_completion(const uuid& qid) {
   return result;
 }
 
+size_t query_queue::memusage() const {
+  auto usage = size_t{0u};
+  for (const auto& [uid, query_state] : queries_) {
+    usage += sizeof(uid) + sizeof(query_state);
+  }
+  usage += partitions.size() * sizeof(decltype(partitions)::value_type);
+  usage += inactive_partitions.size()
+           * sizeof(decltype(inactive_partitions)::value_type);
+  return usage;
+}
+
 } // namespace vast
