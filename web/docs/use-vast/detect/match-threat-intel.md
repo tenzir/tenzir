@@ -343,7 +343,7 @@ Sometimes client-side state handling is not option, e.g., when updating threat
 data through disseminating files. In this case, you can also replace the
 server-side state manually, which is file-backed at the VAST server. The
 command `vast matcher reload` allows for syncing matcher state updates after
-performing external external state modifications.
+performing external state modifications.
 
 :::caution
 You must ensure manually that VAST does not write to the matcher state file
