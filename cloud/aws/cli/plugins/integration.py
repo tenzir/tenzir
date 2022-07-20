@@ -1,4 +1,4 @@
-from invoke import task, Context
+from vast_invoke import task, Context
 import time
 import json
 from common import COMMON_VALIDATORS, AWS_REGION_VALIDATOR
@@ -7,8 +7,6 @@ VALIDATORS = [
     *COMMON_VALIDATORS,
     AWS_REGION_VALIDATOR,
 ]
-
-INVOKE_CONFIG = {"run": {"env": {"VASTCLOUD_NOTTY": "1"}}}
 
 
 @task
@@ -65,7 +63,7 @@ def vast_data_import(c):
     assert 7 == new_count - init_count, "Wrong count"
 
 
-@task()
+@task
 def all(c):
     """Run the entire testbook. VAST needs to be deployed beforehand.
     Warning: This will affect the state of the current stack"""
