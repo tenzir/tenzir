@@ -261,7 +261,7 @@ def run_step(
             if step.transformation:
                 LOGGER.debug(f"transforming output with `{step.transformation}`")
                 env = os.environ.copy()
-                env["INTEGRATION_DB_DIRECTORY"] = db_dir
+                env["VAST_INTEGRATION_DB_DIRECTORY"] = db_dir
                 try:
                     out = subprocess.run(
                         [step.transformation],

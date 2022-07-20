@@ -393,7 +393,7 @@ caf::error index_state::load_from_disk() {
           VAST_WARN("{} failed to remove partition file {} after recovery: {}",
                     index, part_path, err);
         for (auto slice : *seg)
-          co_yield slice;
+          co_yield std::move(slice);
       }
     }(self, std::move(oversized_partitions), this->dir),
     static_cast<index_actor>(self));
