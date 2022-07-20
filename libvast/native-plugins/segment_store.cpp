@@ -113,7 +113,6 @@ private:
 
 // Handler for `vast::query` that is shared between active and passive stores.
 // Returns a the number of events that match the query.
-// Precondition: Query type is either `count` or `extract`.
 template <typename Actor>
 caf::expected<uint64_t>
 handle_lookup(Actor& self, const vast::query_context& query_context,
@@ -240,12 +239,13 @@ system::store_actor::behavior_type passive_local_store(
         return num_hits.error();
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query_context.id);
-      self->send(
-        self->state.accountant, "segment-store.lookup.runtime", runtime,
-        system::metrics_metadata{{"query", id_str}, {"store-type", "passive"}});
-      self->send(self->state.accountant, "segment-store.lookup.hits", *num_hits,
+      self->send(self->state.accountant, "passive-store.lookup.runtime",
+                 runtime,
                  system::metrics_metadata{{"query", id_str},
-                                          {"store-type", "passive"}});
+                                          {"store-type", "segment-store"}});
+      self->send(self->state.accountant, "passive-store.lookup.hits", *num_hits,
+                 system::metrics_metadata{{"query", id_str},
+                                          {"store-type", "segment-store"}});
       return *num_hits;
     },
     [self](atom::erase, ids xs) -> caf::result<uint64_t> {
@@ -353,12 +353,12 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
         return num_hits.error();
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query_context.id);
-      self->send(
-        self->state.accountant, "segment_store.lookup.runtime", runtime,
-        system::metrics_metadata{{"query", id_str}, {"store_type", "active"}});
-      self->send(self->state.accountant, "segment_store.lookup.hits", *num_hits,
+      self->send(self->state.accountant, "active-store.lookup.runtime", runtime,
                  system::metrics_metadata{{"query", id_str},
-                                          {"store_type", "active"}});
+                                          {"store-type", "segment-store"}});
+      self->send(self->state.accountant, "active-store.lookup.hits", *num_hits,
+                 system::metrics_metadata{{"query", id_str},
+                                          {"store-type", "segment-store"}});
       return *num_hits;
     },
     [self](const atom::erase&, const ids& ids) -> caf::result<uint64_t> {
@@ -425,9 +425,9 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
   return result;
 }
 
-class plugin final : public virtual store_plugin {
+class plugin final : public virtual store_actor_plugin {
 public:
-  using store_plugin::builder_and_header;
+  using store_actor_plugin::builder_and_header;
 
   // plugin API
   caf::error initialize(data) override {

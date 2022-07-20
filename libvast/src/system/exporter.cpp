@@ -63,11 +63,11 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
     st.query_status.cached -= rows;
     st.query_status.requested -= rows;
     st.query_status.shipped += rows;
-    if (auto err = self->state.transformer.add(std::move(slice))) {
+    if (auto err = self->state.pipeline.add(std::move(slice))) {
       VAST_ERROR("exporter failed to apply the transformation: {}", err);
       return;
     }
-    auto transformed = self->state.transformer.finish();
+    auto transformed = self->state.pipeline.finish();
     if (!transformed) {
       VAST_ERROR("exporter failed to finish the transformation: {}",
                  transformed.error());
@@ -193,7 +193,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<transform>&& transforms) {
+         query_options options, std::vector<pipeline>&& pipelines) {
   self->state.options = options;
   self->state.query_context
     = vast::query_context::make_extract(self, std::move(expr));
@@ -201,9 +201,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     = has_low_priority_option(self->state.options)
         ? query_context::priority::low
         : query_context::priority::normal;
-  self->state.transformer = transformation_engine{std::move(transforms)};
-  if (auto err = self->state.transformer.validate(
-        transformation_engine::allow_aggregate_transforms::no)) {
+  self->state.pipeline = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.pipeline.validate(
+        pipeline_executor::allow_aggregate_pipelines::no)) {
     VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
     self->quit();
     return exporter_actor::behavior_type::make_empty_behavior();
@@ -331,10 +331,10 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         exp["expression"] = to_string(self->state.query_context.expr);
         if (v >= status_verbosity::detailed) {
           exp["start"] = caf::deep_to_string(self->state.start);
-          auto transform_names = list{};
-          for (const auto& t : self->state.transformer.transforms())
-            transform_names.emplace_back(t.name());
-          exp["transforms"] = std::move(transform_names);
+          auto pipeline_names = list{};
+          for (const auto& t : self->state.pipeline.pipelines())
+            pipeline_names.emplace_back(t.name());
+          exp["pipelines"] = std::move(pipeline_names);
           if (v >= status_verbosity::debug)
             detail::fill_status_map(exp, self);
         }

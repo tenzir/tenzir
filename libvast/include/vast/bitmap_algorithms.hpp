@@ -448,7 +448,7 @@ auto each(Bitmap&& xs) {
 }
 
 /// A higher-order range that takes a bit-sequence range and transforms it into
-/// range of 1-bits. In ther words, this range provides an incremental
+/// range of 1-bits. In other words, this range provides an incremental
 /// interface to the one-shot algorithm that ::select computes.
 /// @relates select frame
 template <bool Bit, class BitRange>

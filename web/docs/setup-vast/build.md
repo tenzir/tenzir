@@ -29,7 +29,7 @@ dependencies and versions.
 |✓|[CMake](https://cmake.org)|>= 3.18|Cross-platform tool for building, testing and packaging software.|
 |✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 0.17.6|Implementation of the actor model in C++. (Bundled as submodule.)|
 |✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 1.12.0|Memory-efficient cross-platform serialization library.|
-|✓|[Apache Arrow](https://arrow.apache.org)|>= 7.0.0|Required for in-memory data representation. Must be built with Compute, Zstd and Parquet enabled.|
+|✓|[Apache Arrow](https://arrow.apache.org)|>= 8.0.0|Required for in-memory data representation. Must be built with Compute, Zstd and Parquet enabled.|
 |✓|[yaml-cpp](https://github.com/jbeder/yaml-cpp)|>= 0.6.2|Required for reading YAML configuration files.|
 |✓|[simdjson](https://github.com/simdjson/simdjson)|>= 0.7|Required for high-performance JSON parsing.|
 |✓|[spdlog](https://github.com/gabime/spdlog)|>= 1.5|Required for logging.|
@@ -71,8 +71,10 @@ Building VAST involves the following steps:
   ```bash
   cd vast
   cmake -B build
+  # CMake defaults to a "Debug" build. When performance matters, use "Release"
+  cmake -B build -DCMAKE_BUILD_TYPE=Release  
   ```
-
+  
   Optionally, you can use the CMake TUI to visually configure the build:
   ```bash
   ccmake build
@@ -111,3 +113,17 @@ verify that your build works as expected:
   # Optional: Install to a custom prefix
   cmake --install build --prefix /path/to/install/prefix
   ```
+
+## Clean
+
+In case you want to make changes to your build environment, we recommend
+deleting the build tree entirely:
+
+```bash
+rm -rf build
+```
+
+This avoids subtle configuration glitches of transitive dependencies. For
+example, CMake doesn't disable assertions when switching from a `Debug` to
+a `Release` build, but would do so when starting with a fresh build of type
+`Release`.

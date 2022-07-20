@@ -88,7 +88,7 @@ TEST(zeek conn source) {
   auto src = mm.spawn_broker(datagram_source, uint16_t{8080}, std::move(reader),
                              100u, std::nullopt, type_registry_actor{},
                              vast::module{}, std::string{}, accountant_actor{},
-                             std::vector<transform>{});
+                             std::vector<pipeline>{});
   run();
   MESSAGE("start sink and initialize stream");
   auto snk = self->spawn(test_sink, src);

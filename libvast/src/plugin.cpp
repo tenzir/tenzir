@@ -8,6 +8,7 @@
 
 #include "vast/plugin.hpp"
 
+#include "vast/chunk.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
@@ -16,10 +17,14 @@
 #include "vast/detail/stable_set.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
+#include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
+#include "vast/query_context.hpp"
+#include "vast/store.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
@@ -297,6 +302,43 @@ system::analyzer_plugin_actor analyzer_plugin::analyzer(
 system::component_plugin_actor analyzer_plugin::make_component(
   system::node_actor::stateful_pointer<system::node_state> node) const {
   return analyzer(node);
+}
+
+// -- store plugin -------------------------------------------------------------
+
+caf::expected<store_actor_plugin::builder_and_header>
+store_plugin::make_store_builder(system::accountant_actor accountant,
+                                 system::filesystem_actor fs,
+                                 const vast::uuid& id) const {
+  auto store = make_active_store();
+  if (!store)
+    return store.error();
+  auto path
+    = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
+  auto store_builder = fs->home_system().spawn<caf::lazy_init>(
+    default_active_store, std::move(*store), fs, std::move(accountant),
+    std::move(path), name());
+  auto header = chunk::copy(id);
+  return builder_and_header{store_builder, header};
+}
+
+caf::expected<system::store_actor>
+store_plugin::make_store(system::accountant_actor accountant,
+                         system::filesystem_actor fs,
+                         std::span<const std::byte> header) const {
+  auto store = make_passive_store();
+  if (!store)
+    return store.error();
+  if (header.size() != uuid::num_bytes)
+    return caf::make_error(ec::invalid_argument, "header must have size of "
+                                                 "single uuid");
+  const auto id = uuid{header.subspan<0, uuid::num_bytes>()};
+  auto path
+    = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
+  return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
+                                                 std::move(*store), fs,
+                                                 std::move(accountant),
+                                                 std::move(path), name());
 }
 
 // -- plugin_ptr ---------------------------------------------------------------

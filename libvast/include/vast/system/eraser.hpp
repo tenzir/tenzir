@@ -65,7 +65,7 @@ public:
 ///              `:timestamp < 1 week ago` to the time of its parsing and not
 ///              update properly.
 /// @param index A handle to the INDEX under investigation.
-/// @param transforms The transform config of the node.
+/// @param pipelines The pipeline config of the node.
 eraser_actor::behavior_type
 eraser(eraser_actor::stateful_pointer<eraser_state> self,
        caf::timespan interval, std::string query, index_actor index);

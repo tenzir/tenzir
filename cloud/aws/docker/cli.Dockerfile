@@ -6,7 +6,7 @@ ARG TERRAGRUNT_VERSION=0.36.0
 RUN apt-get update
 
 # Install Terraform
-RUN apt-get install -y gnupg software-properties-common curl unzip git && \
+RUN apt-get install -y gnupg software-properties-common curl unzip git wget && \
     curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add - && \
     apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
     apt-get update && \
@@ -33,6 +33,14 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     unzip awscliv2.zip && \
     ./aws/install
 
+# Install GCP CLI
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" \
+    | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    wget -O - "https://packages.cloud.google.com/apt/doc/apt-key.gpg" \
+    | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - && \
+    apt-get update && \
+    apt-get -y --no-install-recommends install python3-crcmod google-cloud-sdk
+
 ARG UNAME=hostcaller
 ARG DOCKER_GID
 ARG CALLER_UID
@@ -43,6 +51,14 @@ RUN groupadd -g $CALLER_GID -o $UNAME && \
     useradd -m -u $CALLER_UID -g $CALLER_GID -o -s /bin/bash $UNAME && \
     groupadd -g $DOCKER_GID -o hostdocker && \
     usermod --append --groups hostdocker $UNAME
+
+# Setup persistent folders for configs
+RUN owneddir() { mkdir -p $1 && chown $UNAME $1 ; } && \
+    owneddir /etc/persistant-configs/docker && \
+    owneddir /etc/persistant-configs/gcloud && \
+    owneddir /home/$UNAME/.config && \
+    ln -s /etc/persistant-configs/docker /home/$UNAME/.docker && \
+    ln -s /etc/persistant-configs/gcloud /home/$UNAME/.config/gcloud
 
 USER $UNAME
 

@@ -230,15 +230,15 @@ public:
 
 // -- transform plugin ---------------------------------------------------------
 
-/// A base class for plugins that add new transform steps.
-class transform_plugin : public virtual plugin {
+/// A base class for plugins that add new pipeline operators.
+class pipeline_operator_plugin : public virtual plugin {
 public:
-  /// Creates a new transform step that maps input to output table
+  /// Creates a new pipeline operator that maps input to output table
   /// slices. This will be called when constructing plugins from the
   /// VAST configuration.
-  /// @param options The settings configured for this step.
-  [[nodiscard]] virtual caf::expected<std::unique_ptr<transform_step>>
-  make_transform_step(const vast::record& options) const = 0;
+  /// @param options The settings configured for this operator.
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<pipeline_operator>>
+  make_pipeline_operator(const vast::record& options) const = 0;
 };
 
 // -- aggregation function plugin ---------------------------------------------
@@ -257,10 +257,18 @@ public:
 // -- store plugin ------------------------------------------------------------
 
 /// A base class for plugins that add new store backends.
-//  NOTE: This plugin type is currently considered experimental.
-class store_plugin : public virtual plugin {
+/// @note Consider using the simler `store_plugin` instead, which abstracts the
+/// actor system logic away with a default implementation, which usually
+/// suffices for most store backends.
+class store_actor_plugin : public virtual plugin {
 public:
-  using builder_and_header = std::pair<system::store_builder_actor, chunk_ptr>;
+  /// A store_builder actor and a chunk called the "header". The contents of the
+  /// header will be persisted on disk, and should allow the plugin to retrieve
+  /// the correct store actor when `make_store()` below is called.
+  struct builder_and_header {
+    system::store_builder_actor store_builder;
+    chunk_ptr header;
+  };
 
   /// Create a store builder actor that accepts incoming table slices.
   /// The store builder is required to keep a reference to itself alive
@@ -268,12 +276,10 @@ public:
   /// soon as the input stream terminates.
   /// @param accountant The actor handle of the accountant.
   /// @param fs The actor handle of a filesystem.
-  /// @param id The partition id for which we want to create a store. Can
-  ///           be used as a unique key by the implementation.
-  /// @returns A store_builder actor and a chunk called the "header". The
-  ///          contents of the header will be persisted on disk, and should
-  ///          allow the plugin to retrieve the correct store actor when
-  ///          `make_store()` below is called.
+  /// @param id The partition id for which we want to create a store. Can be
+  /// used as a unique key by the implementation.
+  /// @returns A handle to the store builder actor to add events to, and a
+  /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual caf::expected<builder_and_header>
   make_store_builder(system::accountant_actor accountant,
                      system::filesystem_actor fs,
@@ -288,6 +294,28 @@ public:
   [[nodiscard]] virtual caf::expected<system::store_actor>
   make_store(system::accountant_actor accountant, system::filesystem_actor fs,
              std::span<const std::byte> header) const = 0;
+};
+
+/// A base class for plugins that add new store backends.
+class store_plugin : public virtual store_actor_plugin {
+public:
+  /// Create a store for passive partitions.
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
+  make_passive_store() const = 0;
+
+  /// Create a store for active partitions.
+  [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
+  make_active_store() const = 0;
+
+private:
+  [[nodiscard]] caf::expected<builder_and_header>
+  make_store_builder(system::accountant_actor accountant,
+                     system::filesystem_actor fs,
+                     const vast::uuid& id) const final;
+
+  [[nodiscard]] caf::expected<system::store_actor>
+  make_store(system::accountant_actor accountant, system::filesystem_actor fs,
+             std::span<const std::byte> header) const final;
 };
 
 // -- query language plugin ---------------------------------------------------

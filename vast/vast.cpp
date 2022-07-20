@@ -25,7 +25,7 @@
 #include "vast/plugin.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
-#include "vast/system/make_transforms.hpp"
+#include "vast/system/make_pipelines.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>
@@ -71,6 +71,37 @@ try_handle_deprecations(vast::system::default_configuration& cfg) {
     VAST_WARN("the 'vast.store-backend' option 'archive' is deprecated; "
               "automatically using 'segment-store' instead");
     caf::put(cfg.content, "vast.store-backend", "segment-store");
+  }
+  const auto transforms
+    = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.transforms");
+  const auto pipelines
+    = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.pipelines");
+  if (transforms) {
+    if (pipelines) {
+      VAST_ERROR("the 'vast.transforms' key is deprecated; please remove it "
+                 "from your configuration and use 'vast.pipelines' instead");
+      return EXIT_FAILURE;
+    }
+    VAST_WARN("key 'vast.transforms' is deprecated; automatically setting the "
+              "replacement 'vast.pipelines' instead");
+    caf::put(cfg.content, "vast.pipelines", *transforms);
+  }
+  const auto transform_triggers
+    = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.transform-"
+                                                       "triggers");
+  const auto pipeline_triggers
+    = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.pipeline-"
+                                                       "triggers");
+  if (transform_triggers) {
+    if (pipeline_triggers) {
+      VAST_ERROR("the 'vast.transform-triggers' key is deprecated; please "
+                 "remove it from your configuration and use "
+                 "'vast.pipeline-triggers' instead");
+      return EXIT_FAILURE;
+    }
+    VAST_WARN("key 'vast.transform-triggers' is deprecated; automatically "
+              "setting the replacement 'vast.pipeline-triggers' instead");
+    caf::put(cfg.content, "vast.pipeline-triggers", *transform_triggers);
   }
   return std::nullopt;
 }
@@ -167,8 +198,8 @@ int main(int argc, char** argv) {
   // Eagerly verify the export transform configuration, to avoid hidden
   // configuration errors that pop up the first time a user tries to run
   // `vast export`.
-  if (auto export_transforms = make_transforms(
-        system::transforms_location::server_export, cfg.content);
+  if (auto export_transforms
+      = make_pipelines(system::pipelines_location::server_export, cfg.content);
       !export_transforms) {
     VAST_ERROR("invalid export transform configuration: {}",
                export_transforms.error());
