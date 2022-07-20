@@ -249,23 +249,31 @@ TEST(optional) {
 TEST(action) {
   auto flag = false;
   // no args, void result type
-  auto p0 = printers::integral<int> ->* [&] { flag = true; };
+  auto p0 = printers::integral<int>->*[&] {
+    flag = true;
+  };
   std::string str;
   CHECK(p0(str, 42));
   CHECK(flag);
   CHECK_EQUAL(str, "42");
   // one arg, void result type
-  auto p1 = printers::integral<int> ->* [&](int i) { flag = i % 2 == 0; };
+  auto p1 = printers::integral<int>->*[&](int i) {
+    flag = i % 2 == 0;
+  };
   str.clear();
   CHECK(p1(str, 8));
   CHECK_EQUAL(str, "8");
   // no args, non-void result type
-  auto p2 = printers::integral<int> ->* [] { return 42; };
+  auto p2 = printers::integral<int>->*[] {
+    return 42;
+  };
   str.clear();
   CHECK(p2(str, 7));
   CHECK_EQUAL(str, "42");
   // one arg, non-void result type
-  auto p3 = printers::integral<int> ->* [](int i) { return ++i; };
+  auto p3 = printers::integral<int>->*[](int i) {
+    return ++i;
+  };
   str.clear();
   CHECK(p3(str, 41));
   CHECK_EQUAL(str, "42");
@@ -278,9 +286,13 @@ TEST(epsilon) {
 
 TEST(guard) {
   std::string str;
-  auto always_false = printers::eps.with([] { return false; });
+  auto always_false = printers::eps.with([] {
+    return false;
+  });
   CHECK(!always_false(str, 0));
-  auto even = printers::integral<int>.with([](int i) { return i % 2 == 0; });
+  auto even = printers::integral<int>.with([](int i) {
+    return i % 2 == 0;
+  });
   CHECK(str.empty());
   CHECK(!even(str, 41));
   CHECK(str.empty());
@@ -291,7 +303,9 @@ TEST(guard) {
 TEST(and) {
   std::string str;
   auto flag = true;
-  auto p = &printers::eps.with([&] { return flag; }) << printers::str;
+  auto p = &printers::eps.with([&] {
+    return flag;
+  }) << printers::str;
   CHECK(p(str, "yoda"));
   CHECK_EQUAL(str, "yoda");
   flag = false;
@@ -300,10 +314,12 @@ TEST(and) {
   CHECK(str.empty());
 }
 
-TEST(not) {
+TEST(not ) {
   std::string str;
   auto flag = true;
-  auto p = !printers::eps.with([&] { return flag; }) << printers::str;
+  auto p = !printers::eps.with([&] {
+    return flag;
+  }) << printers::str;
   CHECK(!p(str, "yoda"));
   CHECK(str.empty());
   flag = false;
@@ -383,6 +399,13 @@ TEST(JSON - omit - nulls) {
   check_to_json(
     p, vast::record{{"a", vast::record{{"b", caf::none}}}, {"c", caf::none}},
     "{\"a\": {}}");
+  check_to_json(p,
+                vast::record{
+                  {"a", 42u},
+                  {"b", record{{"c", caf::none}, {"d", caf::none}}},
+                  {"e", record{{"f", record{{"g", caf::none}}}}},
+                },
+                R"__({"a": 42, "b": {}, "e": {"f": {}}})__");
 }
 
 TEST(JSON - remove trailing zeroes) {
