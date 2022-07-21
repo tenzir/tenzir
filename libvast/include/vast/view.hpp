@@ -502,16 +502,6 @@ data materialize(data_view xs);
 /// @returns `true` if *x* is a valid type for *y*.
 bool type_check(const type& x, const data_view& y);
 
-/// Evaluates a data predicate.
-/// @param lhs The LHS of the predicate.
-/// @param op The relational operator.
-/// @param rhs The RHS of the predicate.
-/// @note This function unfortunately needs to use the `_view` suffix because
-///       it otherwise produces ambiguous function calls with the `evaluate`
-///       function in `data.hpp`.
-bool evaluate_view(const data_view& lhs, relational_operator op,
-                   const data_view& rhs);
-
 /// Converts a value from its internal representation to the type used in the
 /// user interface. This is the inverse of to_internal.
 /// @param t The type that describes *x*.

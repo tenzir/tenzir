@@ -8,6 +8,10 @@
 
 #include "vast/offset.hpp"
 
+#include "vast/detail/narrow.hpp"
+
+#include <arrow/type.h>
+
 namespace vast {
 
 std::strong_ordering
@@ -26,6 +30,14 @@ operator<=>(const offset& lhs, const offset& rhs) noexcept {
     return std::strong_ordering::greater;
   return *lhs_mismatch < *rhs_mismatch ? std::strong_ordering::less
                                        : std::strong_ordering::greater;
+}
+
+offset::operator arrow::FieldPath() const noexcept {
+  auto intermediate = std::vector<int>{};
+  intermediate.reserve(size());
+  for (auto x : *this)
+    intermediate.push_back(detail::narrow_cast<int>(x));
+  return arrow::FieldPath{std::move(intermediate)};
 }
 
 } // namespace vast

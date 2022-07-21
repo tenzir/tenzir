@@ -12,8 +12,11 @@
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
+#include "vast/detail/iterator.hpp"
+#include "vast/fbs/segment.hpp"
 #include "vast/flatbuffer.hpp"
 #include "vast/ids.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/expected.hpp>
@@ -31,6 +34,38 @@ class segment {
   friend segment_builder;
 
 public:
+  class iterator
+    : public detail::iterator_facade<
+        iterator, table_slice, std::random_access_iterator_tag, table_slice> {
+    friend detail::iterator_access;
+    using flat_slice_iterator = flatbuffers::Vector<
+      flatbuffers::Offset<fbs::FlatTableSlice>>::const_iterator;
+    using interval_iterator
+      = flatbuffers::Vector<const fbs::uinterval*>::const_iterator;
+
+  public:
+    iterator(flat_slice_iterator nested, interval_iterator intervals,
+             const segment* parent);
+
+    [[nodiscard]] table_slice dereference() const;
+
+    void increment();
+
+    void decrement();
+
+    void advance(size_t n);
+
+    [[nodiscard]] bool equals(iterator other) const;
+
+    [[nodiscard]] segment::iterator::difference_type
+    distance_to(iterator other) const;
+
+  private:
+    flat_slice_iterator nested_;
+    interval_iterator intervals_;
+    const segment* parent_;
+  };
+
   /// Constructs a segment.
   /// @param chunk The chunk holding the segment data.
   static caf::expected<segment> make(chunk_ptr&& chunk);
@@ -44,11 +79,17 @@ public:
   /// @returns The unique ID of this segment.
   [[nodiscard]] uuid id() const;
 
-  /// @returns the event IDs of all contained table slice.
+  /// @returns The event IDs of all contained table slice.
   [[nodiscard]] vast::ids ids() const;
 
-  // @returns The number of table slices in this segment.
+  /// @returns The number of table slices in this segment.
   [[nodiscard]] size_t num_slices() const;
+
+  /// @returns An iterator pointing to the first slice in the segment.
+  [[nodiscard]] iterator begin() const;
+
+  /// @returns An iterator pointing to the end of the segment.
+  [[nodiscard]] iterator end() const;
 
   /// @returns The underlying chunk.
   [[nodiscard]] chunk_ptr chunk() const;

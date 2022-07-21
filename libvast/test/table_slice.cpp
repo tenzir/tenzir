@@ -268,7 +268,7 @@ TEST(evaluate) {
     = [&](std::string_view expr, std::initializer_list<id_range> id_init) {
         auto ids = make_ids(id_init, sut.offset() + sut.rows());
         auto exp = unbox(to<expression>(expr));
-        CHECK_EQUAL(evaluate(exp, sut), ids);
+        CHECK_EQUAL(evaluate(exp, sut, {}), ids);
       };
   check_eval("#type == \"zeek.conn\"", {{0, 8}});
   check_eval("#type != \"zeek.conn\"", {});

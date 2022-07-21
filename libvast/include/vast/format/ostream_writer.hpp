@@ -91,7 +91,8 @@ protected:
     auto start = 0;
     for (const auto& f : layout.fields()) {
       if constexpr (detail::is_any_v<policy::omit_nulls, Policies...>) {
-        if (caf::holds_alternative<caf::none_t>(row[pos])) {
+        if (!caf::holds_alternative<record_type>(f.type)
+            && caf::holds_alternative<caf::none_t>(row[pos])) {
           if (const auto* r = caf::get_if<record_type>(&f.type))
             pos += r->num_leaves();
           else

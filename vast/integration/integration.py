@@ -205,6 +205,7 @@ def run_step(
     basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result
 ):
     try:
+        db_dir = work_dir / "vast.db"
         stdout = work_dir / f"{step_id}.out"
         stderr = work_dir / f"{step_id}.err"
         cmd = basecmd + step.command
@@ -259,6 +260,8 @@ def run_step(
             out = None
             if step.transformation:
                 LOGGER.debug(f"transforming output with `{step.transformation}`")
+                env = os.environ.copy()
+                env["VAST_INTEGRATION_DB_DIRECTORY"] = db_dir
                 try:
                     out = subprocess.run(
                         [step.transformation],
@@ -266,6 +269,7 @@ def run_step(
                         stdout=subprocess.PIPE,
                         timeout=STEP_TIMEOUT,
                         shell=True,
+                        env=env,
                     ).stdout.decode("utf8")
                 except subprocess.TimeoutExpired:
                     LOGGER.error(f"timeout reached, terminating transformation")

@@ -36,6 +36,7 @@ class DataType;
 class DoubleType;
 class DurationType;
 class Field;
+class FieldPath;
 class Int64Type;
 class ListType;
 class MapType;
