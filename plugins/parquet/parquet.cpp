@@ -300,7 +300,8 @@ caf::expected<std::shared_ptr<arrow::Table>>
 read_parquet_buffer(const chunk_ptr& chunk) {
   VAST_ASSERT(chunk);
   auto bufr = std::make_shared<arrow::io::BufferReader>(as_arrow_buffer(chunk));
-  auto parquet_reader = ::parquet::ParquetFileReader::Open(bufr);
+  const auto options = ::parquet::default_reader_properties();
+  auto parquet_reader = ::parquet::ParquetFileReader::Open(bufr, options);
   auto arrow_schema
     = parse_arrow_schema_from_metadata(parquet_reader->metadata());
   std::unique_ptr<::parquet::arrow::FileReader> file_reader{};

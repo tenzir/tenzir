@@ -75,7 +75,8 @@ auto wrap_record_batch(const table_slice& slice)
 class passive_feather_store final : public passive_store {
   [[nodiscard]] caf::error load(chunk_ptr chunk) override {
     auto file = as_arrow_file(std::move(chunk));
-    auto reader = arrow::ipc::feather::Reader::Open(file);
+    const auto options = arrow::ipc::IpcReadOptions::Defaults();
+    auto reader = arrow::ipc::feather::Reader::Open(file, options);
     if (!reader.ok())
       return caf::make_error(ec::system_error, reader.status().ToString());
     auto table = std::shared_ptr<arrow::Table>{};
