@@ -114,7 +114,9 @@ class active_feather_store final : public active_store {
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     slices_.reserve(new_slices.size() + slices_.size());
     for (auto& slice : new_slices) {
-      slice.offset(num_events_);
+      if (slice.offset() == invalid_id)
+        slice.offset(num_events_);
+      VAST_ASSERT(slice.offset() == num_events_);
       num_events_ += slice.rows();
       slices_.push_back(std::move(slice));
     }

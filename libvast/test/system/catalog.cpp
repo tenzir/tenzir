@@ -395,12 +395,6 @@ TEST(catalog with bool synopsis) {
 }
 
 TEST(catalog messages) {
-  // The pregenerated partitions have ids [0,25), [25,50), ...
-  // We create `lookup_ids = {0, 31, 32}`.
-  auto lookup_ids = vast::ids{};
-  lookup_ids.append_bits(true, 1);
-  lookup_ids.append_bits(false, 30);
-  lookup_ids.append_bits(true, 2);
   // All of the pregenerated data has "foo" as content and its id as timestamp,
   // so this selects everything but the first partition.
   auto expr = unbox(to<expression>("content == \"foo\" && :timestamp >= @25"));
@@ -414,43 +408,6 @@ TEST(catalog messages) {
     [this](catalog_result& candidates) {
       auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
       std::sort(candidates.partitions.begin(), candidates.partitions.end());
-      REQUIRE_EQUAL(candidates.partitions.size(), expected.size());
-      for (const auto& [partition, expected_uuid] :
-           detail::zip(candidates.partitions, expected))
-        CHECK_EQUAL(partition.uuid, expected_uuid);
-    },
-    [](const caf::error& e) {
-      auto msg = fmt::format("unexpected error {}", render(e));
-      FAIL(msg);
-    });
-  // Sending ids should return the partition ids containing these ids
-  query_context.expr = vast::expression{};
-  query_context.ids = lookup_ids;
-  auto ids_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
-  run();
-  ids_response.receive(
-    [this](catalog_result& candidates) {
-      auto expected = std::vector<uuid>{ids[0], ids[1]};
-      std::sort(candidates.partitions.begin(), candidates.partitions.end());
-      REQUIRE_EQUAL(candidates.partitions.size(), expected.size());
-      for (const auto& [partition, expected_uuid] :
-           detail::zip(candidates.partitions, expected))
-        CHECK_EQUAL(partition.uuid, expected_uuid);
-    },
-    [](const caf::error& e) {
-      auto msg = fmt::format("unexpected error {}", render(e));
-      FAIL(msg);
-    });
-  // Sending BOTH an expression and ids should return the intersection.
-  query_context.expr = expr;
-  query_context.ids = lookup_ids;
-  auto both_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
-  run();
-  both_response.receive(
-    [this](const catalog_result& candidates) {
-      auto expected = std::vector<uuid>{ids[1]};
       REQUIRE_EQUAL(candidates.partitions.size(), expected.size());
       for (const auto& [partition, expected_uuid] :
            detail::zip(candidates.partitions, expected))

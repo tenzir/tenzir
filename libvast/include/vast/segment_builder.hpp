@@ -69,7 +69,7 @@ public:
 private:
   uuid id_;
   vast::id min_table_slice_offset_;
-  uint64_t num_events_;
+  uint64_t num_events_ = 0;
   flatbuffers::FlatBufferBuilder builder_;
   std::vector<flatbuffers::Offset<fbs::FlatTableSlice>> flat_slices_;
   std::vector<table_slice> slices_; // For queries to an unfinished segment.

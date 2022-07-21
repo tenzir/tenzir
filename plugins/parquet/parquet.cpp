@@ -273,7 +273,7 @@ create_table_slices(const std::shared_ptr<arrow::RecordBatch>& rb,
     auto& slice = slices.emplace_back(rb_sliced);
     slice.import_time(
       derive_import_time(time_col->Slice(offset, max_slice_size)));
-    slice.offset(offset);
+    VAST_ASSERT(slice.offset() == detail::narrow_cast<id>(offset));
   }
   return slices;
 }
@@ -434,7 +434,9 @@ public:
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     slices_.reserve(new_slices.size() + slices_.size());
     for (auto& slice : new_slices) {
-      slice.offset(num_events_);
+      if (slice.offset() == invalid_id)
+        slice.offset(num_events_);
+      VAST_ASSERT(slice.offset() == num_events_);
       num_events_ += slice.rows();
       slices_.push_back(std::move(slice));
     }

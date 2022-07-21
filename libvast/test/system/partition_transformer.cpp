@@ -34,25 +34,15 @@ using namespace std::string_literals;
 
 namespace {
 
-auto constexpr const IDSPACE_BEGIN = vast::id{42ull};
+auto constexpr const IDSPACE_BEGIN = vast::id{0ull};
 auto const PARTITION_PATH_TEMPLATE = std::string{"/partition-{}.fbs"};
 auto const SYNOPSIS_PATH_TEMPLATE = std::string{"/partition_synopsis-{}.fbs"};
-
-vast::system::idspace_distributor_actor::behavior_type mock_importer() {
-  auto current_id = std::make_shared<vast::id>(IDSPACE_BEGIN);
-  return {[=](vast::atom::reserve, uint64_t) {
-    // Currently each test only reserves a single time; this actor will
-    // need some state as soon as that changes.
-    return IDSPACE_BEGIN;
-  }};
-}
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
     filesystem = self->spawn(memory_filesystem);
-    importer = self->spawn(mock_importer);
     auto type_system_path = std::filesystem::path{"/type-registry"};
     type_registry = self->spawn(vast::system::type_registry, type_system_path);
   }
@@ -64,12 +54,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   ~fixture() override {
     self->send_exit(filesystem, caf::exit_reason::user_shutdown);
-    self->send_exit(importer, caf::exit_reason::user_shutdown);
     self->send_exit(type_registry, caf::exit_reason::user_shutdown);
   }
 
   vast::system::accountant_actor accountant = {};
-  vast::system::idspace_distributor_actor importer;
   vast::system::type_registry_actor type_registry;
   vast::system::filesystem_actor filesystem;
 };
@@ -91,7 +79,7 @@ TEST(identity pipeline / done before persist) {
   pipeline->add_operator(std::move(*identity_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, importer, type_registry, filesystem,
+                  index_opts, accountant, type_registry, filesystem,
                   std::move(pipeline), PARTITION_PATH_TEMPLATE,
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
@@ -173,7 +161,7 @@ TEST(delete pipeline / persist before done) {
   pipeline->add_operator(std::move(*delete_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, importer, type_registry, filesystem,
+                  index_opts, accountant, type_registry, filesystem,
                   std::move(pipeline), PARTITION_PATH_TEMPLATE,
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
@@ -264,7 +252,7 @@ TEST(partition with multiple types) {
   pipeline->add_operator(std::move(*identity_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, importer, type_registry, filesystem,
+                  index_opts, accountant, type_registry, filesystem,
                   std::move(pipeline), PARTITION_PATH_TEMPLATE,
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
@@ -360,7 +348,6 @@ TEST(identity partition pipeline via the index) {
                   vast::defaults::system::store_backend, partition_capacity,
                   active_partition_timeout, in_mem_partitions, taste_count,
                   num_query_supervisors, index_dir, index_config);
-  self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   // Get one of the partitions that were persisted.
@@ -461,7 +448,6 @@ TEST(select pipeline with an empty result set) {
                   vast::defaults::system::store_backend, partition_capacity,
                   active_partition_timeout, in_mem_partitions, taste_count,
                   num_query_supervisors, index_dir, vast::index_config{});
-  self->send(index, vast::atom::importer_v, importer);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   // Get one of the partitions that were persisted.
@@ -525,7 +511,7 @@ TEST(exceeded partition size) {
   pipeline->add_operator(std::move(*identity_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, importer, type_registry, filesystem,
+                  index_opts, accountant, type_registry, filesystem,
                   std::move(pipeline), PARTITION_PATH_TEMPLATE,
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);

@@ -1008,6 +1008,9 @@ index(index_actor::stateful_pointer<index_state> self,
         active_partition = *part;
       }
       VAST_ASSERT(active_partition->second.actor);
+      const auto offset
+        = self->state.partition_capacity - active_partition->second.capacity;
+      x.offset(offset);
       out.push(x);
       if (active_partition->second.capacity == self->state.partition_capacity
           && x.rows() > active_partition->second.capacity) {
@@ -1506,12 +1509,13 @@ index(index_actor::stateful_pointer<index_state> self,
       auto partition_path_template = self->state.partition_path_template();
       auto partition_synopsis_path_template
         = self->state.partition_synopsis_path_template();
-      partition_transformer_actor partition_transfomer = self->spawn(
-        system::partition_transformer, store_id, self->state.synopsis_opts,
-        self->state.index_opts, self->state.accountant,
-        self->state.type_registry, self->state.filesystem, pipeline,
-        std::move(partition_path_template),
-        std::move(partition_synopsis_path_template));
+      partition_transformer_actor partition_transfomer
+        = self->spawn(system::partition_transformer, store_id,
+                      self->state.synopsis_opts, self->state.index_opts,
+                      self->state.accountant, self->state.type_registry,
+                      self->state.filesystem, pipeline,
+                      std::move(partition_path_template),
+                      std::move(partition_synopsis_path_template));
       // match_everything == '"" in #type'
       static const auto match_everything
         = vast::predicate{meta_extractor{meta_extractor::type},

@@ -144,7 +144,6 @@ FIXTURE_SCOPE(filesystem_tests, fixture)
 
 TEST(feather store roundtrip) {
   auto xs = std::vector<vast::table_slice>{suricata_dns_log[0]};
-  xs[0].offset(23u);
   auto uuid = vast::uuid::random();
   const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
@@ -159,11 +158,10 @@ TEST(feather store roundtrip) {
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = ::vast::make_ids({23});
+  auto ids = ::vast::make_ids({0});
   auto results = query(*store, ids);
   run();
   CHECK_EQUAL(results.size(), 1ull);
-  // CHECK_EQUAL(results[0].offset(), 23ull);
   auto expected_rows = select(xs[0], ids);
   CHECK_EQUAL(results[0].rows(), expected_rows[0].rows());
 }
@@ -281,7 +279,6 @@ struct table_slice_fixture {
 TEST(active feather store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  slice.offset(23);
   auto uuid = vast::uuid::random();
   const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
@@ -299,7 +296,6 @@ TEST(active feather store fetchall query) {
 TEST(passive feather store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  slice.offset(23);
   auto uuid = vast::uuid::random();
   const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
@@ -325,7 +321,6 @@ TEST(passive feather store selective count query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
-  slice.offset(23);
   auto uuid = vast::uuid::random();
   const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
@@ -341,7 +336,7 @@ TEST(passive feather store selective count query) {
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = ::vast::make_ids({23});
+  auto ids = ::vast::make_ids({0});
   auto results = count(*store, ids, *expr);
   run();
   REQUIRE_EQUAL(results, 1ull);
@@ -351,7 +346,6 @@ TEST(passive feather store selective query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
-  slice.offset(23);
   auto uuid = vast::uuid::random();
   const auto* plugin = vast::plugins::find<vast::store_actor_plugin>("feather");
   REQUIRE(plugin);
@@ -367,7 +361,7 @@ TEST(passive feather store selective query) {
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = ::vast::make_ids({23});
+  auto ids = ::vast::make_ids({0});
   auto results = query(*store, ids, *expr);
   run();
   REQUIRE_EQUAL(results.size(), 1ull);

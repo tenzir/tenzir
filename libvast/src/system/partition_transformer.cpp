@@ -268,13 +268,13 @@ partition_transformer_actor::behavior_type partition_transformer(
       self->state.max_import_time
         = std::max(self->state.max_import_time, old_import_time);
     },
-    [self](atom::done) {
+    [self](atom::done) -> caf::result<void> {
       auto transformed = self->state.transform->finish();
       if (!transformed) {
         VAST_ERROR("{} failed to finish transform: {}", *self,
                    transformed.error());
         self->state.transform_error = transformed.error();
-        return;
+        return {};
       }
       for (auto& slice : *transformed) {
         auto const& layout = slice.layout();
@@ -307,7 +307,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       // We're already done if the whole partition got deleted
       if (self->state.events == 0) {
         store_or_fulfill(self, std::move(stream_data));
-        return;
+        return {};
       }
       // ...otherwise, prepare for writing out the transformed data by creating
       // new stores, sending out the slices and requesting new idspace.
@@ -319,7 +319,7 @@ partition_transformer_actor::behavior_type partition_transformer(
           = caf::make_error(ec::invalid_argument,
                             "could not find a store plugin named {}", store_id);
         store_or_fulfill(self, std::move(stream_data));
-        return;
+        return {};
       }
       self->state.stage = caf::attach_continuous_stream_stage(
         self, [](caf::unit_t&) {},
@@ -341,7 +341,7 @@ partition_transformer_actor::behavior_type partition_transformer(
                               "could not create store builder for backend {}",
                               store_id);
           store_or_fulfill(self, std::move(stream_data));
-          return;
+          return {};
         }
         partition_data.store_header = builder_and_header->header;
         // Empirically adding the outbound path and pushing data to it
@@ -352,15 +352,19 @@ partition_transformer_actor::behavior_type partition_transformer(
             builder_and_header->store_builder);
       }
       VAST_DEBUG("{} received all table slices", *self);
+      return self->delegate(static_cast<partition_transformer_actor>(self),
+                            atom::internal_v, atom::resume_v, atom::done_v);
     },
-    [self](atom::internal, atom::resume, atom::done, vast::id offset) {
-      VAST_DEBUG("{} got new offset {}", *self, offset);
+    [self](atom::internal, atom::resume, atom::done) {
+      VAST_DEBUG("{} got resume", *self);
       for (auto& [layout, data] : self->state.data) {
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
         auto& buildup = self->state.partition_buildup.at(data.id);
         auto slot = buildup.slot;
+        auto offset = id{0};
         for (auto& slice : buildup.slices) {
+          slice.offset(offset);
           offset += slice.rows();
           push_to(self->state.stage->out(), slot, slice);
           self->state.update_type_ids_and_indexers(data.type_ids, data.id,
