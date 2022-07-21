@@ -53,14 +53,14 @@ analyzer plugin is a refinement of the [component plugin](#component).
 The reader plugin adds a new format to parse input data, such as JSON (ASCII) or
 PCAP (binary).
 
-Reader plugins automatically add the subcommands `vast import <format>`.
+Reader plugins automatically add the subcommand `vast import <plugin name>`.
 
 ### Writer
 
 The writer plugin adds a new format to print data, such as JSON (ASCII) or PCAP
 (binary).
 
-Writer plugins automatically add the subcommands `vast export <format>`.
+Writer plugins automatically add the subcommand `vast export <plugin name>`.
 
 ### Query Language
 
@@ -72,20 +72,28 @@ For example, you could write a SQL plugin that takes an expression like
 `SELECT * FROM zeek.conn WHERE id.orig_h = "1.2.3.4"` and executes it on
 historical data or runs it as live query.
 
-### Pipeline
+### Pipeline Operator
 
 The pipeline operator plugin adds a new [pipeline
-operator](/docs/understand-vast/query-language/operators) that users can reference in
-a [pipeline definition](/docs/understand-vast/query-language/pipelines).
+operator](/docs/understand-vast/query-language/operators) that users can
+reference in a [pipeline
+definition](/docs/understand-vast/query-language/pipelines).
 
 ### Aggregation Function
 
 The aggregation function plugin adds a new [aggregation
 function](/docs/understand-vast/query-language/operators/summarize#aggregate-functions)
-for the `summarize` pipeline operator that performs an incremental aggregation over
-a set of grouped input values of a single type.
+for the `summarize` pipeline operator that performs an incremental aggregation
+over a set of grouped input values of a single type.
 
 ### Store
 
 Inside a partition, the store plugin implements the conversion from in-memory
 Arrow record batches to the persistent format, and vice versa.
+
+:::note Store Actor
+There exists a variant of the store plugin called the store actor plugin, which
+is more powerful and allows for customizing the control flow on top of providing
+a custom store backend. Unlike the store plugin, the store actor plugin is
+responsible for doing I/O itself.
+:::

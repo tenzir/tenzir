@@ -47,10 +47,11 @@ files/directories:
 
 ## Choose a plugin type
 
-VAST offers a variety of customization points, each of which defines its own
-API by inheriting from the plugin base class `vast::plugin`. When writing a new
-plugin, you can choose a subset of available types by inheriting from
-the respective plugin classes.
+VAST offers [a variety of customization
+points](/docs/understand-vast/architecture/plugins#plugin-types),
+each of which defines its own API by inheriting from the plugin base class
+`vast::plugin`. When writing a new plugin, you can choose a subset of available
+types by inheriting from the respective plugin classes.
 
 :::caution Dreaded Diamond
 To avoid common issues with multiple inheritance, all intermediate plugin
@@ -59,8 +60,7 @@ issues with the [dreaded
 diamond](https://isocpp.org/wiki/faq/multiple-inheritance#mi-diamond).
 :::
 
-The below section describes the [various plugin types](#plugin-types) in more
-detail. Please also consult the [example-analyzer
+Please also consult the [example-analyzer
 plugin](https://github.com/tenzir/vast/tree/master/examples/plugins/analyzer)
 for a complete end-to-end code example.
 
