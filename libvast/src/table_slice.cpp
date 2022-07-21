@@ -609,39 +609,30 @@ ids evaluate(const expression& expr, const table_slice& slice,
              const ids& hints) {
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   const auto num_rows = slice.rows();
-  const auto make_path = [](const struct offset& index) noexcept {
-    auto intermediate = std::vector<int>{};
-    intermediate.reserve(index.size());
-    for (auto x : index)
-      intermediate.push_back(detail::narrow_cast<int>(x));
-    return arrow::FieldPath{std::move(intermediate)};
-  };
-  auto make_empty_result = [&] {
-    auto result = ids{};
-    result.append(false, offset + num_rows);
-    return result;
-  };
   const auto evaluate_predicate = detail::overload{
     [](const auto&, relational_operator, const auto&, const ids&) -> ids {
       die("predicates must be normalized and bound for evaluation");
     },
     [&](const meta_extractor& lhs, relational_operator op, const data& rhs,
         ids selection) -> ids {
+      // If no bit in the selection is set we have no results, but we can avoid
+      // an allocation by simply returning the already empty selection.
       if (!any(selection))
         return selection;
       if (evaluate_meta_extractor(slice, lhs, op, rhs))
         return selection;
-      return make_empty_result();
+      return ids{offset + num_rows, false};
     },
     [&](const data_extractor& lhs, relational_operator op, const data& rhs,
         const ids& selection) -> ids {
       if (!any(selection))
-        return make_empty_result();
+        return ids{offset + num_rows, false};
       const auto index
         = caf::get<record_type>(slice.layout()).resolve_flat_index(lhs.column);
       const auto type = caf::get<record_type>(slice.layout()).field(index).type;
-      const auto array
-        = make_path(index).Get(*to_record_batch(slice)).ValueOrDie();
+      const auto array = static_cast<arrow::FieldPath>(index)
+                           .Get(*to_record_batch(slice))
+                           .ValueOrDie();
       auto result = ids{};
       const auto rhs_internal
         = materialize(to_internal(type, make_data_view(rhs)));
@@ -649,10 +640,10 @@ ids evaluate(const expression& expr, const table_slice& slice,
         VAST_ASSERT(id >= offset);
         const auto row = id - offset;
         result.append(false, id - result.size());
-        // FIXME: This materializes unnecessarily because `evaluate_view` is
-        // broken and does not do the same thing as `evaluate`. We must align
-        // their behavior and add tests for `evaluate_view`, or, which would be
-        // even better, operate on the Arrow Arrays directly here.
+        // TODO: Introduce an evaluate function that takes an entire
+        // *arrow::Array*, a *relational_operator*, a `data` for the rhs, and a
+        // set of *ids*, insread of materializing every element here and
+        // comparing element by element.
         auto lhs = materialize(
           value_at(type, *array, detail::narrow_cast<int64_t>(row)));
         const bool matches = evaluate(lhs, op, rhs_internal);
@@ -666,19 +657,18 @@ ids evaluate(const expression& expr, const table_slice& slice,
     = [&](const auto& self, const expression& expr, ids selection) -> ids {
     const auto evaluate_expression_impl = detail::overload{
       [&](const caf::none_t&, const ids&) {
-        return make_empty_result();
+        return ids{offset + num_rows, false};
       },
       [&](const negation& negation, const ids& selection) {
         return selection ^ self(self, negation.expr(), selection);
       },
-      [&](const conjunction& conjunction, const ids& selection) {
-        auto result = selection;
+      [&](const conjunction& conjunction, ids selection) {
         for (const auto& connective : conjunction) {
           if (!any(selection))
             return selection;
-          result = self(self, connective, std::move(result));
+          selection = self(self, connective, std::move(selection));
         }
-        return result;
+        return selection;
       },
       [&](const disjunction& disjunction, const ids& selection) {
         auto mask = selection;

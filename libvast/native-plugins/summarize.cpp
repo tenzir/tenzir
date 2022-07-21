@@ -30,16 +30,6 @@ namespace vast::plugins::summarize {
 
 namespace {
 
-/// Converts an offset into it's Arrow equivalent FieldPath.
-/// @param index The offset to convert.
-arrow::FieldPath make_path(const offset& index) noexcept {
-  auto intermediate = std::vector<int>{};
-  intermediate.reserve(index.size());
-  for (auto x : index)
-    intermediate.push_back(detail::narrow_cast<int>(x));
-  return arrow::FieldPath{std::move(intermediate)};
-}
-
 /// Converts a duration into the options required for Arrow Compute's
 /// {Round,Floor,Ceil}Temporal functions.
 /// @param time_resolution The multiple to round to.
@@ -609,7 +599,9 @@ private:
     auto result = arrow::ArrayVector{};
     result.reserve(group_by_columns.size());
     for (const auto& group_by_column : group_by_columns) {
-      auto array = make_path(group_by_column.input).Get(batch).ValueOrDie();
+      auto array = static_cast<arrow::FieldPath>(group_by_column.input)
+                     .Get(batch)
+                     .ValueOrDie();
       if (group_by_column.time_resolution) {
         array = arrow::compute::FloorTemporal(
                   array,
@@ -632,7 +624,8 @@ private:
       auto sub_result = arrow::ArrayVector{};
       sub_result.reserve(column.inputs.size());
       for (const auto& input : column.inputs)
-        sub_result.push_back(make_path(input).Get(batch).ValueOrDie());
+        sub_result.push_back(
+          static_cast<arrow::FieldPath>(input).Get(batch).ValueOrDie());
       result.push_back(std::move(sub_result));
     }
     return result;
