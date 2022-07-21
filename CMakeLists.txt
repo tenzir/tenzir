@@ -23,6 +23,15 @@ if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed.")
 endif ()
 
+# Check whether remnants of an earlier in-source build exist.
+if (EXISTS "${CMAKE_SOURCE_DIR}/CMakeCache.txt"
+    OR EXISTS "${CMAKE_SOURCE_DIR}/CMakeFiles")
+  message(
+    FATAL_ERROR
+      "Detected an earlier in-source build; please remove CMakeCache.txt and CMakeFiles/ from your source-directory"
+  )
+endif ()
+
 # Ensure that CMAKE_INSTALL_PREFIX is not a relative path.
 if (NOT IS_ABSOLUTE "${CMAKE_INSTALL_PREFIX}")
   message(
