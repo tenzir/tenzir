@@ -313,53 +313,6 @@ struct contains_predicate {
 
 } // namespace
 
-bool evaluate_view(const data_view& lhs, relational_operator op,
-                   const data_view& rhs) {
-  auto check_match = [](const auto& x, const auto& y) {
-    return caf::visit(detail::overload{
-                        [](auto, auto) {
-                          return false;
-                        },
-                        [](view<std::string>& lhs, view<pattern> rhs) {
-                          return rhs.match(lhs);
-                        },
-                      },
-                      x, y);
-  };
-  auto check_in = [](const auto& x, const auto& y) {
-    return caf::visit(contains_predicate{}, x, y);
-  };
-  switch (op) {
-    default:
-      VAST_ASSERT(!"missing case");
-      return false;
-    case relational_operator::match:
-      return check_match(lhs, rhs);
-    case relational_operator::not_match:
-      return !check_match(lhs, rhs);
-    case relational_operator::in:
-      return check_in(lhs, rhs);
-    case relational_operator::not_in:
-      return !check_in(lhs, rhs);
-    case relational_operator::ni:
-      return check_in(rhs, lhs);
-    case relational_operator::not_ni:
-      return !check_in(rhs, lhs);
-    case relational_operator::equal:
-      return lhs == rhs;
-    case relational_operator::not_equal:
-      return lhs != rhs;
-    case relational_operator::less:
-      return lhs < rhs;
-    case relational_operator::less_equal:
-      return lhs <= rhs;
-    case relational_operator::greater:
-      return lhs > rhs;
-    case relational_operator::greater_equal:
-      return lhs >= rhs;
-  }
-}
-
 data_view to_canonical(const type& t, const data_view& x) {
   auto v = detail::overload{
     [](const view<enumeration>& x, const enumeration_type& t) -> data_view {

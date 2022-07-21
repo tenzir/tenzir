@@ -328,8 +328,10 @@ uint64_t rows(const std::vector<table_slice>& slices);
 /// Evaluates an expression over a table slice by applying it row-wise.
 /// @param expr The expression to evaluate.
 /// @param slice The table slice to apply *expr* on.
+/// @param hints An optional pre-selection of rows to look at.
 /// @returns The set of row IDs in *slice* for which *expr* yields true.
-ids evaluate(const expression& expr, const table_slice& slice);
+ids evaluate(const expression& expr, const table_slice& slice,
+             const ids& hints);
 
 // Attribute-specifier-seqs are not allowed in friend function declarations, so
 // we re-declare the filter functions with nodiscard here.

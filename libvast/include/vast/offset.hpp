@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/detail/stack_vector.hpp"
 #include "vast/hash/hash.hpp"
 
@@ -32,6 +34,9 @@ struct offset : detail::stack_vector<size_t, 64> {
 
   friend std::strong_ordering
   operator<=>(const offset& lhs, const offset& rhs) noexcept;
+
+  /// Convert an offset into it's Arrow-equivalent FieldPath.
+  explicit operator arrow::FieldPath() const noexcept;
 };
 
 } // namespace vast
