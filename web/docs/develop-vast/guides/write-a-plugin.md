@@ -48,7 +48,7 @@ files/directories:
 ## Choose a plugin type
 
 VAST offers [a variety of customization
-points](https://vast.io/docs/understand-vast/architecture/plugins#plugin-types),
+points](/docs/understand-vast/architecture/plugins#plugin-types),
 each of which defines its own API by inheriting from the plugin base class
 `vast::plugin`. When writing a new plugin, you can choose a subset of available
 types by inheriting from the respective plugin classes.

@@ -68,9 +68,9 @@ A query language plugin adds an alternative parser for a query expression. This
 plugin allows for replacing the query *frontend* while using VAST as *backend*
 execution engine.
 
-For example, you could write a SQL plugin that takes an expression like `SELECT
-* FROM zeek.conn WHERE id.orig_h = "1.2.3.4"` and executes it on historical data
-or runs it as live query.
+For example, you could write a SQL plugin that takes an expression like
+`SELECT * FROM zeek.conn WHERE id.orig_h = "1.2.3.4"` and executes it on
+historical data or runs it as live query.
 
 ### Pipeline Operator
 
