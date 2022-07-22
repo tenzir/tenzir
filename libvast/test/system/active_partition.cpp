@@ -140,12 +140,10 @@ TEST(No dense indexes serialization when create dense index in config is false) 
                                persist_path, synopsis_path);
   run();
 
-  promise.receive(
-    [](vast::partition_synopsis_ptr&) {
-    },
-    [](const caf::error& err) {
-      FAIL(err);
-    });
+  promise.receive([](vast::partition_synopsis_ptr&) {},
+                  [](const caf::error& err) {
+                    FAIL(err);
+                  });
 
   //  1 chunk for partition synopsis and one for partition itself
   REQUIRE_EQUAL(last_written_chunks.size(), 2u);
