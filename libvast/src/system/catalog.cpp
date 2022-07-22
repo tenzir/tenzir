@@ -30,6 +30,7 @@
 #include "vast/time.hpp"
 
 #include <caf/binary_serializer.hpp>
+#include <caf/detail/set_thread_name.hpp>
 
 #include <type_traits>
 
@@ -421,6 +422,8 @@ catalog_state::lookup_impl(const expression& expr) const {
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
         accountant_actor accountant) {
+  if (self->getf(caf::local_actor::is_detached_flag))
+    caf::detail::set_thread_name("vast.catalog");
   self->state.self = self;
   if (accountant) {
     self->state.accountant = std::move(accountant);
