@@ -273,7 +273,7 @@ create_table_slices(const std::shared_ptr<arrow::RecordBatch>& rb,
     auto& slice = slices.emplace_back(rb_sliced);
     slice.import_time(
       derive_import_time(time_col->Slice(offset, max_slice_size)));
-    VAST_ASSERT(slice.offset() == detail::narrow_cast<id>(offset));
+    slice.offset(detail::narrow_cast<id>(offset));
   }
   return slices;
 }
