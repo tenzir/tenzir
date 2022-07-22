@@ -6,6 +6,53 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
+## [v2.2.0-rc1][v2.2.0-rc1]
+
+### Changes
+
+- Metrics for VAST's store lookups now use the keys `{active,passive}-store.lookup.{runtime,hits}`. The store type metadata field now distinguishes between the various supported store types, e.g., `parquet`, `feather`, or `segment-store`, rather than containing `active` or `passive`.
+  [#2413](https://github.com/tenzir/vast/pull/2413)
+
+- The `summarize` pipeline operator is now a builtin; the previously bundled `summarize` plugin no longer exists. Aggregation functions in the `summarize` operator are now plugins, which makes them easily extensible. The syntax of `summarize` now supports specification of output field names, similar to SQL's `AS` in `SELECT f(x) AS name`.
+  [#2417](https://github.com/tenzir/vast/pull/2417)
+
+- The `count` pipeline operator no longer exists. If you relied on the undocumented operator's behavior, please let us know.
+  [#2417](https://github.com/tenzir/vast/pull/2417)
+
+- The `put` pipeline operator is now called `select`, as we've abandoned plans to integrate the functionality of `replace` into it.
+  [#2423](https://github.com/tenzir/vast/pull/2423)
+
+- The `replace` pipeline operator now supports multiple replacements in one configuration, which aligns the behavior with other operators.
+  [#2423](https://github.com/tenzir/vast/pull/2423)
+
+- Transforms are now called pipelines. In your configuration, replace `transform` with `pipeline` in all keys.
+  [#2429](https://github.com/tenzir/vast/pull/2429)
+
+### Features
+
+- The new `flush` command causes VAST to decommission all currently active partitions, i.e., write all active partitions to disk immediately regardless of their size or the active partition timeout. This is particularly useful for testing, or when needing to guarantee in automated scripts that input is available for operations that only work on persisted passive partitions. The `flush` command returns only after all active partitions were flushed to disk.
+  [#2396](https://github.com/tenzir/vast/pull/2396)
+
+- The `summarize` operator supports three new aggregation functions: `sample` takes the first value in every group, `distinct` filters out duplicate values, and `count` yields the number of values.
+  [#2417](https://github.com/tenzir/vast/pull/2417)
+
+- The `drop` pipeline operator now drops entire schemas spcefied by name in the `schemas` configuration key in addition to dropping fields by extractors in the `fields` configuration key.
+  [#2419](https://github.com/tenzir/vast/pull/2419)
+
+- The new `extend` pipeline operator allows for adding new fields with fixed values to data.
+  [#2423](https://github.com/tenzir/vast/pull/2423)
+
+### Bug Fixes
+
+- VAST will export `real` values in JSON consistently with at least one decimal place.
+  [#2393](https://github.com/tenzir/vast/pull/2393)
+
+- VAST is now able to detect corrupt index files and will attempt to repair them on startup.
+  [#2431](https://github.com/tenzir/vast/pull/2431)
+
+- The JSON export with `--omit-nulls` now handles nested records whose first field is `null` correctly instead of dropping them entirely.
+  [#2447](https://github.com/tenzir/vast/pull/2447)
+
 ## [v2.1.0][v2.1.0]
 
 ### Changes
@@ -15,6 +62,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Partition transforms now always emit homogenous partitions, i.e., one schema per partition. This makes compaction and aging more efficient.
   [#2277](https://github.com/tenzir/vast/pull/2277)
+
+- VAST now requires Arrow >= v8.0.0.
+  [#2284](https://github.com/tenzir/vast/pull/2284)
 
 - The `vast.store-backend` configuration option no longer supports `archive`, and instead always uses the superior `segment-store` instead. Events stored in the archive will continue to be available in queries.
   [#2290](https://github.com/tenzir/vast/pull/2290)
@@ -38,6 +88,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST now produces additional metrics under the keys `ingest.events`, `ingest.duration` and `ingest.rate`. Each of those gets issued once for every schema that VAST ingested during the measurement period. Use the `metadata_schema` key to disambiguate the metrics.
   [#2274](https://github.com/tenzir/vast/pull/2274)
+
+- A new parquet store plugin allows VAST to store its data as parquet files, increasing storage efficiency at the expense of higher deserialization costs. Storage requirements for the VAST database is reduced by another 15-20% compared to the existing segment store with Zstd compression enabled. CPU usage for suricata import is up ~ 10%,  mostly related to the more expensive serialization. Deserialization (reading) of a partition is significantly more expensive, increasing CPU utilization by about 100%, and should be carefully considered and compared to the potential reduction in storage cost and I/O operations.
+  [#2284](https://github.com/tenzir/vast/pull/2284)
 
 - The `status` command now supports filtering by component name. E.g., `vast status importer index` only shows the status of the importer and index components.
   [#2288](https://github.com/tenzir/vast/pull/2288)
@@ -64,6 +117,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The output `vast status --detailed` now shows metadata from all partitions under the key `.catalog.partitions`. Additionally, the catalog emits metrics under the key `catalog.num-events` and `catalog.num-partitions` containing the number of events and partitions respectively. The metrics contain the schema name in the field `metadata_schema` and the (internal) partition version in the field `metadata_partition-version`.
   [#2360](https://github.com/tenzir/vast/pull/2360)
   [#2363](https://github.com/tenzir/vast/pull/2363)
+
+- The VAST Cloud CLI can now authenticate to the Tenzir private registry and download the vast-pro image (including plugins such as Matcher). The deployment script can now be configured to use a specific image and can thus be set to use vast-pro.
+  [#2415](https://github.com/tenzir/vast/pull/2415)
 
 ### Bug Fixes
 
@@ -1799,6 +1855,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
+[v2.2.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.2.0-rc1
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
