@@ -69,10 +69,64 @@ class VastStartRestart(SingleTestWithContext):
         time.sleep(100)
 
 
+class LambdaOutput(SingleTestWithContext):
+    def test(self):
+        """Validate VAST server start and restart commands"""
+        print("Running successful command")
+        success = self.c.run(
+            "./vast-cloud run-lambda -c 'echo hello' -e VAR1=val1", hide="out"
+        ).stdout
+        self.assertEqual(
+            success,
+            """PARSED COMMAND:
+['/bin/bash', '-c', 'echo hello']
+
+ENV:
+{'VAR1': 'val1'}
+
+STDOUT:
+hello
+
+STDERR:
+
+
+RETURN CODE:
+0
+""",
+        )
+
+        print("Running erroring command")
+        error = self.c.run(
+            "./vast-cloud run-lambda -c 'echo hello >&2 && false' -e VAR1=val1",
+            hide="out",
+            warn=True,
+        ).stdout
+        self.assertEqual(
+            error,
+            """PARSED COMMAND:
+['/bin/bash', '-c', 'echo hello >&2 && false']
+
+ENV:
+{'VAR1': 'val1'}
+
+STDOUT:
+
+
+STDERR:
+hello
+
+RETURN CODE:
+1
+""",
+        )
+
+
 class VastDataImport(SingleTestWithContext):
     def vast_count(self):
         """Run `vast count` and parse the result"""
-        res_raw = self.c.run('./vast-cloud run-lambda -c "vast count"', hide="stdout")
+        res_raw = self.c.run(
+            './vast-cloud run-lambda -c "vast count" --json-output', hide="stdout"
+        )
         res_obj = json.loads(res_raw.stdout)
         self.assertEqual(
             res_obj["parsed_cmd"],
@@ -181,13 +235,14 @@ class ScriptedCmd(SingleTestWithContext):
 
         print("Run lambda with local script")
         res = self.c.run(
-            f"./vast-cloud run-lambda -c file://{script_file} -e VAR2=world", hide="out"
+            f"./vast-cloud run-lambda -c file://{script_file} -e VAR2=world --json-output",
+            hide="out",
         ).stdout
         self.assertEqual(json.loads(res)["stdout"], "hello world")
 
         print("Run lambda with piped script")
         res = self.c.run(
-            f"cat {container_path(script_file)} | ./vast-cloud run-lambda -c file:///dev/stdin -e VAR2=world",
+            f"cat {container_path(script_file)} | ./vast-cloud run-lambda -c file:///dev/stdin -e VAR2=world --json-output",
             hide="out",
         ).stdout
         self.assertEqual(json.loads(res)["stdout"], "hello world")
@@ -212,6 +267,11 @@ class ScriptedCmd(SingleTestWithContext):
             hide="out",
         ).stdout
         self.assertIn("hello world", res)
+
+
+@task
+def lambda_output(c):
+    unittest.TextTestRunner().run(LambdaOutput(c))
 
 
 @task
@@ -243,6 +303,7 @@ def all(c):
     - This will affect the state of the current stack"""
     suite = unittest.TestSuite()
     suite.addTest(VastStartRestart(c))
+    suite.addTest(LambdaOutput(c))
     suite.addTest(VastDataImport(c))
     suite.addTest(WorkbucketRoundtrip(c))
     suite.addTest(ScriptedCmd(c))

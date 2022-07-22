@@ -259,12 +259,29 @@ def list_all_tasks(c):
     return task_ids
 
 
-@task(autoprint=True, help=CMD_HELP, iterable=["env"])
-def run_lambda(c, cmd, env=[]):
+def print_lambda_output(json_response: str, json_output: bool):
+    if json_output:
+        print(json_response)
+    else:
+        response = json.loads(json_response)
+        print("PARSED COMMAND:")
+        print(response["parsed_cmd"])
+        print("\nENV:")
+        print(response["env"])
+        print("\nSTDOUT:")
+        print(response["stdout"])
+        print("\nSTDERR:")
+        print(response["stderr"])
+        print("\nRETURN CODE:")
+        print(response["returncode"])
+
+
+@task(help=CMD_HELP, iterable=["env"])
+def run_lambda(c, cmd, env=[], json_output=False):
     """Run ad-hoc VAST client commands from AWS Lambda
 
-    Returns an object containing the standard and error outputs as well as the
-    parsed command that was executed"""
+    Prints the inputs (command / environment) and outputs (stdout, stderr, exit
+    code) of the executed function to stdout."""
     lambda_name = terraform_output(c, "core-2", "vast_lambda_name")
     cmd_b64 = base64.b64encode(load_cmd(cmd)).decode()
     lambda_res = aws("lambda").invoke(
@@ -280,12 +297,13 @@ def run_lambda(c, cmd, env=[]):
         try:
             json_payload = json.loads(resp_payload)
             if json_payload["errorType"] == "CommandException":
-                # CommandException is already JSON encoded
-                mess = json_payload["errorMessage"]
+                # CommandException is JSON encoded
+                print_lambda_output(json_payload["errorMessage"], json_output)
+                mess = ""
         except Exception:
             pass
         raise Exit(message=mess, code=1)
-    return resp_payload
+    print_lambda_output(resp_payload, json_output)
 
 
 @pty_task(help=CMD_HELP, iterable=["env"])
