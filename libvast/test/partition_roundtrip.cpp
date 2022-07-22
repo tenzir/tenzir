@@ -131,12 +131,10 @@ TEST(empty partition roundtrip) {
   // Create partition state.
   vast::system::active_partition_state state;
   state.data.id = vast::uuid::random();
-  state.data.store_id = "legacy_archive";
+  state.data.store_id = "segment-store";
   state.data.store_header = vast::chunk::make_empty();
-  state.data.offset = 17;
   state.data.events = 23;
   state.data.synopsis = caf::make_copy_on_write<vast::partition_synopsis>();
-  state.data.synopsis.unshared().offset = state.data.offset;
   state.data.synopsis.unshared().events = state.data.events;
   auto& ids = state.data.type_ids["x"];
   ids.append_bits(false, 3);
@@ -182,13 +180,11 @@ TEST(empty partition roundtrip) {
   REQUIRE(partition_legacy);
   REQUIRE(partition_legacy->store());
   REQUIRE(partition_legacy->store()->id());
-  CHECK_EQUAL(partition_legacy->store()->id()->str(), "legacy_archive");
-  CHECK_EQUAL(partition_legacy->offset(), state.data.offset);
+  CHECK_EQUAL(partition_legacy->store()->id()->str(), "segment-store");
   CHECK_EQUAL(partition_legacy->events(), state.data.events);
   auto error = unpack(*partition_legacy, recovered_state);
   CHECK(!error);
   CHECK_EQUAL(recovered_state.id, state.data.id);
-  CHECK_EQUAL(recovered_state.offset, state.data.offset);
   CHECK_EQUAL(recovered_state.events, state.data.events);
   // As of the Type FlatBuffers change we no longer keep the combined layout in
   // the active partition, which makes this test irrelevant:
@@ -199,7 +195,6 @@ TEST(empty partition roundtrip) {
   auto error2 = vast::system::unpack(*partition_legacy, ps.unshared());
   CHECK(!error2);
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
-  CHECK_EQUAL(ps->offset, state.data.offset);
   CHECK_EQUAL(ps->events, state.data.events);
   auto catalog
     = self->spawn(vast::system::catalog, vast::system::accountant_actor{});
@@ -238,7 +233,7 @@ TEST(full partition roundtrip) {
     vast::system::posix_filesystem,
     directory); // `directory` is provided by the unit test fixture
   auto partition_uuid = vast::uuid::random();
-  auto store_id = std::string{"legacy_archive"};
+  auto store_id = std::string{"segment-store"};
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
@@ -279,14 +274,10 @@ TEST(full partition roundtrip) {
       FAIL(err);
     });
   self->send_exit(partition, caf::exit_reason::user_shutdown);
-  // Spawn a read-only partition from this chunk and try to query the data we
-  // added. We make two queries, one "#type"-query and one "normal" query
-  auto archive = sys.spawn(dummy_store);
-  // auto archive =
-  // vast::system::store_actor::behavior_type::make_empty_behavior();
   auto readonly_partition
     = sys.spawn(vast::system::passive_partition, partition_uuid,
-                vast::system::accountant_actor{}, archive, fs, persist_path);
+                vast::system::accountant_actor{}, vast::system::archive_actor{},
+                fs, persist_path);
   REQUIRE(readonly_partition);
   run();
   // A minimal `partition_client_actor`that stores the results in a local

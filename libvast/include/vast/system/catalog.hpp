@@ -87,10 +87,6 @@ public:
   // See also ae9dbed.
   detail::flat_map<uuid, partition_synopsis_ptr> synopses = {};
 
-  /// Maps ids to the corresponding partitions.
-  //  TODO: Maybe this should be moved into it a standalone actor.
-  detail::range_map<id, uuid> offset_map = {};
-
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;
 };

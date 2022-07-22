@@ -94,9 +94,6 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
     [=](atom::rebuild, std::vector<uuid>) -> std::vector<partition_info> {
       FAIL("no mock implementation available");
     },
-    [=](atom::importer, system::idspace_distributor_actor) {
-      FAIL("no mock implementation available");
-    },
     [=](atom::resolve, vast::expression) -> system::catalog_result {
       std::vector<vast::partition_info> result;
       result.reserve(CANDIDATES_PER_MOCK_QUERY);

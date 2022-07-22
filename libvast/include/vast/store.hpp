@@ -10,7 +10,9 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/generator.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -26,9 +28,21 @@ public:
   /// @returns An error on failure.
   [[nodiscard]] virtual caf::error load(chunk_ptr chunk) = 0;
 
-  /// Retrieve all of the store's slices.
-  /// @returns The store's slices.
-  [[nodiscard]] virtual const std::vector<table_slice>& slices() const = 0;
+  /// Retrieve the slices of the store.
+  /// @returns The contained slices.
+  [[nodiscard]] virtual detail::generator<table_slice> slices() const = 0;
+
+  /// Retrieve the number of contained events.
+  /// @returns The number of rows in all contained slices.
+  [[nodiscard]] virtual uint64_t num_events() const = 0;
+
+  /// Handle a query; this has a default implementation.
+  /// @param query_context The query context.
+  /// @param self The executing actor's self pointer.
+  /// @returns The number of rows in all contained slices.
+  [[nodiscard]] virtual caf::expected<uint64_t>
+  lookup(system::store_actor::pointer self,
+         const query_context& query_context) const;
 };
 
 /// A base class for active stores used by the store plugin.
@@ -45,9 +59,21 @@ public:
   /// failure.
   [[nodiscard]] virtual caf::expected<chunk_ptr> finish() = 0;
 
-  /// Retrieve all of the store's slices.
-  /// @returns The store's slices.
-  [[nodiscard]] virtual const std::vector<table_slice>& slices() const = 0;
+  /// Retrieve the slices of the store.
+  /// @returns The contained slices.
+  [[nodiscard]] virtual detail::generator<table_slice> slices() const = 0;
+
+  /// Retrieve the number of contained events.
+  /// @returns The number of rows in all contained slices.
+  [[nodiscard]] virtual size_t num_events() const;
+
+  /// Handle a query; this has a default implementation.
+  /// @param query_context The query context.
+  /// @param self The executing actor's self pointer.
+  /// @returns The number of rows in all contained slices.
+  [[nodiscard]] virtual caf::expected<uint64_t>
+  lookup(system::store_builder_actor::pointer self,
+         const query_context& query_context) const;
 };
 
 /// The state of the default passive store actor implementation.

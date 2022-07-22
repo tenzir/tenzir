@@ -62,11 +62,9 @@ size_t catalog_state::memusage() const {
 
 void catalog_state::erase(const uuid& partition) {
   synopses.erase(partition);
-  offset_map.erase_value(partition);
 }
 
 void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
-  offset_map.inject(ps->offset, ps->offset + ps->events, partition);
   update_unprunable_fields(*ps);
   synopses.emplace(partition, std::move(ps));
 }
@@ -75,8 +73,6 @@ void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
   std::vector<std::pair<uuid, partition_synopsis_ptr>> flat_data;
   for (auto&& [uuid, synopsis] : std::move(ps)) {
     VAST_ASSERT(synopsis->get_reference_count() == 1ull);
-    offset_map.inject(synopsis->offset, synopsis->offset + synopsis->events,
-                      uuid);
     flat_data.emplace_back(uuid, std::move(synopsis));
   }
   std::sort(flat_data.begin(), flat_data.end(),
@@ -494,62 +490,25 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [=](atom::candidates, const vast::query_context& query_context)
       -> caf::result<catalog_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
-      catalog_result expression_candidates;
-      std::vector<vast::uuid> ids_candidates;
       bool has_expression = query_context.expr != vast::expression{};
       bool has_ids = !query_context.ids.empty();
-      if (!has_expression && !has_ids)
-        return caf::make_error(ec::invalid_argument, "query had neither an "
-                                                     "expression nor ids");
+      if (has_ids)
+        return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                     "not to have ids");
+      if (!has_expression)
+        return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                     "to have an expression");
       auto start = std::chrono::steady_clock::now();
-      if (has_expression) {
-        expression_candidates = self->state.lookup(query_context.expr);
-      }
-      if (has_ids) {
-        for (auto id : select(query_context.ids)) {
-          const auto* x = self->state.offset_map.lookup(id);
-          if (x)
-            ids_candidates.push_back(*x);
-        }
-        std::sort(ids_candidates.begin(), ids_candidates.end());
-        auto new_end
-          = std::unique(ids_candidates.begin(), ids_candidates.end());
-        ids_candidates.erase(new_end, ids_candidates.end());
-      }
-      std::vector<partition_info> result_candidates;
-      if (has_expression && has_ids) {
-        std::set_intersection(expression_candidates.partitions.begin(),
-                              expression_candidates.partitions.end(),
-                              ids_candidates.begin(), ids_candidates.end(),
-                              std::back_inserter(result_candidates));
-      } else if (has_expression) {
-        result_candidates = std::move(expression_candidates.partitions);
-      } else {
-        result_candidates.reserve(ids_candidates.size());
-        for (const auto& ids_candidate : ids_candidates) {
-          const auto syn = self->state.synopses.find(ids_candidate);
-          //  We calculates the candidate partition ids from the query ids above
-          //  race conditions in this same handler, so we can safely assert that
-          //  the candidate partition id is valid.
-          VAST_ASSERT(syn != self->state.synopses.end());
-          result_candidates.push_back({
-            .uuid = ids_candidate,
-            .events = syn->second->events,
-            .max_import_time = syn->second->max_import_time,
-            .schema = syn->second->schema,
-          });
-        }
-      }
+      auto result = self->state.lookup(query_context.expr);
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query_context.id);
       self->send(self->state.accountant, "catalog.lookup.runtime", runtime,
                  metrics_metadata{{"query", id_str}});
       self->send(self->state.accountant, "catalog.lookup.candidates",
-                 result_candidates.size(),
+                 result.partitions.size(),
                  metrics_metadata{{"query", std::move(id_str)}});
 
-      return catalog_result{catalog_result::probabilistic,
-                            std::move(result_candidates)};
+      return result;
     },
     [=](atom::status, status_verbosity v) {
       record result;

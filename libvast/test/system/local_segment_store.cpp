@@ -78,7 +78,6 @@ FIXTURE_SCOPE(filesystem_tests, fixture)
 
 TEST(local store roundtrip) {
   auto xs = std::vector<vast::table_slice>{zeek_conn_log[0]};
-  xs[0].offset(23u);
   auto uuid = vast::uuid::random();
   auto plugin = vast::plugins::find<vast::store_actor_plugin>("segment-store");
   REQUIRE(plugin);
@@ -93,7 +92,7 @@ TEST(local store roundtrip) {
   auto store = plugin->make_store(accountant, filesystem, as_bytes(header));
   REQUIRE_NOERROR(store);
   run();
-  auto ids = vast::make_ids({23});
+  auto ids = vast::make_ids({0});
   auto results = query(*store, ids);
   run();
   CHECK_EQUAL(results.size(), 1ull);

@@ -30,7 +30,15 @@ segment_builder::segment_builder(size_t initial_buffer_size,
   reset(id);
 }
 
-caf::error segment_builder::add(const table_slice& x) {
+caf::error segment_builder::add(table_slice x) {
+  // The index already sets the correct offset for this slice, but in some unit
+  // tests we test this component separately, causing incoming table slices not
+  // to have an offset at all. We should fix the unit tests properly, but that
+  // takes time we did not want to spend when migrating to partition-local ids.
+  // -- DL
+  if (x.offset() == invalid_id)
+    x.offset(num_events_);
+  VAST_ASSERT(x.offset() == num_events_);
   if (x.offset() < min_table_slice_offset_)
     return caf::make_error(ec::unspecified, "slice offsets not increasing");
   auto last_fb_offset = flat_slices_.empty() ? 0ull : flat_slices_.back().o;

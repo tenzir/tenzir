@@ -55,23 +55,7 @@ struct importer_state {
 
   ~importer_state();
 
-  caf::error read_state();
-
-  caf::error write_state(write_mode mode);
-
   void send_report();
-
-  /// Extends the available ids by block size
-  /// @param required The minimum increment of ids so that available ids are
-  /// not depleted after calling this function and assigning this amount
-  /// subsequently.
-  caf::error get_next_block(uint64_t required = 0u);
-
-  /// @returns the next unused id and increments the position by its argument.
-  id next_id(uint64_t advance);
-
-  /// @returns the number of currently available IDs.
-  [[nodiscard]] id available_ids() const noexcept;
 
   /// @returns various status metrics.
   [[nodiscard]] caf::typed_response_promise<record>
@@ -79,9 +63,6 @@ struct importer_state {
 
   /// The active id block.
   id_block current;
-
-  /// State directory.
-  std::filesystem::path dir;
 
   /// The continous stage that moves data from all sources to all subscribers.
   caf::stream_stage_ptr<

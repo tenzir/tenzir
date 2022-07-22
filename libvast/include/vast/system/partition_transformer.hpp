@@ -60,10 +60,6 @@ struct partition_transformer_state {
       self,
     stream_data&&, path_data&&) const;
 
-  /// Actor handle of the actor (usually the importer) where we reserve new ids
-  /// for the transformed data.
-  idspace_distributor_actor idspace_distributor = {};
-
   /// Actor handle of the type registry.
   type_registry_actor type_registry = {};
 
@@ -159,7 +155,6 @@ partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  idspace_distributor_actor idspace_distributor,
   type_registry_actor type_registry, filesystem_actor fs,
   pipeline_ptr transform, std::string partition_path_template,
   std::string synopsis_path_template);

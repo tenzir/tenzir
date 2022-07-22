@@ -37,7 +37,7 @@ public:
   /// @pre The table slice offset (`x.offset()`) must be greater than the
   ///      offset of the previously added table slice. This requirement enables
   ///      efficient lookup of table slices from a sequence of IDs.
-  caf::error add(const table_slice& x);
+  caf::error add(table_slice x);
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
@@ -69,7 +69,7 @@ public:
 private:
   uuid id_;
   vast::id min_table_slice_offset_;
-  uint64_t num_events_;
+  uint64_t num_events_ = 0;
   flatbuffers::FlatBufferBuilder builder_;
   std::vector<flatbuffers::Offset<fbs::FlatTableSlice>> flat_slices_;
   std::vector<table_slice> slices_; // For queries to an unfinished segment.

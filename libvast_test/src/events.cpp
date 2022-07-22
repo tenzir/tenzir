@@ -209,8 +209,8 @@ events::events() {
   REQUIRE_EQUAL(rows(suricata_stats_log), 1u);
   REQUIRE_EQUAL(suricata_stats_log[0].columns(), 1u);
   // Assign IDs.
-  auto i = id{0};
   auto assign_ids = [&](auto& slices) {
+    auto i = id{0};
     for (auto& slice : slices) {
       slice.offset(i);
       i += slice.rows();
@@ -218,15 +218,10 @@ events::events() {
   };
   assign_ids(zeek_conn_log);
   assign_ids(zeek_dns_log);
-  i += 1'000; // Cause an artificial gap in the ID space.
   assign_ids(zeek_http_log);
   assign_ids(ascending_integers);
   assign_ids(alternating_integers);
-  // The full conn.log stands out in that it has its own offset.
-  i = 100'000;
   assign_ids(zeek_conn_log_full);
-  // The Suricata logs have separate offsets.
-  i = 200'000;
   assign_ids(suricata_alert_log);
   assign_ids(suricata_dns_log);
   assign_ids(suricata_fileinfo_log);

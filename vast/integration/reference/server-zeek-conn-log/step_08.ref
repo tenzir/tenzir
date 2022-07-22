@@ -10,9 +10,6 @@
 {"path":["catalog","partitions",0,"import-time","min"],"type":"string"}
 {"path":["catalog","partitions",0,"import-time","max"],"type":"string"}
 {"path":["filesystem","type"],"type":"string"}
-{"path":["importer","ids","available"],"type":"number"}
-{"path":["importer","ids","block","end"],"type":"number"}
-{"path":["importer","ids","block","next"],"type":"number"}
 {"path":["index","backlog","num-custom-priority"],"type":"number"}
 {"path":["index","backlog","num-low-priority"],"type":"number"}
 {"path":["index","backlog","num-normal-priority"],"type":"number"}

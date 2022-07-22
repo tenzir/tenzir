@@ -224,11 +224,6 @@ using catalog_actor = typed_actor_fwd<
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// The IDSPACE DISTRIBUTOR actor interface.
-using idspace_distributor_actor = typed_actor_fwd<
-  // Request a part of the id space.
-  caf::replies_to<atom::reserve, uint64_t>::with<vast::id>>::unwrap;
-
 /// The interface of an IMPORTER actor.
 using importer_actor = typed_actor_fwd<
   // Register the ACCOUNTANT actor.
@@ -240,8 +235,6 @@ using importer_actor = typed_actor_fwd<
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // The internal telemetry loop of the IMPORTER.
   caf::reacts_to<atom::telemetry>>
-  // Conform to the protocol of the IDSPACE DISTRIBUTOR actor.
-  ::extend_with<idspace_distributor_actor>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STREAM SINK actor for table slices with a
@@ -287,9 +280,7 @@ using index_actor = typed_actor_fwd<
   caf::replies_to<atom::rebuild,
                   std::vector<uuid>>::with<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
-  caf::reacts_to<atom::flush>,
-  // Makes the identity of the importer known to the index.
-  caf::reacts_to<atom::importer, idspace_distributor_actor>>
+  caf::reacts_to<atom::flush>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
@@ -368,7 +359,7 @@ using partition_transformer_actor = typed_actor_fwd<
   // partition synopses.
   caf::replies_to<atom::persist>::with<std::vector<augmented_partition_synopsis>>,
   // INTERNAL: Continuation handler for `atom::done`.
-  caf::reacts_to<atom::internal, atom::resume, atom::done, vast::id>>
+  caf::reacts_to<atom::internal, atom::resume, atom::done>>
   // query_context::extract API
   ::extend_with<receiver_actor<table_slice>>
   // Receive a completion signal for the input stream.
@@ -513,7 +504,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::filesystem_actor))
   VAST_ADD_TYPE_ID((vast::system::flush_listener_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_creation_listener_actor))
-  VAST_ADD_TYPE_ID((vast::system::idspace_distributor_actor))
   VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::index_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))

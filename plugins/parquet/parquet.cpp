@@ -273,6 +273,7 @@ create_table_slices(const std::shared_ptr<arrow::RecordBatch>& rb,
     auto& slice = slices.emplace_back(rb_sliced);
     slice.import_time(
       derive_import_time(time_col->Slice(offset, max_slice_size)));
+    slice.offset(detail::narrow_cast<id>(offset));
   }
   return slices;
 }
@@ -299,7 +300,8 @@ caf::expected<std::shared_ptr<arrow::Table>>
 read_parquet_buffer(const chunk_ptr& chunk) {
   VAST_ASSERT(chunk);
   auto bufr = std::make_shared<arrow::io::BufferReader>(as_arrow_buffer(chunk));
-  auto parquet_reader = ::parquet::ParquetFileReader::Open(bufr);
+  const auto options = ::parquet::default_reader_properties();
+  auto parquet_reader = ::parquet::ParquetFileReader::Open(bufr, options);
   auto arrow_schema
     = parse_arrow_schema_from_metadata(parquet_reader->metadata());
   std::unique_ptr<::parquet::arrow::FileReader> file_reader{};
@@ -406,14 +408,19 @@ public:
 
   /// Retrieve all of the store's slices.
   /// @returns The store's slices.
-  [[nodiscard]] const std::vector<table_slice>& slices() const override {
-    return slices_;
+  [[nodiscard]] detail::generator<table_slice> slices() const override {
+    for (const auto& slice : slices_)
+      co_yield slice;
+  }
+
+  [[nodiscard]] uint64_t num_events() const override {
+    return num_rows_;
   }
 
 private:
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
-  size_t num_rows_ = {};
+  uint64_t num_rows_ = {};
 };
 
 class active_parquet_store final : public active_store {
@@ -426,8 +433,18 @@ public:
   /// @returns An error on failure.
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     slices_.reserve(new_slices.size() + slices_.size());
-    slices_.insert(slices_.end(), std::make_move_iterator(new_slices.begin()),
-                   std::make_move_iterator(new_slices.end()));
+    for (auto& slice : new_slices) {
+      // The index already sets the correct offset for this slice, but in some
+      // unit tests we test this component separately, causing incoming table
+      // slices not to have an offset at all. We should fix the unit tests
+      // properly, but that takes time we did not want to spend when migrating
+      // to partition-local ids. -- DL
+      if (slice.offset() == invalid_id)
+        slice.offset(num_rows_);
+      VAST_ASSERT(slice.offset() == num_rows_);
+      num_rows_ += slice.rows();
+      slices_.push_back(std::move(slice));
+    }
     return {};
   }
 
@@ -442,11 +459,17 @@ public:
 
   /// Retrieve all of the store's slices.
   /// @returns The store's slices.
-  [[nodiscard]] const std::vector<table_slice>& slices() const override {
-    return slices_;
+  [[nodiscard]] detail::generator<table_slice> slices() const override {
+    for (const auto& slice : slices_)
+      co_yield slice;
+  }
+
+  [[nodiscard]] size_t num_events() const override {
+    return num_rows_;
   }
 
 private:
+  uint64_t num_rows_ = {};
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
 };

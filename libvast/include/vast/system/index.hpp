@@ -318,10 +318,6 @@ struct index_state {
   /// Actor handle of the store actor.
   archive_actor global_store = {};
 
-  /// Actor handle of the importer actor to reserve additional
-  /// parts of the id space.
-  idspace_distributor_actor importer = {};
-
   /// Plugin responsible for spawning new partition-local stores.
   const vast::store_actor_plugin* store_actor_plugin = {};
 

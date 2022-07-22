@@ -464,8 +464,9 @@ rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
 
 void select(std::vector<table_slice>& result, const table_slice& slice,
             const ids& selection) {
+  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  auto xs_ids = make_ids({{slice.offset(), slice.offset() + slice.rows()}});
+  auto xs_ids = make_ids({{offset, offset + slice.rows()}});
   auto intersection = selection & xs_ids;
   auto intersection_rank = rank(intersection);
   // Do no rows qualify?
@@ -495,7 +496,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
                implementation_id);
     return;
   }
-  id last_offset = slice.offset();
+  id last_offset = offset;
   auto push_slice = [&] {
     if (builder->rows() == 0)
       return;
@@ -519,8 +520,8 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     } else {
       ++last_id;
     }
-    VAST_ASSERT(id >= slice.offset());
-    auto row = id - slice.offset();
+    VAST_ASSERT(id >= offset);
+    auto row = id - offset;
     VAST_ASSERT(row < slice.rows());
     for (size_t column = 0; column < flat_layout.num_fields(); ++column) {
       auto cell_value = slice.at(row, column, flat_layout.field(column).type);

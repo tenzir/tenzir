@@ -237,7 +237,6 @@ partition_transformer_actor::behavior_type partition_transformer(
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  idspace_distributor_actor idspace_distributor,
   type_registry_actor type_registry, filesystem_actor fs,
   pipeline_ptr transform, std::string partition_path_template,
   std::string synopsis_path_template) {
@@ -250,7 +249,6 @@ partition_transformer_actor::behavior_type partition_transformer(
     index_opts, "cardinality", defaults::system::max_partition_size);
   self->state.index_opts = index_opts;
   self->state.accountant = std::move(accountant);
-  self->state.idspace_distributor = std::move(idspace_distributor);
   self->state.fs = std::move(fs);
   self->state.type_registry = std::move(type_registry);
   // transform can be an aggregate transform here
@@ -270,13 +268,13 @@ partition_transformer_actor::behavior_type partition_transformer(
       self->state.max_import_time
         = std::max(self->state.max_import_time, old_import_time);
     },
-    [self](atom::done) {
+    [self](atom::done) -> caf::result<void> {
       auto transformed = self->state.transform->finish();
       if (!transformed) {
         VAST_ERROR("{} failed to finish transform: {}", *self,
                    transformed.error());
         self->state.transform_error = transformed.error();
-        return;
+        return {};
       }
       for (auto& slice : *transformed) {
         auto const& layout = slice.layout();
@@ -287,7 +285,6 @@ partition_transformer_actor::behavior_type partition_transformer(
           partition_data.id = vast::uuid::random();
           partition_data.store_id = self->state.store_id;
           partition_data.events = 0ull;
-          partition_data.offset = invalid_id;
           partition_data.synopsis
             = caf::make_copy_on_write<partition_synopsis>();
         }
@@ -310,7 +307,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       // We're already done if the whole partition got deleted
       if (self->state.events == 0) {
         store_or_fulfill(self, std::move(stream_data));
-        return;
+        return {};
       }
       // ...otherwise, prepare for writing out the transformed data by creating
       // new stores, sending out the slices and requesting new idspace.
@@ -322,7 +319,7 @@ partition_transformer_actor::behavior_type partition_transformer(
           = caf::make_error(ec::invalid_argument,
                             "could not find a store plugin named {}", store_id);
         store_or_fulfill(self, std::move(stream_data));
-        return;
+        return {};
       }
       self->state.stage = caf::attach_continuous_stream_stage(
         self, [](caf::unit_t&) {},
@@ -344,7 +341,7 @@ partition_transformer_actor::behavior_type partition_transformer(
                               "could not create store builder for backend {}",
                               store_id);
           store_or_fulfill(self, std::move(stream_data));
-          return;
+          return {};
         }
         partition_data.store_header = builder_and_header->header;
         // Empirically adding the outbound path and pushing data to it
@@ -355,26 +352,17 @@ partition_transformer_actor::behavior_type partition_transformer(
             builder_and_header->store_builder);
       }
       VAST_DEBUG("{} received all table slices", *self);
-      self
-        ->request(self->state.idspace_distributor, caf::infinite,
-                  atom::reserve_v, self->state.events)
-        .then(
-          [self](vast::id id) {
-            self->send(self, atom::internal_v, atom::resume_v, atom::done_v,
-                       id);
-          },
-          [self](const caf::error& e) {
-            self->state.stream_error = e;
-          });
+      return self->delegate(static_cast<partition_transformer_actor>(self),
+                            atom::internal_v, atom::resume_v, atom::done_v);
     },
-    [self](atom::internal, atom::resume, atom::done, vast::id offset) {
-      VAST_DEBUG("{} got new offset {}", *self, offset);
+    [self](atom::internal, atom::resume, atom::done) {
+      VAST_DEBUG("{} got resume", *self);
       for (auto& [layout, data] : self->state.data) {
-        data.offset = offset;
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
         auto& buildup = self->state.partition_buildup.at(data.id);
         auto slot = buildup.slot;
+        auto offset = id{0};
         for (auto& slice : buildup.slices) {
           slice.offset(offset);
           offset += slice.rows();
@@ -388,7 +376,7 @@ partition_transformer_actor::behavior_type partition_transformer(
         // TODO: It would make more sense if the partition
         // synopsis keeps track of offset/events internally.
         mutable_synopsis.shrink();
-        mutable_synopsis.offset = data.offset;
+        mutable_synopsis.offset = 0;
         mutable_synopsis.events = data.events;
         // Create the value indices.
         for (auto& [qf, idx] :

@@ -62,9 +62,6 @@ struct active_partition_state {
     /// Uniquely identifies this partition.
     vast::uuid id = {};
 
-    /// The first ID in the partition.
-    vast::id offset = {};
-
     /// The number of events in the partition.
     size_t events = {};
 

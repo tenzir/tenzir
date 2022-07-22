@@ -14,7 +14,6 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/archive.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
@@ -44,17 +43,12 @@ struct fixture : fixture_base {
     self->send_exit(exporter, caf::exit_reason::user_shutdown);
     self->send_exit(index, caf::exit_reason::user_shutdown);
     self->send_exit(catalog, caf::exit_reason::user_shutdown);
-    self->send_exit(archive, caf::exit_reason::user_shutdown);
     run();
   }
 
   void spawn_type_registry() {
     type_registry
       = self->spawn(system::type_registry, directory / "type-registry");
-  }
-
-  void spawn_archive() {
-    archive = self->spawn(system::archive, directory / "archive", 1, 1024);
   }
 
   void spawn_catalog() {
@@ -64,15 +58,16 @@ struct fixture : fixture_base {
   void spawn_index() {
     auto fs = self->spawn(system::posix_filesystem, directory);
     auto indexdir = directory / "index";
-    index = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                        catalog, type_registry, indexdir,
-                        defaults::system::store_backend, 10000, duration{}, 5,
-                        5, 1, indexdir, vast::index_config{});
+    index = self->spawn(system::index, system::accountant_actor{}, fs,
+                        system::archive_actor{}, catalog, type_registry,
+                        indexdir, defaults::system::store_backend, 10000,
+                        duration{}, 5, 5, 1, indexdir, vast::index_config{});
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer", archive,
-                           index, type_registry, std::vector<vast::pipeline>{});
+    importer = self->spawn(system::importer, directory / "importer",
+                           system::archive_actor{}, index, type_registry,
+                           std::vector<vast::pipeline>{});
   }
 
   void spawn_exporter(query_options opts) {
@@ -83,8 +78,6 @@ struct fixture : fixture_base {
   void importer_setup() {
     if (!type_registry)
       spawn_type_registry();
-    if (!archive)
-      spawn_archive();
     if (!catalog)
       spawn_catalog();
     if (!index)
@@ -141,7 +134,6 @@ struct fixture : fixture_base {
   system::type_registry_actor type_registry;
   system::catalog_actor catalog;
   system::index_actor index;
-  system::archive_actor archive;
   system::importer_actor importer;
   system::exporter_actor exporter;
   expression expr;
@@ -152,13 +144,12 @@ struct fixture : fixture_base {
 FIXTURE_SCOPE(exporter_tests, fixture)
 
 TEST(historical query without importer) {
-  MESSAGE("spawn index and archive");
-  spawn_archive();
+  MESSAGE("spawn index");
   spawn_catalog();
   spawn_index();
   run();
-  MESSAGE("ingest conn.log into archive and index");
-  vast::detail::spawn_container_source(sys, zeek_conn_log, index, archive);
+  MESSAGE("ingest conn.log into index");
+  vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   MESSAGE("spawn exporter for historical query");
   exporter_setup(historical);

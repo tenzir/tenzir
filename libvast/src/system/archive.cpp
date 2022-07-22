@@ -233,45 +233,8 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       }
       self->send(self, atom::internal_v, atom::resume_v);
     },
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_DEBUG("{} got a new stream source", *self);
-      return self
-        ->make_sink(
-          in,
-          [](caf::unit_t&) {
-            // nop
-          },
-          [=](caf::unit_t&, std::vector<table_slice>& batch) {
-            VAST_TRACE_SCOPE("{} got {} table slices", *self, batch.size());
-            auto t = timer::start(self->state.measurement);
-            uint64_t events = 0;
-            for (auto& slice : batch) {
-              if (auto error = self->state.store->put(slice))
-                VAST_ERROR("{} failed to add table slice to store {}", *self,
-                           render(error));
-              else
-                events += slice.rows();
-            }
-            t.stop(events);
-          },
-          [=](caf::unit_t&, const caf::error& err) {
-            // We get an 'unreachable' error when the stream becomes
-            // unreachable because the actor was destroyed; in this case we
-            // can't use `self` anymore.
-            if (err && err != caf::exit_reason::unreachable) {
-              if (err != caf::exit_reason::user_shutdown)
-                VAST_ERROR("{} got a stream error: {}", *self, render(err));
-              else
-                VAST_DEBUG("{} got a user shutdown error: {}", *self,
-                           render(err));
-              // We can shutdown now because we only get a single stream from
-              // the importer.
-              self->send_exit(self, err);
-            }
-            VAST_DEBUG("archive finalizes streaming");
-          })
-        .inbound_slot();
+    [](caf::stream<table_slice>) -> caf::inbound_stream_slot<table_slice> {
+      die("cannot add new events to legacy archive");
     },
     [self](accountant_actor accountant) {
       namespace defs = defaults::system;
