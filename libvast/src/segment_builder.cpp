@@ -41,6 +41,13 @@ caf::error segment_builder::add(table_slice x) {
   VAST_ASSERT(x.offset() == num_events_);
   if (x.offset() < min_table_slice_offset_)
     return caf::make_error(ec::unspecified, "slice offsets not increasing");
+  if (!x.is_serialized()) {
+    auto serialized_x = table_slice{to_record_batch(x), true};
+    serialized_x.import_time(x.import_time());
+    serialized_x.offset(x.offset());
+    x = std::move(serialized_x);
+  }
+  VAST_ASSERT(x.is_serialized());
   auto last_fb_offset = flat_slices_.empty() ? 0ull : flat_slices_.back().o;
   // Allow ca. 100MiB of extra space for the non-table data.
   constexpr auto REASONABLE_SIZE
