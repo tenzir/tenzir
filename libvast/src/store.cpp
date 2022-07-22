@@ -75,13 +75,6 @@ handle_lookup(Actor& self, const query_context& query_context,
 
 } // namespace
 
-size_t passive_store::num_events() const {
-  auto result = size_t{};
-  for (const auto& slice : slices())
-    result += slice.rows();
-  return result;
-}
-
 caf::expected<uint64_t>
 passive_store::lookup(system::store_actor::pointer self,
                       const query_context& query_context) const {
@@ -160,7 +153,7 @@ system::store_actor::behavior_type default_passive_store(
                   self->state.path)
         .then(
           [rp, num_events](atom::done) mutable {
-            rp.deliver(detail::narrow_cast<uint64_t>(num_events));
+            rp.deliver(num_events);
           },
           [rp](caf::error& error) mutable {
             rp.deliver(std::move(error));

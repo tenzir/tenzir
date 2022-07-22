@@ -493,8 +493,8 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         return caf::make_error(ec::invalid_argument, "catalog expects queries "
                                                      "not to have ids");
       if (!has_expression)
-        return caf::make_error(ec::invalid_argument, "query had neither an "
-                                                     "expression nor ids");
+        return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                     "to have an expression");
       auto start = std::chrono::steady_clock::now();
       auto result = self->state.lookup(query_context.expr);
       duration runtime = std::chrono::steady_clock::now() - start;

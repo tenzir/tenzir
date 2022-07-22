@@ -34,7 +34,7 @@ public:
 
   /// Retrieve the number of contained events.
   /// @returns The number of rows in all contained slices.
-  [[nodiscard]] virtual size_t num_events() const;
+  [[nodiscard]] virtual uint64_t num_events() const = 0;
 
   /// Handle a query; this has a default implementation.
   /// @param query_context The query context.

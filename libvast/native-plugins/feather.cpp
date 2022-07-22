@@ -101,12 +101,12 @@ class passive_feather_store final : public passive_store {
       co_yield slice;
   }
 
-  [[nodiscard]] size_t num_events() const override {
+  [[nodiscard]] uint64_t num_events() const override {
     return num_events_;
   }
 
 private:
-  size_t num_events_ = {};
+  uint64_t num_events_ = {};
   std::vector<table_slice> slices_ = {};
 };
 
@@ -114,6 +114,11 @@ class active_feather_store final : public active_store {
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     slices_.reserve(new_slices.size() + slices_.size());
     for (auto& slice : new_slices) {
+      // The index already sets the correct offset for this slice, but in some
+      // unit tests we test this component separately, causing incoming table
+      // slices not to have an offset at all. We should fix the unit tests
+      // properly, but that takes time we did not want to spend when migrating
+      // to partition-local ids. -- DL
       if (slice.offset() == invalid_id)
         slice.offset(num_events_);
       VAST_ASSERT(slice.offset() == num_events_);

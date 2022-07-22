@@ -401,7 +401,7 @@ public:
       slices_.insert(slices_.end(),
                      std::make_move_iterator(slices_for_batch.begin()),
                      std::make_move_iterator(slices_for_batch.end()));
-      num_events_ += (*rb)->num_rows();
+      num_rows_ += (*rb)->num_rows();
     }
     return {};
   }
@@ -413,14 +413,14 @@ public:
       co_yield slice;
   }
 
-  [[nodiscard]] size_t num_events() const override {
-    return num_events_;
+  [[nodiscard]] uint64_t num_events() const override {
+    return num_rows_;
   }
 
 private:
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
-  size_t num_events_ = {};
+  uint64_t num_rows_ = {};
 };
 
 class active_parquet_store final : public active_store {
@@ -434,10 +434,15 @@ public:
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     slices_.reserve(new_slices.size() + slices_.size());
     for (auto& slice : new_slices) {
+      // The index already sets the correct offset for this slice, but in some
+      // unit tests we test this component separately, causing incoming table
+      // slices not to have an offset at all. We should fix the unit tests
+      // properly, but that takes time we did not want to spend when migrating
+      // to partition-local ids. -- DL
       if (slice.offset() == invalid_id)
-        slice.offset(num_events_);
-      VAST_ASSERT(slice.offset() == num_events_);
-      num_events_ += slice.rows();
+        slice.offset(num_rows_);
+      VAST_ASSERT(slice.offset() == num_rows_);
+      num_rows_ += slice.rows();
       slices_.push_back(std::move(slice));
     }
     return {};
@@ -460,11 +465,11 @@ public:
   }
 
   [[nodiscard]] size_t num_events() const override {
-    return num_events_;
+    return num_rows_;
   }
 
 private:
-  size_t num_events_ = {};
+  uint64_t num_rows_ = {};
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
 };
