@@ -14,6 +14,7 @@
 #include "vast/system/status.hpp"
 
 #include <caf/config_value.hpp>
+#include <caf/detail/set_thread_name.hpp>
 #include <caf/dictionary.hpp>
 #include <caf/result.hpp>
 #include <caf/settings.hpp>
@@ -25,6 +26,8 @@ namespace vast::system {
 filesystem_actor::behavior_type
 posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
                  const std::filesystem::path& root) {
+  if (self->getf(caf::local_actor::is_detached_flag))
+    caf::detail::set_thread_name("vast.posix-filesystem");
   self->state.root = root;
   return {
     [self](atom::write, const std::filesystem::path& filename,
