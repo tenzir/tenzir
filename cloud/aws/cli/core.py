@@ -297,10 +297,11 @@ def execute_command(c, cmd="/bin/bash", env=[]):
     if cmd != "/bin/bash":
         cmd_bytes = load_cmd(cmd)
         parse_env(env)  # validate format of env list items
-        cmd = f"{' '.join(env)} /bin/bash -c 'echo {base64.b64encode(cmd_bytes).decode()} | base64 -d | /bin/bash'"
+        cmd = f"/bin/bash -c 'echo {base64.b64encode(cmd_bytes).decode()} | base64 -d | {' '.join(env)} /bin/bash'"
     # we use the CLI here because boto does not know how to use the session-manager-plugin
+    # unbuffer (expect package) helps ensuring a clean session closing when there is no PTY
     c.run(
-        f"""aws ecs execute-command \
+        f"""unbuffer aws ecs execute-command \
 		--cluster {cluster} \
 		--task {task_id} \
 		--interactive \

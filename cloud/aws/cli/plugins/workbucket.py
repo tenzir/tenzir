@@ -1,9 +1,11 @@
 from vast_invoke import pty_task, task
 import core
 from common import (
+    AWS_REGION,
     AWS_REGION_VALIDATOR,
     COMMON_VALIDATORS,
     auto_app_fmt,
+    check_absolute,
     conf,
     TFDIR,
     container_path,
@@ -54,20 +56,39 @@ def list(c, prefix=""):
             print(obj["Key"])
 
 
-@task(help={"source": "Absolute path to the file"})
+@task(help={"source": "Absolute path to the file, use /dev/stdin to pipe in data"})
 def upload(c, source, key):
     """Upload a file to the specified key in the bucket
 
     This is a simplified helper, for more advanced features use the AWS CLI directly"""
-    aws("s3").upload_file(container_path(source), name(c), key)
+    if source == "/dev/stdin":
+        # the `-` feature of `aws s3 cp` enables upload from non-seekable streams
+        source = "-"
+    else:
+        check_absolute(source)
+        source = container_path(source)
+    c.run(
+        f"aws s3 cp {source} s3://{name(c)}/{key} --region {AWS_REGION()}",
+        hide="out",
+    )
 
 
-@task(help={"destination": "Absolute path to the file"})
+@task(
+    help={"destination": "Absolute path to the file, use /dev/stdout to pipe out data"}
+)
 def download(c, key, destination):
     """Download a file to the specified key in the bucket
 
     This is a simplified helper, for more advanced features use the AWS CLI directly"""
-    aws("s3").download_file(name(c), key, container_path(destination))
+    if destination == "/dev/stdout":
+        destination = "-"
+    else:
+        check_absolute(destination)
+        destination = container_path(destination)
+    c.run(
+        f"aws s3 cp s3://{name(c)}/{key} {destination} --region {AWS_REGION()}",
+        hide="out",
+    )
 
 
 @task

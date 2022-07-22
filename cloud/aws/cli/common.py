@@ -2,6 +2,7 @@ from vast_invoke import Context, Exit
 import dynaconf
 import json
 import re
+import os
 from boto3.session import Session
 import boto3
 import botocore.client
@@ -71,7 +72,10 @@ def tf_version(c: Context):
 
 def terraform_output(c: Context, step, key) -> str:
     output = c.run(
-        f"terraform -chdir={TFDIR}/{step} output --raw {key}", hide="out"
+        f"terraform -chdir={TFDIR}/{step} output --raw {key}",
+        hide="out",
+        # avoid unintentionally capturing stdin
+        in_stream=False,
     ).stdout
     if "No outputs found" in output:
         raise Exit(
@@ -96,12 +100,20 @@ def container_path(host_path: str):
     return f"{HOSTROOT}{host_path}"
 
 
+def check_absolute(path: str):
+    """Raise an Exit if the provided path is not absolute"""
+    if not os.path.isabs(path):
+        raise Exit(f"{path} is not an absolute path")
+
+
 def load_cmd(cmd: str) -> bytes:
     """Load the command as bytes. If cmd starts with file:// or s3://, load commands from a file.
 
     Must be an absolute path (e.g file:///etc/mycommands)"""
-    if cmd.startswith("file:///"):
-        with open(container_path(cmd[8:]), "rb") as f:
+    if cmd.startswith("file://"):
+        path = cmd[7:]
+        check_absolute(path)
+        with open(container_path(path), "rb") as f:
             return f.read()
     if cmd.startswith("s3://"):
         chunks = cmd[5:].split("/", 1)
