@@ -152,7 +152,7 @@ proceedings][nsdi-proceedings].
 [ci-static-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST+Static%22
 [ci-static-badge]: https://github.com/tenzir/vast/workflows/VAST%20Static/badge.svg?branch=master&event=push
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
-[license-url]: https://raw.github.com/vast-io/vast/master/COPYING
+[license-url]: https://raw.github.com/vast-io/vast/master/LICENSE
 [changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
 [changelog-url]: CHANGELOG.md
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
