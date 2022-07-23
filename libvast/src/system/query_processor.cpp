@@ -37,12 +37,12 @@ query_processor::query_processor(caf::event_based_actor* self)
   behaviors_[await_query_id].assign(
     // Received from the INDEX after sending the query when leaving `idle`.
     [this](const query_cursor& cursor) {
-      VAST_ASSERT(cursor.scheduled_partitions <= cursor.candidate_partitions);
       query_id_ = cursor.id;
       partitions_.received = 0;
-      partitions_.scheduled = cursor.scheduled_partitions;
+      partitions_.scheduled = std::min(cursor.candidate_partitions, taste_size);
       partitions_.total = cursor.candidate_partitions;
       transition_to(await_results_until_done);
+      return partitions_.scheduled;
     },
     status_handler);
   behaviors_[await_results_until_done].assign(
@@ -51,6 +51,14 @@ query_processor::query_processor(caf::event_based_actor* self)
         return caf::skip;
       partitions_.received += partitions_.scheduled;
       process_done();
+      return caf::unit;
+    },
+    status_handler);
+  behaviors_[await_final_done].assign(
+    [this](atom::done) -> caf::result<void> {
+      if (block_end_of_hits_)
+        return caf::skip;
+      transition_to(idle);
       return caf::unit;
     },
     status_handler);
@@ -93,7 +101,7 @@ void query_processor::transition_to(state_name x) {
 
 void query_processor::process_done() {
   if (!request_more_results())
-    transition_to(idle);
+    transition_to(await_final_done);
 }
 
 record query_processor::status(status_verbosity) {
@@ -109,6 +117,7 @@ std::string to_string(query_processor::state_name x) {
     "idle",
     "await_query_id",
     "await_results_until_done",
+    "await_final_done",
   };
   return tbl[static_cast<size_t>(x)];
 }

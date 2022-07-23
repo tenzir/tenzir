@@ -284,22 +284,38 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         ->request(self->state.index, caf::infinite, atom::evaluate_v,
                   self->state.query_context)
         .then(
-          [=](const query_cursor& cursor) {
-            VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} "
-                         "partitions",
-                         *self, cursor.id, cursor.scheduled_partitions,
-                         cursor.candidate_partitions);
-            self->state.id = cursor.id;
-            if (cursor.candidate_partitions > 0) {
-              self->state.query_status.expected = cursor.candidate_partitions;
-              self->state.query_status.scheduled = cursor.scheduled_partitions;
-            } else {
-              shutdown(self);
-            }
+          [=](const atom::done&) {
+            using namespace std::string_literals;
+            // Figure out if we're done by bumping the counter for `received`
+            // and check whether it reaches `expected`.
+            caf::timespan runtime
+              = std::chrono::system_clock::now() - self->state.start;
+            self->state.query_status.runtime = runtime;
+            VAST_DEBUG("{} received all hits from {} partition(s) in {}", *self,
+                       self->state.query_status.expected,
+                       vast::to_string(runtime));
+            VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
+            if (self->state.accountant)
+              self->send(
+                self->state.accountant, "exporter.hits.runtime", runtime,
+                metrics_metadata{
+                  {"query", fmt::to_string(self->state.query_context.id)}});
+            shutdown(self);
           },
           [=](const caf::error& e) {
             shutdown(self, e);
           });
+    },
+    [self](atom::ping, const query_cursor& cursor) -> uint32_t {
+      VAST_ASSERT_CHEAP(cursor.candidate_partitions > 0);
+      auto taste_size
+        = std::min(self->state.taste_size, cursor.candidate_partitions);
+      VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} partitions", *self,
+                   cursor.id, taste_size, cursor.candidate_partitions);
+      self->state.id = cursor.id;
+      self->state.query_status.expected = cursor.candidate_partitions;
+      self->state.query_status.scheduled = taste_size;
+      return taste_size;
     },
     [self](atom::statistics, const caf::actor& statistics_subscriber) {
       VAST_DEBUG("{} registers statistics subscriber {}", *self,
@@ -354,7 +370,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // Ship slices to connected SINKs.
       ship_results(self);
     },
-    [self](atom::done) -> caf::result<void> {
+    [self](atom::done) {
       using namespace std::string_literals;
       // Figure out if we're done by bumping the counter for `received`
       // and check whether it reaches `expected`.
@@ -362,24 +378,11 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         = std::chrono::system_clock::now() - self->state.start;
       self->state.query_status.runtime = runtime;
       self->state.query_status.received += self->state.query_status.scheduled;
-      if (self->state.query_status.received
-          < self->state.query_status.expected) {
-        VAST_DEBUG("{} received hits from {}/{} partitions", *self,
-                   self->state.query_status.received,
-                   self->state.query_status.expected);
+      VAST_DEBUG("{} received hits from {}/{} partitions", *self,
+                 self->state.query_status.received,
+                 self->state.query_status.expected);
+      if (self->state.query_status.received < self->state.query_status.expected)
         request_more_hits(self);
-      } else {
-        VAST_DEBUG("{} received all hits from {} partition(s) in {}", *self,
-                   self->state.query_status.expected, vast::to_string(runtime));
-        VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
-        if (self->state.accountant)
-          self->send(
-            self->state.accountant, "exporter.hits.runtime", runtime,
-            metrics_metadata{
-              {"query", fmt::to_string(self->state.query_context.id)}});
-        shutdown(self);
-      }
-      return {};
     },
   };
 }

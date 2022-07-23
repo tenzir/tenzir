@@ -24,11 +24,8 @@ struct query_cursor {
   /// The number of partitions that qualify for the query.
   uint32_t candidate_partitions = {};
 
-  /// The number of partitions in the initial evaluation batch.
-  uint32_t scheduled_partitions = {};
-
   friend auto inspect(auto& f, query_cursor& x) {
-    return f(x.id, x.candidate_partitions, x.scheduled_partitions);
+    return f(x.id, x.candidate_partitions);
   }
 };
 

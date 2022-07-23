@@ -15,6 +15,7 @@
 #include "vast/query_context.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
@@ -64,6 +65,10 @@ struct exporter_state {
 
   /// Stores the time point for when this actor got started via 'run'.
   std::chrono::system_clock::time_point start = {};
+
+  /// The initial number of partitions to schedule.
+  // TODO: Expose in the API.
+  uint32_t taste_size = 5;
 
   /// Stores various meta information about the progress we made on the query.
   struct query_status query_status = {};

@@ -230,6 +230,7 @@ query_queue::handle_completion(const uuid& qid) {
     result = query_state.client;
   if (query_state.completed_partitions == query_state.candidate_partitions) {
     VAST_ASSERT(!reachable(qid));
+    query_state.rp.deliver(atom::done_v);
     queries_.erase(qid);
   }
   return result;

@@ -1175,7 +1175,7 @@ index(index_actor::stateful_pointer<index_state> self,
           });
     },
     [self](atom::evaluate,
-           vast::query_context query_context) -> caf::result<query_cursor> {
+           vast::query_context query_context) -> caf::result<atom::done> {
       // Query handling
       auto sender = self->current_sender();
       // Sanity check.
@@ -1188,6 +1188,11 @@ index(index_actor::stateful_pointer<index_state> self,
         VAST_WARN("{} ignores query {} because it is shutting down", *self,
                   query_context);
         return ec::remote_node_down;
+      }
+      if (!self->state.accept_queries) {
+        VAST_VERBOSE("{} delays query {} because it is still starting up",
+                     *self, query_context);
+        return caf::skip;
       }
       // Allows the client to query further results after initial taste.
       VAST_ASSERT(query_context.id == uuid::nil());
@@ -1202,12 +1207,7 @@ index(index_actor::stateful_pointer<index_state> self,
         auto& [_, ids] = *it;
         ids.emplace(query_context.id);
       }
-      if (!self->state.accept_queries) {
-        VAST_VERBOSE("{} delays query {} because it is still starting up",
-                     *self, query_context);
-        return caf::skip;
-      }
-      auto rp = self->make_response_promise<query_cursor>();
+      auto rp = self->make_response_promise<atom::done>();
       std::vector<uuid> candidates;
       for (const auto& [_, active_partition] : self->state.active_partitions)
         candidates.push_back(active_partition.id);
@@ -1233,22 +1233,49 @@ index(index_actor::stateful_pointer<index_state> self,
           if (candidates.empty()) {
             VAST_DEBUG("{} returns without result: no partitions qualify",
                        *self);
-            rp.deliver(query_cursor{query_id, 0u, 0u});
-            self->send(client, atom::done_v);
+            rp.deliver(atom::done_v);
             return;
           }
           auto num_candidates = detail::narrow<uint32_t>(candidates.size());
-          auto scheduled
-            = std::min(num_candidates, self->state.taste_partitions);
-          if (auto err = self->state.pending_queries.insert(
-                query_state{.query_context = query_context,
-                            .client = client,
-                            .candidate_partitions = num_candidates,
-                            .requested_partitions = scheduled},
-                std::move(candidates)))
-            rp.deliver(err);
-          rp.deliver(query_cursor{query_id, num_candidates, scheduled});
-          self->state.schedule_lookups();
+          auto qs = query_state{.query_context = query_context,
+                                .client = client,
+                                .rp = rp,
+                                .candidate_partitions = num_candidates,
+                                .requested_partitions = 0};
+          VAST_DEBUG("{} requests the desired taste size for query {}", *self,
+                     query_id);
+          self
+            ->request(caf::actor_cast<index_client_actor>(sender),
+                      std::chrono::seconds{60}, atom::ping_v,
+                      query_cursor{query_id, num_candidates})
+            .then(
+              [self, qs = std::move(qs), candidates = std::move(candidates)] //
+              (uint32_t taste_partitions) mutable {
+                VAST_DEBUG("{} received taste size {} for query {}", *self,
+                           taste_partitions, qs.query_context.id);
+                auto scheduled
+                  = std::min(qs.candidate_partitions, taste_partitions);
+                qs.requested_partitions = scheduled;
+                if (auto err = self->state.pending_queries.insert(
+                      std::move(qs), std::move(candidates)))
+                  qs.rp.deliver(err);
+                else
+                  self->state.schedule_lookups();
+              },
+              [self, sender, rp, query_id](caf::error& err) mutable {
+                VAST_DEBUG("{} received a timeout for query {} and drops the "
+                           "query state",
+                           *self, query_id);
+                rp.deliver(err);
+                auto it = self->state.monitored_queries.find(sender->address());
+                VAST_ASSERT(it != self->state.monitored_queries.end());
+                VAST_ASSERT(it->second.contains(query_id));
+                it->second.erase(query_id);
+                if (it->second.empty()) {
+                  self->demonitor(sender->address());
+                  self->state.monitored_queries.erase(it);
+                }
+              });
         });
       return rp;
     },

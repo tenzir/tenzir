@@ -25,6 +25,9 @@ struct query_state {
   /// The query client.
   system::receiver_actor<atom::done> client = {};
 
+  /// The response promise to deliver upon completion.
+  caf::typed_response_promise<atom::done> rp = {};
+
   /// The number of partitions that need to be evaluated for this query.
   uint32_t candidate_partitions = 0;
 

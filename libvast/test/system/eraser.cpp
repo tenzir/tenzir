@@ -105,8 +105,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
       return system::catalog_result{system::catalog_result::probabilistic,
                                     std::move(result)};
     },
-    [=](atom::evaluate,
-        vast::query_context&) -> caf::result<system::query_cursor> {
+    [=](atom::evaluate, vast::query_context&) -> atom::done {
       FAIL("no mock implementation available");
     },
     [=](const uuid&, uint32_t) {

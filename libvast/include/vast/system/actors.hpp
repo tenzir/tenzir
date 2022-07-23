@@ -250,6 +250,11 @@ using importer_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
+/// The INDEX CLIENT actor interface.
+using index_client_actor = typed_actor_fwd<
+  // Reply to the query_cursor with the requested taste size.
+  caf::replies_to<atom::ping, query_cursor>::with<uint32_t>>::unwrap;
+
 /// The INDEX actor interface.
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
@@ -262,7 +267,7 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<atom::subscribe, atom::create,
                  partition_creation_listener_actor, send_initial_dbstate>,
   // Evaluates a query, ie. sends matching events to the caller.
-  caf::replies_to<atom::evaluate, query_context>::with<query_cursor>,
+  caf::replies_to<atom::evaluate, query_context>::with<atom::done>,
   // Resolves a query to its candidate partitions.
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
@@ -410,6 +415,8 @@ using exporter_actor = typed_actor_fwd<
   caf::reacts_to<atom::statistics, caf::actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
+  // Conform to the protocol of the INDEX CLIENT actor.
+  ::extend_with<index_client_actor>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 

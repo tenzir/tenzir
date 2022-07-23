@@ -38,6 +38,7 @@ struct mock_index_state {
   caf::actor_addr client = {};
   std::array<uint64_t, 5> results = {2ul, 3, 6, 12, 24};
   std::array<uint64_t, 5>::iterator it = results.begin();
+  caf::typed_response_promise<atom::done> rp = {};
 };
 
 system::index_actor::behavior_type
@@ -76,12 +77,19 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::resolve, vast::expression) -> system::catalog_result {
       FAIL("no mock implementation available");
     },
-    [=](atom::evaluate,
-        vast::query_context&) -> caf::result<system::query_cursor> {
+    [=](atom::evaluate, vast::query_context&) -> caf::result<atom::done> {
       auto query_id = unbox(to<uuid>(uuid_str));
       self->state.client = self->current_sender()->address();
-      self->send(self, query_id, 3u);
-      return system::query_cursor{query_id, 5u, 3u};
+      self->state.rp = self->make_response_promise<atom::done>();
+      auto sender = self->current_sender();
+      self
+        ->request(caf::actor_cast<system::index_client_actor>(sender),
+                  std::chrono::seconds{60}, atom::ping_v,
+                  system::query_cursor{query_id, 5u})
+        .then([=](uint32_t taste_size) {
+          self->send(self, query_id, taste_size);
+        });
+      return self->state.rp;
     },
     [=](const uuid&, uint32_t n) {
       auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
@@ -89,6 +97,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
       for (uint32_t i = 0; i < n; ++i)
         anon_self->send(hdl, *self->state.it++);
       anon_self->send(hdl, atom::done_v);
+      if (self->state.it == self->state.results.end())
+        self->state.rp.deliver(atom::done_v);
     },
     [=](atom::erase, uuid) -> atom::done {
       FAIL("no mock implementation available");

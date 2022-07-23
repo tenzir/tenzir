@@ -44,6 +44,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   static constexpr size_t segments = 1;
   static constexpr size_t max_segment_size = 8192;
 
+  struct scheduled_query_cursor {
+    uuid id = {};
+    uint32_t candidate_partitions = {};
+    uint32_t scheduled_partitions = {};
+  };
+
   fixture()
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
@@ -69,15 +75,19 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     return deref<caf::stateful_actor<system::index_state>>(index).state;
   }
 
-  system::query_cursor query(std::string_view expr) {
+  scheduled_query_cursor query(std::string_view expr) {
     self->send(index, atom::evaluate_v,
                vast::query_context::make_extract(self,
                                                  unbox(to<expression>(expr))));
     run();
-    system::query_cursor result;
+    scheduled_query_cursor result;
     self->receive(
-      [&](const system::query_cursor& cursor) {
-        result = cursor;
+      [&](atom::ping, const system::query_cursor& cursor) {
+        result.id = cursor.id;
+        result.candidate_partitions = cursor.candidate_partitions;
+        result.scheduled_partitions = 5u;
+        self->response(result.scheduled_partitions);
+        run();
       },
       after(0s) >>
         [&] {

@@ -37,17 +37,17 @@ namespace vast::system {
 ///               |            |
 ///               |            | (run)
 ///               |            v
-///               |    +-------+--------+
+///        (done) |    +-------+--------+
 ///               |    |                |
 ///               |    | await query id |
 ///               |    |                |
 ///               |    +-------+--------+
-///               |            |
-///               |            | (query_id, scheduled, total)
-///               |            |
-///               |            |      +------+
-///               |            |      |      |
-///               |            v      v      | (ids)
+///       +-------+--------+   |
+///       |                |   | (query_id, scheduled, total)
+///       |   await done   |   |
+///       |                |   |      +------+
+///       +-------+--------+   |      |      |
+///               ^            v      v      | (ids)
 ///               |    +-------+------+-+    |
 ///               |    |                +----+
 ///               |    |  collect hits  |
@@ -70,9 +70,10 @@ public:
     idle,
     await_query_id,
     await_results_until_done,
+    await_final_done,
   };
 
-  static constexpr size_t num_states = 3;
+  static constexpr size_t num_states = 4;
 
   // -- constants --------------------------------------------------------------
 
@@ -147,6 +148,10 @@ protected:
 
   /// Our query ID for collecting more hits.
   uuid query_id_;
+
+  /// The initial number of partitions to schedule.
+  // TODO: Expose in the API.
+  uint32_t taste_size = 5;
 
   /// Our INDEX for querying and collecting more hits.
   index_actor index_;
