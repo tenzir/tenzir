@@ -289,6 +289,7 @@ template <concrete_type Type>
 view<type_to_data_t<Type>>
 value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
          int64_t row) noexcept {
+  VAST_ASSERT(type.to_arrow_type()->id() == arr.type_id());
   VAST_ASSERT(!arr.IsNull(row));
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value)
     return value_at(type, *caf::get<type_to_arrow_array_t<Type>>(arr).storage(),
@@ -299,6 +300,7 @@ value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
 
 data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
                    int64_t row) noexcept {
+  VAST_ASSERT(type.to_arrow_type()->id() == arr.type_id());
   if (arr.IsNull(row))
     return caf::none;
   auto f = [&]<concrete_type Type>(const Type& type) noexcept -> data_view {
