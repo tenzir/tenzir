@@ -68,6 +68,13 @@ uuid uuid::nil() {
   return u;
 }
 
+uuid uuid::from_flatbuffer(const fbs::UUID& id) {
+  VAST_ASSERT_CHEAP(id.data()->size() == uuid::num_bytes);
+  auto const* data = id.data();
+  return uuid{std::span<const std::byte, uuid::num_bytes>(
+    reinterpret_cast<const std::byte*>(data->data()), data->size())};
+}
+
 uuid::uuid(std::span<const std::byte, num_bytes> bytes) {
   std::memcpy(id_.data(), bytes.data(), bytes.size());
 }

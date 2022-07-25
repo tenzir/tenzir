@@ -39,6 +39,7 @@ public:
 
   static uuid random();
   static uuid nil();
+  static uuid from_flatbuffer(const fbs::UUID&);
 
   /// Constructs an uninitialized UUID.
   uuid() = default;

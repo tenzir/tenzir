@@ -1,0 +1,23 @@
+include "uuid.fbs";
+
+namespace vast.fbs.partition_transform;
+
+// TODO: Does it make sense to also store the id of
+// the transform itself and the `keep_input` flag?
+table v0 {
+	input_partitions: [UUID] (required);
+	output_partitions: [UUID] (required);
+}
+
+union PartitionTransform {
+	v0: v0,
+}
+
+namespace vast.fbs;
+
+table PartitionTransform {
+	transform: partition_transform.PartitionTransform;
+}
+
+root_type PartitionTransform; 
+file_identifier "vPTT";

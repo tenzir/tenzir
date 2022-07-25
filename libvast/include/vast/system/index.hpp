@@ -158,20 +158,25 @@ struct index_state {
   [[nodiscard]] std::filesystem::path
   index_filename(const std::filesystem::path& basename = {}) const;
 
+  ///
+  [[nodiscard]] std::filesystem::path
+  inprogress_marker_path(const uuid& id) const;
+
   // Maps partitions to their expected location on the file system.
   [[nodiscard]] std::filesystem::path partition_path(const uuid& id) const;
 
   /// Returns a format string that can be formatted with a partition id to
-  /// get the location of the corresponding partition.
-  [[nodiscard]] std::string partition_path_template() const;
+  /// get the output location of that partition for the partition transformer.
+  [[nodiscard]] std::string inprogress_partition_path_template() const;
 
   // Maps partition synopses to their expected location on the file system.
   [[nodiscard]] std::filesystem::path
   partition_synopsis_path(const uuid& id) const;
 
   /// Returns a format string that can be formatted with a partition id to
-  /// get the location of the corresponding partition synopsis.
-  [[nodiscard]] std::string partition_synopsis_path_template() const;
+  /// get the output location of the that partition synopsis for the
+  /// partition transformer.
+  [[nodiscard]] std::string inprogress_partition_synopsis_path_template() const;
 
   caf::error load_from_disk();
 
