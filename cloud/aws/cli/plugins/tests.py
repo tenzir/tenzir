@@ -1,15 +1,16 @@
 import filecmp
+import sys
 import flags
 import unittest
-from vast_invoke import task, Context
+from vast_invoke import Exit, task, Context
 import time
 import json
 import os
-from common import AWS_REGION, COMMON_VALIDATORS, AWS_REGION_VALIDATOR, container_path
+import common
 
 VALIDATORS = [
-    *COMMON_VALIDATORS,
-    AWS_REGION_VALIDATOR,
+    *common.COMMON_VALIDATORS,
+    common.AWS_REGION_VALIDATOR,
 ]
 
 # A common prefix for all test files to help cleanup
@@ -27,27 +28,37 @@ def vast_import_suricata(c: Context):
     )
 
 
-@task
 def clean(c):
     """Delete local and remote files starting with the TEST_PREFIX"""
     print("Cleaning up...")
     tmp_prefix = f"/tmp/{TEST_PREFIX}*"
-    c.run(f"rm -rfv {container_path(tmp_prefix)}")
+    c.run(f"rm -rfv {common.container_path(tmp_prefix)}")
     bucket_name = c.run("./vast-cloud workbucket.name", hide="out").stdout.rstrip()
     c.run(
-        f'aws s3 rm --recursive s3://{bucket_name}/ --exclude "*" --include "{TEST_PREFIX}*" --region {AWS_REGION()}'
+        f'aws s3 rm --recursive s3://{bucket_name}/ --exclude "*" --include "{TEST_PREFIX}*" --region {common.AWS_REGION()}'
     )
 
 
-class SingleTestWithContext(unittest.TestCase):
-    """A TestCase with an Invoke Context and a single test method called "test" """
+class VastCloudTestLoader(unittest.TestLoader):
+    """Load TestCase instances with an additional Context attribute"""
 
     def __init__(self, invoke_ctx: Context) -> None:
         self.c = invoke_ctx
-        super().__init__("test")
+        super().__init__()
+
+    def loadTestsFromTestCase(self, testCaseClass):
+        """Override load method to add context"""
+        testCaseNames = self.getTestCaseNames(testCaseClass)
+        testCases = []
+        for testCaseName in testCaseNames:
+            testCase = testCaseClass(testCaseName)
+            testCase.c = self.c
+            testCases.append(testCase)
+        loaded_suite = self.suiteClass(testCases)
+        return loaded_suite
 
 
-class VastStartRestart(SingleTestWithContext):
+class VastStartRestart(unittest.TestCase):
     def test(self):
         """Validate VAST server start and restart commands"""
         print("Run start-vast-server")
@@ -65,11 +76,8 @@ class VastStartRestart(SingleTestWithContext):
         print("Get running vast server")
         self.c.run("./vast-cloud get-vast-server")
 
-        print("The task needs a bit of time to boot, sleeping for a while...")
-        time.sleep(100)
 
-
-class LambdaOutput(SingleTestWithContext):
+class LambdaOutput(unittest.TestCase):
     def test(self):
         """Validate VAST server start and restart commands"""
         print("Running successful command")
@@ -121,7 +129,13 @@ RETURN CODE:
         )
 
 
-class VastDataImport(SingleTestWithContext):
+class VastDataImport(unittest.TestCase):
+    def setUp(self):
+        print("Start VAST Server")
+        self.c.run("./vast-cloud start-vast-server")
+        print("The task needs a bit of time to boot, sleeping for a while...")
+        time.sleep(100)
+
     def vast_count(self):
         """Run `vast count` and parse the result"""
         res_raw = self.c.run(
@@ -150,7 +164,7 @@ class VastDataImport(SingleTestWithContext):
         self.assertEqual(7, new_count - init_count, "Wrong count")
 
 
-class WorkbucketRoundtrip(SingleTestWithContext):
+class WorkbucketRoundtrip(unittest.TestCase):
     def validate_dl(self, src, dst, key):
         print(f"Download object {key} to {dst}")
         self.c.run(
@@ -158,7 +172,7 @@ class WorkbucketRoundtrip(SingleTestWithContext):
             hide="out",
         )
         self.assertTrue(
-            filecmp.cmp(container_path(src), container_path(dst)),
+            filecmp.cmp(common.container_path(src), common.container_path(dst)),
             f"{src} and {dst} are not identical",
         )
 
@@ -175,7 +189,7 @@ class WorkbucketRoundtrip(SingleTestWithContext):
         src = f"/tmp/{TEST_PREFIX}_src"
         dst_fromfile = f"/tmp/{TEST_PREFIX}_fromfile_dst"
         dst_frompipe = f"/tmp/{TEST_PREFIX}_frompipe_dst"
-        self.c.run(f"echo 'hello world' > {container_path(src)}")
+        self.c.run(f"echo 'hello world' > {common.container_path(src)}")
 
         print("List before upload")
         empty_ls = self.c.run(
@@ -213,7 +227,7 @@ class WorkbucketRoundtrip(SingleTestWithContext):
         self.assertNotIn(key_frompipe, half_ls)
 
 
-class ScriptedCmd(SingleTestWithContext):
+class ScriptedCmd(unittest.TestCase):
     def setUp(self):
         clean(self.c)
 
@@ -230,7 +244,7 @@ class ScriptedCmd(SingleTestWithContext):
     """
         script_file = f"/tmp/{TEST_PREFIX}_script"
         script_key = f"{TEST_PREFIX}_script"
-        with open(container_path(script_file), "w") as text_file:
+        with open(common.container_path(script_file), "w") as text_file:
             text_file.write(script)
 
         print("Run lambda with local script")
@@ -242,7 +256,7 @@ class ScriptedCmd(SingleTestWithContext):
 
         print("Run lambda with piped script")
         res = self.c.run(
-            f"cat {container_path(script_file)} | ./vast-cloud run-lambda -c file:///dev/stdin -e VAR2=world --json-output",
+            f"cat {common.container_path(script_file)} | ./vast-cloud run-lambda -c file:///dev/stdin -e VAR2=world --json-output",
             hide="out",
         ).stdout
         self.assertEqual(json.loads(res)["stdout"], "hello world")
@@ -250,7 +264,7 @@ class ScriptedCmd(SingleTestWithContext):
         print("Run execute command with piped script")
         # we can pipe into execute command here because we are in a no pty context
         res = self.c.run(
-            f"cat {container_path(script_file)} | ./vast-cloud execute-command -c file:///dev/stdin -e VAR2=world",
+            f"cat {common.container_path(script_file)} | ./vast-cloud execute-command -c file:///dev/stdin -e VAR2=world",
             hide="out",
         ).stdout
         self.assertIn("hello world", res)
@@ -269,42 +283,38 @@ class ScriptedCmd(SingleTestWithContext):
         self.assertIn("hello world", res)
 
 
-@task
-def lambda_output(c):
-    unittest.TextTestRunner().run(LambdaOutput(c))
+class Common(unittest.TestCase):
+    def test_list_modules(self):
+        res = common.list_modules(self.c)
+        self.assertIn("core-1", res)
+        self.assertIn("core-2", res)
+
+    def test_tf_version(self):
+        res = common.tf_version(self.c)
+        self.assertRegex(res, r"^\d{1,3}\.\d{1,3}\.\d{1,3}$")
+
+    def test_default_vast_version(self):
+        res = common.default_vast_version()
+        self.assertRegex(res, r"^v\d{1,3}\.\d{1,3}\.\d{1,3}$")
+
+    def test_parse_env(self):
+        res = common.parse_env(["var1=val1", "var2=val2"])
+        self.assertEqual(res, {"var1": "val1", "var2": "val2"})
 
 
-@task
-def vast_start_restart(c):
-    unittest.TextTestRunner().run(VastStartRestart(c))
-
-
-@task
-def vast_data_import(c):
-    unittest.TextTestRunner().run(VastDataImport(c))
-
-
-@task
-def workbucket_roundtrip(c):
-    unittest.TextTestRunner().run(WorkbucketRoundtrip(c))
-
-
-@task
-def scripted_cmd(c):
-    unittest.TextTestRunner().run(ScriptedCmd(c))
-
-
-@task
-def all(c):
-    """Run the entire testbook.
+@task(
+    help={"case": "The case class names to execute, all tests if unspecified"},
+    iterable=["case"],
+)
+def run(c, case=[]):
+    """Run the tests, either inidividually or in bulk.
 
     Notes:
     - VAST needs to be deployed beforehand with the workbucket plugin
-    - This will affect the state of the current stack"""
-    suite = unittest.TestSuite()
-    suite.addTest(VastStartRestart(c))
-    suite.addTest(LambdaOutput(c))
-    suite.addTest(VastDataImport(c))
-    suite.addTest(WorkbucketRoundtrip(c))
-    suite.addTest(ScriptedCmd(c))
+    - These tests will affect the state of the current stack"""
+    mod = sys.modules[__name__]
+    if len(case) == 0:
+        suite = VastCloudTestLoader(c).loadTestsFromModule(mod)
+    else:
+        suite = VastCloudTestLoader(c).loadTestsFromNames(case, mod)
     unittest.TextTestRunner().run(suite)

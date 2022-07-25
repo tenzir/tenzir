@@ -1,4 +1,3 @@
-from typing import List, Tuple
 from vast_invoke import pty_task, task, Context, Exit
 import dynaconf
 import time
@@ -14,7 +13,9 @@ from common import (
     auto_app_fmt,
     REPOROOT,
     DOCKERDIR,
+    default_vast_version,
     load_cmd,
+    parse_env,
     terraform_output,
     aws,
 )
@@ -26,7 +27,7 @@ VALIDATORS = [
     dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
     dynaconf.Validator("VAST_IMAGE", default="tenzir/vast"),
-    dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
+    dynaconf.Validator("VAST_VERSION", default=default_vast_version()),
     dynaconf.Validator(
         "VAST_SERVER_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]
     ),
@@ -44,37 +45,6 @@ CMD_HELP = {
 
 ##  Aliases
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
-
-
-## Helper functions
-
-
-def VAST_VERSION(c: Context):
-    """If VAST_VERSION not defined, use latest release"""
-    if "VAST_VERSION" in conf():
-        return conf()["VAST_VERSION"]
-    version = c.run(
-        "git describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*'", hide="out"
-    ).stdout.strip()
-    return version
-
-
-def env(c: Context) -> dict:
-    return {
-        **conf(VALIDATORS),
-        "VAST_VERSION": VAST_VERSION(c),
-    }
-
-
-def parse_env(env: List[str]) -> Tuple[str, str]:
-    def split_name_val(name_val):
-        env_split = name_val.split("=")
-        if len(env_split) != 2:
-            raise Exit(f"{name_val} should have exactly one '=' char", 1)
-        return env_split[0], env_split[1]
-
-    name_val_list = [split_name_val(v) for v in env]
-    return {v[0]: v[1] for v in name_val_list}
 
 
 ## Tasks
@@ -110,7 +80,7 @@ def init_step(c, step):
     """Manually run terraform init on a specific step"""
     c.run(
         f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
-        env=env(c),
+        env=conf(VALIDATORS),
     )
 
 
@@ -120,7 +90,7 @@ def deploy_step(c, step, auto_approve=False):
     init_step(c, step)
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
-        env=env(c),
+        env=conf(VALIDATORS),
     )
 
 
@@ -161,9 +131,9 @@ def deploy_image(c, type):
     except:
         old_digest = "current-image-not-found"
     # build the image and get the new digest
-    base_image = env(c)["VAST_IMAGE"]
+    base_image = conf(VALIDATORS)["VAST_IMAGE"]
     image_tag = int(time.time())
-    version = VAST_VERSION(c)
+    version = conf(VALIDATORS)["VAST_VERSION"]
     if version == "build":
         c.run(f"docker build -t {base_image}:{image_tag} {REPOROOT}")
         version = image_tag
@@ -334,7 +304,7 @@ def destroy_step(c, step, auto_approve=False):
     init_step(c, step)
     c.run(
         f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
-        env=env(c),
+        env=conf(VALIDATORS),
     )
 
 
@@ -348,5 +318,5 @@ def destroy(c, auto_approve=False):
         print("Failed to stop tasks. Continuing destruction...")
     c.run(
         f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}",
-        env=env(c),
+        env=conf(VALIDATORS),
     )

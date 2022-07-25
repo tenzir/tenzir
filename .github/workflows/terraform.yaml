@@ -73,9 +73,9 @@ jobs:
       - name: Deploy bucket
         run: ./vast-cloud workbucket.deploy --auto-approve
 
-      - name: Run integration.all playbook
+      - name: Run test playbook
         run: |
-          ./vast-cloud integration.all
+          ./vast-cloud tests.run
 
       - name: Destroy
         continue-on-error: true
