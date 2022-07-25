@@ -307,7 +307,7 @@ class Common(unittest.TestCase):
     iterable=["case"],
 )
 def run(c, case=[]):
-    """Run the tests, either inidividually or in bulk.
+    """Run the tests, either inidividually or in bulk
 
     Notes:
     - VAST needs to be deployed beforehand with the workbucket plugin

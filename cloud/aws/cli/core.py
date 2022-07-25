@@ -117,7 +117,7 @@ def current_image(c, repo_arn):
 
 @task(help={"type": "Can be either 'lambda' or 'fargate'"})
 def deploy_image(c, type):
-    """Build and push the image, fails if step 1 is not deployed"""
+    """Build and push the image, fails if core-1 is not deployed"""
     image_url = terraform_output(c, "core-1", f"vast_{type}_repository_url")
     repo_arn = terraform_output(c, "core-1", f"vast_{type}_repository_arn")
     # get the digest of the current image
@@ -218,15 +218,6 @@ def restart_vast_server(c):
     # + 120 seconds for the new task to start
     task_id = get_vast_server(c, max_wait_time_sec=240)
     print(f"Started task {task_id}")
-
-
-@task(autoprint=True)
-def list_all_tasks(c):
-    """List the ids of all tasks running on the ECS cluster"""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    task_res = aws("ecs").list_tasks(cluster=cluster)
-    task_ids = [task.split("/")[-1] for task in task_res["taskArns"]]
-    return task_ids
 
 
 def print_lambda_output(json_response: str, json_output: bool):
