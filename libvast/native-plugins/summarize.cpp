@@ -338,8 +338,8 @@ struct aggregation_column {
       column.function_name = aggregation.function_name;
       column.inputs = std::move(inputs);
       column.input_type = std::move(input_type);
-      column.name = aggregation.output;
-      column.type = std::move(output_type);
+      column.output_name = aggregation.output;
+      column.output_type = std::move(output_type);
     }
     return result;
   }
@@ -354,10 +354,10 @@ struct aggregation_column {
   class type input_type = {};
 
   /// The output field's name.
-  std::string name = {};
+  std::string output_name = {};
 
   /// The output field's type.
-  class type type = {};
+  class type output_type = {};
 };
 
 /// The key by which aggregations are grouped. Essentially, this is a vector of
@@ -459,7 +459,7 @@ public:
       for (const auto& column : result.group_by_columns)
         fields.emplace_back(column.name, column.type);
       for (const auto& column : result.aggregation_columns)
-        fields.emplace_back(column.name, column.type);
+        fields.emplace_back(column.output_name, column.output_type);
       return {schema.name(), record_type{fields}};
     }();
     return result;
@@ -481,7 +481,7 @@ public:
         for (size_t column = 0; column < aggregation_columns.size(); ++column) {
           for (const auto& array : aggregation_arrays[column])
             bucket[column]->add(
-              value_at(aggregation_columns[column].type, *array, offset));
+              value_at(aggregation_columns[column].input_type, *array, offset));
         }
       } else {
         for (size_t column = 0; column < aggregation_columns.size(); ++column) {
@@ -569,7 +569,7 @@ public:
         if (!value)
           return value.error();
         const auto append_status
-          = append_builder(aggregation_columns[column].type,
+          = append_builder(aggregation_columns[column].output_type,
                            *builder->field_builder(
                              detail::narrow_cast<int>(key.size() + column)),
                            make_data_view(*value));
