@@ -55,7 +55,9 @@ table_slice make_testdata(table_slice_encoding encoding
     auto time = vast::time{std::chrono::seconds(1258329600 + i)};
     auto ip = address::v4(0xC0A80101); // 192, 168, 1, 1
     auto port = count{443};
-    auto sum = real{1.001 * i};
+    // We inject a gap here at index 1 to make sure that we test both the slow-
+    // and fast-paths for aggregation_function::add(...).
+    auto sum = i == 2 ? data{caf::none} : data{real{1. * i}};
     auto sum_null = caf::none;
     auto min = integer{i};
     auto max = integer{i};
@@ -188,7 +190,7 @@ TEST(summarize test) {
               data_view{vast::time{std::chrono::seconds(1258329600)}});
   CHECK_EQUAL(summarized_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
   CHECK_EQUAL(summarized_slice.at(0, 2), data_view{count{443}});
-  CHECK_EQUAL(summarized_slice.at(0, 3), data_view{real{45.045}});
+  CHECK_EQUAL(summarized_slice.at(0, 3), data_view{real{43.}});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
   CHECK_EQUAL(summarized_slice.at(0, 5), data_view{integer{0}});
   CHECK_EQUAL(summarized_slice.at(0, 6), data_view{integer{9}});
@@ -211,7 +213,7 @@ TEST(summarize test) {
               make_data_view(expected_alternating_numbers_list));
   CHECK_EQUAL(summarized_slice.at(0, 16),
               make_data_view(vast::time{std::chrono::seconds(1258329600)}));
-  CHECK_EQUAL(summarized_slice.at(0, 17), make_data_view(count{10}));
+  CHECK_EQUAL(summarized_slice.at(0, 17), make_data_view(count{9}));
 }
 
 TEST(summarize test fully qualified field names) {
@@ -247,7 +249,7 @@ TEST(summarize test fully qualified field names) {
               data_view{vast::time{std::chrono::seconds(1258329600)}});
   CHECK_EQUAL(summarized_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
   CHECK_EQUAL(summarized_slice.at(0, 2), data_view{count{443}});
-  CHECK_EQUAL(summarized_slice.at(0, 3), data_view{real{45.045}});
+  CHECK_EQUAL(summarized_slice.at(0, 3), data_view{real{43.}});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
   CHECK_EQUAL(summarized_slice.at(0, 5), data_view{integer{0}});
   CHECK_EQUAL(summarized_slice.at(0, 6), data_view{integer{9}});
