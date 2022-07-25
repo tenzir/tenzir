@@ -16,6 +16,14 @@ VALIDATORS = [
 # A common prefix for all test files to help cleanup
 TEST_PREFIX = "vastcloudtest"
 
+# A script whose output should be "hello world"
+DUMMY_SCRIPT = """
+VAR1="hello"
+echo -n $VAR1
+echo -n " "
+echo -n $VAR2
+"""
+
 # Force stack trace display for all tests
 os.environ[flags.TRACE_FLAG_VAR] = "1"
 
@@ -37,6 +45,14 @@ def clean(c):
     c.run(
         f'aws s3 rm --recursive s3://{bucket_name}/ --exclude "*" --include "{TEST_PREFIX}*" --region {common.AWS_REGION()}'
     )
+
+
+def start_vast(c):
+    """Start the server, noop if already running"""
+    print("Start VAST Server")
+    c.run("./vast-cloud start-vast-server")
+    print("The task needs a bit of time to boot, sleeping for a while...")
+    time.sleep(100)
 
 
 class VastCloudTestLoader(unittest.TestLoader):
@@ -131,10 +147,7 @@ RETURN CODE:
 
 class VastDataImport(unittest.TestCase):
     def setUp(self):
-        print("Start VAST Server")
-        self.c.run("./vast-cloud start-vast-server")
-        print("The task needs a bit of time to boot, sleeping for a while...")
-        time.sleep(100)
+        start_vast(self.c)
 
     def vast_count(self):
         """Run `vast count` and parse the result"""
@@ -227,7 +240,7 @@ class WorkbucketRoundtrip(unittest.TestCase):
         self.assertNotIn(key_frompipe, half_ls)
 
 
-class ScriptedCmd(unittest.TestCase):
+class ScriptedLambda(unittest.TestCase):
     def setUp(self):
         clean(self.c)
 
@@ -236,16 +249,9 @@ class ScriptedCmd(unittest.TestCase):
 
     def test(self):
         """Validate that we can run commands from files"""
-        script = """
-    VAR1="hello"
-    echo -n $VAR1
-    echo -n " "
-    echo -n $VAR2
-    """
         script_file = f"/tmp/{TEST_PREFIX}_script"
-        script_key = f"{TEST_PREFIX}_script"
         with open(common.container_path(script_file), "w") as text_file:
-            text_file.write(script)
+            text_file.write(DUMMY_SCRIPT)
 
         print("Run lambda with local script")
         res = self.c.run(
@@ -260,6 +266,22 @@ class ScriptedCmd(unittest.TestCase):
             hide="out",
         ).stdout
         self.assertEqual(json.loads(res)["stdout"], "hello world")
+
+
+class ScriptedExecuteCommand(unittest.TestCase):
+    def setUp(self):
+        clean(self.c)
+        start_vast(self.c)
+
+    def tearDown(self):
+        clean(self.c)
+
+    def test(self):
+        """Validate that we can run commands from files"""
+        script_file = f"/tmp/{TEST_PREFIX}_script"
+        script_key = f"{TEST_PREFIX}_script"
+        with open(common.container_path(script_file), "w") as text_file:
+            text_file.write(DUMMY_SCRIPT)
 
         print("Run execute command with piped script")
         # we can pipe into execute command here because we are in a no pty context
@@ -317,4 +339,6 @@ def run(c, case=[]):
         suite = VastCloudTestLoader(c).loadTestsFromModule(mod)
     else:
         suite = VastCloudTestLoader(c).loadTestsFromNames(case, mod)
-    unittest.TextTestRunner().run(suite)
+    res = unittest.TextTestRunner().run(suite)
+    if not res.wasSuccessful():
+        exit(1)
