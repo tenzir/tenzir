@@ -2,8 +2,6 @@ from vast_invoke import pty_task, task
 import core
 from common import (
     AWS_REGION,
-    AWS_REGION_VALIDATOR,
-    COMMON_VALIDATORS,
     auto_app_fmt,
     check_absolute,
     conf,
@@ -14,7 +12,7 @@ from common import (
 )
 
 
-VALIDATORS = [*COMMON_VALIDATORS, AWS_REGION_VALIDATOR]
+VALIDATORS = core.VALIDATORS
 
 
 @pty_task
