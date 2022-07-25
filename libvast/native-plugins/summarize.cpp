@@ -735,6 +735,52 @@ private:
   std::unordered_map<type, std::vector<pipeline_batch>> blacklist_ = {};
 };
 
+caf::expected<std::unique_ptr<pipeline_operator>>
+make_summarize_operator(const record& config) {
+  auto parsed_config = configuration::make(config);
+  if (!parsed_config)
+    return parsed_config.error();
+  return std::make_unique<summarize_operator>(std::move(*parsed_config));
+}
+
+std::vector<std::string>
+get_keys_from_legacy_sections(const data::variant& legacy_section) {
+  const auto* list = caf::get_if<vast::list>(&legacy_section);
+  if (!list)
+    return {};
+  std::vector<std::string> keys;
+  for (const auto& item : *list) {
+    if (auto item_str = caf::get_if<std::string>(&item))
+      keys.emplace_back(*item_str);
+  }
+  return keys;
+}
+
+/// change legacy config into newer format
+caf::expected<std::unique_ptr<pipeline_operator>>
+try_handle_deprecations(const record& config,
+                        const std::vector<std::string>& sections_to_reformat) {
+  auto new_config = config;
+  auto aggregate = record{};
+  for (const auto& section : sections_to_reformat) {
+    VAST_WARN("Legacy format detected in summarize section: {}. Please "
+              "upgrade to the newest format",
+              section);
+    for (const auto& key :
+         get_keys_from_legacy_sections(new_config.at(section).get_data())) {
+      if (aggregate.contains(key))
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("Duplicate key: {} found in "
+                                           "{} section",
+                                           key, section));
+      aggregate.emplace(key, section);
+    }
+    new_config.erase(section);
+  }
+  new_config.emplace("aggregate", std::move(aggregate));
+  return make_summarize_operator(new_config);
+}
+
 /// The summarize pipeline operator plugin.
 class plugin final : public virtual pipeline_operator_plugin {
 public:
@@ -750,10 +796,22 @@ public:
 
   [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
   make_pipeline_operator(const record& config) const override {
-    auto parsed_config = configuration::make(config);
-    if (!parsed_config)
-      return parsed_config.error();
-    return std::make_unique<summarize_operator>(std::move(*parsed_config));
+    std::vector<std::string> sections_to_reformat;
+    for (const auto& key : {"min", "max", "any", "all", "sum"}) {
+      if (config.contains(key))
+        sections_to_reformat.emplace_back(key);
+    }
+    // new format detected. Proceed as usual
+    if (sections_to_reformat.empty()) {
+      return make_summarize_operator(config);
+    }
+    if (config.contains("aggregate")) {
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("Aggregate section found in legacy "
+                                         "config"));
+    }
+
+    return try_handle_deprecations(config, sections_to_reformat);
   }
 };
 
