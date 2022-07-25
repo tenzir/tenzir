@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -exo pipefail
+
 nix --version
 nix-prefetch-github --version workaround bug
 
