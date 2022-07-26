@@ -76,35 +76,26 @@ resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs
 
 std::vector<std::filesystem::path> loaded_config_files_singleton = {};
 
-} // namespace
-
-std::vector<plugin_ptr>& get_mutable() noexcept {
-  static auto plugins = std::vector<plugin_ptr>{};
-  return plugins;
+/// Remove native plugins from the given list of plugins.
+std::vector<std::string>
+remove_native_plugins(std::vector<std::string> paths_or_names) {
+  std::erase_if(paths_or_names, [](const auto& path_or_name) {
+    return std::any_of(plugins::get().begin(), plugins::get().end(),
+                       [&](const auto& plugin) {
+                         return plugin->name() == path_or_name
+                                && plugin.type() == plugin_ptr::type::native;
+                       });
+  });
+  return paths_or_names;
 }
 
-const std::vector<plugin_ptr>& get() noexcept {
-  return get_mutable();
-}
-
-std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
-get_static_type_id_blocks() noexcept {
-  static auto result = std::vector<
-    std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>{};
-  return result;
-}
-
-caf::expected<std::vector<std::filesystem::path>>
-load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
-  auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
-  // Step 1: Get the necessary options.
-  auto paths_or_names
-    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
-  if (paths_or_names.empty() && bundled_plugins.empty())
-    return loaded_plugin_paths;
-  const auto plugin_dirs = get_plugin_dirs(cfg);
-  // Step 2: Try to resolve the reserved identifier 'all'. The list may only
-  // contain plugin names, plugin paths, and the resevved identifier 'bundled'
+/// Expand the 'bundled' and 'all' keywords for the given list of plugins.
+std::vector<std::string> expand_special_identifiers(
+  std::vector<std::string> paths_or_names,
+  const std::vector<std::string>& bundled_plugins,
+  const detail::stable_set<std::filesystem::path>& plugin_dirs) {
+  // Try to resolve the reserved identifier 'all'. The list may only contain
+  // plugin names, plugin paths, and the reserved identifier 'bundled'
   // afterwards.
   if (const auto all
       = std::remove(paths_or_names.begin(), paths_or_names.end(), "all");
@@ -122,9 +113,8 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
     // 'all' implies 'bundled'.
     paths_or_names.emplace_back("bundled");
   }
-  // Step 3: Try to resolve the reserved identifier 'bundled' into a list of
-  // plugin names. The list may only contain plugin names and plugin paths
-  // afterwards.
+  // Try to resolve the reserved identifier 'bundled' into a list of plugin
+  // names. The list may only contain plugin names and plugin paths afterwards.
   if (const auto bundled
       = std::remove(paths_or_names.begin(), paths_or_names.end(), "bundled");
       bundled != paths_or_names.end()) {
@@ -132,8 +122,12 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
     std::copy(bundled_plugins.begin(), bundled_plugins.end(),
               std::back_inserter(paths_or_names));
   }
-  // Step 4: Disable static plugins that were not enabled, and remove the names
-  // of static plugins from the list of enabled plugins.
+  return paths_or_names;
+}
+
+/// Unload disabled static plugins, i.e., static plugins not explicitly enabled.
+std::vector<std::string>
+unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
   auto check_and_remove_disabled_static_plugin = [&](auto& plugin) -> bool {
     switch (plugin.type()) {
       case plugin_ptr::type::dynamic:
@@ -156,8 +150,13 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
   get_mutable().erase(std::remove_if(get_mutable().begin(), get_mutable().end(),
                                      check_and_remove_disabled_static_plugin),
                       get_mutable().end());
-  // Step 5: Try to resolve plugin names to plugin paths. After this step, the
-  // list only contains plugin paths.
+  return paths_or_names;
+}
+
+/// Resolve plugin names to a sorted set of paths.
+caf::expected<detail::stable_set<std::string>> resolve_plugin_names(
+  std::vector<std::string> paths_or_names,
+  const detail::stable_set<std::filesystem::path>& plugin_dirs) {
   for (auto& path_or_name : paths_or_names) {
     // Ignore paths.
     if (auto maybe_path = std::filesystem::path{path_or_name};
@@ -171,15 +170,56 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
     else
       return std::move(path.error());
   }
-  // Step 6: Deduplicate plugin paths.
-  // TODO: Consider moving steps 1-5 into a separate `resolve` function, and
-  // splitting step 3 into separate steps for modifying the list of bundled
-  // plugins and unloading unwanted static plugins.
+  // Deduplicate plugin paths.
   auto paths = detail::stable_set<std::string>{};
   paths.insert(std::make_move_iterator(paths_or_names.begin()),
                std::make_move_iterator(paths_or_names.end()));
-  // Step 7: Load plugins.
-  for (auto path : std::move(paths)) {
+  return paths;
+}
+
+} // namespace
+
+std::vector<plugin_ptr>& get_mutable() noexcept {
+  static auto plugins = std::vector<plugin_ptr>{};
+  return plugins;
+}
+
+const std::vector<plugin_ptr>& get() noexcept {
+  return get_mutable();
+}
+
+std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
+get_static_type_id_blocks() noexcept {
+  static auto result = std::vector<
+    std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>{};
+  return result;
+}
+
+caf::expected<std::vector<std::filesystem::path>>
+load(const std::vector<std::string>& bundled_plugins,
+     caf::actor_system_config& cfg) {
+  auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
+  // Get the necessary options.
+  auto paths_or_names
+    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
+  if (paths_or_names.empty() && bundled_plugins.empty())
+    return loaded_plugin_paths;
+  const auto plugin_dirs = get_plugin_dirs(cfg);
+  // Silently ignore native plugins if they're in the list of plugins.
+  paths_or_names = remove_native_plugins(std::move(paths_or_names));
+  // Resolve the 'bundled' and 'all' identifiers.
+  paths_or_names = expand_special_identifiers(std::move(paths_or_names),
+                                              bundled_plugins, plugin_dirs);
+  // Disable static plugins that were not enabled, and remove the names of
+  // static plugins from the list of enabled plugins.
+  paths_or_names = unload_disabled_static_plugins(std::move(paths_or_names));
+  // Try to resolve plugin names to plugin paths. After this step, the list only
+  // contains deduplicated plugin paths.
+  auto paths = resolve_plugin_names(std::move(paths_or_names), plugin_dirs);
+  if (!paths)
+    return std::move(paths.error());
+  // Load plugins.
+  for (auto path : std::move(*paths)) {
     if (auto plugin = plugin_ptr::make_dynamic(path.c_str(), cfg)) {
       // Check for name clashes.
       auto has_same_name = [&](const auto& other) {
@@ -197,7 +237,7 @@ load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg) {
       return std::move(plugin.error());
     }
   }
-  // Step 8: Sort loaded plugins by name.
+  // Sort loaded plugins by name.
   std::sort(get_mutable().begin(), get_mutable().end(),
             [](const auto& lhs, const auto& rhs) {
               return std::strcmp(lhs->name(), rhs->name()) < 0;

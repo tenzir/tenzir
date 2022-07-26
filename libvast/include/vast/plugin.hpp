@@ -73,7 +73,8 @@ get_static_type_id_blocks() noexcept;
 /// went wrong.
 /// @note Invoke exactly once before \ref get() may be used.
 caf::expected<std::vector<std::filesystem::path>>
-load(std::vector<std::string> bundled_plugins, caf::actor_system_config& cfg);
+load(const std::vector<std::string>& bundled_plugins,
+     caf::actor_system_config& cfg);
 
 /// Initialize loaded plugins.
 caf::error initialize(caf::actor_system_config& cfg);
