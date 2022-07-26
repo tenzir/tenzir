@@ -274,14 +274,16 @@ def execute_command(c, cmd="/bin/bash", env=[]):
     task_id = get_vast_server(c)
     cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues
+    buf = ""
     if cmd != "/bin/bash":
         cmd_bytes = load_cmd(cmd)
         parse_env(env)  # validate format of env list items
         cmd = f"/bin/bash -c 'echo {base64.b64encode(cmd_bytes).decode()} | base64 -d | {' '.join(env)} /bin/bash'"
+        buf = "unbuffer"
     # we use the CLI here because boto does not know how to use the session-manager-plugin
     # unbuffer (expect package) helps ensuring a clean session closing when there is no PTY
     c.run(
-        f"""unbuffer aws ecs execute-command \
+        f"""{buf} aws ecs execute-command \
 		--cluster {cluster} \
 		--task {task_id} \
 		--interactive \
