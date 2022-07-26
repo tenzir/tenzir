@@ -40,6 +40,7 @@ CLOUDROOT = "."
 REPOROOT = "../.."
 TFDIR = f"{CLOUDROOT}/terraform"
 DOCKERDIR = f"{CLOUDROOT}/docker"
+RESOURCEDIR = f"{CLOUDROOT}/resources"
 HOSTROOT = "/host"
 
 

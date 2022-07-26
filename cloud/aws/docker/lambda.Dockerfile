@@ -41,9 +41,9 @@ RUN ln -s $PWD/aws-cli/v2/current/dist/aws /usr/local/bin/aws && \
 
 USER vast:vast
 
-COPY lambda-handler.py .
+COPY scripts/lambda-handler.py .
 COPY schema/ /opt/tenzir/vast/etc/vast/schema/
-COPY vast-lambda.yaml /opt/tenzir/vast/etc/vast/vast.yaml
+COPY configs/vast-lambda.yaml /opt/tenzir/vast/etc/vast/vast.yaml
 
 ENTRYPOINT [ "/usr/bin/python3.9", "-m", "awslambdaric" ]
 CMD [ "lambda-handler.handler" ]

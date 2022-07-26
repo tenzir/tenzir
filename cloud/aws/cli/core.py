@@ -7,6 +7,7 @@ import io
 from common import (
     AWS_REGION,
     COMMON_VALIDATORS,
+    RESOURCEDIR,
     conf,
     TFDIR,
     AWS_REGION_VALIDATOR,
@@ -143,7 +144,7 @@ def deploy_image(c, type):
             --build-arg BASE_IMAGE={base_image} \
             -f {DOCKERDIR}/{type}.Dockerfile \
             -t {image_url}:{image_tag} \
-            {DOCKERDIR}"""
+            {RESOURCEDIR}"""
     )
     new_digest = c.run(
         f"docker inspect --format='{{{{.RepoDigests}}}}' {image_url}:{image_tag}",
