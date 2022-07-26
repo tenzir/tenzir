@@ -763,14 +763,18 @@ try_handle_deprecations(const record& config,
   auto new_config = config;
   auto aggregate = record{};
   for (const auto& section : sections_to_reformat) {
-    VAST_WARN("Legacy format detected in summarize section: {}. Please "
-              "upgrade to the newest format",
+    VAST_WARN("the configuration key '{}' for the summarize operator is "
+              "deprecated and will be removed in the next major release; "
+              "please migrate to using explicit output field names",
               section);
     for (const auto& key :
          get_keys_from_legacy_sections(new_config.at(section))) {
       if (aggregate.contains(key))
         return caf::make_error(ec::invalid_configuration,
-                               fmt::format("aggregation function '{}' for output field '{}' shadows previous definition", section, key));
+                               fmt::format("aggregation function '{}' for "
+                                           "output field '{}' shadows previous "
+                                           "definition",
+                                           section, key));
       aggregate.emplace(key, section);
     }
     new_config.erase(section);
@@ -800,14 +804,17 @@ public:
         sections_to_reformat.emplace_back(key);
     }
     // new format detected. Proceed as usual
-    if (sections_to_reformat.empty()) {
+    if (sections_to_reformat.empty())
       return make_summarize_operator(config);
-    }
     if (config.contains("aggregate")) {
-      return caf::make_error(ec::invalid_configuration,
-fmt::format("the configuration keys '{}' for the summarize operator are deprecated and will be removed in the next major release; please migrate to using explicit output field names", fmt::join(sections_to_reformat, "', '"));
+      return caf::make_error(
+        ec::invalid_configuration,
+        fmt::format("the configuration keys '{}' for the summarize operator "
+                    "are deprecated and will be removed in the next major "
+                    "release; please migrate to using explicit output field "
+                    "names",
+                    fmt::join(sections_to_reformat, "', '")));
     }
-
     return try_handle_deprecations(config, sections_to_reformat);
   }
 };
