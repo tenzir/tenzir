@@ -83,6 +83,25 @@ TEST(serialization) {
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }
 
+TEST(nullptr serialization) {
+  auto x = chunk_ptr{};
+  std::vector<char> buf;
+  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
+  chunk_ptr y;
+  CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
+  REQUIRE_EQUAL(y, nullptr);
+}
+
+TEST(empty serialization) {
+  auto x = chunk::make_empty();
+  std::vector<char> buf;
+  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
+  chunk_ptr y;
+  CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
+  REQUIRE_NOT_EQUAL(y, nullptr);
+  CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
+}
+
 TEST(compression) {
   // We assemble a large test string with many repetitions for compression
   // tests.
