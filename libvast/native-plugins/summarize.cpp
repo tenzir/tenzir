@@ -744,7 +744,7 @@ make_summarize_operator(const record& config) {
 }
 
 std::vector<std::string>
-get_keys_from_legacy_sections(const data::variant& legacy_section) {
+get_keys_from_legacy_sections(const data& legacy_section) {
   const auto* list = caf::get_if<vast::list>(&legacy_section);
   if (!list)
     return {};
@@ -767,12 +767,10 @@ try_handle_deprecations(const record& config,
               "upgrade to the newest format",
               section);
     for (const auto& key :
-         get_keys_from_legacy_sections(new_config.at(section).get_data())) {
+         get_keys_from_legacy_sections(new_config.at(section))) {
       if (aggregate.contains(key))
         return caf::make_error(ec::invalid_configuration,
-                               fmt::format("Duplicate key: {} found in "
-                                           "{} section",
-                                           key, section));
+                               fmt::format("aggregation function '{}' for output field '{}' shadows previous definition", section, key));
       aggregate.emplace(key, section);
     }
     new_config.erase(section);
@@ -807,8 +805,7 @@ public:
     }
     if (config.contains("aggregate")) {
       return caf::make_error(ec::invalid_configuration,
-                             fmt::format("Aggregate section found in legacy "
-                                         "config"));
+fmt::format("the configuration keys '{}' for the summarize operator are deprecated and will be removed in the next major release; please migrate to using explicit output field names", fmt::join(sections_to_reformat, "', '"));
     }
 
     return try_handle_deprecations(config, sections_to_reformat);
