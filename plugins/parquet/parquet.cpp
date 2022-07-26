@@ -26,7 +26,7 @@ namespace vast::plugins::parquet {
 
 /// Configuration for the Parquet plugin.
 struct configuration {
-  uint64_t row_group_size{::parquet::DEFAULT_MAX_ROW_GROUP_LENGTH};
+  uint64_t row_group_size{defaults::import::table_slice_size};
   int64_t zstd_compression_level{9};
 
   template <class Inspector>
