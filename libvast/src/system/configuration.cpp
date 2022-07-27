@@ -431,7 +431,10 @@ caf::error configuration::parse(int argc, char** argv) {
         .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugins", "");
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
-  VAST_ASSERT(ec == caf::pec::success);
+  if (ec != caf::pec::success) {
+    VAST_ASSERT(it != plugin_args.end());
+    return caf::make_error(ec, fmt::format("failed to parse option '{}'", *it));
+  }
   VAST_ASSERT(it == plugin_args.end());
   // Now parse all CAF options from the command line. Prior to doing so, we
   // clear the config_file_path first so it does not use caf-application.ini as
