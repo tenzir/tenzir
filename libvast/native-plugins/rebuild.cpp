@@ -90,6 +90,29 @@ struct rebuilder_state {
     indicator->tick();
   }
 
+  /// Finish the indicator bar with an error.
+  /// @pre err
+  void finish(const caf::error& err) const {
+    if (!indicator)
+      return;
+    indicator->set_option(
+      indicators::option::ForegroundColor{indicators::Color::red});
+    indicator->set_option(indicators::option::PrefixText{"✗"});
+    indicator->set_option(indicators::option::ShowSpinner{false});
+    indicator->set_option(indicators::option::ShowPercentage{false});
+    indicator->set_option(indicators::option::ShowRemainingTime{false});
+    indicator->set_option(indicators::option::FontStyles{
+      std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
+    if (inaccurate_statistics)
+      indicator->set_option(indicators::option::PostfixText{
+        fmt::format("Failed to rebuild: {}", err)});
+    else
+      indicator->set_option(indicators::option::PostfixText{
+        fmt::format("Failed after rebuilding {} into {} partitions: {}",
+                    num_transformed, num_results, err)});
+    indicator->mark_as_completed();
+  }
+
   /// Finish the indicator bar.
   void finish() const {
     if (!indicator)
@@ -105,8 +128,8 @@ struct rebuilder_state {
     indicator->set_option(indicators::option::FontStyles{
       std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
     if (inaccurate_statistics)
-      indicator->set_option(indicators::option::PostfixText{
-        fmt::format("Done!", num_transformed, num_results)});
+      indicator->set_option(indicators::option::PostfixText{fmt::format("Done"
+                                                                        "!")});
     else
       indicator->set_option(indicators::option::PostfixText{
         fmt::format("Done! Transformed {} into {} partitions.", num_transformed,
@@ -163,7 +186,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
             self->quit();
           },
           [self](caf::error error) {
-            self->state.finish();
+            self->state.finish(error);
             self->quit(std::move(error));
           });
         VAST_DEBUG("{} triggers a rebuild for {} partitions with {} parallel "
