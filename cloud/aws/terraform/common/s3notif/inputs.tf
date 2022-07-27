@@ -20,7 +20,7 @@ locals {
 resource "null_resource" "bucket-location-check" {
   provisioner "local-exec" {
     command = <<EOT
-aws s3api get-bucket-location --bucket ${var.bucket_name} \
+aws s3api get-bucket-location --bucket ${var.bucket_name} --endpoint-url https://s3.amazonaws.com \
   | grep ${var.region} \
   || (echo 'Wrong region for source bucket'; exit 1)
     EOT

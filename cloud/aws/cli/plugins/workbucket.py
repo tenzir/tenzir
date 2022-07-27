@@ -1,12 +1,21 @@
-from vast_invoke import task
+from vast_invoke import pty_task, task
 import core
-from common import COMMON_VALIDATORS, auto_app_fmt, conf, TFDIR, terraform_output, aws
+from common import (
+    AWS_REGION,
+    auto_app_fmt,
+    check_absolute,
+    conf,
+    TFDIR,
+    container_path,
+    terraform_output,
+    aws,
+)
 
 
-VALIDATORS = COMMON_VALIDATORS
+VALIDATORS = core.VALIDATORS
 
 
-@task
+@pty_task
 def deploy(c, auto_approve=False):
     """Deploy a bucket that can be used to persist data from the client"""
     core.init_step(c, "workbucket")
@@ -45,20 +54,39 @@ def list(c, prefix=""):
             print(obj["Key"])
 
 
-@task
+@task(help={"source": "Absolute path to the file, use /dev/stdin to pipe in data"})
 def upload(c, source, key):
     """Upload a file to the specified key in the bucket
 
     This is a simplified helper, for more advanced features use the AWS CLI directly"""
-    aws("s3").upload_file(source, name(c), key)
+    if source == "/dev/stdin":
+        # the `-` feature of `aws s3 cp` enables upload from non-seekable streams
+        source = "-"
+    else:
+        check_absolute(source)
+        source = container_path(source)
+    c.run(
+        f"aws s3 cp {source} s3://{name(c)}/{key} --region {AWS_REGION()}",
+        hide="out",
+    )
 
 
-@task
+@task(
+    help={"destination": "Absolute path to the file, use /dev/stdout to pipe out data"}
+)
 def download(c, key, destination):
     """Download a file to the specified key in the bucket
 
     This is a simplified helper, for more advanced features use the AWS CLI directly"""
-    aws("s3").download_file(name(c), key, destination)
+    if destination == "/dev/stdout":
+        destination = "-"
+    else:
+        check_absolute(destination)
+        destination = container_path(destination)
+    c.run(
+        f"aws s3 cp s3://{name(c)}/{key} {destination} --region {AWS_REGION()}",
+        hide="out",
+    )
 
 
 @task

@@ -3,11 +3,15 @@ import sys
 import core
 import plugins
 import pkgutil
+import flags
 
 
 def unhandled_exception(type, value, traceback):
-    """Override for `sys.excepthook` without stack trace"""
-    print(f"{type.__name__}: {str(value)}")
+    """Override for `sys.excepthook` only showing stack trace if requested"""
+    if flags.TRACE:
+        sys.__excepthook__(type, value, traceback)
+    else:
+        print(f"{type.__name__}: {str(value)}")
 
 
 class VastCloudProgram(Program):

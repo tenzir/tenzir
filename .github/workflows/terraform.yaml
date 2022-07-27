@@ -38,6 +38,7 @@ env:
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
   VASTCLOUD_NO_PTY: 1
+  VASTCLOUD_TRACE: 1
 
 jobs:
   vast_on_aws:
@@ -67,21 +68,14 @@ jobs:
         run: ./vast-cloud tfcloud.config --auto
 
       - name: Deploy
-        id: deploy
-        continue-on-error: true
         run: ./vast-cloud deploy --auto-approve
 
-      - name: Retry deploy
-        if: steps.deploy.outcome=='failure'
-        run: |
-          echo "Deploy sometimes fails for an unexplained reason."
-          echo "Retrying after a few minutes usually works."
-          sleep 200
-          ./vast-cloud deploy --auto-approve
+      - name: Deploy bucket
+        run: ./vast-cloud workbucket.deploy --auto-approve
 
-      - name: Run integration.all playbook
+      - name: Run test playbook
         run: |
-          ./vast-cloud integration.all
+          ./vast-cloud tests.run
 
       - name: Destroy
         continue-on-error: true

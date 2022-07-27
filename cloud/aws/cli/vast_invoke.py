@@ -16,29 +16,20 @@ the first tasks requires a PTY.
 mode return 0s only
 """
 import invoke
-import os
-
-CHECK_PTY_FLAG_VAR = "VASTCLOUD_CHECK_PTY"
-NO_PTY_FLAG_VAR = "VASTCLOUD_NO_PTY"
-
-
-def is_check_pty_call():
-    return CHECK_PTY_FLAG_VAR in os.environ
-
-
-def has_no_pty_flag():
-    return NO_PTY_FLAG_VAR in os.environ
+import flags
 
 
 class _Task(invoke.Task):
     """PyInvoke Task that supports PTY checking calls"""
 
     def __call__(self, *args, **kwargs):
-        if is_check_pty_call():
+        if flags.CHECK_PTY:
             return "0"
         else:
             # specify no PTY for recursive calls to the CLI
-            args[0].config.run.env[NO_PTY_FLAG_VAR] = "1"
+            args[0].config.run.env[flags.NO_PTY_FLAG_VAR] = "1"
+            if flags.TRACE:
+                args[0].config.run.env[flags.TRACE_FLAG_VAR] = "1"
             return super().__call__(*args, **kwargs)
 
 
@@ -47,11 +38,13 @@ class _PTYTask(invoke.Task):
     checking calls"""
 
     def __call__(self, *args, **kwargs):
-        if is_check_pty_call():
+        if flags.CHECK_PTY:
             print("1", end="")
             return ""
         else:
             args[0].config.run.pty = True
+            if flags.TRACE:
+                args[0].config.run.env[flags.TRACE_FLAG_VAR] = "1"
             return super().__call__(*args, **kwargs)
 
 
@@ -63,7 +56,7 @@ def task(*args, **kwargs):
 def pty_task(*args, **kwargs):
     """PyInvoke task decorator specific to commands that need PTY. Also supports
     PTY checking calls"""
-    task_class = _Task if has_no_pty_flag() else _PTYTask
+    task_class = _Task if flags.NO_PTY else _PTYTask
     return invoke.task(*args, **kwargs, klass=task_class)
 
 

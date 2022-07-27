@@ -5,13 +5,18 @@ import base64
 import json
 import io
 from common import (
+    AWS_REGION,
     COMMON_VALIDATORS,
+    RESOURCEDIR,
     conf,
     TFDIR,
     AWS_REGION_VALIDATOR,
     auto_app_fmt,
     REPOROOT,
     DOCKERDIR,
+    default_vast_version,
+    load_cmd,
+    parse_env,
     terraform_output,
     aws,
 )
@@ -23,43 +28,24 @@ VALIDATORS = [
     dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
     dynaconf.Validator("VAST_IMAGE", default="tenzir/vast"),
-    dynaconf.Validator("VAST_VERSION"),  # usually resolved lazily
+    dynaconf.Validator("VAST_VERSION", default=default_vast_version()),
     dynaconf.Validator(
         "VAST_SERVER_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]
     ),
 ]
 
 CMD_HELP = {
-    "cmd": "A bash command to be executed. We recommend wrapping it with single quotes to avoid unexpected interpolations."
+    "cmd": "Bash commands to be executed. Can be either a plain command\
+ (we recommend wrapping it with single quotes to avoid unexpected\
+ interpolations), a local absolute file path (e.g file:///etc/mycommands)\
+ or an s3 location (e.g s3://mybucket/key)",
+    "env": "List of environment variables to be passed to the execution context,\
+ name and values are separated by = (e.g --env BUCKET=mybucketname)",
 }
 
 
 ##  Aliases
 EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
-
-
-def AWS_REGION():
-    return conf(AWS_REGION_VALIDATOR)["VAST_AWS_REGION"]
-
-
-## Helper functions
-
-
-def VAST_VERSION(c: Context):
-    """If VAST_VERSION not defined, use latest release"""
-    if "VAST_VERSION" in conf():
-        return conf()["VAST_VERSION"]
-    version = c.run(
-        "git describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*'", hide="out"
-    ).stdout.strip()
-    return version
-
-
-def env(c: Context) -> dict:
-    return {
-        **conf(VALIDATORS),
-        "VAST_VERSION": VAST_VERSION(c),
-    }
 
 
 ## Tasks
@@ -95,7 +81,7 @@ def init_step(c, step):
     """Manually run terraform init on a specific step"""
     c.run(
         f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
-        env=env(c),
+        env=conf(VALIDATORS),
     )
 
 
@@ -105,7 +91,7 @@ def deploy_step(c, step, auto_approve=False):
     init_step(c, step)
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
-        env=env(c),
+        env=conf(VALIDATORS),
     )
 
 
@@ -132,7 +118,7 @@ def current_image(c, repo_arn):
 
 @task(help={"type": "Can be either 'lambda' or 'fargate'"})
 def deploy_image(c, type):
-    """Build and push the image, fails if step 1 is not deployed"""
+    """Build and push the image, fails if core-1 is not deployed"""
     image_url = terraform_output(c, "core-1", f"vast_{type}_repository_url")
     repo_arn = terraform_output(c, "core-1", f"vast_{type}_repository_arn")
     # get the digest of the current image
@@ -146,9 +132,9 @@ def deploy_image(c, type):
     except:
         old_digest = "current-image-not-found"
     # build the image and get the new digest
-    base_image = env(c)["VAST_IMAGE"]
+    base_image = conf(VALIDATORS)["VAST_IMAGE"]
     image_tag = int(time.time())
-    version = VAST_VERSION(c)
+    version = conf(VALIDATORS)["VAST_VERSION"]
     if version == "build":
         c.run(f"docker build -t {base_image}:{image_tag} {REPOROOT}")
         version = image_tag
@@ -158,7 +144,7 @@ def deploy_image(c, type):
             --build-arg BASE_IMAGE={base_image} \
             -f {DOCKERDIR}/{type}.Dockerfile \
             -t {image_url}:{image_tag} \
-            {DOCKERDIR}"""
+            {RESOURCEDIR}"""
     )
     new_digest = c.run(
         f"docker inspect --format='{{{{.RepoDigests}}}}' {image_url}:{image_tag}",
@@ -235,26 +221,34 @@ def restart_vast_server(c):
     print(f"Started task {task_id}")
 
 
-@task(autoprint=True)
-def list_all_tasks(c):
-    """List the ids of all tasks running on the ECS cluster"""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    task_res = aws("ecs").list_tasks(cluster=cluster)
-    task_ids = [task.split("/")[-1] for task in task_res["taskArns"]]
-    return task_ids
+def print_lambda_output(json_response: str, json_output: bool):
+    if json_output:
+        print(json_response)
+    else:
+        response = json.loads(json_response)
+        print("PARSED COMMAND:")
+        print(response["parsed_cmd"])
+        print("\nENV:")
+        print(response["env"])
+        print("\nSTDOUT:")
+        print(response["stdout"])
+        print("\nSTDERR:")
+        print(response["stderr"])
+        print("\nRETURN CODE:")
+        print(response["returncode"])
 
 
-@task(autoprint=True, help=CMD_HELP)
-def run_lambda(c, cmd):
+@task(help=CMD_HELP, iterable=["env"])
+def run_lambda(c, cmd, env=[], json_output=False):
     """Run ad-hoc VAST client commands from AWS Lambda
 
-    Returns an object containing the standard and error outputs as well as the
-    parsed command that was executed"""
+    Prints the inputs (command / environment) and outputs (stdout, stderr, exit
+    code) of the executed function to stdout."""
     lambda_name = terraform_output(c, "core-2", "vast_lambda_name")
-    cmd_b64 = base64.b64encode(cmd.encode()).decode()
+    cmd_b64 = base64.b64encode(load_cmd(cmd)).decode()
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
-        Payload=json.dumps({"cmd": cmd_b64}).encode(),
+        Payload=json.dumps({"cmd": cmd_b64, "env": parse_env(env)}).encode(),
         InvocationType="RequestResponse",
     )
     resp_payload = lambda_res["Payload"].read().decode()
@@ -265,25 +259,31 @@ def run_lambda(c, cmd):
         try:
             json_payload = json.loads(resp_payload)
             if json_payload["errorType"] == "CommandException":
-                # CommandException is already JSON encoded
-                mess = json_payload["errorMessage"]
+                # CommandException is JSON encoded
+                print_lambda_output(json_payload["errorMessage"], json_output)
+                mess = ""
         except Exception:
             pass
         raise Exit(message=mess, code=1)
-    return resp_payload
+    print_lambda_output(resp_payload, json_output)
 
 
-@pty_task(help=CMD_HELP)
-def execute_command(c, cmd="/bin/bash"):
+@pty_task(help=CMD_HELP, iterable=["env"])
+def execute_command(c, cmd="/bin/bash", env=[]):
     """Run ad-hoc or interactive commands from the VAST server Fargate task"""
     task_id = get_vast_server(c)
     cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues
+    buf = ""
     if cmd != "/bin/bash":
-        cmd = f"/bin/bash -c 'echo {base64.b64encode(cmd.encode()).decode()} | base64 -d | /bin/bash'"
+        cmd_bytes = load_cmd(cmd)
+        parse_env(env)  # validate format of env list items
+        cmd = f"/bin/bash -c 'echo {base64.b64encode(cmd_bytes).decode()} | base64 -d | {' '.join(env)} /bin/bash'"
+        buf = "unbuffer"
     # we use the CLI here because boto does not know how to use the session-manager-plugin
+    # unbuffer (expect package) helps ensuring a clean session closing when there is no PTY
     c.run(
-        f"""aws ecs execute-command \
+        f"""{buf} aws ecs execute-command \
 		--cluster {cluster} \
 		--task {task_id} \
 		--interactive \
@@ -298,7 +298,7 @@ def destroy_step(c, step, auto_approve=False):
     init_step(c, step)
     c.run(
         f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
-        env=env(c),
+        env=conf(VALIDATORS),
     )
 
 
@@ -312,5 +312,5 @@ def destroy(c, auto_approve=False):
         print("Failed to stop tasks. Continuing destruction...")
     c.run(
         f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}",
-        env=env(c),
+        env=conf(VALIDATORS),
     )

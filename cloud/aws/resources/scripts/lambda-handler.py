@@ -89,6 +89,7 @@ def handler(event, context):
         "stderr": stderr,
         "parsed_cmd": parsed_cmd,
         "returncode": returncode,
+        "env": event.get("env", {}),
     }
     if returncode != 0:
         raise CommandException(json.dumps(result))

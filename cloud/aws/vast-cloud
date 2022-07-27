@@ -3,6 +3,7 @@
 # Input:
 # - VASTCLOUD_REBUILD: set to any value to force docker rebuild
 # - VASTCLOUD_NO_PTY: set to any value to force-disable PTY
+# - VASTCLOUD_TRACE: set to any value to show stack trace of exceptions
 
 # The CLI runs Docker commands from Docker, so it needs to have access to the
 # Docker socket. The calling user id and group id as well as the docker group id
@@ -26,11 +27,10 @@ build () {
   echo "(CALLER_UID=$CALLER_UID,CALLER_GID=$CALLER_GID,DOCKER_GID=$DOCKER_GID)"
   docker build \
     -t tenzir/vast-cloud-cli \
-    -f docker/cli.Dockerfile \
     --build-arg CALLER_UID \
     --build-arg CALLER_GID \
     --build-arg DOCKER_GID \
-    . \
+    - < docker/cli.Dockerfile  \
   || exit $? # call exit to fail CLI if build fails
 }
 
@@ -43,22 +43,23 @@ docker image inspect tenzir/vast-cloud-cli > /dev/null \
 # First argument passed to docker as flags
 # Second argument passed to the container as command arguments
 run () {
-  docker run -i \
+  docker run \
     $(echo "$1") \
     --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
-    --mount type=bind,source=$HOST_DIRNAME/../..,target=/vast \
-    $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "--mount type=bind,source=$HOST_CREDENTIALS_FILE,target=/.aws/credentials,readonly") \
+    --mount type=bind,source=/,target=/host \
     --mount source=vastcloud-cli-persistant-configs,target=/etc/persistant-configs \
     -e AWS_PROFILE \
-    -e AWS_SHARED_CREDENTIALS_FILE=/.aws/credentials \
+    $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "-e AWS_SHARED_CREDENTIALS_FILE=/host$HOST_CREDENTIALS_FILE") \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
     -e VASTCLOUD_NO_PTY \
+    -e VASTCLOUD_TRACE \
     --env-file <(env | grep VAST_) \
     --env-file <(env | grep TF_) \
     --env-file <(env | grep HOST_) \
     --rm \
-    tenzir/vast-cloud-cli "${@:2}"
+    --workdir /host$HOST_DIRNAME \
+    tenzir/vast-cloud-cli python ./cli/main.py "${@:2}"
 }
 
 # Use the VASTCLOUD_CHECK_PTY to execute the command in a dry run mode that
@@ -66,7 +67,15 @@ run () {
 PTY_CHECK_RESULT=$(run '-e VASTCLOUD_CHECK_PTY=1' "$@")
 [[ $? == 0 ]] || exit 1
 # if one task needs a PTY, the whole command needs one
-PTY_FLAG=$([[ $PTY_CHECK_RESULT =~ "1" ]] && echo "-t")
+PTY_FLAG=""
+if [[ $PTY_CHECK_RESULT =~ "1" ]] && [ -t 0 ] ;
+then
+  PTY_FLAG="-t"
+elif [[ $PTY_CHECK_RESULT =~ "1" ]] ;
+then
+  echo "No PTY found but command requires one. Disable the PTY for the command by setting VASTCLOUD_NO_PTY=1" >&2
+  exit 1
+fi
 
-# The command is then executed with the resulting PTY_FLAG
-run "$PTY_FLAG" "$@"
+# The command is then executed with the resulting PTY_FLAG and enabling stdin
+run "$PTY_FLAG -i" "$@"
