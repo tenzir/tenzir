@@ -39,6 +39,9 @@ namespace vast {
 
 namespace {
 
+/// The size of an invalid chunk when serialized.
+inline constexpr auto invalid_chunk_size = int64_t{-1};
+
 class chunk_random_access_file final : public arrow::io::RandomAccessFile {
 public:
   /// Construct a random access file from a chunk.
@@ -417,10 +420,10 @@ caf::error read(const std::filesystem::path& filename, chunk_ptr& x) {
 caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
   using vast::detail::narrow;
   if (x == nullptr)
-    return sink(uint32_t{0});
+    return sink(invalid_chunk_size);
   return caf::error::eval(
     [&] {
-      return sink(narrow<uint32_t>(x->size()));
+      return sink(narrow<int64_t>(x->size()));
     },
     [&] {
       return sink.apply_raw(x->size(), const_cast<std::byte*>(x->data()));
@@ -428,11 +431,15 @@ caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
 }
 
 caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
-  uint32_t size = 0;
+  int64_t size = 0;
   if (auto err = source(size))
     return err;
-  if (size == 0) {
+  if (size == invalid_chunk_size) {
     x = nullptr;
+    return caf::none;
+  }
+  if (size == 0) {
+    x = chunk::make_empty();
     return caf::none;
   }
   auto buffer = std::make_unique<chunk::value_type[]>(size);
@@ -448,11 +455,15 @@ caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
 }
 
 bool inspect(detail::legacy_deserializer& source, chunk_ptr& x) {
-  uint32_t size = 0;
+  int64_t size = 0;
   if (!source(size))
     return false;
-  if (size == 0) {
+  if (size == invalid_chunk_size) {
     x = nullptr;
+    return true;
+  }
+  if (size == 0) {
+    x = chunk::make_empty();
     return true;
   }
   auto buffer = std::make_unique<chunk::value_type[]>(size);
