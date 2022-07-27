@@ -1,11 +1,8 @@
 from vast_invoke import pty_task, task
 import dynaconf
-from common import COMMON_VALIDATORS, conf
+from common import conf
 
-VALIDATORS = [
-    *COMMON_VALIDATORS,
-    dynaconf.Validator("VAST_VERSION", must_exist=True, ne=""),
-]
+VALIDATORS = [dynaconf.Validator("VAST_VERSION", must_exist=True, ne="")]
 
 
 @pty_task
