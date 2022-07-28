@@ -36,12 +36,13 @@ struct filesystem_statistics {
   ops reads;
   ops mmaps;
   ops erases;
+  ops moves;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, filesystem_statistics& x) ->
     typename Inspector::result_type {
     return f(caf::meta::type_name("vast.system.filesystem_statistics"),
-             x.checks, x.writes, x.reads, x.mmaps);
+             x.checks, x.writes, x.reads, x.mmaps, x.moves);
   }
 };
 

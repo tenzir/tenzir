@@ -30,6 +30,10 @@ struct posix_filesystem_state {
 
   /// The actor name.
   static inline const char* name = "posix-filesystem";
+
+  // Rename a file and update statistics.
+  caf::expected<atom::done> rename_single_file(const std::filesystem::path&,
+                                               const std::filesystem::path&);
 };
 
 /// A filesystem implemented with POSIX system calls.

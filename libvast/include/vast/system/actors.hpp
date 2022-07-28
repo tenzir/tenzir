@@ -344,6 +344,15 @@ using filesystem_actor = typed_actor_fwd<
   // Reads a chunk of data from a given path and returns the chunk.
   caf::replies_to<atom::read, std::filesystem::path>::with< //
     chunk_ptr>,
+  // Moves a file on the fielsystem.
+  caf::replies_to<atom::move, std::filesystem::path,
+                  std::filesystem::path>::with< //
+    atom::done>,
+  // Moves a file on the fielsystem.
+  caf::replies_to<
+    atom::move,
+    std::vector<std::pair<std::filesystem::path, std::filesystem::path>>>::with< //
+    atom::done>,
   // Memory-maps a file.
   caf::replies_to<atom::mmap, std::filesystem::path>::with< //
     chunk_ptr>,
@@ -492,6 +501,8 @@ using node_actor = typed_actor_fwd<
 CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
 
   VAST_ADD_TYPE_ID((std::filesystem::path))
+  VAST_ADD_TYPE_ID(
+    (std::vector<std::pair<std::filesystem::path, std::filesystem::path>>))
 
   VAST_ADD_TYPE_ID((vast::system::accountant_actor))
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))

@@ -23,6 +23,26 @@
 
 namespace vast::system {
 
+caf::expected<atom::done>
+posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
+                                           const std::filesystem::path& to) {
+  const auto from_absolute = root / from;
+  const auto to_absolute = root / to;
+  if (from_absolute == to_absolute)
+    return atom::done_v;
+  std::error_code err;
+  std::filesystem::rename(from, to, err);
+  if (err) {
+    ++stats.moves.failed;
+    return caf::make_error(ec::system_error,
+                           fmt::format("failed to move {} to {}: {}", from, to,
+                                       err.message()));
+  } else {
+    ++stats.moves.successful;
+    return atom::done_v;
+  }
+}
+
 filesystem_actor::behavior_type
 posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
                  const std::filesystem::path& root) {
@@ -66,6 +86,22 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         ++self->state.stats.reads.failed;
         return bytes.error();
       }
+    },
+    [self](atom::move, const std::filesystem::path& from,
+           const std::filesystem::path& to) -> caf::result<atom::done> {
+      return self->state.rename_single_file(from, to);
+    },
+    [self](
+      atom::move,
+      const std::vector<std::pair<std::filesystem::path, std::filesystem::path>>&
+        files) -> caf::result<atom::done> {
+      std::error_code err;
+      for (const auto& [from, to] : files) {
+        auto result = self->state.rename_single_file(from, to);
+        if (!result)
+          return result.error();
+      }
+      return atom::done_v;
     },
     [self](atom::mmap,
            const std::filesystem::path& filename) -> caf::result<chunk_ptr> {
