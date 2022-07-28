@@ -34,7 +34,6 @@ env:
   TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
   TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX  || 'gh-act-' }}"
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
-  TF_STATE_BACKEND: "cloud"
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
   VASTCLOUD_NO_PTY: 1
@@ -42,17 +41,19 @@ env:
 
 jobs:
   vast_init:
-    name: VAST Terraform init
+    name: VAST Terraform init with local backend
     runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: ./cloud/aws
+    env:
+       TF_STATE_BACKEND: "local"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          
+
       - name: Init on empty state
         run: ./vast-cloud init
         
@@ -65,6 +66,8 @@ jobs:
     defaults:
       run:
         working-directory: ./cloud/aws
+    env:
+       TF_STATE_BACKEND: "cloud"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
