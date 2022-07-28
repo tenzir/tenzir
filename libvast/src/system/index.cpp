@@ -234,20 +234,22 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
 }
 
 vast::chunk_ptr create_marker(const std::vector<vast::uuid>& in,
-                                         const std::vector<vast::uuid>& out,
-                                         keep_original_partition keep) {
+                              const std::vector<vast::uuid>& out,
+                              keep_original_partition keep) {
   flatbuffers::FlatBufferBuilder builder;
   auto in_offsets
     = flatbuffers::Offset<flatbuffers::Vector<const fbs::UUID*>>{};
   if (keep == keep_original_partition::no) {
     in_offsets = builder.CreateVectorOfStructs<fbs::UUID>(
       in.size(), [&in](size_t i, fbs::UUID* vec) {
-        ::memcpy(vec->mutable_data(), in[i].begin(), vast::uuid::num_bytes);
+        ::memcpy(vec->mutable_data()->Data(), in[i].begin(),
+                 vast::uuid::num_bytes);
       });
   }
   auto out_offsets = builder.CreateVectorOfStructs<fbs::UUID>(
     out.size(), [&out](size_t i, fbs::UUID* vec) {
-      ::memcpy(vec->mutable_data(), out[i].begin(), vast::uuid::num_bytes);
+      ::memcpy(vec->mutable_data()->Data(), out[i].begin(),
+               vast::uuid::num_bytes);
     });
   auto v0_offset = vast::fbs::partition_transform::Createv0(builder, in_offsets,
                                                             out_offsets);
@@ -301,8 +303,7 @@ index_state::index_filename(const std::filesystem::path& basename) const {
   return basename / dir / "index.bin";
 }
 
-std::filesystem::path
-index_state::marker_path(const uuid& id) const {
+std::filesystem::path index_state::marker_path(const uuid& id) const {
   return markersdir / fmt::format("{:l}.marker", id);
 }
 
@@ -311,11 +312,11 @@ std::filesystem::path index_state::partition_path(const uuid& id) const {
 }
 
 std::filesystem::path
-index_state::markers_partition_path(const uuid& id) const {
+index_state::transformer_partition_path(const uuid& id) const {
   return markersdir / fmt::format("{:l}", id);
 }
 
-std::string index_state::markers_partition_path_template() const {
+std::string index_state::transformer_partition_path_template() const {
   return (markersdir / "{:l}").string();
 }
 
@@ -325,11 +326,11 @@ index_state::partition_synopsis_path(const uuid& id) const {
 }
 
 std::filesystem::path
-index_state::markers_partition_synopsis_path(const uuid& id) const {
+index_state::transformer_partition_synopsis_path(const uuid& id) const {
   return markersdir / fmt::format("{:l}.mdx", id);
 }
 
-std::string index_state::markers_partition_synopsis_path_template() const {
+std::string index_state::transformer_partition_synopsis_path_template() const {
   return (dir / "markers" / "{:l}.mdx").string();
 }
 
@@ -396,16 +397,13 @@ caf::error index_state::load_from_disk() {
               });
         }
       }
-      VAST_WARN("num outputs: {}", transform_v0->output_partitions()->size());
       for (auto const* id : *transform_v0->output_partitions()) {
         const auto uuid = vast::uuid::from_flatbuffer(*id);
-        const auto from_partition = 
-          fmt::format(VAST_FMT_RUNTIME(markers_partition_path_template()),
-                      uuid);
-        const auto to_partition = 
-          partition_path(uuid);
+        const auto from_partition = fmt::format(
+          VAST_FMT_RUNTIME(transformer_partition_path_template()), uuid);
+        const auto to_partition = partition_path(uuid);
         const auto from_partition_synopsis = fmt::format(
-          VAST_FMT_RUNTIME(markers_partition_synopsis_path_template()),
+          VAST_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
           uuid);
         const auto to_partition_synopsis = partition_synopsis_path(uuid);
         std::filesystem::rename(from_partition, to_partition);
@@ -1674,9 +1672,9 @@ index(index_actor::stateful_pointer<index_state> self,
         return std::vector<partition_info>{};
       auto store_id = std::string{self->state.store_actor_plugin->name()};
       auto partition_path_template
-        = self->state.markers_partition_path_template();
+        = self->state.transformer_partition_path_template();
       auto partition_synopsis_path_template
-        = self->state.markers_partition_synopsis_path_template();
+        = self->state.transformer_partition_synopsis_path_template();
       partition_transformer_actor partition_transfomer
         = self->spawn(system::partition_transformer, store_id,
                       self->state.synopsis_opts, self->state.index_opts,
@@ -1760,8 +1758,8 @@ index(index_actor::stateful_pointer<index_state> self,
               result.emplace_back(std::move(info));
             }
             // Record in-progress marker.
-            auto marker_chunk = create_marker(
-              old_partition_ids, new_partition_ids, keep);
+            auto marker_chunk
+              = create_marker(old_partition_ids, new_partition_ids, keep);
             self
               ->request(self->state.filesystem, caf::infinite, atom::write_v,
                         marker_path, marker_chunk)
@@ -1772,11 +1770,11 @@ index(index_actor::stateful_pointer<index_state> self,
                   // directory into the regular index directory.
                   auto renames = std::vector<
                     std::pair<std::filesystem::path, std::filesystem::path>>{};
-                  for (auto aps : apsv) {
+                  for (auto const& aps : apsv) {
                     auto old_path
-                      = self->state.markers_partition_path(aps.uuid);
+                      = self->state.transformer_partition_path(aps.uuid);
                     auto old_synopsis_path
-                      = self->state.markers_partition_synopsis_path(
+                      = self->state.transformer_partition_synopsis_path(
                         aps.uuid);
                     auto new_path = self->state.partition_path(aps.uuid);
                     auto new_synopsis_path

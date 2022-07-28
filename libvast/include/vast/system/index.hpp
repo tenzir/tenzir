@@ -158,30 +158,35 @@ struct index_state {
   [[nodiscard]] std::filesystem::path
   index_filename(const std::filesystem::path& basename = {}) const;
 
-  [[nodiscard]] std::filesystem::path
-  marker_path(const uuid& id) const;
+  /// The path to a partition transform finalize marker.
+  [[nodiscard]] std::filesystem::path marker_path(const uuid& id) const;
 
-  // Maps partitions to their expected location on the file system.
+  /// Maps partitions to their expected location on the file system.
   [[nodiscard]] std::filesystem::path partition_path(const uuid& id) const;
 
+  /// The path to which a partition transformer should write a partition with
+  /// the UUID `id`.
   [[nodiscard]] std::filesystem::path
-  markers_partition_path(const uuid& id) const;
+  transformer_partition_path(const uuid& id) const;
 
   /// Returns a format string that can be formatted with a partition id to
   /// get the output location of that partition for the partition transformer.
-  [[nodiscard]] std::string markers_partition_path_template() const;
+  [[nodiscard]] std::string transformer_partition_path_template() const;
 
-  // Maps partition synopses to their expected location on the file system.
+  /// Maps partition synopses to their expected location on the file system.
   [[nodiscard]] std::filesystem::path
   partition_synopsis_path(const uuid& id) const;
 
+  /// The path to which a partition transformer should write a synopsis
+  /// for a partition with the UUID `id`.
   [[nodiscard]] std::filesystem::path
-  markers_partition_synopsis_path(const uuid& id) const;
+  transformer_partition_synopsis_path(const uuid& id) const;
 
   /// Returns a format string that can be formatted with a partition id to
   /// get the output location of the that partition synopsis for the
   /// partition transformer.
-  [[nodiscard]] std::string markers_partition_synopsis_path_template() const;
+  [[nodiscard]] std::string
+  transformer_partition_synopsis_path_template() const;
 
   caf::error load_from_disk();
 
