@@ -8,6 +8,7 @@ from common import (
     AWS_REGION,
     COMMON_VALIDATORS,
     RESOURCEDIR,
+    clean_modules,
     conf,
     TFDIR,
     AWS_REGION_VALIDATOR,
@@ -81,6 +82,17 @@ def init_step(c, step):
     """Manually run terraform init on a specific step"""
     c.run(
         f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
+        env=conf(VALIDATORS),
+    )
+
+
+@task(help={"clean": clean_modules.__doc__})
+def init(c, clean=False):
+    """Manually run terraform init on all steps"""
+    if clean:
+        clean_modules()
+    c.run(
+        f"terragrunt run-all init --terragrunt-working-dir {TFDIR}",
         env=conf(VALIDATORS),
     )
 

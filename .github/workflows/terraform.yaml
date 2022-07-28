@@ -17,9 +17,11 @@ on: workflow_dispatch
 #   and TF_API_TOKEN with a Terraform Cloud API key (for instance a user token).
 
 # Notes:
-# - If this workflow is executed multiple times at in parallel, the Terraform
-#   state will be protected against inconsistencies by the lock provided by
-#   Terraform Cloud but the other tests will result in undefined behavior.
+# - This workflow interacts with AWS resources and cannot be executed multiple
+#   times at in parallel. The workflow level `concurrency` should prevent that
+#   from happening, and the Terraform state will be protected against
+#   inconsistencies by the lock provided by Terraform Cloud. Still, if the AWS
+#   resources are tempered with exernally, tests might fail in unexpected ways.
 # - If Terraform fails or is interrupted during deployment or destruction, the
 #   state might end up locked and subsequent runs will fail. In this case the
 #   state first needs to be unlocked, for instance from the Terraform Cloud UI.
@@ -34,19 +36,42 @@ env:
   TF_ORGANIZATION: "${{ secrets.TF_ORGANIZATION }}"
   TF_WORKSPACE_PREFIX: "${{ secrets.TF_WORKSPACE_PREFIX  || 'gh-act-' }}"
   TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
-  TF_STATE_BACKEND: "cloud"
   AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
   VASTCLOUD_NO_PTY: 1
   VASTCLOUD_TRACE: 1
 
+concurrency: vast_aws_integration_tests
+
 jobs:
+  vast_init:
+    name: VAST Terraform init with local backend
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    env:
+      TF_STATE_BACKEND: "local"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Init on empty state
+        run: ./vast-cloud init
+
+      - name: Init clean
+        run: ./vast-cloud init --clean
+
   vast_on_aws:
     name: VAST on AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: ./cloud/aws
+    env:
+      TF_STATE_BACKEND: "cloud"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -74,6 +99,13 @@ jobs:
         run: ./vast-cloud workbucket.deploy --auto-approve
 
       - name: Run test playbook
+        run: |
+          ./vast-cloud tests.run
+
+      - name: Init clean
+        run: ./vast-cloud init --clean
+
+      - name: Run test playbook after init
         run: |
           ./vast-cloud tests.run
 

@@ -6,15 +6,16 @@ import json
 import re
 import os
 import subprocess
-from boto3.session import Session
+import boto3.session
 import boto3
 import botocore.client
+import shutil
 
 
 @cache
 def s3_regions():
     """List all the regions where S3 is available using the AWS API"""
-    return Session().get_available_regions("s3")
+    return boto3.session.Session().get_available_regions("s3")
 
 
 AWS_REGION_VALIDATOR = dynaconf.Validator(
@@ -154,3 +155,20 @@ def parse_env(env: List[str]) -> Dict[str, str]:
 
     name_val_list = [split_name_val(v) for v in env]
     return {v[0]: v[1] for v in name_val_list}
+
+
+def clean_modules():
+    """Delete Terragrunt and Terragrunt cache files. This does not impact the Terraform state"""
+    for path in os.listdir(TFDIR):
+        if os.path.isdir(f"{TFDIR}/{path}"):
+            # clean terraform cache
+            tf_cache = f"{TFDIR}/{path}/.terraform"
+            if os.path.isdir(tf_cache):
+                print(f"deleting {tf_cache}")
+                shutil.rmtree(tf_cache)
+            # remove generated files
+            for sub_path in os.listdir(f"{TFDIR}/{path}"):
+                if sub_path.endswith(".generated.tf"):
+                    generated_file = f"{TFDIR}/{path}/{sub_path}"
+                    print(f"deleting {generated_file}")
+                    os.remove(generated_file)
