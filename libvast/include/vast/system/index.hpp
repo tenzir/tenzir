@@ -158,7 +158,6 @@ struct index_state {
   [[nodiscard]] std::filesystem::path
   index_filename(const std::filesystem::path& basename = {}) const;
 
-  ///
   [[nodiscard]] std::filesystem::path
   inprogress_marker_path(const uuid& id) const;
 
@@ -309,6 +308,9 @@ struct index_state {
 
   /// The directory for partition synopses.
   std::filesystem::path synopsisdir = {};
+
+  /// The directory for in-progress partition transforms.
+  std::filesystem::path inprogressdir;
 
   /// Statistics about processed data.
   index_statistics stats = {};

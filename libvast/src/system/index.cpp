@@ -116,26 +116,27 @@
 //
 // 
 //
-//   atom::apply, transform                      spawn()
-// ---------------------------> index  ---------------------------> partition_transformer
-//                                                                           |
-//                                                                           \--------------> write index/inprogress/188427dd-1577-4b2a-b99c-09e91d1c167f
-//                                                                           \--------------> write index/inprogress/188427dd-1577-4b2a-b99c-09e91d1c167f.mdx
-//                                                                           |
-//                                                                          [...] (2 files per output partition)
-//                                      vector<partition_synopsis>           |
-//                             index  <--------------------------------------/
-//                                    -----\
+//   atom::apply, transform              spawn()
+// ---------------------------> index  -----------> partition_transformer
+//                                                                    |
+//                                                                    \--------------> write index/inprogress/188427dd-1577-4b2a-b99c-09e91d1c167f
+//                                                                    \--------------> write index/inprogress/188427dd-1577-4b2a-b99c-09e91d1c167f.mdx
+//                                                                    |
+//                                                                  [...] (2 files per output partition)
+//                                      vector<partition_synopsis>    |
+//                             index  <-------------------------------/
+//                            |     | -----|
 //                                         | write index/inprogress/{transform_id}.marker
 //                                         | (contains list of input and output partitions)
-//                                    <----/                                         
-//                                    ~~~~~\
+//                            |     | <----/                                         
+//                            |     | ~~~~~|
 //                                         | atom::rename (move output partitions from index/inprogress/ to index/ )
 //                                         | update index statistics
 //                                         | atom::erase (for every input partition)
-//   atom::done                      <~~~~~/
-// <------------------------- |      |
-//                                    -----\
+//   atom::done               |     |<~~~~~/
+// <--------------------------|     |
+//                                  |------|
+//                                         |
 //                                         | erase index/inprogress/{transform_id}.marker
 //                                    <----/                                         
 //
@@ -302,7 +303,7 @@ index_state::index_filename(const std::filesystem::path& basename) const {
 
 std::filesystem::path
 index_state::inprogress_marker_path(const uuid& id) const {
-  return dir / "inprogress" / fmt::format("{:l}.marker", id);
+  return inprogressdir / fmt::format("{:l}.marker", id);
 }
 
 std::filesystem::path index_state::partition_path(const uuid& id) const {
@@ -311,11 +312,11 @@ std::filesystem::path index_state::partition_path(const uuid& id) const {
 
 std::filesystem::path
 index_state::inprogress_partition_path(const uuid& id) const {
-  return dir / "inprogress" / fmt::format("{:l}", id);
+  return inprogressdir / fmt::format("{:l}", id);
 }
 
 std::string index_state::inprogress_partition_path_template() const {
-  return (dir / "inprogress" / "{:l}").string();
+  return (inprogressdir / "{:l}").string();
 }
 
 std::filesystem::path
@@ -325,7 +326,7 @@ index_state::partition_synopsis_path(const uuid& id) const {
 
 std::filesystem::path
 index_state::inprogress_partition_synopsis_path(const uuid& id) const {
-  return dir / "inprogress" / fmt::format("{:l}.mdx", id);
+  return inprogressdir / fmt::format("{:l}.mdx", id);
 }
 
 std::string index_state::inprogress_partition_synopsis_path_template() const {
@@ -342,10 +343,9 @@ caf::error index_state::load_from_disk() {
     return caf::none;
   }
   // Start by finishing up any in-progress transforms.
-  auto transforms_dir = dir / "transforms";
-  if (std::filesystem::is_directory(transforms_dir, err)) {
+  if (std::filesystem::is_directory(inprogressdir, err)) {
     auto transforms_dir_iter
-      = std::filesystem::directory_iterator(transforms_dir, err);
+      = std::filesystem::directory_iterator(inprogressdir, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to list directory contents of "
@@ -409,7 +409,7 @@ caf::error index_state::load_from_disk() {
           partition_synopsis_path(uuid));
       }
     }
-    std::filesystem::remove_all(transforms_dir);
+    std::filesystem::remove_all(inprogressdir);
   }
   auto dir_iter = std::filesystem::directory_iterator(dir, err);
   if (err)
@@ -1116,6 +1116,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.catalog = std::move(catalog);
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
+  self->state.inprogressdir = dir / "inprogress";
   self->state.partition_capacity = partition_capacity;
   self->state.active_partition_timeout = active_partition_timeout;
   self->state.taste_partitions = taste_partitions;
