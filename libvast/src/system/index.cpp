@@ -1765,7 +1765,6 @@ index(index_actor::stateful_pointer<index_state> self,
                         marker_path, marker_chunk)
               .then(
                 [=, apsv = std::move(apsv)](atom::ok) mutable {
-                  die(":)");
                   // Move the written partitions from the `markers/`
                   // directory into the regular index directory.
                   auto renames = std::vector<
