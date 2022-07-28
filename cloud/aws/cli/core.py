@@ -4,12 +4,11 @@ import time
 import base64
 import json
 import io
-import os
-import shutil
 from common import (
     AWS_REGION,
     COMMON_VALIDATORS,
     RESOURCEDIR,
+    clean_modules,
     conf,
     TFDIR,
     AWS_REGION_VALIDATOR,
@@ -79,24 +78,21 @@ def docker_login(c):
 
 
 @task
-def clean(c):
-    """Login the Docker client to ECR"""
-    for path in os.listdir(TFDIR):
-        if os.path.isdir(f"{TFDIR}/{path}"):
-            # clean terraform cache
-            if os.path.isdir(f"{TFDIR}/{path}/.terraform"):
-                shutil.rmtree(f"{TFDIR}/{path}/.terraform")
-            # remove generated files
-            for sub_path in os.listdir(f"{TFDIR}/{path}"):
-                if sub_path.endswith(".generated.tf"):
-                    os.remove(f"{TFDIR}/{path}/{sub_path}")
-
-
-@task
 def init_step(c, step):
     """Manually run terraform init on a specific step"""
     c.run(
         f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
+        env=conf(VALIDATORS),
+    )
+
+
+@task(help={"clean": clean_modules.__doc__})
+def init(c, clean=False):
+    """Manually run terraform init on all steps"""
+    if clean:
+        clean_modules()
+    c.run(
+        f"terragrunt run-all init --terragrunt-working-dir {TFDIR}",
         env=conf(VALIDATORS),
     )
 

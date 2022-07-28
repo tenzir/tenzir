@@ -41,6 +41,22 @@ env:
   VASTCLOUD_TRACE: 1
 
 jobs:
+  vast_init:
+    name: VAST Terraform init
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Init
+        run: ./vast-cloud init
+      - name: Init clean
+        run: ./vast-cloud init --clean
+
   vast_on_aws:
     name: VAST on AWS
     runs-on: ubuntu-20.04
