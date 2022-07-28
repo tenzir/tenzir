@@ -32,6 +32,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
+#include "vast/fbs/partition_transform.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/ids.hpp"
@@ -110,6 +111,37 @@
 //                                                      atom::done            |
 //   <------------------------------------------------------------------------/
 //
+//
+// # Partition Transforms
+//
+// 
+//
+//   atom::apply, transform              spawn()
+// ---------------------------> index  -----------> partition_transformer
+//                                                                    |
+//                                                                    \--------------> write index/markers/188427dd-1577-4b2a-b99c-09e91d1c167f
+//                                                                    \--------------> write index/markers/188427dd-1577-4b2a-b99c-09e91d1c167f.mdx
+//                                                                    |
+//                                                                  [...] (2 files per output partition)
+//                                      vector<partition_synopsis>    |
+//                             index  <-------------------------------/
+//                            |     | -----|
+//                                         | write index/markers/{transform_id}.marker
+//                                         | (contains list of input and output partitions)
+//                            |     | <----/                                         
+//                            |     | ~~~~~|
+//                                         | atom::rename (move output partitions from index/markers/ to index/ )
+//                                         | update index statistics
+//                                         | atom::erase (for every input partition)
+//   atom::done               |     |<~~~~~/
+// <--------------------------|     |
+//                                  |------|
+//                                         |
+//                                         | erase index/markers/{transform_id}.marker
+//                                    <----/                                         
+//
+// On index startup in `index::load_from_disk()` we first go through the `index/markers/` directory
+// and finish up the work recorded in any existing marker files.
 //
 // # Erase
 //
@@ -201,6 +233,33 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   return index;
 }
 
+vast::chunk_ptr create_marker(const std::vector<vast::uuid>& in,
+                              const std::vector<vast::uuid>& out,
+                              keep_original_partition keep) {
+  flatbuffers::FlatBufferBuilder builder;
+  auto in_offsets
+    = flatbuffers::Offset<flatbuffers::Vector<const fbs::UUID*>>{};
+  if (keep == keep_original_partition::no) {
+    in_offsets = builder.CreateVectorOfStructs<fbs::UUID>(
+      in.size(), [&in](size_t i, fbs::UUID* vec) {
+        ::memcpy(vec->mutable_data()->Data(), in[i].begin(),
+                 vast::uuid::num_bytes);
+      });
+  }
+  auto out_offsets = builder.CreateVectorOfStructs<fbs::UUID>(
+    out.size(), [&out](size_t i, fbs::UUID* vec) {
+      ::memcpy(vec->mutable_data()->Data(), out[i].begin(),
+               vast::uuid::num_bytes);
+    });
+  auto v0_offset = vast::fbs::partition_transform::Createv0(builder, in_offsets,
+                                                            out_offsets);
+  auto transform_offset = vast::fbs::CreatePartitionTransform(
+    builder, vast::fbs::partition_transform::PartitionTransform::v0,
+    v0_offset.Union());
+  fbs::FinishPartitionTransformBuffer(builder, transform_offset);
+  return vast::chunk::make(builder.Release());
+}
+
 // -- partition_factory --------------------------------------------------------
 
 partition_factory::partition_factory(index_state& state) : state_{state} {
@@ -244,31 +303,118 @@ index_state::index_filename(const std::filesystem::path& basename) const {
   return basename / dir / "index.bin";
 }
 
-std::filesystem::path index_state::partition_path(const uuid& id) const {
-  return dir / to_string(id);
+std::filesystem::path index_state::marker_path(const uuid& id) const {
+  return markersdir / fmt::format("{:l}.marker", id);
 }
 
-std::string index_state::partition_path_template() const {
-  return (dir / "{:l}").string();
+std::filesystem::path index_state::partition_path(const uuid& id) const {
+  return dir / fmt::format("{:l}", id);
+}
+
+std::filesystem::path
+index_state::transformer_partition_path(const uuid& id) const {
+  return markersdir / fmt::format("{:l}", id);
+}
+
+std::string index_state::transformer_partition_path_template() const {
+  return (markersdir / "{:l}").string();
 }
 
 std::filesystem::path
 index_state::partition_synopsis_path(const uuid& id) const {
-  return synopsisdir / (to_string(id) + ".mdx");
+  return synopsisdir / fmt::format("{:l}.mdx", id);
 }
 
-std::string index_state::partition_synopsis_path_template() const {
-  return (dir / "{:l}.mdx").string();
+std::filesystem::path
+index_state::transformer_partition_synopsis_path(const uuid& id) const {
+  return markersdir / fmt::format("{:l}.mdx", id);
+}
+
+std::string index_state::transformer_partition_synopsis_path_template() const {
+  return (dir / "markers" / "{:l}.mdx").string();
 }
 
 caf::error index_state::load_from_disk() {
   // We dont use the filesystem actor here because this function is only
   // called once during startup, when no other actors exist yet.
   std::error_code err{};
-  const auto file_exists = std::filesystem::exists(dir, err);
+  auto const file_exists = std::filesystem::exists(dir, err);
   if (!file_exists) {
     VAST_VERBOSE("{} found no prior state, starting with a clean slate", *self);
     return caf::none;
+  }
+  // Start by finishing up any in-progress transforms.
+  if (std::filesystem::is_directory(markersdir, err)) {
+    auto transforms_dir_iter
+      = std::filesystem::directory_iterator(markersdir, err);
+    if (err)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to list directory contents of "
+                                         "{}: {}",
+                                         dir, err.message()));
+    for (auto const& entry : transforms_dir_iter) {
+      if (entry.path().extension() != ".marker")
+        continue;
+      auto chunk = vast::chunk::mmap(entry.path());
+      if (!chunk)
+        return caf::make_error(ec::filesystem_error,
+                               "failed to mmap chunk at {}: {}", entry.path(),
+                               chunk.error());
+      auto maybe_flatbuffer
+        = vast::flatbuffer<vast::fbs::PartitionTransform>::make(
+          std::move(*chunk));
+      if (!maybe_flatbuffer)
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("failed to open transform {}: {}",
+                                           entry, err.message()));
+      auto& transform_flatbuffer = *maybe_flatbuffer;
+      if (transform_flatbuffer->transform_type()
+          != vast::fbs::partition_transform::PartitionTransform::v0)
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("unknown transform version at {}",
+                                           entry));
+      auto const* transform_v0 = transform_flatbuffer->transform_as_v0();
+      for (auto const* id : *transform_v0->input_partitions()) {
+        auto uuid = vast::uuid::from_flatbuffer(*id);
+        auto path = partition_path(uuid);
+        if (std::filesystem::exists(path), err) {
+          // TODO: In combination with inhomogeneous partitions, this may result
+          // in incorrect index statistics. This depends on whether the
+          // statistics where already updated on-disk before VAST crashed or
+          // not, which is hard to figure out here.
+          auto partition = self->spawn(passive_partition, uuid, accountant,
+                                       static_cast<store_actor>(global_store),
+                                       filesystem, path);
+          self->request(partition, caf::infinite, atom::erase_v)
+            .then(
+              [uuid](atom::done) {
+                VAST_DEBUG("index erased partition {} during startup", uuid);
+              },
+              [uuid](const caf::error& e) {
+                VAST_WARN("index failed to erase partition {} during startup: "
+                          "{}",
+                          uuid, e);
+              });
+        }
+      }
+      for (auto const* id : *transform_v0->output_partitions()) {
+        const auto uuid = vast::uuid::from_flatbuffer(*id);
+        const auto from_partition = fmt::format(
+          VAST_FMT_RUNTIME(transformer_partition_path_template()), uuid);
+        const auto to_partition = partition_path(uuid);
+        const auto from_partition_synopsis = fmt::format(
+          VAST_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
+          uuid);
+        const auto to_partition_synopsis = partition_synopsis_path(uuid);
+        std::filesystem::rename(from_partition, to_partition);
+        std::filesystem::rename(from_partition_synopsis, to_partition_synopsis);
+      }
+    }
+    // TODO: This does not handle store files, which may already have been
+    // written. Since a store file may also be written before the partition
+    // itself, there does not currently seem to be a bulletproof way of handling
+    // this.
+    std::filesystem::remove_all(markersdir);
   }
   auto dir_iter = std::filesystem::directory_iterator(dir, err);
   if (err)
@@ -313,6 +459,7 @@ caf::error index_state::load_from_disk() {
   for (auto& orphan : orphans)
     std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
   // Now try to load the partitions - with a progress indicator.
+  vast::index_statistics stats;
   for (size_t idx = 0; idx < partitions.size(); ++idx) {
     auto partition_uuid = partitions[idx];
     auto part_path = partition_path(partition_uuid);
@@ -348,11 +495,13 @@ caf::error index_state::load_from_disk() {
       // TODO: There is probably a good way to rewrite this without the jump,
       // but in the meantime I defer to Knuth:
       //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-goto)
       goto retry;
     }
     if (auto error = unpack(synopsis_legacy, ps.unshared()))
       return error;
     persisted_partitions.insert(partition_uuid);
+    stats.layouts[std::string{ps->schema.name()}].count += ps->events;
     synopses->emplace(partition_uuid, std::move(ps));
   }
   // Reimport oversized partitions to rescue the data.
@@ -404,10 +553,52 @@ caf::error index_state::load_from_disk() {
     synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
       return id_and_synopsis.second->version < version::partition_version;
     });
-  if (num_outdated > 0)
+  if (num_outdated > 0) {
     VAST_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
               "rebuild' to upgrade existing partitions in the background",
               *self, num_outdated, synopses->size());
+  }
+  // Version '0' is the only partition version that admits inhomogeneous
+  // partitions.
+  const auto only_homogeneous_partitions = std::none_of(
+    synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
+      return id_and_synopsis.second->version == 0;
+    });
+  if (!only_homogeneous_partitions) {
+    // If we have potentially heterogeneous partitions, load the statistics from
+    // the `index.bin`  file because we cannot reliably rebuild it from the
+    // partition synopses alone.
+    if (auto fname = index_filename(); std::filesystem::exists(fname, err)) {
+      VAST_VERBOSE("{} loads state from {}", *self, fname);
+      auto buffer = io::read(fname);
+      if (!buffer) {
+        VAST_ERROR("{} failed to read index file: {}", *self,
+                   render(buffer.error()));
+        return buffer.error();
+      }
+      // TODO: Create a `index_ondisk_state` struct and move this part of the
+      // code into an `unpack()` function.
+      const auto* index = fbs::GetIndex(buffer->data());
+      if (index->index_type() != fbs::index::Index::v0)
+        return caf::make_error(ec::format_error, "invalid index version");
+      const auto* index_v0 = index->index_as_v0();
+      const auto* stats = index_v0->stats();
+      if (!stats)
+        return caf::make_error(ec::format_error, "no stats in persisted index "
+                                                 "state");
+      for (const auto* const stat : *stats) {
+        this->stats.layouts[stat->name()->str()]
+          = layout_statistics{stat->count()};
+      }
+    } else if (!persisted_partitions.empty()) {
+      VAST_DEBUG("{} found existing database dir {} without index statefile, "
+                 "the "
+                 "index statistics in the status output will be incorrect",
+                 *self, dir);
+    }
+  } else { // Only homogeneous partitions.
+    this->stats = std::move(stats);
+  }
   // We collect all synopses to send them in bulk, since the `await` interface
   // doesn't lend itself to a huge number of awaited messages: Only the tip of
   // the current awaited list is considered, leading to an O(n**2) worst-case
@@ -430,33 +621,7 @@ caf::error index_state::load_from_disk() {
                    *self, err);
         self->send_exit(self, std::move(err));
       });
-  if (auto fname = index_filename(); std::filesystem::exists(fname, err)) {
-    VAST_VERBOSE("{} loads state from {}", *self, fname);
-    auto buffer = io::read(fname);
-    if (!buffer) {
-      VAST_ERROR("{} failed to read index file: {}", *self,
-                 render(buffer.error()));
-      return buffer.error();
-    }
-    // TODO: Create a `index_ondisk_state` struct and move this part of the
-    // code into an `unpack()` function.
-    const auto* index = fbs::GetIndex(buffer->data());
-    if (index->index_type() != fbs::index::Index::v0)
-      return caf::make_error(ec::format_error, "invalid index version");
-    const auto* index_v0 = index->index_as_v0();
-    const auto* stats = index_v0->stats();
-    if (!stats)
-      return caf::make_error(ec::format_error, "no stats in persisted index "
-                                               "state");
-    for (const auto* const stat : *stats) {
-      this->stats.layouts[stat->name()->str()]
-        = layout_statistics{stat->count()};
-    }
-  } else if (!persisted_partitions.empty()) {
-    VAST_DEBUG("{} found existing database dir {} without index statefile, the "
-               "index statistics in the status output will be incorrect",
-               *self, dir);
-  }
+
   return caf::none;
 }
 
@@ -956,6 +1121,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.catalog = std::move(catalog);
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
+  self->state.markersdir = dir / "markers";
   self->state.partition_capacity = partition_capacity;
   self->state.active_partition_timeout = active_partition_timeout;
   self->state.taste_partitions = taste_partitions;
@@ -1509,9 +1675,10 @@ index(index_actor::stateful_pointer<index_state> self,
       if (old_partition_ids.empty())
         return std::vector<partition_info>{};
       auto store_id = std::string{self->state.store_actor_plugin->name()};
-      auto partition_path_template = self->state.partition_path_template();
+      auto partition_path_template
+        = self->state.transformer_partition_path_template();
       auto partition_synopsis_path_template
-        = self->state.partition_synopsis_path_template();
+        = self->state.transformer_partition_synopsis_path_template();
       partition_transformer_actor partition_transfomer
         = self->spawn(system::partition_transformer, store_id,
                       self->state.synopsis_opts, self->state.index_opts,
@@ -1525,7 +1692,8 @@ index(index_actor::stateful_pointer<index_state> self,
                           relational_operator::ni, data{""}};
       auto query_context
         = query_context::make_extract(partition_transfomer, match_everything);
-      query_context.id = self->state.pending_queries.create_query_id();
+      auto transform_id = self->state.pending_queries.create_query_id();
+      query_context.id = transform_id;
       query_context.priority = 100;
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
@@ -1539,10 +1707,24 @@ index(index_actor::stateful_pointer<index_state> self,
         std::vector{old_partition_ids});
       VAST_ASSERT(err == caf::none);
       self->state.schedule_lookups();
+      auto marker_path = self->state.marker_path(transform_id);
       auto rp = self->make_response_promise<std::vector<partition_info>>();
       auto deliver
-        = [self, rp, old_partition_ids](
+        = [self, rp, old_partition_ids, marker_path](
             caf::expected<std::vector<partition_info>>&& result) mutable {
+            // Erase errors don't matter too much here, leftover in-progress
+            // transforms will be cleaned up on next startup.
+            self
+              ->request(self->state.filesystem, caf::infinite, atom::erase_v,
+                        marker_path)
+              .then(
+                [](atom::done) { /* nop */
+                                 ;
+                },
+                [self, marker_path](const caf::error& e) {
+                  VAST_DEBUG("{} failed to erase in-progress marker at {}: {}",
+                             *self, marker_path, e);
+                });
             for (const auto& partition : old_partition_ids)
               self->state.partitions_in_transformation.erase(partition);
             if (result)
@@ -1554,8 +1736,8 @@ index(index_actor::stateful_pointer<index_state> self,
       // nested requests.
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
-          [self, deliver, old_partition_ids,
-           keep](std::vector<augmented_partition_synopsis>& apsv) mutable {
+          [self, deliver, old_partition_ids, keep, marker_path](
+            std::vector<augmented_partition_synopsis>& apsv) mutable {
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
             for (auto const& aps : apsv)
@@ -1579,50 +1761,97 @@ index(index_actor::stateful_pointer<index_state> self,
               self->state.stats.layouts[name].count += info.events;
               result.emplace_back(std::move(info));
             }
-
-            if (keep == keep_original_partition::yes) {
-              if (!apsv.empty())
-                self
-                  ->request(self->state.catalog, caf::infinite, atom::merge_v,
-                            std::move(apsv))
-                  .then(
-                    [self, deliver, new_partition_ids,
-                     result = std::move(result)](atom::ok) mutable {
-                      self->state.persisted_partitions.insert(
-                        new_partition_ids.begin(), new_partition_ids.end());
-                      self->state.flush_to_disk();
-                      deliver(std::move(result));
-                    },
-                    [deliver](const caf::error& e) mutable {
-                      deliver(std::move(e));
-                    });
-              else
-                deliver(result);
-            } else { // keep == keep_original_partition::no
-              self
-                ->request(self->state.catalog, caf::infinite, atom::replace_v,
-                          old_partition_ids, std::move(apsv))
-                .then(
-                  [self, deliver, old_partition_ids, new_partition_ids,
-                   result](atom::ok) mutable {
-                    self->state.persisted_partitions.insert(
-                      new_partition_ids.begin(), new_partition_ids.end());
-                    self->state.flush_to_disk();
-                    self
-                      ->request(static_cast<index_actor>(self), caf::infinite,
-                                atom::erase_v, old_partition_ids)
-                      .then(
-                        [=](atom::done) mutable {
-                          deliver(result);
-                        },
-                        [=](const caf::error& e) mutable {
-                          deliver(e);
-                        });
-                  },
-                  [deliver](const caf::error& e) mutable {
-                    deliver(e);
-                  });
-            }
+            // Record in-progress marker.
+            auto marker_chunk
+              = create_marker(old_partition_ids, new_partition_ids, keep);
+            self
+              ->request(self->state.filesystem, caf::infinite, atom::write_v,
+                        marker_path, marker_chunk)
+              .then(
+                [=, apsv = std::move(apsv)](atom::ok) mutable {
+                  // Move the written partitions from the `markers/`
+                  // directory into the regular index directory.
+                  auto renames = std::vector<
+                    std::pair<std::filesystem::path, std::filesystem::path>>{};
+                  for (auto const& aps : apsv) {
+                    auto old_path
+                      = self->state.transformer_partition_path(aps.uuid);
+                    auto old_synopsis_path
+                      = self->state.transformer_partition_synopsis_path(
+                        aps.uuid);
+                    auto new_path = self->state.partition_path(aps.uuid);
+                    auto new_synopsis_path
+                      = self->state.partition_synopsis_path(aps.uuid);
+                    renames.emplace_back(std::move(old_path),
+                                         std::move(new_path));
+                    renames.emplace_back(std::move(old_synopsis_path),
+                                         std::move(new_synopsis_path));
+                  }
+                  self
+                    ->request(self->state.filesystem, caf::infinite,
+                              atom::move_v, std::move(renames))
+                    .then(
+                      // Delete input partitions if necessary.
+                      [=, apsv = std::move(apsv)](atom::done) mutable {
+                        if (keep == keep_original_partition::yes) {
+                          if (!apsv.empty())
+                            self
+                              ->request(self->state.catalog, caf::infinite,
+                                        atom::merge_v, std::move(apsv))
+                              .then(
+                                [self, deliver, new_partition_ids,
+                                 result = std::move(result)](atom::ok) mutable {
+                                  // Update index statistics and list of
+                                  // persisted partitions.
+                                  self->state.persisted_partitions.insert(
+                                    new_partition_ids.begin(),
+                                    new_partition_ids.end());
+                                  self->state.flush_to_disk();
+                                  deliver(std::move(result));
+                                },
+                                [deliver](caf::error& e) mutable {
+                                  deliver(std::move(e));
+                                });
+                          else
+                            deliver(result);
+                        } else { // keep == keep_original_partition::no
+                          self
+                            ->request(self->state.catalog, caf::infinite,
+                                      atom::replace_v, old_partition_ids,
+                                      std::move(apsv))
+                            .then(
+                              [self, deliver, old_partition_ids,
+                               new_partition_ids, result](atom::ok) mutable {
+                                self->state.persisted_partitions.insert(
+                                  new_partition_ids.begin(),
+                                  new_partition_ids.end());
+                                self->state.flush_to_disk();
+                                self
+                                  ->request(static_cast<index_actor>(self),
+                                            caf::infinite, atom::erase_v,
+                                            old_partition_ids)
+                                  .then(
+                                    [=](atom::done) mutable {
+                                      deliver(result);
+                                    },
+                                    [=](const caf::error& e) mutable {
+                                      deliver(e);
+                                    });
+                              },
+                              [deliver](const caf::error& e) mutable {
+                                deliver(e);
+                              });
+                        }
+                      },
+                      [self](const caf::error& e) {
+                        VAST_WARN("{} failed to finalize partition transformer "
+                                  "output: {}",
+                                  *self, e);
+                      });
+                },
+                [deliver](const caf::error& e) mutable {
+                  deliver(e);
+                });
           },
           [deliver](const caf::error& e) mutable {
             deliver(e);

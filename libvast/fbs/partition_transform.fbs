@@ -1,0 +1,28 @@
+include "uuid.fbs";
+
+namespace vast.fbs.partition_transform;
+
+table v0 {
+	/// List of input partitions to be erased.
+	//  Will be null/empty if `keep_input_partitions` was set.
+	input_partitions: [UUID];
+
+	/// List of output partitions.
+	output_partitions: [UUID] (required);
+}
+
+union PartitionTransform {
+	v0: v0,
+}
+
+namespace vast.fbs;
+
+/// A marker file that signals that a partition transform is
+/// currently being finalized. See diagram in `index.cpp`
+/// for an overview of the protocol.
+table PartitionTransform {
+	transform: partition_transform.PartitionTransform;
+}
+
+root_type PartitionTransform; 
+file_identifier "vPTT";

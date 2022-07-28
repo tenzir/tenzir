@@ -36,6 +36,32 @@ inline vast::system::filesystem_actor::behavior_type memory_filesystem() {
                                fmt::format("unknown file {}", path));
       return chunk->second;
     },
+    [chunks](vast::atom::move, const std::filesystem::path& from,
+             const std::filesystem::path& to) -> caf::result<vast::atom::done> {
+      auto chunk = chunks->find(from);
+      if (chunk == chunks->end())
+        return caf::make_error(vast::ec::no_such_file,
+                               fmt::format("unknown file {}", from));
+      auto x = chunks->extract(from);
+      x.key() = to;
+      chunks->insert(std::move(x));
+      return vast::atom::done_v;
+    },
+    [chunks](
+      vast::atom::move,
+      const std::vector<std::pair<std::filesystem::path, std::filesystem::path>>&
+        files) -> caf::result<vast::atom::done> {
+      for (auto const& [from, to] : files) {
+        auto chunk = chunks->find(from);
+        if (chunk == chunks->end())
+          return caf::make_error(vast::ec::no_such_file,
+                                 fmt::format("unknown file {}", from));
+        auto x = chunks->extract(from);
+        x.key() = to;
+        chunks->insert(std::move(x));
+      }
+      return vast::atom::done_v;
+    },
     [chunks](vast::atom::mmap, const std::filesystem::path& path)
       -> caf::result<vast::chunk_ptr> {
       auto chunk = chunks->find(path);

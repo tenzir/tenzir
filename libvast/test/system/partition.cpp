@@ -38,6 +38,16 @@ system::filesystem_actor::behavior_type mock_filesystem(
     [](atom::read, const std::filesystem::path&) -> caf::result<chunk_ptr> {
       return nullptr;
     },
+    [](vast::atom::move, const std::filesystem::path&,
+       const std::filesystem::path&) -> caf::result<vast::atom::done> {
+      FAIL("not implemented");
+    },
+    [](
+      vast::atom::move,
+      const std::vector<std::pair<std::filesystem::path, std::filesystem::path>>&)
+      -> caf::result<vast::atom::done> {
+      FAIL("not implemented");
+    },
     [self](atom::mmap, const std::filesystem::path&) -> caf::result<chunk_ptr> {
       return self->make_response_promise<chunk_ptr>();
     },
