@@ -51,7 +51,7 @@ jobs:
       run:
         working-directory: ./cloud/aws
     env:
-       TF_STATE_BACKEND: "local"
+      TF_STATE_BACKEND: "local"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -71,7 +71,7 @@ jobs:
       run:
         working-directory: ./cloud/aws
     env:
-       TF_STATE_BACKEND: "cloud"
+      TF_STATE_BACKEND: "cloud"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
