@@ -17,9 +17,11 @@ on: workflow_dispatch
 #   and TF_API_TOKEN with a Terraform Cloud API key (for instance a user token).
 
 # Notes:
-# - If this workflow is executed multiple times at in parallel, the Terraform
-#   state will be protected against inconsistencies by the lock provided by
-#   Terraform Cloud but the other tests will result in undefined behavior.
+# - This workflow interacts with AWS resources and cannot be executed multiple
+#   times at in parallel. The workflow level `concurrency` should prevent that
+#   from happening, and the Terraform state will be protected against
+#   inconsistencies by the lock provided by Terraform Cloud. Still, if the AWS
+#   resources are tempered with exernally, tests might fail in unexpected ways.
 # - If Terraform fails or is interrupted during deployment or destruction, the
 #   state might end up locked and subsequent runs will fail. In this case the
 #   state first needs to be unlocked, for instance from the Terraform Cloud UI.
@@ -38,6 +40,8 @@ env:
   AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
   VASTCLOUD_NO_PTY: 1
   VASTCLOUD_TRACE: 1
+
+concurrency: vast_aws_integration_tests
 
 jobs:
   vast_init:
