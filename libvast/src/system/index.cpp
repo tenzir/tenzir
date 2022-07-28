@@ -410,6 +410,10 @@ caf::error index_state::load_from_disk() {
         std::filesystem::rename(from_partition_synopsis, to_partition_synopsis);
       }
     }
+    // TODO: This does not handle store files, which may already have been
+    // written. Since a store file may also be written before the partition
+    // itself, there does not currently seem to be a bulletproof way of handling
+    // this.
     std::filesystem::remove_all(markersdir);
   }
   auto dir_iter = std::filesystem::directory_iterator(dir, err);
