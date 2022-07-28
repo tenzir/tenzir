@@ -60,7 +60,7 @@ jobs:
 
       - name: Init on empty state
         run: ./vast-cloud init
-        
+
       - name: Init clean
         run: ./vast-cloud init --clean
 
