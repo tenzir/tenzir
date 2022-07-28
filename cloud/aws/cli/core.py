@@ -4,6 +4,8 @@ import time
 import base64
 import json
 import io
+import os
+import shutil
 from common import (
     AWS_REGION,
     COMMON_VALIDATORS,
@@ -74,6 +76,20 @@ def docker_login(c):
         f"docker login --username {user_pass[0]} --password-stdin {registry}",
         in_stream=io.StringIO(user_pass[1]),
     )
+
+
+@task
+def clean(c):
+    """Login the Docker client to ECR"""
+    for path in os.listdir(TFDIR):
+        if os.path.isdir(f"{TFDIR}/{path}"):
+            # clean terraform cache
+            if os.path.isdir(f"{TFDIR}/{path}/.terraform"):
+                shutil.rmtree(f"{TFDIR}/{path}/.terraform")
+            # remove generated files
+            for sub_path in os.listdir(f"{TFDIR}/{path}"):
+                if sub_path.endswith(".generated.tf"):
+                    os.remove(f"{TFDIR}/{path}/{sub_path}")
 
 
 @task
