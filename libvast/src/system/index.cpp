@@ -119,28 +119,28 @@
 //   atom::apply, transform              spawn()
 // ---------------------------> index  -----------> partition_transformer
 //                                                                    |
-//                                                                    \--------------> write index/inprogress/188427dd-1577-4b2a-b99c-09e91d1c167f
-//                                                                    \--------------> write index/inprogress/188427dd-1577-4b2a-b99c-09e91d1c167f.mdx
+//                                                                    \--------------> write index/markers/188427dd-1577-4b2a-b99c-09e91d1c167f
+//                                                                    \--------------> write index/markers/188427dd-1577-4b2a-b99c-09e91d1c167f.mdx
 //                                                                    |
 //                                                                  [...] (2 files per output partition)
 //                                      vector<partition_synopsis>    |
 //                             index  <-------------------------------/
 //                            |     | -----|
-//                                         | write index/inprogress/{transform_id}.marker
+//                                         | write index/markers/{transform_id}.marker
 //                                         | (contains list of input and output partitions)
 //                            |     | <----/                                         
 //                            |     | ~~~~~|
-//                                         | atom::rename (move output partitions from index/inprogress/ to index/ )
+//                                         | atom::rename (move output partitions from index/markers/ to index/ )
 //                                         | update index statistics
 //                                         | atom::erase (for every input partition)
 //   atom::done               |     |<~~~~~/
 // <--------------------------|     |
 //                                  |------|
 //                                         |
-//                                         | erase index/inprogress/{transform_id}.marker
+//                                         | erase index/markers/{transform_id}.marker
 //                                    <----/                                         
 //
-// On index startup in `index::load_from_disk()` we first go through the `index/inprogress/` directory
+// On index startup in `index::load_from_disk()` we first go through the `index/markers/` directory
 // and finish up the work recorded in any existing marker files.
 //
 // # Erase
@@ -233,7 +233,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   return index;
 }
 
-vast::chunk_ptr create_inprogress_marker(const std::vector<vast::uuid>& in,
+vast::chunk_ptr create_marker(const std::vector<vast::uuid>& in,
                                          const std::vector<vast::uuid>& out,
                                          keep_original_partition keep) {
   flatbuffers::FlatBufferBuilder builder;
@@ -302,8 +302,8 @@ index_state::index_filename(const std::filesystem::path& basename) const {
 }
 
 std::filesystem::path
-index_state::inprogress_marker_path(const uuid& id) const {
-  return inprogressdir / fmt::format("{:l}.marker", id);
+index_state::marker_path(const uuid& id) const {
+  return markersdir / fmt::format("{:l}.marker", id);
 }
 
 std::filesystem::path index_state::partition_path(const uuid& id) const {
@@ -311,12 +311,12 @@ std::filesystem::path index_state::partition_path(const uuid& id) const {
 }
 
 std::filesystem::path
-index_state::inprogress_partition_path(const uuid& id) const {
-  return inprogressdir / fmt::format("{:l}", id);
+index_state::markers_partition_path(const uuid& id) const {
+  return markersdir / fmt::format("{:l}", id);
 }
 
-std::string index_state::inprogress_partition_path_template() const {
-  return (inprogressdir / "{:l}").string();
+std::string index_state::markers_partition_path_template() const {
+  return (markersdir / "{:l}").string();
 }
 
 std::filesystem::path
@@ -325,12 +325,12 @@ index_state::partition_synopsis_path(const uuid& id) const {
 }
 
 std::filesystem::path
-index_state::inprogress_partition_synopsis_path(const uuid& id) const {
-  return inprogressdir / fmt::format("{:l}.mdx", id);
+index_state::markers_partition_synopsis_path(const uuid& id) const {
+  return markersdir / fmt::format("{:l}.mdx", id);
 }
 
-std::string index_state::inprogress_partition_synopsis_path_template() const {
-  return (dir / "inprogress" / "{:l}.mdx").string();
+std::string index_state::markers_partition_synopsis_path_template() const {
+  return (dir / "markers" / "{:l}.mdx").string();
 }
 
 caf::error index_state::load_from_disk() {
@@ -343,16 +343,16 @@ caf::error index_state::load_from_disk() {
     return caf::none;
   }
   // Start by finishing up any in-progress transforms.
-  if (std::filesystem::is_directory(inprogressdir, err)) {
+  if (std::filesystem::is_directory(markersdir, err)) {
     auto transforms_dir_iter
-      = std::filesystem::directory_iterator(inprogressdir, err);
+      = std::filesystem::directory_iterator(markersdir, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to list directory contents of "
                                          "{}: {}",
                                          dir, err.message()));
     for (auto const& entry : transforms_dir_iter) {
-      if (entry.path().extension() != "transform")
+      if (entry.path().extension() != ".marker")
         continue;
       auto chunk = vast::chunk::mmap(entry.path());
       if (!chunk)
@@ -396,20 +396,23 @@ caf::error index_state::load_from_disk() {
               });
         }
       }
+      VAST_WARN("num outputs: {}", transform_v0->output_partitions()->size());
       for (auto const* id : *transform_v0->output_partitions()) {
-        auto uuid = vast::uuid::from_flatbuffer(*id);
-        std::filesystem::rename(
-          fmt::format(VAST_FMT_RUNTIME(inprogress_partition_path_template()),
-                      uuid),
-          partition_path(uuid));
-        std::filesystem::rename(
-          fmt::format(
-            VAST_FMT_RUNTIME(inprogress_partition_synopsis_path_template()),
-            uuid),
-          partition_synopsis_path(uuid));
+        const auto uuid = vast::uuid::from_flatbuffer(*id);
+        const auto from_partition = 
+          fmt::format(VAST_FMT_RUNTIME(markers_partition_path_template()),
+                      uuid);
+        const auto to_partition = 
+          partition_path(uuid);
+        const auto from_partition_synopsis = fmt::format(
+          VAST_FMT_RUNTIME(markers_partition_synopsis_path_template()),
+          uuid);
+        const auto to_partition_synopsis = partition_synopsis_path(uuid);
+        std::filesystem::rename(from_partition, to_partition);
+        std::filesystem::rename(from_partition_synopsis, to_partition_synopsis);
       }
     }
-    std::filesystem::remove_all(inprogressdir);
+    std::filesystem::remove_all(markersdir);
   }
   auto dir_iter = std::filesystem::directory_iterator(dir, err);
   if (err)
@@ -1116,7 +1119,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.catalog = std::move(catalog);
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
-  self->state.inprogressdir = dir / "inprogress";
+  self->state.markersdir = dir / "markers";
   self->state.partition_capacity = partition_capacity;
   self->state.active_partition_timeout = active_partition_timeout;
   self->state.taste_partitions = taste_partitions;
@@ -1671,9 +1674,9 @@ index(index_actor::stateful_pointer<index_state> self,
         return std::vector<partition_info>{};
       auto store_id = std::string{self->state.store_actor_plugin->name()};
       auto partition_path_template
-        = self->state.inprogress_partition_path_template();
+        = self->state.markers_partition_path_template();
       auto partition_synopsis_path_template
-        = self->state.inprogress_partition_synopsis_path_template();
+        = self->state.markers_partition_synopsis_path_template();
       partition_transformer_actor partition_transfomer
         = self->spawn(system::partition_transformer, store_id,
                       self->state.synopsis_opts, self->state.index_opts,
@@ -1702,7 +1705,7 @@ index(index_actor::stateful_pointer<index_state> self,
         std::vector{old_partition_ids});
       VAST_ASSERT(err == caf::none);
       self->state.schedule_lookups();
-      auto marker_path = self->state.inprogress_marker_path(transform_id);
+      auto marker_path = self->state.marker_path(transform_id);
       auto rp = self->make_response_promise<std::vector<partition_info>>();
       auto deliver
         = [self, rp, old_partition_ids, marker_path](
@@ -1757,22 +1760,23 @@ index(index_actor::stateful_pointer<index_state> self,
               result.emplace_back(std::move(info));
             }
             // Record in-progress marker.
-            auto marker_chunk = create_inprogress_marker(
+            auto marker_chunk = create_marker(
               old_partition_ids, new_partition_ids, keep);
             self
               ->request(self->state.filesystem, caf::infinite, atom::write_v,
                         marker_path, marker_chunk)
               .then(
                 [=, apsv = std::move(apsv)](atom::ok) mutable {
-                  // Move the written partitions from the `inprogress/`
+                  die(":)");
+                  // Move the written partitions from the `markers/`
                   // directory into the regular index directory.
                   auto renames = std::vector<
                     std::pair<std::filesystem::path, std::filesystem::path>>{};
                   for (auto aps : apsv) {
                     auto old_path
-                      = self->state.inprogress_partition_path(aps.uuid);
+                      = self->state.markers_partition_path(aps.uuid);
                     auto old_synopsis_path
-                      = self->state.inprogress_partition_synopsis_path(
+                      = self->state.markers_partition_synopsis_path(
                         aps.uuid);
                     auto new_path = self->state.partition_path(aps.uuid);
                     auto new_synopsis_path
