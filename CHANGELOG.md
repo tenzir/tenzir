@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.2.0-rc1][v2.2.0-rc1]
+## [v2.2.0-rc2][v2.2.0-rc2]
 
 ### Changes
 
@@ -42,6 +42,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The new `extend` pipeline operator allows for adding new fields with fixed values to data.
   [#2423](https://github.com/tenzir/vast/pull/2423)
 
+- The cloud execution commands ('run-lambda' and 'execute-command') now accept scripts from file-like handles. To improve the usability of this feature, the whole host file system is now mounted into the CLI container.
+  [#2446](https://github.com/tenzir/vast/pull/2446)
+
 ### Bug Fixes
 
 - VAST will export `real` values in JSON consistently with at least one decimal place.
@@ -52,6 +55,15 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The JSON export with `--omit-nulls` now handles nested records whose first field is `null` correctly instead of dropping them entirely.
   [#2447](https://github.com/tenzir/vast/pull/2447)
+
+- Fixed a race condition when VAST crashed while applying a partition transform, leading to data duplication.
+  [#2465](https://github.com/tenzir/vast/pull/2465)
+
+- The rebuild command no longer crashes on failure, and instead displays the error it encountered.
+  [#2466](https://github.com/tenzir/vast/pull/2466)
+
+- Missing arguments for the `--plugins`, `--plugin-dirs`, and `--schema-dirs` command line options no longer cause VAST to sometimes crash.
+  [#2470](https://github.com/tenzir/vast/pull/2470)
 
 ## [v2.1.0][v2.1.0]
 
@@ -1855,7 +1867,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.2.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.2.0-rc1
+[v2.2.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.2.0-rc2
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2
