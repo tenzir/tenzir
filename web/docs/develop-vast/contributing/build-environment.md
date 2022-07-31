@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+---
+
 # Build Environment
 
 ## Use Nix as Reproducible Development Environment

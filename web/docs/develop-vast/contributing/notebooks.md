@@ -1,3 +1,7 @@
+---
+sidebar_position: 6
+---
+
 # Notebooks
 
 We use [Jupyter notebooks](https://jupyter.org/) as vehicle for self-contained
