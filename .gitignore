@@ -45,9 +45,14 @@ __pycache__/
 /web/.env.development.local
 /web/.env.test.local
 /web/.env.production.local
+/web/.github
 /web/npm-debug.log*
 /web/yarn-debug.log*
 /web/yarn-error.log*
 /web/src/pages/changelog.md
+/web/docs/develop-vast/contributing/code-of-conduct.md
+/web/docs/develop-vast/contributing/coding-style.md
+/web/docs/develop-vast/contributing/workflow.md
+/web/docs/develop-vast/contributing/security.md
 /web/docs/try-vast/*.md
 /web/docs/try-vast/*_files
