@@ -507,7 +507,8 @@ TEST_DISABLED(modifier test rule) {
   auto expr = to_rule(modifier_test);
   auto field = R"__(field|re: '.*foobar.*')__"s;
   auto encoded = R"__(encoded|wide|base64: 'This string is Base64 encoded')__"s;
-  auto obfuscated = R"__(obfuscated|base64offset|contains: ['http://', 'https://'])__"s;
+  auto obfuscated
+    = R"__(obfuscated|base64offset|contains: ['http://', 'https://'])__"s;
   auto allmatch = R"__(allmatch|contains|all: [foo, bar, bla])__"s;
   auto end = R"__(end|endswith: test)__"s;
   auto start = R"__(start|startswith: test)__"s;
