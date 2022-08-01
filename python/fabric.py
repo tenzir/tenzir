@@ -4,7 +4,7 @@ from typing import Any
 from backbones.backbone import Backbone
 
 
-class VAST:
+class Fabric:
     def __init__(self, settings: Dynaconf, backbone: Backbone):
         self.apps = []
         self.settings = settings

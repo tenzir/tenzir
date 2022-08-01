@@ -1,16 +1,15 @@
-import asyncio
-from fabric import Fabric, Message
+from fabric import Fabric
 
 
 async def test_callback(msg):
-    print("test_callback got msg:", msg.to_bytes().decode())
+    print("test_callback got msg:", msg)
 
 
-async def start(vast: Fabric):
+async def start(fabric: Fabric):
     print("Test App started")
-    await vast.subscribe("welcoming-topic", test_callback)
-    await vast.subscribe("farewelling-topic", test_callback)
-    await vast.publish("welcoming-topic", Message.from_bytes(b"hello"))
-    await vast.publish("welcoming-topic", Message.from_bytes(b"world"))
-    await vast.publish("farewelling-topic", Message.from_bytes(b"goodbye"))
-    await vast.publish("farewelling-topic", Message.from_bytes(b"buddy"))
+    await fabric.subscribe("welcoming-topic", test_callback)
+    await fabric.subscribe("farewelling-topic", test_callback)
+    await fabric.publish("welcoming-topic", "hello")
+    await fabric.publish("welcoming-topic", "world")
+    await fabric.publish("farewelling-topic", "goodbye")
+    await fabric.publish("farewelling-topic", "buddy")

@@ -1,4 +1,4 @@
-import fabric
+from fabric import Fabric
 import asyncio
 import pyvast
 import logging
@@ -14,7 +14,7 @@ logger = logging.getLogger("db-app")
 
 
 class DB:
-    def __init__(self, fabric):
+    def __init__(self, fabric: Fabric):
         self.db = pyvast.VAST(container={"runtime": "docker", "name": "vast-pro"})
         self.matcher_name = "vast-app-matcher"
         self.fabric = fabric

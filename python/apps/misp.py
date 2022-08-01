@@ -1,4 +1,4 @@
-from vast import VAST
+from fabric import Fabric
 import pymisp
 import zmq
 import zmq.asyncio
@@ -9,9 +9,9 @@ from typing import Any
 
 # The MISP app.
 class MISP:
-    def __init__(self, config: dict, vast: VAST):
+    def __init__(self, config: dict, fabric: Fabric):
         self.config = config
-        self.vast = vast
+        self.fabric = fabric
         self.logger = logging.getLogger("MISP")
         self.logger.info("MISP App started")
         self.misp = pymisp.ExpandedPyMISP(
@@ -22,7 +22,7 @@ class MISP:
 
     async def run(self):
         # Setup subscriptions.
-        await self.vast.subscribe("vast.sighting", self._on_sighting)
+        await self.fabric.subscribe("vast.sighting", self._on_sighting)
         # Hook into event feed via 0mq.
         socket = zmq.asyncio.Context().socket(zmq.SUB)
         zmq_host = self.config['zmq.host']
@@ -48,7 +48,7 @@ class MISP:
                 try:
                     parser.parse_misp_event(event)
                     self.logger.info(parser.bundle.serialize(pretty=True))
-                    await self.vast.publish("stix.bundle", parser.bundle)
+                    await self.fabric.publish("stix.bundle", parser.bundle)
                 except Exception as e:
                     self.logger.error(f"failed to parse MISP event as STIX: {e}")
                     continue
@@ -66,7 +66,7 @@ class MISP:
         #    self.logger.info(f"reported sighting: {response}")
 
 
-async def start(config: dict, vast: VAST):
+async def start(config: dict, fabric: Fabric):
     # Should by DynaConf or so eventually...
     config = {
         "api.host": "http://localhost:5000",
@@ -74,5 +74,5 @@ async def start(config: dict, vast: VAST):
         "zmq.host": "localhost",
         "zmq.port": 50000
         }
-    misp = MISP(config, vast)
+    misp = MISP(config, fabric)
     await misp.run()

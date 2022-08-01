@@ -5,17 +5,17 @@ import logging
 from signal import SIGINT, SIGTERM
 import sys
 
-from vast import VAST
+from fabric import Fabric
 import apps.misp
 import backbones.inmemory
 
 async def main(config):
-    # Spawn VAST.
+    # Spawn the fabric.
     backbone = backbones.inmemory.InMemory()
-    vast = VAST(config, backbone)
+    fabric = Fabric(config, backbone)
     # Spawn plugins.
     try:
-        await asyncio.gather(apps.misp.start(config, vast))
+        await asyncio.gather(apps.misp.start(config, fabric))
     except asyncio.CancelledError:
         pass # TODO: log
 
