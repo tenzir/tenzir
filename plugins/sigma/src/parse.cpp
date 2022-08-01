@@ -298,6 +298,23 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "utf16le" || *i == "wide") {
           return caf::make_error(ec::unimplemented, //
                                  "utf16le/wide not yet implemented");
+          // FIXME: the attempt below doesn't work yet, but gives an idea on
+          // what needs to be done algorithmically.
+          auto convert = [](const data& x) -> caf::expected<data> {
+            const auto* str = caf::get_if<std::string>(&x);
+            if (!str)
+              return caf::make_error(ec::type_clash, //
+                                     "utf16le/wide only works with strings");
+            // Hand-roll conversion.
+            std::string result;
+            result.reserve(str->size() * 2);
+            for (auto c : *str) {
+              result.push_back(c);
+              result.push_back(0x00);
+            }
+            return result;
+          };
+          transforms.emplace_back(convert);
         } else if (*i == "utf16be") {
           return caf::make_error(ec::unimplemented, //
                                  "utf16be not yet implemented");

@@ -285,6 +285,17 @@ TEST(modifier - cidr) {
   CHECK_EQUAL(search_id, expected);
 }
 
+// FIXME: The expression parser doesn't handle escaped strings properly, so we
+// can't include NUL bytes in a query string yet. Once this is possible.
+TEST_DISABLED(modifier - wide) {
+  auto yaml = R"__(
+    foo|wide: abc
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr(R"__(foo == "a\x00b\x00c\x00")__"s);
+  CHECK_EQUAL(search_id, expected);
+}
+
 TEST(search id selection - exact match) {
   auto yaml = R"__(
     detection:
@@ -467,5 +478,45 @@ TEST(real example) {
   expected.emplace_back(to_expr(selection3));
   expected.emplace_back(to_expr(selection4));
   expected.emplace_back(tail);
+  CHECK_EQUAL(expr, expression{expected});
+}
+
+auto modifier_test = R"__(
+ title: Modifier test rule
+ logsource:
+     product: windows
+     service: security
+ detection:
+     selection:
+         field|re: '.*foobar.*'
+         encoded|wide|base64: 'This string is Base64 encoded'
+         obfuscated|base64offset|contains:
+             - 'http://'
+             - 'https://'
+         allmatch|contains|all:
+             - foo
+             - bar
+             - bla
+         end|endswith: test
+         start|startswith: test
+     condition: selection
+)__";
+
+// TODO: For this to run through we need to implement the utf* modifiers.
+TEST_DISABLED(modifier test rule) {
+  auto expr = to_rule(modifier_test);
+  auto field = R"__(field|re: '.*foobar.*')__"s;
+  auto encoded = R"__(encoded|wide|base64: 'This string is Base64 encoded')__"s;
+  auto obfuscated = R"__(obfuscated|base64offset|contains: ['http://', 'https://'])__"s;
+  auto allmatch = R"__(allmatch|contains|all: [foo, bar, bla])__"s;
+  auto end = R"__(end|endswith: test)__"s;
+  auto start = R"__(start|startswith: test)__"s;
+  conjunction expected;
+  expected.emplace_back(to_expr(field));
+  expected.emplace_back(to_expr(encoded));
+  expected.emplace_back(to_expr(obfuscated));
+  expected.emplace_back(to_expr(allmatch));
+  expected.emplace_back(to_expr(end));
+  expected.emplace_back(to_expr(start));
   CHECK_EQUAL(expr, expression{expected});
 }
