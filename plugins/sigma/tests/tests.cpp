@@ -253,15 +253,26 @@ TEST(modifier - double base64) {
 // allmatch.keyword:*bar* AND allmatch.keyword:*bla* AND end.keyword:*test AND
 // start.keyword:test*)
 //
-// Note the following sub-expression: *aHR0cDovL* OR *h0dHA6Ly* OR *odHRwOi8v*
-//
-// This is what we are testing here.
+// Note the following sub-expression: *aHR0cDovL* OR *h0dHA6Ly* OR *odHRwOi8v*.
+// This is a combination of 'base64offset' and 'contains'. Without the contains
+// modifier, it would look like this: aHR0cDovL OR h0dHA6Ly OR odHRwOi8v.
 TEST(modifier - base64offset) {
   auto yaml = R"__(
     foo|base64offset: "http://"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expr = R"__(foo in ["aHR0cDovL", "h0dHA6Ly", "odHRwOi8v"])__"s;
+  auto expr
+    = R"__(foo == "aHR0cDovL" || foo == "h0dHA6Ly" || foo == "odHRwOi8v")__"s;
+  CHECK_EQUAL(search_id, to_expr(expr));
+}
+
+TEST(modifier - base64offset and contains) {
+  auto yaml = R"__(
+    foo|base64offset|contains: "http://"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expr
+    = R"__(foo ni "aHR0cDovL" || foo ni "h0dHA6Ly" || foo ni "odHRwOi8v")__"s;
   CHECK_EQUAL(search_id, to_expr(expr));
 }
 

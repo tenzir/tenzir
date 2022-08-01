@@ -248,17 +248,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       auto extractor = field_extractor{std::string{keys[0]}};
       auto op = relational_operator::equal;
       auto all = false;
-      // Predicate factory that references the extractor.
-      auto make_predicate = [&](const data& value) {
-        if (auto str = caf::get_if<std::string>(&value))
-          if (!str->empty())
-            if (auto pat = make_pattern(*str))
-              return predicate{extractor, relational_operator::match,
-                               data{std::move(*pat)}};
-        // By default, we take the operator based on the provided modifiers.
-        return predicate{extractor, op, value};
-      };
-      // Value transformation; identity by default.
+      // Value transformation; identity (= no modifiers) by default.
       std::vector<std::function<caf::expected<data>(const data&)>> transforms;
       // Parse modifiers.
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
@@ -288,7 +278,6 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           };
           transforms.emplace_back(encode);
         } else if (*i == "base64offset") {
-          op = relational_operator::in;
           auto encode = [](const data& x) -> caf::expected<data> {
             const auto* str = caf::get_if<std::string>(&x);
             if (!str)
@@ -346,7 +335,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         }
       }
       // Helper to apply all modifiers over a value.
-      auto transform = [&](const data& x) -> caf::expected<data> {
+      auto modify = [&](const data& x) -> caf::expected<data> {
         auto result = x;
         for (auto f : transforms)
           if (auto x = f(result))
@@ -355,18 +344,42 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             return x.error();
         return result;
       };
+      // Helper to create an expression from a (transformed) value.
+      auto make_predicate_expr = [&](const data& value) -> expression {
+        // Convert strings to patterns if wildcarding is present.
+        if (auto str = caf::get_if<std::string>(&value))
+          if (!str->empty())
+            if (auto pat = make_pattern(*str))
+              return predicate{extractor, relational_operator::match,
+                               data{std::move(*pat)}};
+        // The modifier 'base64offset' is unique in that it creates
+        // multiple values represented as list. If followed by 'contains', then
+        // we have substring search on each value; otherwise we can use equality
+        // comparison.
+        if (auto xs = caf::get_if<list>(&value)) {
+          // Only 'base64offset' creates a list value. Lists are otherwise not
+          // allowed as values.
+          VAST_ASSERT(xs->size() == 3);
+          disjunction result;
+          for (const auto& x : *xs)
+            result.emplace_back(predicate{extractor, op, x});
+          return result;
+        }
+        // By default, we take the (potentially modified) operator.
+        return predicate{extractor, op, value};
+      };
       // Parse RHS.
       if (caf::holds_alternative<record>(rhs))
-        return caf::make_error(ec::type_clash, "nested maps not allowed");
+        return caf::make_error(ec::type_clash, "nested records not allowed");
       if (auto values = caf::get_if<list>(&rhs)) {
         std::vector<expression> connective;
-        for (auto& value : *values) {
+        for (const auto& value : *values) {
           if (caf::holds_alternative<list>(value))
             return caf::make_error(ec::type_clash, "nested lists disallowed");
           if (caf::holds_alternative<record>(value))
             return caf::make_error(ec::type_clash, "nested records disallowed");
-          if (auto x = transform(value))
-            connective.emplace_back(make_predicate(*x));
+          if (auto x = modify(value))
+            connective.emplace_back(make_predicate_expr(*x));
           else
             return x.error();
         }
@@ -374,8 +387,8 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                         : expression{disjunction(std::move(connective))};
         result.emplace_back(hoist(std::move(expr)));
       } else {
-        if (auto x = transform(rhs))
-          result.emplace_back(make_predicate(*x));
+        if (auto x = modify(rhs))
+          result.emplace_back(make_predicate_expr(*x));
         else
           return x.error();
       }
