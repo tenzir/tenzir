@@ -1,33 +1,27 @@
 ---
 draft: true
-title: VAST v2.3
-description: VAST v2.3 - Sigma modifiers
+title: Richer Typing in Sigma
+description: Towards Native Sigma Rule Execution
 authors: mavam
-tags: [release, sigma]
+tags: [sigma, regex, taxonomies]
 ---
-
-[VAST v2.3][github-vast-release] is out!
-
-[github-vast-release]: https://github.com/tenzir/vast/releases/tag/v2.3.0
-
-<!--truncate-->
-
-## More Sigma rule modifiers
 
 VAST's [Sigma frontend](/docs/understand-vast/query-language/frontends/sigma)
 now supports more modifiers. In the Sigma language, modifiers transform
 predicates in various ways, e.g., to apply a function over a value or to change
-the operator of a predicate. Modifiers are basically the customization point to
-enhance expressiveness of query operations.
+the operator of a predicate. Modifiers are the customization point to enhance
+expressiveness of query operations.
 
 The new [pySigma][pysigma] effort, which will eventually replace the
 now-considered-legacy [sigma][sigma] project, comes with new modifiers as well.
-Most notably, the `lt`, `lte`, `gt`, `gte` modifiers provide comparisons over
-value domains with a total ordering, e.g., numbers: `x >= 42`. In addition, the
-`cidr` modifier interprets a value as subnet, e.g., `10.0.0.0/8`. Richer typing!
+Most notably, `lt`, `lte`, `gt`, `gte` provide comparisons over value domains
+with a total ordering, e.g., numbers: `x >= 42`. In addition, the `cidr`
+modifier interprets a value as subnet, e.g., `10.0.0.0/8`. Richer typing!
 
 [sigma]: https://github.com/SigmaHQ/sigma
 [pysigma]: https://github.com/SigmaHQ/pySigma
+
+<!--truncate-->
 
 Here's a real-world example of some modifiers:
 
@@ -81,17 +75,15 @@ example:
    search natively transform the value instead by wrapping it into `*`
    wildcards, e.g., translate `"foo"` into `"*foo*"`.
 
-[^1]: What happens under the hood is a padding a string with spaces. Anton
-Kutepov's an [illustrative article][sigma-article] on how this works.
+[^1]: What happens under the hood is a padding a string with spaces. [Anton
+Kutepov's article][sigma-article] illustrates how this works.
 
 [sigma-article]: https://tech-en.netlify.app/articles/en513032/index.html
 
-### Current status of modifier support
-
 Our ultimate goal is to support a fully function executional platform for Sigma
-rules. VAST is not quite there yet. The table below shows the current
-implementation status of modifiers, where ✅ means implemented, 🚧 not yet
-implemented but possible, and ❌ not yet supported by VAST's execution engine:
+rules. The table below shows the current implementation status of modifiers,
+where ✅ means implemented, 🚧 not yet implemented but possible, and ❌ not yet
+supported by VAST's execution engine:
 
 |Modifier|Use|sigmac|VAST|
 |--------|---|:----:|:--:|
@@ -111,3 +103,33 @@ implemented but possible, and ❌ not yet supported by VAST's execution engine:
 |`gt`|compare greater than (`>`) the value|❌|✅
 |`gte`|compare greater than or equal to (`>=`) the value|❌|✅
 |`expand`|expand value to placeholder strings, e.g., `%something%`|❌|❌
+
+Aside from completing the implementation of the missing modifiers, there are two
+major missing pieces for Sigma rule execution to become viable in VAST:
+
+1. **Regular expressions**: the complexity of regular expression execution is
+   manageable, given that we would call into the corresponding [Arrow Compute
+   function][arrow-containment-tests] for the heavy lifting. The number one
+   challenge will be increasing the scanning throughput, because the sketch data
+   structures in the catalog cannot handle pattern types. If the sketches cannot
+   identify a candidate set, most of the data needs to be scanned, making the
+   system I/O-bound. That said, scanning doesn't have to be slow, as Humio
+   demonstrates impressively.
+
+   To alleviate the effects of full scans, it's possible to winnow down the
+   candidate set of partitions by executing rules periodically. When making the
+   windows asymptotically small, this yields effectively streaming execution,
+   which VAST already supports in the form of "live queries".
+
+2. **Field mappings**: while Sigma rules execute already syntactically, VAST
+   currently doesn't touch the field names in the rules and interprets them as
+   [field extractors][field extractors]. On the flip side, this means you can
+   already write generic Sigma rules using [concepts][concepts].
+
+[arrow-containment-tests]: https://arrow.apache.org/docs/cpp/compute.html#containment-tests
+[field-extractors]: https://vast.io/docs/understand-vast/query-language/expressions#field-extractor
+[concepts]: https://vast.io/docs/understand-vast/data-model/taxonomies#concepts
+
+Please don't hesitate to swing by our [Community Slack](http://slack.tenzir.com)
+and talk with us if you are passionate about Sigma and other topics around open
+detection and response.
