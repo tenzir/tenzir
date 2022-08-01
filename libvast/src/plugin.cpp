@@ -205,11 +205,11 @@ load(const std::vector<std::string>& bundled_plugins,
   if (paths_or_names.empty() && bundled_plugins.empty())
     return loaded_plugin_paths;
   const auto plugin_dirs = get_plugin_dirs(cfg);
-  // Silently ignore native plugins if they're in the list of plugins.
-  paths_or_names = remove_native_plugins(std::move(paths_or_names));
   // Resolve the 'bundled' and 'all' identifiers.
   paths_or_names = expand_special_identifiers(std::move(paths_or_names),
                                               bundled_plugins, plugin_dirs);
+  // Silently ignore native plugins if they're in the list of plugins.
+  paths_or_names = remove_native_plugins(std::move(paths_or_names));
   // Disable static plugins that were not enabled, and remove the names of
   // static plugins from the list of enabled plugins.
   paths_or_names = unload_disabled_static_plugins(std::move(paths_or_names));
