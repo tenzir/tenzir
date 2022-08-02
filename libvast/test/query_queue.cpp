@@ -100,7 +100,7 @@ TEST(insert violating precondidtions) {
 TEST(mark as erased) {
   query_queue q;
   const auto candidates = cands(1);
-  make_insert(q, std::vector{candidates}, candidates.size());
+  make_insert(q, std::vector<uuid>{candidates}, candidates.size());
   CHECK_EQUAL(q.queries().size(), 1u);
   q.mark_partition_erased(candidates.front());
   const auto out = unbox(q.next());
