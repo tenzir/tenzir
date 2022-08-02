@@ -26,7 +26,6 @@ $(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
 
 .github:
 	git clone https://github.com/tenzir/.github.git
-	cd .github && git pull
 
 dot-github: \
   $(DOT_GITHUB_OUTPUT_DIR)/code-of-conduct.md \
