@@ -91,8 +91,9 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
       inactive_partitions.erase(it);
       continue;
     }
-    partitions.push_back(query_queue::entry{
-      cand, query_state_it->second.query_context.priority, std::vector{qid}});
+    partitions.push_back(
+      query_queue::entry{cand, query_state_it->second.query_context.priority,
+                         std::vector{qid}, false});
   }
   // TODO: Insertion sort should be better.
   std::sort(partitions.begin(), partitions.end());
@@ -168,8 +169,8 @@ std::optional<query_queue::entry> query_queue::next() {
   while (!partitions.empty()) {
     auto result = std::move(partitions.back());
     partitions.pop_back();
-    entry active = {result.partition, 0ull, {}};
-    entry inactive = {result.partition, 0ull, {}};
+    auto active = entry{result.partition, 0ull, {}, result.erased};
+    auto inactive = entry{result.partition, 0ull, {}, result.erased};
     std::partition_copy(
       std::make_move_iterator(result.queries.begin()),
       std::make_move_iterator(result.queries.end()),

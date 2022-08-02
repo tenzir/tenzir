@@ -50,6 +50,14 @@ public:
   /// The entry type for the `partitions` lists. Maps a partition ID
   /// to a list of query IDs.
   struct entry {
+    entry(uuid partition_id, uint64_t priority, std::vector<uuid> queries,
+          bool erased)
+      : partition{std::move(partition_id)},
+        priority{priority},
+        queries{std::move(queries)},
+        erased{erased} {
+    }
+
     uuid partition;
     uint64_t priority = 0;
     std::vector<uuid> queries;
