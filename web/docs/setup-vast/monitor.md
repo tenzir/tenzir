@@ -124,6 +124,7 @@ The following list describes all available metrics keys:
 |`scheduler.backlog.custom`|The number of custom priority queries in the backlog.|#queries||
 |`scheduler.backlog.low`|The number of low priority queries in the backlog.|#queries||
 |`scheduler.backlog.normal`|The number of normal priority queries in the backlog.|#queries||
+|`scheduler.backlog.high`|The number of high priority queries in the backlog.|#queries||
 |`scheduler.partition.current-lookups`|The number of partition lookups that are currently running.|#workers||
 |`scheduler.partition.lookups`|Query lookups executed on individual partitions.|#partition-lookups||
 |`scheduler.partition.materializations`|Partitions loaded from disk.|#partitions||
