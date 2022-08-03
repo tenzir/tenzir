@@ -1,48 +1,68 @@
-from dynaconf import Dynaconf
 import argparse
 import asyncio
-import logging
-from signal import SIGINT, SIGTERM
-import sys
+from signal import SIGINT, SIGTERM, SIGHUP
+
+from dynaconf import Dynaconf
 
 from fabric import Fabric
 import apps.misp
 import backbones.inmemory
+import utils.logger
 
-async def main(config):
-    # Spawn the fabric.
-    backbone = backbones.inmemory.InMemory()
-    fabric = Fabric(config, backbone)
-    # Spawn plugins.
-    try:
-        await asyncio.gather(apps.misp.start(config, fabric))
-    except asyncio.CancelledError:
-        pass # TODO: log
+logger = utils.logger.create()
 
-if __name__ == "__main__":
-    # Parse config file
-    settings_files = ["config.yaml", "config.yml"]
+async def shutdown(loop, signal=None):
+    """Cleanup tasks tied to the service's shutdown."""
+    if signal:
+        logger.info(f"received exit signal {signal.name}")
+    tasks = [t for t in asyncio.all_tasks() if t is not
+             asyncio.current_task()]
+    [task.cancel() for task in tasks]
+    logger.debug(f"cancelling {len(tasks)} outstanding tasks")
+    await asyncio.gather(*tasks, return_exceptions=True)
+    loop.stop()
+
+def handle_exception(loop, context):
+    # context["message"] will always be there, but context["exception"] may not
+    msg = context.get("exception", context["message"])
+    logger.error(f"caught exception: {msg}")
+    logger.info("shutting down...")
+    asyncio.create_task(shutdown(loop))
+
+def main():
+    # Parse config file(s).
+    configs = ["config.yaml", "config.yml"]
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-c", help="path to a configuration file")
     args = parser.parse_args()
     if args.config:
-        if not args.config.endswith("yaml") and not args.config.endswith("yml"):
-            sys.exit("please provide a `yaml` or `yml` configuration file.")
-        settings_files = [args.config]
+        configs = [args.config]
     config = Dynaconf(
-        settings_files=settings_files,
+        settings_files=configs,
         load_dotenv=True,
         envvar_prefix="VAST",
     )
     # Setup logger.
-    # TODO: do nicely with colors.
-    logging.basicConfig(level = logging.DEBUG)
+    utils.logger.configure(config.logging, logger)
     # Configure event loop to exit gracefully on CTRL+C.
     loop = asyncio.get_event_loop()
-    main_task = asyncio.ensure_future(main(config))
-    for signal in [SIGINT, SIGTERM]:
-        loop.add_signal_handler(signal, main_task.cancel)
+    logger.debug("registering signal handler for SIGINT and SIGTERM")
+    stop = lambda: asyncio.create_task(shutdown(loop, signal))
+    for signal in [SIGINT, SIGTERM, SIGHUP]:
+        loop.add_signal_handler(signal, stop)
+    loop.set_exception_handler(handle_exception)
     try:
-        loop.run_until_complete(main_task)
+        # Spawn the fabric.
+        logger.debug("initializing fabric")
+        backbone = backbones.inmemory.InMemory()
+        fabric = Fabric(config, backbone)
+        # Spawn apps.
+        logger.debug("spawning apps")
+        loop.create_task(apps.misp.start(config, fabric))
+        loop.run_forever()
     finally:
         loop.close()
+        logger.info("successfully shutdown VAST")
+
+if __name__ == "__main__":
+    main()

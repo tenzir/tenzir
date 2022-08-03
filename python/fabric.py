@@ -6,7 +6,6 @@ from backbones.backbone import Backbone
 
 class Fabric:
     def __init__(self, settings: Dynaconf, backbone: Backbone):
-        self.apps = []
         self.settings = settings
         self.backbone = backbone
 

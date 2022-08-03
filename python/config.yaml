@@ -1,0 +1,15 @@
+logging:
+  console: true
+  console_verbosity: DEBUG
+  file: false
+  file_verbosity: DEBUG
+  filename: vast.log
+
+apps:
+  misp:
+    api:
+      host: http://localhost:5000
+      key: demodemodemodemodemodemodemodemodemodemo
+    zmq:
+      host: localhost
+      port: 50000
