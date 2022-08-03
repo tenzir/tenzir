@@ -254,8 +254,8 @@ system::store_builder_actor::behavior_type default_active_store(
             .then(
               [self, stream_state](atom::ok) {
                 static_cast<void>(stream_state);
-                VAST_INFO("{} ({}) persisted itself to {}", *self,
-                          self->state.store_type, self->state.path);
+                VAST_DEBUG("{} ({}) persisted itself to {}", *self,
+                           self->state.store_type, self->state.path);
               },
               [self, stream_state](caf::error& error) {
                 static_cast<void>(stream_state);
