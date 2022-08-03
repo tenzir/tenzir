@@ -35,7 +35,7 @@ dot-github: \
 
 $(DOT_GITHUB_OUTPUT_DIR)/code-of-conduct.md: .github
 	@echo "---\nsidebar_position: 0\n---\n" > $@
-	@cat .github/$(@F) >> $@
+	@cat .github/CODE-OF-CONDUCT.md >> $@
 
 $(DOT_GITHUB_OUTPUT_DIR)/coding-style.md: .github
 	@echo "---\nsidebar_position: 2\n---\n" > $@
@@ -43,7 +43,7 @@ $(DOT_GITHUB_OUTPUT_DIR)/coding-style.md: .github
 
 $(DOT_GITHUB_OUTPUT_DIR)/security.md: .github
 	@echo "---\nsidebar_position: 10\n---\n" > $@
-	@cat .github/$(@F) >> $@
+	@cat .github/SECURITY.md >> $@
 
 $(DOT_GITHUB_OUTPUT_DIR)/workflow.md: .github
 	@echo "---\nsidebar_position: 1\n---\n" > $@
@@ -53,6 +53,7 @@ clean:
 	rm -f $(CHANGELOG_OUTPUT)
 	$(MAKE) -C $(NOTEBOOK_INPUT_DIR) clean
 	git clean -f -d -x $(NOTEBOOK_OUTPUT_DIR)
+	rm -rf .github
 	rm $(DOT_GITHUB_OUTPUT_DIR)/code-of-conduct.md
 	rm $(DOT_GITHUB_OUTPUT_DIR)/coding-style.md
 	rm $(DOT_GITHUB_OUTPUT_DIR)/security.md
