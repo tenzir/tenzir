@@ -113,9 +113,9 @@ struct query_context {
   vast::ids ids = {};
 
   struct priority {
-    constexpr static uint8_t high = 80;
-    constexpr static uint8_t normal = 30;
-    constexpr static uint8_t low = 10;
+    constexpr static uint8_t high = 100;
+    constexpr static uint8_t normal = 25;
+    constexpr static uint8_t low = 1;
   };
 
   /// The query priority.
