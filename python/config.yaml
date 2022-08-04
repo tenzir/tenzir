@@ -1,9 +1,13 @@
 logging:
   console: true
-  console_verbosity: DEBUG
+  console-verbosity: DEBUG
   file: false
-  file_verbosity: DEBUG
+  file-verbosity: DEBUG
   filename: vast.log
+
+# How to pass in a vast.yaml? This way?
+node:
+  config: vast.yaml
 
 apps:
   misp:

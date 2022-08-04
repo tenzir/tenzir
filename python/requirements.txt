@@ -3,7 +3,6 @@ git+https://github.com/misp/misp-stix
 coloredlogs>=10.0
 dynaconf[yaml]
 pluggy
-pymisp
 threatbus
 vast-threatbus
 zmq

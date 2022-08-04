@@ -4,13 +4,12 @@ import sys
 import coloredlogs
 import dynaconf
 
-def create(name = None):
+def get(name = None):
     logger = logging.getLogger(f"vast.{name}" if name else "vast")
-    logger.propagate = False # prevent duplicate entries at parent logger
     return logger
 
-def configure(config: dynaconf.Dynaconf, logger: logging.Logger):
-    """Constructs a named logger according to the configuration."""
+# Consider configuration via logging.config.dictConfig.
+def configure(config: dynaconf.Dynaconf, logger: logging.Logger = get()):
     fmt = '%(asctime)s %(name)s %(levelname)-7s %(message)s'
     colored_formatter = coloredlogs.ColoredFormatter(fmt)
     plain_formatter = logging.Formatter(fmt)

@@ -15,6 +15,6 @@ class InMemory(Backbone):
 
     async def subscribe(self, topic: str, callback: Callable[[Any], None]):
         if topic in self.topics:
-            self.topics[topic].push(callback)
+            self.topics[topic].append(callback)
         else:
             self.topics[topic] = [callback]

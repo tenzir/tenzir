@@ -1,68 +1,32 @@
-import argparse
 import asyncio
-from signal import SIGINT, SIGTERM, SIGHUP
 
 from dynaconf import Dynaconf
+import stix2
 
-from fabric import Fabric
 import apps.misp
-import backbones.inmemory
-import utils.logger
+import utils.asyncio
+import utils.config
+import utils.logging
+from vast import VAST
 
-logger = utils.logger.create()
+async def start(config: Dynaconf):
+    vast = await VAST.create(config)
+    #proc = await vast.start(db_directory="/tmp/vast.db")
+    #await proc.communicate()
 
-async def shutdown(loop, signal=None):
-    """Cleanup tasks tied to the service's shutdown."""
-    if signal:
-        logger.info(f"received exit signal {signal.name}")
-    tasks = [t for t in asyncio.all_tasks() if t is not
-             asyncio.current_task()]
-    [task.cancel() for task in tasks]
-    logger.debug(f"cancelling {len(tasks)} outstanding tasks")
-    await asyncio.gather(*tasks, return_exceptions=True)
-    loop.stop()
+    loop = asyncio.get_event_loop()
+    loop.create_task(apps.misp.start(vast))
 
-def handle_exception(loop, context):
-    # context["message"] will always be there, but context["exception"] may not
-    msg = context.get("exception", context["message"])
-    logger.error(f"caught exception: {msg}")
-    logger.info("shutting down...")
-    asyncio.create_task(shutdown(loop))
+    ind = stix2.Indicator(
+            description="Test",
+            pattern_type="vast",
+            pattern="#type == \"zeek.conn\" && \"CQishF25ynsGkC6v6e\"")
+    await vast.publish("stix.indicator", ind)
 
 def main():
-    # Parse config file(s).
-    configs = ["config.yaml", "config.yml"]
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", help="path to a configuration file")
-    args = parser.parse_args()
-    if args.config:
-        configs = [args.config]
-    config = Dynaconf(
-        settings_files=configs,
-        load_dotenv=True,
-        envvar_prefix="VAST",
-    )
-    # Setup logger.
-    utils.logger.configure(config.logging, logger)
-    # Configure event loop to exit gracefully on CTRL+C.
-    loop = asyncio.get_event_loop()
-    logger.debug("registering signal handler for SIGINT and SIGTERM")
-    stop = lambda: asyncio.create_task(shutdown(loop, signal))
-    for signal in [SIGINT, SIGTERM, SIGHUP]:
-        loop.add_signal_handler(signal, stop)
-    loop.set_exception_handler(handle_exception)
-    try:
-        # Spawn the fabric.
-        logger.debug("initializing fabric")
-        backbone = backbones.inmemory.InMemory()
-        fabric = Fabric(config, backbone)
-        # Spawn apps.
-        logger.debug("spawning apps")
-        loop.create_task(apps.misp.start(config, fabric))
-        loop.run_forever()
-    finally:
-        loop.close()
-        logger.info("successfully shutdown VAST")
+    config = utils.config.parse()
+    utils.logging.configure(config.logging)
+    utils.asyncio.run_forever(start(config))
 
 if __name__ == "__main__":
     main()

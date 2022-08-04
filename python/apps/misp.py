@@ -1,22 +1,22 @@
 import json
 from typing import Any
 
-from dynaconf import Dynaconf
 import misp_stix_converter
 import pymisp
+import stix2
 import zmq
 import zmq.asyncio
 
-from fabric import Fabric
-import utils.logger
+from vast import VAST
+import utils.logging
 
-logger = utils.logger.create(__name__)
+logger = utils.logging.get(__name__)
 
 # The MISP app.
 class MISP:
-    def __init__(self, config: Dynaconf, fabric: Fabric):
-        self.config = config
-        self.fabric = fabric
+    def __init__(self, vast: VAST):
+        self.vast = vast
+        self.config = vast.config.apps.misp
         logger.info(f"connecting to REST API at {self.config.api.host}")
         try:
             self.misp = pymisp.ExpandedPyMISP(
@@ -27,8 +27,7 @@ class MISP:
             logger.error(f"failed to connect: {e}")
 
     async def run(self):
-        # Setup subscriptions.
-        await self.fabric.subscribe("vast.sighting", self._on_sighting)
+        await self.vast.subscribe("stix.bundle", self._on_bundle)
         # Hook into event feed via 0mq.
         socket = zmq.asyncio.Context().socket(zmq.SUB)
         zmq_uri = f"tcp://{self.config.zmq.host}:{self.config.zmq.port}"
@@ -50,7 +49,7 @@ class MISP:
                 try:
                     parser.parse_misp_event(event)
                     logger.info(parser.bundle.serialize(pretty=True))
-                    await self.fabric.publish("stix.bundle", parser.bundle)
+                    await self.vast.publish("stix.bundle", parser.bundle)
                 except Exception as e:
                     logger.warning(f"failed to parse MISP event as STIX: {e}")
                     continue
@@ -60,17 +59,34 @@ class MISP:
             socket.setsockopt(zmq.LINGER, 0)
             socket.close()
 
-    async def _on_sighting(self, message: Any):
-        logger.debug(f"got data: {message}")
-        # TODO: exctract sighting
-        #response = self.misp.add_sighting(...)
-        #if not response or type(response) is dict and response.get("message", None):
-        #   logger.error(f"failed to add sighting to MISP: '{sighting}' ({response})")
-        #else:
-        #    logger.info(f"reported sighting: {response}")
+    async def _on_bundle(self, message: Any):
+        logger.debug(f"got bundle: {message}")
+        bundle = stix2.parse(message)
+        if type(bundle) != stix2.Bundle:
+            logger.warn(f"expected bundle, got {type(bundle)}")
+            return
+        sightings = []
+        # FIXME: this a shortcut. We'll go through the bundle and assume that
+        # all SCOs are sightings.
+        for object in bundle.objects:
+            # TODO: get timestamp from out Observed Data.
+            if type(object) is stix2.IPv4Address:
+                sighting = pymisp.MISPSighting()
+                sighting.from_dict(
+                        value=object.value,
+                        type="0", # true positive
+                        timestamp=11111111,
+                        source="VAST",
+                        )
+                sightings.append(sighting)
+        for sighting in sightings:
+            response = self.misp.add_sighting(sighting)
+            if not response or type(response) is dict and response.get("message", None):
+               logger.error(f"failed to add sighting to MISP: '{sighting}' ({response})")
+            else:
+                logger.info(f"reported sighting: {response}")
 
 
-async def start(config: Dynaconf, fabric: Fabric):
-    utils.logger.configure(config.logging, logger)
-    misp = MISP(config.apps.misp, fabric)
+async def start(vast: VAST):
+    misp = MISP(vast)
     await misp.run()

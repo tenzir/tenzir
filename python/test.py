@@ -4,20 +4,17 @@ import pyvast
 from backbone import InMemoryBackbone
 from fabric import Fabric
 
+import utils.asyncio
+import utils.config
+import utils.logging
 
-async def main():
-    backbone = InMemoryBackbone()
-    vast = Fabric(backbone)
-    await test.start(vast)
+logger = utils.logger.create("test")
 
+def main():
+    config = utils.config.parse()
+    utils.logging.configure(config.logging)
+    utils.asyncio.run_forever(start(config))
 
-async def pyvasttest():
-    vast = pyvast.VAST(container={"runtime": "docker", "name": "vast-pro"})
-    await vast.test_connection()
-    proc = await vast.count().exec()
-    stdout, stderr = await proc.communicate()
-    print("stdout", stdout)
-    print("stderr", stderr)
 
 
 if __name__ == "__main__":
