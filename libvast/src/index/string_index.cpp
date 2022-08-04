@@ -83,6 +83,18 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
     [&](auto x) -> caf::expected<ids> {
       return caf::make_error(ec::type_clash, materialize(x));
     },
+    [&](view<pattern>) -> caf::expected<ids> {
+      switch (op) {
+        default:
+          return caf::make_error(ec::unsupported_operator, op);
+        case relational_operator::equal:
+        case relational_operator::not_equal:
+        case relational_operator::match:
+        case relational_operator::not_match: {
+           return ids{offset(), true};
+        }
+      }
+    },
     [&](view<std::string> str) -> caf::expected<ids> {
       auto str_size = str.size();
       if (str_size > max_length_)
