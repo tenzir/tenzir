@@ -36,6 +36,7 @@ jobs:
     runs-on: ubuntu-20.04
     outputs:
       build-version: ${{ steps.determine-version.outputs.build-version }}
+      build-version-short: ${{ steps.determine-version.outputs.build-version-short }}
       release-version: ${{ steps.determine-version.outputs.release-version }}
     steps:
       - name: Checkout
@@ -48,8 +49,10 @@ jobs:
         id: determine-version
         run: |
           build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
+          build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
           echo "::set-output name=build-version::${build_version}"
+          echo "::set-output name=build-version-short::${build_version_short}"
           echo "::set-output name=release-version::${release_version}"
 
   changelog:
@@ -826,7 +829,9 @@ jobs:
           fi
 
   build-nix:
-    needs: cancel-previous-runs
+    needs:
+      - cancel-previous-runs
+      - determine-version
     name: Nix Static (${{ matrix.nix.target }})
     runs-on: ubuntu-20.04
     strategy:
@@ -862,6 +867,8 @@ jobs:
       - name: Build Static Binary
         env:
           STATIC_BINARY_TARGET: ${{ matrix.nix.target }}
+          VAST_BUILD_VERSION: ${{ needs.determine-version.outputs.build-version }}
+          VAST_BUILD_VERSION_SHORT: ${{ needs.determine-version.outputs.build-version-short }}
         run: |
           nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
             ${{ matrix.nix.build-options }}
