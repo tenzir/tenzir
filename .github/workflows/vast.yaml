@@ -17,20 +17,22 @@ on:
   release:
     types:
       - published
+
+# This section defines how the VAST action is enqueued.
+concurrency:
+  # Wait for in-progress runs of this action for the same branch to finish
+  # before starting, ensuring that a branch is only built once at a time. This
+  # has a double-purpose: It ensures that caches are always able to pick up work
+  # from previous builds of the same branch, and it rate-limits the CI to ensure
+  # it's running smoothly for all users.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel all in-progress runs of this action for the same pull request.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CCACHE_MAXSIZE: "5G"
 
 jobs:
-  cancel-previous-runs:
-    name: Cancel Previous Runs
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Cancel Previous Runs
-        if: github.event_name == 'pull_request'
-        uses: styfle/cancel-workflow-action@0.10.0
-        with:
-          access_token: ${{ github.token }}
-
   determine-version:
     name: Determine Version
     runs-on: ubuntu-20.04
@@ -53,7 +55,6 @@ jobs:
           echo "::set-output name=release-version::${release_version}"
 
   changelog:
-    needs: cancel-previous-runs
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     name: Changelog
     runs-on: ubuntu-20.04
@@ -169,7 +170,6 @@ jobs:
 
   build-debian:
     needs:
-      - cancel-previous-runs
       - determine-version
     if: github.event_name != 'workflow_dispatch'
     name: Debian ${{ matrix.configure.tag }} (${{ matrix.build.compiler }})
@@ -269,11 +269,19 @@ jobs:
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
 
+      - name: Inject slug variables
+        uses: rlespinasse/github-slug-action@v4
+
       - name: Fetch ccache Cache
         uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+          key: ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}
+          restore-keys: |
+            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}
+            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
+            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
+            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-
 
       - name: Configure
         run: |
@@ -398,7 +406,6 @@ jobs:
 
   build-macos:
     needs:
-      - cancel-previous-runs
       - determine-version
     if: github.event_name != 'workflow_dispatch'
     name: macOS ${{ matrix.configure.tag }} (${{ matrix.build.compiler }})
@@ -491,11 +498,19 @@ jobs:
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
 
+      - name: Inject slug variables
+        uses: rlespinasse/github-slug-action@v4
+
       - name: Fetch ccache Cache
         uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
+          key: ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}
+          restore-keys: |
+            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}
+            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
+            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
+            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-
 
       - name: Configure
         run: |
@@ -738,7 +753,6 @@ jobs:
 
   build-docker:
     needs:
-      - cancel-previous-runs
       - determine-version
     if: github.event_name != 'workflow_dispatch'
     name: Docker
@@ -826,7 +840,8 @@ jobs:
           fi
 
   build-nix:
-    needs: cancel-previous-runs
+    needs:
+      - determine-version
     name: Nix Static (${{ matrix.nix.target }})
     runs-on: ubuntu-20.04
     strategy:
