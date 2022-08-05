@@ -42,7 +42,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev && \
+    apt-get -y --no-install-recommends install libarrow-dev=9.0.0-1 libprotobuf-dev libparquet-dev=9.0.0-1 && \
     rm -rf /var/lib/apt/lists/* *.deb
 
 # VAST
@@ -88,13 +88,12 @@ RUN cmake -B build -G Ninja \
       ${VAST_BUILD_OPTIONS} \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
-      -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
+      -D VAST_ENABLE_UNIT_TESTS:BOOL="ON" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
     cmake --build build --parallel && \
-    cmake --install build --strip && \
-    rm -rf build
+    cmake --install build
 
 RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
 COPY systemd/vast.yaml $PREFIX/etc/vast/vast.yaml
@@ -146,7 +145,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow800 libparquet800 && \
+    apt-get -y --no-install-recommends install libarrow900 libparquet900 && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast

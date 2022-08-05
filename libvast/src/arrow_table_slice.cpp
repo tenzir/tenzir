@@ -1319,6 +1319,11 @@ upgrade_array_to_v2(const std::shared_ptr<arrow::Array>& arr, const type& t) {
       const auto& keys = upgrade_array_to_v2(structs.field(0), mt.key_type());
       const auto& items
         = upgrade_array_to_v2(structs.field(1), mt.value_type());
+      // Workaround to a segfault we encountered with arrow 9.0.0: Calling
+      // `null_count()` has the side effect of initializing the `null_count`
+      // variable from -1 to its correct value, and the constructor of
+      // `MapArray` asserts that `null_count != 0`.
+      keys->null_count();
       return std::make_shared<arrow::MapArray>(mt.to_arrow_type(), la.length(),
                                                la.value_offsets(), keys, items,
                                                la.null_bitmap(),
