@@ -88,9 +88,9 @@ below).
 ### Aggregate Step
 
 :::info Transforms → Pipelines
-In VAST v2.2, we will rename *transforms* to *pipelines*, and
-*transform steps* to *pipeline operators*. This causes several configuration key
-changes. Additionally, we will rename the `aggregate` operator to
+In [VAST v2.2](/blog/vast-v2.2), we renamed *transforms* to *pipelines*, and
+*transform steps* to *pipeline operators*. This caused several configuration key
+changes. Additionally, we renamed the `aggregate` operator to
 [`summarize`][summarize]. Please keep this in mind when reading the example
 below and consult the
 [documentation](/docs/understand-vast/query-language/pipelines) for the

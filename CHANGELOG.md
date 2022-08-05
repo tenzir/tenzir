@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.2.0-rc3][v2.2.0-rc3]
+## [v2.2.0][v2.2.0]
 
 ### Changes
 
@@ -16,7 +16,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `summarize` pipeline operator is now a builtin; the previously bundled `summarize` plugin no longer exists. Aggregation functions in the `summarize` operator are now plugins, which makes them easily extensible. The syntax of `summarize` now supports specification of output field names, similar to SQL's `AS` in `SELECT f(x) AS name`.
   [#2417](https://github.com/tenzir/vast/pull/2417)
 
-- The `count` pipeline operator no longer exists. If you relied on the undocumented operator's behavior, please let us know.
+- The undocumented `count` pipeline operator no longer exists.
   [#2417](https://github.com/tenzir/vast/pull/2417)
 
 - The `put` pipeline operator is now called `select`, as we've abandoned plans to integrate the functionality of `replace` into it.
@@ -28,7 +28,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Transforms are now called pipelines. In your configuration, replace `transform` with `pipeline` in all keys.
   [#2429](https://github.com/tenzir/vast/pull/2429)
 
-- An `init` command was added to `./vast-cloud` to help getting out of inconsistent Terraform states
+- An `init` command was added to `vast-cloud` to help getting out of inconsistent Terraform states.
   [#2435](https://github.com/tenzir/vast/pull/2435)
 
 ### Features
@@ -45,7 +45,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The new `extend` pipeline operator allows for adding new fields with fixed values to data.
   [#2423](https://github.com/tenzir/vast/pull/2423)
 
-- The cloud execution commands ('run-lambda' and 'execute-command') now accept scripts from file-like handles. To improve the usability of this feature, the whole host file system is now mounted into the CLI container.
+- The cloud execution commands (`run-lambda` and `execute-command`) now accept scripts from file-like handles. To improve the usability of this feature, the whole host file system is now mounted into the CLI container.
   [#2446](https://github.com/tenzir/vast/pull/2446)
 
 ### Bug Fixes
@@ -56,20 +56,17 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST is now able to detect corrupt index files and will attempt to repair them on startup.
   [#2431](https://github.com/tenzir/vast/pull/2431)
 
-- The JSON export with `--omit-nulls` now handles nested records whose first field is `null` correctly instead of dropping them entirely.
+- The JSON export with `--omit-nulls` now correctly handles nested records whose first field is `null` instead of dropping them entirely.
   [#2447](https://github.com/tenzir/vast/pull/2447)
 
-- Fixed a race condition when VAST crashed while applying a partition transform, leading to data duplication.
+- We fixed a race condition when VAST crashed while applying a partition transform, leading to data duplication.
   [#2465](https://github.com/tenzir/vast/pull/2465)
 
-- The rebuild command no longer crashes on failure, and instead displays the error it encountered.
+- The rebuild command no longer crashes on failure, and displays the encountered error instead.
   [#2466](https://github.com/tenzir/vast/pull/2466)
 
-- Missing arguments for the `--plugins`, `--plugin-dirs`, and `--schema-dirs` command line options no longer cause VAST to sometimes crash.
+- Missing arguments for the `--plugins`, `--plugin-dirs`, and `--schema-dirs` command line options no longer cause VAST to crash occasionally.
   [#2470](https://github.com/tenzir/vast/pull/2470)
-
-- Fixed a bug in rc2 that lead to an incorrect expansion of the `--plugins=all` option.
-  [#2479](https://github.com/tenzir/vast/pull/2479)
 
 ## [v2.1.0][v2.1.0]
 
@@ -1873,7 +1870,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.2.0-rc3]: https://github.com/tenzir/vast/releases/tag/v2.2.0-rc3
+[v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
 [v1.1.2]: https://github.com/tenzir/vast/releases/tag/v1.1.2

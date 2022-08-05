@@ -1,9 +1,8 @@
 ---
-draft: true
 title: VAST v2.2
 description: Pipelines
-authors: dominiklohmann
-date: 2022-07-30
+authors: lava
+date: 2022-08-05
 tags: [release, summarize, pipelines]
 ---
 
