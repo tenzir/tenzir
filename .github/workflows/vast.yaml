@@ -279,8 +279,9 @@ jobs:
         uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
+          key: ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
+            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
             ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
             ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
             ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
@@ -508,8 +509,9 @@ jobs:
         uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
+          key: ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
+            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
             ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
             ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
             ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
