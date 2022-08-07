@@ -1,8 +1,8 @@
 ---
-draft: true
 title: Richer Typing in Sigma
 description: Towards Native Sigma Rule Execution
 authors: mavam
+date: 2022-08-12
 tags: [sigma, regex, taxonomies]
 ---
 
