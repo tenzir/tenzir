@@ -82,11 +82,9 @@ bool list_index::append_impl(data_view x, id pos) {
         elements_.resize(seq_size);
         for (auto i = old; i < elements_.size(); ++i) {
           elements_[i] = factory<value_index>::make(value_type_, options());
-          // TODO: Support the #skip attribute here.
           if (!elements_[i])
-            VAST_WARN("{} failed to create value index for type {}; values "
-                      "can be exported, but will not be directly queryable",
-                      detail::pretty_type_name(this), value_type_);
+            VAST_DEBUG("{} failed to create value index for type {}",
+                       detail::pretty_type_name(this), value_type_);
         }
       }
       auto x = v->begin();
