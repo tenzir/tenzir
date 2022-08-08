@@ -14,6 +14,8 @@ that transforms rules into the native query languages of SIEM systems. The
 repository also ships with collection of detection rules that apply to endpoint
 and network log telemetry.
 
+[sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
+
 ## Usage
 
 To use the Sigma frontend, [install the `sigma`
@@ -96,8 +98,8 @@ example, the `contains` modifier changes the operator to substring search, and
 the `re` modifier switches to a regular expression match. The now "legacy" sigma
 compiler lacks support for ordering relationships, such as less-than comparison
 of numerical values, e.g., `x < 42` or `timestamp >= 2021-02`. The
-[pySigma][pysigma] project addresses this with the additional modifiers `lt`,
-`lte`, `gt`, `gte`.
+[pySigma](https://github.com/SigmaHQ/pySigma) project addresses this with the
+additional modifiers `lt`, `lte`, `gt`, `gte`.
 
 ## Compatibility
 
@@ -130,34 +132,3 @@ by VAST's query engine:
 |`gt`|compare greater than (`>`) the value|❌|✅
 |`gte`|compare greater than or equal to (`>=`) the value|❌|✅
 |`expand`|expand value to placeholder strings, e.g., `%something%`|❌|❌
-
-## Focus on Endpoint
-
-Sigma predominantly offers rules with a focus on endpoint data, such as
-[Sysmon](https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon)
-telemetry. While there exist rules for network-based detections (e.g., for
-DNS queries, SMB events, and Kerberos traffic), they receive less attention.
-
-As of June 2022, the [rules][sigma-rules-2022-06] directory includes a total of
-2,015 total `*.yml` files compared to 51 files in the `network` directory:
-
-```bash
-find rules -name '*.yml' | wc -l
-2015
-find rules/network -name '*.yml' | wc -l
-51
-```
-
-That is, network-based rules account only for **2.5%** of the total rules. This
-illustrates the emphasis of the community and project authors, who have strong
-background in endpoint detection.
-
-VAST's history emphasizes network telemetry, with native support for PCAP,
-NetFlow, and full support for network monitors like Zeek and Suricata. By
-natively supporting Sigma in VAST, we are looking forward to offer a platform
-with detection capabilities on both ends of the spectrum.
-
-[pysigma]: https://github.com/SigmaHQ/pySigma
-[correlations]: https://github.com/SigmaHQ/sigma/wiki/Specification:-Sigma-Correlations
-[sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
-[sigma-rules-2022-06]: https://github.com/SigmaHQ/sigma/tree/d78818e27d42710f427eb205a9ca59b4ab97e728/rules
