@@ -245,14 +245,15 @@ feed_url='https://pulsedive.com/premium/?key=&header=true&fields=id,type,risk,th
 
 # Ingest the feed into the matcher 'ips' we created above.
 curl -sSL "$feed_url" |
-  vast matcher import -t pulsedive csv ips
+  vast matcher import -t pulsedive.ip csv ips
 ```
 
 The `curl` command downloads a CSV and dumps it to STDOUT. The `vast matcher
 import` command reads CSV content by specifying `csv` as first positional
-argument. We are also telling VAST via `-t pulsedive` that the data matches the
-`pulsedive` type (specified in the bundled `pulsedive.schema`). After parsing,
-VAST forwards the parsed indicators to the matcher `ips`.
+argument. We are also telling VAST via `-t pulsedive.ip` that the data matches
+the `pulsedive` type family (specified in the bundled `pulsedive.schema`), and
+more specifically its variant where the IOC is an IP of type `addr`. After
+parsing, VAST forwards the parsed indicators to the matcher `ips`.
 
 An additional [concepts
 definition](/docs/understand-vast/data-model/taxonomies#concepts) for the
@@ -270,7 +271,7 @@ feed_url='https://pulsedive.com/premium/?key=&header=true&fields=id,type,risk,th
 
 # Ingest the feed into the matcher 'ips', but skip all retired indicators.
 curl -sSL "${feed_url}" |
-  vast matcher import -t pulsedive csv ips \
+  vast matcher import -t pulsedive.ip csv ips \
     'risk !~ /:retired/ && type ~ /ip.*/
 ```
 
