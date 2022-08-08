@@ -918,9 +918,10 @@ void index_state::schedule_lookups() {
 namespace {
 
 struct query_counters {
-  size_t num_custom_prio = 0;
   size_t num_low_prio = 0;
   size_t num_normal_prio = 0;
+  size_t num_high_prio = 0;
+  size_t num_custom_prio = 0;
 };
 
 auto get_query_counters(const query_queue& pending_queries) {
@@ -930,6 +931,8 @@ auto get_query_counters(const query_queue& pending_queries) {
       result.num_low_prio++;
     else if (q.query_context.priority == query_context::priority::normal)
       result.num_normal_prio++;
+    else if (q.query_context.priority == query_context::priority::high)
+      result.num_high_prio++;
     else
       result.num_custom_prio++;
   }
@@ -950,6 +953,7 @@ void index_state::send_report() {
       {"scheduler.backlog.custom", query_counters.num_custom_prio},
       {"scheduler.backlog.low", query_counters.num_low_prio},
       {"scheduler.backlog.normal", query_counters.num_normal_prio},
+      {"scheduler.backlog.high", query_counters.num_high_prio},
       {"scheduler.partition.pending", pending_queries.num_partitions()},
       {"scheduler.partition.materializations", materializations},
       {"scheduler.partition.lookups", counters.partition_lookups},
@@ -1694,7 +1698,7 @@ index(index_actor::stateful_pointer<index_state> self,
         = query_context::make_extract(partition_transfomer, match_everything);
       auto transform_id = self->state.pending_queries.create_query_id();
       query_context.id = transform_id;
-      query_context.priority = 100;
+      query_context.priority = query_context::priority::high;
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
