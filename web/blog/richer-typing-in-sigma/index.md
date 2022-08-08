@@ -23,7 +23,14 @@ modifier interprets a value as subnet, e.g., `10.0.0.0/8`. Richer typing!
 
 <!--truncate-->
 
-Here's a real-world example of some modifiers:
+How does the frontend work? Think of it as a parser that processes the YAML and
+translates it into an expression tree, where the leaves are predicates with
+typed operands according to VAST's data model. Here's how it works:
+
+![Sigma Query Frontend](/img/sigma-query-frontend-light.png#gh-light-mode-only)
+![Sigma Query Frontend](/img/sigma-query-frontend-dark.png#gh-dark-mode-only)
+
+Let's take a closer look at some Sigma rule modifiers:
 
 ```yaml
 selection:

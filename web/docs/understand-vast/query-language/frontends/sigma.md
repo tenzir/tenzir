@@ -10,9 +10,14 @@ vast export json < sigma-rule.yaml
 ```
 
 Sigma defines a [YAML-based rule language][sigma-spec] along with a compiler
-that transforms rules into the native query languages of SIEM systems. The
-repository also ships with collection of detection rules that apply to endpoint
-and network log telemetry.
+that transforms rules into the native query languages of SIEM systems. VAST
+takes a different approach and compiles the Sigma query directly into a native
+query expression, without going through the Python tooling provided by the
+SigmaHQ project. This has numerous advantages in exploiting the richer type
+system of VAST. The translation process looks as follows:
+
+![Sigma Query Frontend](/img/sigma-query-frontend-light.png#gh-light-mode-only)
+![Sigma Query Frontend](/img/sigma-query-frontend-dark.png#gh-dark-mode-only)
 
 [sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
 
