@@ -95,7 +95,7 @@ supported by VAST's execution engine:
 |`utf16le`/`wide`|transform the value to UTF16 little endian|✅|🚧
 |`utf16be`|transform the value to UTF16 big endian|✅|🚧
 |`utf16`|transform the value to UTF16|✅|🚧
-|`re`|interpret the value as regular expression|✅|❌
+|`re`|interpret the value as regular expression|✅|🚧
 |`cidr`|interpret the value as a IP CIDR|❌|✅
 |`all`|changes the expression logic from OR to AND|✅|✅
 |`lt`|compare less than (`<`) the value|❌|✅
@@ -104,27 +104,37 @@ supported by VAST's execution engine:
 |`gte`|compare greater than or equal to (`>=`) the value|❌|✅
 |`expand`|expand value to placeholder strings, e.g., `%something%`|❌|❌
 
-Aside from completing the implementation of the missing modifiers, there are two
-major missing pieces for Sigma rule execution to become viable in VAST:
+Aside from completing the implementation of the missing modifiers, there are
+three missing pieces for Sigma rule execution to become viable in VAST:
 
-1. **Regular expressions**: the complexity of regular expression execution is
+1. **Regular expressions**: VAST currently has no efficient mechanism to execute
+   regular expressions. A regex lookup requires a full scan of the data.
+   Moreover, the regular expression execution speed is abysimal. But we are
+   aware of it and are working on this soon. The good thing is that the
+   complexity of regular expression execution over batches of data is
    manageable, given that we would call into the corresponding [Arrow Compute
    function][arrow-containment-tests] for the heavy lifting. The number one
-   challenge will be increasing the scanning throughput, because the sketch data
-   structures in the catalog cannot handle pattern types. If the sketches cannot
-   identify a candidate set, most of the data needs to be scanned, making the
-   system I/O-bound. That said, scanning doesn't have to be slow, as Humio
-   demonstrates impressively.
+   challenge will be reduing the data to scan, because the Bloom-filter-like
+   sketch data structures in the catalog cannot handle pattern types. If the
+   sketches cannot identify a candidate set, all data needs to be scanned,
 
    To alleviate the effects of full scans, it's possible to winnow down the
    candidate set of partitions by executing rules periodically. When making the
    windows asymptotically small, this yields effectively streaming execution,
    which VAST already supports in the form of "live queries".
 
-2. **Field mappings**: while Sigma rules execute already syntactically, VAST
+2. **Case-insensitive strings**: All strings in Sigma rules are case-insensitive
+   by default, but VAST's string search is case-sensitive. As a workaround, we
+   could translate Sigma strings into regular expressions, e.g., `"Foo"` into
+   `/Foo/i`. Unfortunately there is a big performance gap between string
+   equality search and regular expression search. We will need to find a better
+   solution for production-grade rule execution.
+
+3. **Field mappings**: while Sigma rules execute already syntactically, VAST
    currently doesn't touch the field names in the rules and interprets them as
-   [field extractors][field extractors]. On the flip side, this means you can
-   already write generic Sigma rules using [concepts][concepts].
+   [field extractors][field-extractors]. In other words, VAST doesn't support
+   the Sigma taxonomy yet. Until we provide the mappings, you can already write
+   generic Sigma rules using [concepts][concepts].
 
 [arrow-containment-tests]: https://arrow.apache.org/docs/cpp/compute.html#containment-tests
 [field-extractors]: https://vast.io/docs/understand-vast/query-language/expressions#field-extractor
