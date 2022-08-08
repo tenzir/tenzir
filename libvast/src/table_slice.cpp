@@ -231,21 +231,10 @@ table_slice table_slice::unshare() const noexcept {
 
 // TODO: Dispatch to optimized implementations if the encodings are the same.
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
-  // Check whether the slices point to the same chunk of data.
-  if (lhs.chunk_ == rhs.chunk_)
+  if (!lhs.chunk_ && !rhs.chunk_)
     return true;
-  // Check whether the slices have different sizes or layouts.
-  if (lhs.rows() != rhs.rows() || lhs.columns() != rhs.columns()
-      || lhs.layout() != lhs.layout())
-    return false;
-  // Check whether the slices contain different data.
-  auto flat_layout = flatten(caf::get<record_type>(lhs.layout()));
-  for (size_t row = 0; row < lhs.rows(); ++row)
-    for (size_t col = 0; col < flat_layout.num_fields(); ++col)
-      if (lhs.at(row, col, flat_layout.field(col).type)
-          != rhs.at(row, col, flat_layout.field(col).type))
-        return false;
-  return true;
+  constexpr auto check_metadata = true;
+  return to_record_batch(lhs)->Equals(*to_record_batch(rhs), check_metadata);
 }
 
 bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
