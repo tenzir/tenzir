@@ -184,6 +184,28 @@ applies to a single field, `suricata.http.http.url`, and has false-positive rate
 of 0.5%. The second rule creates one sketch for all fields of type `addr` that
 has a false-positive rate of 10%.
 
+### Skip partition index creation
+
+Partition indexes improve query performance at the cost of database size. Operators can
+disable the creation of partition indexes for specific fields or types in the
+configuration section `vast.index`. By default, VAST creates partition indexes for all fields.
+
+#### Example
+
+```yaml
+vast:
+  index:
+    rules:
+        # Don't create partition indexes the suricata.http.http.url field.
+      - targets:
+          - suricata.http.http.url
+        partition-index: false
+        # Don't create partition indexes for fields of type addr.
+      - targets:
+          - :addr
+        partition-index: false
+```
+
 ## Shutdown
 
 The `stop` command gracefully brings down a VAST server that has been started

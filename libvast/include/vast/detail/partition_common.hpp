@@ -144,13 +144,13 @@ evaluate(const PartitionState& state, const expression& expr) {
   // TODO: Should resolve take a record_type directly?
   std::vector<system::evaluation_triple> result;
   auto resolved = resolve(expr, type{*combined_layout});
-  for (auto& kvp : resolved) {
+  for (auto& [offset, predicate] : resolved) {
     // For each fitted predicate, look up the corresponding INDEXER
     // according to the specified type of extractor.
-    auto& pred = kvp.second;
-    auto get_indexer_handle = [&](const auto& ext, const data& x) {
-      return fetch_indexer(state, ext, pred.op, x);
-    };
+    auto get_indexer_handle
+      = [&, &pred = predicate](const auto& ext, const data& x) {
+          return fetch_indexer(state, ext, pred.op, x);
+        };
     auto v = detail::overload{
       [&](const meta_extractor& ex, const data& x) {
         return get_indexer_handle(ex, x);
@@ -163,12 +163,22 @@ evaluate(const PartitionState& state, const expression& expr) {
       },
     };
     // Package the predicate, its position in the query and the required
-    // INDEXER as a "job description".
-    if (auto hdl = caf::visit(v, pred.lhs, pred.rhs))
-      result.emplace_back(kvp.first, curried(pred), std::move(hdl));
+    // INDEXER as a "job description". INDEXER can be nullptr
+    auto hdl = caf::visit(v, predicate.lhs, predicate.rhs);
+    result.emplace_back(std::move(offset), curried(predicate), std::move(hdl));
   }
   // Return the list of jobs, to be used by the EVALUATOR.
   return result;
 }
+
+/// Evaluator requires all ids for a given partition when no indexers are used.
+/// This is a helper function to extract them when needed.
+/// @param type_ids mapping of partition layout name to it's ids.
+/// @param evaluation_triples contains indexers used for evaluation.
+/// @returns all ids from type_ids if any evaluation_triple doesn't have an
+/// indexer. Returns default initialized ids{} otherwise.
+ids get_ids_for_evaluation(
+  const std::unordered_map<std::string, ids>& type_ids,
+  const std::vector<system::evaluation_triple>& evaluation_triples);
 
 } // namespace vast::detail

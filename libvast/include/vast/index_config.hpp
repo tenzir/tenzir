@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/defaults.hpp"
 #include "vast/type.hpp"
 
@@ -23,16 +25,18 @@ struct index_config {
   struct rule {
     std::vector<std::string> targets = {};
     double fp_rate = defaults::system::fp_rate;
+    bool create_partition_index = defaults::system::create_partition_index;
 
     template <class Inspector>
     friend auto inspect(Inspector& f, rule& x) {
-      return f(x.targets, x.fp_rate);
+      return f(x.targets, x.fp_rate, x.create_partition_index);
     }
 
     static inline const record_type& layout() noexcept {
       static auto result = record_type{
         {"targets", list_type{string_type{}}},
         {"fp-rate", real_type{}},
+        {"partition-index", bool_type{}},
       };
       return result;
     }
@@ -54,5 +58,8 @@ struct index_config {
     return result;
   }
 };
+
+bool should_create_partition_index(const qualified_record_field& index_qf,
+                                   const std::vector<index_config::rule>& rules);
 
 } // namespace vast

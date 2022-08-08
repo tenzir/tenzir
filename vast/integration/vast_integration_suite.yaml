@@ -606,3 +606,19 @@ tests:
       - command: -N import suricata
         input: data/suricata/eve.json
       - command: -N count "zeek.conn.id.orig_h == 192.168.1.104"
+
+  # Checks if the import and export works as usual when we ignore creation
+  # of partition indexes for all field names
+  Optional Partition Indexes:
+    tags: [import, export, csv]
+    steps:
+      - command: -N --config=@./vast-optional-indexes.yaml import -t argus.record csv '--separator=" "'
+        input: data/csv/argus-additional-fields.ssv
+      - command: -N export csv
+
+  Process Query For Field With Skip Attribute:
+    tags: [import, export]
+    steps:
+      - command: -N import --schema-file="@./misc/schema/zeek-with-skip.schema" zeek-json
+        input: data/zeek/zeek.json
+      - command: -N export json 'username == "steve"'

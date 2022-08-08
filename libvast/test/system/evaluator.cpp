@@ -96,6 +96,23 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     },
   };
 
+  ids run_sut(expression expression,
+              std::vector<system::evaluation_triple> triples,
+              vast::ids ids_for_partition = {}) {
+    auto eval = sys.spawn(system::evaluator, std::move(expression),
+                          std::move(triples), std::move(ids_for_partition));
+    run();
+    self->send(eval, atom::run_v);
+    run();
+    ids result;
+    REQUIRE(!self->mailbox().empty());
+    self->receive([&](const ids& hits) {
+      result = hits;
+    });
+    REQUIRE(self->mailbox().empty());
+    return result;
+  }
+
   ids query(std::string_view expr_str) {
     auto expr = unbox(to<expression>(expr_str));
     std::vector<system::evaluation_triple> triples;
@@ -109,17 +126,23 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       for (auto& x : xs)
         triples.emplace_back(expr_position, curried(pred), x);
     }
-    auto eval = sys.spawn(system::evaluator, expr, std::move(triples));
-    run();
-    self->send(eval, atom::run_v);
-    run();
-    ids result;
-    REQUIRE(!self->mailbox().empty());
-    self->receive([&](const ids& hits) {
-      result = hits;
-    });
-    REQUIRE(self->mailbox().empty());
-    return result;
+
+    return run_sut(std::move(expr), std::move(triples));
+  }
+
+  ids query_with_ids(std::string_view expr_str, vast::ids ids_for_partition) {
+    auto expr = unbox(to<expression>(expr_str));
+    std::vector<system::evaluation_triple> triples;
+    auto resolved = resolve(expr, layout);
+    VAST_ASSERT(resolved.size() > 0);
+    for (auto& [expr_position, pred] : resolved) {
+      VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
+      triples.emplace_back(expr_position, curried(pred),
+                           vast::system::indexer_actor{});
+    }
+
+    return run_sut(std::move(expr), std::move(triples),
+                   std::move(ids_for_partition));
   }
 };
 
@@ -136,6 +159,9 @@ ids pad_result(ids x) {
 
 #define CHECK_QUERY(str, result)                                               \
   CHECK_EQUAL(pad_result(query(str)), pad_result(make_ids result));
+
+#define CHECK_QUERY2(str, ids, result)                                         \
+  CHECK_EQUAL(pad_result(query2(str, ids)), pad_result(make_ids result));
 
 FIXTURE_SCOPE(evaluator_tests, fixture)
 
@@ -175,6 +201,13 @@ TEST(disjunctions) {
   CHECK_QUERY("x == 42 || y != 10", ({0, 1, 2, 3, 4, 8}));
   MESSAGE("hits on both sides without intersection");
   CHECK_QUERY("x == 75 || y == 77", ({3, 5}));
+}
+
+TEST(default initialized index actor should return input ids) {
+  auto input_ids = ids{};
+  input_ids.append_bits(true, 10);
+  auto res = query_with_ids("x == 334353 || y >= 99", input_ids);
+  CHECK_EQUAL(input_ids, res);
 }
 
 FIXTURE_SCOPE_END()

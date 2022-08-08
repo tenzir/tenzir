@@ -24,31 +24,32 @@ namespace vast::defaults {
 
 /// Maximum depth in recursive function calls before bailing out.
 /// Note: the value must be > 0.
-constexpr size_t max_recursion = 100;
+inline constexpr size_t max_recursion = 100;
 
 // -- constants for the import command and its subcommands ---------------------
 
 namespace import {
 
 /// Maximum size for sources that generate table slices.
-constexpr size_t table_slice_size = 65'536; // 64 Ki
+inline constexpr size_t table_slice_size = 65'536; // 64 Ki
 
 /// The default table slice type when arrow is available.
-constexpr auto table_slice_type = table_slice_encoding::arrow;
+inline constexpr auto table_slice_type = table_slice_encoding::arrow;
 
 /// Maximum number of results.
-constexpr size_t max_events = 0;
+inline constexpr size_t max_events = 0;
 
 /// Timeout after which data is forwarded to the importer regardless of
 /// batching and table slices being unfinished.
-constexpr std::chrono::milliseconds batch_timeout = std::chrono::seconds{10};
+inline constexpr std::chrono::milliseconds batch_timeout
+  = std::chrono::seconds{10};
 
 /// Timeout for how long readers should block while waiting for their input.
-constexpr std::chrono::milliseconds read_timeout
+inline constexpr std::chrono::milliseconds read_timeout
   = std::chrono::milliseconds{20};
 
 /// Path for reading input events or `-` for reading from STDIN.
-constexpr std::string_view read = "-";
+inline constexpr std::string_view read = "-";
 
 /// Contains settings for the csv subcommand.
 struct csv {
@@ -78,13 +79,13 @@ namespace explore {
 // by `min(max_events, max_events_query*max_events_context)`.
 
 /// Maximum total number of results.
-constexpr size_t max_events = std::numeric_limits<size_t>::max();
+inline constexpr size_t max_events = std::numeric_limits<size_t>::max();
 
 /// Maximum number of results for the initial query.
-constexpr size_t max_events_query = 100;
+inline constexpr size_t max_events_query = 100;
 
 /// Maximum number of results for every explored context.
-constexpr size_t max_events_context = 100;
+inline constexpr size_t max_events_context = 100;
 
 } // namespace explore
 
@@ -96,13 +97,13 @@ constexpr size_t max_events_context = 100;
 namespace export_ {
 
 /// Path for reading reading the query or `-` for reading from STDIN.
-constexpr std::string_view read = "-";
+inline constexpr std::string_view read = "-";
 
 /// Maximum number of results.
-constexpr size_t max_events = 0;
+inline constexpr size_t max_events = 0;
 
 /// Path for writing query results or `-` for writing to STDOUT.
-constexpr std::string_view write = "-";
+inline constexpr std::string_view write = "-";
 
 /// Contains settings for the csv subcommand.
 struct csv {
@@ -134,11 +135,11 @@ struct infer {
 namespace index {
 
 /// The maximum length of a string before the default string index chops it off.
-constexpr size_t max_string_size = 1024;
+inline constexpr size_t max_string_size = 1024;
 
 /// The maximum number elements an index for a container type (set, vector,
 /// or table).
-constexpr size_t max_container_elements = 256;
+inline constexpr size_t max_container_elements = 256;
 
 } // namespace index
 
@@ -146,37 +147,38 @@ constexpr size_t max_container_elements = 256;
 namespace logger {
 
 /// Log filename.
-constexpr const char* log_file = "server.log";
+inline constexpr const char* log_file = "server.log";
 
 /// Log format for file output.
-constexpr const char* file_format = "[%Y-%m-%dT%T.%e%z] [%n] [%l] [%s:%#] %v";
+inline constexpr const char* file_format
+  = "[%Y-%m-%dT%T.%e%z] [%n] [%l] [%s:%#] %v";
 
 /// Log format for console output.
-constexpr const char* console_format = "%^[%T.%e] %v%$";
+inline constexpr const char* console_format = "%^[%T.%e] %v%$";
 
 /// Verbosity for writing to console.
-constexpr const char* console_verbosity = "info";
+inline constexpr const char* console_verbosity = "info";
 
 /// Verbosity for writing to file.
-constexpr const char* file_verbosity = "debug";
+inline constexpr const char* file_verbosity = "debug";
 
 /// Maximum number of log messages in the logger queue (client).
-constexpr const size_t client_queue_size = 100;
+inline constexpr const size_t client_queue_size = 100;
 
 /// Maximum number of log messages in the logger queue (server).
-constexpr const size_t server_queue_size = 1'000'000;
+inline constexpr const size_t server_queue_size = 1'000'000;
 
 /// Number of logger threads.
-constexpr const size_t logger_threads = 1;
+inline constexpr const size_t logger_threads = 1;
 
 /// Rotate log file if the file size exceeds threshold.
-constexpr const bool disable_log_rotation = false;
+inline constexpr const bool disable_log_rotation = false;
 
 /// File size threshold for the `rotating_file_sink`.
-constexpr const size_t rotate_threshold = 10 * 1'024 * 1'024; // 10_Mi;
+inline constexpr const size_t rotate_threshold = 10 * 1'024 * 1'024; // 10_Mi;
 
 /// Maximum number of rotated log files that are kept.
-constexpr const size_t rotate_files = 3;
+inline constexpr const size_t rotate_files = 3;
 
 } // namespace logger
 
@@ -186,81 +188,86 @@ constexpr const size_t rotate_files = 3;
 namespace system {
 
 /// Hostname or IP address and port of a remote node.
-constexpr std::string_view endpoint = "localhost:42000/tcp";
+inline constexpr std::string_view endpoint = "localhost:42000/tcp";
 
 /// Default port of a remote node.
-constexpr uint16_t endpoint_port = 42000;
+inline constexpr uint16_t endpoint_port = 42000;
 
 /// The unique ID of this node.
-constexpr std::string_view node_id = "node";
+inline constexpr std::string_view node_id = "node";
 
 /// Path to persistent state.
-constexpr std::string_view db_directory = "vast.db";
+inline constexpr std::string_view db_directory = "vast.db";
 
 /// Interval between two aging cycles.
-constexpr caf::timespan aging_frequency = std::chrono::hours{24};
+inline constexpr caf::timespan aging_frequency = std::chrono::hours{24};
 
 /// Interval between two disk scanning cycles.
-constexpr std::chrono::seconds disk_scan_interval = std::chrono::minutes{1};
+inline constexpr std::chrono::seconds disk_scan_interval
+  = std::chrono::minutes{1};
 
 /// Number of partitions to remove before re-checking disk size.
-constexpr size_t disk_monitor_step_size = 1;
+inline constexpr size_t disk_monitor_step_size = 1;
 
 /// Maximum number of events per INDEX partition.
-constexpr size_t max_partition_size = 4'194'304; // 4 Mi
+inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 
 /// Timeout after which an active partition is forcibly flushed.
-constexpr caf::timespan active_partition_timeout = std::chrono::hours{1};
+inline constexpr caf::timespan active_partition_timeout = std::chrono::hours{1};
 
 /// Maximum number of in-memory INDEX partitions.
-constexpr size_t max_in_mem_partitions = 10;
+inline constexpr size_t max_in_mem_partitions = 10;
 
 /// Number of immediately scheduled INDEX partitions.
-constexpr size_t taste_partitions = 5;
+inline constexpr size_t taste_partitions = 5;
 
 /// Maximum number of concurrent INDEX queries.
-constexpr size_t num_query_supervisors = 10;
+inline constexpr size_t num_query_supervisors = 10;
 
 /// The store backend to use.
-constexpr const char* store_backend = "segment-store";
+inline constexpr const char* store_backend = "segment-store";
 
 /// Number of cached ARCHIVE segments.
-constexpr size_t segments = 10;
+inline constexpr size_t segments = 10;
 
 /// Maximum size of ARCHIVE segments in MiB.
-constexpr size_t max_segment_size = 1'024;
+inline constexpr size_t max_segment_size = 1'024;
 
 /// Number of initial IDs to request in the IMPORTER.
-constexpr size_t initially_requested_ids = 128;
+inline constexpr size_t initially_requested_ids = 128;
 
 /// Rate at which telemetry data is sent to the ACCOUNTANT.
-constexpr std::chrono::milliseconds telemetry_rate
+inline constexpr std::chrono::milliseconds telemetry_rate
   = std::chrono::milliseconds{10000};
 
 /// Interval between checks whether a signal occured.
-constexpr std::chrono::milliseconds signal_monitoring_interval
+inline constexpr std::chrono::milliseconds signal_monitoring_interval
   = std::chrono::milliseconds{750};
 
 /// Timeout for initial connections to the node.
-constexpr std::chrono::milliseconds initial_request_timeout
+inline constexpr std::chrono::milliseconds initial_request_timeout
   = std::chrono::seconds{10};
 
 /// Timeout for the scheduler to give up on a partition.
-constexpr std::chrono::milliseconds scheduler_timeout
+inline constexpr std::chrono::milliseconds scheduler_timeout
   = std::chrono::minutes{15};
 
 /// The period to wait until a shutdown sequence finishes cleanly. After the
 /// elapses, the shutdown procedure escalates into a "hard kill".
 /// @relates shutdown_kill_timeout
-constexpr std::chrono::milliseconds shutdown_grace_period
+inline constexpr std::chrono::milliseconds shutdown_grace_period
   = std::chrono::minutes{3};
 
 /// Time to wait until receiving a DOWN from a killed actor.
 /// @relates shutdown_grace_period
-constexpr std::chrono::seconds shutdown_kill_timeout = std::chrono::minutes{1};
+inline constexpr std::chrono::seconds shutdown_kill_timeout
+  = std::chrono::minutes{1};
 
 /// The allowed false positive rate for a synopsis.
-constexpr double fp_rate = 0.01;
+inline constexpr double fp_rate = 0.01;
+
+/// Flag that enables creation of partition indexes in the database
+inline constexpr bool create_partition_index = true;
 
 } // namespace system
 
