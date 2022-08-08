@@ -3,7 +3,7 @@ title: Richer Typing in Sigma
 description: Towards Native Sigma Rule Execution
 authors: mavam
 date: 2022-08-12
-tags: [sigma, regex, taxonomies]
+tags: [sigma, regex, query-frontend]
 ---
 
 VAST's [Sigma frontend](/docs/understand-vast/query-language/frontends/sigma)
