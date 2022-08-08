@@ -36,6 +36,10 @@ struct evaluator_state {
   /// tree.
   void handle_missing_result(const offset& position, const caf::error& err);
 
+  /// Updates `predicate_hits` by all possible ids for partition and may
+  /// trigger re-evaluation of the expression tree.
+  void handle_no_indexer(const offset& position);
+
   /// Evaluates the predicate-tree and may produces new deltas.
   void evaluate();
 
@@ -54,6 +58,9 @@ struct evaluator_state {
 
   /// Stores hits for the expression.
   ids hits;
+
+  // Stores all ids for the partition. Required when no indexer is available
+  ids all_possible_ids_for_partition;
 
   /// Points to the parent actor.
   evaluator_actor::pointer self;
@@ -76,6 +83,7 @@ struct evaluator_state {
 /// @pre `!eval.empty()`
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
-          expression expr, std::vector<evaluation_triple> eval);
+          expression expr, std::vector<evaluation_triple> eval,
+          ids all_possible_ids_for_partition);
 
 } // namespace vast::system

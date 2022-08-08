@@ -361,7 +361,11 @@ partition_actor::behavior_type passive_partition(
         rp.deliver(uint64_t{0});
         return rp;
       }
-      auto eval = self->spawn(evaluator, query_context.expr, triples);
+
+      auto ids_for_evaluation
+        = detail::get_ids_for_evaluation(self->state.type_ids(), triples);
+      auto eval = self->spawn(evaluator, query_context.expr, std::move(triples),
+                              std::move(ids_for_evaluation));
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, rp, start,

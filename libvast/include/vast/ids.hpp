@@ -26,8 +26,8 @@ struct id_range {
   id_range(id id) : id_range(id, id + 1) {
     // nop
   }
-  id first;
-  id last;
+  id first{0u};
+  id last{0u};
 };
 
 /// Generates an ID set for the given ranges. For example,

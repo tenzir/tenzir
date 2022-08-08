@@ -62,6 +62,129 @@
 
 namespace vast::system {
 
+namespace {
+
+bool should_skip_index_creation(const type& type,
+                                const qualified_record_field& qf,
+                                const std::vector<index_config::rule>& rules) {
+  if (type.attribute("skip").has_value()) {
+    return true;
+  }
+
+  return not should_create_dense_index(qf, rules);
+}
+
+chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
+  flatbuffers::FlatBufferBuilder synopsis_builder;
+  const auto ps = pack(synopsis_builder, synopsis);
+  if (not ps)
+    return {};
+
+  fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
+  ps_builder.add_partition_synopsis_type(
+    fbs::partition_synopsis::PartitionSynopsis::legacy);
+  ps_builder.add_partition_synopsis(ps->Union());
+  auto ps_offset = ps_builder.Finish();
+  fbs::FinishPartitionSynopsisBuffer(synopsis_builder, ps_offset);
+  return fbs::release(synopsis_builder);
+}
+
+void serialize(
+  active_partition_actor::stateful_pointer<active_partition_state> self) {
+  auto& mutable_synopsis = self->state.data.synopsis.unshared();
+  // Shrink synopses for addr fields to optimal size.
+  mutable_synopsis.shrink();
+  // TODO: It would probably make more sense if the partition
+  // synopsis keeps track of offset/events internally.
+  mutable_synopsis.offset = 0;
+  mutable_synopsis.events = self->state.data.events;
+  for (auto& [qf, actor] : self->state.indexers) {
+    if (actor == nullptr) {
+      self->state.data.indexer_chunks.emplace_back(qf.name(), nullptr);
+      continue;
+    }
+    auto actor_id = actor.id();
+    auto chunk_it = self->state.chunks.find(actor_id);
+    if (chunk_it == self->state.chunks.end()) {
+      auto error = caf::make_error(ec::logic_error, "no chunk for for actor id "
+                                                      + to_string(actor_id));
+      VAST_ERROR("{} failed to serialize: {}", self->state.name, render(error));
+      self->state.persistence_promise.deliver(error);
+      return;
+    }
+    // TODO: Consider storing indexer chunks by the fully qualified
+    // field instead of just its fully qualified name in a future
+    // partition version. As-is, this breaks if multiple fields with
+    // the same fully qualified name but different types exist in
+    // the same partition.
+    self->state.data.indexer_chunks.emplace_back(
+      std::make_pair(qf.name(), chunk_it->second));
+  }
+  // Create the partition flatbuffer.
+  flatbuffers::FlatBufferBuilder builder;
+  auto combined_layout = self->state.combined_layout();
+  if (!combined_layout) {
+    auto err = caf::make_error(ec::logic_error, "unable to create "
+                                                "combined layout");
+    VAST_ERROR("{} failed to serialize {} with error: {}", *self,
+               self->state.name, err);
+    self->state.persistence_promise.deliver(err);
+    return;
+  }
+  auto partition = pack(builder, self->state.data, *combined_layout);
+  if (!partition) {
+    VAST_ERROR("{} failed to serialize {} with error: {}", *self,
+               self->state.name, partition.error());
+    self->state.persistence_promise.deliver(partition.error());
+    return;
+  }
+  VAST_ASSERT(self->state.persist_path);
+  VAST_ASSERT(self->state.synopsis_path);
+  // Note that this is a performance optimization: We used to store
+  // the partition synopsis inside the `Partition` flatbuffer, and
+  // then on startup the index would mmap all partitions and read
+  // the relevant part of the flatbuffer. However, due to the way
+  // the flatbuffer file format is structured this still needs three
+  // random file accesses: At the beginning to read vtable offset
+  // and file identifier, at the end to read the actual vtable, and
+  // finally at the actual data. On systems with aggressive
+  // readahead (ie., btrfs defaults to 4MiB), this can increase the
+  // i/o at startup and thus the time to boot by more than 10x.
+  //
+  // Since the synopsis should be small compared to the actual data,
+  // we store a redundant copy in the partition itself so we can
+  // regenerate the synopses as needed. This also means we don't
+  // need to handle errors here, since VAST can still start
+  // correctly (if a bit slower) when the write fails.
+  if (auto ps_chunk
+      = serialize_partition_synopsis(*self->state.data.synopsis)) {
+    self
+      ->request(self->state.filesystem, caf::infinite, atom::write_v,
+                *self->state.synopsis_path, std::move(ps_chunk))
+      .then([=](atom::ok) {}, [=](caf::error) {});
+  }
+  auto fbchunk = fbs::release(builder);
+  VAST_DEBUG("{} persists partition with a total size of "
+             "{} bytes",
+             *self, fbchunk->size());
+  // TODO: Add a proper timeout.
+  self
+    ->request(self->state.filesystem, caf::infinite, atom::write_v,
+              *self->state.persist_path, std::move(fbchunk))
+    .then(
+      [=](atom::ok) {
+        // Relinquish ownership and send the shrunken synopsis to
+        // the index.
+        self->state.persistence_promise.deliver(self->state.data.synopsis);
+        self->state.data.synopsis.reset();
+      },
+      [=](caf::error e) {
+        self->state.persistence_promise.deliver(std::move(e));
+      });
+}
+
+} // namespace
+
 /// Gets the ACTIVE INDEXER at a certain position.
 active_indexer_actor active_partition_state::indexer_at(size_t position) const {
   VAST_ASSERT(position < indexers.size());
@@ -251,11 +374,12 @@ active_partition_actor::behavior_type active_partition(
       size_t col = 0;
       for (const auto& [field, offset] :
            caf::get<record_type>(layout).leaves()) {
-        auto qf = qualified_record_field{layout, offset};
+        const auto qf = qualified_record_field{layout, offset};
         auto& idx = self->state.indexers[qf];
-        auto has_skip_attribute = field.type.attribute("skip").has_value();
-        if (has_skip_attribute)
+        if (should_skip_index_creation(
+              field.type, qf, self->state.synopsis_index_config.rules)) {
           continue;
+        }
         if (!idx) {
           auto value_index
             = factory<vast::value_index>::make(field.type, index_opts);
@@ -387,9 +511,12 @@ active_partition_actor::behavior_type active_partition(
         = std::count_if(indexers.begin(), indexers.end(), [](auto& idx) {
             return idx.second != nullptr;
           });
+
+      if (0u == valid_count) {
+        return serialize(self);
+      }
       VAST_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);
-      for (auto& [field_, indexer] : self->state.indexers) {
-        auto field = field_;
+      for (auto& [field, indexer] : self->state.indexers) {
         if (indexer == nullptr)
           continue;
         self->request(indexer, caf::infinite, atom::snapshot_v)
@@ -418,114 +545,11 @@ active_partition_actor::behavior_type active_partition(
                            *self, self->state.persisted_indexers, valid_count);
                 return;
               }
-              auto& mutable_synopsis = self->state.data.synopsis.unshared();
-              // Shrink synopses for addr fields to optimal size.
-              mutable_synopsis.shrink();
-              // TODO: It would probably make more sense if the partition
-              // synopsis keeps track of offset/events internally.
-              mutable_synopsis.offset = 0;
-              mutable_synopsis.events = self->state.data.events;
-              for (auto& [qf, actor] : self->state.indexers) {
-                if (actor == nullptr) {
-                  self->state.data.indexer_chunks.emplace_back(qf.name(),
-                                                               nullptr);
-                  continue;
-                }
-                auto actor_id = actor.id();
-                auto chunk_it = self->state.chunks.find(actor_id);
-                if (chunk_it == self->state.chunks.end()) {
-                  auto error = caf::make_error(ec::logic_error,
-                                               "no chunk for for actor id "
-                                                 + to_string(actor_id));
-                  VAST_ERROR("{} failed to serialize: {}", self->state.name,
-                             render(error));
-                  self->state.persistence_promise.deliver(error);
-                  return;
-                }
-                // TODO: Consider storing indexer chunks by the fully qualified
-                // field instead of just its fully qualified name in a future
-                // partition version. As-is, this breaks if multiple fields with
-                // the same fully qualified name but different types exist in
-                // the same partition.
-                self->state.data.indexer_chunks.emplace_back(
-                  std::make_pair(qf.name(), chunk_it->second));
-              }
-              // Create the partition flatbuffer.
-              flatbuffers::FlatBufferBuilder builder;
-              auto combined_layout = self->state.combined_layout();
-              if (!combined_layout) {
-                auto err = caf::make_error(ec::logic_error, "unable to create "
-                                                            "combined layout");
-                VAST_ERROR("{} failed to serialize {} with error: {}", *self,
-                           self->state.name, err);
-                self->state.persistence_promise.deliver(err);
-                return;
-              }
-              auto partition
-                = pack(builder, self->state.data, *combined_layout);
-              if (!partition) {
-                VAST_ERROR("{} failed to serialize {} with error: {}", *self,
-                           self->state.name, partition.error());
-                self->state.persistence_promise.deliver(partition.error());
-                return;
-              }
-              VAST_ASSERT(self->state.persist_path);
-              VAST_ASSERT(self->state.synopsis_path);
-              // Note that this is a performance optimization: We used to store
-              // the partition synopsis inside the `Partition` flatbuffer, and
-              // then on startup the index would mmap all partitions and read
-              // the relevant part of the flatbuffer. However, due to the way
-              // the flatbuffer file format is structured this still needs three
-              // random file accesses: At the beginning to read vtable offset
-              // and file identifier, at the end to read the actual vtable, and
-              // finally at the actual data. On systems with aggressive
-              // readahead (ie., btrfs defaults to 4MiB), this can increase the
-              // i/o at startup and thus the time to boot by more than 10x.
-              //
-              // Since the synopsis should be small compared to the actual data,
-              // we store a redundant copy in the partition itself so we can
-              // regenerate the synopses as needed. This also means we don't
-              // need to handle errors here, since VAST can still start
-              // correctly (if a bit slower) when the write fails.
-              flatbuffers::FlatBufferBuilder synopsis_builder;
-              if (auto ps
-                  = pack(synopsis_builder, *self->state.data.synopsis)) {
-                fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
-                ps_builder.add_partition_synopsis_type(
-                  fbs::partition_synopsis::PartitionSynopsis::legacy);
-                ps_builder.add_partition_synopsis(ps->Union());
-                auto ps_offset = ps_builder.Finish();
-                fbs::FinishPartitionSynopsisBuffer(synopsis_builder, ps_offset);
-                auto ps_chunk = fbs::release(synopsis_builder);
-                self
-                  ->request(self->state.filesystem, caf::infinite,
-                            atom::write_v, *self->state.synopsis_path, ps_chunk)
-                  .then([=](atom::ok) {}, [=](caf::error) {});
-              }
-              auto fbchunk = fbs::release(builder);
-              VAST_DEBUG("{} persists partition with a total size of "
-                         "{} bytes",
-                         *self, fbchunk->size());
-              // TODO: Add a proper timeout.
-              self
-                ->request(self->state.filesystem, caf::infinite, atom::write_v,
-                          *self->state.persist_path, fbchunk)
-                .then(
-                  [=](atom::ok) {
-                    // Relinquish ownership and send the shrunken synopsis to
-                    // the index.
-                    self->state.persistence_promise.deliver(
-                      self->state.data.synopsis);
-                    self->state.data.synopsis.reset();
-                  },
-                  [=](caf::error e) {
-                    self->state.persistence_promise.deliver(std::move(e));
-                  });
-              return;
+              serialize(self);
             },
-            [=](caf::error err) {
+            [=, field_ = field](caf::error err) {
               VAST_ERROR("{} failed to persist indexer for {} with error: {}",
-                         *self, field.name(), err);
+                         *self, field_.name(), err);
               ++self->state.persisted_indexers;
               if (!self->state.persistence_promise.pending())
                 self->state.persistence_promise.deliver(std::move(err));
@@ -550,7 +574,11 @@ active_partition_actor::behavior_type active_partition(
         rp.deliver(uint64_t{0});
         return rp;
       }
-      auto eval = self->spawn(evaluator, query_context.expr, triples);
+
+      auto ids_for_evaluation
+        = detail::get_ids_for_evaluation(self->state.type_ids(), triples);
+      auto eval = self->spawn(evaluator, query_context.expr, std::move(triples),
+                              std::move(ids_for_evaluation));
       self->request(eval, caf::infinite, atom::run_v)
         .then(
           [self, rp, start,

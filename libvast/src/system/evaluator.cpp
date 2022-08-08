@@ -119,6 +119,10 @@ void evaluator_state::handle_missing_result(
   decrement_pending();
 }
 
+void evaluator_state::handle_no_indexer(const offset& position) {
+  handle_result(position, all_possible_ids_for_partition);
+}
+
 void evaluator_state::evaluate() {
   auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
   VAST_DEBUG("{} got predicate_hits: {} expr_hits: {}", *self, predicate_hits,
@@ -144,27 +148,33 @@ evaluator_state::hits_for(const offset& position) {
 
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
-          expression expr, std::vector<evaluation_triple> eval) {
+          expression expr, std::vector<evaluation_triple> eval,
+          ids all_possible_ids_for_partition) {
   VAST_TRACE_SCOPE("{} {}", VAST_ARG(expr), caf::deep_to_string(eval));
   VAST_ASSERT(!eval.empty());
   self->state.expr = std::move(expr);
   self->state.eval = std::move(eval);
+  self->state.all_possible_ids_for_partition
+    = std::move(all_possible_ids_for_partition);
   return {
     [self](atom::run) {
       self->state.promise = self->make_response_promise<ids>();
       self->state.pending_responses += self->state.eval.size();
-      for (auto& triple : self->state.eval) {
-        // No strucutured bindings available due to subsequent lambda. :-/
-        // TODO: C++20
-        auto& pos = std::get<0>(triple);
-        auto& curried_pred = std::get<1>(triple);
-        auto& indexer = std::get<2>(triple);
+      for (auto& [pos, curried_pred, indexer] : self->state.eval) {
         ++self->state.predicate_hits[pos].first;
+        if (not indexer) {
+          self->state.handle_no_indexer(pos);
+          continue;
+        }
+
         self->request(indexer, caf::infinite, curried_pred)
-          .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
-                [=](const caf::error& err) {
-                  self->state.handle_missing_result(pos, err);
-                });
+          .then(
+            [self, pos_ = pos](const ids& hits) {
+              self->state.handle_result(pos_, hits);
+            },
+            [self, pos_ = pos](const caf::error& err) {
+              self->state.handle_missing_result(pos_, err);
+            });
       }
       if (self->state.pending_responses == 0) {
         VAST_DEBUG("{} has nothing to evaluate for expression", *self);

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/defaults.hpp"
 #include "vast/type.hpp"
 
@@ -56,5 +58,8 @@ struct index_config {
     return result;
   }
 };
+
+bool should_create_dense_index(const qualified_record_field& index_qf,
+                               const std::vector<index_config::rule>& rules);
 
 } // namespace vast
