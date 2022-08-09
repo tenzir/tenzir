@@ -72,7 +72,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
         });
       return result.inbound_slot();
     },
-    [self](const curried_predicate& pred) {
+    [self](atom::evaluate, const curried_predicate& pred) {
       VAST_DEBUG("{} got predicate: {}", *self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
@@ -119,7 +119,7 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
   self->state.partition_id = partition_id;
   self->state.idx = std::move(idx);
   return {
-    [self](const curried_predicate& pred) {
+    [self](atom::evaluate, const curried_predicate& pred) {
       VAST_DEBUG("{} got predicate: {}", *self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;

@@ -197,7 +197,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     // init
     [self](caf::unit_t&) {
       caf::timestamp now = std::chrono::system_clock::now();
-      self->send(self->state.accountant, "source.start", now,
+      self->send(self->state.accountant, atom::metrics_v, "source.start", now,
                  metrics_metadata{});
     },
     // get next element
@@ -309,7 +309,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         return err;
       return caf::unit;
     },
-    [self](expression& expr) -> caf::result<void> {
+    [self](atom::normalize, expression& expr) -> caf::result<void> {
       auto normalized_expr = normalize_and_validate(std::move(expr));
       if (!normalized_expr) {
         return caf::make_error(ec::invalid_argument,

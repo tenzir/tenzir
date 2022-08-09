@@ -87,7 +87,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     query.ids = ids;
     self->send(actor, atom::query_v, query);
     run();
-    std::this_thread::sleep_for(std::chrono::seconds{1});
     self
       ->do_receive(
         [&](uint64_t x) {
@@ -116,7 +115,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     query.ids = ids;
     self->send(actor, atom::query_v, query);
     run();
-    std::this_thread::sleep_for(std::chrono::seconds{1});
     auto received_messages = uint64_t{};
     self
       // we can't distinguish the "final tally" message from the individual

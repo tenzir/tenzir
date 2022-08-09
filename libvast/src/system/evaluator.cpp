@@ -167,7 +167,7 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           continue;
         }
 
-        self->request(indexer, caf::infinite, curried_pred)
+        self->request(indexer, caf::infinite, atom::evaluate_v, curried_pred)
           .then(
             [self, pos_ = pos](const ids& hits) {
               self->state.handle_result(pos_, hits);

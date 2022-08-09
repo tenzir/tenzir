@@ -507,15 +507,15 @@ partition_actor::behavior_type passive_partition(
             VAST_DEBUG("{} received results from the evaluator", *self);
             duration runtime = std::chrono::steady_clock::now() - start;
             auto id_str = fmt::to_string(query_context.id);
-            self->send(self->state.accountant, "partition.lookup.runtime",
-                       runtime,
+            self->send(self->state.accountant, atom::metrics_v,
+                       "partition.lookup.runtime", runtime,
                        metrics_metadata{
                          {"query", id_str},
                          {"issuer", query_context.issuer},
                          {"partition-type", "passive"},
                        });
-            self->send(self->state.accountant, "partition.lookup.hits",
-                       rank(hits),
+            self->send(self->state.accountant, atom::metrics_v,
+                       "partition.lookup.hits", rank(hits),
                        metrics_metadata{
                          {"query", std::move(id_str)},
                          {"issuer", query_context.issuer},

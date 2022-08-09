@@ -231,7 +231,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
     if (auto telemetry = self->state.telemetry(); !telemetry.data.empty())
-      self->send(self->state.accountant, std::move(telemetry));
+      self->send(self->state.accountant, atom::metrics_v, std::move(telemetry));
     if (auto err = self->state.save_to_disk())
       VAST_ERROR("{} failed to persist state to disk: {}", *self,
                  self->system().render(err));
@@ -252,7 +252,8 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       if (auto telemetry = self->state.telemetry(); !telemetry.data.empty()) {
         VAST_TRACE_SCOPE("{} sends out a telemetry report to the {}", *self,
                          VAST_ARG("accountant", self->state.accountant));
-        self->send(self->state.accountant, std::move(telemetry));
+        self->send(self->state.accountant, atom::metrics_v,
+                   std::move(telemetry));
       }
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
@@ -334,7 +335,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     [self](atom::resolve, const expression& e) {
       return resolve(self->state.taxonomies, e, self->state.data);
     },
-    [self](accountant_actor accountant) {
+    [self](atom::set, accountant_actor accountant) {
       VAST_ASSERT(accountant);
       VAST_DEBUG("{} connects to {}", *self, VAST_ARG(accountant));
       self->state.accountant = accountant;

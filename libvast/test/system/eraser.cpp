@@ -105,7 +105,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
         vast::query_context&) -> caf::result<system::query_cursor> {
       FAIL("no mock implementation available");
     },
-    [=](const uuid&, uint32_t) {
+    [=](atom::query, const uuid&, uint32_t) {
       FAIL("no mock implementation available");
     },
     [=](atom::erase, uuid) -> atom::done {

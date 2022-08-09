@@ -58,7 +58,7 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
   if (accountant)
-    self->send(handle, accountant);
+    self->send(handle, atom::set_v, accountant);
   if (importer && has_continuous_option(query_opts))
     self
       ->request(importer, caf::infinite,
@@ -73,7 +73,7 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
         });
   if (index) {
     VAST_DEBUG("{} connects index to new exporter", *self);
-    self->send(handle, index);
+    self->send(handle, atom::set_v, index);
   }
   // Setting max-events to 0 means infinite.
   auto max_events = get_or(args.inv.options, "vast.export.max-events",

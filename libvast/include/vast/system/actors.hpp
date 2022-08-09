@@ -143,7 +143,7 @@ using evaluator_actor = typed_actor_fwd<
 /// The INDEXER actor interface.
 using indexer_actor = typed_actor_fwd<
   // Returns the ids for the given predicate.
-  caf::replies_to<curried_predicate>::with<ids>,
+  caf::replies_to<atom::evaluate, curried_predicate>::with<ids>,
   // Requests the INDEXER to shut down.
   caf::reacts_to<atom::shutdown>>::unwrap;
 
@@ -167,19 +167,19 @@ using accountant_actor = typed_actor_fwd<
   // Registers the sender with the ACCOUNTANT.
   caf::reacts_to<atom::announce, std::string>,
   // Record duration metric.
-  caf::reacts_to<std::string, duration, metrics_metadata>,
+  caf::reacts_to<atom::metrics, std::string, duration, metrics_metadata>,
   // Record time metric.
-  caf::reacts_to<std::string, time, metrics_metadata>,
+  caf::reacts_to<atom::metrics, std::string, time, metrics_metadata>,
   // Record integer metric.
-  caf::reacts_to<std::string, integer, metrics_metadata>,
+  caf::reacts_to<atom::metrics, std::string, integer, metrics_metadata>,
   // Record count metric.
-  caf::reacts_to<std::string, count, metrics_metadata>,
+  caf::reacts_to<atom::metrics, std::string, count, metrics_metadata>,
   // Record real metric.
-  caf::reacts_to<std::string, real, metrics_metadata>,
+  caf::reacts_to<atom::metrics, std::string, real, metrics_metadata>,
   // Record a metrics report.
-  caf::reacts_to<report>,
+  caf::reacts_to<atom::metrics, report>,
   // Record a performance report.
-  caf::reacts_to<performance_report>,
+  caf::reacts_to<atom::metrics, performance_report>,
   // The internal telemetry loop of the ACCOUNTANT.
   caf::reacts_to<atom::telemetry>>
   // Conform to the procotol of the STATUS CLIENT actor.
@@ -254,7 +254,7 @@ using index_actor = typed_actor_fwd<
   // handler can go directly to the catalog.
   caf::replies_to<atom::resolve, expression>::with<catalog_result>,
   // Queries PARTITION actors for a given query id.
-  caf::reacts_to<uuid, uint32_t>,
+  caf::reacts_to<atom::query, uuid, uint32_t>,
   // Erases the given partition from the INDEX.
   caf::replies_to<atom::erase, uuid>::with<atom::done>,
   // Erases the given set of partitions from the INDEX.
@@ -277,7 +277,7 @@ using index_actor = typed_actor_fwd<
 /// The ARCHIVE actor interface.
 using archive_actor = typed_actor_fwd<
   // Registers the ARCHIVE with the ACCOUNTANT.
-  caf::reacts_to<accountant_actor>,
+  caf::reacts_to<atom::set, accountant_actor>,
   // INTERNAL: Handles a query for the given ids, and sends the table slices
   // back to the client.
   caf::reacts_to<atom::internal, atom::resume>,
@@ -306,7 +306,7 @@ using type_registry_actor = typed_actor_fwd<
   caf::replies_to<atom::resolve, expression>::with< //
     expression>,
   // Registers the TYPE REGISTRY with the ACCOUNTANT.
-  caf::reacts_to<accountant_actor>>
+  caf::reacts_to<atom::set, accountant_actor>>
   // Conform to the procotol of the STREAM SINK actor for table slices,
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the procotol of the STATUS CLIENT actor.
@@ -383,19 +383,19 @@ using exporter_actor = typed_actor_fwd<
   // Request extraction of the given number of events.
   caf::reacts_to<atom::extract, uint64_t>,
   // Register the ACCOUNTANT actor.
-  caf::reacts_to<accountant_actor>,
+  caf::reacts_to<atom::set, accountant_actor>,
   // Register the INDEX actor.
-  caf::reacts_to<index_actor>,
+  caf::reacts_to<atom::set, index_actor>,
   // Register the SINK actor.
   caf::reacts_to<atom::sink, caf::actor>,
   // Execute previously registered query.
   caf::reacts_to<atom::run>,
   // Execute previously registered query.
   caf::reacts_to<atom::done>,
-  // Execute previously registered query.
-  caf::reacts_to<table_slice>,
   // Register a STATISTICS SUBSCRIBER actor.
   caf::reacts_to<atom::statistics, caf::actor>>
+  // Receive a table slice that belongs to a query.
+  ::extend_with<receiver_actor<table_slice>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
@@ -422,7 +422,7 @@ using source_actor = typed_actor_fwd<
   // Update the currently used module of the SOURCE.
   caf::reacts_to<atom::put, module>,
   // Update the expression used for filtering data in the SOURCE.
-  caf::reacts_to<expression>,
+  caf::reacts_to<atom::normalize, expression>,
   // Set up a new stream sink for the generated data.
   caf::reacts_to<stream_sink_actor<table_slice, std::string>>,
   // INTERNAL: Cause the source to wake up.
