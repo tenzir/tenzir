@@ -859,6 +859,12 @@ TEST(full_table_slice) {
   check_column(slice, 12, count_type{}, f2_count);     // f11_1_2
   check_column(slice, 13, address_type{}, f4_address); // f11_2_1
   check_column(slice, 14, pattern_type{}, f3_pattern); // f11_2_2
+  MESSAGE("test is_serilaized");
+  CHECK(slice.is_serialized());
+  auto slice2 = table_slice{to_record_batch(slice)};
+  CHECK(!slice2.is_serialized());
+  CHECK_EQUAL(slice, slice2);
+  CHECK(table_slice{}.is_serialized());
 }
 
 TEST(convert_legacy_table_slice) {

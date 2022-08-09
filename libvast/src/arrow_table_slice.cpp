@@ -797,6 +797,14 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     // chunk at all, but rather create it on the fly only.
     if (batch) {
       state_.record_batch = batch;
+      // Technically we could infer an outer buffer here as Arrow Buffer
+      // instances remember which parent buffer they were sliced from, so we if
+      // know that the schema, the dictionary, and then all columns in order
+      // concatenated are exactly the parent-most buffer we could get back to
+      // it. This is in practice not a bottleneck, as we only create from a
+      // record batch directly if we do not have the IPC backing already, so we
+      // chose not to implement it and always treat the IPC backing as not yet
+      // created.
       state_.is_serialized = false;
     } else {
       auto decoder = record_batch_decoder{};

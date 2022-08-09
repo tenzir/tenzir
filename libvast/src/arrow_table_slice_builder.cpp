@@ -57,7 +57,8 @@ namespace {
 /// @param serialize Embed the IPC format in the FlatBuffers table.
 table_slice
 create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                   flatbuffers::FlatBufferBuilder& builder, bool serialize) {
+                   flatbuffers::FlatBufferBuilder& builder,
+                   table_slice::serialize serialize) {
   VAST_ASSERT(record_batch);
 #if VAST_ENABLE_ASSERTIONS
   // NOTE: There's also a ValidateFull function, but that always errors when
@@ -66,7 +67,7 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   VAST_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
 #endif // VAST_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
-  if (serialize) {
+  if (serialize == table_slice::serialize::yes) {
     auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
     auto opts = arrow::ipc::IpcWriteOptions::Defaults();
     opts.codec
@@ -99,8 +100,9 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder);
   auto result = table_slice{std::move(chunk), table_slice::verify::no,
-                            serialize ? std::shared_ptr<arrow::RecordBatch>{}
-                                      : record_batch};
+                            serialize == table_slice::serialize::yes
+                              ? std::shared_ptr<arrow::RecordBatch>{}
+                              : record_batch};
   result.import_time(time{});
   return result;
 }
@@ -141,12 +143,13 @@ table_slice arrow_table_slice_builder::finish() {
     caf::get<type_to_arrow_array_t<record_type>>(*combined_array).fields());
   // Reset the builder state.
   num_rows_ = {};
-  return create_table_slice(record_batch, this->builder_, true);
+  return create_table_slice(record_batch, this->builder_,
+                            table_slice::serialize::yes);
 }
 
 table_slice arrow_table_slice_builder::create(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch, bool serialize,
-  size_t initial_buffer_size) {
+  const std::shared_ptr<arrow::RecordBatch>& record_batch,
+  table_slice::serialize serialize, size_t initial_buffer_size) {
   verify_record_batch(*record_batch);
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
   return create_table_slice(record_batch, builder, serialize);
