@@ -27,7 +27,7 @@ concurrency:
   # it's running smoothly for all users.
   group: ${{ github.workflow }}-${{ github.ref }}
   # Cancel all in-progress runs of this action for the same pull request.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 
 env:
   CCACHE_MAXSIZE: "5G"
