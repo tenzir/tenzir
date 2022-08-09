@@ -40,6 +40,13 @@ public:
     yes, ///< Enable FlatBuffers table verification.
   };
 
+  /// Controls whether the underlying FlatBuffers table should be created when
+  /// constructing a table slice from an existing Arrow Record Batch.
+  enum class serialize : uint8_t {
+    no,  ///< Skip serialization into the Arrow IPC backing if possible.
+    yes, ///< Always serialize into an Arrow IPC backing.
+  };
+
   /// A typed view on a given set of columns of a table slice.
   template <class... Types>
   friend class projection;
@@ -53,10 +60,14 @@ public:
   /// `vast.fbs.TableSlice` FlatBuffers table.
   /// @param chunk A `vast.fbs.TableSlice` FlatBuffers table in a chunk.
   /// @param verify Controls whether the table should be verified.
+  /// @param batch An optional pre-existing record batch to use over the IPC
+  /// buffer in the chunk.
   /// @pre !chunk || chunk->unique()
   /// @note Constructs an invalid table slice if the verification of the
   /// FlatBuffers table fails.
-  explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
+  explicit table_slice(chunk_ptr&& chunk, enum verify verify,
+                       const std::shared_ptr<arrow::RecordBatch>& batch
+                       = nullptr) noexcept;
 
   /// Construct a table slice from a flattened table slice embedded in a chunk,
   /// and shares the chunk's lifetime.
@@ -72,7 +83,9 @@ public:
 
   /// Construct an Arrow-encoded table slice from an existing record batch.
   /// @param record_batch The record batch containing the table slice data.
-  explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch);
+  /// @param serialize Whether to store IPC format as a backing.
+  explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+                       enum serialize serialize = serialize::no);
 
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.
@@ -132,6 +145,9 @@ public:
   /// Sets the import timestamp.
   /// @pre The underlying chunk must be unique.
   void import_time(time import_time) noexcept;
+
+  /// @returns Whether the slice is already serialized.
+  [[nodiscard]] bool is_serialized() const noexcept;
 
   /// @returns The number of in-memory table slices.
   static size_t instances() noexcept;
@@ -197,6 +213,7 @@ public:
   /// Returns an immutable view on the underlying binary representation of a
   /// table slice.
   /// @param slice The table slice to view.
+  /// @pre slice.is_serialized()
   friend std::span<const std::byte> as_bytes(const table_slice& slice) noexcept;
 
   /// Opt-in to CAF's type inspection API.
@@ -204,15 +221,26 @@ public:
   friend auto inspect(Inspector& f, table_slice& x) ->
     typename Inspector::result_type {
     auto chunk = x.chunk_;
-    return f(caf::meta::type_name("vast.table_slice"), chunk,
-             caf::meta::load_callback([&]() noexcept -> caf::error {
-               // When VAST allows for external tools to hook directly into the
-               // table slice streams, this should be switched to verify if the
-               // chunk is unique.
-               x = table_slice{std::move(chunk), table_slice::verify::no};
-               return caf::none;
-             }),
-             x.offset_);
+    return f(
+      caf::meta::type_name("vast.table_slice"),
+      caf::meta::save_callback([&]() noexcept -> caf::error {
+        if (!x.is_serialized()) {
+          auto serialized_x = table_slice{to_record_batch(x), serialize::yes};
+          serialized_x.import_time(x.import_time());
+          chunk = serialized_x.chunk_;
+          x = std::move(serialized_x);
+        }
+        return caf::none;
+      }),
+      chunk, caf::meta::load_callback([&]() noexcept -> caf::error {
+        // When VAST allows for external tools to hook directly into the
+        // table slice streams, this should be switched to verify if the
+        // chunk is unique.
+        x = table_slice{std::move(chunk), table_slice::verify::no};
+        VAST_ASSERT(x.is_serialized());
+        return caf::none;
+      }),
+      x.offset_);
   }
 
   // -- operations -------------------------------------------------------------

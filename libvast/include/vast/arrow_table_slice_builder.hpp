@@ -45,6 +45,7 @@ public:
   /// @pre `record_batch->schema()->Equals(make_experimental_schema(layout))``
   [[nodiscard]] table_slice static create(
     const std::shared_ptr<arrow::RecordBatch>& record_batch,
+    table_slice::serialize serialize = table_slice::serialize::no,
     size_t initial_buffer_size = default_buffer_size);
 
   /// @returns The number of columns in the table slice.

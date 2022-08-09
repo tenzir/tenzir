@@ -144,7 +144,9 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
 
 table_slice::table_slice() noexcept = default;
 
-table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
+table_slice::table_slice(
+  chunk_ptr&& chunk, enum verify verify,
+  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   VAST_ASSERT(!chunk_ || chunk_->unique());
   if (chunk_) {
@@ -156,7 +158,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
         auto state = std::make_unique<std::decay_t<decltype(*state_ptr)>>(
-          encoded, chunk_);
+          encoded, chunk_, batch);
         state_ptr = state.get();
         const auto bytes = as_bytes(chunk_);
         // We create a second chunk with an intentionally decoupled reference
@@ -187,9 +189,9 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
   // nop
 }
 
-table_slice::table_slice(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch) {
-  *this = arrow_table_slice_builder::create(record_batch);
+table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+                         enum serialize serialize) {
+  *this = arrow_table_slice_builder::create(record_batch, serialize);
 }
 
 table_slice::table_slice(const table_slice& other) noexcept = default;
@@ -229,21 +231,25 @@ table_slice table_slice::unshare() const noexcept {
 
 // TODO: Dispatch to optimized implementations if the encodings are the same.
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
-  // Check whether the slices point to the same chunk of data.
-  if (lhs.chunk_ == rhs.chunk_)
+  if (!lhs.chunk_ && !rhs.chunk_)
     return true;
-  // Check whether the slices have different sizes or layouts.
-  if (lhs.rows() != rhs.rows() || lhs.columns() != rhs.columns()
-      || lhs.layout() != lhs.layout())
-    return false;
-  // Check whether the slices contain different data.
-  auto flat_layout = flatten(caf::get<record_type>(lhs.layout()));
-  for (size_t row = 0; row < lhs.rows(); ++row)
-    for (size_t col = 0; col < flat_layout.num_fields(); ++col)
-      if (lhs.at(row, col, flat_layout.field(col).type)
-          != rhs.at(row, col, flat_layout.field(col).type))
-        return false;
-  return true;
+  if (lhs.encoding() == table_slice_encoding::msgpack
+      || rhs.encoding() == table_slice_encoding::msgpack) {
+    // Check whether the slices have different sizes or layouts.
+    if (lhs.rows() != rhs.rows() || lhs.columns() != rhs.columns()
+        || lhs.layout() != lhs.layout())
+      return false;
+    // Check whether the slices contain different data.
+    auto flat_layout = flatten(caf::get<record_type>(lhs.layout()));
+    for (size_t row = 0; row < lhs.rows(); ++row)
+      for (size_t col = 0; col < flat_layout.num_fields(); ++col)
+        if (lhs.at(row, col, flat_layout.field(col).type)
+            != rhs.at(row, col, flat_layout.field(col).type))
+          return false;
+    return true;
+  }
+  constexpr auto check_metadata = true;
+  return to_record_batch(lhs)->Equals(*to_record_batch(rhs), check_metadata);
 }
 
 bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
@@ -341,6 +347,18 @@ void table_slice::import_time(time import_time) noexcept {
   visit(f, as_flatbuffer(chunk_));
 }
 
+bool table_slice::is_serialized() const noexcept {
+  auto f = detail::overload{
+    []() noexcept {
+      return true;
+    },
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->is_serialized();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
+}
+
 size_t table_slice::instances() noexcept {
   return num_instances_;
 }
@@ -428,6 +446,7 @@ std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
 // -- concepts -----------------------------------------------------------------
 
 std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
+  VAST_ASSERT(slice.is_serialized());
   return as_bytes(slice.chunk_);
 }
 

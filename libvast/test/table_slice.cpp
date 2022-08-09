@@ -202,6 +202,8 @@ TEST(split) {
   // Splits `sut` using split() and then converting to events.
   auto split_sut = [&](size_t parition_point) {
     auto [first, second] = split(sut, parition_point);
+    CHECK(!first.is_serialized());
+    CHECK(!second.is_serialized());
     if (first.rows() + second.rows() != 8)
       FAIL("expected 8 rows in total, got " << (first.rows() + second.rows()));
     return std::pair{make_data(first), make_data(second)};
