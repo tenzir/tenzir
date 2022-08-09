@@ -87,14 +87,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     query.ids = ids;
     self->send(actor, atom::query_v, query);
     run();
-    std::this_thread::sleep_for(std::chrono::seconds{1});
     self
       ->do_receive(
         [&](uint64_t x) {
           tally = x;
           done = true;
         },
-        [&](vast::table_slice slice) {
+        [&](vast::atom::receive, vast::table_slice slice) {
           rows += slice.rows();
           result.push_back(std::move(slice));
         })
@@ -116,20 +115,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     query.ids = ids;
     self->send(actor, atom::query_v, query);
     run();
-    std::this_thread::sleep_for(std::chrono::seconds{1});
-    auto received_messages = uint64_t{};
     self
-      // we can't distinguish the "final tally" message from the individual
-      // results
-      ->do_receive([&](uint64_t x) {
-        // first message is for the query actor, second one back to sender
-        if (++received_messages >= 2) {
+      // First handler handles count.sink message and the second is response to
+      // request above
+      ->do_receive(
+        [&](atom::receive, uint64_t x) {
+          rows += x;
+        },
+        [&](uint64_t x) {
           done = true;
           tally = x;
-        } else {
-          rows += x;
-        }
-      })
+        })
       .until(done);
     REQUIRE_EQUAL(rows, tally);
     return tally;

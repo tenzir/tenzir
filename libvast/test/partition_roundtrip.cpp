@@ -285,7 +285,7 @@ TEST(full partition roundtrip) {
   auto dummy_client = [](std::shared_ptr<uint64_t> count)
     -> vast::system::receiver_actor<uint64_t>::behavior_type {
     return {
-      [count](uint64_t hits) {
+      [count](vast::atom::receive, uint64_t hits) {
         *count += hits;
       },
     };

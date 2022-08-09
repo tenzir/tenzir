@@ -384,7 +384,7 @@ partition_actor::behavior_type passive_partition(
             // exactly.
             auto* count = caf::get_if<query_context::count>(&query_context.cmd);
             if (count && count->mode == query_context::count::estimate) {
-              self->send(count->sink, rank(hits));
+              self->send(count->sink, atom::receive_v, rank(hits));
               rp.deliver(rank(hits));
             } else {
               query_context.ids = hits;

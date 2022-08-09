@@ -255,7 +255,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.transform = std::move(transform);
   self->state.store_id = std::move(store_id);
   return {
-    [self](vast::table_slice& slice) {
+    [self](atom::receive, vast::table_slice& slice) {
       update_statistics(self->state.stats_in, slice);
       const auto old_import_time = slice.import_time();
       if (auto err = self->state.transform->add(std::move(slice))) {
@@ -268,7 +268,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       self->state.max_import_time
         = std::max(self->state.max_import_time, old_import_time);
     },
-    [self](atom::done) -> caf::result<void> {
+    [self](atom::receive, atom::done) -> caf::result<void> {
       auto transformed = self->state.transform->finish();
       if (!transformed) {
         VAST_ERROR("{} failed to finish transform: {}", *self,

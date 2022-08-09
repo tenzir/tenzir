@@ -87,9 +87,9 @@ TEST(identity pipeline / done before persist) {
   size_t events = 0;
   for (auto& slice : zeek_conn_log) {
     events += slice.rows();
-    self->send(transformer, slice);
+    self->send(transformer, vast::atom::receive_v, slice);
   }
-  self->send(transformer, vast::atom::done_v);
+  self->send(transformer, vast::atom::receive_v, vast::atom::done_v);
   run();
   auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
   run();
@@ -171,9 +171,9 @@ TEST(delete pipeline / persist before done) {
   size_t events = 0;
   for (auto& slice : zeek_conn_log) {
     events += slice.rows();
-    self->send(transformer, slice);
+    self->send(transformer, vast::atom::receive_v, slice);
   }
-  self->send(transformer, vast::atom::done_v);
+  self->send(transformer, vast::atom::receive_v, vast::atom::done_v);
   run();
   auto synopsis = vast::partition_synopsis_ptr{nullptr};
   auto uuid = vast::uuid::nil();
@@ -260,21 +260,21 @@ TEST(partition with multiple types) {
   size_t events = 0;
   for (auto& slice : suricata_dns_log) {
     events += slice.rows();
-    self->send(transformer, slice);
+    self->send(transformer, vast::atom::receive_v, slice);
   }
   for (auto& slice : suricata_http_log) {
     events += slice.rows();
-    self->send(transformer, slice);
+    self->send(transformer, vast::atom::receive_v, slice);
   }
   for (auto& slice : suricata_dns_log) {
     events += slice.rows();
-    self->send(transformer, slice);
+    self->send(transformer, vast::atom::receive_v, slice);
   }
   for (auto& slice : suricata_flow_log) {
     events += slice.rows();
-    self->send(transformer, slice);
+    self->send(transformer, vast::atom::receive_v, slice);
   }
-  self->send(transformer, vast::atom::done_v);
+  self->send(transformer, vast::atom::receive_v, vast::atom::done_v);
   run();
   auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
   run();
@@ -521,11 +521,11 @@ TEST(exceeded partition size) {
   for (size_t i = 0; i < expected_total; ++i) {
     for (auto& slice : suricata_dns_log) {
       events += slice.rows();
-      self->send(transformer, slice);
+      self->send(transformer, vast::atom::receive_v, slice);
     }
   }
   CHECK_EQUAL(events, expected_total);
-  self->send(transformer, vast::atom::done_v);
+  self->send(transformer, vast::atom::receive_v, vast::atom::done_v);
   run();
   auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
   run();

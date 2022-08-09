@@ -85,7 +85,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
       auto hdl = caf::actor_cast<caf::actor>(self->state.client);
       for (uint32_t i = 0; i < n; ++i)
         anon_self->send(hdl, *self->state.it++);
-      anon_self->send(hdl, atom::done_v);
+      anon_self->send(hdl, atom::receive_v, atom::done_v);
     },
     [=](atom::erase, uuid) -> atom::done {
       FAIL("no mock implementation available");
@@ -163,11 +163,11 @@ TEST(state transitions) {
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
-  expect((atom::done), from(index).to(aut));
+  expect((atom::receive, atom::done), from(index).to(aut));
   expect((uuid, uint32_t), from(aut).to(index));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
-  expect((atom::done), from(index).to(aut));
+  expect((atom::receive, atom::done), from(index).to(aut));
   CHECK_EQUAL(mock_ref().log, expected_log);
   CHECK_EQUAL(mock_ref().results, unsigned{2 + 3 + 6 + 12 + 24});
   CHECK_EQUAL(mock_ref().state(), system::query_processor::idle);

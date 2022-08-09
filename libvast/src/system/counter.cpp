@@ -45,7 +45,7 @@ void counter_state::init(expression expr, index_actor index,
     behaviors_[await_results_until_done].as_behavior_impl()};
   behaviors_[await_results_until_done] = base.or_else(
     // Forward results to the sink.
-    [this](uint64_t num_results) {
+    [this](atom::receive, uint64_t num_results) {
       self_->send(client_, num_results);
     });
 }

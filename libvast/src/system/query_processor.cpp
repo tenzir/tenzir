@@ -46,7 +46,7 @@ query_processor::query_processor(caf::event_based_actor* self)
     },
     status_handler);
   behaviors_[await_results_until_done].assign(
-    [this](atom::done) -> caf::result<void> {
+    [this](atom::receive, atom::done) -> caf::result<void> {
       if (block_end_of_hits_)
         return caf::skip;
       partitions_.received += partitions_.scheduled;

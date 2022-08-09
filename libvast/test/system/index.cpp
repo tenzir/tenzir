@@ -87,11 +87,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       auto done = false;
       while (!done)
         self->receive(
-          [&](table_slice& slice) {
+          [&](atom::receive, table_slice& slice) {
             // test
             result += slice.rows();
           },
-          [&](atom::done) {
+          [&](atom::receive, atom::done) {
             done = true;
           },
           caf::others >>

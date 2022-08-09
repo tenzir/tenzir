@@ -139,7 +139,7 @@ handle_lookup(Actor& self, const vast::query_context& query_context,
         const auto& checker = checkers.at(i);
         auto result = count_matching(slice, checker, ids);
         num_hits += result;
-        self->send(count.sink, result);
+        self->send(count.sink, atom::receive_v, result);
       }
     },
     [&](const query_context::extract& extract) {
@@ -150,7 +150,7 @@ handle_lookup(Actor& self, const vast::query_context& query_context,
         auto final_slice = filter(slice, checker, ids);
         if (final_slice) {
           num_hits += final_slice->rows();
-          self->send(extract.sink, *final_slice);
+          self->send(extract.sink, atom::receive_v, *final_slice);
         }
       }
     },

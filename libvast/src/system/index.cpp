@@ -825,7 +825,7 @@ void index_state::schedule_lookups() {
     auto immediate_completion = [&](const query_queue::entry& x) {
       for (auto qid : x.queries)
         if (auto client = pending_queries.handle_completion(qid))
-          self->send(*client, atom::done_v);
+          self->send(*client, atom::receive_v, atom::done_v);
     };
     if (next->erased) {
       VAST_DEBUG("{} skips erased partition {}", *self, next->partition);
@@ -881,7 +881,7 @@ void index_state::schedule_lookups() {
       }
       auto handle_completion = [cnt, qid, this] {
         if (auto client = pending_queries.handle_completion(qid))
-          self->send(*client, atom::done_v);
+          self->send(*client, atom::receive_v, atom::done_v);
         // 4. recursively call schedule_lookups in the done handler. ...or
         //    when all done? (5)
         // 5. decrement running_partition_lookups when all queries that
@@ -1410,7 +1410,7 @@ index(index_actor::stateful_pointer<index_state> self,
             VAST_DEBUG("{} returns without result: no partitions qualify",
                        *self);
             rp.deliver(query_cursor{query_id, 0u, 0u});
-            self->send(client, atom::done_v);
+            self->send(client, atom::receive_v, atom::done_v);
             return;
           }
           auto num_candidates = detail::narrow<uint32_t>(candidates.size());

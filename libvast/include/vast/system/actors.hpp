@@ -92,7 +92,7 @@ using flush_listener_actor = typed_actor_fwd<
 template <class T, class... Ts>
 using receiver_actor = typename typed_actor_fwd<
   // Add a new source.
-  typename caf::reacts_to<T, Ts...>>::unwrap;
+  typename caf::reacts_to<atom::receive, T, Ts...>>::unwrap;
 
 /// The STATUS CLIENT actor interface.
 using status_client_actor = typed_actor_fwd<
@@ -402,12 +402,12 @@ using exporter_actor = typed_actor_fwd<
   caf::reacts_to<atom::sink, caf::actor>,
   // Execute previously registered query.
   caf::reacts_to<atom::run>,
-  // Execute previously registered query.
-  caf::reacts_to<atom::done>,
-  // Execute previously registered query.
-  caf::reacts_to<table_slice>,
   // Register a STATISTICS SUBSCRIBER actor.
   caf::reacts_to<atom::statistics, caf::actor>>
+  // Receive a table slice that belongs to a query.
+  ::extend_with<receiver_actor<table_slice>>
+  // Execute previously registered query.
+  ::extend_with<receiver_actor<atom::done>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.

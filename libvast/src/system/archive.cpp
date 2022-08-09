@@ -203,14 +203,15 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                          die("logic error detected");
                        auto result = count_matching(*slice, checker,
                                                     self->state.session_ids);
-                       self->send(count.sink, result);
+                       self->send(count.sink, atom::receive_v, result);
                      },
                      [&](const query_context::extract& extract) {
                        auto final_slice
                          = filter(*slice, checker, self->state.session_ids);
                        if (final_slice) {
                          request.num_hits += final_slice->rows();
-                         self->send(extract.sink, *final_slice);
+                         self->send(extract.sink, atom::receive_v,
+                                    *final_slice);
                        }
                      },
                    },

@@ -51,7 +51,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
           tally = x;
           done = true;
         },
-        [&](vast::table_slice slice) {
+        [&](vast::atom::receive, vast::table_slice slice) {
           rows += slice.rows();
           result.push_back(std::move(slice));
         })

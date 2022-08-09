@@ -345,7 +345,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       return result;
     },
     // -- receiver_actor<table_slice> ------------------------------------------
-    [self](table_slice slice) { //
+    [self](atom::receive, table_slice slice) { //
       VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
       VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
       self->state.query_status.processed += slice.rows();
@@ -354,7 +354,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // Ship slices to connected SINKs.
       ship_results(self);
     },
-    [self](atom::done) -> caf::result<void> {
+    [self](atom::receive, atom::done) -> caf::result<void> {
       using namespace std::string_literals;
       // Figure out if we're done by bumping the counter for `received`
       // and check whether it reaches `expected`.

@@ -49,7 +49,7 @@ handle_lookup(Actor& self, const query_context& query_context,
         }
         num_hits += count_matching(slice, *tailored_expr, query_context.ids);
       }
-      self->send(count.sink, num_hits);
+      self->send(count.sink, atom::receive_v, num_hits);
       return num_hits;
     },
     [&](const query_context::extract& extract) -> caf::expected<uint64_t> {
@@ -64,7 +64,7 @@ handle_lookup(Actor& self, const query_context& query_context,
         auto final_slice = filter(slice, *tailored_expr, query_context.ids);
         if (final_slice) {
           num_hits += final_slice->rows();
-          self->send(extract.sink, *final_slice);
+          self->send(extract.sink, atom::receive_v, *final_slice);
         }
       }
       return num_hits;
