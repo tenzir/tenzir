@@ -75,7 +75,7 @@ try:
         reader = pyarrow.ipc.RecordBatchStreamReader(istream)
         table = reader.read_all()
         total_row_count += table.num_rows
-        tables.append(tables)
+        tables.append(table)
 except pyarrow.ArrowInvalid:
     print(f"All {len(tables)} readers iterated, {total_row_count} records read")
 ```
