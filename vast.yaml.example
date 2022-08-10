@@ -90,7 +90,12 @@ vast:
 
   # Timeout after which an active partition is forcibly flushed, regardless of
   # its size.
-  active-partition-timeout: 1 hour
+  active-partition-timeout: 5 min
+
+  # Automatically rebuild undersized and outdated partitions in the background.
+  # The given number controls how much resources to spend on it. Set to 0 to
+  # disable.
+  automatic-rebuild: 1
 
   # The number of index shards that can be cached in memory.
   max-resident-partitions: 10

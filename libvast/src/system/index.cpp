@@ -1753,10 +1753,8 @@ index(index_actor::stateful_pointer<index_state> self,
               // it in the result.
               VAST_ASSERT(aps.synopsis);
               auto info = partition_info{
-                .uuid = aps.uuid,
-                .events = aps.synopsis->events,
-                .max_import_time = aps.synopsis->max_import_time,
-                .schema = aps.type,
+                aps.uuid, aps.synopsis->events,  aps.synopsis->max_import_time,
+                aps.type, aps.synopsis->version,
               };
               // Update the index statistics. We only need to add the events of
               // the new partition here, the subtraction of the old events is
@@ -1861,18 +1859,6 @@ index(index_actor::stateful_pointer<index_state> self,
             deliver(e);
           });
       return rp;
-    },
-    [self](atom::rebuild, std::vector<vast::uuid> old_partition_ids)
-      -> caf::result<std::vector<partition_info>> {
-      auto pipeline = std::make_shared<vast::pipeline>(
-        "rebuild", std::vector<std::string>{});
-      auto identity_operator = make_pipeline_operator("identity", {});
-      if (!identity_operator)
-        return identity_operator.error();
-      pipeline->add_operator(std::move(*identity_operator));
-      return self->delegate(static_cast<index_actor>(self), atom::apply_v,
-                            std::move(pipeline), std::move(old_partition_ids),
-                            keep_original_partition::no);
     },
     [self](atom::flush) -> caf::result<void> {
       // If we've got nothing to flush we can just exit immediately.

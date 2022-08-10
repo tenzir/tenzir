@@ -526,44 +526,6 @@ if (VAST_ENABLE_BACKTRACE)
   endif ()
 endif ()
 
-# Link against indicators.
-option(VAST_ENABLE_BUNDLED_INDICATORS "Use the indicators submodule" OFF)
-add_feature_info("VAST_ENABLE_BUNDLED_INDICATORS"
-                 VAST_ENABLE_BUNDLED_INDICATORS "use the indicators submodule.")
-if (NOT VAST_ENABLE_BUNDLED_INDICATORS)
-  find_package(indicators 2.2.0 QUIET)
-  if (indicators_FOUND)
-    # CMake exports private interface dependencies because they might depend on
-    # other non-interface libraries. CMake could scan the depency tree to figure
-    # out when this is actually needed, but it doesn't.
-    # We know that indicators itself doesn't have any dependency, so we work
-    # around this behavior by not linking to the target.
-    # https://gitlab.kitware.com/cmake/cmake/-/issues/15415 for more discussion.
-    get_target_property(indicators_include_directory indicators::indicators
-                        INTERFACE_INCLUDE_DIRECTORIES)
-    target_include_directories(
-      libvast_native_plugins PRIVATE "${indicators_include_directory}/include")
-    dependency_summary("indicators" indicators::indicators "Dependencies")
-  endif ()
-endif ()
-if (NOT indicators_FOUND)
-  # Use bundled indicators.
-  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/indicators/CMakeLists.txt")
-    message(
-      FATAL_ERROR
-        "indicators library not found, either use -Dindicators_DIR=... or"
-        " initialize the libvast/aux/indicators submodule")
-  else ()
-    add_subdirectory(aux/indicators)
-    set(indicators_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/indicators)
-    # Work around https://gitlab.kitware.com/cmake/cmake/-/issues/15415 because
-    # indicators doesn't export its target if built as a subproject.
-    target_include_directories(libvast_native_plugins
-                               PRIVATE "${indicators_dir}/include")
-    dependency_summary("Indicators" "${indicators_dir}" "Dependencies")
-  endif ()
-endif ()
-
 # Configure options-dependent code files.
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)

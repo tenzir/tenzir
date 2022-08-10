@@ -106,6 +106,18 @@ private:
 struct partition_info {
   static constexpr bool use_deep_to_string_formatter = true;
 
+  partition_info() noexcept = default;
+
+  partition_info(class uuid uuid, size_t events, time max_import_time,
+                 type schema, uint64_t version) noexcept
+    : uuid{uuid},
+      events{events},
+      max_import_time{max_import_time},
+      schema{std::move(schema)},
+      version{version} {
+    // nop
+  }
+
   /// The partition id.
   vast::uuid uuid = vast::uuid::nil();
 
@@ -118,6 +130,9 @@ struct partition_info {
 
   /// The schema of the partition.
   type schema = {};
+
+  /// The internal version of the partition.
+  uint64_t version = {};
 
   friend std::strong_ordering
   operator<=>(const partition_info& lhs, const partition_info& rhs) noexcept {
@@ -142,7 +157,7 @@ struct partition_info {
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_info& x) {
     return f(caf::meta::type_name("partition_info"), x.uuid, x.events,
-             x.max_import_time, x.schema);
+             x.max_import_time, x.schema, x.version);
   }
 };
 

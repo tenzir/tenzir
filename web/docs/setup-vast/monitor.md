@@ -121,6 +121,9 @@ The following list describes all available metrics keys:
 |`pcap-reader.rate`|The rate of events processed by the PCAP source.|#events/second||
 |`pcap-reader.recv`|The number of packets received.|#events||
 |`pcap-writer.rate`|The rate of events processed by the PCAP sink.|#events/second||
+|`rebuilder.partitions.remaining`|The number of partitions scheduled for rebuilding.|#partitions||
+|`rebuilder.partitions.rebuilding`|The number of partitions currently being rebuilt.|#partitions||
+|`rebuilder.partitions.completed`|The number of partitions rebuilt in the current run.|#partitions||
 |`scheduler.backlog.custom`|The number of custom priority queries in the backlog.|#queries||
 |`scheduler.backlog.low`|The number of low priority queries in the backlog.|#queries||
 |`scheduler.backlog.normal`|The number of normal priority queries in the backlog.|#queries||

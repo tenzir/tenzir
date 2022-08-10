@@ -20,7 +20,6 @@
 , libunwind
 , xxHash
 , zeek-broker
-, indicators
 , python3
 , jq
 , tcpdump
@@ -70,7 +69,6 @@ stdenv.mkDerivation rec {
     simdjson
     spdlog
     zeek-broker
-    indicators
   ];
   propagatedBuildInputs = [
     arrow-cpp
