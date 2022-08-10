@@ -213,7 +213,8 @@ inline constexpr size_t disk_monitor_step_size = 1;
 inline constexpr size_t max_partition_size = 4'194'304; // 4 Mi
 
 /// Timeout after which an active partition is forcibly flushed.
-inline constexpr caf::timespan active_partition_timeout = std::chrono::hours{1};
+inline constexpr caf::timespan active_partition_timeout
+  = std::chrono::seconds{30};
 
 /// Maximum number of in-memory INDEX partitions.
 inline constexpr size_t max_in_mem_partitions = 10;

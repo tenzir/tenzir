@@ -9,15 +9,20 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
+#include <vast/detail/fanout_counter.hpp>
 #include <vast/fwd.hpp>
 #include <vast/partition_synopsis.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
+#include <vast/query_context.hpp>
 #include <vast/system/catalog.hpp>
 #include <vast/system/connect_to_node.hpp>
 #include <vast/system/index.hpp>
 #include <vast/system/node.hpp>
+#include <vast/system/query_cursor.hpp>
 #include <vast/system/read_query.hpp>
 #include <vast/system/status.hpp>
+#include <vast/table_slice.hpp>
 #include <vast/uuid.hpp>
 
 #include <caf/expected.hpp>
@@ -27,8 +32,6 @@
 #include <fmt/format.h>
 
 namespace vast::plugins::rebuild {
-
-namespace {
 
 struct rebuild_request {
   bool undersized{false};
@@ -40,9 +43,21 @@ struct rebuild_request {
     return f(x.undersized, x.all, x.parallel, x.expr);
   }
 };
+} // namespace vast::plugins::rebuild
+
+CAF_BEGIN_TYPE_ID_BLOCK(vast_rebuild_plugin_types, 1400)
+  CAF_ADD_TYPE_ID(vast_rebuild_plugin_types,
+                  (vast::plugins::rebuild::rebuild_request))
+
+CAF_END_TYPE_ID_BLOCK(vast_rebuild_plugin_types)
+
+namespace vast::plugins::rebuild {
+
+namespace {
 
 using rebuilder_actor
-  = system::typed_actor_fwd<caf::reacts_to<atom::rebuild, rebuild_request>>
+  = system::typed_actor_fwd<caf::reacts_to<atom::rebuild, rebuild_request>,
+                            caf::reacts_to<atom::internal, atom::rebuild>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<system::component_plugin_actor>::unwrap;
 
@@ -51,6 +66,22 @@ struct rebuilder_state {
 
   system::catalog_actor catalog;
   system::index_actor index;
+  std::size_t max_partition_size{0u};
+
+  std::vector<partition_info> remaining_partitions = {};
+
+  /// Various counters required to show a live progress bar of the potentially
+  /// long-running rebuilding process.
+  size_t num_total = {};
+  size_t num_transforming = {};
+  size_t num_transformed = {};
+  size_t num_results = {};
+  size_t num_heterogeneous = {};
+  bool inaccurate_statistics = false;
+
+  bool is_running = false;
+
+  rebuilder_state() = default;
 };
 
 rebuilder_actor::behavior_type
@@ -58,13 +89,239 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
           system::catalog_actor catalog, system::index_actor index) {
   self->state.catalog = std::move(catalog);
   self->state.index = std::move(index);
+
+  self->state.max_partition_size
+    = caf::get_or(self->system().config(), "vast.max-partition-size",
+                  defaults::system::max_partition_size);
   VAST_INFO("Created actor: {}", *self);
   return {
-    [](atom::status, system::status_verbosity) -> record {
-      return {};
+    [self](atom::status, system::status_verbosity) -> record {
+      return {
+        {"num-total", self->state.num_total},
+        {"num-transforming", self->state.num_transforming},
+        {"num-transformed", self->state.num_transformed},
+        {"num-results", self->state.num_results},
+        {"num-heterogeneous", self->state.num_heterogeneous},
+      };
     },
-    [](atom::rebuild, const rebuild_request&) -> caf::result<void> {
-      return {};
+    [self](atom::rebuild, const rebuild_request& request) -> caf::result<void> {
+      if (self->state.is_running)
+        return caf::make_error(ec::invalid_argument, "Rebuild already running");
+      self->state.is_running = true;
+
+      const auto lookup_id = uuid::random();
+      const auto max_partition_version = request.all
+                                           ? version::partition_version
+                                           : version::partition_version - 1;
+      VAST_INFO("{} requests {}{} partitions matching the expression {}", *self,
+                request.all ? "all" : "outdated",
+                request.undersized ? " undersized" : "", request.expr);
+
+      auto rp = self->make_response_promise<void>();
+      auto finish = [self, rp](caf::error err) mutable {
+        self->state.is_running = false;
+        if (err) {
+          rp.deliver(std::move(err));
+          return;
+        }
+        static_cast<caf::response_promise&>(rp).deliver(caf::unit);
+      };
+
+      self
+        ->request(self->state.catalog, caf::infinite, atom::candidates_v,
+                  lookup_id, request.expr, max_partition_version)
+        .then(
+          [self, lookup_id, request,
+           finish](system::catalog_result& result) mutable {
+            if (request.undersized)
+              std::erase_if(result.partitions,
+                            [=](const partition_info& partition) {
+                              return static_cast<bool>(partition.schema)
+                                     && partition.events
+                                          > self->state.max_partition_size / 2;
+                            });
+            if (result.partitions.empty()) {
+              VAST_INFO("{} had nothing to do for request {}", *self,
+                        lookup_id);
+              return finish({});
+            }
+            self->state.num_total = result.partitions.size();
+            self->state.num_heterogeneous
+              = std::count_if(result.partitions.begin(),
+                              result.partitions.end(),
+                              [](const partition_info& partition) {
+                                return !partition.schema;
+                              });
+            self->state.remaining_partitions = std::move(result.partitions);
+            auto counter = detail::make_fanout_counter(
+              request.parallel,
+              [finish]() mutable {
+                finish({});
+              },
+              [finish](caf::error error) mutable {
+                finish(std::move(error));
+              });
+            VAST_DEBUG("{} triggers a rebuild for {} partitions with {} "
+                       "parallel "
+                       "runs",
+                       *self, self->state.num_total, request.parallel);
+            for (size_t i = 0; i < request.parallel; ++i) {
+              self
+                ->request(static_cast<rebuilder_actor>(self), caf::infinite,
+                          atom::internal_v, atom::rebuild_v)
+                .then(
+                  [counter]() {
+                    counter->receive_success();
+                  },
+                  [counter](caf::error& error) {
+                    counter->receive_error(std::move(error));
+                  });
+            }
+          },
+          [self, finish](caf::error& error) mutable {
+            finish(std::move(error));
+          });
+      return rp;
+    },
+    [self](atom::internal, atom::rebuild) -> caf::result<void> {
+      if (self->state.remaining_partitions.empty())
+        return {}; // We're done!
+      auto current_run_partitions = std::vector<uuid>{};
+      auto current_run_events = size_t{0};
+      bool is_heterogeneous = false;
+      bool is_oversized = false;
+      if (self->state.num_heterogeneous > 0) {
+        // If there's any partition that has no homogenous schema we want to
+        // take it first and split it up into heterogeneous partitions.
+        const auto heterogenenous_partition
+          = std::find_if(self->state.remaining_partitions.begin(),
+                         self->state.remaining_partitions.end(),
+                         [](const partition_info& partition) {
+                           return !partition.schema;
+                         });
+        if (heterogenenous_partition
+            != self->state.remaining_partitions.end()) {
+          is_heterogeneous = true;
+          current_run_partitions.push_back(heterogenenous_partition->uuid);
+          self->state.remaining_partitions.erase(heterogenenous_partition);
+        } else {
+          // Wait until we have all heterogeneous partitions transformed into
+          // homogenous partitions before starting to work on the homogenous
+          // parittions. In practice, this leads to less undeful partitions.
+          return caf::skip;
+        }
+      } else {
+        // Take the first homogenous partition and collect as many of the same
+        // type as possible to create new paritions. The approach used may
+        // collects too many partitions if there is no exact match, but that is
+        // usually better than conservatively undersizing the number of
+        // partitions for the current run. For oversized runs we move the last
+        // transformed partition back to the list of remaining partitions if it
+        // is less than 50% of the desired size.
+        const auto schema = self->state.remaining_partitions[0].schema;
+        const auto first_removed = std::remove_if(
+          self->state.remaining_partitions.begin(),
+          self->state.remaining_partitions.end(),
+          [&](const partition_info& partition) {
+            if (schema == partition.schema
+                && current_run_events < self->state.max_partition_size) {
+              current_run_events += partition.events;
+              current_run_partitions.push_back(partition.uuid);
+              return true;
+            }
+            return false;
+          });
+        self->state.remaining_partitions.erase(
+          first_removed, self->state.remaining_partitions.end());
+        is_oversized = current_run_events > self->state.max_partition_size;
+      }
+      // Ask the index to rebuild the partitions we selected.
+      auto rp = self->make_response_promise<void>();
+      const auto num_partitions = current_run_partitions.size();
+      self->state.num_transforming += num_partitions;
+      self
+        ->request(self->state.index, caf::infinite, atom::rebuild_v,
+                  std::move(current_run_partitions))
+        .then(
+          [self, rp, current_run_events, num_partitions, is_heterogeneous,
+           is_oversized](std::vector<partition_info>& result) mutable {
+            // Determines whether we moved partitions back.
+            bool needs_second_stage = false;
+            // If the number of events in the resulting partitions does not
+            // match the number of events in the partitions that went in we ran
+            // into a conflict with other partition transformations on an
+            // overlapping set.
+            const auto detected_conflict
+              = current_run_events
+                != std::transform_reduce(result.begin(), result.end(), size_t{},
+                                         std::plus<>{},
+                                         [](const partition_info& partition) {
+                                           return partition.events;
+                                         });
+            if (detected_conflict) {
+              self->state.inaccurate_statistics = true;
+              self->state.num_transformed += num_partitions;
+              self->state.num_total += result.size();
+              if (is_heterogeneous)
+                self->state.num_heterogeneous -= 1;
+              needs_second_stage = true;
+              std::copy(result.begin(), result.end(),
+                        std::back_inserter(self->state.remaining_partitions));
+            } else {
+              // Adjust the counters, update the indicator, and move back
+              // undersized transformed partitions to the list of remainig
+              // partitions as desired.
+              VAST_ASSERT(!result.empty());
+              if (is_heterogeneous) {
+                VAST_ASSERT(num_partitions == 1);
+                self->state.num_heterogeneous -= 1;
+                if (result.size() > 1
+                    || result[0].events <= self->state.max_partition_size / 2) {
+                  self->state.num_total += result.size();
+                  std::copy(
+                    result.begin(), result.end(),
+                    std::back_inserter(self->state.remaining_partitions));
+                  needs_second_stage = true;
+                } else {
+                  self->state.num_transformed += 1;
+                }
+              } else {
+                self->state.num_transformed += num_partitions;
+                self->state.num_results += result.size();
+              }
+              if (is_oversized) {
+                VAST_ASSERT(result.size() > 1);
+                if (result.back().events
+                    <= self->state.max_partition_size / 2) {
+                  self->state.remaining_partitions.push_back(
+                    std::move(result.back()));
+                  needs_second_stage = true;
+                  self->state.num_transformed -= 1;
+                  self->state.num_results -= 1;
+                  self->state.num_total += 1;
+                }
+              }
+            }
+            if (needs_second_stage)
+              std::sort(self->state.remaining_partitions.begin(),
+                        self->state.remaining_partitions.end(),
+                        [](const partition_info& lhs,
+                           const partition_info& rhs) {
+                          return lhs.max_import_time > rhs.max_import_time;
+                        });
+            self->state.num_transforming -= num_partitions;
+            // Pick up new work until we run out of remainig partitions.
+            rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
+                        atom::rebuild_v);
+          },
+          [self, num_partitions, rp](caf::error& error) mutable {
+            self->state.num_transforming -= num_partitions;
+            VAST_WARN("{} failed to rebuild partititons: {}", *self, error);
+            // Pick up new work until we run out of remainig partitions.
+            rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
+                        atom::rebuild_v);
+          });
+      return rp;
     },
   };
 }
@@ -191,7 +448,7 @@ public:
     const override {
     auto [catalog, index]
       = node->state.registry.find<system::catalog_actor, system::index_actor>();
-    return node->spawn(rebuilder, std::move(catalog), std::move(index));
+    return node->spawn(rebuilder, catalog, index);
   }
 };
 
@@ -200,11 +457,5 @@ public:
 } // namespace vast::plugins::rebuild
 
 VAST_REGISTER_PLUGIN(vast::plugins::rebuild::plugin)
-
-CAF_BEGIN_TYPE_ID_BLOCK(vast_rebuild_plugin_types, 1400)
-  CAF_ADD_TYPE_ID(vast_rebuild_plugin_types,
-                  (vast::plugins::rebuild::rebuild_request))
-
-CAF_END_TYPE_ID_BLOCK(vast_rebuild_plugin_types)
 
 VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_rebuild_plugin_types)
