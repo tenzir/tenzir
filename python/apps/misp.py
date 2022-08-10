@@ -28,6 +28,7 @@ class MISP:
 
     async def run(self):
         await self.vast.subscribe("stix.bundle", self._on_bundle)
+        await self.vast.subscribe("stix.sighting", self._on_sighting)
         # Hook into event feed via 0mq.
         socket = zmq.asyncio.Context().socket(zmq.SUB)
         zmq_uri = f"tcp://{self.config.zmq.host}:{self.config.zmq.port}"
@@ -58,6 +59,13 @@ class MISP:
             self.misp = None
             socket.setsockopt(zmq.LINGER, 0)
             socket.close()
+
+    async def _on_sighting(self, message: Any):
+        logger.debug(f"got sighting: {message}")
+        sighting = stix2.parse(message)
+        if type(sighting) != stix2.Bundle:
+            logger.warn(f"expected sighting or bundle, got {type(sighting)}")
+            return
 
     async def _on_bundle(self, message: Any):
         logger.debug(f"got bundle: {message}")

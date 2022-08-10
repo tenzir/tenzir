@@ -1,14 +1,14 @@
-from datetime import datetime, timedelta
 import asyncio
 from typing import Any
 
 from dynaconf import Dynaconf
 import json
-import pyarrow
+#import pyarrow
 import stix2
 
 from fabric import Fabric
 import backbones.inmemory
+import bridges.stix
 import utils.logging
 
 logger = utils.logging.get("node")
@@ -61,6 +61,8 @@ class CLI:
             return self
         return command
 
+
+
 # The VAST node.
 class VAST:
     @staticmethod
@@ -75,6 +77,7 @@ class VAST:
     def __init__(self, config: Dynaconf, fabric: Fabric):
         self.config = config
         self.fabric = fabric
+        self.stix_bridge = bridges.stix.STIX()
         # TODO: Start a matcher
         #cmd = CLI(plugins="matcher").matcher().start(match_types="[:string]").test()
 
@@ -90,6 +93,8 @@ class VAST:
     async def subscribe(self, topic: str, callback):
         await self.fabric.subscribe(topic, callback)
 
+    # Translates an STIX Indicator into a VAST query and publishes the results
+    # as STIX Bundle.
     async def _on_stix_indicator(self, message: Any):
         logger.debug(message)
         indicator = stix2.parse(message)
@@ -107,47 +112,7 @@ class VAST:
         if len(results) == 0:
             logger.info(f"got no results for query: {indicator.pattern}")
             return
-        # Extract SCOs.
-        # TODO: Go beyond Zeek conn logs. We should use concepts or type aliases
-        # to make this mapping process easier.
-        scos = []
-        observed_data = []
-        for event in results:
-            # Create Network Traffic SDO.
-            src = stix2.IPv4Address(value=event["id.orig_h"])
-            dst = stix2.IPv4Address(value=event["id.resp_h"])
-            start = datetime.fromisoformat(event["ts"].split('.')[0])
-            duration = timedelta(seconds=float(event["duration"]))
-            end = start + duration if duration else None
-            flow = stix2.NetworkTraffic(
-                    start=start,
-                    end=end,
-                    is_active=end is None,
-                    protocols=[event["proto"], event["service"]],
-                    src_port=event["id.orig_p"],
-                    dst_port=event["id.resp_p"],
-                    src_byte_count=event["orig_ip_bytes"],
-                    dst_byte_count=event["resp_ip_bytes"],
-                    src_packets=event["orig_pkts"],
-                    dst_packets=event["resp_pkts"],
-                    src_ref=src,
-                    dst_ref=dst,
-                )
-            scos.append(flow)
-            scos.append(src)
-            scos.append(dst)
-            # Wrap in Observed Data SDO.
-            observable = stix2.ObservedData(
-                    first_observed=start,
-                    last_observed=end,
-                    number_observed=1,
-                    object_refs=flow)
-            observed_data.append(observable)
-        # Reference in Sighting SRO.
-        sighting = stix2.Sighting(
-                sighting_of_ref=indicator,
-                observed_data_refs=observed_data)
-        bundle = stix2.Bundle(sighting, *observed_data, *scos)
+        bundle = self.stix_bridge.make_sighting(indicator, results)
         logger.warning(bundle.serialize(pretty=True))
         await self.publish("stix.bundle", bundle)
 
@@ -155,7 +120,7 @@ class VAST:
         proc = await CLI().export(max_events=limit).json(
                 expression,
                 numeric_durations=True).exec()
-        stdout, stderr = await proc.communicate()
+        stdout, _ = await proc.communicate()
         return [json.loads(line) for line in stdout.decode().splitlines()]
         #logger.debug(stderr.decode())
         #proc = await CLI().export(max_events=limit).arrow(expression).exec()
