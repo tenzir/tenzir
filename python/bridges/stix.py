@@ -1,25 +1,48 @@
 from datetime import datetime, timedelta
+import ipaddress
 
+import pandas as pd
+#import pyarrow as pa
 import stix2
+
+import utils.arrow
+
+def to_addr_sdo(x: ipaddress.IPv6Address):
+    if x.ipv4_mapped:
+        return stix2.IPv4Address(value=x.ipv4_mapped)
+    else:
+        return stix2.IPv6Address(value=x)
 
 # The STIX 2.1 bridge that process STIX objects on the fabric.
 class STIX:
     def __init__(self):
         self.store = stix2.MemoryStore()
-        self.identity = stix2.Identity(name="VAST", identity_class="system")
-        self.store.add(self.identity)
+        self.identities = {}
+        self.identities["vast"] = stix2.Identity(name="VAST", identity_class="system")
+        self.identities["zeek"] = stix2.Identity(name="Zeek", identity_class="system")
 
-    def make_sighting(self, indicator: stix2.Indicator, events):
+    def make_sighting(self, indicator: stix2.Indicator, tables):
+        # TODO: Go beyond Zeek conn logs. This is hard-coded for Zeek on purpose
+        # to understand the full scope of what it takes to construct a STIX
+        # bundle. Moving forward, We should use a proper taxonomy.
+        table = tables["zeek.conn"]
+        if not table:
+            return None
+        events = table.to_pylist()
         scos = []
         observed_data = []
-        # TODO: Go beyond Zeek conn logs. We should use concepts or type aliases
-        # to make this mapping process easier.
+        # TODO: aggregate flows into a single Observed Data SDO when the 5-tuple
+        # is unique, and then bump number_observed by the multiplicity.
         for event in events:
             # Create Network Traffic SDO.
-            src = stix2.IPv4Address(value=event["id.orig_h"])
-            dst = stix2.IPv4Address(value=event["id.resp_h"])
-            start = datetime.fromisoformat(event["ts"].split('.')[0])
-            duration = timedelta(seconds=float(event["duration"]))
+            # TODO: cast the Arrow Table properly to avoid having to do this
+            # conversion here. This should already be a typed data frame.
+            orig_h = ipaddress.IPv6Address(event["id.orig_h"])
+            resp_h = ipaddress.IPv6Address(event["id.resp_h"])
+            src = to_addr_sdo(orig_h)
+            dst = to_addr_sdo(resp_h)
+            start = pd.to_datetime(event["ts"])
+            duration = event["duration"]
             end = start + duration if duration else None
             flow = stix2.NetworkTraffic(
                     start=start,
@@ -47,11 +70,15 @@ class STIX:
                     number_observed=1,
                     object_refs=flow)
             observed_data.append(observable)
+        # TODO: Derive the identity from the telemetry.
         # Reference in Sighting SRO.
         sighting = stix2.Sighting(
-                # TODO: use the inner-most data source and not VAST itself.
-                created_by_ref=self.identity,
+                created_by_ref=self.identities["zeek"],
                 sighting_of_ref=indicator,
                 observed_data_refs=observed_data)
-        bundle = stix2.Bundle(self.identity, sighting, *observed_data, *scos)
+        bundle = stix2.Bundle(self.identities["vast"],
+                              self.identities["zeek"],
+                              sighting,
+                              *observed_data,
+                              *scos)
         return bundle

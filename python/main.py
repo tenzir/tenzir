@@ -20,7 +20,7 @@ async def start(config: Dynaconf):
     ind = stix2.Indicator(
             description="Test",
             pattern_type="vast",
-            pattern="#type == \"zeek.conn\" && \"CQishF25ynsGkC6v6e\"")
+            pattern="\"CQishF25ynsGkC6v6e\"")
     await vast.publish("stix.indicator", ind)
 
 def main():

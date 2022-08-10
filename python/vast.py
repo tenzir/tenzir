@@ -1,14 +1,16 @@
 import asyncio
+import io
 from typing import Any
 
 from dynaconf import Dynaconf
 import json
-#import pyarrow
+import pyarrow
 import stix2
 
 from fabric import Fabric
 import backbones.inmemory
 import bridges.stix
+import utils.arrow
 import utils.logging
 
 logger = utils.logging.get("node")
@@ -60,8 +62,6 @@ class CLI:
                 self.args.extend(args)
             return self
         return command
-
-
 
 # The VAST node.
 class VAST:
@@ -117,30 +117,19 @@ class VAST:
         await self.publish("stix.bundle", bundle)
 
     async def _query(self, expression: str, limit: int = 100):
-        proc = await CLI().export(max_events=limit).json(
-                expression,
-                numeric_durations=True).exec()
-        stdout, _ = await proc.communicate()
-        return [json.loads(line) for line in stdout.decode().splitlines()]
-        #logger.debug(stderr.decode())
-        #proc = await CLI().export(max_events=limit).arrow(expression).exec()
-        #stdout, stderr = await proc.communicate()
-        #logger.debug(stderr.decode())
-        #istream = pyarrow.input_stream(stdout)
-        #batch_count = 0
-        #row_count = 0
-        #result = {}
-        #try:
-        #    while True:
-        #        reader = pyarrow.ipc.RecordBatchStreamReader(istream)
-        #        try:
-        #            while True:
-        #                batch = reader.read_next_batch()
-        #                batch_count += 1
-        #                row_count += batch.num_rows
-        #                result.get(batch.schema, []).append(batch)
-        #        except StopIteration:
-        #            batch_count = 0
-        #            row_count = 0
-        #except:
-        #    logger.debug("completed all readers")
+        proc = await CLI().export(max_events=limit).arrow(expression).exec()
+        stdout, stderr = await proc.communicate()
+        logger.debug(stderr.decode())
+        istream = pyarrow.input_stream(io.BytesIO(stdout))
+        tables = {}
+        try:
+            while True:
+                reader = pyarrow.ipc.RecordBatchStreamReader(istream)
+                table = reader.read_all()
+                name = utils.arrow.name(table)
+                logger.debug(f"got table '{name}' with {table.num_rows} row(s)")
+                assert name not in tables
+                tables[name] = table
+        except pyarrow.ArrowInvalid:
+            pass
+        return tables
