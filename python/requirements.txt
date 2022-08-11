@@ -4,6 +4,7 @@ coloredlogs>=10.0
 dynaconf[yaml]
 pluggy
 pyarrow
+pytest
 threatbus
 vast-threatbus
 zmq
