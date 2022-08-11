@@ -96,6 +96,7 @@ struct rebuilder_state {
   system::index_actor index = {};
   system::accountant_actor accountant = {};
   size_t max_partition_size = 0u;
+  std::optional<duration> rebuild_interval = {};
 
   std::vector<partition_info> remaining_partitions = {};
   std::optional<struct run> run = {};
@@ -139,9 +140,9 @@ struct rebuilder_state {
     const auto max_partition_version = options.all
                                          ? version::partition_version
                                          : version::partition_version - 1;
-    VAST_INFO("{} requests {}{} partitions matching the expression {}", *self,
-              options.all ? "all" : "outdated",
-              options.undersized ? " undersized" : "", options.expression);
+    VAST_DEBUG("{} requests {}{} partitions matching the expression {}", *self,
+               options.all ? "all" : "outdated",
+               options.undersized ? " undersized" : "", options.expression);
     auto rp = self->make_response_promise<void>();
     auto finish = [this, rp,
                    detached = options.detached](caf::error err) mutable {
@@ -166,7 +167,7 @@ struct rebuilder_state {
         [this, finish](system::catalog_result& result) mutable {
           if (run->options.undersized)
             std::erase_if(result.partitions,
-                          [=](const partition_info& partition) {
+                          [this](const partition_info& partition) {
                             return static_cast<bool>(partition.schema)
                                    && partition.events > max_partition_size / 2;
                           });
@@ -294,10 +295,10 @@ struct rebuilder_state {
               && current_run_events < max_partition_size) {
             current_run_events += partition.events;
             current_run_partitions.push_back(partition);
-            VAST_WARN("{} selects partition {} (v{}, {}) with "
-                      "{} events (total: {})",
-                      *self, partition.uuid, partition.version,
-                      partition.schema, partition.events, current_run_events);
+            VAST_TRACE("{} selects partition {} (v{}, {}) with "
+                       "{} events (total: {})",
+                       *self, partition.uuid, partition.version,
+                       partition.schema, partition.events, current_run_events);
             return true;
           }
           return false;
@@ -305,6 +306,7 @@ struct rebuilder_state {
       remaining_partitions.erase(first_removed, remaining_partitions.end());
       is_oversized = current_run_events > max_partition_size;
     }
+    run->statistics.num_transforming += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
     // oversized or not of the latest partition version.
@@ -313,10 +315,10 @@ struct rebuilder_state {
         && current_run_partitions[0].version == version::partition_version
         && current_run_partitions[0].events <= max_partition_size;
     if (skip_rebuild) {
-      VAST_INFO("{} skips rebuilding of undersized partition {} because no "
-                "other partition of schema {} exists",
-                *self, current_run_partitions[0].uuid,
-                current_run_partitions[0].schema);
+      VAST_DEBUG("{} skips rebuilding of undersized partition {} because no "
+                 "other partition of schema {} exists",
+                 *self, current_run_partitions[0].uuid,
+                 current_run_partitions[0].schema);
       run->statistics.num_transformed += 1;
       run->statistics.num_transforming -= 1;
       run->statistics.num_results += 1;
@@ -326,7 +328,6 @@ struct rebuilder_state {
     }
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
-    run->statistics.num_transforming += current_run_partitions.size();
     auto pipeline
       = std::make_shared<vast::pipeline>("rebuild", std::vector<std::string>{});
     auto identity_operator = make_pipeline_operator("identity", {});
@@ -447,7 +448,12 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   self->state.max_partition_size
     = caf::get_or(self->system().config(), "vast.max-partition-size",
                   defaults::system::max_partition_size);
-  self->send(self, atom::internal_v, atom::worker_v);
+  const auto rebuild_interval
+    = caf::get_if<duration>(&self->system().config(), "vast.rebuild-interval");
+  if (rebuild_interval) {
+    self->state.rebuild_interval = *rebuild_interval;
+    self->send(self, atom::internal_v, atom::worker_v);
+  }
   return {
     [self](atom::status, system::status_verbosity verbosity) {
       return self->state.status(verbosity);
@@ -462,22 +468,28 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
       return self->state.rebuild();
     },
     [self](atom::internal, atom::worker) {
+      VAST_ASSERT(self->state.rebuild_interval);
+      auto match_everything = predicate{
+        meta_extractor{meta_extractor::kind::type},
+        relational_operator::not_equal,
+        data{"this expression matches everything"},
+      };
       auto options = start_options{
         .all = true,
         .undersized = true,
         .parallel = 1,
         .max_partitions = std::numeric_limits<size_t>::max(),
-        .expression = predicate{meta_extractor{meta_extractor::kind::type}, relational_operator::not_equal, data{""},},
+        .expression = std::move(match_everything),
         .detached = true,
       };
-      self->delayed_send(self, std::chrono::minutes{5}, atom::internal_v,
+      self->delayed_send(self, *self->state.rebuild_interval, atom::internal_v,
                          atom::worker_v);
       self
         ->request(static_cast<rebuilder_actor>(self), caf::infinite,
                   atom::start_v, std::move(options))
         .then(
           [self] {
-            VAST_INFO("{} finished scheduled rebuild", *self);
+            VAST_DEBUG("{} finished scheduled rebuild", *self);
           },
           [self](const caf::error& err) {
             VAST_WARN("{} failed during scheduled rebuild: {}", *self, err);
