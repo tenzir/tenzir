@@ -17,3 +17,7 @@ apps:
     zmq:
       host: localhost
       port: 50000
+  thehive:
+    user: demo@tenzir.com
+    host: http://localhost:9000
+    key: O8fD7Se+GPfAstfpxByzP8kTt5A4kQYi

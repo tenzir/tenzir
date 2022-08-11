@@ -4,6 +4,7 @@ from dynaconf import Dynaconf
 import stix2
 
 import apps.misp
+import apps.thehive
 import utils.asyncio
 import utils.config
 import utils.logging
@@ -15,13 +16,14 @@ async def start(config: Dynaconf):
     #await proc.communicate()
 
     loop = asyncio.get_event_loop()
-    loop.create_task(apps.misp.start(vast))
+    #loop.create_task(apps.misp.start(vast))
+    loop.create_task(apps.thehive.start(vast))
 
-    ind = stix2.Indicator(
-            description="Test",
-            pattern_type="vast",
-            pattern="\"CQishF25ynsGkC6v6e\"")
-    await vast.fabric.publish("stix.indicator", ind)
+    #ind = stix2.Indicator(
+    #        description="Test",
+    #        pattern_type="vast",
+    #        pattern="\"CQishF25ynsGkC6v6e\"")
+    #await vast.fabric.publish("stix.indicator", ind)
 
     #async def async_print(x):
     #    print(x)
