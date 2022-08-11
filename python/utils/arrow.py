@@ -15,12 +15,12 @@ class IPAddressType(pa.PyExtensionType):
         # the v4-in-v6 embedding natively.
         return ipaddress.IPv6Address
 
-def names(table: pa.Table):
-    meta = table.schema.metadata
+def names(schema: pa.Schema):
+    meta = schema.metadata
     return [meta[key].decode() for key in meta if key.startswith(b"VAST:name:")]
 
 
-def name(table: pa.Table):
-    xs = names(table)
+def name(schema: pa.Schema):
+    xs = names(schema)
     return xs[0] if xs[0] else ""
 

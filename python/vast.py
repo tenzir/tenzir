@@ -1,10 +1,11 @@
 import asyncio
 import io
+from collections import defaultdict
 from typing import Any
 
 from dynaconf import Dynaconf
 import json
-import pyarrow
+import pyarrow as pa
 import stix2
 
 from fabric import Fabric
@@ -120,16 +121,25 @@ class VAST:
         proc = await CLI().export(max_events=limit).arrow(expression).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
-        istream = pyarrow.input_stream(io.BytesIO(stdout))
-        tables = {}
+        istream = pa.input_stream(io.BytesIO(stdout))
+        num_batches = 0
+        num_rows = 0
+        batches = defaultdict(list)
         try:
             while True:
-                reader = pyarrow.ipc.RecordBatchStreamReader(istream)
-                table = reader.read_all()
-                name = utils.arrow.name(table)
-                logger.debug(f"got table '{name}' with {table.num_rows} row(s)")
-                assert name not in tables
-                tables[name] = table
-        except pyarrow.ArrowInvalid:
-            pass
-        return tables
+                reader = pa.ipc.RecordBatchStreamReader(istream)
+                try:
+                    while True:
+                        batch = reader.read_next_batch()
+                        name = utils.arrow.name(batch.schema)
+                        logger.debug(f"got batch of {name}")
+                        num_batches += 1
+                        num_rows += batch.num_rows
+                        batches[name].append(batch)
+                except StopIteration:
+                    logger.debug(f"read {num_batches}/{num_rows} batches/rows")
+                    num_batches = 0
+                    num_rows = 0
+        except pa.ArrowInvalid:
+            logger.debug("completed processing stream of record batches")
+        return {n: pa.Table.from_batches(xs) for (n, xs) in batches.items()}
