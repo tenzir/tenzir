@@ -23,6 +23,14 @@ async def start(config: Dynaconf):
             pattern="\"CQishF25ynsGkC6v6e\"")
     await vast.fabric.publish("stix.indicator", ind)
 
+    #async def async_print(x):
+    #    print(x)
+    #    return
+
+    #await vast.fabric.subscribe("suricata.alert", async_print)
+
+    loop.create_task(vast.republish("suricata.alert"))
+
 def main():
     config = utils.config.parse()
     utils.logging.configure(config.logging)

@@ -79,13 +79,13 @@ class VAST:
         self.config = config
         self.fabric = fabric
         self.stix_bridge = bridges.stix.STIX()
-        # TODO: Start a matcher
-        #cmd = CLI(plugins="matcher").matcher().start(match_types="[:string]").test()
 
     async def start(self, **kwargs):
         proc = await CLI(**kwargs).start().exec()
         await proc.communicate()
         logger.debug(proc.stderr.decode())
+        # TODO: Start a matcher
+        #cmd = CLI(plugins="matcher").matcher().start(match_types="[:string]").test()
         return proc
 
     # Translates an STIX Indicator into a VAST query and publishes the results
@@ -110,6 +110,21 @@ class VAST:
         bundle = self.stix_bridge.make_sighting(indicator, results)
         logger.warning(bundle.serialize(pretty=True))
         await self.fabric.publish("stix.bundle", bundle)
+
+    async def _live_query(self, expression: str, callback):
+        proc = await CLI().export(continuous=True).json(expression).exec()
+        while True:
+            if proc.stdout.at_eof():
+                break
+            line = await proc.stdout.readline()
+            await callback(line)
+        await proc.communicate()
+        if proc.returncode != 0:
+            logger.warning(f"vast exited with non-zero code: {proc.returncode}")
+
+    async def republish(self, type: str):
+        callback = lambda line: self.fabric.publish(type, line)
+        await self._live_query(f"#type == \"{type}\"", callback)
 
     async def _query(self, expression: str, limit: int = 100):
         proc = await CLI().export(max_events=limit).arrow(expression).exec()
