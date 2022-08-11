@@ -69,7 +69,7 @@ struct statistics {
 };
 
 struct run {
-  statistics statistics = {};
+  struct statistics statistics = {};
   start_options options = {};
 };
 
@@ -79,7 +79,9 @@ using rebuilder_actor = system::typed_actor_fwd<
   // Stop a rebuild.
   caf::reacts_to<atom::stop, stop_options>,
   // INTERNAL: Continue working on the currently in-progress rebuild.
-  caf::reacts_to<atom::internal, atom::rebuild>>
+  caf::reacts_to<atom::internal, atom::rebuild>,
+  // INTERNAL: Continue working on the currently in-progress rebuild.
+  caf::reacts_to<atom::internal, atom::worker>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<system::component_plugin_actor>::unwrap;
 
@@ -445,6 +447,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   self->state.max_partition_size
     = caf::get_or(self->system().config(), "vast.max-partition-size",
                   defaults::system::max_partition_size);
+  self->send(self, atom::internal_v, atom::worker_v);
   return {
     [self](atom::status, system::status_verbosity verbosity) {
       return self->state.status(verbosity);
@@ -457,6 +460,28 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     },
     [self](atom::internal, atom::rebuild) {
       return self->state.rebuild();
+    },
+    [self](atom::internal, atom::worker) {
+      auto options = start_options{
+        .all = true,
+        .undersized = true,
+        .parallel = 1,
+        .max_partitions = std::numeric_limits<size_t>::max(),
+        .expression = predicate{meta_extractor{meta_extractor::kind::type}, relational_operator::not_equal, data{""},},
+        .detached = true,
+      };
+      self->delayed_send(self, std::chrono::minutes{5}, atom::internal_v,
+                         atom::worker_v);
+      self
+        ->request(static_cast<rebuilder_actor>(self), caf::infinite,
+                  atom::start_v, std::move(options))
+        .then(
+          [self] {
+            VAST_INFO("{} finished scheduled rebuild", *self);
+          },
+          [self](const caf::error& err) {
+            VAST_WARN("{} failed during scheduled rebuild: {}", *self, err);
+          });
     },
   };
 }
@@ -635,8 +660,8 @@ public:
     auto [catalog, index, accountant]
       = node->state.registry.find<system::catalog_actor, system::index_actor,
                                   system::accountant_actor>();
-    return node->spawn<caf::lazy_init>(rebuilder, std::move(catalog),
-                                       std::move(index), std::move(accountant));
+    return node->spawn(rebuilder, std::move(catalog), std::move(index),
+                       std::move(accountant));
   }
 };
 
