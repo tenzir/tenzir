@@ -84,18 +84,20 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
     [=](atom::apply, pipeline_ptr, std::vector<uuid>,
         system::keep_original_partition) -> std::vector<partition_info> {
       return std::vector<partition_info>{partition_info{
-        .uuid = vast::uuid::nil(),
-        .events = 0ull,
-        .max_import_time = vast::time::min(),
-        .schema = vast::type{},
-        // .stats = {},
+        vast::uuid::nil(),
+        0ull,
+        vast::time::min(),
+        vast::type{},
+        version::partition_version,
       }};
     },
     [=](atom::resolve, vast::expression) -> system::catalog_result {
       std::vector<vast::partition_info> result;
       result.reserve(CANDIDATES_PER_MOCK_QUERY);
-      for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i)
-        result.push_back({.uuid = vast::uuid::random()});
+      for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i) {
+        auto& partition = result.emplace_back();
+        partition.uuid = vast::uuid::random();
+      }
       return system::catalog_result{system::catalog_result::probabilistic,
                                     std::move(result)};
     },

@@ -161,21 +161,21 @@ struct rebuilder_state {
       ->request(catalog, caf::infinite, atom::candidates_v, lookup_id,
                 options.expression, max_partition_version)
       .then(
-        [this, options, finish](system::catalog_result& result) mutable {
-          if (options.undersized)
+        [this, finish](system::catalog_result& result) mutable {
+          if (run->options.undersized)
             std::erase_if(result.partitions,
                           [=](const partition_info& partition) {
                             return static_cast<bool>(partition.schema)
                                    && partition.events > max_partition_size / 2;
                           });
-          if (options.max_partitions < result.partitions.size()) {
+          if (run->options.max_partitions < result.partitions.size()) {
             std::stable_sort(result.partitions.begin(), result.partitions.end(),
                              [](const auto& lhs, const auto& rhs) {
                                return lhs.schema < rhs.schema;
                              });
             result.partitions.erase(
               result.partitions.begin()
-                + detail::narrow_cast<ptrdiff_t>(options.max_partitions),
+                + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
               result.partitions.end());
           }
           if (result.partitions.empty()) {
@@ -190,7 +190,7 @@ struct rebuilder_state {
                             });
           remaining_partitions = std::move(result.partitions);
           auto counter = detail::make_fanout_counter(
-            options.parallel,
+            run->options.parallel,
             [finish]() mutable {
               finish({});
             },
@@ -199,9 +199,9 @@ struct rebuilder_state {
             });
           VAST_INFO("{} triggers a rebuild for {} partitions with {} "
                     "parallel runs",
-                    *self, run->statistics.num_total, options.parallel);
+                    *self, run->statistics.num_total, run->options.parallel);
           emit_telemetry();
-          for (size_t i = 0; i < options.parallel; ++i) {
+          for (size_t i = 0; i < run->options.parallel; ++i) {
             self
               ->request(static_cast<rebuilder_actor>(self), caf::infinite,
                         atom::internal_v, atom::rebuild_v)
@@ -229,6 +229,7 @@ struct rebuilder_state {
     }
     if (options.force) {
       VAST_INFO("{} forcefully stopped ongoing rebuild", *self);
+      remaining_partitions.clear();
       run.reset();
       emit_telemetry();
       return {};
@@ -253,7 +254,7 @@ struct rebuilder_state {
   auto rebuild() -> caf::result<void> {
     if (remaining_partitions.empty())
       return {}; // We're done!
-    auto current_run_partitions = std::vector<uuid>{};
+    auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
     bool is_heterogeneous = false;
     bool is_oversized = false;
@@ -267,7 +268,7 @@ struct rebuilder_state {
                        });
       if (heterogenenous_partition != remaining_partitions.end()) {
         is_heterogeneous = true;
-        current_run_partitions.push_back(heterogenenous_partition->uuid);
+        current_run_partitions.push_back(*heterogenenous_partition);
         remaining_partitions.erase(heterogenenous_partition);
       } else {
         // Wait until we have all heterogeneous partitions transformed into
@@ -284,37 +285,63 @@ struct rebuilder_state {
       // transformed partition back to the list of remaining partitions if it
       // is less than 50% of the desired size.
       const auto schema = remaining_partitions[0].schema;
-      const auto first_removed
-        = std::remove_if(remaining_partitions.begin(),
-                         remaining_partitions.end(),
-                         [&](const partition_info& partition) {
-                           if (schema == partition.schema
-                               && current_run_events < max_partition_size) {
-                             current_run_events += partition.events;
-                             current_run_partitions.push_back(partition.uuid);
-                             return true;
-                           }
-                           return false;
-                         });
+      const auto first_removed = std::remove_if(
+        remaining_partitions.begin(), remaining_partitions.end(),
+        [&](const partition_info& partition) {
+          if (schema == partition.schema
+              && current_run_events < max_partition_size) {
+            current_run_events += partition.events;
+            current_run_partitions.push_back(partition);
+            VAST_WARN("{} selects partition {} (v{}, {}) with "
+                      "{} events (total: {})",
+                      *self, partition.uuid, partition.version,
+                      partition.schema, partition.events, current_run_events);
+            return true;
+          }
+          return false;
+        });
       remaining_partitions.erase(first_removed, remaining_partitions.end());
       is_oversized = current_run_events > max_partition_size;
     }
+    // If we have just a single partition then we shouldn't rebuild if our
+    // intent was to merge undersized partitions, unless the partition is
+    // oversized or not of the latest partition version.
+    const auto skip_rebuild
+      = run->options.undersized && current_run_partitions.size() == 1
+        && current_run_partitions[0].version == version::partition_version
+        && current_run_partitions[0].events <= max_partition_size;
+    if (skip_rebuild) {
+      VAST_INFO("{} skips rebuilding of undersized partition {} because no "
+                "other partition of schema {} exists",
+                *self, current_run_partitions[0].uuid,
+                current_run_partitions[0].schema);
+      run->statistics.num_transformed += 1;
+      run->statistics.num_transforming -= 1;
+      run->statistics.num_results += 1;
+      // Pick up new work until we run out of remainig partitions.
+      return self->delegate(static_cast<rebuilder_actor>(self),
+                            atom::internal_v, atom::rebuild_v);
+    }
     // Ask the index to rebuild the partitions we selected.
     auto rp = self->make_response_promise<void>();
-    const auto num_partitions = current_run_partitions.size();
-    run->statistics.num_transforming += num_partitions;
+    run->statistics.num_transforming += current_run_partitions.size();
     auto pipeline
       = std::make_shared<vast::pipeline>("rebuild", std::vector<std::string>{});
     auto identity_operator = make_pipeline_operator("identity", {});
     if (!identity_operator)
       return identity_operator.error();
     pipeline->add_operator(std::move(*identity_operator));
+    auto current_run_partition_ids = std::vector<uuid>{};
+    current_run_partition_ids.reserve(current_run_partitions.size());
+    for (const auto& partition : current_run_partitions)
+      current_run_partition_ids.push_back(partition.uuid);
     self
       ->request(index, caf::infinite, atom::apply_v, std::move(pipeline),
-                std::move(current_run_partitions),
+                std::move(current_run_partition_ids),
                 system::keep_original_partition::no)
       .then(
-        [this, rp, current_run_events, num_partitions, is_heterogeneous,
+        [this, rp, current_run_events,
+         num_partitions = current_run_partitions.size(), is_heterogeneous,
          is_oversized](std::vector<partition_info>& result) mutable {
           // Determines whether we moved partitions back.
           bool needs_second_stage = false;
@@ -379,7 +406,8 @@ struct rebuilder_state {
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                       atom::rebuild_v);
         },
-        [this, num_partitions, rp](caf::error& error) mutable {
+        [this, num_partitions = current_run_partitions.size(),
+         rp](caf::error& error) mutable {
           run->statistics.num_transforming -= num_partitions;
           VAST_WARN("{} failed to rebuild partititons: {}", *self, error);
           // Pick up new work until we run out of remainig partitions.
@@ -482,20 +510,6 @@ get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
 
 caf::message
 rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
-  // Read options.
-  auto options = start_options{};
-  options.all = caf::get_or(inv.options, "vast.rebuild.all", false);
-  options.undersized
-    = caf::get_or(inv.options, "vast.rebuild.undersized", false);
-  options.parallel
-    = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1});
-  if (options.parallel == 0)
-    return caf::make_message(caf::make_error(
-      ec::invalid_configuration, "rebuild requires a non-zero parallel level"));
-  options.max_partitions
-    = caf::get_or(inv.options, "vast.rebuild.max-partitions",
-                  std::numeric_limits<size_t>::max());
-  options.detached = caf::get_or(inv.options, "vast.rebuild.detached", false);
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
@@ -510,7 +524,18 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
   auto expr = to<expression>(*query);
   if (!expr)
     return caf::make_message(std::move(expr.error()));
-  options.expression = std::move(*expr);
+  auto options = start_options{
+    .all = caf::get_or(inv.options, "vast.rebuild.all", false),
+    .undersized = caf::get_or(inv.options, "vast.rebuild.undersized", false),
+    .parallel = caf::get_or(inv.options, "vast.rebuild.parallel", size_t{1}),
+    .max_partitions = caf::get_or(inv.options, "vast.rebuild.max-partitions",
+                                  std::numeric_limits<size_t>::max()),
+    .expression = std::move(*expr),
+    .detached = caf::get_or(inv.options, "vast.rebuild.detached", false),
+  };
+  if (options.parallel == 0)
+    return caf::make_message(caf::make_error(
+      ec::invalid_configuration, "rebuild requires a non-zero parallel level"));
   auto result = caf::message{};
   self->request(*rebuilder, caf::infinite, atom::start_v, std::move(options))
     .receive(
@@ -525,10 +550,6 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
 
 caf::message
 rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
-  // Read options.
-  auto options = stop_options{};
-  options.detached = caf::get_or(inv.options, "vast.rebuild.detached", false);
-  options.force = caf::get_or(inv.options, "vast.rebuild.force", false);
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
@@ -536,6 +557,10 @@ rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
   if (!rebuilder)
     return caf::make_message(std::move(rebuilder.error()));
   auto result = caf::message{};
+  auto options = stop_options{
+    .detached = caf::get_or(inv.options, "vast.rebuild.detached", false),
+    .force = caf::get_or(inv.options, "vast.rebuild.force", false),
+  };
   self->request(*rebuilder, caf::infinite, atom::stop_v, std::move(options))
     .receive(
       [] {

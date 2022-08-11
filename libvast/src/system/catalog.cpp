@@ -129,12 +129,9 @@ catalog_state::lookup_impl(const expression& expr) const {
       return memoized_partitions;
     memoized_partitions.reserve(synopses.size());
     for (const auto& [partition, synopsis] : synopses) {
-      memoized_partitions.push_back({
-        .uuid = partition,
-        .events = synopsis->events,
-        .max_import_time = synopsis->max_import_time,
-        .schema = synopsis->schema,
-      });
+      memoized_partitions.emplace_back(partition, synopsis->events,
+                                       synopsis->max_import_time,
+                                       synopsis->schema, synopsis->version);
     }
     return memoized_partitions;
   };
@@ -205,12 +202,9 @@ catalog_state::lookup_impl(const expression& expr) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.push_back({
-                    .uuid = part_id,
-                    .events = part_syn->events,
-                    .max_import_time = part_syn->max_import_time,
-                    .schema = part_syn->schema,
-                  });
+                  result.emplace_back(part_id, part_syn->events,
+                                      part_syn->max_import_time,
+                                      part_syn->schema, part_syn->version);
                   break;
                 }
                 // The field has no dedicated synopsis. Check if there is one
@@ -221,23 +215,17 @@ catalog_state::lookup_impl(const expression& expr) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.push_back({
-                    .uuid = part_id,
-                    .events = part_syn->events,
-                    .max_import_time = part_syn->max_import_time,
-                    .schema = part_syn->schema,
-                  });
+                  result.emplace_back(part_id, part_syn->events,
+                                      part_syn->max_import_time,
+                                      part_syn->schema, part_syn->version);
                   break;
                 }
               } else {
                 // The catalog couldn't rule out this partition, so we have
                 // to include it in the result set.
-                result.push_back({
-                  .uuid = part_id,
-                  .events = part_syn->events,
-                  .max_import_time = part_syn->max_import_time,
-                  .schema = part_syn->schema,
-                });
+                result.emplace_back(part_id, part_syn->events,
+                                    part_syn->max_import_time, part_syn->schema,
+                                    part_syn->version);
                 break;
               }
             }
@@ -263,12 +251,9 @@ catalog_state::lookup_impl(const expression& expr) const {
                 // short, so we're probably not hitting the allocator due to
                 // SSO.
                 if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
-                  result.push_back({
-                    .uuid = part_id,
-                    .events = part_syn->events,
-                    .max_import_time = part_syn->max_import_time,
-                    .schema = part_syn->schema,
-                  });
+                  result.emplace_back(part_id, part_syn->events,
+                                      part_syn->max_import_time,
+                                      part_syn->schema, part_syn->version);
                   break;
                 }
               }
@@ -287,12 +272,9 @@ catalog_state::lookup_impl(const expression& expr) const {
               };
               auto add = ts.lookup(x.op, caf::get<vast::time>(d));
               if (!add || *add) {
-                result.push_back({
-                  .uuid = part_id,
-                  .events = part_syn->events,
-                  .max_import_time = part_syn->max_import_time,
-                  .schema = part_syn->schema,
-                });
+                result.emplace_back(part_id, part_syn->events,
+                                    part_syn->max_import_time, part_syn->schema,
+                                    part_syn->version);
               }
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
@@ -323,12 +305,9 @@ catalog_state::lookup_impl(const expression& expr) const {
                 // operator is "positive" and matching is true, or both are
                 // negative.
                 if (!is_negated(x.op) == matching) {
-                  result.push_back({
-                    .uuid = part_id,
-                    .events = part_syn->events,
-                    .max_import_time = part_syn->max_import_time,
-                    .schema = part_syn->schema,
-                  });
+                  result.emplace_back(part_id, part_syn->events,
+                                      part_syn->max_import_time,
+                                      part_syn->schema, part_syn->version);
                 }
               }
             }
