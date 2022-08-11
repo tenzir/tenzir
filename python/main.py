@@ -21,7 +21,7 @@ async def start(config: Dynaconf):
             description="Test",
             pattern_type="vast",
             pattern="\"CQishF25ynsGkC6v6e\"")
-    await vast.publish("stix.indicator", ind)
+    await vast.fabric.publish("stix.indicator", ind)
 
 def main():
     config = utils.config.parse()

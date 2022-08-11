@@ -72,7 +72,7 @@ class VAST:
         fabric = Fabric(config, backbone)
         self = VAST(config, fabric)
         logger.debug("subscribing to STIX topics")
-        await self.subscribe("stix.indicator", self._on_stix_indicator)
+        await self.fabric.subscribe("stix.indicator", self._on_stix_indicator)
         return self
 
     def __init__(self, config: Dynaconf, fabric: Fabric):
@@ -87,12 +87,6 @@ class VAST:
         await proc.communicate()
         logger.debug(proc.stderr.decode())
         return proc
-
-    async def publish(self, topic: str, data: Any):
-        await self.fabric.publish(topic, data)
-
-    async def subscribe(self, topic: str, callback):
-        await self.fabric.subscribe(topic, callback)
 
     # Translates an STIX Indicator into a VAST query and publishes the results
     # as STIX Bundle.
@@ -115,7 +109,7 @@ class VAST:
             return
         bundle = self.stix_bridge.make_sighting(indicator, results)
         logger.warning(bundle.serialize(pretty=True))
-        await self.publish("stix.bundle", bundle)
+        await self.fabric.publish("stix.bundle", bundle)
 
     async def _query(self, expression: str, limit: int = 100):
         proc = await CLI().export(max_events=limit).arrow(expression).exec()

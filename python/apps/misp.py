@@ -27,8 +27,8 @@ class MISP:
             logger.error(f"failed to connect: {e}")
 
     async def run(self):
-        await self.vast.subscribe("stix.bundle", self._on_bundle)
-        await self.vast.subscribe("stix.sighting", self._on_sighting)
+        await self.vast.fabric.subscribe("stix.bundle", self._on_bundle)
+        await self.vast.fabric.subscribe("stix.sighting", self._on_sighting)
         # Hook into event feed via 0mq.
         socket = zmq.asyncio.Context().socket(zmq.SUB)
         zmq_uri = f"tcp://{self.config.zmq.host}:{self.config.zmq.port}"
@@ -50,7 +50,7 @@ class MISP:
                 try:
                     parser.parse_misp_event(event)
                     logger.info(parser.bundle.serialize(pretty=True))
-                    await self.vast.publish("stix.bundle", parser.bundle)
+                    await self.vast.fabric.publish("stix.bundle", parser.bundle)
                 except Exception as e:
                     logger.warning(f"failed to parse MISP event as STIX: {e}")
                     continue
