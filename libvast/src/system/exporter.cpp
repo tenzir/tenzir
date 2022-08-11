@@ -123,7 +123,7 @@ void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
   auto& st = self->state;
   // Sanity check.
   if (!has_historical_option(st.options)) {
-    VAST_WARN("{} requested more hits for continuous query", *self);
+    VAST_DEBUG("{} requested more hits for continuous query", *self);
     return;
   }
   // Do nothing if we already shipped everything the client asked for.
