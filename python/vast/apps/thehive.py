@@ -1,10 +1,11 @@
 import json
 
 import requests
-from vast import VAST
-import utils.logging
 
-logger = utils.logging.get(__name__)
+from vast import VAST
+import vast.utils.logging
+
+logger = vast.utils.logging.get(__name__)
 
 # FIXME
 import random

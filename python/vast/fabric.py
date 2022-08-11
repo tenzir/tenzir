@@ -1,7 +1,7 @@
 from dynaconf import Dynaconf
 from typing import Any
 
-from backbones.backbone import Backbone
+from vast import Backbone
 
 
 class Fabric:

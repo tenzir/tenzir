@@ -1,4 +1,4 @@
-from .backbone import Backbone
+from vast import Backbone
 from typing import Any, Callable
 
 

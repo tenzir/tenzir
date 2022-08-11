@@ -1,9 +1,9 @@
 import asyncio
 from signal import SIGINT, SIGTERM, SIGHUP
 
-import utils.logging
+import vast.utils.logging
 
-logger = utils.logging.get()
+logger = vast.utils.logging.get()
 
 async def shutdown(loop, signal=None):
     """Cleanup tasks tied to the service's shutdown."""

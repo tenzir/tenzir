@@ -2,10 +2,7 @@ from datetime import datetime, timedelta
 import ipaddress
 
 import pandas as pd
-#import pyarrow as pa
 import stix2
-
-import utils.arrow
 
 def to_addr_sdo(x: ipaddress.IPv6Address):
     if x.ipv4_mapped:

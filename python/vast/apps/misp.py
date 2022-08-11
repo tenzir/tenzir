@@ -8,9 +8,9 @@ import zmq
 import zmq.asyncio
 
 from vast import VAST
-import utils.logging
+import vast.utils.logging
 
-logger = utils.logging.get(__name__)
+logger = vast.utils.logging.get(__name__)
 
 # The MISP app.
 class MISP:

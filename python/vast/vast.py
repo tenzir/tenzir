@@ -1,20 +1,18 @@
 import asyncio
 import io
 from collections import defaultdict
-from typing import Any
 
 from dynaconf import Dynaconf
-import json
 import pyarrow as pa
 import stix2
 
-from fabric import Fabric
-import backbones.inmemory
-import bridges.stix
-import utils.arrow
-import utils.logging
+from .fabric import Fabric
+import vast.backbones
+import vast.bridges.stix
+import vast.utils.arrow
+import vast.utils.logging
 
-logger = utils.logging.get("node")
+logger = vast.utils.logging.get("node")
 
 class CLI:
     @staticmethod
@@ -68,7 +66,7 @@ class CLI:
 class VAST:
     @staticmethod
     async def create(config: Dynaconf):
-        backbone = backbones.inmemory.InMemory()
+        backbone = vast.backbones.InMemory()
         fabric = Fabric(config, backbone)
         self = VAST(config, fabric)
         logger.debug("subscribing to STIX topics")
@@ -78,7 +76,7 @@ class VAST:
     def __init__(self, config: Dynaconf, fabric: Fabric):
         self.config = config
         self.fabric = fabric
-        self.stix_bridge = bridges.stix.STIX()
+        self.stix_bridge = vast.bridges.stix.STIX()
 
     async def start(self, **kwargs):
         proc = await CLI(**kwargs).start().exec()
@@ -90,7 +88,7 @@ class VAST:
 
     # Translates an STIX Indicator into a VAST query and publishes the results
     # as STIX Bundle.
-    async def _on_stix_indicator(self, message: Any):
+    async def _on_stix_indicator(self, message):
         logger.debug(message)
         indicator = stix2.parse(message)
         if type(indicator) != stix2.Indicator:
@@ -140,7 +138,7 @@ class VAST:
                 try:
                     while True:
                         batch = reader.read_next_batch()
-                        name = utils.arrow.name(batch.schema)
+                        name = vast.utils.arrow.name(batch.schema)
                         logger.debug(f"got batch of {name}")
                         num_batches += 1
                         num_rows += batch.num_rows
