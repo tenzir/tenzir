@@ -1,0 +1,55 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "configure" ]; then
+	mkdir -p /var/lib/vast
+    if ! getent passwd vast >/dev/null; then
+        adduser \
+            --system --group --no-create-home --home /var/lib/vast \
+            vast
+    fi
+    if ! dpkg-statoverride --list /var/lib/vast >/dev/null 2>&1; then
+        dpkg-statoverride \
+            --quiet --update \
+            --add vast vast 0750 /var/lib/vast
+    fi
+    mkdir -p /var/log/vast
+    if ! dpkg-statoverride --list /var/log/vast >/dev/null 2>&1; then
+        dpkg-statoverride \
+            --quiet --update \
+            --add vast vast 0750 /var/log/vast
+    fi
+fi
+
+# Automatically added by dh_installsystemd/13.3.4
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	# This will only remove masks created by d-s-h on package removal.
+	deb-systemd-helper unmask 'vast.service' >/dev/null || true
+
+	# was-enabled defaults to true, so new installations run enable.
+	if deb-systemd-helper --quiet was-enabled 'vast.service'; then
+		# Enables the unit on first installation, creates new
+		# symlinks on upgrades if the unit file has changed.
+		deb-systemd-helper enable 'vast.service' >/dev/null || true
+	else
+		# Update the statefile to add new symlinks (if any), which need to be
+		# cleaned up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state 'vast.service' >/dev/null || true
+	fi
+fi
+# End automatically added section
+# Automatically added by dh_installsystemd/13.3.4
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			_dh_action=restart
+		else
+			_dh_action=start
+		fi
+		deb-systemd-invoke $_dh_action 'vast.service' >/dev/null || true
+	fi
+fi
+# End automatically added section
+

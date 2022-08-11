@@ -13,7 +13,7 @@ project(
   VERSION
     ${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}.${VAST_VERSION_TWEAK}
   DESCRIPTION "Visibility Across Space and Time"
-  HOMEPAGE_URL "https://github.com/tenzir/vast"
+  HOMEPAGE_URL "https://vast.io"
   LANGUAGES C CXX)
 
 # -- sanity checks -------------------------------------------------------------
@@ -73,7 +73,6 @@ endif ()
 include(CMakeDependentOption)
 include(CMakePackageConfigHelpers)
 include(CMakePrintHelpers)
-include(CPack)
 include(CTest)
 include(CheckCXXSourceCompiles)
 include(CheckLibraryExists)
@@ -99,6 +98,7 @@ else ()
   set(VAST_IS_NOT_SUBPROJECT ON)
 endif ()
 unset(_VAST_PARENT_DIRECTORY)
+
 
 # -- changelog -----------------------------------------------------------------
 
@@ -683,6 +683,12 @@ add_subdirectory(libvast_test)
 add_subdirectory(tools)
 add_subdirectory(vast)
 
+# -- systemd support -----------------------------------------------------------
+
+install(
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/systemd/vast.service"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system")
+
 # -- cmake export/config installations -----------------------------------------
 
 export(
@@ -735,6 +741,11 @@ install(
         "${CMAKE_CURRENT_SOURCE_DIR}/VERSIONING.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
   DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+
+
+# -- packaging -----------------------------------------------------------------
+
+include(Package)
 
 # -- feature summary -----------------------------------------------------------
 
