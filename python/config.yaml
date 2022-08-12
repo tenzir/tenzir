@@ -5,14 +5,11 @@ logging:
   file-verbosity: DEBUG
   filename: vast.log
 
-# How to pass in a vast.yaml? This way?
-node:
-  config: vast.yaml
-
 apps:
   misp:
     api:
       host: http://localhost:5000
+      # Replace with your own API key.
       key: demodemodemodemodemodemodemodemodemodemo
     zmq:
       host: localhost
@@ -20,4 +17,5 @@ apps:
   thehive:
     user: demo@tenzir.com
     host: http://localhost:9000
+    # Replace with your own API key.
     key: O8fD7Se+GPfAstfpxByzP8kTt5A4kQYi
