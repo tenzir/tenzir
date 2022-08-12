@@ -45,6 +45,8 @@ class CLI:
         if not stdin:
             return await run(*self.args, stdin=False)
         proc = await run(*self.args, stdin=True)
+        # TODO: for large inputs, the buffering may be excessive here. We may
+        # have to switch to a streaming approach.
         proc.stdin.write(str(stdin).encode())
         await proc.stdin.drain()
         proc.stdin.close()
