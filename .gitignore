@@ -9,6 +9,8 @@
 /nix/build/
 /compile_commands.json
 /CMakeUserPresets.json
+venv/
+*.egg-info/
 .mypy_cache/
 __pycache__/
 .clangd/
@@ -21,17 +23,16 @@ __pycache__/
 /vast-unit-test/
 /vast-integration-test*/
 
+# Python build artifacts
+/python/dist
+
 # PyVAST build artifacts
 /pyvast/build/
 /pyvast/dist/
 /pyvast/env/
-/pyvast/venv/
-/pyvast/**/__pycache__/
-/pyvast/*.egg-info/
 /pyvast/*tar.gz
 
 # VAST example artifacts
-/examples/**/venv/
 /examples/**/.ipynb_checkpoints/
 /examples/notebooks/output
 
