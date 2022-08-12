@@ -3,11 +3,14 @@ import dynaconf
 
 CONFIG_FILES = ["config.yaml", "config.yml"]
 
+
 def create(config_files=CONFIG_FILES):
-    return dynaconf.Dynaconf(settings_files=config_files,
+    return dynaconf.Dynaconf(
+        settings_files=config_files,
         load_dotenv=True,
         envvar_prefix="VAST",
     )
+
 
 def parse():
     config_files = CONFIG_FILES

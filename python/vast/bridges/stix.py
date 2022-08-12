@@ -4,11 +4,13 @@ import ipaddress
 import pandas as pd
 import stix2
 
+
 def to_addr_sdo(x: ipaddress.IPv6Address):
     if x.ipv4_mapped:
         return stix2.IPv4Address(value=x.ipv4_mapped)
     else:
         return stix2.IPv6Address(value=x)
+
 
 # The STIX 2.1 bridge that process STIX objects on the fabric.
 class STIX:
@@ -42,40 +44,44 @@ class STIX:
             duration = event["duration"]
             end = start + duration if duration else None
             flow = stix2.NetworkTraffic(
-                    start=start,
-                    end=end,
-                    is_active=end is None,
-                    protocols=[event["proto"], event["service"]],
-                    src_port=event["id.orig_p"],
-                    dst_port=event["id.resp_p"],
-                    src_byte_count=event["orig_ip_bytes"],
-                    dst_byte_count=event["resp_ip_bytes"],
-                    src_packets=event["orig_pkts"],
-                    dst_packets=event["resp_pkts"],
-                    src_ref=src,
-                    dst_ref=dst,
-                )
+                start=start,
+                end=end,
+                is_active=end is None,
+                protocols=[event["proto"], event["service"]],
+                src_port=event["id.orig_p"],
+                dst_port=event["id.resp_p"],
+                src_byte_count=event["orig_ip_bytes"],
+                dst_byte_count=event["resp_ip_bytes"],
+                src_packets=event["orig_pkts"],
+                dst_packets=event["resp_pkts"],
+                src_ref=src,
+                dst_ref=dst,
+            )
             scos.append(flow)
             scos.append(src)
             scos.append(dst)
             # Wrap in Observed Data SDO.
             observable = stix2.ObservedData(
-                    # Figure out what system observed the data, e.g., Zeek.
-                    #created_by_ref=...,
-                    first_observed=start,
-                    last_observed=end,
-                    number_observed=1,
-                    object_refs=flow)
+                # Figure out what system observed the data, e.g., Zeek.
+                # created_by_ref=...,
+                first_observed=start,
+                last_observed=end,
+                number_observed=1,
+                object_refs=flow,
+            )
             observed_data.append(observable)
         # TODO: Derive the identity from the telemetry.
         # Reference in Sighting SRO.
         sighting = stix2.Sighting(
-                created_by_ref=self.identities["zeek"],
-                sighting_of_ref=indicator,
-                observed_data_refs=observed_data)
-        bundle = stix2.Bundle(self.identities["vast"],
-                              self.identities["zeek"],
-                              sighting,
-                              *observed_data,
-                              *scos)
+            created_by_ref=self.identities["zeek"],
+            sighting_of_ref=indicator,
+            observed_data_refs=observed_data,
+        )
+        bundle = stix2.Bundle(
+            self.identities["vast"],
+            self.identities["zeek"],
+            sighting,
+            *observed_data,
+            *scos
+        )
         return bundle

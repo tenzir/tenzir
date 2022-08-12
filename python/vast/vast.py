@@ -14,6 +14,7 @@ import vast.utils.logging
 
 logger = vast.utils.logging.get("node")
 
+
 class CLI:
     @staticmethod
     def arguments(**kwargs):
@@ -26,6 +27,7 @@ class CLI:
         return result
 
     """Wraps a VAST executable"""
+
     def __init__(self, **kwargs):
         self.args = CLI.arguments(**kwargs)
 
@@ -36,8 +38,9 @@ class CLI:
                 *args,
                 stdin=asyncio.subprocess.PIPE if stdin else None,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
+
         logger.debug(f"> vast {' '.join(self.args)}")
         if not stdin:
             return await run(*self.args, stdin=False)
@@ -54,13 +57,16 @@ class CLI:
             name = name[:-1]
         if not name == "__iter_":
             self.args.append(name.replace("_", "-"))
+
         def command(*args, **kwargs):
             if kwargs:
                 self.args.extend(CLI.arguments(**kwargs))
             if args:
                 self.args.extend(args)
             return self
+
         return command
+
 
 # The VAST node.
 class VAST:
@@ -83,7 +89,7 @@ class VAST:
         await proc.communicate()
         logger.debug(proc.stderr.decode())
         # TODO: Start a matcher
-        #cmd = CLI(plugins="matcher").matcher().start(match_types="[:string]").test()
+        # cmd = CLI(plugins="matcher").matcher().start(match_types="[:string]").test()
         return proc
 
     # Translates an STIX Indicator into a VAST query and publishes the results
@@ -122,7 +128,7 @@ class VAST:
 
     async def republish(self, type: str):
         callback = lambda line: self.fabric.publish(type, line)
-        await self._live_query(f"#type == \"{type}\"", callback)
+        await self._live_query(f'#type == "{type}"', callback)
 
     async def _query(self, expression: str, limit: int = 100):
         proc = await CLI().export(max_events=limit).arrow(expression).exec()

@@ -26,7 +26,9 @@ class TheHive:
         thehive_alert = {
             "type": "string",
             "source": "string",
-            "sourceRef": ''.join(random.choice(string.ascii_letters) for x in range(10)),
+            "sourceRef": "".join(
+                random.choice(string.ascii_letters) for x in range(10)
+            ),
             "externalLink": "string",
             "title": "string",
             "description": "string",
@@ -59,7 +61,7 @@ class TheHive:
                     "isZip": True,
                     "zipPassword": "string",
                 }
-            ]
+            ],
         }
         response = requests.post(
             f"{self.config.host}/api/v1/alert",
@@ -68,6 +70,7 @@ class TheHive:
         )
         logger.debug(response.text)
         response.raise_for_status()
+
 
 async def start(vast: VAST):
     misp = TheHive(vast)

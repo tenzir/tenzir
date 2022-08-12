@@ -20,9 +20,8 @@ class MISP:
         logger.info(f"connecting to REST API at {self.config.api.host}")
         try:
             self.misp = pymisp.ExpandedPyMISP(
-                url=self.config.api.host,
-                key=self.config.api.key,
-                ssl=False)
+                url=self.config.api.host, key=self.config.api.key, ssl=False
+            )
         except pymisp.exceptions.PyMISPError as e:
             logger.error(f"failed to connect: {e}")
 
@@ -81,16 +80,18 @@ class MISP:
             if type(object) is stix2.IPv4Address:
                 sighting = pymisp.MISPSighting()
                 sighting.from_dict(
-                        value=object.value,
-                        type="0", # true positive
-                        timestamp=11111111,
-                        source="VAST",
-                        )
+                    value=object.value,
+                    type="0",  # true positive
+                    timestamp=11111111,
+                    source="VAST",
+                )
                 sightings.append(sighting)
         for sighting in sightings:
             response = self.misp.add_sighting(sighting)
             if not response or type(response) is dict and response.get("message", None):
-               logger.error(f"failed to add sighting to MISP: '{sighting}' ({response})")
+                logger.error(
+                    f"failed to add sighting to MISP: '{sighting}' ({response})"
+                )
             else:
                 logger.info(f"reported sighting: {response}")
 

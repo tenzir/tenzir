@@ -4,13 +4,15 @@ import sys
 import coloredlogs
 import dynaconf
 
-def get(name = None):
+
+def get(name=None):
     logger = logging.getLogger(f"vast.{name}" if name else "vast")
     return logger
 
+
 # Consider configuration via logging.config.dictConfig.
 def configure(config: dynaconf.Dynaconf, logger: logging.Logger = get()):
-    fmt = '%(asctime)s %(name)s %(levelname)-7s %(message)s'
+    fmt = "%(asctime)s %(name)s %(levelname)-7s %(message)s"
     colored_formatter = coloredlogs.ColoredFormatter(fmt)
     plain_formatter = logging.Formatter(fmt)
     if config.file:
@@ -28,11 +30,14 @@ def configure(config: dynaconf.Dynaconf, logger: logging.Logger = get()):
             logger.setLevel(ch_level)
         ch.setFormatter(colored_formatter)
         logger.addHandler(ch)
+
     class ShutdownHandler(logging.Handler):
         """Exit application with CRITICAL logs"""
+
         def emit(self, _):
             logging.shutdown()
             sys.exit(1)
+
     sh = ShutdownHandler(level=50)
     sh.setFormatter(colored_formatter)
     logger.addHandler(sh)
