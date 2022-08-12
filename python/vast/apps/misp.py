@@ -59,7 +59,7 @@ class MISP:
                     logger.warning(f"failed to parse MISP event as STIX: {e}")
                     continue
         finally:
-            logger.info(f"terminating MISP")
+            logger.info(f"terminating")
             self.misp = None
             socket.setsockopt(zmq.LINGER, 0)
             socket.close()
