@@ -1,10 +1,6 @@
 name: "Python"
 on:
   pull_request:
-    paths:
-      - 'python/**'
-      - '.github/workflows/python.yml'
-      - '.github/workflows/style.yml'
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
