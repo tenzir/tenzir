@@ -1,6 +1,11 @@
 # VAST Python
 
-VAST comes with a Python package for easy management and integration.
+The Python package of VAST provides a flexible control plane to integrate VAST
+with other security tools.
+
+> **Note**
+> The Python effort is still highly experimental and subject to rapid change.
+> Please do not consider it for production use.
 
 ## Usage
 
