@@ -154,11 +154,19 @@ class VAST:
                         logger.debug(f"got batch of {name}")
                         num_batches += 1
                         num_rows += batch.num_rows
-                        batches[name].append(batch)
+                        # TODO: this might be slow, but schemas are not
+                        # hashable. The string representation is the next best
+                        # thing to determine uniqueness.
+                        batches[batch.schema.to_string()].append(batch)
                 except StopIteration:
                     logger.debug(f"read {num_batches}/{num_rows} batches/rows")
                     num_batches = 0
                     num_rows = 0
         except pa.ArrowInvalid:
             logger.debug("completed processing stream of record batches")
-        return {n: pa.Table.from_batches(xs) for (n, xs) in batches.items()}
+        result = defaultdict(list)
+        for (_, batches) in batches.items():
+            table = pa.Table.from_batches(batches)
+            name = vast.utils.arrow.name(table.schema)
+            result[name].append(table)
+        return result

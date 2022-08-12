@@ -28,10 +28,12 @@ class STIX:
         # TODO: Go beyond Zeek conn logs. This is hard-coded for Zeek on purpose
         # to understand the full scope of what it takes to construct a STIX
         # bundle. Moving forward, We should use a proper taxonomy.
-        table = tables["zeek.conn"]
-        if not table:
+        zeek_conn = tables["zeek.conn"]
+        if not zeek_conn:
             return None
-        events = table.to_pylist()
+        events = []
+        for table in zeek_conn:
+            events.extend(table.to_pylist())
         scos = []
         observed_data = []
         # TODO: aggregate flows into a single Observed Data SDO when the 5-tuple
