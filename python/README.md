@@ -4,24 +4,77 @@ VAST comes with a Python package for easy management and integration.
 
 ## Usage
 
-Setup a virtual environment:
+To get started, clone the VAST repository and install the Python package via
+[Poetry](https://python-poetry.org/docs/):
 
 ```bash
-python3 -m venv venv
-. venv/bin/activate
-pip install -e .
+git clone https://github.com/tenzir/vast.git
+cd vast/python
+poetry install
 ```
 
-Thereafter, you should be able to run files in the `examples` directory, e.g.:
+Thereafter, you should be able to run files in the `examples` directory, e.g.,
+via a Poetry shell:
 
 ```bash
+poetry shell
 python examples/misp.py
 ```
 
-## Unit Tests
+## Development
 
-Run all unit tests as follows:
+We recommend that you work with an editable installation, which is the default
+for `poetry install`.
+
+### Unit Tests
+
+Run the unit tests via pytest:
 
 ```bash
-pytest
+poetry run pytest
 ```
+
+## Packaging
+
+The following instructions concern maintainers who want to publish the Python
+package to PyPI.
+
+### Setup Test PyPI
+
+1. Add a Test PyPi repository:
+
+   ```bash
+   poetry config repositories.test-pypi https://test.pypi.org/legacy/
+   ```
+
+2. Get the token from <https://test.pypi.org/manage/account/token/>.
+
+3. Store the token:
+
+  ```bash
+  poetry config pypi-token.test-pypi  pypi-YYYYYYYY
+  ```
+
+### Setup Production PyPI
+
+1. Get the token from <https://pypi.org/manage/account/token/>.
+
+2. Store the token:
+
+  ```bash
+  poetry config pypi-token.pypi pypi-XXXXXXXX
+  ```
+
+### Publish to PyPI
+
+1. Publish to Test PyPI:
+  
+   ```bash
+   poetry publish -r test-pypi
+   ```
+
+2. If everything went well, publish to PyPi:
+
+   ```bash
+   poetry publish --build
+   ```
