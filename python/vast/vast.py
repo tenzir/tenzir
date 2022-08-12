@@ -16,6 +16,8 @@ logger = vast.utils.logging.get("node")
 
 
 class CLI:
+    """A commmand-line wrapper for the VAST executable."""
+
     @staticmethod
     def arguments(**kwargs):
         result = []
@@ -25,8 +27,6 @@ class CLI:
             else:
                 result.append(f"--{k.replace('_','-')}={v}")
         return result
-
-    """Wraps a VAST executable"""
 
     def __init__(self, **kwargs):
         self.args = CLI.arguments(**kwargs)
@@ -68,8 +68,10 @@ class CLI:
         return command
 
 
-# The VAST node.
 class VAST:
+    """An instance of a VAST node that sits between an application and the
+    fabric."""
+
     @staticmethod
     async def create(config: Dynaconf):
         backbone = vast.backbones.InMemory()
@@ -85,12 +87,19 @@ class VAST:
         self.stix_bridge = vast.bridges.stix.STIX()
 
     async def start(self, **kwargs):
+        """Starts a VAST node."""
         proc = await CLI(**kwargs).start().exec()
         await proc.communicate()
         logger.debug(proc.stderr.decode())
         # TODO: Start a matcher
         # cmd = CLI(plugins="matcher").matcher().start(match_types="[:string]").test()
         return proc
+
+    async def republish(self, type: str):
+        """Subscribes to an event type on ingest path and publishes the events
+        directly to the fabric."""
+        callback = lambda line: self.fabric.publish(type, line)
+        await self._live_query(f'#type == "{type}"', callback)
 
     # Translates an STIX Indicator into a VAST query and publishes the results
     # as STIX Bundle.
@@ -126,11 +135,8 @@ class VAST:
         if proc.returncode != 0:
             logger.warning(f"vast exited with non-zero code: {proc.returncode}")
 
-    async def republish(self, type: str):
-        callback = lambda line: self.fabric.publish(type, line)
-        await self._live_query(f'#type == "{type}"', callback)
-
     async def _query(self, expression: str, limit: int = 100):
+        """Executes a VAST and receives results as Arrow Tables."""
         proc = await CLI().export(max_events=limit).arrow(expression).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())

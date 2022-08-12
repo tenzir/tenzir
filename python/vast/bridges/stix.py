@@ -6,6 +6,8 @@ import stix2
 
 
 def to_addr_sdo(x: ipaddress.IPv6Address):
+    """Translates a potentially ipv4-mapped IPv6 address into the right IP
+    address SCO."""
     if x.ipv4_mapped:
         return stix2.IPv4Address(value=x.ipv4_mapped)
     else:
@@ -14,6 +16,8 @@ def to_addr_sdo(x: ipaddress.IPv6Address):
 
 # The STIX 2.1 bridge that process STIX objects on the fabric.
 class STIX:
+    """A bridge for translating STIX objects."""
+
     def __init__(self):
         self.store = stix2.MemoryStore()
         self.identities = {}

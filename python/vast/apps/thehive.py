@@ -7,12 +7,15 @@ import vast.utils.logging
 
 logger = vast.utils.logging.get(__name__)
 
-# FIXME
+# FIXME: these are just here temporarily so that we can generate a unique
+# sourceRef for alerts.
 import random
 import string
 
 # The TheHive app.
 class TheHive:
+    """The app for TheHive."""
+
     def __init__(self, vast: VAST):
         self.vast = vast
         self.config = vast.config.apps.thehive

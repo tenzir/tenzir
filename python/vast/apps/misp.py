@@ -14,6 +14,11 @@ logger = vast.utils.logging.get(__name__)
 
 # The MISP app.
 class MISP:
+    """The app for MISP.
+
+    It hooks into the 0mq feed and interacts with the MISP instance via
+    PyMISP."""
+
     def __init__(self, vast: VAST):
         self.vast = vast
         self.config = vast.config.apps.misp

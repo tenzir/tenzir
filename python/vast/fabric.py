@@ -5,6 +5,9 @@ from vast import Backbone
 
 
 class Fabric:
+    """The high-level interface for object-based interaction over a specific
+    backbone."""
+
     def __init__(self, settings: Dynaconf, backbone: Backbone):
         self.settings = settings
         self.backbone = backbone

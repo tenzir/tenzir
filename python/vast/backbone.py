@@ -3,6 +3,9 @@ from typing import Any, Callable
 
 
 class Backbone(ABC):
+    """The low-level medium that provides a topic-based publish-subscribe
+    interface for event-based communication."""
+
     @abstractmethod
     async def publish(self, topic: str, data: Any):
         pass
