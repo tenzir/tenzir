@@ -1,11 +1,14 @@
-<!-- Describe the change you've made in this section. -->
+<!--
+Please make sure to follow our pull request conventions:
+1. Describe the change you've made.
+2. Ensure that all user-facing changes have changelog entries according to our
+   guidelines: https://vast.io/docs/develop-vast/contributing/changelog
+3. Provide instructions for the reviewer.
+-->
 
-### :memo: Checklist
+### :memo: Reviewer Checklist
 
-- [ ] All user-facing changes have changelog entries.
-- [ ] The changes are reflected on [vast.io](https://vast.io), if necessary.
-- [ ] The PR description contains instructions for the reviewer, if necessary.
+Review this pull request by ensuring the following items:
 
-### :dart: Review Instructions
-
-<!-- Provide instructions for the reviewer here, e.g., review this pull request commit-by-commit, or file-by-file. -->
+- [ ] All user-facing changes have changelog entries
+- [ ] User-facing changes are reflected on [vast.io](https://vast.io)
