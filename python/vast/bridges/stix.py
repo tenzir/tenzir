@@ -5,13 +5,14 @@ import pandas as pd
 import stix2
 
 
-def to_addr_sdo(x: ipaddress.IPv6Address):
+def to_addr_sdo(data):
     """Translates a potentially ipv4-mapped IPv6 address into the right IP
     address SCO."""
-    if x.ipv4_mapped:
-        return stix2.IPv4Address(value=x.ipv4_mapped)
+    addr = ipaddress.IPv6Address(data)
+    if addr.ipv4_mapped:
+        return stix2.IPv4Address(value=addr.ipv4_mapped)
     else:
-        return stix2.IPv6Address(value=x)
+        return stix2.IPv6Address(value=addr)
 
 
 # The STIX 2.1 bridge that process STIX objects on the fabric.
@@ -42,10 +43,8 @@ class STIX:
             # Create Network Traffic SDO.
             # TODO: cast the Arrow Table properly to avoid having to do this
             # conversion here. This should already be a typed data frame.
-            orig_h = ipaddress.IPv6Address(event["id.orig_h"])
-            resp_h = ipaddress.IPv6Address(event["id.resp_h"])
-            src = to_addr_sdo(orig_h)
-            dst = to_addr_sdo(resp_h)
+            src = to_addr_sdo(event["id.orig_h"])
+            dst = to_addr_sdo(event["id.resp_h"])
             start = pd.to_datetime(event["ts"])
             duration = event["duration"]
             end = start + duration if duration else None
