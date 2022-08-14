@@ -8,6 +8,7 @@ import zmq
 import zmq.asyncio
 
 from vast import VAST
+import vast.bridges.stix as vbs
 import vast.utils.logging
 
 logger = vast.utils.logging.get(__name__)
@@ -22,6 +23,7 @@ class MISP:
     def __init__(self, vast: VAST):
         self.vast = vast
         self.config = vast.config.apps.misp
+        self.stix_bridge = vbs.STIX()
         logger.info(f"connecting to REST API at {self.config.api.host}")
         try:
             self.misp = pymisp.ExpandedPyMISP(
@@ -53,7 +55,7 @@ class MISP:
                 parser = misp_stix_converter.MISPtoSTIX21Parser()
                 try:
                     parser.parse_misp_event(event)
-                    logger.info(parser.bundle.serialize(pretty=True))
+                    logger.debug(parser.bundle.serialize(pretty=True))
                     await self.vast.fabric.publish("stix.bundle", parser.bundle)
                 except Exception as e:
                     logger.warning(f"failed to parse MISP event as STIX: {e}")
@@ -64,12 +66,28 @@ class MISP:
             socket.setsockopt(zmq.LINGER, 0)
             socket.close()
 
-    async def _on_sighting(self, message: Any):
-        logger.debug(f"got sighting: {message}")
-        sighting = stix2.parse(message)
-        if type(sighting) != stix2.Bundle:
-            logger.warn(f"expected sighting or bundle, got {type(sighting)}")
-            return
+    async def _on_sighting(self, bundle: stix2.Bundle):
+        logger.debug(f"got sighting: {bundle}")
+        self.stix_bridge.store.add(bundle)
+        sightings = [o for o in bundle.objects if type(o) == stix2.Sighting]
+        # For every Sighting, do the following:
+        # 1. Try to find a MISP Object for sighting_of_ref
+        # 2. Look up the MISP attributes for the SCO in Observed Data.
+        for s in sightings:
+            sightee = self.stix_bridge.store.get(s.sighting_of_ref)
+            misp_uuid = vbs.make_uuid(sightee.id)
+            data = self.misp.search(uuid=misp_uuid, controller="attributes")
+            logger.warning(data)
+            # MISP performs a UUID-preserving conversion of attributes into
+            # either Indicator or Observed Data.
+            if (type(sightee) == stix2.Indicator):
+                pass
+            elif (type(sightee) == stix2.ObservedData):
+                pass
+            else:
+                logger.warning(f"ignoring sightee of type {type(sigthee)}")
+                continue
+
 
     async def _on_bundle(self, message: Any):
         logger.debug(f"got bundle: {message}")

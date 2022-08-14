@@ -80,7 +80,7 @@ class VAST:
         fabric = Fabric(config, backbone)
         self = VAST(config, fabric)
         logger.debug("subscribing to STIX topics")
-        await self.fabric.subscribe("stix.indicator", self._on_stix_indicator)
+        await self.fabric.pull(self._on_stix_indicator)
         return self
 
     def __init__(self, config: Dynaconf, fabric: Fabric):
@@ -100,17 +100,13 @@ class VAST:
     async def republish(self, type: str):
         """Subscribes to an event type on ingest path and publishes the events
         directly to the fabric."""
-        callback = lambda line: self.fabric.publish(type, line)
+        callback = lambda line: self.fabric.backbone.publish(type, line)
         await self._live_query(f'#type == "{type}"', callback)
 
     # Translates an STIX Indicator into a VAST query and publishes the results
     # as STIX Bundle.
-    async def _on_stix_indicator(self, message):
-        logger.debug(message)
-        indicator = stix2.parse(message)
-        if type(indicator) != stix2.Indicator:
-            logger.warn(f"expected indicator, got {type(indicator)}")
-            return
+    async def _on_stix_indicator(self, indicator: stix2.Indicator):
+        logger.debug(f"got {indicator}")
         if indicator.pattern_type == "vast":
             logger.debug(f"got VAST expression {indicator.pattern}")
         elif indicator.pattern_type == "sigma":
@@ -118,13 +114,18 @@ class VAST:
         else:
             logger.warn(f"got unsupported pattern type {indicator.pattern_type}")
             return
+        # Run the query.
         results = await self._query(indicator.pattern)
         if len(results) == 0:
             logger.info(f"got no results for query: {indicator.pattern}")
             return
-        bundle = self.stix_bridge.make_sighting(indicator, results)
-        logger.warning(bundle.serialize(pretty=True))
-        await self.fabric.publish("stix.bundle", bundle)
+        # TODO: go beyond Zeek connection events.
+        zeek_conn = results["zeek.conn"]
+        if not zeek_conn:
+            logger.warning("no connection events found")
+            return
+        bundle = self.stix_bridge.make_sighting_from_flows(indicator, zeek_conn)
+        await self.fabric.push(bundle)
 
     async def _live_query(self, expression: str, callback):
         proc = await CLI().export(continuous=True).json(expression).exec()

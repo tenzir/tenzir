@@ -1,18 +1,33 @@
 from datetime import datetime, timedelta
 import ipaddress
+import uuid
 
 import pandas as pd
 import stix2
 
+# The namespace UUID for STIX.
+STIX_NAMESPACE_UUID = uuid.UUID("00abedb4-aa42-466c-9c01-fed23315a9b7")
 
 def to_addr_sdo(data):
-    """Translates a potentially ipv4-mapped IPv6 address into the right IP
+    """Translate a potentially ipv4-mapped IPv6 address into the right IP
     address SCO."""
     addr = ipaddress.IPv6Address(data)
     if addr.ipv4_mapped:
         return stix2.IPv4Address(value=addr.ipv4_mapped)
     else:
         return stix2.IPv6Address(value=addr)
+
+
+def make_uuid(name: str):
+    """Make a STIX 2.1+ compliant UUIDv5 from a "name"."""
+    return uuid.uuid5(STIX_NAMESPACE_UUID, name)
+
+
+def uuid_from_id(stix_id: str):
+    """Convert a STIX ID to a UUID."""
+    idx = stix_id.index("--")
+    uuid_str = stix_id[idx + 2 :]
+    return uuid.UUID(uuid_str)
 
 
 # The STIX 2.1 bridge that process STIX objects on the fabric.
@@ -25,15 +40,12 @@ class STIX:
         self.identities["vast"] = stix2.Identity(name="VAST", identity_class="system")
         self.identities["zeek"] = stix2.Identity(name="Zeek", identity_class="system")
 
-    def make_sighting(self, indicator: stix2.Indicator, tables):
-        # TODO: Go beyond Zeek conn logs. This is hard-coded for Zeek on purpose
-        # to understand the full scope of what it takes to construct a STIX
-        # bundle. Moving forward, We should use a proper taxonomy.
-        zeek_conn = tables["zeek.conn"]
-        if not zeek_conn:
-            return None
+    # TODO: Do not hardcode the Zeek schema in here, but rather operate with an
+    # event taxonomy.
+    def make_sighting_from_flows(self, indicator: stix2.Indicator, zeek_tables):
+        """Translate zeek connection logs into Network Traffic sightings."""
         events = []
-        for table in zeek_conn:
+        for table in zeek_tables:
             events.extend(table.to_pylist())
         scos = []
         observed_data = []
@@ -87,6 +99,6 @@ class STIX:
             self.identities["zeek"],
             sighting,
             *observed_data,
-            *scos
+            *scos,
         )
         return bundle
