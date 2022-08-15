@@ -583,12 +583,18 @@ active_partition_actor::behavior_type active_partition(
             auto id_str = fmt::to_string(query_context.id);
             self->send(self->state.accountant, "partition.lookup.runtime",
                        runtime,
-                       metrics_metadata{{"query", id_str},
-                                        {"partition-type", "active"}});
+                       metrics_metadata{
+                         {"query", id_str},
+                         {"issuer", query_context.issuer},
+                         {"partition-type", "active"},
+                       });
             self->send(self->state.accountant, "partition.lookup.hits",
                        rank(hits),
-                       metrics_metadata{{"query", std::move(id_str)},
-                                        {"partition-type", "active"}});
+                       metrics_metadata{
+                         {"query", std::move(id_str)},
+                         {"issuer", query_context.issuer},
+                         {"partition-type", "active"},
+                       });
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
             auto* count = caf::get_if<query_context::count>(&query_context.cmd);

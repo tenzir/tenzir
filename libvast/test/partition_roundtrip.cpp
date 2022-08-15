@@ -208,7 +208,8 @@ TEST(empty partition roundtrip) {
   auto expr = vast::expression{vast::predicate{vast::field_extractor{"x"},
                                                vast::relational_operator::equal,
                                                vast::data{0u}}};
-  auto query_context = vast::query_context::make_extract(self, std::move(expr));
+  auto query_context
+    = vast::query_context::make_extract("test", self, std::move(expr));
   auto rp2 = self->request(catalog, caf::infinite, vast::atom::candidates_v,
                            std::move(query_context));
   run();
@@ -298,7 +299,8 @@ TEST(full partition roundtrip) {
         auto rp = self->request(
           readonly_partition, caf::infinite, vast::atom::query_v,
           vast::query_context::make_count(
-            dummy, vast::query_context::count::mode::estimate, expression));
+            "test", dummy, vast::query_context::count::mode::estimate,
+            expression));
         run();
         rp.receive(
           [&tally](uint64_t x) {

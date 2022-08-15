@@ -1430,9 +1430,10 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     [self](atom::resolve,
            vast::expression& expr) -> caf::result<catalog_result> {
-      auto lookup_id = vast::uuid::random();
-      return self->delegate(self->state.catalog, atom::candidates_v, lookup_id,
-                            std::move(expr));
+      auto query_context = query_context::make_extract("index", self, expr);
+      query_context.id = vast::uuid::random();
+      return self->delegate(self->state.catalog, atom::candidates_v,
+                            std::move(query_context));
     },
     [self](const uuid& query_id, uint32_t num_partitions) {
       if (auto err
@@ -1694,8 +1695,8 @@ index(index_actor::stateful_pointer<index_state> self,
       static const auto match_everything
         = vast::predicate{meta_extractor{meta_extractor::type},
                           relational_operator::ni, data{""}};
-      auto query_context
-        = query_context::make_extract(partition_transfomer, match_everything);
+      auto query_context = query_context::make_extract(
+        pipeline->name(), partition_transfomer, match_everything);
       auto transform_id = self->state.pending_queries.create_query_id();
       query_context.id = transform_id;
       query_context.priority = query_context::priority::high;

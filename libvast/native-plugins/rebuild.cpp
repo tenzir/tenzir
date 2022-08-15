@@ -180,10 +180,6 @@ struct rebuilder_state {
     }
     run.emplace();
     run->options = std::move(options);
-    const auto lookup_id = uuid::random();
-    const auto max_partition_version = run->options.all
-                                         ? version::partition_version
-                                         : version::partition_version - 1;
     VAST_DEBUG("{} requests {}{} partitions matching the expression {}", *self,
                run->options.all ? "all" : "outdated",
                run->options.undersized ? " undersized" : "",
@@ -209,11 +205,20 @@ struct rebuilder_state {
     };
     if (run->options.detached)
       static_cast<caf::response_promise&>(rp).deliver(caf::unit);
+    auto query_context
+      = query_context::make_extract("rebuild", self, run->options.expression);
+    query_context.id = uuid::random();
     self
-      ->request(catalog, caf::infinite, atom::candidates_v, lookup_id,
-                run->options.expression, max_partition_version)
+      ->request(catalog, caf::infinite, atom::candidates_v,
+                std::move(query_context))
       .then(
         [this, finish](system::catalog_result& result) mutable {
+          if (!run->options.all) {
+            std::erase_if(
+              result.partitions, [&](const partition_info& partition) {
+                return partition.version >= version::partition_version;
+              });
+          }
           if (result.partitions.empty())
             return finish({}, true);
           if (run->options.undersized)

@@ -57,7 +57,7 @@ std::vector<uuid> cands(uint32_t start, uint32_t end) {
 // We need to be able to generate queries with random query ids.
 query_context make_random_query_context() {
   auto result = query_context::make_count(
-    caf::actor{}, query_context::count::estimate, expression{});
+    "test", caf::actor{}, query_context::count::estimate, expression{});
   result.id = uuid::random();
   return result;
 }

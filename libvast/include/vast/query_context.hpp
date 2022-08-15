@@ -61,8 +61,8 @@ struct query_context {
   query_context(query_context&&) = default;
   query_context(const query_context&) = default;
 
-  query_context(command cmd, expression expr)
-    : cmd(std::move(cmd)), expr(std::move(expr)) {
+  query_context(std::string issuer, command cmd, expression expr)
+    : cmd(std::move(cmd)), expr(std::move(expr)), issuer{std::move(issuer)} {
   }
 
   query_context& operator=(query_context&&) = default;
@@ -73,16 +73,23 @@ struct query_context {
   // -- helper functions to make query creation less boiler-platey -------------
 
   template <class Actor>
-  static query_context
-  make_count(const Actor& sink, enum count::mode m, expression expr) {
-    return {count{caf::actor_cast<system::receiver_actor<uint64_t>>(sink), m},
-            std::move(expr)};
+  static query_context make_count(std::string issuer, const Actor& sink,
+                                  enum count::mode m, expression expr) {
+    return {
+      std::move(issuer),
+      count{caf::actor_cast<system::receiver_actor<uint64_t>>(sink), m},
+      std::move(expr),
+    };
   }
 
   template <class Actor>
-  static query_context make_extract(const Actor& sink, expression expr) {
-    return {extract{caf::actor_cast<system::receiver_actor<table_slice>>(sink)},
-            std::move(expr)};
+  static query_context
+  make_extract(std::string issuer, const Actor& sink, expression expr) {
+    return {
+      std::move(issuer),
+      extract{caf::actor_cast<system::receiver_actor<table_slice>>(sink)},
+      std::move(expr),
+    };
   }
 
   // -- misc -------------------------------------------------------------------
@@ -95,7 +102,7 @@ struct query_context {
   template <class Inspector>
   friend auto inspect(Inspector& f, query_context& q) {
     return f(caf::meta::type_name("vast.query"), q.id, q.cmd, q.expr, q.ids,
-             q.priority);
+             q.priority, q.issuer);
   }
 
   // -- data members -----------------------------------------------------------
@@ -120,6 +127,9 @@ struct query_context {
 
   /// The query priority.
   uint8_t priority = priority::normal;
+
+  /// The issuer of the query.
+  std::string issuer = {};
 };
 
 } // namespace vast
@@ -154,8 +164,8 @@ struct formatter<vast::query_context> {
       },
     };
     caf::visit(f, value.cmd);
-    return format_to(out, "{} (priority::{}), [{}])", value.expr,
-                     value.priority, value.ids);
+    return format_to(out, "{} (priority={}), ids={}, issuer={})", value.expr,
+                     value.priority, value.ids, value.issuer);
   }
 };
 

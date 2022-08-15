@@ -443,29 +443,6 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         self->state.merge(aps.uuid, aps.synopsis);
       return atom::ok_v;
     },
-    [=](atom::candidates, vast::uuid lookup_id,
-        const vast::expression& expr) -> caf::result<catalog_result> {
-      return self->delegate(
-        static_cast<catalog_actor>(self), atom::candidates_v, lookup_id, expr,
-        std::numeric_limits<decltype(version::partition_version)>::max());
-    },
-    [=](atom::candidates, vast::uuid lookup_id, const vast::expression& expr,
-        uint64_t max_partition_version) -> caf::result<catalog_result> {
-      auto start = std::chrono::steady_clock::now();
-      auto result = self->state.lookup(expr);
-      std::erase_if(result.partitions, [&](const partition_info& partition) {
-        return self->state.synopses[partition.uuid]->version
-               > max_partition_version;
-      });
-      duration runtime = std::chrono::steady_clock::now() - start;
-      auto id_str = fmt::to_string(lookup_id);
-      self->send(self->state.accountant, "catalog.lookup.runtime", runtime,
-                 metrics_metadata{{"query", id_str}});
-      self->send(self->state.accountant, "catalog.lookup.candidates",
-                 result.partitions.size(),
-                 metrics_metadata{{"query", std::move(id_str)}});
-      return result;
-    },
     [=](atom::candidates, const vast::query_context& query_context)
       -> caf::result<catalog_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
@@ -482,11 +459,16 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query_context.id);
       self->send(self->state.accountant, "catalog.lookup.runtime", runtime,
-                 metrics_metadata{{"query", id_str}});
+                 metrics_metadata{
+                   {"query", id_str},
+                   {"issuer", query_context.issuer},
+                 });
       self->send(self->state.accountant, "catalog.lookup.candidates",
                  result.partitions.size(),
-                 metrics_metadata{{"query", std::move(id_str)}});
-
+                 metrics_metadata{
+                   {"query", std::move(id_str)},
+                   {"issuer", query_context.issuer},
+                 });
       return result;
     },
     [=](atom::status, status_verbosity v) {

@@ -39,7 +39,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     uint64_t rows = 0;
     std::vector<vast::table_slice> result;
     auto query_context
-      = vast::query_context::make_extract(self, vast::expression{});
+      = vast::query_context::make_extract("test", self, vast::expression{});
     query_context.ids = ids;
     self->send(actor, vast::atom::query_v, query_context);
     run();

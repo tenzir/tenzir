@@ -132,12 +132,14 @@ system::store_actor::behavior_type default_passive_store(
                  fmt::format("{}.lookup.runtime", self->name()), runtime,
                  system::metrics_metadata{
                    {"query", id_str},
+                   {"issuer", query_context.issuer},
                    {"store-type", self->state.store_type},
                  });
       self->send(self->state.accountant,
                  fmt::format("{}.lookup.hits", self->name()), *num_hits,
                  system::metrics_metadata{
                    {"query", id_str},
+                   {"issuer", query_context.issuer},
                    {"store-type", self->state.store_type},
                  });
       return *num_hits;
@@ -188,12 +190,14 @@ system::store_builder_actor::behavior_type default_active_store(
                  fmt::format("{}.lookup.runtime", self->name()), runtime,
                  system::metrics_metadata{
                    {"query", id_str},
+                   {"issuer", query_context.issuer},
                    {"store-type", self->state.store_type},
                  });
       self->send(self->state.accountant,
                  fmt::format("{}.lookup.hits", self->name()), *num_hits,
                  system::metrics_metadata{
                    {"query", id_str},
+                   {"issuer", query_context.issuer},
                    {"store-type", self->state.store_type},
                  });
       return *num_hits;
