@@ -11,5 +11,4 @@ Please make sure to follow our pull request conventions:
 Review this pull request by ensuring the following items:
 
 - [ ] All user-facing changes have changelog entries
-- [ ] User-facing changes are reflected on
-  [vast.io](https://github.com/tenzir/vast/tree/master/web)
+- [ ] User-facing changes are reflected on [vast.io](https://github.com/tenzir/vast/tree/master/web)
