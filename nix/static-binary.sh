@@ -16,10 +16,12 @@ usage() {
   echo
 }
 
-VAST_BUILD_VERSION="${VAST_BUILD_VERSION:=$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')}"
-VAST_BUILD_VERSION_SHORT="${VAST_BUILD_VERSION_SHORT:=$(git describe --abbrev=10 --match='v[0-9]*')}"
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
+
+VAST_BUILD_VERSION="${VAST_BUILD_VERSION:=$(git -C "${toplevel}" describe --abbrev=10 --long --dirty --match='v[0-9]*')}"
+VAST_BUILD_VERSION_SHORT="${VAST_BUILD_VERSION_SHORT:=$(git -C "${toplevel}" describe --abbrev=10 --match='v[0-9]*')}"
+
 desc="${VAST_BUILD_VERSION}"
 artifact_name="${VAST_BUILD_VERSION_SHORT}"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
@@ -81,7 +83,7 @@ done
 
 if [ "${USE_HEAD}" == "on" ]; then
   source_json="$(nix-prefetch-github --rev=${vast_rev} tenzir vast)"
-  desc="$(git -C ${dir} describe --abbrev=10 --long --dirty --match='v[0-9]*' HEAD)"
+  desc="$(git -C "${toplevel}" describe --abbrev=10 --long --dirty --match='v[0-9]*' HEAD)"
   read -r -d '' exp <<EOF
   let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
   pkgs.pkgsStatic."${target}".override {
