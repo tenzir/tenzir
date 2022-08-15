@@ -33,13 +33,14 @@ class MISP:
             logger.error(f"failed to connect: {e}")
 
     async def run(self):
-        await self.vast.fabric.subscribe("stix.bundle", self._on_bundle)
-        await self.vast.fabric.subscribe("stix.sighting", self._on_sighting)
+        await self.vast.fabric.pull(self._on_bundle)
+        await self.vast.fabric.pull(self._on_sighting)
         # Hook into event feed via 0mq.
         socket = zmq.asyncio.Context().socket(zmq.SUB)
         zmq_uri = f"tcp://{self.config.zmq.host}:{self.config.zmq.port}"
         logger.info(f"connecting to 0mq endpoint at {zmq_uri}")
         socket.connect(zmq_uri)
+        # TODO: also subscribe to attributes.
         socket.setsockopt(zmq.SUBSCRIBE, b"misp_json")
         try:
             while True:
@@ -56,7 +57,7 @@ class MISP:
                 try:
                     parser.parse_misp_event(event)
                     logger.debug(parser.bundle.serialize(pretty=True))
-                    await self.vast.fabric.publish("stix.bundle", parser.bundle)
+                    await self.vast.fabric.push(parser.bundle)
                 except Exception as e:
                     logger.warning(f"failed to parse MISP event as STIX: {e}")
                     continue
@@ -66,27 +67,27 @@ class MISP:
             socket.setsockopt(zmq.LINGER, 0)
             socket.close()
 
-    async def _on_sighting(self, bundle: stix2.Bundle):
-        logger.debug(f"got sighting: {bundle}")
-        self.stix_bridge.store.add(bundle)
-        sightings = [o for o in bundle.objects if type(o) == stix2.Sighting]
+    async def _on_sighting(self, sighting: stix2.Sighting):
+        logger.debug(f"got {sighting}")
         # For every Sighting, do the following:
-        # 1. Try to find a MISP Object for sighting_of_ref
-        # 2. Look up the MISP attributes for the SCO in Observed Data.
-        for s in sightings:
-            sightee = self.stix_bridge.store.get(s.sighting_of_ref)
-            misp_uuid = vbs.make_uuid(sightee.id)
-            data = self.misp.search(uuid=misp_uuid, controller="attributes")
-            logger.warning(data)
-            # MISP performs a UUID-preserving conversion of attributes into
-            # either Indicator or Observed Data.
-            if (type(sightee) == stix2.Indicator):
-                pass
-            elif (type(sightee) == stix2.ObservedData):
-                pass
-            else:
-                logger.warning(f"ignoring sightee of type {type(sigthee)}")
-                continue
+        # 1. Check the embedded sightee if it was a already MISP object.
+        # 2. If not, extract the UUID and ask MISP whether it maps to an
+        #    existing object.
+        # 3. Take the value of the attached SCOs and register them as sightings,
+        #    with the timestamp being from the Observed Data SDO.
+        sightee = self.stix_bridge.store.get(sighting.sighting_of_ref)
+        misp_uuid = vbs.make_uuid(sightee.id)
+        data = self.misp.search(uuid=misp_uuid, controller="attributes")
+        logger.warning(data)
+        # MISP performs a UUID-preserving conversion of attributes into
+        # either Indicator or Observed Data.
+        if (type(sightee) == stix2.Indicator):
+            pass
+        elif (type(sightee) == stix2.ObservedData):
+            pass
+        else:
+            logger.warning(f"ignoring sightee of type {type(sightee)}")
+            continue
 
 
     async def _on_bundle(self, message: Any):

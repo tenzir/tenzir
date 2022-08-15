@@ -8,20 +8,19 @@ import vast.utils.logging
 
 logger = vast.utils.logging.get(__name__)
 
-
 class Context:
     """Object context to enable types to travel over the backbone of a
     fabric."""
 
-    def __init__(self, type, name, encode=None, decode=None):
+    def __init__(self, type, name):
         self.type = type
         self.name = name
-        self.encode = encode
-        self.decode = decode
+
 
 def topic(context: Context):
     """Creates a topic for an object context."""
     return f"/{context.name.replace('.', '/')}"
+
 
 class Fabric:
     """The high-level interface for object-based interaction over a specific
@@ -32,14 +31,11 @@ class Fabric:
         self.backbone = backbone
         self.registry = defaultdict(list)
 
-    def register(self, context: Context):
+    def register(self, type, name: str):
         """Register an object context."""
-        logger.debug(f"registering object context {context}")
-        self.registry[context.type].append(context)
+        logger.debug(f"registering object {name}: {type}")
 
-    def context(self, type):
-        """Retrieve the context for an object."""
-        return self.registry[type]
+        self.registry[type].append(Context(type, name))
 
     async def push(self, object):
         """Push a registered object into the fabric."""
@@ -48,10 +44,7 @@ class Fabric:
             logger.error(f"no context registered for object {object}")
             return
         for ctx in contexts:
-            if ctx.encode:
-                await self.backbone.publish(topic(ctx), ctx.encode(object))
-            else:
-                await self.backbone.publish(topic(ctx), object)
+            await self.backbone.publish(topic(ctx), object)
 
     async def pull(self, callback):
         """Provide a callback for a registered object."""
@@ -63,8 +56,4 @@ class Fabric:
             return
         for ctx in contexts:
             logger.debug(f"subscribing to {topic(ctx)} for type {annotation}")
-            if ctx.decode:
-                f = lambda object: callback(ctx.decode(object))
-                await self.backbone.subscribe(topic(ctx), f)
-            else:
-                await self.backbone.subscribe(topic(ctx), callback)
+            await self.backbone.subscribe(topic(ctx), callback)

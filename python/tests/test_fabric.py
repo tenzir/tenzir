@@ -4,14 +4,13 @@ import vast
 import vast.backbones
 
 def test_fabric_context_registration(fabric):
-    ctx = vast.Context(str, "string")
-    fabric.register(ctx)
-    ctxs = fabric.context(str)
-    assert ctxs == [ctx]
+    fabric.register(str, "string")
+    assert fabric.registry[str][0].type == str
+    assert fabric.registry[str][0].name == "string"
 
 @pytest.mark.asyncio
 async def test_fabric_push_pull(fabric):
-    fabric.register(vast.Context(int, "int"))
+    fabric.register(int, "int")
     result = 0
     def assign(x: int):
         nonlocal result
