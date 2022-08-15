@@ -256,9 +256,9 @@ parameters, e.g., switching from the Feather to the Parquet store backend.
 Rebuilding partitions also recreates their sketches. The process takes place
 asynchronously in the background.
 
-VAST continually rebuilds partitions in the background. Control this behavior in
-your `vast.yaml` configuration file, to disable or adjust the resources to spend
-on automatic rebuilding:
+VAST continuously rebuilds partitions in the background. Control this behavior
+in your `vast.yaml` configuration file, to disable or adjust the resources to
+spend on automatic rebuilding:
 
 ```yaml
 vast:
