@@ -4,10 +4,77 @@
         <title>VAST Blog</title>
         <link>https://vast.io/blog</link>
         <description>VAST Blog</description>
-        <lastBuildDate>Fri, 05 Aug 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 12 Aug 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Richer Typing in Sigma]]></title>
+            <link>https://vast.io/blog/richer-typing-in-sigma</link>
+            <guid>/richer-typing-in-sigma</guid>
+            <pubDate>Fri, 12 Aug 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Towards Native Sigma Rule Execution]]></description>
+            <content:encoded><![CDATA[<p>VAST's <a href="/docs/understand-vast/query-language/frontends/sigma">Sigma frontend</a>
+now supports more modifiers. In the Sigma language, modifiers transform
+predicates in various ways, e.g., to apply a function over a value or to change
+the operator of a predicate. Modifiers are the customization point to enhance
+expressiveness of query operations.</p><p>The new <a href="https://github.com/SigmaHQ/pySigma" target="_blank" rel="noopener noreferrer">pySigma</a> effort, which will eventually replace the
+now-considered-legacy <a href="https://github.com/SigmaHQ/sigma" target="_blank" rel="noopener noreferrer">sigma</a> project, comes with new modifiers as well.
+Most notably, <code>lt</code>, <code>lte</code>, <code>gt</code>, <code>gte</code> provide comparisons over value domains
+with a total ordering, e.g., numbers: <code>x &gt;= 42</code>. In addition, the <code>cidr</code>
+modifier interprets a value as subnet, e.g., <code>10.0.0.0/8</code>. Richer typing!</p><p>How does the frontend work? Think of it as a parser that processes the YAML and
+translates it into an expression tree, where the leaves are predicates with
+typed operands according to VAST's data model. Here's how it works:</p><p><img loading="lazy" alt="Sigma Query Frontend" src="/assets/images/sigma-query-frontend-light-fc9a55b6708af9fca88bef9f3a1fcdba.png#gh-light-mode-only" width="999" height="920" class="img_ev3q">
+<img loading="lazy" alt="Sigma Query Frontend" src="/assets/images/sigma-query-frontend-dark-acef89819a48db63cc2f2a69240d4c8f.png#gh-dark-mode-only" width="999" height="920" class="img_ev3q"></p><p>Let's take a closer look at some Sigma rule modifiers:</p><div class="language-yaml codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-yaml codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token key atrule" style="color:#00a4db">selection</span><span class="token punctuation" style="color:#393A34">:</span><span class="token plain"></span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">  </span><span class="token key atrule" style="color:#00a4db">x|re</span><span class="token punctuation" style="color:#393A34">:</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">'f(o+|u)'</span><span class="token plain"></span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">  </span><span class="token key atrule" style="color:#00a4db">x|lt</span><span class="token punctuation" style="color:#393A34">:</span><span class="token plain"> </span><span class="token number" style="color:#36acaa">42</span><span class="token plain"></span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">  </span><span class="token key atrule" style="color:#00a4db">x|cidr</span><span class="token punctuation" style="color:#393A34">:</span><span class="token plain"> 192.168.0.0/23</span><br></span><span class="token-line" style="color:#393A34"><span class="token plain">  </span><span class="token key atrule" style="color:#00a4db">x|base64offset|contains</span><span class="token punctuation" style="color:#393A34">:</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">'http://'</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg class="copyButtonIcon_y97N" viewBox="0 0 24 24"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg class="copyButtonSuccessIcon_LjdS" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>The <code>|</code> symbol applies a modifier to a field. Let's walk through the above
+example:</p><ol><li><p>The <code>re</code> modifier changes the predicate operand from <code>x == "f(o+|u)"</code> to
+<code>x == /f(o+|u)/</code>, i.e., the type of the right-hand side changes from <code>string</code>
+to <code>pattern</code>.</p></li><li><p>The <code>lt</code> modifier changes the predicate operator from <code>==</code> to <code>&lt;</code>, i.e.,
+<code>x == 42</code> becomes <code>x &lt; 42</code>.</p></li><li><p>The <code>cidr</code> modifier changes the predicate operand to type subnet. In VAST,
+parsing the operand type into a subnet happens automatically, so the Sigma
+frontend only changes the operator to <code>in</code>. That is, <code>x == "192.168.0.0/23"</code>
+becomes <code>x in 192.168.0.0/23</code>. Since VAST supports top-k prefix search on
+subnets natively, nothing else needs to be changed.</p><p>Other backends expand this to:</p><div class="language-c codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#393A34;--prism-background-color:#f6f8fa"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-c codeBlock_bY9V thin-scrollbar"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#393A34"><span class="token plain">x </span><span class="token operator" style="color:#393A34">==</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">"192.168.0.*"</span><span class="token plain"> </span><span class="token operator" style="color:#393A34">||</span><span class="token plain"> x </span><span class="token operator" style="color:#393A34">==</span><span class="token plain"> </span><span class="token string" style="color:#e3116c">"192.168.1.*"</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg class="copyButtonIcon_y97N" viewBox="0 0 24 24"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg class="copyButtonSuccessIcon_LjdS" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div><p>This expansion logic on strings doesn't scale very well: for a <code>/22</code>, you
+would have to double the number of predicates, and for a <code>/21</code> quadruple
+them. This is where rich and deep typing in the language pays off.</p></li><li><p><code>x</code>: there are two modifiers that operate in a chained fashion,
+transforming the predicate in two steps:</p><ol><li>Initial: <code>x == "http://"</code></li><li><code>base64offset</code>: <code>x == "aHR0cDovL" || x == "h0dHA6Ly" || x == "odHRwOi8v"</code></li><li><code>contains</code>: <code>x in "aHR0cDovL" || x in "h0dHA6Ly" || x in "odHRwOi8v"</code></li></ol><p>First, <code>base64offset</code> always expands a value into a disjunction of 3
+predicates, each of which performs an equality comparison to a
+Base64-transformed value.<sup id="fnref-1-0b1adb"><a href="#fn-1-0b1adb" class="footnote-ref">1</a></sup></p><p>Thereafter, the <code>contains</code> modifier translates the respective predicate
+operator from <code>==</code> to <code>in</code>. Other Sigma backends that don't support substring
+search natively transform the value instead by wrapping it into <code>*</code>
+wildcards, e.g., translate <code>"foo"</code> into <code>"*foo*"</code>.</p></li></ol><p>Our ultimate goal is to support a fully function executional platform for Sigma
+rules. The table below shows the current implementation status of modifiers,
+where ✅ means implemented, 🚧 not yet implemented but possible, and ❌ not yet
+supported by VAST's execution engine:</p><table><thead><tr><th>Modifier</th><th>Use</th><th align="center">sigmac</th><th align="center">VAST</th></tr></thead><tbody><tr><td><code>contains</code></td><td>perform a substring search with the value</td><td align="center">✅</td><td align="center">✅</td></tr><tr><td><code>startswith</code></td><td>match the value as a prefix</td><td align="center">✅</td><td align="center">✅</td></tr><tr><td><code>endswith</code></td><td>match the value as a suffix</td><td align="center">✅</td><td align="center">✅</td></tr><tr><td><code>base64</code></td><td>encode the value with Base64</td><td align="center">✅</td><td align="center">✅</td></tr><tr><td><code>base64offset</code></td><td>encode value as all three possible Base64 variants</td><td align="center">✅</td><td align="center">✅</td></tr><tr><td><code>utf16le</code>/<code>wide</code></td><td>transform the value to UTF16 little endian</td><td align="center">✅</td><td align="center">🚧</td></tr><tr><td><code>utf16be</code></td><td>transform the value to UTF16 big endian</td><td align="center">✅</td><td align="center">🚧</td></tr><tr><td><code>utf16</code></td><td>transform the value to UTF16</td><td align="center">✅</td><td align="center">🚧</td></tr><tr><td><code>re</code></td><td>interpret the value as regular expression</td><td align="center">✅</td><td align="center">🚧</td></tr><tr><td><code>cidr</code></td><td>interpret the value as a IP CIDR</td><td align="center">❌</td><td align="center">✅</td></tr><tr><td><code>all</code></td><td>changes the expression logic from OR to AND</td><td align="center">✅</td><td align="center">✅</td></tr><tr><td><code>lt</code></td><td>compare less than (<code>&lt;</code>) the value</td><td align="center">❌</td><td align="center">✅</td></tr><tr><td><code>lte</code></td><td>compare less than or equal to (<code>&lt;=</code>) the value</td><td align="center">❌</td><td align="center">✅</td></tr><tr><td><code>gt</code></td><td>compare greater than (<code>&gt;</code>) the value</td><td align="center">❌</td><td align="center">✅</td></tr><tr><td><code>gte</code></td><td>compare greater than or equal to (<code>&gt;=</code>) the value</td><td align="center">❌</td><td align="center">✅</td></tr><tr><td><code>expand</code></td><td>expand value to placeholder strings, e.g., <code>%something%</code></td><td align="center">❌</td><td align="center">❌</td></tr></tbody></table><p>Aside from completing the implementation of the missing modifiers, there are
+three missing pieces for Sigma rule execution to become viable in VAST:</p><ol><li><p><strong>Regular expressions</strong>: VAST currently has no efficient mechanism to execute
+regular expressions. A regex lookup requires a full scan of the data.
+Moreover, the regular expression execution speed is abysimal. But we are
+aware of it and are working on this soon. The good thing is that the
+complexity of regular expression execution over batches of data is
+manageable, given that we would call into the corresponding <a href="https://arrow.apache.org/docs/cpp/compute.html#containment-tests" target="_blank" rel="noopener noreferrer">Arrow Compute
+function</a> for the heavy lifting. The number one
+challenge will be reduing the data to scan, because the Bloom-filter-like
+sketch data structures in the catalog cannot handle pattern types. If the
+sketches cannot identify a candidate set, all data needs to be scanned,</p><p>To alleviate the effects of full scans, it's possible to winnow down the
+candidate set of partitions by executing rules periodically. When making the
+windows asymptotically small, this yields effectively streaming execution,
+which VAST already supports in the form of "live queries".</p></li><li><p><strong>Case-insensitive strings</strong>: All strings in Sigma rules are case-insensitive
+by default, but VAST's string search is case-sensitive. As a workaround, we
+could translate Sigma strings into regular expressions, e.g., <code>"Foo"</code> into
+<code>/Foo/i</code>. Unfortunately there is a big performance gap between string
+equality search and regular expression search. We will need to find a better
+solution for production-grade rule execution.</p></li><li><p><strong>Field mappings</strong>: while Sigma rules execute already syntactically, VAST
+currently doesn't touch the field names in the rules and interprets them as
+<a href="https://vast.io/docs/understand-vast/query-language/expressions#field-extractor" target="_blank" rel="noopener noreferrer">field extractors</a>. In other words, VAST doesn't support
+the Sigma taxonomy yet. Until we provide the mappings, you can already write
+generic Sigma rules using <a href="https://vast.io/docs/understand-vast/data-model/taxonomies#concepts" target="_blank" rel="noopener noreferrer">concepts</a>.</p></li></ol><p>Please don't hesitate to swing by our <a href="http://slack.tenzir.com" target="_blank" rel="noopener noreferrer">Community Slack</a>
+and talk with us if you are passionate about Sigma and other topics around open
+detection and response.</p><div class="footnotes"><hr><ol><li id="fn-1-0b1adb">What happens under the hood is a padding a string with spaces. <a href="https://tech-en.netlify.app/articles/en513032/index.html" target="_blank" rel="noopener noreferrer">Anton
+Kutepov's article</a> illustrates how this works.<a href="#fnref-1-0b1adb" class="footnote-backref">↩</a></li></ol></div>]]></content:encoded>
+            <author>matthias@tenzir.com (Matthias Vallentin)</author>
+            <category>sigma</category>
+            <category>regex</category>
+            <category>query-frontend</category>
+        </item>
         <item>
             <title><![CDATA[VAST v2.2]]></title>
             <link>https://vast.io/blog/vast-v2.2</link>
