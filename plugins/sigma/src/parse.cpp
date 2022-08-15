@@ -10,11 +10,14 @@
 
 #include <vast/concept/parseable/core.hpp>
 #include <vast/concept/parseable/string.hpp>
+#include <vast/concept/printable/to_string.hpp>
+#include <vast/concept/printable/vast/data.hpp>
 #include <vast/detail/base64.hpp>
 #include <vast/detail/string.hpp>
 #include <vast/error.hpp>
 #include <vast/expression_visitors.hpp>
 
+#include <array>
 #include <map>
 #include <regex>
 #include <string>
@@ -151,7 +154,9 @@ struct detection_parser : parser_base<detection_parser> {
   bool parse(Iterator& f, const Iterator& l, expression& result) const {
     using namespace parser_literals;
     auto ws = ignore(*parsers::space);
-    auto negate = [](expression x) { return negation{std::move(x)}; };
+    auto negate = [](expression x) {
+      return negation{std::move(x)};
+    };
     rule<Iterator, expression> expr;
     rule<Iterator, expression> group;
     // clang-format off
@@ -243,30 +248,20 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       auto extractor = field_extractor{std::string{keys[0]}};
       auto op = relational_operator::equal;
       auto all = false;
-      auto re = false;
-      // Value factory that takes into account whether the `re` modifier is
-      // present.
-      auto make_predicate = [&](const data& value) {
-        // If the 're' modifier is present, we interpret the raw string
-        // directly as pattern.
-        if (re)
-          if (auto str = caf::get_if<std::string>(&value))
-            return predicate{extractor, relational_operator::match,
-                             data{pattern{*str}}};
-        // Otherwise, we may have a pattern in case of a string and must try to
-        // parse it as such.
-        if (auto str = caf::get_if<std::string>(&value))
-          if (!str->empty())
-            if (auto pat = make_pattern(*str))
-              return predicate{extractor, relational_operator::match,
-                               data{std::move(*pat)}};
-        // By default, we take the operator based on the provided modifiers.
-        return predicate{extractor, op, value};
-      };
+      // Value transformation; identity (= no modifiers) by default.
+      std::vector<std::function<caf::expected<data>(const data&)>> transforms;
       // Parse modifiers.
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
         if (*i == "all") {
           all = true;
+        } else if (*i == "lt") {
+          op = relational_operator::less;
+        } else if (*i == "lte") {
+          op = relational_operator::less_equal;
+        } else if (*i == "gt") {
+          op = relational_operator::greater;
+        } else if (*i == "gte") {
+          op = relational_operator::greater_equal;
         } else if (*i == "contains") {
           op = relational_operator::ni;
         } else if (*i == "endswith" || *i == "startswith") {
@@ -275,47 +270,144 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           // should become /X$/.
           op = relational_operator::ni;
         } else if (*i == "base64") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "base64 modifier not yet "
-                                                    "implemented");
+          auto encode = [](const data& x) -> caf::expected<data> {
+            if (const auto* str = caf::get_if<std::string>(&x))
+              return detail::base64::encode(*str);
+            return caf::make_error(ec::type_clash, //
+                                   "base64 only works with strings");
+          };
+          transforms.emplace_back(encode);
         } else if (*i == "base64offset") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "base64offset modifier not "
-                                                    "yet implemented");
+          auto encode = [](const data& x) -> caf::expected<data> {
+            const auto* str = caf::get_if<std::string>(&x);
+            if (!str)
+              return caf::make_error(ec::type_clash, //
+                                     "base64offset only works with strings");
+            static constexpr std::array<size_t, 3> start = {{0, 2, 3}};
+            static constexpr std::array<size_t, 3> end = {{0, 3, 2}};
+            std::vector<std::string> xs(3);
+            for (size_t i = 0; i < 3; ++i) {
+              auto padded = std::string(i, ' ') + *str;
+              auto b64 = detail::base64::encode(padded);
+              auto len = b64.size() - end[(str->size() + i) % 3];
+              xs[i] = b64.substr(start[i], len - start[i]);
+            }
+            return list{xs[0], xs[1], xs[2]};
+          };
+          transforms.emplace_back(encode);
         } else if (*i == "utf16le" || *i == "wide") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "utf16le/wide modifier not "
-                                                    "yet implemented");
+          return caf::make_error(ec::unimplemented, //
+                                 "utf16le/wide not yet implemented");
+          // FIXME: the attempt below doesn't work yet, but gives an idea on
+          // what needs to be done algorithmically.
+          auto convert = [](const data& x) -> caf::expected<data> {
+            const auto* str = caf::get_if<std::string>(&x);
+            if (!str)
+              return caf::make_error(ec::type_clash, //
+                                     "utf16le/wide only works with strings");
+            // Hand-roll conversion.
+            std::string result;
+            result.reserve(str->size() * 2);
+            for (auto c : *str) {
+              result.push_back(c);
+              result.push_back(0x00);
+            }
+            return result;
+          };
+          transforms.emplace_back(convert);
         } else if (*i == "utf16be") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "utf16be modifier not yet "
-                                                    "implemented");
+          return caf::make_error(ec::unimplemented, //
+                                 "utf16be not yet implemented");
         } else if (*i == "utf16") {
-          // TODO
-          return caf::make_error(ec::unimplemented, "utf16 modifier not yet "
-                                                    "implemented");
+          return caf::make_error(ec::unimplemented, //
+                                 "utf16 not yet implemented");
         } else if (*i == "re") {
-          re = true;
           op = relational_operator::match;
+          auto to_re = [](const data& d) -> data {
+            auto f = detail::overload{
+              [](const auto& x) -> data {
+                auto str = to_string(x);
+                if (auto pat = make_pattern(str))
+                  return pat;
+                return str;
+              },
+              [](const std::string& x) -> data {
+                return pattern{x};
+              },
+              [](const pattern& x) -> data {
+                return x;
+              },
+            };
+            return caf::visit(f, d);
+          };
+          transforms.emplace_back(to_re);
+        } else if (*i == "cidr") {
+          // This modifier only requires adjusting the operator because VAST
+          // already parses strings as typed values.
+          op = relational_operator::in;
+        } else if (*i == "expand") {
+          // TODO
+          return caf::make_error(ec::unimplemented, "expand modifier not yet "
+                                                    "implemented");
         }
       }
+      // Helper to apply all modifiers over a value.
+      auto modify = [&](const data& x) -> caf::expected<data> {
+        auto result = x;
+        for (auto f : transforms)
+          if (auto x = f(result))
+            result = std::move(*x);
+          else
+            return x.error();
+        return result;
+      };
+      // Helper to create an expression from a (transformed) value.
+      auto make_predicate_expr = [&](const data& value) -> expression {
+        // Convert strings to patterns if wildcarding is present.
+        if (auto str = caf::get_if<std::string>(&value))
+          if (!str->empty())
+            if (auto pat = make_pattern(*str))
+              return predicate{extractor, relational_operator::match,
+                               data{std::move(*pat)}};
+        // The modifier 'base64offset' is unique in that it creates
+        // multiple values represented as list. If followed by 'contains', then
+        // we have substring search on each value; otherwise we can use equality
+        // comparison.
+        if (auto xs = caf::get_if<list>(&value)) {
+          // Only 'base64offset' creates a list value. Lists are otherwise not
+          // allowed as values.
+          VAST_ASSERT(xs->size() == 3);
+          disjunction result;
+          for (const auto& x : *xs)
+            result.emplace_back(predicate{extractor, op, x});
+          return result;
+        }
+        // By default, we take the (potentially modified) operator.
+        return predicate{extractor, op, value};
+      };
       // Parse RHS.
       if (caf::holds_alternative<record>(rhs))
-        return caf::make_error(ec::type_clash, "nested maps not allowed");
+        return caf::make_error(ec::type_clash, "nested records not allowed");
       if (auto values = caf::get_if<list>(&rhs)) {
         std::vector<expression> connective;
-        for (auto& value : *values) {
+        for (const auto& value : *values) {
           if (caf::holds_alternative<list>(value))
             return caf::make_error(ec::type_clash, "nested lists disallowed");
           if (caf::holds_alternative<record>(value))
             return caf::make_error(ec::type_clash, "nested records disallowed");
-          connective.emplace_back(make_predicate(value));
+          if (auto x = modify(value))
+            connective.emplace_back(make_predicate_expr(*x));
+          else
+            return x.error();
         }
         auto expr = all ? expression{conjunction(std::move(connective))}
                         : expression{disjunction(std::move(connective))};
         result.emplace_back(hoist(std::move(expr)));
       } else {
-        result.emplace_back(make_predicate(rhs));
+        if (auto x = modify(rhs))
+          result.emplace_back(make_predicate_expr(*x));
+        else
+          return x.error();
       }
     }
     return result.size() == 1 ? result[0] : result;

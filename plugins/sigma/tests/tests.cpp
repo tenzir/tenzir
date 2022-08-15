@@ -15,12 +15,14 @@
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/printable/stream.hpp>
 #include <vast/concept/printable/vast/expression.hpp>
+#include <vast/detail/base64.hpp>
 #include <vast/expression.hpp>
 #include <vast/test/test.hpp>
 
 #include <caf/test/dsl.hpp>
 
 using namespace std::string_literals;
+using namespace std::string_view_literals;
 using namespace vast;
 using namespace vast::detail;
 
@@ -175,6 +177,122 @@ TEST(modifier - endswith) {
   // TODO: blocked by VAST has pattern matching capability
   // auto expected = to_expr("foo ~ /x$/");
   auto expected = to_expr("foo ni \"x\"");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - lt) {
+  auto yaml = R"__(
+    foo|lt: 42
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo < 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - lte) {
+  auto yaml = R"__(
+    foo|lte: 42
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo <= 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - gt) {
+  auto yaml = R"__(
+    foo|gt: 42
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo > 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - gte) {
+  auto yaml = R"__(
+    foo|gte: 42
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo >= 42");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - base64) {
+  auto yaml = R"__(
+    foo|base64: value
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto base64_value = detail::base64::encode("value"sv);
+  REQUIRE_EQUAL(base64_value, "dmFsdWU="); // echo -n value | base64
+  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - double base64) {
+  auto yaml = R"__(
+    foo|base64|base64: value
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto base64_value = detail::base64::encode("value"sv);
+  base64_value = detail::base64::encode(base64_value);
+  REQUIRE_EQUAL(base64_value, "ZG1Gc2RXVT0="); // echo -n dmFsdWU= | base64
+  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
+  CHECK_EQUAL(search_id, expected);
+}
+
+// The ground truth is in the sigma repo. We use the rule
+// tests/test-modifiers.yml and invoke it as follows:
+//
+//   tools/sigmac -t es-qs -c winlogbeat tests/test-modifiers.yml
+//
+// This yields:
+//
+// (winlog.channel:"Security" AND field.keyword:/.*foobar.*/ AND
+// encoded:"VABoAGkAcwAgAHMAdAByAGkAbgBnACAAaQBzACAAQgBhAHMAZQA2ADQAIABlAG4AYwBvAGQAZQBkAA\=\="
+// AND obfuscated.keyword:(*aHR0cDovL* OR *h0dHA6Ly* OR *odHRwOi8v* OR
+// *aHR0cHM6Ly* OR *h0dHBzOi8v* OR *odHRwczovL*) AND allmatch.keyword:*foo* AND
+// allmatch.keyword:*bar* AND allmatch.keyword:*bla* AND end.keyword:*test AND
+// start.keyword:test*)
+//
+// Note the following sub-expression: *aHR0cDovL* OR *h0dHA6Ly* OR *odHRwOi8v*.
+// This is a combination of 'base64offset' and 'contains'. Without the contains
+// modifier, it would look like this: aHR0cDovL OR h0dHA6Ly OR odHRwOi8v.
+TEST(modifier - base64offset) {
+  auto yaml = R"__(
+    foo|base64offset: "http://"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expr
+    = R"__(foo == "aHR0cDovL" || foo == "h0dHA6Ly" || foo == "odHRwOi8v")__"s;
+  CHECK_EQUAL(search_id, to_expr(expr));
+}
+
+TEST(modifier - base64offset and contains) {
+  auto yaml = R"__(
+    foo|base64offset|contains: "http://"
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expr
+    = R"__(foo ni "aHR0cDovL" || foo ni "h0dHA6Ly" || foo ni "odHRwOi8v")__"s;
+  CHECK_EQUAL(search_id, to_expr(expr));
+}
+
+TEST(modifier - cidr) {
+  auto yaml = R"__(
+    foo|cidr: 192.168.0.0/24
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo in 192.168.0.0/24"s);
+  CHECK_EQUAL(search_id, expected);
+}
+
+// FIXME: The expression parser doesn't handle escaped strings properly, so we
+// can't include NUL bytes in a query string yet. Once this is possible.
+TEST_DISABLED(modifier - wide) {
+  auto yaml = R"__(
+    foo|wide: abc
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr(R"__(foo == "a\x00b\x00c\x00")__"s);
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -360,5 +478,46 @@ TEST(real example) {
   expected.emplace_back(to_expr(selection3));
   expected.emplace_back(to_expr(selection4));
   expected.emplace_back(tail);
+  CHECK_EQUAL(expr, expression{expected});
+}
+
+auto modifier_test = R"__(
+ title: Modifier test rule
+ logsource:
+     product: windows
+     service: security
+ detection:
+     selection:
+         field|re: '.*foobar.*'
+         encoded|wide|base64: 'This string is Base64 encoded'
+         obfuscated|base64offset|contains:
+             - 'http://'
+             - 'https://'
+         allmatch|contains|all:
+             - foo
+             - bar
+             - bla
+         end|endswith: test
+         start|startswith: test
+     condition: selection
+)__";
+
+// TODO: For this to run through we need to implement the utf* modifiers.
+TEST_DISABLED(modifier test rule) {
+  auto expr = to_rule(modifier_test);
+  auto field = R"__(field|re: '.*foobar.*')__"s;
+  auto encoded = R"__(encoded|wide|base64: 'This string is Base64 encoded')__"s;
+  auto obfuscated
+    = R"__(obfuscated|base64offset|contains: ['http://', 'https://'])__"s;
+  auto allmatch = R"__(allmatch|contains|all: [foo, bar, bla])__"s;
+  auto end = R"__(end|endswith: test)__"s;
+  auto start = R"__(start|startswith: test)__"s;
+  conjunction expected;
+  expected.emplace_back(to_expr(field));
+  expected.emplace_back(to_expr(encoded));
+  expected.emplace_back(to_expr(obfuscated));
+  expected.emplace_back(to_expr(allmatch));
+  expected.emplace_back(to_expr(end));
+  expected.emplace_back(to_expr(start));
   CHECK_EQUAL(expr, expression{expected});
 }

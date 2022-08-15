@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18...3.23 FATAL_ERROR)
 
 project(
   sigma
-  VERSION 1.0.0
+  VERSION 1.1.0
   DESCRIPTION "Sigma query language plugin for VAST"
   LANGUAGES CXX)
 

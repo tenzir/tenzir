@@ -10,9 +10,16 @@ vast export json < sigma-rule.yaml
 ```
 
 Sigma defines a [YAML-based rule language][sigma-spec] along with a compiler
-that transforms rules into the native query languages of SIEM systems. The
-repository also ships with collection of detection rules that apply to endpoint
-and network log telemetry.
+that transforms rules into the native query languages of SIEM systems. VAST
+takes a different approach and compiles the Sigma query directly into a native
+query expression, without going through the Python tooling provided by the
+SigmaHQ project. This has numerous advantages in exploiting the richer type
+system of VAST. The translation process looks as follows:
+
+![Sigma Query Frontend](/img/sigma-query-frontend-light.png#gh-light-mode-only)
+![Sigma Query Frontend](/img/sigma-query-frontend-dark.png#gh-dark-mode-only)
+
+[sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
 
 ## Usage
 
@@ -85,7 +92,7 @@ of search expressions using boolean algebra (AND, OR, NOT) and offer multiple
 ways to define predicates and sub-expression. But there also exist differences
 in expressiveness and intent. This section compares the two systems.
 
-### Expressiveness
+## Expressiveness
 
 The majority of rule definitions include combinations of exact string lookups,
 substring searches, or pattern matches. Sigma uses
@@ -93,59 +100,40 @@ substring searches, or pattern matches. Sigma uses
 to select a concrete operator for given search predicate. Without a modifier
 specification, Sigma uses equality comparison (`==`) of field and value. For
 example, the `contains` modifier changes the operator to substring search, and
-the `re` modifier switches to a regular expression match.
-
-Sigma currently lacks support for ordering relationships, such as less-than
-comparison of numerical values, e.g., `x < 42` or `timestamp >= 2021-02`,
-whereas VAST offers relational operators (`<`, `<=`, `>=`, `>`) for numeric
-types.
+the `re` modifier switches to a regular expression match. The now "legacy" sigma
+compiler lacks support for ordering relationships, such as less-than comparison
+of numerical values, e.g., `x < 42` or `timestamp >= 2021-02`. The
+[pySigma](https://github.com/SigmaHQ/pySigma) project addresses this with the
+additional modifiers `lt`, `lte`, `gt`, `gte`.
 
 ## Compatibility
 
 VAST's support for Sigma is still in the early stages and does not support the
-full [language specification][sigma-spec]. The following features are currently
-unsupported:
+full [language specification][sigma-spec]. Most notable, the concept of a
+"value" is different:
 
-- Certain value invariants:
-  - VAST does not offer case-insensitive search, whereas it's the default in
-    Sigma
-  - Interpretation of string values containing `*` and `?` wildcards  
-- The following modifiers:
-  - `re`
-  - `base64`
-  - `base64offset`
-  - `utf16le` / `wide`
-  - `utf16be`
-  - `utf16`
-- TimeFrame specification
-- Aggregation expressions
-- Near aggregation expressions
+- VAST does not yet offer case-insensitive string search
+- VAST does not yet treat `*` and `?` wildcards in strings as wildcards
 
-### Focus on Endpoint
+The table below shows the current implementation status of modifiers, where ✅
+means implemented, 🚧 not yet implemented but possible, and ❌ not yet supported
+by VAST's query engine:
 
-Sigma predominantly offers rules with a focus on endpoint data, such as
-[Sysmon](https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon)
-telemetry. While there exist rules for network-based detections (e.g., for
-DNS queries, SMB events, and Kerberos traffic), they receive less attention.
-
-As of June 2022, the [rules][sigma-rules-2022-06] directory includes a total of
-2,015 total `*.yml` files compared to 51 files in the `network` directory:
-
-```bash
-find rules -name '*.yml' | wc -l
-2015
-find rules/network -name '*.yml' | wc -l
-51
-```
-
-That is, network-based rules account only for **2.5%** of the total rules. This
-illustrates the emphasis of the community and project authors, who have strong
-background in endpoint detection.
-
-VAST's history emphasizes network telemetry, with native support for PCAP,
-NetFlow, and full support for network monitors like Zeek and Suricata. By
-natively supporting Sigma in VAST, we are looking forward to offer a platform
-with detection capabilities on both ends of the spectrum.
-
-[sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
-[sigma-rules-2022-06]: https://github.com/SigmaHQ/sigma/tree/d78818e27d42710f427eb205a9ca59b4ab97e728/rules
+|Modifier|Use|sigmac|VAST|
+|--------|---|:----:|:--:|
+|`contains`|perform a substring search with the value|✅|✅|
+|`startswith`|match the value as a prefix|✅|✅|
+|`endswith`|match the value as a suffix|✅|✅|
+|`base64`|encode the value with Base64|✅|✅
+|`base64offset`|encode value as all three possible Base64 variants|✅|✅
+|`utf16le`/`wide`|transform the value to UTF16 little endian|✅|🚧
+|`utf16be`|transform the value to UTF16 big endian|✅|🚧
+|`utf16`|transform the value to UTF16|✅|🚧
+|`re`|interpret the value as regular expression|✅|🚧
+|`cidr`|interpret the value as a IP CIDR|❌|✅
+|`all`|changes the expression logic from OR to AND|✅|✅
+|`lt`|compare less than (`<`) the value|❌|✅
+|`lte`|compare less than or equal to (`<=`) the value|❌|✅
+|`gt`|compare greater than (`>`) the value|❌|✅
+|`gte`|compare greater than or equal to (`>=`) the value|❌|✅
+|`expand`|expand value to placeholder strings, e.g., `%something%`|❌|❌
