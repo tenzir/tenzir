@@ -955,3 +955,32 @@ jobs:
           # for a build of the latest release.
           asset_name: "${{ matrix.nix.target }}-linux-static.tar.gz"
           asset_content_type: application/gzip
+
+  python:
+    name: Python
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.9", "3.10"]
+        os: [ubuntu-latest, macos-latest]
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run poetry image
+        uses: abatilo/actions-poetry@v2.0.0
+        with:
+          poetry-version: 1.1.14
+      - name: Run poetry install
+        working-directory: python
+        run: poetry install
+      - name: Run unit tests
+        working-directory: python
+        run: poetry run pytest

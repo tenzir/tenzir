@@ -1,0 +1,21 @@
+logging:
+  console: true
+  console-verbosity: DEBUG
+  file: false
+  file-verbosity: DEBUG
+  filename: vast.log
+
+apps:
+  misp:
+    api:
+      host: http://localhost:5000
+      # Replace with your own API key.
+      key: demodemodemodemodemodemodemodemodemodemo
+    zmq:
+      host: localhost
+      port: 50000
+  thehive:
+    user: demo@tenzir.com
+    host: http://localhost:9000
+    # Replace with your own API key.
+    key: O8fD7Se+GPfAstfpxByzP8kTt5A4kQYi
