@@ -33,15 +33,17 @@ Cloud Map as a service discovery provider.
 
 ## Images and Registries
 
-Both Lambda and Fargate deploy VAST as a Docker image. Fargate runs the official
-[tenzir/vast](https://hub.docker.com/r/tenzir/vast) image. Lambda imposes two
-additional requirements:
+Both Lambda and Fargate deploy VAST as a Docker image. They use the official
+[tenzir/vast](https://hub.docker.com/r/tenzir/vast) image with extra layers
+containing tooling such as:
 
-1. The image must contain the Lambda Runtime Interface
-2. ECR must host the image in the region where the Lambda is deployed
+| Image            | Tooling                             |
+| ---------------- | ----------------------------------- |
+| Lambda only      | the Lambda Runtime Interface        |
+| Lambda only      | the AWS and other CLI tools (jq...) |
+| Lambda & Fargate | AWS specific schemas and concepts   |
 
-For that reason, our toolchain builds a Lambda-specific image locally and pushes
-it to a private ECR repository.
+For that reason, our toolchain builds a Lambda and a Fargate specific image
+locally and pushes it to a private ECR repository.
 
-![Docker
-workflow](https://user-images.githubusercontent.com/53797/157065561-82cf8bc6-b314-4439-b66f-c8e3a93e431b.png)
+![Docker Workflow](https://user-images.githubusercontent.com/7913347/174258069-695b358b-30d0-4599-b0eb-53f0acf04a41.png)

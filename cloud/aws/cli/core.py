@@ -1,4 +1,5 @@
-from vast_invoke import pty_task, task, Context, Exit
+from typing import Tuple
+from vast_invoke import Context, pty_task, task, Exit
 import dynaconf
 import time
 import base64
@@ -8,6 +9,7 @@ from common import (
     AWS_REGION,
     COMMON_VALIDATORS,
     RESOURCEDIR,
+    FargateService,
     clean_modules,
     conf,
     TFDIR,
@@ -43,10 +45,6 @@ CMD_HELP = {
     "env": "List of environment variables to be passed to the execution context,\
  name and values are separated by = (e.g --env BUCKET=mybucketname)",
 }
-
-
-##  Aliases
-EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
 
 
 ## Tasks
@@ -115,14 +113,14 @@ def deploy(c, auto_approve=False):
 
 
 @task(autoprint=True)
-def current_image(c, repo_arn):
+def current_image(c, repo_arn, type):
     """Get the current Lambda image URI. In case of failure, returns the error message instead of the URI."""
     try:
         tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
     except Exception as e:
         return str(e)
     current = next(
-        (tag["Value"] for tag in tags if tag["Key"] == "current"),
+        (tag["Value"] for tag in tags if tag["Key"] == f"current-{type}"),
         "current-image-not-defined",
     )
     return current
@@ -131,11 +129,11 @@ def current_image(c, repo_arn):
 @task(help={"type": "Can be either 'lambda' or 'fargate'"})
 def deploy_image(c, type):
     """Build and push the image, fails if core-1 is not deployed"""
-    image_url = terraform_output(c, "core-1", f"vast_{type}_repository_url")
-    repo_arn = terraform_output(c, "core-1", f"vast_{type}_repository_arn")
+    image_url = terraform_output(c, "core-1", f"vast_repository_url")
+    repo_arn = terraform_output(c, "core-1", f"vast_repository_arn")
     # get the digest of the current image
     try:
-        current_img = current_image(c, repo_arn)
+        current_img = current_image(c, repo_arn, type)
         c.run(f"docker pull {current_img}")
         old_digest = c.run(
             f"docker inspect --format='{{{{.RepoDigests}}}}' {current_img}",
@@ -145,7 +143,7 @@ def deploy_image(c, type):
         old_digest = "current-image-not-found"
     # build the image and get the new digest
     base_image = conf(VALIDATORS)["VAST_IMAGE"]
-    image_tag = int(time.time())
+    image_tag = f"{type}-{int(time.time())}"
     version = conf(VALIDATORS)["VAST_VERSION"]
     if version == "build":
         c.run(f"docker build -t {base_image}:{image_tag} {REPOROOT}")
@@ -170,67 +168,40 @@ def deploy_image(c, type):
     c.run(f"docker push {image_url}:{image_tag}")
     aws("ecr").tag_resource(
         resourceArn=repo_arn,
-        tags=[{"Key": "current", "Value": f"{image_url}:{image_tag}"}],
+        tags=[{"Key": f"current-{type}", "Value": f"{image_url}:{image_tag}"}],
     )
+
+
+def service_outputs(c: Context) -> Tuple[str, str, str]:
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+    family = terraform_output(c, "core-2", "vast_task_family")
+    service_name = terraform_output(c, "core-2", "vast_server_service_name")
+    return (cluster, service_name, family)
 
 
 @task(autoprint=True)
 def get_vast_server(c, max_wait_time_sec=0):
     """Get the task id of the VAST server. If no server is running, it waits
     until max_wait_time_sec for a new server to be started."""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    family = terraform_output(c, "core-2", "vast_task_family")
-    start_time = time.time()
-    while True:
-        task_res = aws("ecs").list_tasks(family=family, cluster=cluster)
-        nb_vast_tasks = len(task_res["taskArns"])
-        if nb_vast_tasks == 1:
-            task_id = task_res["taskArns"][0].split("/")[-1]
-            return task_id
-        if nb_vast_tasks > 1:
-            raise Exit(f"{nb_vast_tasks} VAST servers running", 1)
-        if nb_vast_tasks == 0 and time.time() - start_time > max_wait_time_sec:
-            raise Exit("No VAST server running", EXIT_CODE_VAST_SERVER_NOT_RUNNING)
-        time.sleep(1)
+    return FargateService(*service_outputs(c)).get_task_id(max_wait_time_sec)
 
 
 @task
 def start_vast_server(c):
     """Start the VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    service_name = terraform_output(c, "core-2", "vast_service_name")
-    aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=1)
-    task_id = get_vast_server(c, max_wait_time_sec=120)
-    print(f"Started task {task_id}")
-
-
-def stop_vast_task(c):
-    "Stop the current running VAST Fargate Task"
-    task_id = get_vast_server(c)
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    aws("ecs").stop_task(task=task_id, cluster=cluster)
-    return task_id
+    FargateService(*service_outputs(c)).start_service()
 
 
 @task
 def stop_vast_server(c):
     """Stop the VAST server instance"""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    service_name = terraform_output(c, "core-2", "vast_service_name")
-    aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=0)
-    task_id = stop_vast_task(c)
-    print(f"Stopped task {task_id}")
+    FargateService(*service_outputs(c)).stop_service()
 
 
 @task
 def restart_vast_server(c):
     """Stop the running VAST server Fargate task, the service starts a new one"""
-    task_id = stop_vast_task(c)
-    print(f"Stopped task {task_id}")
-    # 120 seconds corresponding to the task stopTimeout grace period
-    # + 120 seconds for the new task to start
-    task_id = get_vast_server(c, max_wait_time_sec=240)
-    print(f"Started task {task_id}")
+    FargateService(*service_outputs(c)).restart_service()
 
 
 def print_lambda_output(json_response: str, json_output: bool):

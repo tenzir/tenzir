@@ -7,7 +7,9 @@ import time
 import json
 import os
 import io
+import threading
 import common
+
 
 VALIDATORS = [
     *common.COMMON_VALIDATORS,
@@ -377,3 +379,28 @@ def import_data(c, dataset):
     bucket_name = c.run("./vast-cloud workbucket.name", hide="out").stdout.rstrip()
     cmd = f"""aws s3 cp s3://{bucket_name}/{ds_key} - | {ds_opts["pipe"]} | {ds_opts["import_cmd"]}"""
     c.run("./vast-cloud run-lambda -c file:///dev/stdin", in_stream=io.StringIO(cmd))
+
+
+class Matcher(unittest.TestCase):
+    # def setUp(self):
+    #     start_vast(self.c)
+
+    def attach(self):
+        self.return_val = self.c.run(
+            "./vast-cloud run-lambda -c 'timeout --preserve-status 60s vast matcher attach json feodo'",
+            hide="out",
+        ).stdout
+
+    def test_feodo(self):
+        # setup the matcher
+        self.c.run("./vast-cloud matcher.feodo")
+        # start a lambda that does live matching during 30 sec
+        thread = threading.Thread(target=lambda: self.attach())
+        thread.start()
+        # wait for the lambda to start
+        time.sleep(30)
+        # import flowlogs with threat
+        import_data(self.c, "flowlogs")
+        # wait for the lambda to return
+        thread.join()
+        print(self.return_val)
