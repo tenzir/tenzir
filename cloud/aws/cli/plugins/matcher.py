@@ -1,5 +1,5 @@
 from typing import Dict, Tuple
-from common import TFDIR, FargateService, auto_app_fmt, conf, terraform_output
+from common import TFDIR, FargateService, auto_app_fmt, aws, conf, terraform_output
 from vast_invoke import Context, pty_task, task
 import plugins.workbucket as workbucket
 import core
@@ -34,11 +34,10 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
     return (cluster, service_name, family)
 
 
-@task(autoprint=True)
-def get_client(c, max_wait_time_sec=0):
-    """Get the task id of the matcher client. If no server is running, it waits
-    until max_wait_time_sec for a new server to be started."""
-    FargateService(*service_outputs(c)).get_task_id(max_wait_time_sec)
+@task
+def client_status(c):
+    """Get the status of the matcher client"""
+    print(FargateService(*service_outputs(c)).get_task_status)
 
 
 @task
@@ -57,6 +56,26 @@ def stop_client(c):
 def restart_client(c):
     """Stop the running matcher client task, the service starts a new one"""
     FargateService(*service_outputs(c)).restart_service()
+
+
+@task
+def post(c):
+    queue_url = terraform_output(c, "matcher", "matched_events_queue_url")
+    aws("sqs").send_message(
+        QueueUrl=queue_url,
+        MessageBody="hello",
+    )
+
+
+@task
+def attach(c):
+    queue_url = terraform_output(c, "matcher", "matched_events_queue_url")
+    queue = aws("sqs", resource=True).Queue(queue_url)
+    while True:
+        messages = queue.receive_messages(VisibilityTimeout=10, WaitTimeSeconds=20)
+        for message in messages:
+            print(message.body, flush=True)
+            message.delete()
 
 
 MATCHER_INPUT = {

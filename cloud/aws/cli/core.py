@@ -179,11 +179,10 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
     return (cluster, service_name, family)
 
 
-@task(autoprint=True)
-def get_vast_server(c, max_wait_time_sec=0):
-    """Get the task id of the VAST server. If no server is running, it waits
-    until max_wait_time_sec for a new server to be started."""
-    return FargateService(*service_outputs(c)).get_task_id(max_wait_time_sec)
+@task
+def vast_server_status(c):
+    """Get the status of the VAST server"""
+    print(FargateService(*service_outputs(c)).get_task_status())
 
 
 @task
@@ -254,7 +253,7 @@ def run_lambda(c, cmd, env=[], json_output=False):
 @pty_task(help=CMD_HELP, iterable=["env"])
 def execute_command(c, cmd="/bin/bash", env=[]):
     """Run ad-hoc or interactive commands from the VAST server Fargate task"""
-    task_id = get_vast_server(c)
+    task_id = FargateService(*service_outputs(c)).get_task_id()
     cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues
     buf = ""

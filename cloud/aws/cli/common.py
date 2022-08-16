@@ -104,10 +104,13 @@ def AWS_REGION():
     return conf(AWS_REGION_VALIDATOR)["VAST_AWS_REGION"]
 
 
-def aws(service):
+def aws(service, resource=False):
     # timeout set to 1000 to be larger than lambda max duration
     config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
-    return boto3.client(service, region_name=AWS_REGION(), config=config)
+    if resource:
+        return boto3.resource(service, region_name=AWS_REGION(), config=config)
+    else:
+        return boto3.client(service, region_name=AWS_REGION(), config=config)
 
 
 def container_path(host_path: str):
@@ -209,6 +212,20 @@ class FargateService:
             if time.time() - start_time > max_wait_time_sec:
                 raise Exit(f"{self.task_family} task timed out", 1)
             time.sleep(1)
+
+    def get_task_status(self):
+        """Get the status of the task for this service"""
+        task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
+        nb_vast_tasks = len(task_res["taskArns"])
+        if nb_vast_tasks == 0:
+            return "No task"
+        if nb_vast_tasks > 1:
+            return f"{nb_vast_tasks} tasks running"
+        else:
+            desc = aws("ecs").describe_tasks(
+                cluster=self.cluster, tasks=task_res["taskArns"]
+            )["tasks"][0]
+            return f"Desired status {desc['desiredStatus']} and current status {desc['lastStatus']}"
 
     def start_service(self):
         """Start the service. Noop if it is already running"""

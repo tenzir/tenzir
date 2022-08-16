@@ -34,7 +34,7 @@ module "vast_server" {
   service_discov_namespace_id = aws_service_discovery_private_dns_namespace.main.id
 
   task_cpu    = 2048
-  task_memory = 4096
+  task_memory = 8192
 
   docker_image = var.vast_server_image
   efs = {

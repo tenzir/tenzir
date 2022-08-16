@@ -15,6 +15,9 @@ locals {
         }, {
         name  = "QUEUE_URL"
         value = aws_sqs_queue.matched_events.url
+        }, {
+        name  = "AWS_REGION"
+        value = var.region_name
       }]
       logConfiguration = {
         logDriver = "awslogs"

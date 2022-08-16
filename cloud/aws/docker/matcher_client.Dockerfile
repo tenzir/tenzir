@@ -10,7 +10,7 @@ USER root
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install python3-pip && \
-    pip install --target ${PREFIX} boto3==${BOTO3_VERSION}
+    pip install --target /dependencies boto3==${BOTO3_VERSION}
 
 
 
@@ -18,7 +18,7 @@ FROM $BASE_IMAGE:$VAST_VERSION AS production
 
 USER vast:vast
 
-COPY --from=build $PREFIX/* $PREFIX/
+COPY --from=build /dependencies/ ./
 
 COPY scripts/matcher-client.py .
 COPY schema/ /opt/tenzir/vast/etc/vast/schema/
