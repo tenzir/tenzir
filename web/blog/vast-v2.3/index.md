@@ -3,13 +3,12 @@ draft: true
 title: VAST v2.3
 description: Automatic Rebuilds
 authors: dominiklohmann
-date: 2022-08-05
+date: 2022-08-19
 tags: [release, rebuild, performance]
 ---
 
-We released [VAST v2.3][github-vast-release]!
-
-FIXME: Write a short summary.
+[VAST v2.3][github-vast-release] is now available. This release brings an
+automatic defragmentation and updating process to VAST.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v2.3.0
 
@@ -51,11 +50,75 @@ We also changed VAST to cut off underful partitions after 5 minutes rather than
 crash. Merging of undersized partitions ensures that this has no negative impact
 on query performance.
 
-FIXME: Show the effect of this visually.
+## Optional Partition Indexes
 
-## Optional Dense Indexes
-
-You can now disable VAST's dense indexes per field to save disk space at the
+You can now disable VAST's partition indexes per field to save disk space at the
 cost of making queries affecting these fields slower.
 
-FIXME: Complete section.
+In a drastically simplified model, VAST has three layers to its query
+evaluation:
+
+1. Send the query to the catalog, which is responsible for maintaining VAST's
+   partitions, and ask it for a list of candidate partitions. The catalog
+   maintains a sparse index per partition that we call the catalog index.
+
+2. Send the query to all candidate partitions in parallel, which each contain a
+   dense index for every field in the partition's schema that allow for
+   identifying candidate events within the partition.
+
+3. Send the query to all candidate partition's store backends if candidate
+   events exist, evaluating the query against the candidate events to extract or
+   count the resulting events.
+
+We now added an option to disable partition indexes for selected fields, which
+essentially causes VAST to skip step (2). This saves disk space and memory
+usage, but makes most queries affecting these fields more compute-expensive to
+run.
+
+Here's how you can configure a partition index to be disabled:
+
+```yaml
+vast:
+  index:
+    rules:
+        # Don't create partition indexes the suricata.http.http.url field.
+      - targets:
+          - suricata.http.http.url
+        partition-index: false
+        # Don't create partition indexes for fields of type addr.
+      - targets:
+          - :addr
+        partition-index: false
+```
+
+## Improved Responsiveness Under High Load
+
+Two small changes improve VAST's behavior under exceptionally high load.
+
+First, the new `vast.connection-timeout` option allows for modifying the default
+client to server connection timeout of 10 seconds. Previously, if a VAST server
+was too busy to respond to a new client within 10 seconds, the client simply
+exited with an unintelligable `!! request_timeout` error message. Here's how you
+can set a custom timeout:
+
+```yaml
+vast:
+  # The timeout for connecting to a VAST server. Set to 0 seconds to wait
+  # indefinitely.
+  connection-timeout: 10s
+```
+
+The option is additionally available under the environment variable
+`VAST_CONNECTION_TIMEOUT` and the `--connection-timeout` command-line option.
+
+Second, we improved the operability of VAST servers under high load from
+automated low-priority queries. We noticed that when spawning thousands of
+automated retro-match queries that compaction would stall and make little
+visible progress, risking the disk running full or no longer being compliant
+with GDPR-related policies enforced by compaction.
+
+To ensure that compaction's internal and regular user-issued queries work as
+expected even in this scenario, VAST now considers queries issued with
+`--low-priority`,  with even less priority compared to regular queries (down
+from 33.3% to 4%) and internal high-priority queries used for rebuilding and
+compaction (down from 12.5% to 1%).
