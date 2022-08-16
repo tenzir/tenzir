@@ -10,7 +10,7 @@ import CommercialPlugin from '@site/presets/CommercialPlugin.md';
 
 We provide a reference architecture and deployment scripts to have matchers running in the AWS cloud.
 
-In order to deploy VAST in the AWS cloud with the Pro image, follow the steps described in the [deployment guide](/web/docs/setup-vast/deploy/aws-pro.md).
+In order to deploy VAST in the AWS cloud with the Pro image, follow the steps described in the [deployment guide](/docs/setup-vast/deploy/aws-pro.md).
 
 ## Architecture
 
@@ -22,7 +22,7 @@ To deploy matchers in the cloud, we need to instantiate two main cloud resources
 
 ## Setup
 
-Once you have the base configuration deployed as described in the [deployment guide](/web/docs/setup-vast/deploy/aws-pro.md), you can deploy the matcher plugin:
+Once you have the base configuration deployed as described in the [deployment guide](/docs/setup-vast/deploy/aws-pro.md), you can deploy the matcher plugin:
 ```bash
 ./vast-cloud matcher.deploy -a
 ```

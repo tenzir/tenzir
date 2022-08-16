@@ -8,7 +8,7 @@ import CommercialPlugin from '@site/presets/CommercialPlugin.md';
 
 <CommercialPlugin />
 
-Before running VAST Pro on AWS, you should refer to the [deployment guide](/web/docs/setup-vast/deploy/aws.md) of the base stack.
+Before running VAST Pro on AWS, you should refer to the [deployment guide](/docs/setup-vast/deploy/aws.md) of the base stack.
 
 To enable the use of matchers you need to use the VAST Pro image:
 - Set up the version you plan to use in the `.env` file:
@@ -19,7 +19,7 @@ VAST_VERSION=latest
 ```bash
 ./vast-cloud pro.login pro.pull-image
 ```
-- Configure the deployment as explained in the [deployment guide](/web/docs/setup-vast/deploy/aws.md):
+- Configure the deployment as explained in the [deployment guide](/docs/setup-vast/deploy/aws.md):
 ```
 VAST_PEERED_VPC_ID=vpc-059a7ec8aac174fc9
 VAST_CIDR=172.31.48.0/24
@@ -39,4 +39,4 @@ VAST_IMAGE=tenzir/vast-pro
 ./vast-cloud [re]start-vast-server
 ```
 
-You can now use commercial features such as [matchers](/web/docs/use-vast/detect/cloud-matchers.md) in the Cloud!
+You can now use commercial features such as [matchers](/docs/use-vast/detect/cloud-matchers.md) in the Cloud!
