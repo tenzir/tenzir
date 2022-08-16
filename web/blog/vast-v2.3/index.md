@@ -18,8 +18,13 @@ FIXME: Write a short summary.
 ## Automatic Rebuilds
 
 VAST server processes now continuously rebuild outdated and merge undersized
-partitions in the background. To control this behavior, set the new
-`vast.automatic-rebuild` option.
+partitions in the background. The following diagram illustrates this
+"defragmentation" procedure:
+
+![Rebuild](/img/rebuild-light.png#gh-light-mode-only)
+![Rebuild](/img/rebuild-dark.png#gh-dark-mode-only)
+
+To control this behavior, set the new `vast.automatic-rebuild` option.
 
 ```yaml
 vast:

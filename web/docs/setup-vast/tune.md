@@ -252,13 +252,16 @@ to 1M messages for servers, and 100 for clients. The option
 The `rebuild` command re-ingests events from existing partitions and replaces
 them with new partitions. This makes it possible to upgrade persistent state to
 a newer version, or recreate persistent state after changing configuration
-parameters, e.g., switching from the Feather to the Parquet store backend.
-Rebuilding partitions also recreates their sketches. The process takes place
-asynchronously in the background.
+parameters, e.g., switching from the Feather to the Parquet store backend. The
+following diagram illustrates this "defragmentation" process:
 
-VAST continuously rebuilds partitions in the background. Control this behavior
-in your `vast.yaml` configuration file, to disable or adjust the resources to
-spend on automatic rebuilding:
+![Rebuild](/img/rebuild-light.png#gh-light-mode-only)
+![Rebuild](/img/rebuild-dark.png#gh-dark-mode-only)
+
+Rebuilding partitions also recreates their sketches. The process takes place
+asynchronously in the background. Control this behavior in your `vast.yaml`
+configuration file, to disable or adjust the resources to spend on automatic
+rebuilding:
 
 ```yaml
 vast:
