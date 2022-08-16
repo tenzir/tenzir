@@ -743,7 +743,8 @@ void index_state::decommission_active_partition(
   stage->out().close(active_partition->second.store_slot);
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
-  unpersisted[id] = active_partition->second.actor;
+  VAST_ASSERT(!unpersisted.contains(id));
+  unpersisted[id] = actor;
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
   const auto part_dir = partition_path(id);
@@ -1385,6 +1386,8 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       auto rp = self->make_response_promise<query_cursor>();
       std::vector<uuid> candidates;
+      candidates.reserve(self->state.active_partitions.size()
+                         + self->state.unpersisted.size());
       for (const auto& [_, active_partition] : self->state.active_partitions)
         candidates.push_back(active_partition.id);
       for (const auto& [id, _] : self->state.unpersisted)
@@ -1395,8 +1398,8 @@ index(index_actor::stateful_pointer<index_state> self,
         .then([=, candidates = std::move(candidates)](
                 catalog_result& midx_result) mutable {
           auto& midx_candidates = midx_result.partitions;
-          VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
-                     *self, candidates, midx_candidates);
+          VAST_DEBUG("{} got initial candidates {} and from catalog {}", *self,
+                     candidates, midx_candidates);
           for (const auto initial_candidates = candidates;
                const auto& midx_candidate : midx_candidates)
             if (std::find(initial_candidates.begin(), initial_candidates.end(),
@@ -1467,7 +1470,7 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [self, partition_id, path, synopsis_path, rp,
            adjust_stats](atom::ok) mutable {
-            VAST_DEBUG("{} erased partition {} from meta-index", *self,
+            VAST_DEBUG("{} erased partition {} from catalog", *self,
                        partition_id);
             auto partition_actor
               = self->state.inmem_partitions.eject(partition_id);
@@ -1602,8 +1605,8 @@ index(index_actor::stateful_pointer<index_state> self,
                 });
           },
           [self, partition_id, rp](caf::error& err) mutable {
-            VAST_WARN("{} failed to erase partition {} from meta-index: {}",
-                      *self, partition_id, err);
+            VAST_WARN("{} failed to erase partition {} from catalog: {}", *self,
+                      partition_id, err);
             rp.deliver(std::move(err));
           });
       return rp;
