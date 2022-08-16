@@ -6,6 +6,7 @@ from vast_invoke import Exit, task, Context
 import time
 import json
 import os
+import io
 import common
 
 VALIDATORS = [
@@ -342,3 +343,37 @@ def run(c, case=[]):
     res = unittest.TextTestRunner().run(suite)
     if not res.wasSuccessful():
         exit(1)
+
+
+DATASETS = {
+    "suricata": {
+        "path": f"{common.REPOROOT}/vast/integration/data/suricata/eve.json",
+        "pipe": "cat",  # use cat for noop
+        "import_cmd": "vast import suricata",
+    },
+    "flowlogs": {
+        "path": f"{common.RESOURCEDIR}/testdata/flowlogs.csv",
+        "pipe": "python3 -c 'import csv, json, sys; [print(json.dumps(dict(r))) for r in csv.DictReader(sys.stdin, delimiter=\" \")]'",
+        "import_cmd": "vast import --type=aws.flowlogs json",
+    },
+    "cloudtrail": {
+        "path": f"{common.RESOURCEDIR}/testdata/cloudtrail.json",
+        "pipe": "jq  -c '.Records[]'",
+        "import_cmd": "vast import --type=aws.cloudtrail json",
+    },
+}
+
+
+@task(help={"dataset": f"One of {list(DATASETS.keys())}"})
+def import_data(c, dataset):
+    """Import the given dataset into the running vast server. Requires a workbucket."""
+    if not dataset in DATASETS:
+        raise Exit(message=f"--dataset should be one of {list(DATASETS.keys())}")
+    ds_opts = DATASETS[dataset]
+    ds_key = f"testdataset/{dataset}"
+    with open(DATASETS[dataset]["path"], "rb") as f:
+        c.run(f"./vast-cloud workbucket.upload -s /dev/stdin -k {ds_key}", in_stream=f)
+    print(f"Test data uploaded to workbucket as {ds_key}")
+    bucket_name = c.run("./vast-cloud workbucket.name", hide="out").stdout.rstrip()
+    cmd = f"""aws s3 cp s3://{bucket_name}/{ds_key} - | {ds_opts["pipe"]} | {ds_opts["import_cmd"]}"""
+    c.run("./vast-cloud run-lambda -c file:///dev/stdin", in_stream=io.StringIO(cmd))
