@@ -6,6 +6,38 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
+## [v2.3.0-rc1][v2.3.0-rc1]
+
+### Changes
+
+- We improved the operability of VAST servers under high load from automated low-priority queries. VAST now considers queries issued with `--low-priority`, such as automated retro-match queries, with even less priority compared to regular queries (down from 33.3% to 4%) and internal high-priority queries used for rebuilding and compaction (down from 12.5% to 1%).
+  [#2484](https://github.com/tenzir/vast/pull/2484)
+
+- The default value for `vast.active-partition-timeout` is now 5 minutes (down from 1 hour), causing VAST to persist underful partitions earlier.
+  [#2493](https://github.com/tenzir/vast/pull/2493)
+
+- We split the `vast rebuild` command into two: `vast rebuild start` and `vast rebuild stop`. Rebuild orchestration now runs server-side, and only a single rebuild may run at a given time. We also made it more intuitive to use: `--undersized` now implies `--all`, and a new `--detached` option allows for running rebuilds in the background.
+  [#2493](https://github.com/tenzir/vast/pull/2493)
+
+### Features
+
+- VAST's partition indexes are now optional, allowing operators to control the trade-off between disk-usage and query performance for every field.
+  [#2430](https://github.com/tenzir/vast/pull/2430)
+
+- VAST now continuously rebuilds outdated and merges undersized partitions in the background. The new option `vast.automatic-rebuild` controls how many resources to spend on this. To disable this behavior, set the option to 0; the default is 1.
+  [#2493](https://github.com/tenzir/vast/pull/2493)
+
+- Rebuilding now emits metrics under the keys `rebuilder.partitions.{remaining,rebuilding,completed}`. The `vast status rebuild` command additionally shows information about the ongoing rebuild.
+  [#2493](https://github.com/tenzir/vast/pull/2493)
+
+- The new `vast.connection-timeout` option allows for configuring the timeout VAST clients use when connecting to a VAST server. The value defaults to 10s; setting it to a zero duration causes produces an infinite timeout.
+  [#2499](https://github.com/tenzir/vast/pull/2499)
+
+### Bug Fixes
+
+- VAST no longer occasionally prints warnings about no longer available partitions when queries run concurrently to imports.
+  [#2500](https://github.com/tenzir/vast/pull/2500)
+
 ## [v2.2.0][v2.2.0]
 
 ### Changes
@@ -1870,6 +1902,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
+[v2.3.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.3.0-rc1
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
