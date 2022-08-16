@@ -35,7 +35,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### Bug Fixes
 
-- VAST no longer prints warnings when export runs concurrently to import.
+- VAST no longer occasionally prints warnings about no longer available partitions when queries run concurrently to imports.
   [#2500](https://github.com/tenzir/vast/pull/2500)
 
 ## [v2.2.0][v2.2.0]
