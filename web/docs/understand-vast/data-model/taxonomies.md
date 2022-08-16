@@ -10,30 +10,37 @@ layer, instead of having to juggle the various naming schemes and
 representations of each individual data source. Today, every SIEM has its own
 "unified" approach to represent data, e.g.,
 elastic's [ECS][ecs],
-splunk's [CIM][cim],
+splunk's [CIM][splunk-cim],
 QRadar's [LEEF][leef],
 Sentinel's [ASIM][asim],
 Chronicle's [UDM][udm-chronicle],
-Panther's [UDM][udm-panther]. There exist also some vendor-agnostic attempts,
-such as MITRE's [CEE][cee], OSSEM's [CDM][ossem], or STIX [SCOs][stix-scos].
+Panther's [UDM][udm-panther],
+and the XDR Alliance's [CIM][xdr-cim]
+There exist also vendor-agnostic with a varying focus, such as MITRE's
+[CEE][cee], OSSEM's [CDM][ossem], or STIX [SCOs][stix-scos].
+Several vendors joined forces and launched the [Open Cybersecurity Schema
+Framework (OCSF)][ocsf], an open and extensible project to create a [universal
+schema][ocsf-schema].
 
 [chuvakin19]: https://medium.com/anton-on-security/security-correlation-then-and-now-a-sad-truth-about-siem-fc5a1afb1001
 [cee]: https://cee.mitre.org/
 [ecs]: https://www.elastic.co/guide/en/ecs/current/ecs-reference.html
-[cim]: https://docs.splunk.com/Splexicon:CommonInformationModel
+[splunk-cim]: https://docs.splunk.com/Splexicon:CommonInformationModel
 [leef]: https://www.ibm.com/docs/en/dsm?topic=leef-overview:
 [asim]: https://docs.microsoft.com/en-us/azure/sentinel/normalization
 [udm-chronicle]: https://cloud.google.com/chronicle/docs/unified-data-model/udm-usage
 [udm-panther]: https://docs.panther.com/writing-detections/data-models
 [ossem]: https://github.com/OTRF/OSSEM-CDM
 [stix-scos]: https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_mlbmudhl16lr
+[xdr-cim]: https://github.com/XDR-Alliance/Common-Information-Model
+[ocsf]: https://ocsf.io
+[ocsf-schema]: https://schema.ocsf.io
 
 We could add [yet another data model](https://xkcd.com/927/), but our goal is
-that you pick one that you know already or like best. Ultimately, we envision a
-thriving community around taxonomization that keeps data sources and semantics
-in a productive state. Until this community exists, we aim to shape the
-appropriate building blocks for creating sustainable taxonomies. In VAST, there
-exist two mechanisms for this purpose:
+that you pick one that you know already or like best. We envision a thriving
+community around taxonomization, as exemplified with the [OCSF][ocsf]. With
+VAST, we aim for leveraging the taxonomy of your choice. There are currently two
+mechanisms for this purpose:
 
 - [Concept](#concepts): a field mapping/alias that lazily resolves at query time
 - [Model](#models): a set of concepts that in sum describe a specific entity
