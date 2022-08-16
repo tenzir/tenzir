@@ -13,15 +13,6 @@ resource "aws_cloudwatch_log_group" "fargate_logging" {
   name = "/ecs/gateway/${module.env.module_name}-${local.name}-${module.env.stage}"
 }
 
-resource "aws_ecr_repository" "matcher_client" {
-  name                 = "${module.env.module_name}-matcher-client-${module.env.stage}"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = false
-  }
-}
-
 resource "aws_ecs_task_definition" "fargate_task_def" {
   family                   = "${module.env.module_name}-${local.name}-${module.env.stage}"
   network_mode             = "awsvpc"
