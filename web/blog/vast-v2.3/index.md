@@ -32,15 +32,13 @@ vast:
 
 This has two major advantages:
 
-1. For VAST users, optimally sized partitions in the most recent will be the
-   norm. This improves query performance throughout the board because of the
-   reduced overall number of partitions.
+1. Optimally sized partitions in the most recent will be the norm. This improves
+   query performance throughout the board because of the reduced overall number
+   of partitions.
 
-2. For VAST developers, making changes to VAST's partitions has less of a
-   barrier to it, because they need to worry less over backwards compatibility
-   as VAST now ensures partitions are up to date. This will allow for removing
-   support for partitions stored in older formats in future major releases of
-   VAST.
+2. Automatic rebuilding also helps with keeping partitions at the latest
+   version. This makes it faster to adopt VAST versions that include breaking
+   changes in the storage layout.
 
 We also changed VAST to cut off underful partitions after 5 minutes rather than
 1 hour by default (controlled through the option
