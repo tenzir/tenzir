@@ -11,7 +11,9 @@
 #include "vast/fwd.hpp"
 
 #include "vast/command.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/port.hpp"
 #include "vast/config.hpp"
@@ -40,6 +42,18 @@ caf::expected<node_actor>
 connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
+  auto timeout = caf::duration{defaults::system::connection_timeout};
+  if (auto connection_timeout_arg
+      = caf::get_if<std::string>(&opts, "vast.connection-timeout")) {
+    if (auto batch_timeout = to<duration>(*connection_timeout_arg))
+      timeout = caf::duration{*batch_timeout};
+    else
+      VAST_WARN("client cannot set vast.connection-timeout to {} as it "
+                "is not a valid duration",
+                *connection_timeout_arg);
+  }
+  if (timeout.is_zero())
+    timeout = caf::infinite;
   endpoint node_endpoint;
   auto endpoint_str = get_or(opts, "vast.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(endpoint_str, node_endpoint))
@@ -75,9 +89,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     return result.error();
   VAST_DEBUG("client connected to VAST node at {}:{}", node_endpoint.host,
              to_string(*node_endpoint.port));
-  self
-    ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
-              atom::version_v)
+  self->request(*result, timeout, atom::get_v, atom::version_v)
     .receive(
       [&](record& remote_version) {
         auto local_version = retrieve_versions();
