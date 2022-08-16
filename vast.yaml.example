@@ -8,6 +8,10 @@ vast:
   # The host and port to listen at and connect to.
   endpoint: "localhost:42000"
 
+  # The timeout for connecting to a VAST server. Set to 0 seconds to wait
+  # indefinitely.
+  connection-timeout: 10s
+
   # The file system path used for persistent state.
   db-directory: "vast.db"
 

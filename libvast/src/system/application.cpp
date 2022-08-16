@@ -438,7 +438,9 @@ auto make_root_command(std::string_view path) {
                           "time to wait until component shutdown "
                           "finishes cleanly before inducing a hard kill")
         .add<std::string>("store-backend", "store plugin to use for imported "
-                                           "data");
+                                           "data")
+        .add<std::string>("connection-timeout", "the timeout for connecting to "
+                                                "a VAST server (default: 10s)");
   ob = add_index_opts(std::move(ob));
   ob = add_archive_opts(std::move(ob));
   auto root = std::make_unique<command>(path, "", std::move(ob));
