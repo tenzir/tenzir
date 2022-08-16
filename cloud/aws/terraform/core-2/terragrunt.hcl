@@ -6,7 +6,7 @@ dependency "core_1" {
   config_path = "../core-1"
 
   mock_outputs = {
-    vast_repository_arn  = "arn:aws:ecr:::repository/temporary-dummy-arn"
+    vast_repository_arn = "arn:aws:ecr:::repository/temporary-dummy-arn"
   }
 }
 
@@ -17,11 +17,11 @@ retryable_errors = [
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["../../resources/scripts/deploy-images.sh", dependency.core_1.outputs.vast_repository_arn, "lambda_client", "vast_server"]
+    execute  = ["../../resources/scripts/deploy-images.sh", dependency.core_1.outputs.vast_repository_arn, "lambda_client", "vast_server"]
   }
 
   extra_arguments "image_vars" {
-    commands = ["apply"]
+    commands  = ["apply"]
     arguments = ["-var-file=${get_terragrunt_dir()}/images.generated.tfvars"]
   }
 
@@ -29,6 +29,8 @@ terraform {
 
 
 inputs = {
+  lambda_client_image      = "dummy_overriden_by_before_hook"
+  vast_server_image        = "dummy_overriden_by_before_hook"
   region_name              = get_env("VAST_AWS_REGION")
   peered_vpc_id            = get_env("VAST_PEERED_VPC_ID")
   vast_cidr                = get_env("VAST_CIDR")

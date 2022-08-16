@@ -2,17 +2,17 @@ locals {
   container_name = "main"
   container_definition = [
     {
-      cpu        = local.task_cpu
-      image      = var.matcher_client_image
-      memory     = local.task_memory
-      name       = local.container_name
-      essential  = true
+      cpu          = local.task_cpu
+      image        = var.matcher_client_image
+      memory       = local.task_memory
+      name         = local.container_name
+      essential    = true
       portMappings = []
       volumesFrom  = []
       environment = [{
         name  = "VAST_ENDPOINT"
         value = var.vast_server_domain_name
-      }, {
+        }, {
         name  = "QUEUE_URL"
         value = aws_sqs_queue.matched_events.url
       }]

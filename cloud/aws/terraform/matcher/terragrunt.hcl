@@ -29,11 +29,11 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["../../resources/scripts/deploy-images.sh", dependency.core_1.outputs.vast_repository_arn, "matcher_client"]
+    execute  = ["../../resources/scripts/deploy-images.sh", dependency.core_1.outputs.vast_repository_arn, "matcher_client"]
   }
 
   extra_arguments "image_vars" {
-    commands = ["apply"]
+    commands  = ["apply"]
     arguments = ["-var-file=${get_terragrunt_dir()}/images.generated.tfvars"]
   }
 
@@ -41,6 +41,7 @@ terraform {
 
 inputs = {
   region_name                     = local.region_name
+  matcher_client_image            = "dummy_overriden_by_before_hook"
   fargate_task_execution_role_arn = dependency.core_2.outputs.fargate_task_execution_role_arn
   vast_server_domain_name         = dependency.core_2.outputs.vast_server_domain_name
   fargate_cluster_name            = dependency.core_2.outputs.fargate_cluster_name
