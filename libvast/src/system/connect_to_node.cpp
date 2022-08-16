@@ -83,12 +83,12 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
         auto local_version = retrieve_versions();
         if (local_version["VAST"] != remote_version["VAST"]) {
           VAST_WARN("client version {} does not match remote version {}; "
-                    "this may caused unexpected behavior",
+                    "this may cause unexpected behavior",
                     local_version["VAST"], remote_version["VAST"]);
         }
         if (local_version["plugins"] != remote_version["plugins"]) {
           VAST_WARN("client plugins {} do not match remote plugins {}; "
-                    "this may caused unexpected behavior",
+                    "this may cause unexpected behavior",
                     local_version["plugins"], remote_version["plugins"]);
         }
       },

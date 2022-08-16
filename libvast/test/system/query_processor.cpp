@@ -67,9 +67,6 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::keep_original_partition) -> std::vector<partition_info> {
       FAIL("no mock implementation available");
     },
-    [=](atom::rebuild, std::vector<uuid>) -> std::vector<partition_info> {
-      FAIL("no mock implementation available");
-    },
     [=](atom::resolve, vast::expression) -> system::catalog_result {
       FAIL("no mock implementation available");
     },
@@ -153,9 +150,10 @@ TEST(state transitions) {
     "await_query_id -> await_results_until_done",
     "await_results_until_done -> idle",
   };
-  self->send(
-    aut, query_context::make_extract(self, unbox(to<expression>(query_str))),
-    index);
+  self->send(aut,
+             query_context::make_extract("test", self,
+                                         unbox(to<expression>(query_str))),
+             index);
   expect((vast::query_context, system::index_actor), from(self).to(aut));
   expect((atom::evaluate, vast::query_context), from(aut).to(index));
   expect((uuid, uint32_t), from(index).to(index));

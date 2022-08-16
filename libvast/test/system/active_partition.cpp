@@ -226,7 +226,8 @@ TEST(Delegate query to store with all possible ids in partition when query is to
   auto expr = vast::expression{vast::predicate{vast::field_extractor{"x"},
                                                vast::relational_operator::equal,
                                                vast::data{0u}}};
-  auto query_context = vast::query_context::make_extract(self, std::move(expr));
+  auto query_context
+    = vast::query_context::make_extract("test", self, std::move(expr));
 
   auto promise
     = self->request(sut, caf::infinite, vast::atom::query_v, query_context);

@@ -181,8 +181,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     expr += hhmmss;
     expr += ".0";
     std::vector<uuid> result;
-    auto query_context
-      = vast::query_context::make_extract(self, unbox(to<expression>(expr)));
+    auto query_context = vast::query_context::make_extract(
+      "test", self, unbox(to<expression>(expr)));
     auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
                             std::move(query_context));
     run();
@@ -205,7 +205,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
   auto lookup(catalog_actor& meta_idx, expression expr) {
     std::vector<uuid> result;
     auto query_context
-      = vast::query_context::make_extract(self, std::move(expr));
+      = vast::query_context::make_extract("test", self, std::move(expr));
     auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
                             query_context);
     run();
@@ -399,8 +399,9 @@ TEST(catalog messages) {
   // so this selects everything but the first partition.
   auto expr = unbox(to<expression>("content == \"foo\" && :timestamp >= @25"));
   // Sending an expression should return candidate partition ids
-  auto query_context = query_context::make_count(
-    system::receiver_actor<uint64_t>{}, query_context::count::estimate, expr);
+  auto query_context
+    = query_context::make_count("test", system::receiver_actor<uint64_t>{},
+                                query_context::count::estimate, expr);
   auto expr_response
     = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
   run();

@@ -196,7 +196,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options, std::vector<pipeline>&& pipelines) {
   self->state.options = options;
   self->state.query_context
-    = vast::query_context::make_extract(self, std::move(expr));
+    = vast::query_context::make_extract("export", self, std::move(expr));
   self->state.query_context.priority
     = has_low_priority_option(self->state.options)
         ? query_context::priority::low

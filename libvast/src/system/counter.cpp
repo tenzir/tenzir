@@ -24,7 +24,7 @@ counter_state::counter_state(caf::event_based_actor* self) : super(self) {
 void counter_state::init(expression expr, index_actor index,
                          bool skip_candidate_check) {
   auto query_context
-    = vast::query_context::make_count(self_,
+    = vast::query_context::make_count("count", self_,
                                       skip_candidate_check
                                         ? query_context::count::estimate
                                         : query_context::count::exact,

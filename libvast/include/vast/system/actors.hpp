@@ -210,13 +210,6 @@ using catalog_actor = typed_actor_fwd<
   // Atomatically replace a set of partititon synopses with another.
   caf::replies_to<atom::replace, std::vector<uuid>,
                   std::vector<augmented_partition_synopsis>>::with<atom::ok>,
-  // Return the candidate partitions for an expression.
-  caf::replies_to<atom::candidates, vast::uuid,
-                  vast::expression>::with<catalog_result>,
-  // Return the candidate partitions for an expression, restricted to a max
-  // partition version.
-  caf::replies_to<atom::candidates, vast::uuid, vast::expression,
-                  uint64_t>::with<catalog_result>,
   // Return the candidate partitions for a query.
   caf::replies_to<atom::candidates, vast::query_context>::with<catalog_result>,
   // Internal telemetry loop.
@@ -274,11 +267,6 @@ using index_actor = typed_actor_fwd<
   // preserving the old one(s).
   caf::replies_to<atom::apply, pipeline_ptr, std::vector<uuid>,
                   keep_original_partition>::with<std::vector<partition_info>>,
-  // A shorthand to the above handler that runs an identity transformation on
-  // the provided partitions without keeping the originals. This is a necessity,
-  // because pipeline_ptr's cannot be send across the wire.
-  caf::replies_to<atom::rebuild,
-                  std::vector<uuid>>::with<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
   caf::reacts_to<atom::flush>>
   // Conform to the protocol of the STREAM SINK actor for table slices.

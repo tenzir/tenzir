@@ -252,9 +252,24 @@ to 1M messages for servers, and 100 for clients. The option
 The `rebuild` command re-ingests events from existing partitions and replaces
 them with new partitions. This makes it possible to upgrade persistent state to
 a newer version, or recreate persistent state after changing configuration
-parameters, e.g., switching from the Feather to the Parquet store backend.
+parameters, e.g., switching from the Feather to the Parquet store backend. The
+following diagram illustrates this "defragmentation" process:
+
+![Rebuild](/img/rebuild-light.png#gh-light-mode-only)
+![Rebuild](/img/rebuild-dark.png#gh-dark-mode-only)
+
 Rebuilding partitions also recreates their sketches. The process takes place
-asynchronously in the background.
+asynchronously in the background. Control this behavior in your `vast.yaml`
+configuration file, to disable or adjust the resources to spend on automatic
+rebuilding:
+
+```yaml
+vast:
+  # Automatically rebuild undersized and outdated partitions in the background.
+  # The given number controls how much resources to spend on it. Set to 0 to
+  # disable. Defaults to 1.
+  automatic-rebuild: 1
+```
 
 :::info Upgrade from VAST v1.x partitions
 You can use the `rebuild` command to upgrade your VAST v1.x partitions to v2.x,
@@ -263,10 +278,10 @@ recommend this to be able to use newer features that do not work with v1.x
 partitions.
 :::
 
-This is how you run it:
+This is how you run it manually:
 
 ```bash
-vast rebuild [--all] [--undersized] [--parallel=<number>] [<expression>]
+vast rebuild start [--all] [--undersized] [--parallel=<number>] [--max-partitions=<number>] [--detached] [<expression>]
 ```
 
 A rebuild is not only useful when upgrading outdated partitions, but also when
@@ -275,13 +290,16 @@ rebuild operation to _all_ partitions. (Internally, VAST versions the partition
 state via FlatBuffers. An outdated partition is one whose version number is not
 the newest.)
 
-The `--undersized` flag causes VAST to only rebuild partitions that are under
-the configured partition size limit `vast.max-partition-size`.
+The `--undersized` flag (implies `--all`) causes VAST to only rebuild partitions
+that are under the configured partition size limit `vast.max-partition-size`.
 
 The `--parallel` options is a performance tuning knob. The parallelism level
 controls how many sets of partitions to rebuild in parallel. This value defaults
 to 1 to limit the CPU and memory requirements of the rebuilding process, which
 grow linearly with the selected parallelism level.
+
+The `--max-partitions` option allows for setting an upper bound to the number of
+partitions to rebuild.
 
 An optional expression allows for restricting the set of partitions to rebuild.
 VAST performs a catalog lookup with the expression to identify the set of
@@ -291,5 +309,7 @@ example, to rebuild outdated partitions containing `suricata.flow` events
 older than 2 weeks, run the following command:
 
 ```bash
-vast rebuild '#type == "suricata.flow" && #import_time < 2 weeks ago'
+vast rebuild start '#type == "suricata.flow" && #import_time < 2 weeks ago'
 ```
+
+To stop an ongoing rebuild, use the `vast rebuild stop` command.
