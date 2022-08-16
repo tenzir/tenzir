@@ -1,1 +1,1 @@
-VAST properly processes queries for fields with skip attribute.
+VAST properly processes queries for fields with `skip` attribute.

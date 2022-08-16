@@ -21,7 +21,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### Features
 
-- VAST's partition indexes are now optional, allowing operators to control the trade-off between disk-usage and query performance for every field. For more information on how to configure partition indexes, see [here](https://vast.io/docs/setup-vast/tune#skip-partition-index-creation).
+- VAST's partition indexes are now optional, allowing operators to control the trade-off between disk-usage and query performance for every field.
   [#2430](https://github.com/tenzir/vast/pull/2430)
 
 - VAST now continuously rebuilds outdated and merges undersized partitions in the background. The new option `vast.automatic-rebuild` controls how many resources to spend on this. To disable this behavior, set the option to 0; the default is 1.
@@ -30,7 +30,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - Rebuilding now emits metrics under the keys `rebuilder.partitions.{remaining,rebuilding,completed}`. The `vast status rebuild` command additionally shows information about the ongoing rebuild.
   [#2493](https://github.com/tenzir/vast/pull/2493)
 
-- The new `vast.connection-timeout` option allows for configuring the timeout VAST clients use when connecting to a VAST server. The value defaults to 10s; setting it to a zero duration causes VAST to use an infinite timeout.
+- The new `vast.connection-timeout` option allows for configuring the timeout VAST clients use when connecting to a VAST server. The value defaults to 10s; setting it to a zero duration causes produces an infinite timeout.
   [#2499](https://github.com/tenzir/vast/pull/2499)
 
 ### Bug Fixes
