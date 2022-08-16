@@ -7,8 +7,8 @@ date: 2022-08-19
 tags: [release, rebuild, performance]
 ---
 
-[VAST v2.3][github-vast-release] is now available, which introduces an
-automatic data defragmentation capability.
+[VAST v2.3][github-vast-release] is now available, which introduces an automatic
+data defragmentation capability.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v2.3.0
 
@@ -16,8 +16,8 @@ automatic data defragmentation capability.
 
 ## Automatic Rebuilds
 
-VAST server processes now continuously rebuild partitions in the background.
-The following diagram visualizes what happens under the hood:
+VAST server processes now continuously rebuild partitions in the background. The
+following diagram visualizes what happens under the hood:
 
 ![Rebuild](/img/rebuild-light.png#gh-light-mode-only)
 ![Rebuild](/img/rebuild-dark.png#gh-dark-mode-only)
@@ -32,7 +32,7 @@ Rebuilding kicks in when a partition has the following properties:
 
 2. **Undersized**: numerous small partitions can cause fragmentation in the
    catalog, causing higher memory consumption, larger database footprint, and
-   slower queries. Rebuilding merging undersized partitions, thereby
+   slower queries. Rebuilding merges undersized partitions, thereby
    defragmenting the system. This reduces the resource footprint and makes
    queries faster.
 
@@ -74,12 +74,12 @@ spans many disparate partitions.
 In a simplified model, VAST performs three steps when executing a query:
 
 1. Send the query to the catalog, which maintains VAST's partitions, and ask it
-   for a list of candidate partitions. The catalog maintains a the first tier of
+   for a list of candidate partitions. The catalog maintains the first tier of
    sparse indexes, currently one per partition.
 
 2. Send the query to all candidate partitions in parallel, each of which
-   contains dense indexes for fields in the partition's schema. The index lookup
-   yields a set of candidate records IDs within the partition. 
+   contains dense indexes for all fields in the partition's schema. The index
+   lookup yields a set of candidate records IDs within the partition. 
 
 3. Send the query to all candidate partition's stores, provided the index lookup
    yielded record IDs. Then evaluating the query against the candidate events
@@ -129,6 +129,6 @@ with GDPR-related policies enforced by compaction.
 
 To ensure that compaction's internal and regular user-issued queries work as
 expected even in this scenario, VAST now considers queries issued with
-`--low-priority`,  with even less priority compared to regular queries (down
-from 33.3% to 4%) and internal high-priority queries used for rebuilding and
+`--low-priority`, with even less priority compared to regular queries (down from
+33.3% to 4%) and internal high-priority queries used for rebuilding and
 compaction (down from 12.5% to 1%).
