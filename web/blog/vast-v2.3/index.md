@@ -7,8 +7,8 @@ date: 2022-08-19
 tags: [release, rebuild, performance]
 ---
 
-[VAST v2.3][github-vast-release] is now available. This release brings an
-automatic defragmentation and updating process to VAST.
+[VAST v2.3][github-vast-release] is now available, which introduces an
+automatic data defragmentation capability.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v2.3.0
 
@@ -16,14 +16,27 @@ automatic defragmentation and updating process to VAST.
 
 ## Automatic Rebuilds
 
-VAST server processes now continuously rebuild outdated and merge undersized
-partitions in the background. The following diagram illustrates this
-"defragmentation" procedure:
+VAST server processes now continuously rebuild partitions in the background.
+The following diagram visualizes what happens under the hood:
 
 ![Rebuild](/img/rebuild-light.png#gh-light-mode-only)
 ![Rebuild](/img/rebuild-dark.png#gh-dark-mode-only)
 
-To control this behavior, set the new `vast.automatic-rebuild` option.
+Rebuilding kicks in when a partition has the following properties:
+
+1. **Outdated**: if a partitions does not have the latest partition version, it
+   may not enjoy the latest features and optimizations. It makes it also faster
+   to adopt VAST versions that include breaking changes in the storage layout.
+   Therefore, VAST rebuilds outdated partitions to bring them into the most
+   recent state.
+
+2. **Undersized**: numerous small partitions can cause fragmentation in the
+   catalog, causing higher memory consumption, larger database footprint, and
+   slower queries. Rebuilding merging undersized partitions, thereby
+   defragmenting the system. This reduces the resource footprint and makes
+   queries faster.
+
+To enable automatic rebuilding, set the new `vast.automatic-rebuild` option.
 
 ```yaml
 vast:
@@ -34,46 +47,43 @@ vast:
   automatic-rebuild: 1
 ```
 
-This has two major advantages:
-
-1. Optimally sized partitions in the most recent will be the norm. This improves
-   query performance throughout the board because of the reduced overall number
-   of partitions.
-
-2. Automatic rebuilding also helps with keeping partitions at the latest
-   version. This makes it faster to adopt VAST versions that include breaking
-   changes in the storage layout.
-
-We also changed VAST to cut off underful partitions after 5 minutes rather than
-1 hour by default (controlled through the option
-`vast.active-partition-timeout`), reducing the risk of data loss in case of a
-crash. Merging of undersized partitions ensures that this has no negative impact
-on query performance.
+Now that we have an LSM-style merge operation of partitions, we reduced
+the partition cutoff timeout to 5 minutes from 1 hour by default (controlled
+through the option `vast.active-partition-timeout`). This reduces the risk of
+data loss in case of a crash. This comes in handy in particular for low-volume
+data sources that never exhaust their capacity.
 
 ## Optional Partition Indexes
 
-You can now disable VAST's partition indexes per field to save disk space at the
-cost of making queries affecting these fields slower.
+Historically, VAST evolved from a special-purpose bitmap indexing system into a
+general-purpose telemetry engine for security data. Today, VAST has a two-tiered
+indexing architecture with sparse sketch structures at the top, followed by a
+second layer of dense indexes. As of this release, it is possible to disable
+this second layer.
 
-In a drastically simplified model, VAST has three layers to its query
-evaluation:
+The space savings can be substantial based on the size of your index. For
+example, if the first layer of indexing always yields highly selective results,
+then it the dense indexes do not provide a lot of value. One scenario would be
+retro-matching: if you only do IoC-style point queries, they will be most likely
+covered well by the sketches. If you do not have selective queries, the dense
+index is not helping much anyway, since you need access the base data anyway. A
+really good use case for the indexes when your have a scatterd data access
+patterns, i.e., highly selective results *within* a partition, but a result that
+spans many disparate partitions.
 
-1. Send the query to the catalog, which is responsible for maintaining VAST's
-   partitions, and ask it for a list of candidate partitions. The catalog
-   maintains a sparse index per partition that we call the catalog index.
+In a simplified model, VAST performs three steps when executing a query:
 
-2. Send the query to all candidate partitions in parallel, which each contain a
-   dense index for every field in the partition's schema that allow for
-   identifying candidate events within the partition.
+1. Send the query to the catalog, which maintains VAST's partitions, and ask it
+   for a list of candidate partitions. The catalog maintains a the first tier of
+   sparse indexes, currently one per partition.
 
-3. Send the query to all candidate partition's store backends if candidate
-   events exist, evaluating the query against the candidate events to extract or
-   count the resulting events.
+2. Send the query to all candidate partitions in parallel, each of which
+   contains dense indexes for fields in the partition's schema. The index lookup
+   yields a set of candidate records IDs within the partition. 
 
-We now added an option to disable partition indexes for selected fields, which
-essentially causes VAST to skip step (2). This saves disk space and memory
-usage, but makes most queries affecting these fields more compute-expensive to
-run.
+3. Send the query to all candidate partition's stores, provided the index lookup
+   yielded record IDs. Then evaluating the query against the candidate events
+   and return the result.
 
 Here's how you can configure a partition index to be disabled:
 
@@ -96,9 +106,9 @@ vast:
 Two small changes improve VAST's behavior under exceptionally high load.
 
 First, the new `vast.connection-timeout` option allows for modifying the default
-client to server connection timeout of 10 seconds. Previously, if a VAST server
+client-to-server connection timeout of 10 seconds. Previously, if a VAST server
 was too busy to respond to a new client within 10 seconds, the client simply
-exited with an unintelligable `!! request_timeout` error message. Here's how you
+exited with an unintelligable `request_timeout` error message. Here's how you
 can set a custom timeout:
 
 ```yaml
