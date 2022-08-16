@@ -79,7 +79,7 @@ In a simplified model, VAST performs three steps when executing a query:
 
 2. Send the query to all candidate partitions in parallel, each of which
    contains dense indexes for all fields in the partition's schema. The index
-   lookup yields a set of candidate records IDs within the partition. 
+   lookup yields a set of candidate records IDs within the partition.
 
 3. Send the query to all candidate partition's stores, provided the index lookup
    yielded record IDs. Then evaluating the query against the candidate events
