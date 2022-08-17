@@ -1,0 +1,21 @@
+MISP:
+  org: Tenzir
+  email: support@tenzir.com
+  contact: support@tenzir.com
+  live: true
+  disable_emailing: true
+  disablerestalert: true
+  disableUserSelfManagement: true
+Plugin:
+  ZeroMQ_enable: true
+  ZeroMQ_host: 0.0.0.0
+  ZeroMQ_port: 50000
+  ZeroMQ_attribute_notifications_enable: true
+  ZeroMQ_event_notifications_enable: true
+# Lenient lab settings. Not production-grade.
+Security:
+  # csp_enforce: false
+  # advanced_authkeys: false
+  # auth_enforced: false
+  password_policy_length: 4
+  password_policy_complexity: /.*/
