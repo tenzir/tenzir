@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/system/node_control.hpp"
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
@@ -591,10 +592,9 @@ get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
     = std::holds_alternative<system::node_actor>(node_opt)
         ? std::get<system::node_actor>(node_opt)
         : std::get<scope_linked<system::node_actor>>(node_opt).get();
+  const auto timeout = system::node_connection_timeout(content(sys.config()));
   auto result = caf::expected<caf::actor>{caf::no_error};
-  self
-    ->request(node, defaults::system::initial_request_timeout, atom::get_v,
-              atom::type_v, "rebuild")
+  self->request(node, timeout, atom::get_v, atom::type_v, "rebuild")
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {

@@ -210,7 +210,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     }
     rs->content["system"] = std::move(system);
   }
-  const auto timeout = defaults::system::initial_request_timeout;
+  const auto timeout = defaults::system::status_request_timeout;
   // Send out requests and collects answers.
   for (const auto& [label, component] : self->state.registry.components()) {
     // Requests to busy remote sources and sinks can easily delay the combined
@@ -268,13 +268,7 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
                                              "type-registry"));
   caf::error request_error = caf::none;
   auto rp = self->make_response_promise();
-  // The overload for 'request(...)' taking a 'std::chrono::duration' does not
-  // respect the specified message priority, so we convert to 'caf::duration'
-  // by hand.
-  const auto timeout = caf::duration{defaults::system::initial_request_timeout};
-  self
-    ->request<caf::message_priority::high>(type_registry, timeout, atom::get_v,
-                                           atom::taxonomies_v)
+  self->request(type_registry, caf::infinite, atom::get_v, atom::taxonomies_v)
     .then(
       [=](struct taxonomies taxonomies) mutable {
         auto result = list{};
@@ -331,7 +325,10 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
         }
       },
       [=](caf::error& err) mutable {
-        request_error = std::move(err);
+        request_error
+          = caf::make_error(ec::unspecified,
+                            "'dump' failed to get taxonomies from type-registry: {}",
+                            std::move(err));
       });
   if (request_error)
     return caf::make_message(std::move(request_error));
@@ -603,9 +600,9 @@ node_state::spawn_command(const invocation& inv,
         return make_message(expr.error());
       }
       self
-        ->request(type_registry, defaults::system::initial_request_timeout,
-                  atom::resolve_v, std::move(*expr))
-        .then(handle_taxonomies, [=](caf::error err) mutable {
+        ->request(type_registry, caf::infinite, atom::resolve_v,
+                  std::move(*expr))
+        .then(handle_taxonomies, [=](caf::error& err) mutable {
           rp.deliver(err);
           return make_message(err);
         });
