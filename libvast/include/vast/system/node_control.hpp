@@ -55,9 +55,7 @@ get_node_components(caf::scoped_actor& self, const node_actor& node) {
   const auto timeout = node_connection_timeout(self->config().content);
   auto labels = std::vector<std::string>{
     normalize(caf::type_name_by_id<caf::type_id<Actors>::value>::value)...};
-  self
-    ->request(node, timeout, atom::get_v,
-              atom::label_v, labels)
+  self->request(node, timeout, atom::get_v, atom::label_v, labels)
     .receive(
       [&](std::vector<caf::actor>& components) {
         result = detail::tuple_map<result_t>(

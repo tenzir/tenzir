@@ -39,8 +39,7 @@ caf::expected<caf::actor>
 spawn_at_node(caf::scoped_actor& self, const node_actor& node, invocation inv) {
   const auto timeout = node_connection_timeout(self->config().content);
   caf::expected<caf::actor> result = caf::no_error;
-  self
-    ->request(node, timeout, atom::spawn_v, inv)
+  self->request(node, timeout, atom::spawn_v, inv)
     .receive(
       [&](caf::actor& actor) {
         result = std::move(actor);

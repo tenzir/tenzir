@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/system/node_control.hpp"
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
@@ -20,6 +19,7 @@
 #include <vast/system/catalog.hpp>
 #include <vast/system/index.hpp>
 #include <vast/system/node.hpp>
+#include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/system/read_query.hpp>
 #include <vast/system/report.hpp>
