@@ -11,7 +11,6 @@
 #include "vast/atoms.hpp"
 #include "vast/command.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/actor_cast_wrapper.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/tuple_map.hpp"
 #include "vast/error.hpp"
@@ -61,8 +60,10 @@ get_node_components(caf::scoped_actor& self, const node_actor& node) {
               atom::label_v, labels)
     .receive(
       [&](std::vector<caf::actor>& components) {
-        result = detail::tuple_map<result_t>(std::move(components),
-                                             detail::actor_cast_wrapper{});
+        result = detail::tuple_map<result_t>(
+          std::move(components), []<class Out>(auto&& in) {
+            return caf::actor_cast<Out>(std::forward<decltype(in)>(in));
+          });
       },
       [&](caf::error& err) { //
         result = caf::make_error(ec::lookup_error,
