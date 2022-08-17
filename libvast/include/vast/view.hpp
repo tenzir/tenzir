@@ -570,7 +570,7 @@ struct formatter<vast::data_view> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::data_view& value, FormatContext& ctx) {
+  auto format(const vast::data_view& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;

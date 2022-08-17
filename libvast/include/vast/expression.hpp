@@ -452,7 +452,7 @@ struct formatter<vast::expression> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::expression& value, FormatContext& ctx) {
+  auto format(const vast::expression& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;
@@ -467,7 +467,7 @@ struct formatter<vast::data_extractor> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::data_extractor& value, FormatContext& ctx) {
+  auto format(const vast::data_extractor& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;
@@ -482,7 +482,7 @@ struct formatter<vast::meta_extractor> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::meta_extractor& value, FormatContext& ctx) {
+  auto format(const vast::meta_extractor& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;
@@ -497,7 +497,8 @@ struct formatter<vast::relational_operator> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::relational_operator& value, FormatContext& ctx) {
+  auto
+  format(const vast::relational_operator& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;
@@ -512,7 +513,7 @@ struct formatter<vast::predicate> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::predicate& value, FormatContext& ctx) {
+  auto format(const vast::predicate& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;
@@ -527,7 +528,7 @@ struct formatter<vast::curried_predicate> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::curried_predicate& value, FormatContext& ctx) {
+  auto format(const vast::curried_predicate& value, FormatContext& ctx) const {
     return format_to(ctx.out(), "{} {}", value.op, value.rhs);
   }
 };

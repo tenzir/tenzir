@@ -32,17 +32,21 @@ enum class table_slice_encoding : uint8_t {
 namespace fmt {
 
 template <>
-struct formatter<vast::table_slice_encoding> : formatter<std::string_view> {
+struct formatter<vast::table_slice_encoding> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
   template <typename FormatContext>
-  auto format(vast::table_slice_encoding x, FormatContext& ctx) {
-    using super = formatter<std::string_view>;
+  auto format(const vast::table_slice_encoding& x, FormatContext& ctx) const {
     switch (x) {
       case vast::table_slice_encoding::none:
-        return super::format("none", ctx);
+        return format_to(ctx.out(), "none");
       case vast::table_slice_encoding::arrow:
-        return super::format("arrow", ctx);
+        return format_to(ctx.out(), "arrow");
       case vast::table_slice_encoding::msgpack:
-        return super::format("msgpack", ctx);
+        return format_to(ctx.out(), "msgpack");
     }
     vast::die("unreachable");
   }

@@ -685,7 +685,8 @@ struct formatter<vast::msgpack::builder<Policy>> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::msgpack::builder<Policy>& value, FormatContext& ctx) {
+  auto format(const vast::msgpack::builder<Policy>& value,
+              FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", caf::deep_to_string(value));
   }
 };
@@ -701,7 +702,7 @@ struct formatter<
   template <typename FormatContext>
   auto format(const vast::msgpack::builder<
                 vast::msgpack::input_validation>::proxy<Format>& value,
-              FormatContext& ctx) {
+              FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", caf::deep_to_string(value));
   }
 };
@@ -717,7 +718,7 @@ struct formatter<
   template <typename FormatContext>
   auto format(const vast::msgpack::builder<
                 vast::msgpack::no_input_validation>::proxy<Format>& value,
-              FormatContext& ctx) {
+              FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", caf::deep_to_string(value));
   }
 };
@@ -732,7 +733,7 @@ struct formatter<vast::msgpack::builder<vast::msgpack::input_validation>::empty>
   template <typename FormatContext>
   auto format(const typename vast::msgpack::builder<
                 vast::msgpack::input_validation>::empty& value,
-              FormatContext& ctx) {
+              FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", caf::deep_to_string(value));
   }
 };
@@ -748,7 +749,7 @@ struct formatter<
   template <typename FormatContext>
   auto format(const typename vast::msgpack::builder<
                 vast::msgpack::no_input_validation>::empty& value,
-              FormatContext& ctx) {
+              FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", caf::deep_to_string(value));
   }
 };
@@ -761,7 +762,7 @@ struct formatter<vast::msgpack::format> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::msgpack::format& value, FormatContext& ctx) {
+  auto format(const vast::msgpack::format& value, FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", caf::deep_to_string(value));
   }
 };

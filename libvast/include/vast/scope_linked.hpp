@@ -71,7 +71,7 @@ struct formatter<vast::scope_linked<T>> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::scope_linked<T>& item, FormatContext& ctx) {
+  auto format(const vast::scope_linked<T>& item, FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", item.get());
   }
 };

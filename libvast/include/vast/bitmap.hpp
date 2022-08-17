@@ -134,7 +134,7 @@ struct formatter<Bitmap> {
   }
 
   template <typename FormatContext>
-  auto format(const Bitmap& value, FormatContext& ctx) {
+  auto format(const Bitmap& value, FormatContext& ctx) const {
     std::string buffer{};
     // TODO: Support other policies via parse context.
     vast::printers::bitmap<Bitmap, vast::policy::rle>(buffer, value);

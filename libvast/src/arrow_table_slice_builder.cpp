@@ -81,7 +81,7 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
           .ValueOrDie();
     auto status = stream_writer->WriteRecordBatch(*record_batch);
     if (!status.ok())
-      VAST_ERROR("failed to write record batch: {}", status);
+      VAST_ERROR("failed to write record batch: {}", status.ToString());
     auto arrow_ipc_buffer = ipc_ostream->Finish().ValueOrDie();
     fbs_ipc_buffer = builder.CreateVector(arrow_ipc_buffer->data(),
                                           arrow_ipc_buffer->size());

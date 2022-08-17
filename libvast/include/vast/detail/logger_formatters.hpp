@@ -38,6 +38,10 @@
 #include <string>
 #include <type_traits>
 
+#if __has_include(<fmt/std.h>)
+#  include <fmt/std.h>
+#endif
+
 namespace vast {
 
 // -- use_deep_to_string_formatter --------------------------------------------
@@ -98,19 +102,29 @@ namespace fmt {
 
 template <class T>
   requires(vast::use_deep_to_string_formatter<T>::value)
-struct formatter<T> : formatter<std::string_view> {
+struct formatter<T> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
   template <class FormatContext>
-  constexpr auto format(const T& value, FormatContext& ctx)
+  constexpr auto format(const T& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return formatter<std::string_view>::format(caf::deep_to_string(value), ctx);
+    return format_to(ctx.out(), "{}", caf::deep_to_string(value));
   }
 };
 
 template <class T>
   requires(vast::use_name_member_formatter<T>::value)
-struct formatter<T> : formatter<std::string_view> {
+struct formatter<T> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
   template <class FormatContext>
-  constexpr auto format(const T& value, FormatContext& ctx)
+  constexpr auto format(const T& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     constexpr bool has_name_member_function = requires {
       { value.name() } -> std::convertible_to<std::string_view>;
@@ -128,8 +142,8 @@ struct formatter<vast::detail::single_arg_wrapper<T>> {
   }
 
   template <class FormatContext>
-  auto
-  format(const vast::detail::single_arg_wrapper<T>& value, FormatContext& ctx) {
+  auto format(const vast::detail::single_arg_wrapper<T>& value,
+              FormatContext& ctx) const {
     return format_to(ctx.out(), "{} = {}", value.name, value.value);
   }
 };
@@ -142,8 +156,8 @@ struct formatter<vast::detail::range_arg_wrapper<T>> {
   }
 
   template <class FormatContext>
-  auto
-  format(const vast::detail::range_arg_wrapper<T>& value, FormatContext& ctx) {
+  auto format(const vast::detail::range_arg_wrapper<T>& value,
+              FormatContext& ctx) const {
     return format_to(ctx.out(), "{} = <{}>", value.name,
                      join(value.first, value.last, ", "));
   }
@@ -157,7 +171,7 @@ struct formatter<caf::intrusive_ptr<T>> {
   }
 
   template <class FormatContext>
-  auto format(const caf::intrusive_ptr<T>& value, FormatContext& ctx) {
+  auto format(const caf::intrusive_ptr<T>& value, FormatContext& ctx) const {
     if (!value)
       return format_to(ctx.out(), "*{}", "nullptr");
     return format_to(ctx.out(), "*{}", ptr(value.get()));
@@ -172,7 +186,8 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
   }
 
   template <class FormatContext>
-  auto format(const caf::intrusive_cow_ptr<T>& value, FormatContext& ctx) {
+  auto
+  format(const caf::intrusive_cow_ptr<T>& value, FormatContext& ctx) const {
     if (!value)
       return format_to(ctx.out(), "*{}", "nullptr");
     return format_to(ctx.out(), "*{}", ptr(value.get()));
@@ -187,7 +202,7 @@ struct formatter<caf::optional<T>> {
   }
 
   template <class FormatContext>
-  auto format(const caf::optional<T>& value, FormatContext& ctx) {
+  auto format(const caf::optional<T>& value, FormatContext& ctx) const {
     if (!value)
       return format_to(ctx.out(), "none");
     return format_to(ctx.out(), "{}", *value);
@@ -202,7 +217,7 @@ struct formatter<std::optional<T>> {
   }
 
   template <class FormatContext>
-  auto format(const std::optional<T>& value, FormatContext& ctx) {
+  auto format(const std::optional<T>& value, FormatContext& ctx) const {
     if (!value)
       return format_to(ctx.out(), "nullopt");
     return format_to(ctx.out(), "{}", *value);
@@ -217,7 +232,7 @@ struct formatter<caf::expected<T>> {
   }
 
   template <class FormatContext>
-  auto format(const caf::expected<T>& value, FormatContext& ctx) {
+  auto format(const caf::expected<T>& value, FormatContext& ctx) const {
     if (!value)
       return format_to(ctx.out(), "{}", value.error());
     return format_to(ctx.out(), "{}", *value);
@@ -232,7 +247,7 @@ struct formatter<caf::error> {
   }
 
   template <class FormatContext>
-  auto format(const caf::error& value, FormatContext& ctx) {
+  auto format(const caf::error& value, FormatContext& ctx) const {
     return format_to(ctx.out(), "{}", vast::render(value));
   }
 };
@@ -245,7 +260,7 @@ struct formatter<std::span<T>> {
   }
 
   template <class FormatContext>
-  auto format(const std::span<T>& value, FormatContext& ctx) {
+  auto format(const std::span<T>& value, FormatContext& ctx) const {
     return format_to(ctx.out(), "vast.span({})",
                      join(value.begin(), value.end(), ", "));
   }
@@ -259,7 +274,7 @@ struct formatter<std::span<std::byte>> {
   }
 
   template <class FormatContext>
-  auto format(const std::span<std::byte>&, FormatContext& ctx) {
+  auto format(const std::span<std::byte>&, FormatContext& ctx) const {
     // Inentioanlly unprintable.
     return format_to(ctx.out(), "vast.span(<bytes>)");
   }
@@ -273,7 +288,7 @@ struct formatter<caf::stream<T>> {
   }
 
   template <class FormatContext>
-  auto format(const caf::stream<T>&, FormatContext& ctx) {
+  auto format(const caf::stream<T>&, FormatContext& ctx) const {
     return format_to(ctx.out(), "caf.stream<{}>",
                      caf::detail::pretty_type_name(typeid(T)));
   }
@@ -287,13 +302,33 @@ struct formatter<caf::downstream<T>> {
   }
 
   template <class FormatContext>
-  auto format(const caf::downstream<T>&, FormatContext& ctx) {
+  auto format(const caf::downstream<T>&, FormatContext& ctx) const {
     return format_to(ctx.out(), "caf.downstream<{}>",
                      caf::detail::pretty_type_name(typeid(T)));
   }
 };
 
+#if !__has_include(<fmt/std.h>)
+
 template <>
 struct formatter<std::filesystem::path> : formatter<std::string> {};
+
+#else
+
+template <>
+struct formatter<std::error_code> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  constexpr auto format(const std::error_code& value, FormatContext& ctx)
+    -> decltype(ctx.out()) {
+    return format_to(ctx.out(), "{}", value.message());
+  }
+};
+
+#endif
 
 } // namespace fmt
