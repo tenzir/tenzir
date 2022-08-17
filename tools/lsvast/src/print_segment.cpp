@@ -42,7 +42,8 @@ static void print_segment_contents(const SegmentFlatbuffer* segment,
                                    []() noexcept { /* nop */ });
     auto slice
       = vast::table_slice{std::move(chunk), vast::table_slice::verify::no};
-    writer.write(slice);
+    fmt::print("batch with size = {}\n", slice.rows());
+    // writer.write(slice);
   }
   writer.flush();
   auto& out = static_cast<std::stringstream&>(writer.out());
