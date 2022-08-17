@@ -33,7 +33,7 @@ dependencies and versions.
 |✓|[yaml-cpp](https://github.com/jbeder/yaml-cpp)|>= 0.6.2|Required for reading YAML configuration files.|
 |✓|[simdjson](https://github.com/simdjson/simdjson)|>= 0.7|Required for high-performance JSON parsing.|
 |✓|[spdlog](https://github.com/gabime/spdlog)|>= 1.5|Required for logging.|
-|✓|[fmt](https://fmt.dev)|>= 7.1.3|Required for formatted text output.|
+|✓|[fmt](https://fmt.dev)|>= 7.1.3 and < 9.0.0|Required for formatted text output.|
 |✓|[xxHash](https://github.com/Cyan4973/xxHash)|>= 0.8.0|Required for computing fast hash digests.|
 |✓|[robin-map](https://github.com/Tessil/robin-map)|>= 0.6.3|Fast hash map and hash set using robin hood hashing. (Bundled as subtree.)|
 |✓|[fast_float](https://github.com/FastFloat/fast_float)|>= 3.2.0|Required for parsing floating point numbers. (Bundled as submodule.)|
