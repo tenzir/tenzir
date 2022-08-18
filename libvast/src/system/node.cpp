@@ -325,10 +325,11 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
         }
       },
       [=](caf::error& err) mutable {
-        request_error = caf::make_error(ec::unspecified,
-                                        "'dump' failed to get taxonomies from "
-                                        "type-registry: {}",
-                                        std::move(err));
+        request_error
+          = caf::make_error(ec::unspecified, fmt::format("'dump' failed to get "
+                                                         "taxonomies from "
+                                                         "type-registry: {}",
+                                                         std::move(err)));
       });
   if (request_error)
     return caf::make_message(std::move(request_error));
