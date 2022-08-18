@@ -42,7 +42,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   const auto& node = std::holds_alternative<node_actor>(node_opt)
                        ? std::get<node_actor>(node_opt)
                        : std::get<scope_linked<node_actor>>(node_opt).get();
-  VAST_DEBUG("{} got node", detail::pretty_type_name(inv.full_name));
+  VAST_DEBUG("{} received node handle", inv.full_name);
   // Get node components.
   auto components = get_node_components< //
     accountant_actor, type_registry_actor, importer_actor>(self, node);
