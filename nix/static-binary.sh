@@ -105,7 +105,7 @@ EOF
 fi
 
 echo running "nix-build --no-out-link -E \'${exp}\'"
-result=$(nix-build --no-out-link -E "${exp}")
+result=$(nix-build --keep-failed --no-out-link -E "${exp}")
 
 mkdir -p build
 tar -C "${result}" \
