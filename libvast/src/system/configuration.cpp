@@ -305,6 +305,20 @@ const std::vector<std::filesystem::path>& loaded_config_files() {
   return loaded_config_files_singleton;
 }
 
+caf::expected<duration>
+get_or_duration(const caf::settings& options, std::string_view key,
+                duration fallback) {
+  if (auto duration_arg = caf::get_if<std::string>(&options, key)) {
+    if (auto duration = to<vast::duration>(*duration_arg))
+      return *duration;
+    return caf::make_error(ec::parse_error, fmt::format("cannot parse option "
+                                                        "'{}' with value '{}' "
+                                                        "as duration",
+                                                        key, *duration_arg));
+  }
+  return caf::get_or(options, key, fallback);
+}
+
 configuration::configuration() {
   detail::add_message_types(*this);
   // Load I/O module.

@@ -592,7 +592,7 @@ get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
     = std::holds_alternative<system::node_actor>(node_opt)
         ? std::get<system::node_actor>(node_opt)
         : std::get<scope_linked<system::node_actor>>(node_opt).get();
-  const auto timeout = system::node_connection_timeout(content(sys.config()));
+  const auto timeout = system::node_connection_timeout(config);
   auto result = caf::expected<caf::actor>{caf::no_error};
   self->request(node, timeout, atom::get_v, atom::type_v, "rebuild")
     .receive(

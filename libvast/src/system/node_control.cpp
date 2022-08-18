@@ -11,6 +11,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/system/configuration.hpp"
 
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
@@ -20,18 +21,17 @@
 namespace vast::system {
 
 caf::duration node_connection_timeout(const caf::settings& options) {
-  auto timeout = caf::duration{defaults::system::node_connection_timeout};
-  if (auto connection_timeout_arg
-      = caf::get_if<std::string>(&options, "vast.connection-timeout")) {
-    if (auto batch_timeout = to<duration>(*connection_timeout_arg))
-      timeout = caf::duration{*batch_timeout};
-    else
-      VAST_WARN("client cannot set vast.connection-timeout to {} as it "
-                "is not a valid duration",
-                *connection_timeout_arg);
+  auto timeout_value
+    = system::get_or_duration(options, "vast.connection-timeout",
+                              defaults::system::node_connection_timeout);
+  if (!timeout_value) {
+    VAST_ERROR("client failed to read connection-timeout: {}",
+               timeout_value.error());
+    return caf::duration{defaults::system::node_connection_timeout};
   }
+  auto timeout = caf::duration{*timeout_value};
   if (timeout.is_zero())
-    timeout = caf::infinite;
+    return caf::infinite;
   return timeout;
 }
 

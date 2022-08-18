@@ -51,7 +51,6 @@
 #include "vast/system/spawn_importer.hpp"
 #include "vast/system/spawn_index.hpp"
 #include "vast/system/spawn_node.hpp"
-#include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/spawn_pivoter.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"

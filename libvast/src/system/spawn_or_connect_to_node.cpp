@@ -24,8 +24,7 @@ spawn_or_connect_to_node(caf::scoped_actor& self, const caf::settings& opts,
     -> std::variant<caf::error, node_actor, scope_linked<node_actor>> {
     if (result)
       return std::move(*result);
-    else
-      return std::move(result.error());
+    return std::move(result.error());
   };
   if (caf::get_or<bool>(opts, "vast.node", false))
     return convert(spawn_node(self, node_opts));
