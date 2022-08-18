@@ -24,6 +24,7 @@
 , jq
 , tcpdump
 , utillinux
+, dpkg
 , versionOverride ? null
 , withPlugins ? []
 , extraCmakeFlags ? []
@@ -51,13 +52,15 @@ stdenv.mkDerivation rec {
   inherit src version;
   pname = "vast";
 
+  outputs = ["out"] ++ lib.optionals isStatic ["debian"];
+
   preConfigure = ''
     substituteInPlace plugins/pcap/cmake/FindPCAP.cmake \
       --replace /bin/sh "${stdenv.shell}" \
       --replace nm "''${NM}"
   '';
 
-  nativeBuildInputs = [ cmake cmake-format ];
+  nativeBuildInputs = [ cmake cmake-format dpkg ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [
     fast_float
@@ -121,6 +124,24 @@ stdenv.mkDerivation rec {
     python ../vast/integration/integration.py \
       --app ${placeholder "out"}/bin/vast \
       --disable "Disk Monitor"
+  '';
+
+  postInstall = "" + lib.optionalString isStatic ''
+    rm CMakeCache.txt
+    cmake ''${cmakeDir:-.} $cmakeFlags "''${cmakeFlagsArray[@]}" \
+      -UCMAKE_INSTALL_BINDIR \
+      -UCMAKE_INSTALL_SBINDIR \
+      -UCMAKE_INSTALL_INCLUDEDIR \
+      -UCMAKE_INSTALL_OLDINCLUDEDIR \
+      -UCMAKE_INSTALL_MANDIR \
+      -UCMAKE_INSTALL_INFODIR \
+      -UCMAKE_INSTALL_DOCDIR \
+      -UCMAKE_INSTALL_LIBDIR \
+      -UCMAKE_INSTALL_LIBEXECDIR \
+      -UCMAKE_INSTALL_LOCALEDIR \
+      -DCMAKE_INSTALL_PREFIX="/usr" ..
+    cmake --build . --target package -j $NIX_BUILD_CORES
+    install -m 644 -Dt $debian *.deb
   '';
 
   meta = with lib; {
