@@ -37,6 +37,11 @@
 
 namespace vast::system {
 
+/// Determines whether the index creation should be skipped for a given field.
+bool should_skip_index_creation(const type& type,
+                                const qualified_record_field& qf,
+                                const std::vector<index_config::rule>& rules);
+
 /// Helper class used to route table slice columns to the correct indexer
 /// in the CAF stream stage.
 struct partition_selector {

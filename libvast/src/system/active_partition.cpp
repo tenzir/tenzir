@@ -64,14 +64,6 @@ namespace vast::system {
 
 namespace {
 
-bool should_skip_index_creation(const type& type,
-                                const qualified_record_field& qf,
-                                const std::vector<index_config::rule>& rules) {
-  if (type.attribute("skip").has_value())
-    return true;
-  return !should_create_partition_index(qf, rules);
-}
-
 chunk_ptr serialize_partition_synopsis(const partition_synopsis& synopsis) {
   flatbuffers::FlatBufferBuilder synopsis_builder;
   const auto ps = pack(synopsis_builder, synopsis);
@@ -182,6 +174,14 @@ void serialize(
 }
 
 } // namespace
+
+bool should_skip_index_creation(const type& type,
+                                const qualified_record_field& qf,
+                                const std::vector<index_config::rule>& rules) {
+  if (type.attribute("skip").has_value())
+    return true;
+  return !should_create_partition_index(qf, rules);
+}
 
 /// Gets the ACTIVE INDEXER at a certain position.
 active_indexer_actor active_partition_state::indexer_at(size_t position) const {
