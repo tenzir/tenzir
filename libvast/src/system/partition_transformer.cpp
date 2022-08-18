@@ -392,7 +392,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       [&] {
         for (auto& [layout, partition_data] :
              self->state.data) { // Pack partitions
-          flatbuffers::FlatBufferBuilder builder;
+          // flatbuffers::FlatBufferBuilder builder;
           auto indexers_it
             = self->state.partition_buildup.find(partition_data.id);
           if (indexers_it == self->state.partition_buildup.end()) {
@@ -405,13 +405,13 @@ partition_transformer_actor::behavior_type partition_transformer(
           fields.reserve(indexers.size());
           for (const auto& [qf, _] : indexers)
             fields.emplace_back(std::string{qf.name()}, qf.type());
-          auto partition = pack(builder, partition_data, record_type{fields});
+          auto partition = pack_full(partition_data, record_type{fields});
           if (!partition) {
             stream_data.partition_chunks = partition.error();
             return;
           }
           stream_data.partition_chunks->emplace_back(
-            std::make_tuple(partition_data.id, layout, fbs::release(builder)));
+            std::make_tuple(partition_data.id, layout, *partition));
         }
         for (auto& [layout, partition_data] :
              self->state.data) { // Pack partition synopsis

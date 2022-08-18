@@ -12,10 +12,8 @@ namespace vast.fbs.segmented_file;
 //                \------------------------------/
 //
 //
-// A user of this class must know the kind of data stored in the
-// segments from some external context; in the future it may become
-// necessary to extend the header with some kind of version or identifier
-// field as needed.
+// This container cannot be embedded as "nested_flatbuffer" into another
+// class, because offsets are measured from the beginning of the file.
 
 struct FileSegment {
   /// Offset of this segment. A byte offset measured from the beginning
@@ -40,7 +38,7 @@ union SegmentedFileHeader {
 namespace vast.fbs;
 
 table SegmentedFileHeader {
-  toc: segmented_file.SegmentedFileHeader;  
+  header: segmented_file.SegmentedFileHeader;  
 }
 
 root_type SegmentedFileHeader;

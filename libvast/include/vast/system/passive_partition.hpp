@@ -11,7 +11,9 @@
 #include "vast/fwd.hpp"
 
 #include "vast/aliases.hpp"
+#include "vast/fbs/flatbuffer_container.hpp"
 #include "vast/fbs/partition.hpp"
+#include "vast/fbs/segmented_file.hpp"
 #include "vast/ids.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -43,6 +45,8 @@ struct passive_partition_state {
   // -- constructor ------------------------------------------------------------
 
   passive_partition_state() = default;
+
+  caf::error initialize_from_chunk(const vast::chunk_ptr&);
 
   // -- member types -----------------------------------------------------------
 
@@ -114,6 +118,9 @@ struct passive_partition_state {
   /// A typed view into the `partition_chunk`.
   const fbs::partition::LegacyPartition* flatbuffer = {};
 
+  /// The flatbuffer container holding the index data
+  std::optional<fbs::flatbuffer_container> container = {};
+
   /// Maps qualified fields to indexer actors. This is mutable since
   /// indexers are spawned lazily on first access.
   mutable std::vector<indexer_actor> indexers = {};
@@ -122,10 +129,14 @@ struct passive_partition_state {
 // -- flatbuffers --------------------------------------------------------------
 
 [[nodiscard]] caf::error
-unpack(const fbs::partition::LegacyPartition& x, passive_partition_state& y);
+unpack(const fbs::partition::LegacyPartition&, passive_partition_state&);
+
+// The chunk must be the file that has the `SegmentedFileHeader` at its beginning.
+[[nodiscard]] caf::error unpack(const fbs::SegmentedFileHeader&,
+                                vast::chunk_ptr, passive_partition_state&);
 
 [[nodiscard]] caf::error
-unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& y);
+unpack(const fbs::partition::LegacyPartition&, partition_synopsis&);
 
 // -- behavior -----------------------------------------------------------------
 

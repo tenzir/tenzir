@@ -1,6 +1,7 @@
 include "partition_synopsis.fbs";
 include "uuid.fbs";
 include "value_index.fbs";
+include "segmented_file.fbs";
 
 namespace vast.fbs.partition.detail;
 

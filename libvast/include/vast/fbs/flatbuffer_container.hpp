@@ -21,26 +21,33 @@ class flatbuffer_container {
 public:
   flatbuffer_container(vast::chunk_ptr chunk);
 
+  /// Get the chunk at position `idx`.
   // NOTE: Index 0 will return the file chunk
   // to the first offset stored in the table of contents,
   // not the ToC itself.
   chunk_ptr get_raw(size_t idx);
 
+  /// Get the chunk at position `idx` casted to the
+  /// appropriate type.
   template <typename T>
   [[nodiscard]] const T* get(size_t idx) const {
     return reinterpret_cast<const T*>(this->get(idx));
   }
 
+  /// Number of elements in the container.
   [[nodiscard]] size_t size() const;
 
   /// Tests is this container was constructed successfully.
   operator bool() const;
 
+  /// Give up ownership of the contained chunk.
+  vast::chunk_ptr dissolve() &&;
+
 private:
   [[nodiscard]] const std::byte* get(size_t idx) const;
 
   vast::chunk_ptr chunk_ = nullptr;
-  vast::fbs::segmented_file::v0 const* toc_ = nullptr;
+  vast::fbs::segmented_file::v0 const* header_ = nullptr;
 };
 
 class flatbuffer_container_builder {

@@ -11,6 +11,13 @@ table LegacyValueIndex {
   /// The size of the value index before compression. A value of zero indicates
   /// that no compression was used.
   decompressed_size: ulong;
+
+  /// The index into the external flatbuffer container that holds the `data` for
+  /// this indexer. Implies that `data` is null. Note that indices need to be >= 1
+  /// because we can't distinguish `0` from "Field doesn't exist", but that's fine
+  /// here because the partition itself will always occupy index 0 of the external
+  /// container.
+  external_container_idx: ulong;
 }
 
 table ValueIndexBase {
@@ -90,6 +97,10 @@ union ValueIndex {
 
 namespace vast.fbs;
 
+// TODO: Before actually using the `ValueIndex` in VAST we need to
+// implement a way to store the bulk of the data separately, to avoid
+// running into the 2GiB limit for flatbuffers when individual indexes
+// get too big.
 table ValueIndex {
   value_index: value_index.ValueIndex (required);
 }
