@@ -29,7 +29,7 @@ to the scheduler. As a result, other actors scheduled on the same thread may
 have to wait a little longer.
 
 The option `vast.import.batch-size` sets an upper bound for the number of events
-per table slice. It defaults to 64k.
+per table slice. It defaults to `65536`.
 
 The option merely controls the maximum number of events per table slice, but
 not necessarily the number of events until a component forwards a batch to the
