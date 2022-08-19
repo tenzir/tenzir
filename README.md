@@ -18,6 +18,7 @@ The network telemetry engine for data-driven security investigations.
 [![Changelog][changelog-badge]][changelog-url]
 [![Since Release][since-release-badge]][since-release-url]
 [![License][license-badge]][license-url]
+[![CII Best Practices][cii-best-practices-badge]][cii-best-practices-url]
 
 [_Getting Started_](#getting-started) &mdash;
 [_Installation_][installation-url] &mdash;
@@ -158,6 +159,8 @@ proceedings][nsdi-proceedings].
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [since-release-url]: https://github.com/tenzir/vast/compare/2021.06.24...master
+[cii-best-practices-badge]: https://bestpractices.coreinfrastructure.org/projects/6366/badge
+[cii-best-practices-url]: https://bestpractices.coreinfrastructure.org/projects/6366
 [latest-release]: https://github.com/tenzir/vast/releases/latest
 [installation-url]: https://vast.io/docs/setup-vast/install
 
