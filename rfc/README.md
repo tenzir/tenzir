@@ -9,6 +9,8 @@ discussion in pull requests, which we describe below.
 
 [rfc-dir]: https://github.com/tenzir/vast/tree/master/rfc
 
+For all RFCs, we aim for an acceptance period of **30 days**.
+
 ## Provide comments to an open RFC
 
 Every RFC has a corresponding pull request with an `rfp` label.
@@ -37,9 +39,14 @@ The workflow to add a new RFC works as follows:
 
 3. [Submit a pull request][vast-prs] and add the `rfp` label.
 
-4. Share the pull request and drive the discussion forward.
+4. Share the pull request in the [Community Slack](http://slack.tenzir.com) and
+   other stake holders that may provide valuable feedback.
 
-5. Merge the pull request once the discussion plateaus and all comments have
+5. Actively drive the discussion forward and point out the expected date of
+   closure to keep a healthy engagement. Aim for resolving all outstanding
+   discussion threads close to the targeted acceptance date.
+
+6. Merge the pull request once the discussion plateaus and all comments have
    been resolved.
 
 In you need to re-open the discussion after a pull request has been merged,
