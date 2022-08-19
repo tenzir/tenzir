@@ -128,12 +128,8 @@ void partition_transformer_state::update_type_ids_and_indexers(
       it = typed_indexers.emplace(qf, std::move(idx)).first;
     }
     auto& idx = it->second;
-    if (idx != nullptr) {
-      auto column = table_slice_column{slice, flat_index};
-      auto offset = column.slice().offset();
-      for (size_t i = 0; i < column.size(); ++i)
-        idx->append(column[i], offset + i);
-    }
+    if (idx != nullptr)
+      slice.append_column_to_index(flat_index, *idx);
     ++flat_index;
   }
 }
