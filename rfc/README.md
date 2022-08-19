@@ -3,6 +3,12 @@
 This directory hosts proposals (RFCs) of evolutionary topics around VAST. The
 objective is to actively include the community in the discussion.
 
+## Provide comments to an open RFC
+
+Every open RFC has a corresponding open pull request.
+
+Navigate to [VAST's pull requests][vast-prs] to engage in the discussion.
+
 ## Add a new RFC
 
 The workflow to add a new RFC works as follows:
@@ -15,7 +21,7 @@ The workflow to add a new RFC works as follows:
 
 2. Write the proposal in Github Markdown.
 
-3. [Submit a pull request](https://github.com/tenzir/vast/pulls).
+3. [Submit a pull request][vast-prs].
 
 4. Share the pull request and drive the discussion forward.
 
@@ -24,3 +30,5 @@ The workflow to add a new RFC works as follows:
 
 In you need to re-open the discussion after a pull request has been merged,
 create a follow-up pull request with the proposed changes.
+
+[vast-prs]: https://github.com/tenzir/vast/pulls
