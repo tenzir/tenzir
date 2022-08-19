@@ -196,9 +196,20 @@ partition_actor::behavior_type passive_partition(
   self->state.filesystem = std::move(filesystem);
   self->state.name = "partition-" + id_string;
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
+  self->set_down_handler([=](const caf::down_msg& msg) {
+    if (msg.source != self->state.store.address()) {
+      VAST_WARN("{} ignores DOWN from unexpected sender: {}", *self,
+                msg.reason);
+      return;
+    }
+    VAST_ERROR("{} shuts down after DOWN from {} store: {}", *self,
+               self->state.store_id, msg.reason);
+    self->quit(msg.reason);
+  });
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
+    self->demonitor(self->state.store->address());
     // Receiving an EXIT message does not need to coincide with the state
     // being destructed, so we explicitly clear the vector to release the
     // references.
@@ -300,6 +311,7 @@ partition_actor::behavior_type passive_partition(
             return;
           }
           self->state.store = *store;
+          self->monitor(self->state.store);
         }
         if (id != self->state.id)
           VAST_WARN("{} encountered partition ID mismatch: restored {}"
