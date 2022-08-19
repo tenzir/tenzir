@@ -1,13 +1,13 @@
 # Composable Pipelines
 
-- **Created**: Aug 19, 2022
-- **Accepted**: TBA
 - **Status**: WIP
+- **Created**: Aug 19, 2022
 - **Authors**:
   - [Matthias Vallentin](https://github.com/mavam)
 - **Contributors**:
   - [Anthony Verez](https://github.com/netantho)
   - [Dominik Lohmann](https://github.com/dominiklohmann)
+- **Discussion**: [PR #2511](https://github.com/tenzir/vast/pull/2511)
 
 ## Overview
 

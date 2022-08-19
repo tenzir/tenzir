@@ -1,12 +1,13 @@
 # Proposal Name
 
-- **Created**: Aug 19, 2022
-- **Accepted**: Sep 20, 2022
 - **Status**: WIP | In-Review | Approved | Obsolete
+- **Created**: Aug 19, 2022
+- **Accepted** | **Dismissed**: Sep 20, 2022
 - **Authors**:
   - [First Last](https://github.com/username)
 - **Contributors**:
   - [First Last](https://github.com/username)
+- **Discussion**: [PR #2511](https://github.com/tenzir/vast/pull/2511)
 
 ## Overview
 
