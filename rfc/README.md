@@ -1,13 +1,19 @@
 # Request for Comments (RFC)
 
-This directory hosts proposals (RFCs) of evolutionary topics around VAST. The
-objective is to actively include the community in the discussion.
+We cultivate an open RFC process around evolutionary topics relating to VAST.
+The objective is to encourage participation of the community in the process.
+
+For this reason, we include RFCs in the VAST repository in the top-level
+[rfc][rfc-dir] directory. Engaging with an open RFC centers around the
+discussion in pull requests, which we describe below.
+
+[rfc-dir]: https://github.com/tenzir/vast/tree/master/rfc
 
 ## Provide comments to an open RFC
 
 Every RFC has a corresponding pull request with an `rfp` label.
 
-Here are the direct links to open, closed, or all RFCs:
+Here are the direct links to open, closed, or all RFC pull requests:
 
 - [Open RFCs][open-rfcs]
 - [Closed RFCs][closed-rfcs]

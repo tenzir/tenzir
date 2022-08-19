@@ -11,7 +11,10 @@ NOTEBOOK_OUTPUTS := $(addprefix $(NOTEBOOK_OUTPUT_DIR)/, $(notdir $(NOTEBOOK_INP
 
 CONTRIBUTING_DIR := docs/develop-vast/contributing
 
-all: changelog notebooks dot-github
+RFC_INPUT := ../rfc/README.md
+RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
+
+all: changelog notebooks dot-github rfc
 
 changelog: $(CHANGELOG_OUTPUT)
 
@@ -49,6 +52,12 @@ $(CONTRIBUTING_DIR)/workflow.md: .github
 	@echo "---\nsidebar_position: 1\n---\n" > $@
 	@cat .github/$(@F) >> $@
 
+rfc: $(RFC_OUTPUT)
+
+$(RFC_OUTPUT): $(RFC_INPUT)
+	@echo "---\nsidebar_position: 9\n---\n" > $@
+	@cat $< >> $@
+
 clean:
 	rm -f $(CHANGELOG_OUTPUT)
 	$(MAKE) -C $(NOTEBOOK_INPUT_DIR) clean
@@ -58,3 +67,4 @@ clean:
 	rm $(CONTRIBUTING_DIR)/coding-style.md
 	rm $(CONTRIBUTING_DIR)/security.md
 	rm $(CONTRIBUTING_DIR)/workflow.md
+	rm $(RFC_OUTPUT)
