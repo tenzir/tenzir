@@ -43,8 +43,8 @@ performance doesn't matter:
 ```bash
 vast from s3://aws |
   vast read json |
-  vast group-by |
-  vast summarize |
+  vast group-by src |
+  vast 'summarize count(dst)' |
   vast write feather |
   vast to /path/to/file.feather
 ```
@@ -54,13 +54,13 @@ just executes a pipeline.
 
 Then we can model the ingestion as follows: load data via stdin, push into a
 parser, then send off to a remote VAST node. For example, we would rewrite
-`import zeek` as:
+`vast import zeek` as:
 
 ```bash
 vast exec 'from - | parse zeek | to vast://1.2.3.4'
 ```
 
-Likewise, `export json EXPRESSION` would become:
+Likewise, `vast export json EXPRESSION` would become:
 
 ```bash
 vast exec 'from vast://1.2.3.4 |
@@ -85,7 +85,7 @@ The VAST node basically becomes a **pipeline manager** with persistent state. We
 can keep everything as is, e.g., start a node:
 
 ```bash
-vast start -e 1.2.3.4
+vast -e 1.2.3.4 start
 ```
 
 There are of course a bunch of convenience things we can do, like assuming `from
@@ -105,7 +105,7 @@ vast exec 'convert zeek csv'
 ```
 
 Another UX improvement would be assuming that we interact with a VAST node. Here
-we could have dedicate commands the prepend or append a pipeline operator:
+we could have dedicated commands to prepend or append a pipeline operator:
 
 - `vast pull` → `from vast://...`
 - `vast push` → `to vast://...`
@@ -132,24 +132,30 @@ vast import zeek EXPRESSION
 
 ## Implementation
 
-We could implement the entire pipeline with Arrow IPC streams in the middle.
-It's clean and simple.
+We could implement the entire pipeline with Arrow IPC streams in the "interior"
+operators, with only `from` and `to` taking raw input as byte stream. But this
+may be too restrictive. Let's assume that input and output are dynamically
+typed. An operator must then define its input and output types, e.g., `from<In,
+Out>` takes as input `In` and produces instances of `Out`.
 
-But this may be too restrictive. Let's assume for a moment that input and output
-are dynamically typed. Then an operator must define its input and output types,
-e.g., `from<In, Out>`. This can come in handy for working with matchers:
+### Matcher Example
 
-Here, we build a matcher, with read having the type `read<Bytes, Arrow>`:
+This can come in handy for working with the matcher plugin. Consider the use
+case of constructing a matcher from data. Consider this pipeline:
 
 ```bash
-vast exec 'read csv | matcher build --extract=net.src.ip' > ips.flatbuffer
+vast exec 'read csv |
+           matcher build --extract=net.src.ip' > ips.flatbuffer
 ```
 
-The type of `matcher build` would be `<Arrow, Flatbuffer>`. Also assume `matcher
-load` yields `<Flatbuffer, Void>` where `Void` is "no output, just a side
-effect".
+Here, we have:
 
-How do we pre-load a matcher?
+- `read<Bytes, Arrow>`: reads `Bytes` and produces `Arrow` record batches
+- `matcher build<Arrow, Flatbuffer>`: consumes `Arrow` and create a matcher
+  backend.
+
+Let `Void` be a valid type where the operator as only a side effect. Then we can
+pre-load a matcher at a VAST node as follows:
 
 ```bash
 vast exec 'from file:///ips.flatbuffer |
@@ -162,16 +168,22 @@ Or more UNIX'ish, assuming an implicit `from -`:
 vast exec 'matcher load --name=ips' < ips.flatbuffer
 ```
 
-The `matcher` sub-command `match` does the actual matching:
+Here, `matcher load<Flatbuffer, Void>` is the operator that updates the remote
+matcher state.
+
+Finally, the `matcher` sub-command `match` does the actual matching:
 
 ```bash
 vast pull 'where #type == "suricata.flow" |
            matcher match --on=:addr ips'
 ```
 
-The above is a locally running pipeline, but most likely I want this to run at a
-node. This begs the challenge: how do we manage all these pipelines? With a
-client command (and ideally also a REST API):
+### Pipeline Management
+
+The above is a locally running pipeline, but most likely we want this to run at
+a node remotely, independent of where the client is. This begs the challenge:
+how do we manage all these pipelines? As with all other VAST functions, there
+could be a client command.
 
 ```bash
 # Show all pipelines:
@@ -190,20 +202,34 @@ vast pipeline list
 The idea would be that only clients can manipulate server state. This fixes
 the mess of having server-side YAML that goes out of sync with the server
 state when new things happen, e.g., new schemas arrive or new matchers get
-spawned. From now on, everything is client-side managed. This is where you can
+spawned.
+
+From now on, everything is client-side managed *only*. No more server-side
+state configuration beyond options/settings. This is where you can
 have your YAML for declarative ops:
 
 ```bash
 vast pipeline load < pipelines.yaml
 ```
 
-If you want the current server-side pipeline state for reproducing pipelines
-elsewhere, just dump it (as YAML or JSON):
+If you want the current server-side state for reproducing pipelines elsewhere,
+just dump it (as YAML or JSON):
 
 ```bash
 vast pipeline dump --json
 vast pipeline dump --yaml
 ```
+
+The output is not to be confused with the settings in `vast.yaml`. The pipeline
+state is still persisted on the server, though, because it must survive
+restarts. Consequently, the state changes must be atomic and be applied
+in a WAL manner.
+
+### REST API
+
+In the future, it would also be nice to offer the same pipeline management
+functionality through a REST API to make it easier to integrate with a
+remote VAST node, e.g., build a web UI.)
 
 ## Alternatives
 
