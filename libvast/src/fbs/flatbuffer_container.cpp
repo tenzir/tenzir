@@ -70,9 +70,10 @@ flatbuffer_container_builder::finish(const char* identifier) && {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto segments_offset = builder.CreateVectorOfStructs(segments_);
   auto v0_builder = fbs::segmented_file::v0Builder(builder);
+  auto n = ::strnlen(identifier, 4);
   fbs::segmented_file::FileIdentifier ident;
-  ::strncpy(reinterpret_cast<char*>(ident.mutable_data()->Data()), identifier,
-            4);
+  std::memset(ident.mutable_data()->Data(), '\0', 4);
+  std::memcpy(ident.mutable_data()->Data(), identifier, n);
   v0_builder.add_inner_identifier(&ident);
   v0_builder.add_file_segments(segments_offset);
   auto v0_offset = v0_builder.Finish();
