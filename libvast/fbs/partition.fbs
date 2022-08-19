@@ -64,6 +64,16 @@ union Partition {
 
 namespace vast.fbs;
 
+// Up to VAST 2.3 the partition files on disk contained a `Partition`
+// as root type, after 2.3 a `SegmentedFileHeader` is the root type
+// and the total file has the following layout:
+//
+// [SegmentedFileHeader | vast::fbs::Partition | data0 | data1 | ... ]
+//
+// where the `data` fields are referenced by the
+// `LegacyValueIndex::external_container_index` fields in the partition.
+// The change was made in order to allow indices to exceed 2GiB in size.
+
 table Partition {
   partition: partition.Partition;
 }

@@ -21,7 +21,7 @@ vast::chunk_ptr flatbuffer_container::dissolve() && {
   return std::exchange(chunk_, {});
 }
 
-chunk_ptr flatbuffer_container::get_raw(size_t idx) {
+chunk_ptr flatbuffer_container::get_raw(size_t idx) const {
   VAST_ASSERT_CHEAP(chunk_);
   VAST_ASSERT_CHEAP(header_);
   auto const& segments = *header_->file_segments();

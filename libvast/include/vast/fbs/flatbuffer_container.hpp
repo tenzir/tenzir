@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-// TODO: Should this header be folded into `fbs/utils.hpp`?
-
 #pragma once
 
 #include "vast/fwd.hpp"
@@ -17,21 +15,35 @@
 
 namespace vast::fbs {
 
+/// This container provides a `std::vector<vast::chunk>`-like
+/// interface for chunks that were created from
+/// a `flatbuffer_container_builder`.
+// The typical usage is for the first chunk to be some flatbuffer
+// and the subsequent ones being data blobs that are too big to
+// store inline without hitting the 2GiB limit for individual
+// flatbuffers.
 class flatbuffer_container {
 public:
+  // The `chunk` must begin with a flatbuffer that has
+  // `fbs::SegmentedFileHeader` as root type.
   flatbuffer_container(vast::chunk_ptr chunk);
 
   /// Get the chunk at position `idx`.
-  // NOTE: Index 0 will return the file chunk
-  // to the first offset stored in the table of contents,
-  // not the ToC itself.
-  chunk_ptr get_raw(size_t idx);
+  chunk_ptr get_raw(size_t idx) const;
 
-  /// Get the chunk at position `idx` casted to the
-  /// appropriate type.
+  /// Return the chunk at position `idx` interpreted as a `T`.
   template <typename T>
-  [[nodiscard]] const T* get(size_t idx) const {
+  [[nodiscard]] const T* as(size_t idx) const {
     return reinterpret_cast<const T*>(this->get(idx));
+  }
+
+  /// Return the chunk at position `idx` interpreted as a root
+  /// flatbuffer of type `T`.
+  //  (the difference to `as<T>()` is that the optional 4-bytes
+  //  buffer identifier at the beginning is handled correctly)
+  template <typename T>
+  [[nodiscard]] const T* as_flatbuffer(size_t idx) const {
+    return flatbuffers::GetRoot<T>(this->get(idx));
   }
 
   /// Number of elements in the container.
@@ -40,7 +52,7 @@ public:
   /// Tests is this container was constructed successfully.
   operator bool() const;
 
-  /// Give up ownership of the contained chunk.
+  /// Give up ownership of the chunk and clear this container.
   vast::chunk_ptr dissolve() &&;
 
 private:

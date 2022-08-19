@@ -30,11 +30,11 @@ TEST(roundtrip) {
   auto container = std::move(builder).finish();
   REQUIRE(container);
   REQUIRE_EQUAL(container.size(), 5ull);
-  auto const* str0 = container.get<char>(0);
-  auto const* str1 = container.get<char>(1);
-  auto const* str2 = container.get<char>(2);
-  auto const* str3 = container.get<char>(3);
-  auto const* str4 = container.get<char>(4);
+  auto const* str0 = container.as<char>(0);
+  auto const* str1 = container.as<char>(1);
+  auto const* str2 = container.as<char>(2);
+  auto const* str3 = container.as<char>(3);
+  auto const* str4 = container.as<char>(4);
   CHECK_EQUAL(::strcmp(test_data0.c_str(), str0), 0);
   CHECK_EQUAL(::strcmp(test_data1.c_str(), str1), 0);
   CHECK_EQUAL(::strcmp(test_data2.c_str(), str2), 0);

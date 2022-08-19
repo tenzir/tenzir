@@ -200,7 +200,7 @@ segment::get_slice_ptr_(size_t idx) const {
   if (idx < segment->slices()->size())
     return segment->slices()->Get(idx);
   else
-    return container_->get<fbs::FlatTableSlice>(1 + idx);
+    return container_->as_flatbuffer<fbs::FlatTableSlice>(1 + idx);
 }
 
 std::vector<const vast::fbs::FlatTableSlice*> segment::flat_slices_() const {
@@ -213,7 +213,7 @@ std::vector<const vast::fbs::FlatTableSlice*> segment::flat_slices_() const {
                     || container_->size() == segment->overflow_slices() + 1);
   for (size_t i = 0; i < segment->overflow_slices(); ++i)
     // Chunk 0 is the segment itself, so we apply an offset of 1
-    result.push_back(container_->get<fbs::FlatTableSlice>(1 + i));
+    result.push_back(container_->as_flatbuffer<fbs::FlatTableSlice>(1 + i));
   return result;
 }
 

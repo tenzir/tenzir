@@ -244,15 +244,17 @@ pack_full(const active_partition_state::serialization_data& x,
       if (!compressed_chunk)
         return compressed_chunk.error();
       size = (*compressed_chunk)->size();
-      // Note that the threshold is at the time of writing an educated guess,
-      // no measurements were performed to find an optimal value.
+      // This threshold is an educated guess to keep tiny indices inline
+      // to reduce additional page loads and huge indices out of the way.
       constexpr auto INDEXER_INLINE_THRESHOLD = 4096ull;
       if (size >= INDEXER_INLINE_THRESHOLD) {
         data = builder.CreateVector(
           reinterpret_cast<const uint8_t*>((*compressed_chunk)->data()), size);
       } else {
-        external_idx = external_indices.size();
         external_indices.emplace_back(std::move(*compressed_chunk));
+        // The index into the flatbuffer_container is 1 + index into
+        // `external_indices`.
+        external_idx = external_indices.size();
       }
     }
     fbs::value_index::detail::LegacyValueIndexBuilder vbuilder(builder);

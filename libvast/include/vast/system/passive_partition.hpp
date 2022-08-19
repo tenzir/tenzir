@@ -131,12 +131,13 @@ struct passive_partition_state {
 [[nodiscard]] caf::error
 unpack(const fbs::partition::LegacyPartition&, passive_partition_state&);
 
-// The chunk must be the file that has the `SegmentedFileHeader` at its beginning.
-[[nodiscard]] caf::error unpack(const fbs::SegmentedFileHeader&,
-                                vast::chunk_ptr, passive_partition_state&);
-
 [[nodiscard]] caf::error
 unpack(const fbs::partition::LegacyPartition&, partition_synopsis&);
+
+/// Get the layout statistics of a partition, regardless of the underlying
+/// file layout.
+//  TODO: Create a wrapper class for the flatbuffer, similar to `vast::segment`.
+caf::expected<index_statistics> get_partition_statistics(vast::chunk_ptr);
 
 // -- behavior -----------------------------------------------------------------
 

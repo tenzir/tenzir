@@ -122,7 +122,8 @@ TEST(identity pipeline / done before persist) {
   partition_rp.receive(
     [&](vast::chunk_ptr& partition_chunk) {
       REQUIRE(partition_chunk);
-      const auto* partition = vast::fbs::GetPartition(partition_chunk->data());
+      auto container = vast::fbs::flatbuffer_container{partition_chunk};
+      const auto* partition = container.as_flatbuffer<vast::fbs::Partition>(0);
       REQUIRE_EQUAL(partition->partition_type(),
                     vast::fbs::partition::Partition::legacy);
       const auto* partition_legacy = partition->partition_as_legacy();
@@ -203,7 +204,8 @@ TEST(delete pipeline / persist before done) {
   partition_rp.receive(
     [&](vast::chunk_ptr& partition_chunk) {
       REQUIRE(partition_chunk);
-      const auto* partition = vast::fbs::GetPartition(partition_chunk->data());
+      auto container = vast::fbs::flatbuffer_container{partition_chunk};
+      const auto* partition = container.as_flatbuffer<vast::fbs::Partition>(0);
       REQUIRE_EQUAL(partition->partition_type(),
                     vast::fbs::partition::Partition::legacy);
       const auto* partition_legacy = partition->partition_as_legacy();
