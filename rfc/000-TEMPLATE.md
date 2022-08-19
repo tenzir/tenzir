@@ -6,7 +6,7 @@
 
 ## Overview
 
-A short summary of the propsal contents.
+A short summary of the proposal contents.
 
 ## Problem Statement
 
