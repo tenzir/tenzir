@@ -202,7 +202,7 @@ partition_actor::behavior_type passive_partition(
                 msg.reason);
       return;
     }
-    VAST_ERROR("{} cannot reach its {} store and shuts down: {}", *self,
+    VAST_ERROR("{} shuts down after DOWN from {} store: {}", *self,
                self->state.store_id, msg.reason);
     self->quit(msg.reason);
   });
