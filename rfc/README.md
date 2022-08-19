@@ -37,7 +37,7 @@ The workflow to add a new RFC works as follows:
 
 2. Write the proposal in Github Markdown.
 
-3. [Submit a pull request][vast-prs] and add the `rfp` label.
+3. [Open a pull request][vast-prs] and add the `rfp` label.
 
 4. Share the pull request in the [Community Slack](http://slack.tenzir.com) and
    other stake holders that may provide valuable feedback.
