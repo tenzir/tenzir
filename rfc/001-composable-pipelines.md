@@ -1,7 +1,12 @@
 # Composable Pipelines
 
+- Created: Aug 19, 2022
+- Status: WIP
 - Authors:
   - [Matthias Vallentin](https://github.com/mavam)
+- Contributors:
+  - [Anthony Verez](https://github.com/netantho)
+  - [Dominik Lohmann](https://github.com/dominiklohmann)
 
 ## Overview
 
