@@ -19,6 +19,8 @@
 namespace vast {
 
 struct query_state {
+  static constexpr bool use_deep_to_string_formatter = true;
+
   /// The query expression.
   vast::query_context query_context;
 
@@ -130,17 +132,14 @@ private:
 namespace fmt {
 
 template <>
-struct formatter<vast::query_state> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const vast::query_state& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
+struct formatter<vast::query_queue::entry> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
   }
-};
 
-template <>
-struct formatter<vast::query_queue::entry> : formatter<std::string> {
   template <class FormatContext>
-  auto format(const vast::query_queue::entry& value, FormatContext& ctx) {
+  auto format(const vast::query_queue::entry& value, FormatContext& ctx) const {
     return format_to(ctx.out(), "(partition: {}; priority: {}; queries: {})",
                      value.partition, value.priority, value.queries);
   }

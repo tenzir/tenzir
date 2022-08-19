@@ -329,7 +329,7 @@ struct formatter<vast::data> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::data& value, FormatContext& ctx) {
+  auto format(const vast::data& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;

@@ -408,7 +408,7 @@ struct formatter<vast::table_slice> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::table_slice& value, FormatContext& ctx) {
+  auto format(const vast::table_slice& value, FormatContext& ctx) const {
     auto out = ctx.out();
     vast::print(out, value);
     return out;

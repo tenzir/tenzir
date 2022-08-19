@@ -128,7 +128,7 @@ struct formatter<vast::module> {
   }
 
   template <class FormatContext>
-  auto format(const vast::module& value, FormatContext& ctx) {
+  auto format(const vast::module& value, FormatContext& ctx) const {
     auto out = ctx.out();
     for (const auto& t : value) {
       auto f = [&]<vast::concrete_type T>(const T& x) {

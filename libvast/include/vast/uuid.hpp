@@ -125,7 +125,7 @@ struct formatter<vast::uuid> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::uuid& x, FormatContext& ctx) {
+  auto format(const vast::uuid& x, FormatContext& ctx) const {
     // e.g. 96107185-1838-48fb-906c-d1a9941ff407
     static_assert(sizeof(vast::uuid) == 16, "id format changed, please update "
                                             "formatter");

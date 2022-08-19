@@ -45,12 +45,8 @@ auto pretty_type_name(const T&) {
 
 template <class T>
 struct single_arg_wrapper {
-  const char* name;
+  const std::string_view name;
   const T& value;
-
-  single_arg_wrapper(const char* x, const T& y) : name(x), value(y) {
-    // nop
-  }
 };
 
 template <class T>
@@ -60,19 +56,14 @@ single_arg_wrapper<T> make_arg_wrapper(const char* name, const T& value) {
 
 template <class Iterator>
 struct range_arg_wrapper {
-  const char* name;
+  const std::string_view name;
   Iterator first;
   Iterator last;
-
-  range_arg_wrapper(const char* x, Iterator begin, Iterator end)
-    : name(x), first(begin), last(end) {
-    // nop
-  }
 };
 
 template <class Iterator>
 range_arg_wrapper<Iterator>
-make_arg_wrapper(const char* name, Iterator first, Iterator last) {
+make_arg_wrapper(std::string_view name, Iterator first, Iterator last) {
   return {name, first, last};
 }
 

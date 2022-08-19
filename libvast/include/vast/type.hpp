@@ -2013,7 +2013,7 @@ struct formatter<vast::type> {
   }
 
   template <class FormatContext>
-  auto format(const vast::type& value, FormatContext& ctx)
+  auto format(const vast::type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     auto out = ctx.out();
     if (const auto& name = value.name(); !name.empty())
@@ -2045,7 +2045,7 @@ struct formatter<vast::type::attribute_view> {
   }
 
   template <class FormatContext>
-  auto format(const vast::type::attribute_view& value, FormatContext& ctx)
+  auto format(const vast::type::attribute_view& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     if (value.value.empty())
       return format_to(ctx.out(), "#{}", value.key);
@@ -2061,88 +2061,88 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const vast::bool_type&, FormatContext& ctx)
+  auto format(const vast::bool_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "bool");
   }
 
   template <class FormatContext>
-  auto format(const vast::integer_type&, FormatContext& ctx)
+  auto format(const vast::integer_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     // TODO: Rename to "integer" when switching to YAML schemas.
     return format_to(ctx.out(), "int");
   }
 
   template <class FormatContext>
-  auto format(const vast::count_type&, FormatContext& ctx)
+  auto format(const vast::count_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "count");
   }
 
   template <class FormatContext>
-  auto format(const vast::real_type&, FormatContext& ctx)
+  auto format(const vast::real_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "real");
   }
 
   template <class FormatContext>
-  auto format(const vast::duration_type&, FormatContext& ctx)
+  auto format(const vast::duration_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "duration");
   }
 
   template <class FormatContext>
-  auto format(const vast::time_type&, FormatContext& ctx)
+  auto format(const vast::time_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "time");
   }
 
   template <class FormatContext>
-  auto format(const vast::string_type&, FormatContext& ctx)
+  auto format(const vast::string_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "string");
   }
 
   template <class FormatContext>
-  auto format(const vast::pattern_type&, FormatContext& ctx)
+  auto format(const vast::pattern_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "pattern");
   }
 
   template <class FormatContext>
-  auto format(const vast::address_type&, FormatContext& ctx)
+  auto format(const vast::address_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     // TODO: Rename to "address" when switching to YAML schemas.
     return format_to(ctx.out(), "addr");
   }
 
   template <class FormatContext>
-  auto format(const vast::subnet_type&, FormatContext& ctx)
+  auto format(const vast::subnet_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "subnet");
   }
 
   template <class FormatContext>
-  auto format(const vast::enumeration_type& value, FormatContext& ctx)
+  auto format(const vast::enumeration_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "enum {{{}}}", fmt::join(value.fields(), ", "));
   }
 
   template <class FormatContext>
-  auto format(const vast::list_type& value, FormatContext& ctx)
+  auto format(const vast::list_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "list<{}>", value.value_type());
   }
 
   template <class FormatContext>
-  auto format(const vast::map_type& value, FormatContext& ctx)
+  auto format(const vast::map_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "map<{}, {}>", value.key_type(),
                      value.value_type());
   }
 
   template <class FormatContext>
-  auto format(const vast::record_type& value, FormatContext& ctx)
+  auto format(const vast::record_type& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     auto out = ctx.out();
     out = format_to(out, "record {{");
@@ -2167,7 +2167,7 @@ struct formatter<struct vast::enumeration_type::field_view> {
 
   template <class FormatContext>
   auto format(const struct vast::enumeration_type::field_view& value,
-              FormatContext& ctx) -> decltype(ctx.out()) {
+              FormatContext& ctx) const -> decltype(ctx.out()) {
     return format_to(ctx.out(), "{}: {}", value.name, value.key);
   }
 };
@@ -2180,7 +2180,8 @@ struct formatter<struct vast::record_type::field> {
   }
 
   template <class FormatContext>
-  auto format(const struct vast::record_type::field& value, FormatContext& ctx)
+  auto
+  format(const struct vast::record_type::field& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "{}: {}", value.name, value.type);
   }
@@ -2194,7 +2195,8 @@ struct formatter<vast::record_type::field_view> {
   }
 
   template <class FormatContext>
-  auto format(const vast::record_type::field_view& value, FormatContext& ctx)
+  auto
+  format(const vast::record_type::field_view& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "{}: {}", value.name, value.type);
   }

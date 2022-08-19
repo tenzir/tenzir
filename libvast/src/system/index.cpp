@@ -366,13 +366,13 @@ caf::error index_state::load_from_disk() {
       if (!maybe_flatbuffer)
         return caf::make_error(ec::filesystem_error,
                                fmt::format("failed to open transform {}: {}",
-                                           entry, err.message()));
+                                           entry.path(), err.message()));
       auto& transform_flatbuffer = *maybe_flatbuffer;
       if (transform_flatbuffer->transform_type()
           != vast::fbs::partition_transform::PartitionTransform::v0)
         return caf::make_error(ec::filesystem_error,
                                fmt::format("unknown transform version at {}",
-                                           entry));
+                                           entry.path()));
       auto const* transform_v0 = transform_flatbuffer->transform_as_v0();
       for (auto const* id : *transform_v0->input_partitions()) {
         auto uuid = vast::uuid::from_flatbuffer(*id);

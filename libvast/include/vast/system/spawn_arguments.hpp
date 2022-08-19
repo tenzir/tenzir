@@ -27,6 +27,8 @@ namespace vast::system {
 
 /// Wraps arguments for spawn functions.
 struct spawn_arguments {
+  static inline constexpr bool use_deep_to_string_formatter = true;
+
   /// Current command executed by the node actor.
   const invocation& inv;
 
@@ -72,15 +74,3 @@ caf::expected<std::optional<module>> read_module(const spawn_arguments& args);
 caf::error unexpected_arguments(const spawn_arguments& args);
 
 } // namespace vast::system
-
-namespace fmt {
-
-template <>
-struct formatter<vast::system::spawn_arguments> : formatter<std::string> {
-  template <class FormatContext>
-  auto format(const vast::system::spawn_arguments& value, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(value), ctx);
-  }
-};
-
-} // namespace fmt

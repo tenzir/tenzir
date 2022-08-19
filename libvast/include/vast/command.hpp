@@ -150,6 +150,8 @@ public:
 /// Wraps invocation of a single command for separating the parsing of
 /// program argument from running the command.
 struct invocation {
+  static constexpr bool use_deep_to_string_formatter = true;
+
   // -- member variables -----------------------------------------------------
 
   /// Stores user-defined program options.
@@ -238,15 +240,3 @@ void for_each(const command& cmd, F fun) {
 }
 
 } // namespace vast
-
-namespace fmt {
-
-template <>
-struct formatter<vast::invocation> : formatter<std::string> {
-  template <typename FormatContext>
-  auto format(const vast::invocation& item, FormatContext& ctx) {
-    return formatter<std::string>::format(caf::deep_to_string(item), ctx);
-  }
-};
-
-} // namespace fmt
