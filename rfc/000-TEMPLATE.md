@@ -1,10 +1,11 @@
 # Proposal Name
 
-- Created: Aug 19, 2022
-- Status: WIP | In-Review | Approved | Obsolete
-- Authors:
+- **Created**: Aug 19, 2022
+- **Accepted**: Sep 20, 2022
+- **Status**: WIP | In-Review | Approved | Obsolete
+- **Authors**:
   - [First Last](https://github.com/username)
-- Contributors:
+- **Contributors**:
   - [First Last](https://github.com/username)
 
 ## Overview
