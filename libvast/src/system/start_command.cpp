@@ -69,8 +69,9 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(node_opt.error()));
   auto& node = node_opt->get();
   // Publish our node.
-  auto host
-    = node_endpoint.host.empty() ? "localhost" : node_endpoint.host.c_str();
+  auto host = node_endpoint.host.empty()
+                ? defaults::system::endpoint_host.data()
+                : node_endpoint.host.c_str();
   auto publish = [&]() -> caf::expected<uint16_t> {
     const auto reuse_address = true;
     if (sys.has_openssl_manager()) {

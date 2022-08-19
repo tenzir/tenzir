@@ -188,7 +188,12 @@ inline constexpr const size_t rotate_files = 3;
 namespace system {
 
 /// Hostname or IP address and port of a remote node.
-inline constexpr std::string_view endpoint = "localhost:42000/tcp";
+//  (explicitly use IPv4 here to get predictable behavior even on
+//   weird dual-stack setups)
+inline constexpr std::string_view endpoint = "127.0.0.1:42000/tcp";
+
+/// Default port of a remote node.
+inline constexpr std::string_view endpoint_host = "127.0.0.1";
 
 /// Default port of a remote node.
 inline constexpr uint16_t endpoint_port = 42000;
