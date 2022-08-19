@@ -115,8 +115,7 @@ private:
   [[nodiscard]] std::vector<const vast::fbs::FlatTableSlice*>
   flat_slices_() const;
 
-  [[nodiscard]] const vast::fbs::FlatTableSlice*
-  get_slice_ptr_(size_t idx) const;
+  [[nodiscard]] vast::table_slice get_slice_(size_t idx) const;
 
   flatbuffer<fbs::Segment> flatbuffer_ = {};
 

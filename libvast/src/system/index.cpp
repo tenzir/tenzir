@@ -176,11 +176,19 @@ caf::error extract_partition_synopsis(
   auto chunk = chunk::mmap(partition_path);
   if (!chunk)
     return std::move(chunk.error());
-  const auto* partition = fbs::GetPartition(chunk->get()->data());
+  auto maybe_partition = partition_chunk::get_flatbuffer(*chunk);
+  if (!maybe_partition)
+    return caf::make_error(
+      ec::format_error, fmt::format("malformed partition at {}: {}",
+                                    partition_path, maybe_partition.error()));
+  const auto* partition = *maybe_partition;
   if (partition->partition_type() != fbs::partition::Partition::legacy)
-    return caf::make_error(ec::format_error, "found unsupported version for "
-                                             "partition "
-                                               + partition_path.string());
+    return caf::make_error(
+      ec::format_error,
+      fmt::format("unknown version {} for "
+                  "partition at {}",
+                  static_cast<uint8_t>(partition->partition_type()),
+                  partition_path));
   const auto* partition_legacy = partition->partition_as_legacy();
   VAST_ASSERT(partition_legacy);
   partition_synopsis ps;
@@ -1574,7 +1582,7 @@ index(index_actor::stateful_pointer<index_state> self,
                         });
                   } else {
                     if (adjust_stats) {
-                      auto stats = get_partition_statistics(chunk);
+                      auto stats = partition_chunk::get_statistics(chunk);
                       if (!stats) {
                         rp.deliver(caf::make_error(
                           ec::format_error, fmt::format("{} could not adjust "

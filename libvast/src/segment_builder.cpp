@@ -56,10 +56,10 @@ caf::error segment_builder::add(table_slice x) {
     = detail::narrow_cast<size_t>(0.95 * FLATBUFFERS_MAX_BUFFER_SIZE);
   if (overflow_idx_ < slices_.size()
       || last_fb_offset + as_bytes(x).size() >= REASONABLE_SIZE) [[unlikely]] {
-    // This is the happy path where everything fits
-    // into a single segment flatbuffer
     /* nop */;
   } else {
+    // This is the happy path where everything fits into a single
+    // segment flatbuffer
     ++overflow_idx_;
     auto bytes = fbs::pack_bytes(builder_, x);
     auto slice = fbs::CreateFlatTableSlice(builder_, bytes);
@@ -100,7 +100,7 @@ segment segment_builder::finish() {
   cbuilder.add(as_bytes(chunk));
   for (size_t i = overflow_idx_; i < slices_.size(); ++i)
     cbuilder.add(as_bytes(slices_.at(i)));
-  auto container = std::move(cbuilder).finish();
+  auto container = std::move(cbuilder).finish(fbs::SegmentIdentifier());
   return segment{std::move(container)};
 }
 

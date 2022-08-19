@@ -16,6 +16,10 @@ flatbuffer_container::flatbuffer_container(vast::chunk_ptr chunk) {
   chunk_ = std::move(chunk);
 }
 
+vast::chunk_ptr flatbuffer_container::chunk() const {
+  return chunk_;
+}
+
 vast::chunk_ptr flatbuffer_container::dissolve() && {
   header_ = nullptr;
   return std::exchange(chunk_, {});
@@ -61,10 +65,15 @@ void flatbuffer_container_builder::add(std::span<const std::byte> bytes) {
   file_contents_.insert(file_contents_.end(), bytes.begin(), bytes.end());
 }
 
-flatbuffer_container flatbuffer_container_builder::finish() && {
+flatbuffer_container
+flatbuffer_container_builder::finish(const char* identifier) && {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto segments_offset = builder.CreateVectorOfStructs(segments_);
   auto v0_builder = fbs::segmented_file::v0Builder(builder);
+  fbs::segmented_file::FileIdentifier ident;
+  ::strncpy(reinterpret_cast<char*>(ident.mutable_data()->Data()), identifier,
+            4);
+  v0_builder.add_inner_identifier(&ident);
   v0_builder.add_file_segments(segments_offset);
   auto v0_offset = v0_builder.Finish();
   auto header_builder = fbs::SegmentedFileHeaderBuilder(builder);

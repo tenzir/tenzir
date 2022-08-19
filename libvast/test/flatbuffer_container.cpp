@@ -27,7 +27,7 @@ TEST(roundtrip) {
   builder.add(vast::as_bytes(test_data2));
   builder.add(vast::as_bytes(test_data3));
   builder.add(vast::as_bytes(test_data4));
-  auto container = std::move(builder).finish();
+  auto container = std::move(builder).finish("oooo");
   REQUIRE(container);
   REQUIRE_EQUAL(container.size(), 5ull);
   auto const* str0 = container.as<char>(0);

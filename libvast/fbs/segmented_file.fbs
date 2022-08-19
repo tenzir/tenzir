@@ -24,9 +24,19 @@ struct FileSegment {
   size: uint64;
 }
 
+struct FileIdentifier {
+  data: [ubyte: 4];
+}
+
 /// An overview of memory chunks contained in a file; used by
 /// the `flatbuffer_container`.
 table v0 {
+  /// Since many semantically different types can use the
+  /// `SegmentedFileHeader` for the outermost framing, this stores
+  /// the identifier of the inner flatbuffer to allow distinguishing
+  /// them.
+  inner_identifier: FileIdentifier;
+
   /// The individual segments that make up this file.
   file_segments: [FileSegment];
 }

@@ -26,7 +26,7 @@ class flatbuffer_container {
 public:
   // The `chunk` must begin with a flatbuffer that has
   // `fbs::SegmentedFileHeader` as root type.
-  flatbuffer_container(vast::chunk_ptr chunk);
+  explicit flatbuffer_container(vast::chunk_ptr chunk);
 
   /// Get the chunk at position `idx`.
   chunk_ptr get_raw(size_t idx) const;
@@ -41,6 +41,8 @@ public:
   /// flatbuffer of type `T`.
   //  (the difference to `as<T>()` is that the optional 4-bytes
   //  buffer identifier at the beginning is handled correctly)
+  //  TODO: This should probably return a `flatbuffer<T>` so the
+  //  caller can save a copy if he wants to store the flatbuffer.
   template <typename T>
   [[nodiscard]] const T* as_flatbuffer(size_t idx) const {
     return flatbuffers::GetRoot<T>(this->get(idx));
@@ -51,6 +53,8 @@ public:
 
   /// Tests is this container was constructed successfully.
   operator bool() const;
+
+  vast::chunk_ptr chunk() const;
 
   /// Give up ownership of the chunk and clear this container.
   vast::chunk_ptr dissolve() &&;
@@ -69,7 +73,7 @@ public:
 
   void add(std::span<const std::byte> bytes);
 
-  flatbuffer_container finish() &&;
+  flatbuffer_container finish(const char* identifier) &&;
 
 private:
   // Space for ~640 TOC entries. Given that we only need to use

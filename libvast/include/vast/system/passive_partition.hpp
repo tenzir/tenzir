@@ -134,10 +134,16 @@ unpack(const fbs::partition::LegacyPartition&, passive_partition_state&);
 [[nodiscard]] caf::error
 unpack(const fbs::partition::LegacyPartition&, partition_synopsis&);
 
-/// Get the layout statistics of a partition, regardless of the underlying
-/// file layout.
-//  TODO: Create a wrapper class for the flatbuffer, similar to `vast::segment`.
-caf::expected<index_statistics> get_partition_statistics(vast::chunk_ptr);
+/// Get various parts of a passive partition from a chunk containing a partition
+/// file. These functions hide the differences of the underlying file formats
+/// used by different VAST versions. They are also a stop-gap until we introduce
+/// a dedicated class to wrap a partition flatbuffer.
+struct partition_chunk {
+  static caf::expected<index_statistics> get_statistics(vast::chunk_ptr);
+
+  static caf::expected<const vast::fbs::Partition*>
+    get_flatbuffer(vast::chunk_ptr);
+};
 
 // -- behavior -----------------------------------------------------------------
 

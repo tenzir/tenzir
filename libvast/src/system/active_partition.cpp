@@ -152,7 +152,6 @@ void serialize(
                 *self->state.synopsis_path, std::move(ps_chunk))
       .then([=](atom::ok) {}, [=](caf::error) {});
   }
-  // auto fbchunk = fbs::release(builder);
   VAST_DEBUG("{} persists partition with a total size of "
              "{} bytes",
              *self, (*partition)->size());
@@ -326,7 +325,7 @@ pack_full(const active_partition_state::serialization_data& x,
   cbuilder.add(as_bytes(chunk));
   for (auto const& index : external_indices)
     cbuilder.add(as_bytes(index));
-  auto container = std::move(cbuilder).finish();
+  auto container = std::move(cbuilder).finish(fbs::PartitionIdentifier());
   return std::move(container).dissolve();
 }
 

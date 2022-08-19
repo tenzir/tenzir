@@ -15,6 +15,7 @@
 #include <vast/index/hash_index.hpp>
 #include <vast/legacy_type.hpp>
 #include <vast/qualified_record_field.hpp>
+#include <vast/system/passive_partition.hpp>
 #include <vast/type.hpp>
 #include <vast/value_index_factory.hpp>
 
@@ -28,20 +29,19 @@ namespace lsvast {
 template <size_t N>
 void print_hash_index_(const vast::hash_index<N>& idx, indentation& indent,
                        const options& options) {
-  std::cout << indent << " - hash index bytes " << N << "\n";
-  std::cout << indent << " - " << idx.digests().size() << " digests:"
-            << "\n";
+  fmt::print("{} - hash index bytes {}\n", indent, N);
+  fmt::print("{} - {} digests\n", indent, idx.digests().size());
   indented_scope _(indent);
   if (options.format.verbosity == output_verbosity::normal) {
     const size_t bound = std::min<size_t>(idx.digests().size(), 3);
     for (size_t i = 0; i < bound; ++i) {
-      std::cout << indent << idx.digests().at(i) << "\n";
+      fmt::print("{}{}\n", indent, idx.digests().at(i));
     }
     if (bound < idx.digests().size())
-      std::cout << indent << "... (use -v to display remaining entries)\n";
+      fmt::print("{}... (use -v to display remaining entries)\n", indent);
   } else {
     for (const auto& digest : idx.digests()) {
-      std::cout << indent << digest << "\n";
+      fmt::print("{}{}\n", indent, digest);
     }
   }
 }
@@ -68,7 +68,7 @@ void print_hash_index(const vast::value_index_ptr& ptr, indentation& indent,
   } else if (auto idx = dynamic_cast<const vast::hash_index<8>*>(ptr.get())) {
     print_hash_index_(*idx, indent, options);
   } else {
-    std::cout << "more than 8 bytes digest :(\n";
+    fmt::print("more than 8 bytes digest :(\n");
   }
 }
 
@@ -76,74 +76,71 @@ void print_partition_legacy(
   const vast::fbs::partition::LegacyPartition* partition, indentation& indent,
   const options& options) {
   if (!partition) {
-    std::cout << "(null)\n";
+    fmt::print("(null)\n");
     return;
   }
-  std::cout << indent << "Partition\n";
+  fmt::print("{}Partition\n", indent);
   indented_scope _(indent);
   vast::uuid id;
   if (partition->uuid())
     if (auto error = unpack(*partition->uuid(), id))
-      std::cerr << indent << to_string(error);
-  std::cout << indent << "uuid: " << to_string(id) << "\n";
-  std::cout << indent << "offset: " << partition->offset() << "\n";
-  std::cout << indent << "events: " << partition->events() << "\n";
+      fmt::print(stderr, "{}{}", indent, to_string(error));
+  fmt::print("{}uuid: {}\n", indent, id);
+  fmt::print("{}offset: {}\n", indent, partition->offset());
+  fmt::print("{}events: {}\n", indent, partition->events());
   // Print contained event types.
-  std::cout << indent << "Event Types: \n";
+  fmt::print("{}Event Types: \n", indent);
   if (auto type_ids_vector = partition->type_ids()) {
     indented_scope _(indent);
     for (auto type_ids : *type_ids_vector) {
       auto name = type_ids->name()->c_str();
       auto ids_bytes = type_ids->ids();
-      std::cout << indent << name << ": ";
+      fmt::print("{}{}: ", indent, name);
       vast::ids restored_ids;
       vast::detail::legacy_deserializer bds(
         vast::as_bytes(ids_bytes->data(), ids_bytes->size()));
       if (!bds(restored_ids))
-        std::cout << " (deserialization error)";
+        fmt::print(" (deserialization error)");
       else
-        std::cout << rank(restored_ids);
+        fmt::print("{}", rank(restored_ids));
       if (options.format.print_bytesizes)
-        std::cout << " (" << print_bytesize(ids_bytes->size(), options.format)
-                  << ")";
-      std::cout << "\n";
+        fmt::print(" ({})", print_bytesize(ids_bytes->size(), options.format));
+      fmt::print("\n");
     }
   }
   // Print catalog contents.
-  std::cout << indent << "Catalog\n";
+  fmt::print("{}Catalog\n", indent);
   if (auto partition_synopsis = partition->partition_synopsis()) {
     indented_scope _(indent);
     for (auto column_synopsis : *partition_synopsis->synopses()) {
       vast::qualified_record_field fqf;
       auto name = vast::fbs::deserialize_bytes(
         column_synopsis->qualified_record_field(), fqf);
-      std::cout << indent << fqf.name() << ": ";
+      fmt::print("{}{}: ", indent, fqf.name());
       if (auto opaque = column_synopsis->opaque_synopsis()) {
-        std::cout << "opaque_synopsis";
+        fmt::print("opaque_synopsis");
         if (options.format.print_bytesizes)
-          std::cout << " ("
-                    << print_bytesize(opaque->data()->size(), options.format)
-                    << ")";
+          fmt::print(" ({})",
+                     print_bytesize(opaque->data()->size(), options.format));
       } else if (auto bs = column_synopsis->bool_synopsis()) {
-        std::cout << "bool_synopis " << bs->any_true() << " "
-                  << bs->any_false();
+        fmt::print("bool_synopis {} {}", bs->any_true(), bs->any_false());
       } else if (auto ts = column_synopsis->time_synopsis()) {
-        std::cout << "time_synopsis " << ts->start() << "-" << ts->end();
+        fmt::print("time_synopsis {}-{}", ts->start(), ts->end());
       } else {
-        std::cout << "(unknown)";
+        fmt::print("(unknown)");
       }
-      std::cout << '\n';
+      fmt::print("\n");
     }
   }
   // Print column indices.
-  std::cout << indent << "Column Indices\n";
+  fmt::print("{}Column Indices\n", indent);
   vast::legacy_record_type intermediate;
   vast::fbs::deserialize_bytes(partition->combined_layout(), intermediate);
   auto combined_layout
     = caf::get<vast::record_type>(vast::type::from_legacy_type(intermediate));
   if (auto indexes = partition->indexes()) {
     if (indexes->size() != combined_layout.num_fields()) {
-      std::cout << indent << "!! wrong number of fields\n";
+      fmt::print("{}!! wrong number of fields\n", indent);
       return;
     }
     const auto& expand_indexes = options.partition.expand_indexes;
@@ -153,16 +150,16 @@ void print_partition_legacy(
       auto name = field.name;
       const auto* index = indexes->Get(i);
       if (!index) {
-        std::cout << indent << "(missing index field " << name << ")\n";
+        fmt::print("{}(missing index field {})\n", indent, name);
         continue;
       }
       auto sz = index->index() && index->index()->data()
                   ? index->index()->data()->size()
                   : 0;
-      std::cout << indent << name << ": " << fmt::to_string(field.type);
+      fmt::print("{}{}: {}", indent, name, field.type);
       if (options.format.print_bytesizes)
-        std::cout << " (" << print_bytesize(sz, options.format) << ")";
-      std::cout << "\n";
+        fmt::print(" ({})", print_bytesize(sz, options.format));
+      fmt::print("\n");
       bool expand
         = std::find(expand_indexes.begin(), expand_indexes.end(), name)
           != expand_indexes.end();
@@ -171,14 +168,12 @@ void print_partition_legacy(
         vast::value_index_ptr state_ptr;
         if (auto error
             = vast::fbs::deserialize_bytes(index->index()->data(), state_ptr)) {
-          std::cout << "!! failed to deserialize index" << to_string(error)
-                    << std::endl;
+          fmt::print("!! failed to deserialize index: {}\n", error);
           continue;
         }
         const auto& type = state_ptr->type();
-        std::cout << indent << "- type: " << fmt::to_string(type) << std::endl;
-        std::cout << indent << "- options: " << to_string(state_ptr->options())
-                  << std::endl;
+        fmt::print("{}- type: {}\n", indent, type);
+        fmt::print("{}- options: {}\n", indent, state_ptr->options());
         // Print even more detailed information for hash indices.
         using namespace std::string_literals;
         if (auto index = type.attribute("index"))
@@ -191,18 +186,24 @@ void print_partition_legacy(
 
 void print_partition(const std::filesystem::path& path, indentation& indent,
                      const options& formatting) {
-  auto partition = read_flatbuffer_file<vast::fbs::Partition>(path);
-  if (!partition) {
-    std::cout << "(error reading partition file " << path.string() << ")\n";
+  auto chunk = vast::chunk::mmap(path);
+  if (!chunk) {
+    fmt::print("(failed to open file: {})\n", chunk.error());
     return;
   }
+  auto maybe_partition = vast::system::partition_chunk::get_flatbuffer(*chunk);
+  if (!maybe_partition) {
+    fmt::print("(failed to read partition: {}\n", maybe_partition.error());
+    return;
+  }
+  auto& partition = *maybe_partition;
   switch (partition->partition_type()) {
     case vast::fbs::partition::Partition::legacy:
       print_partition_legacy(partition->partition_as_legacy(), indent,
                              formatting);
       break;
     default:
-      std::cout << "(unknown partition version)\n";
+      fmt::print("(unknown partition version)\n");
   }
 }
 

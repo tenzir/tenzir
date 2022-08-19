@@ -195,7 +195,7 @@ unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
 }
 
 caf::expected<index_statistics>
-get_partition_statistics(vast::chunk_ptr chunk) {
+partition_chunk::get_statistics(vast::chunk_ptr chunk) {
   auto result = index_statistics{};
   if (flatbuffers::BufferHasIdentifier(chunk->data(),
                                        fbs::PartitionIdentifier())) {
@@ -226,15 +226,21 @@ get_partition_statistics(vast::chunk_ptr chunk) {
   } else if (flatbuffers::BufferHasIdentifier(
                chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
     // For partitions with a SegmentedFileHeader at the root, we know
-    // they must be at least version 1 and thus have a file header at the root.
+    // they must be at least version 1 and thus have a fixed schema.
     auto header = fbs::GetSegmentedFileHeader(chunk->data());
     if (header->header_type() != fbs::segmented_file::SegmentedFileHeader::v0)
       return caf::make_error(ec::format_error,
                              fmt::format("with invalid version of type: {}",
                                          header->GetFullyQualifiedName()));
     auto container = fbs::flatbuffer_container(chunk);
+    VAST_ASSERT_CHEAP(container); // FIXME dev assertion
     auto const* partition = container.as_flatbuffer<fbs::Partition>(0);
+    VAST_ASSERT_CHEAP(partition); // FIXME dev assertion
+    VAST_ASSERT_CHEAP(
+      partition->partition_type()
+      == vast::fbs::partition::Partition::legacy); // FIXME dev assertion
     auto const* partition_legacy = partition->partition_as_legacy();
+    VAST_ASSERT_CHEAP(partition_legacy); // FIXME dev assertion
     auto const* synopsis = partition_legacy->partition_synopsis();
     VAST_ASSERT_CHEAP(synopsis->version() >= 1);
     auto type = vast::type{chunk::copy(as_bytes(*synopsis->schema()))};
@@ -244,6 +250,30 @@ get_partition_statistics(vast::chunk_ptr chunk) {
     return caf::make_error(ec::format_error, "unknown header");
   }
   return result;
+}
+
+caf::expected<const vast::fbs::Partition*>
+partition_chunk::get_flatbuffer(vast::chunk_ptr chunk) {
+  if (flatbuffers::BufferHasIdentifier(chunk->data(),
+                                       fbs::PartitionIdentifier())) {
+    // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'
+    // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
+    using ::flatbuffers::soffset_t;
+    if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+      return caf::make_error(ec::format_error, "partition exceeds the maximum "
+                                               "flatbuffer size");
+    }
+    return fbs::GetPartition(chunk->data());
+  } else if (flatbuffers::BufferHasIdentifier(
+               chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
+    auto container = fbs::flatbuffer_container(chunk);
+    if (!container)
+      return caf::make_error(ec::format_error, "invalid flatbuffer container");
+    return container.as_flatbuffer<fbs::Partition>(0);
+  } else {
+    return caf::make_error(ec::format_error, "unknown identifier {}",
+                           flatbuffers::GetBufferIdentifier(chunk->data()));
+  }
 }
 
 caf::error
