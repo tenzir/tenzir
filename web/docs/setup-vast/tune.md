@@ -29,17 +29,18 @@ to the scheduler. As a result, other actors scheduled on the same thread may
 have to wait a little longer.
 
 The option `vast.import.batch-size` sets an upper bound for the number of events
-per table slice.
+per table slice. It defaults to 65,536.
 
-The option merely controls number of events per table slice, but not
-necessarily the number of events until a component forwards a batch to the next
-stage in a stream. The CAF streaming framework uses a credit-based flow-control
-mechanism to determine buffering of tables slices.
+The option controls the maximum number of events per table slice, but
+not necessarily the number of events until a component forwards a batch to the
+next stage in a stream. The CAF streaming framework uses a credit-based
+flow-control mechanism to determine buffering of tables slices.
 
-:::tip
-Setting `vast.import.batch-size` to 0 causes the table slice size to be
-unbounded and leaves it to other parameters to determine the actual table slice
-size.
+:::caution
+Setting `vast.import.batch-size` to `0` causes the table slice size to be
+unbounded and leaves it to `vast.import.batch-timeout` to produce table slices.
+This can lead to very large table slices for sources with high data rates, and
+is not recommended.
 :::
 
 ### Import Timeout
@@ -51,7 +52,7 @@ and ship immediately.
 
 The `vast.import.read-timeout` option determines how long a call to read data
 from the input will block. After the read timeout elapses, VAST tries again at a
-later.
+later. The default value is 10 seconds.
 
 ## Persistent Storage
 
