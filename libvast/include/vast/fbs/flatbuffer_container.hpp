@@ -33,6 +33,7 @@ public:
 
   /// Return the chunk at position `idx` interpreted as a `T`.
   template <typename T>
+    requires std::is_trivial_v<T>
   [[nodiscard]] const T* as(size_t idx) const {
     return reinterpret_cast<const T*>(this->get(idx));
   }
