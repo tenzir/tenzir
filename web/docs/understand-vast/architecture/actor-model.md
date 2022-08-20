@@ -24,9 +24,8 @@ hardware. The programmer only thinks in actors (circles), and sending messages
 between (arrows), whereas the runtime takes care of scheduling the actor
 execution.
 
-<div align="center">
-<img src={require("@site/static/img/actor-model-architecture.png").default} width="500" />
-</div>
+![Actor Execution Model](/img/actor-execution-model.light.png#gh-light-mode-only)
+![Actor Execution Model](/img/actor-execution-model.dark.png#gh-dark-mode-only)
 
 ## C++ Actor Framework (CAF)
 
@@ -45,9 +44,8 @@ CAF's actor runtime transparently serializes messages when they cross process
 boundaries; within a single process all actors send messages via efficient
 pointer passing. The figure below illustrates this concept:
 
-<div align="center">
-<img src={require("@site/static/img/actor-model-messaging.png").default} width="600" />
-</div>
+![Actor Message Passing](/img/actor-message-passing.light.png#gh-light-mode-only)
+![Actor Message Passing](/img/actor-message-passing.dark.png#gh-dark-mode-only)
 
 The main benefit of this capability is deployment flexibility: CAF decides when
 to choose pointer passing and when serialization, based on whether an actor
@@ -69,9 +67,8 @@ distribution model. We can either bundle up all actors in a single process
 
 You can think of two ends of the spectrum as follows:
 
-<div align="center">
-<img src={require("@site/static/img/actor-model-distribution.png").default} width="500" />
-</div>
+![Actor Distribution](/img/actor-distribution.light.png#gh-light-mode-only)
+![Actor Distribution](/img/actor-distribution.dark.png#gh-dark-mode-only)
 
 ### Actor Scheduling
 
@@ -82,9 +79,8 @@ CPU cores, but orders of magnitude more actors than threads. This results in a
 steady flow of work, proportional to the amount of communication between the
 actors. The figure below shows the scheduler in action.
 
-<div align="center">
-<img src={require("@site/static/img/actor-model-workstealing.png").default} width="350" />
-</div>
+![Actor Framework Workstealing](/img/actor-framework-workstealing.light.png#gh-light-mode-only)
+![Actor Framework Workstealing](/img/actor-framework-workstealing.dark.png#gh-dark-mode-only)
 
 CAF maintains a thread pool, in which every thread maintains its own queue of
 "work," i.e., dispatching control flow into an actor. If an actor sends a
