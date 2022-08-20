@@ -19,6 +19,8 @@
 #include <vast/type.hpp>
 #include <vast/value_index_factory.hpp>
 
+#include <fmt/ranges.h>
+
 #include <iostream>
 
 #include "lsvast.hpp"
@@ -35,13 +37,19 @@ void print_hash_index_(const vast::hash_index<N>& idx, indentation& indent,
   if (options.format.verbosity == output_verbosity::normal) {
     const size_t bound = std::min<size_t>(idx.digests().size(), 3);
     for (size_t i = 0; i < bound; ++i) {
-      fmt::print("{}{}\n", indent, idx.digests().at(i));
+      // Workaround for fmt7.
+      std::ostringstream ss;
+      ss << idx.digests().at(i);
+      fmt::print("{}{}\n", indent, ss.str());
     }
     if (bound < idx.digests().size())
       fmt::print("{}... (use -v to display remaining entries)\n", indent);
   } else {
     for (const auto& digest : idx.digests()) {
-      fmt::print("{}{}\n", indent, digest);
+      // Workaround for fmt7.
+      std::ostringstream ss;
+      ss << digest;
+      fmt::print("{}{}\n", indent, ss.str());
     }
   }
 }
