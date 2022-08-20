@@ -14,19 +14,19 @@ NOTEBOOKS = $(filter-out README.md, $(wildcard *.md))
 MD = $(addprefix $(BUILD)/md/, $(NOTEBOOKS))
 IPYNB = $(addprefix $(BUILD)/ipynb/, $(NOTEBOOKS:.md=.ipynb))
 
-all: md
-
-md: $(MD)
+all: poetry poetry-install md
 
 ipynb: $(IPYNB)
 
-$(IPYNB) $(MD): poetry
+md: $(MD)
 
 poetry:
 ifndef POETRY
 	$(error "poetry not in $$PATH; please install system-wide")
 endif
-	@poetry install
+
+poetry-install:
+	@poetry install --no-root
 	@poetry	run python -m bash_kernel.install
 
 $(BUILD)/ipynb/%.ipynb: %.md
