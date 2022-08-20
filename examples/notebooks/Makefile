@@ -10,7 +10,7 @@
 
 POETRY := $(shell command -v poetry 2> /dev/null)
 BUILD := output
-NOTEBOOKS = $(wildcard *.md)
+NOTEBOOKS = $(filter-out README.md, $(wildcard *.md))
 MD = $(addprefix $(BUILD)/md/, $(NOTEBOOKS))
 IPYNB = $(addprefix $(BUILD)/ipynb/, $(NOTEBOOKS:.md=.ipynb))
 
