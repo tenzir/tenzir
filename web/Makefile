@@ -30,25 +30,25 @@ dot-github: \
   $(DOT_GITHUB_OUTPUT_DIR)/workflow.md
 
 $(DOT_GITHUB_OUTPUT_DIR)/code-of-conduct.md: .github
-	@echo "---\nsidebar_position: 0\n---\n" > $@
+	@echo -e "---\nsidebar_position: 0\n---\n" > $@
 	@cat .github/CODE-OF-CONDUCT.md >> $@
 
 $(DOT_GITHUB_OUTPUT_DIR)/coding-style.md: .github
-	@echo "---\nsidebar_position: 2\n---\n" > $@
+	@echo -e "---\nsidebar_position: 2\n---\n" > $@
 	@cat .github/$(@F) >> $@
 
 $(DOT_GITHUB_OUTPUT_DIR)/security.md: .github
-	@echo "---\nsidebar_position: 10\n---\n" > $@
+	@echo -e "---\nsidebar_position: 10\n---\n" > $@
 	@cat .github/SECURITY.md >> $@
 
 $(DOT_GITHUB_OUTPUT_DIR)/workflow.md: .github
-	@echo "---\nsidebar_position: 1\n---\n" > $@
+	@echo -e "---\nsidebar_position: 1\n---\n" > $@
 	@cat .github/$(@F) >> $@
 
 notebooks: $(NOTEBOOK_DOCS_OUTPUT) $(NOTEBOOK_OUTPUTS)
 
 $(NOTEBOOK_DOCS_OUTPUT): $(NOTEBOOK_DOCS_INPUT)
-	@echo "---\nsidebar_position: 6\n---\n" > $@
+	@echo -e "---\nsidebar_position: 6\n---\n" > $@
 	@cat $< >> $@
 
 $(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
