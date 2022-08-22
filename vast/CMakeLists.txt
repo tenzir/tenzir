@@ -57,6 +57,15 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
     configure_file(
       \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.vast.plist.in\"
       \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\" @ONLY)")
+elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  # Not all Linux distros use systemd, but those we care about at the moment do.
+  install(
+    CODE "\
+    message(STATUS
+      \"Installing: ${CMAKE_INSTALL_LIBDIR}/systemd/vast.service\")
+    configure_file(
+      \"${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/vast.service.in\"
+      \"${CMAKE_INSTALL_LIBDIR}/systemd/vast.service\" @ONLY)")
 endif ()
 
 # -- integration tests ---------------------------------------------------------

@@ -683,12 +683,6 @@ add_subdirectory(libvast_test)
 add_subdirectory(tools)
 add_subdirectory(vast)
 
-# -- systemd support -----------------------------------------------------------
-
-install(
-  FILES "${CMAKE_CURRENT_SOURCE_DIR}/systemd/vast.service"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system")
-
 # -- cmake export/config installations -----------------------------------------
 
 export(
