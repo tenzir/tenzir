@@ -1,6 +1,6 @@
 # Composable Pipelines
 
-- **Status**: WIP
+- **Status**: In-Review
 - **Created**: Aug 19, 2022
 - **ETA**: Sep 19, 2022
 - **Authors**:
@@ -119,8 +119,14 @@ vast exec 'parse zeek | print csv'
 vast exec 'convert zeek csv'
 ```
 
-Another UX improvement would be assuming that we interact with a VAST node. Here
-we could have dedicated commands to prepend or append a pipeline operator:
+### Node Interaction
+
+When considering pipelines in conjunction with VAST nodes, we may want to
+improve the UX of working with pipelines.
+
+One example would be specifying the VAST node as a source or sink of a pipeline.
+To this end, we could have dedicated commands to prepend or append a pipeline
+operator:
 
 - `vast pull` → `from vast://...`
 - `vast push` → `to vast://...`
@@ -135,7 +141,7 @@ vast exec 'from vast://.... | where EXPRESSION | print json'
 vast export json EXPRESSION
 ```
 
-An `import` degenerates to
+An `import` degenerates to:
 
 ```bash
 vast push 'parse zeek | where EXPRESSION'
