@@ -178,17 +178,23 @@ class VAST:
         return result
 
     @staticmethod
-    async def status() -> str:
-        """Executes the VAST status command and return the response string"""
-        proc = await CLI().status().exec()
+    async def status(**kwargs) -> str:
+        """
+        Executes the VAST status command and return the response string.
+        Examples: `status()`, `status(detailed=True)`.
+        """
+        proc = await CLI().status(**kwargs).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
         return stdout.decode("utf-8")
 
     @staticmethod
-    async def count() -> int:
-        """Executes the VAST status command and return the response number"""
-        proc = await CLI().count().exec()
+    async def count(*args, **kwargs) -> int:
+        """
+        Executes the VAST count command and return the response number.
+        Examples: `count()`, `count("#type ~ /suricata.alert/", estimate=True)`.
+        """
+        proc = await CLI().count(*args, **kwargs).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
         return int(stdout.decode("utf-8"))
