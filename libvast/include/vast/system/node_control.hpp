@@ -11,7 +11,6 @@
 #include "vast/atoms.hpp"
 #include "vast/command.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/actor_cast_wrapper.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/tuple_map.hpp"
 #include "vast/error.hpp"
@@ -19,6 +18,7 @@
 #include "vast/system/actors.hpp"
 
 #include <caf/actor.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/typed_actor.hpp>
@@ -28,6 +28,10 @@
 #include <string_view>
 
 namespace vast::system {
+
+/// Retrieves the node connection timeout as specified under the option
+/// `vast.connection-timeout` from the given settings.
+caf::duration node_connection_timeout(const caf::settings& options);
 
 caf::expected<caf::actor>
 spawn_at_node(caf::scoped_actor& self, const node_actor& node, invocation inv);
@@ -48,18 +52,21 @@ get_node_components(caf::scoped_actor& self, const node_actor& node) {
     std::replace(in.begin(), in.end(), '_', '-');
     return in;
   };
+  const auto timeout = node_connection_timeout(self->config().content);
   auto labels = std::vector<std::string>{
     normalize(caf::type_name_by_id<caf::type_id<Actors>::value>::value)...};
-  self
-    ->request(node, defaults::system::initial_request_timeout, atom::get_v,
-              atom::label_v, std::move(labels))
+  self->request(node, timeout, atom::get_v, atom::label_v, labels)
     .receive(
       [&](std::vector<caf::actor>& components) {
-        result = detail::tuple_map<result_t>(std::move(components),
-                                             detail::actor_cast_wrapper{});
+        result = detail::tuple_map<result_t>(
+          std::move(components), []<class Out>(auto&& in) {
+            return caf::actor_cast<Out>(std::forward<decltype(in)>(in));
+          });
       },
-      [&](caf::error& e) { //
-        result = std::move(e);
+      [&](caf::error& err) { //
+        result = caf::make_error(ec::lookup_error,
+                                 "failed to get components {} from node: {}",
+                                 labels, std::move(err));
       });
   return result;
 }

@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/detail/actor_cast_wrapper.hpp"
 #include "vast/detail/tuple_map.hpp"
 
 #include <caf/actor.hpp>
@@ -115,7 +114,9 @@ public:
       },
       std::move(labels));
     return detail::tuple_map<std::tuple<Handles...>>(
-      std::move(components), detail::actor_cast_wrapper{});
+      std::move(components), []<typename Out>(auto&& in) {
+        return caf::actor_cast<Out>(std::forward<decltype(in)>(in));
+      });
   }
 
   /// Finds all components for a given type.

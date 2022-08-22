@@ -245,12 +245,12 @@ inline constexpr std::chrono::milliseconds telemetry_rate
 inline constexpr std::chrono::milliseconds signal_monitoring_interval
   = std::chrono::milliseconds{750};
 
-/// Initial timeout for complex requests.
-inline constexpr std::chrono::milliseconds initial_request_timeout
+/// The timeout for the cascading requests of 'vast status'.
+inline constexpr std::chrono::milliseconds status_request_timeout
   = std::chrono::seconds{10};
 
 /// Timeout for initial connections to the node.
-inline constexpr std::chrono::milliseconds connection_timeout
+inline constexpr std::chrono::milliseconds node_connection_timeout
   = std::chrono::seconds{10};
 
 /// Timeout for the scheduler to give up on a partition.

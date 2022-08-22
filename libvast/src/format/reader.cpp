@@ -13,6 +13,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/format/reader_factory.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/configuration.hpp"
 
 #include <caf/settings.hpp>
 
@@ -37,24 +38,18 @@ reader::reader(const caf::settings& options) {
                 "is not a valid encoding",
                 detail::pretty_type_name(this), *batch_encoding_arg);
   }
-  if (auto batch_timeout_arg
-      = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
-    if (auto batch_timeout = to<decltype(batch_timeout_)>(*batch_timeout_arg))
-      batch_timeout_ = *batch_timeout;
-    else
-      VAST_WARN("{} cannot set vast.import.batch-timeout to {} as it "
-                "is not a valid duration",
-                detail::pretty_type_name(this), *batch_timeout_arg);
-  }
-  if (auto read_timeout_arg
-      = caf::get_if<std::string>(&options, "vast.import.read-timeout")) {
-    if (auto read_timeout = to<decltype(batch_timeout_)>(*read_timeout_arg))
-      read_timeout_ = *read_timeout;
-    else
-      VAST_WARN("{} cannot set vast.import.read-timeout to {} as it is "
-                "not a valid duration",
-                detail::pretty_type_name(this), *read_timeout_arg);
-  }
+  auto parse_timeout = [&](std::string_view key, duration fallback) {
+    auto timeout_value = system::get_or_duration(options, key, fallback);
+    if (!timeout_value) {
+      VAST_WARN("client failed to read '{}': {}", key, timeout_value.error());
+      return fallback;
+    }
+    return *timeout_value;
+  };
+  batch_timeout_ = parse_timeout("vast.import.batch-timeout",
+                                 vast::defaults::import::batch_timeout);
+  read_timeout_ = parse_timeout("vast.import.read-timeout",
+                                vast::defaults::import::read_timeout);
   last_batch_sent_ = reader_clock::now();
 }
 

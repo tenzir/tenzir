@@ -24,12 +24,12 @@ spawn_type_registry(node_actor::stateful_pointer<node_state> self,
   if (!args.empty())
     return unexpected_arguments(args);
   auto handle = self->spawn(type_registry, args.dir / args.label);
-  self->request(handle, defaults::system::initial_request_timeout, atom::load_v)
+  self->request(handle, caf::infinite, atom::load_v)
     .await([](atom::ok) {},
            [](caf::error& err) {
              VAST_WARN("type-registry failed to load taxonomy "
                        "definitions: {}",
-                       render(std::move(err)));
+                       std::move(err));
            });
   VAST_VERBOSE("{} spawned the type-registry", *self);
   if (auto [accountant] = self->state.registry.find<accountant_actor>();

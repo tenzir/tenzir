@@ -627,7 +627,7 @@ active_partition_actor::behavior_type active_partition(
       // Reservation is necessary to make sure the entries don't get relocated
       // as the underlying vector grows - `ps` would refer to the wrong memory
       // otherwise.
-      const auto timeout = defaults::system::initial_request_timeout / 5 * 3;
+      const auto timeout = defaults::system::status_request_timeout / 5 * 3;
       indexer_states.reserve(self->state.indexers.size());
       for (auto& i : self->state.indexers) {
         auto& ps = caf::get<record>(indexer_states.emplace_back(record{}));

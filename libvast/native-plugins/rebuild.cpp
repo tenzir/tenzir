@@ -19,6 +19,7 @@
 #include <vast/system/catalog.hpp>
 #include <vast/system/index.hpp>
 #include <vast/system/node.hpp>
+#include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/system/read_query.hpp>
 #include <vast/system/report.hpp>
@@ -591,10 +592,9 @@ get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
     = std::holds_alternative<system::node_actor>(node_opt)
         ? std::get<system::node_actor>(node_opt)
         : std::get<scope_linked<system::node_actor>>(node_opt).get();
+  const auto timeout = system::node_connection_timeout(config);
   auto result = caf::expected<caf::actor>{caf::no_error};
-  self
-    ->request(node, defaults::system::initial_request_timeout, atom::get_v,
-              atom::type_v, "rebuild")
+  self->request(node, timeout, atom::get_v, atom::type_v, "rebuild")
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {

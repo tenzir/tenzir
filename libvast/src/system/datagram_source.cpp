@@ -173,7 +173,7 @@ caf::behavior datagram_source(
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
-        const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
+        const auto timeout = defaults::system::status_request_timeout / 5 * 4;
         collect_status(
           rs, timeout, v, self->state.transformer,
           [rs, src](record& response) mutable {

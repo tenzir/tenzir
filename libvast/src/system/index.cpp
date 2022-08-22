@@ -1020,7 +1020,7 @@ index_state::status(status_verbosity v) const {
     rs->content["num-active-partitions"] = count{active_partitions.size()};
     rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
     rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
-    const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
+    const auto timeout = defaults::system::status_request_timeout / 5 * 4;
     auto partitions = record{};
     auto partition_status
       = [&](const uuid& id, const partition_actor& pa, list& xs) {

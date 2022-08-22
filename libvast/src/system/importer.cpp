@@ -138,7 +138,7 @@ importer_state::status(status_verbosity v) const {
   if (v >= status_verbosity::debug)
     detail::fill_status_map(rs->content, self);
   // Retrieve an additional subsection from the transformer.
-  const auto timeout = defaults::system::initial_request_timeout / 5 * 4;
+  const auto timeout = defaults::system::status_request_timeout / 5 * 4;
   collect_status(rs, timeout, v, transformer, rs->content, "transformer");
   return rs->promise;
 }
