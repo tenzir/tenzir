@@ -190,9 +190,8 @@ vast::table_slice segment::get_slice_(size_t idx) const {
   if (idx < segment->slices()->size())
     return table_slice{*segment->slices()->Get(idx), chunk(),
                        table_slice::verify::yes};
-  else
-    return table_slice{container_->get_raw(1 + idx - segment->slices()->size()),
-                       table_slice::verify::yes};
+  return table_slice{container_->get_raw(1 + (idx - segment->slices()->size())),
+                     table_slice::verify::yes};
 }
 
 std::vector<const vast::fbs::FlatTableSlice*> segment::flat_slices_() const {
