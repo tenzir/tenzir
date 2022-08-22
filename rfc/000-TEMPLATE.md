@@ -2,7 +2,7 @@
 
 - **Status**: WIP | In-Review | Approved | Obsolete
 - **Created**: Aug 19, 2022
-- **Accepted** | **Dismissed**: Sep 20, 2022
+- **ETA** | **Accepted** | **Dismissed**: Sep 20, 2022
 - **Authors**:
   - [First Last](https://github.com/username)
 - **Contributors**:
