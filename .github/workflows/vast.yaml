@@ -852,7 +852,7 @@ jobs:
   build-nix:
     needs:
       - determine-version
-    name: Nix Static (${{ matrix.nix.target }})
+    name: Nix Static Package (${{ matrix.nix.target }})
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
@@ -884,7 +884,8 @@ jobs:
           name: vast
           signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
 
-      - name: Build Static Binary
+      - name: Build Static Packages
+        id: build_static_packages
         env:
           STATIC_BINARY_TARGET: ${{ matrix.nix.target }}
           VAST_BUILD_VERSION: ${{ needs.determine-version.outputs.build-version }}
@@ -892,18 +893,21 @@ jobs:
         run: |
           nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
             ${{ matrix.nix.build-options }}
+          echo '::set-output name=store_path::$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} ${{ matrix.nix.build-options }})'
 
-      - name: Create Paths
-        id: create_paths
+      - name: Get Artifact Names
+        id: get_artifact_names
         run: |
-          ARTIFACT_NAME=$(ls "${BUILD_DIR}" | grep "${{ matrix.nix.target }}.*.tar.gz")
-          echo "::set-output name=artifact_name::${ARTIFACT_NAME}"
+          TAR_ZST=$(ls "${{ steps.build_static_package.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.tar.zst")
+          DEB=$(ls "${{ steps.build_static_package.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.deb")
+          echo "::set-output name=tar_zst::${TAR_ZST}"
+          echo "::set-output name=deb::${DEB}"
 
-      - name: Upload Artifact to Github
+      - name: Upload Artifacts to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ steps.create_paths.outputs.artifact_name }}"
-          path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
+          name: "${{ matrix.nix.target }}-static"
+          path: "${{ steps.build_static_package.outputs.store_path }}"
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -923,8 +927,10 @@ jobs:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
-          gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_zst }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_zst }}"
+          gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.outputs.deb }}"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_zst }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-static-latest.deb"
 
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
@@ -932,8 +938,9 @@ jobs:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
-          RELEASE_MONTH=$(echo "${{ steps.create_paths.outputs.artifact_name }}" | cut -d"-" -f2)
-          gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${RELEASE_MONTH}-static-latest.tar.gz"
+          VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_zst }}" | cut -d"-" -f2)
+          gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_zst }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-${VERSION}-static-latest.deb"
 
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
@@ -956,7 +963,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
+          asset_path: "${{ env.BUILD_DIR }}/${{ steps.get_artifact_names.outputs.tar_zst }}"
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
           # for a build of the latest release.
