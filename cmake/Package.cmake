@@ -1,6 +1,5 @@
 # -- packaging -----------------------------------------------------------------
 
-set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 set(CPACK_PACKAGE_VENDOR "Tenzir")
 set(CPACK_PACKAGE_CONTACT "engineering@tenzir.com")
 set(CPACK_VERBATIM_VARIABLES ON)
