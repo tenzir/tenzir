@@ -16,16 +16,16 @@ logger = vast.utils.logging.get("node")
 
 
 class CLI:
-    """A commmand-line wrapper for the VAST executable."""
+    """A command-line wrapper for the VAST executable."""
 
     @staticmethod
     def arguments(**kwargs):
         result = []
         for k, v in kwargs.items():
             if v is True:
-                result.append(f"--{k.replace('_','-')}")
+                result.append(f"--{k.replace('_', '-')}")
             else:
-                result.append(f"--{k.replace('_','-')}={v}")
+                result.append(f"--{k.replace('_', '-')}={v}")
         return result
 
     def __init__(self, **kwargs):
@@ -88,7 +88,8 @@ class VAST:
         self.fabric = fabric
         self.stix_bridge = vast.bridges.stix.STIX()
 
-    async def start(self, **kwargs):
+    @staticmethod
+    async def start(**kwargs):
         """Starts a VAST node."""
         proc = await CLI(**kwargs).start().exec()
         await proc.communicate()
@@ -101,7 +102,7 @@ class VAST:
         """Subscribes to an event type on ingest path and publishes the events
         directly to the fabric."""
         callback = lambda line: self.fabric.publish(type, line)
-        await self._live_query(f'#type == "{type}"', callback)
+        await self.export_continuous(callback)
 
     # Translates an STIX Indicator into a VAST query and publishes the results
     # as STIX Bundle.
@@ -116,9 +117,10 @@ class VAST:
         elif indicator.pattern_type == "sigma":
             logger.debug(f"got Sigma rule {indicator.pattern}")
         else:
-            logger.warn(f"got unsupported pattern type {indicator.pattern_type}")
+            logger.warn(
+                f"got unsupported pattern type {indicator.pattern_type}")
             return
-        results = await self._query(indicator.pattern)
+        results = await self.export(indicator.pattern)
         if len(results) == 0:
             logger.info(f"got no results for query: {indicator.pattern}")
             return
@@ -126,7 +128,9 @@ class VAST:
         logger.warning(bundle.serialize(pretty=True))
         await self.fabric.publish("stix.bundle", bundle)
 
-    async def _live_query(self, expression: str, callback):
+    @staticmethod
+    async def export_continuous(expression: str, callback):
+        """"""
         proc = await CLI().export(continuous=True).json(expression).exec()
         while True:
             if proc.stdout.at_eof():
@@ -137,8 +141,9 @@ class VAST:
         if proc.returncode != 0:
             logger.warning(f"vast exited with non-zero code: {proc.returncode}")
 
-    async def _query(self, expression: str, limit: int = 100):
-        """Executes a VAST and receives results as Arrow Tables."""
+    @staticmethod
+    async def export(expression: str, limit: int = 100):
+        """Executes a VAST export and receives results as Arrow Tables."""
         proc = await CLI().export(max_events=limit).arrow(expression).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
@@ -172,3 +177,19 @@ class VAST:
             name = vast.utils.arrow.name(table.schema)
             result[name].append(table)
         return result
+
+    @staticmethod
+    async def status() -> str:
+        """Executes the VAST status command and return the response string"""
+        proc = await CLI().status().exec()
+        stdout, stderr = await proc.communicate()
+        logger.debug(stderr.decode())
+        return stdout.decode("utf-8")
+
+    @staticmethod
+    async def count() -> int:
+        """Executes the VAST status command and return the response number"""
+        proc = await CLI().count().exec()
+        stdout, stderr = await proc.communicate()
+        logger.debug(stderr.decode())
+        return int(stdout.decode("utf-8"))
