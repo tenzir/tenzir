@@ -30,6 +30,7 @@
 , extraCmakeFlags ? []
 , disableTests ? true
 , buildType ? "Release"
+, buildAsPackage ? false
 }:
 let
   inherit (stdenv.hostPlatform) isStatic;
@@ -48,11 +49,9 @@ let
   version = if (versionOverride != null) then versionOverride else "v2.3.1";
 in
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (rec {
   inherit src version;
   pname = "vast";
-
-  outputs = ["out"] ++ lib.optionals isStatic ["debian"];
 
   preConfigure = ''
     substituteInPlace plugins/pcap/cmake/FindPCAP.cmake \
@@ -96,11 +95,23 @@ stdenv.mkDerivation rec {
     "-DBUILD_SHARED_LIBS:BOOL=OFF"
     "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-  ] ++ lib.optional disableTests "-DVAST_ENABLE_UNIT_TESTS=OFF"
-    # Plugin Section
-    ++ lib.optional (withPlugins != [])
-       "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
-    ++ extraCmakeFlags;
+  ] ++ lib.optionals disableTests [
+    "-DVAST_ENABLE_UNIT_TESTS=OFF"
+  ] ++ lib.optionals (withPlugins != []) [
+    "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
+  ] ++ lib.optionals buildAsPackage [
+    "-UCMAKE_INSTALL_BINDIR"
+    "-UCMAKE_INSTALL_SBINDIR"
+    "-UCMAKE_INSTALL_INCLUDEDIR"
+    "-UCMAKE_INSTALL_OLDINCLUDEDIR"
+    "-UCMAKE_INSTALL_MANDIR"
+    "-UCMAKE_INSTALL_INFODIR"
+    "-UCMAKE_INSTALL_DOCDIR"
+    "-UCMAKE_INSTALL_LIBDIR"
+    "-UCMAKE_INSTALL_LIBEXECDIR"
+    "-UCMAKE_INSTALL_LOCALEDIR"
+    "-DCMAKE_INSTALL_PREFIX=/opt/vast"
+  ] ++ extraCmakeFlags;
 
   # The executable is run to generate the man page as part of the build phase.
   # libvast.{dyld,so} is put into the libvast subdir if relocatable installation
@@ -117,31 +128,13 @@ stdenv.mkDerivation rec {
 
   dontStrip = true;
 
-  doInstallCheck = true;
+  doInstallCheck = !buildAsPackage;
   installCheckInputs = [ py3 jq tcpdump ];
   # TODO: Investigate why the disk monitor test fails in the build sandbox.
   installCheckPhase = ''
     python ../vast/integration/integration.py \
       --app ${placeholder "out"}/bin/vast \
       --disable "Disk Monitor"
-  '';
-
-  postInstall = "" + lib.optionalString isStatic ''
-    rm CMakeCache.txt
-    cmake ''${cmakeDir:-.} $cmakeFlags "''${cmakeFlagsArray[@]}" \
-      -UCMAKE_INSTALL_BINDIR \
-      -UCMAKE_INSTALL_SBINDIR \
-      -UCMAKE_INSTALL_INCLUDEDIR \
-      -UCMAKE_INSTALL_OLDINCLUDEDIR \
-      -UCMAKE_INSTALL_MANDIR \
-      -UCMAKE_INSTALL_INFODIR \
-      -UCMAKE_INSTALL_DOCDIR \
-      -UCMAKE_INSTALL_LIBDIR \
-      -UCMAKE_INSTALL_LIBEXECDIR \
-      -UCMAKE_INSTALL_LOCALEDIR \
-      -DCMAKE_INSTALL_PREFIX="/usr" ..
-    cmake --build . --target package -j $NIX_BUILD_CORES
-    install -m 644 -Dt $debian *.deb
   '';
 
   meta = with lib; {
@@ -151,4 +144,11 @@ stdenv.mkDerivation rec {
     platforms = platforms.unix;
     maintainers = with maintainers; [ tobim ];
   };
-}
+} // lib.optionalAttrs buildAsPackage {
+  installPhase = ''
+    cmake --build . --target package
+    install -m 644 -Dt $out *.deb *.tar.zst
+  '';
+  # We don't need the nix support files in this case.
+  fixupPhase = "";
+})
