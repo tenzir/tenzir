@@ -1,0 +1,49 @@
+[Unit]
+Description=VAST - Visibility Across Space and Time
+StartLimitIntervalSec=120
+StartLimitBurst=1
+OnFailure=vast-collect.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=notify
+
+# user + privileges
+# We explicitly don't use DynamicUser because that can lead to recursive `chown`s.
+# Doing that is pretty slow on some file systems (e.g., xfs).
+User=vast
+Group=vast
+NoNewPrivileges=yes
+
+# capabilities
+RestrictNamespaces=yes
+RestrictAddressFamilies=
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+
+# system access
+ExecPaths=@CMAKE_INSTALL_FULL_LIBEXECDIR@/dbsize.sh
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vast
+ReadWritePaths=/var/log/vast
+PrivateTmp=no
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# service specifics
+TimeoutStopSec=600
+WorkingDirectory=/var/lib/vast
+ExecStop=@CMAKE_INSTALL_FULL_BINDIR@/vast stop
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/vast start
+
+[Install]
+WantedBy=multi-user.target
