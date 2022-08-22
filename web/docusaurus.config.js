@@ -101,6 +101,11 @@ const config = {
             position: 'left',
           },
           {
+            to: '/api',
+            label: 'API',
+            position: 'left',
+          },
+          {
             type: 'search',
             position: 'right',
           },
