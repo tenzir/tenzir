@@ -56,7 +56,7 @@ flatbuffer_container::operator bool() const {
 flatbuffer_container_builder::flatbuffer_container_builder(
   size_t expected_size) {
   file_contents_.reserve(expected_size);
-  file_contents_.resize(PROBABLY_ENOUGH_BYTES_FOR_TOC_FLATBUFFER);
+  file_contents_.resize(PROBABLY_ENOUGH_BYTES_FOR_HEADER);
 }
 
 void flatbuffer_container_builder::add(std::span<const std::byte> bytes) {
@@ -86,17 +86,19 @@ flatbuffer_container_builder::finish(const char* identifier) && {
   auto header_buffer = builder.Release();
   // If the table of contents fits into the reserved space we copy it there,
   // otherwise we have no choice but to copy the whole contents.
-  if (header_buffer.size() <= PROBABLY_ENOUGH_BYTES_FOR_TOC_FLATBUFFER)
-    [[likely]] {
+  if (header_buffer.size() <= PROBABLY_ENOUGH_BYTES_FOR_HEADER) [[likely]] {
     ::memcpy(file_contents_.data(), header_buffer.data(), header_buffer.size());
   } else {
     auto old = std::exchange(file_contents_, {});
-    file_contents_.reserve(header_buffer.size() + old.size());
+    file_contents_.reserve(header_buffer.size() + old.size()
+                           - PROBABLY_ENOUGH_BYTES_FOR_HEADER);
     file_contents_.resize(header_buffer.size());
     ::memcpy(file_contents_.data(), header_buffer.data(), header_buffer.size());
-    file_contents_.insert(file_contents_.end(), old.begin(), old.end());
+    file_contents_.insert(file_contents_.end(),
+                          old.begin() + PROBABLY_ENOUGH_BYTES_FOR_HEADER,
+                          old.end());
     auto offset_adjustment
-      = header_buffer.size() - PROBABLY_ENOUGH_BYTES_FOR_TOC_FLATBUFFER;
+      = header_buffer.size() - PROBABLY_ENOUGH_BYTES_FOR_HEADER;
     auto* header = GetMutableSegmentedFileHeader(file_contents_.data());
     // We just created this so we know the type.
     VAST_ASSERT(header->header_type()

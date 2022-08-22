@@ -77,10 +77,10 @@ public:
   flatbuffer_container finish(const char* identifier) &&;
 
 private:
-  // Space for ~640 TOC entries. Given that we only need to use
+  // Space for ~1024 TOC entries. Given that we only need to use
   // the flatbuffer_container if the total file size is >= 2GiB,
   // the amount wasted here should not matter.
-  constexpr static auto PROBABLY_ENOUGH_BYTES_FOR_TOC_FLATBUFFER = 1024ull;
+  constexpr static auto PROBABLY_ENOUGH_BYTES_FOR_HEADER = 8 * 1024ull;
 
   std::vector<fbs::segmented_file::FileSegment> segments_;
   std::vector<std::byte> file_contents_;

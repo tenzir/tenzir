@@ -51,9 +51,9 @@ caf::error segment_builder::add(table_slice x) {
   }
   VAST_ASSERT(x.is_serialized());
   auto last_fb_offset = flat_slices_.empty() ? 0ull : flat_slices_.back().o;
-  // Allow ca. 100MiB of extra space for the non-table data.
+  // Allow ca. 500MiB of extra space for the non-table data.
   constexpr auto REASONABLE_SIZE
-    = detail::narrow_cast<size_t>(0.95 * FLATBUFFERS_MAX_BUFFER_SIZE);
+    = detail::narrow_cast<size_t>(0.75 * FLATBUFFERS_MAX_BUFFER_SIZE);
   if (overflow_idx_ < slices_.size()
       || last_fb_offset + as_bytes(x).size() >= REASONABLE_SIZE) [[unlikely]] {
     /* nop */;
