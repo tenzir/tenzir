@@ -151,6 +151,40 @@ vast exec 'parse zeek | where EXPRESSION | to vast://...'
 vast import zeek EXPRESSION
 ```
 
+### Mutating existing data
+
+Security telemetry data is often messy. After the data collection aspects have
+been sorted out and analysts interact with the data, it becomes clear that some
+part of the data needs to be cleaned. This matches ELT mindset of dumping
+everything first so that the data is there, and then tweak as you go.
+
+Example operations include, migrating data to a different schema, enriching
+telemetry (e.g., with GeoIP data), and fixing invalid entries.
+
+Mutation of data is non-trivial in that it requires exclusive access to the
+data. Otherwise data races may occur. Consequently, we need transactional
+interface (ACID) to support this operation.
+
+As long as VAST owns the underlying data (i.e., only VAST is allowed to make
+changes), VAST can already mutate of data at rest. [Spatial
+compaction][mutate-at-rest] uses a pre-defined disk quota as trigger to apply
+pipelines to a subset of to-be-transformed data. After VAST applies the
+pipeline, VAST optionally removes the original data in an atomic fashion.
+
+[mutate-at-rest]: https://vast.io/docs/use-vast/transform#modify-data-at-rest
+
+Modeled after the `compaction` plugin, we may consider exposing a mutable
+pipeline interface through a dedicate command. This command interacts with a
+node, and could be seen as a combination of `pull` and `push` that executes
+remotely. For example:
+
+```bash
+vast mutate --types=A,B,C 'where 10.0.0.0/8 | put orig.h resp.h'
+```
+
+This would apply the pipeline to filter and project in schema types `A`, `B`,
+and `C`.
+
 ## Implementation
 
 We could implement the entire pipeline with Arrow IPC streams in the "interior"
