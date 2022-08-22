@@ -50,7 +50,21 @@ vast from s3://aws |
   vast to /path/to/file.feather
 ```
 
-But let's take a step back and just assume that we add a new `exec` command that
+The UX would translate seamlessly to other languages, e.g., Python:
+
+```python
+import vast as v
+await v.from("s3://aws")
+       .read_json() # or read("json")
+       .group_by("src")
+       .summarize(v.count("dst"))
+       .write_feather() # or write("feather")
+       .to("/path/to/file.feather")
+```
+
+### Pipeline Execution
+
+Let's take a step back and just assume that we add a new `exec` command that
 just executes a pipeline.
 
 Then we can model the ingestion as follows: load data via stdin, push into a
