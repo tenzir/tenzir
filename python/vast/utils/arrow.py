@@ -18,7 +18,7 @@ def name(schema: pa.Schema):
 # Accepts a 128-bit buffer holding an IPv6 address and
 # returns an IPv4 or IPv6 address.
 def unpack_ip(buffer: SupportsBytes) -> str:
-    num = int.from_bytes(buffer, byteorder='big')
+    num = int.from_bytes(buffer, byteorder="big")
     # convert IPv4 mapped addresses back to regular IPv4
     # https://tools.ietf.org/html/rfc4291#section-2.5.5.2
     if (num >> 32) == 65535:

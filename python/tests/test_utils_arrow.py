@@ -30,12 +30,16 @@ def test_schema_alias_extraction():
 
 
 def test_unpack_ip():
-    assert vua.unpack_ip(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n'
-                         b'\x01\x15\xa5') == ipaddress.IPv4Address(
-        "10.1.21.165")
+    assert vua.unpack_ip(
+        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n" b"\x01\x15\xa5"
+    ) == ipaddress.IPv4Address("10.1.21.165")
 
 
 def test_fmt_ip():
-    df = pd.DataFrame([b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n'
-                       b'\x01\x15\xa5'], columns=['ip'])
-    assert vua.fmt_ip(df, ip_columns=['ip']).ip[0] == ipaddress.IPv4Address("10.1.21.165")
+    df = pd.DataFrame(
+        [b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\xa5'],
+        columns=['ip']
+    )
+    assert vua.fmt_ip(df, ip_columns=['ip']).ip[0] == ipaddress.IPv4Address(
+        "10.1.21.165"
+    )

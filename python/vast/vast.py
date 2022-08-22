@@ -117,8 +117,7 @@ class VAST:
         elif indicator.pattern_type == "sigma":
             logger.debug(f"got Sigma rule {indicator.pattern}")
         else:
-            logger.warn(
-                f"got unsupported pattern type {indicator.pattern_type}")
+            logger.warn(f"got unsupported pattern type {indicator.pattern_type}")
             return
         results = await self.export(indicator.pattern)
         if len(results) == 0:
