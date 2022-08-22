@@ -730,6 +730,14 @@ if (VAST_ENABLE_CORELIGHT_CAT)
           DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif ()
 
+option(VAST_ENABLE_DBSIZE_SH "Install dbsize.sh with VAST" ON)
+add_feature_info("VAST_ENABLE_DBSIZE_SH" VAST_ENABLE_DBSIZE_SH
+                 "install dbsize.sh with VAST.")
+if (VAST_ENABLE_DBSIZE_SH)
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/dbsize.sh"
+          DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
+endif ()
+
 # -- docdir --------------------------------------------------------------------
 
 # Install CHANGELOG, LICENSE, README, and VERSIONING. This can intentionally not
