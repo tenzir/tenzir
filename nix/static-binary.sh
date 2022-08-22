@@ -3,6 +3,10 @@
 nix --version
 nix-prefetch-github --version workaround bug
 
+log () {
+  >&2 echo "$@"
+}
+
 usage() {
   printf "usage: %s [options]\n" $(basename $0)
   echo
@@ -25,7 +29,7 @@ VAST_BUILD_VERSION_SHORT="${VAST_BUILD_VERSION_SHORT:=$(git -C "${toplevel}" des
 desc="${VAST_BUILD_VERSION}"
 artifact_name="${VAST_BUILD_VERSION_SHORT}"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
-echo "rev is ${vast_rev}"
+log "rev is ${vast_rev}"
 
 target="${STATIC_BINARY_TARGET:-vast}"
 
@@ -91,6 +95,7 @@ if [ "${USE_HEAD}" == "on" ]; then
     versionOverride = "${desc}";
     withPlugins = [ ${plugins[@]} ];
     extraCmakeFlags = [ ${cmakeFlags} ];
+    buildAsPackage = true;
   }
 EOF
 else
@@ -100,20 +105,10 @@ else
     versionOverride = "${desc}";
     withPlugins = [ ${plugins[@]} ];
     extraCmakeFlags = [ ${cmakeFlags} ];
+    buildAsPackage = true;
   }
 EOF
 fi
 
-echo running "nix-build --no-out-link -E \'${exp}\'"
-result=$(nix-build --keep-failed --no-out-link -E "${exp}")
-
-mkdir -p build
-tar -C "${result}" \
-  --exclude lib \
-  --exclude include \
-  --exclude nix-support \
-  --exclude share/vast/test \
-  --exclude share/vast/integration \
-  --mode='u+w' \
-  -cvzf "$PWD/build/${target}-${artifact_name}-linux-static.tar.gz" \
-  $(ls "${result}")
+log running "nix --print-build-logs build --print-out-paths --impure --expr  \'${exp}\'"
+nix --print-build-logs build --print-out-paths --impure --expr "${exp}"
