@@ -1,23 +1,17 @@
 cmake_minimum_required(VERSION 3.18...3.23 FATAL_ERROR)
 
-set(categories
-  "breaking-changes"
-  "changes"
-  "experimental-features"
-  "features"
-  "bug-fixes")
-set(titles
-  "Breaking Changes"
-  "Changes"
-  "Experimental Features"
-  "Features"
-  "Bug Fixes")
+set(categories "breaking-changes" "changes" "experimental-features" "features"
+               "bug-fixes")
+set(titles "Breaking Changes" "Changes" "Experimental Features" "Features"
+           "Bug Fixes")
 
 set(changelog "")
 set(changelog_links "")
 set(changelog_directory "@CMAKE_CURRENT_SOURCE_DIR@/changelog")
 
-string(APPEND changelog
+string(
+  APPEND
+  changelog
   "<!--\n"
   "This file is generated automatically. Add individual changelog entries to "
   "the 'changelog/' subdirectory instead.\n"
@@ -26,9 +20,15 @@ string(APPEND changelog
   "This changelog documents all notable changes to @PROJECT_NAME@ and is "
   "updated on every release.\n\n")
 
-file(GLOB releases LIST_DIRECTORIES ON
-  RELATIVE "${changelog_directory}/" "${changelog_directory}/*")
-list(SORT releases COMPARE NATURAL ORDER DESCENDING)
+file(
+  GLOB releases
+  LIST_DIRECTORIES ON
+  RELATIVE "${changelog_directory}/"
+  "${changelog_directory}/*")
+list(
+  SORT releases
+  COMPARE NATURAL
+  ORDER DESCENDING)
 list(REMOVE_ITEM releases "legacy.md")
 if ("unreleased" IN_LIST releases)
   list(REMOVE_ITEM releases "unreleased")
@@ -41,8 +41,9 @@ foreach (release IN LISTS releases)
     string(APPEND changelog "## Unreleased\n\n")
   else ()
     string(APPEND changelog "## [${release}][${release}]\n\n")
-    string(APPEND changelog_links
-      "[${release}]: @PROJECT_HOMEPAGE_URL@/releases/tag/${release}\n")
+    string(
+      APPEND changelog_links
+      "[${release}]: https://github.com/tenzir/vast/releases/tag/${release}\n")
   endif ()
 
   # Iterate over changelog entries for every release in a fixed order of
@@ -53,7 +54,8 @@ foreach (release IN LISTS releases)
     list(GET categories "${category_index}" category)
     list(GET titles "${category_index}" title)
     if (IS_DIRECTORY "${changelog_directory}/${release}/${category}")
-      file(GLOB entries
+      file(
+        GLOB entries
         RELATIVE "${changelog_directory}/${release}/${category}/"
         "${changelog_directory}/${release}/${category}/*.md")
       if (entries)
@@ -64,7 +66,7 @@ foreach (release IN LISTS releases)
         # bullet.
         foreach (entry IN LISTS entries)
           file(READ "${changelog_directory}/${release}/${category}/${entry}"
-            entry_texts)
+               entry_texts)
           string(REGEX REPLACE "--.*$" "" entry "${entry}")
           string(STRIP "${entry_texts}" entry_texts)
           string(REPLACE ";" ":semicolon:" entry_texts "${entry_texts}")
@@ -80,7 +82,8 @@ foreach (release IN LISTS releases)
             foreach (reference IN LISTS references)
               if (reference)
                 if (reference MATCHES "^[1-9][0-9]+\$")
-                  set(reference_link "@PROJECT_HOMEPAGE_URL@/pull/${reference}")
+                  set(reference_link
+                      "https://github.com/tenzir/vast/pull/${reference}")
                   string(PREPEND reference "#")
                 else ()
                   set(reference_link "https://github.com/${reference}")
@@ -100,6 +103,4 @@ endforeach ()
 # Assemble the amalgamated CHANGELOG.md file.
 file(READ "${changelog_directory}/legacy.md" changelog_legacy)
 file(WRITE "@CMAKE_CURRENT_BINARY_DIR@/CHANGELOG.md"
-  "${changelog}"
-  "${changelog_legacy}\n"
-  "${changelog_links}")
+     "${changelog}" "${changelog_legacy}\n" "${changelog_links}")
