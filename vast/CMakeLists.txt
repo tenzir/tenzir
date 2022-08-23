@@ -62,9 +62,8 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   # TODO: We don't consider CPACK_PACKAGE_INSTALL_PREFIX here, this could
   # potentially be solved with a more involved CPack setup. See also the
   # comment at the beginning of cmake/Package.cmake.
-  configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/vast.service.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/vast.service" @ONLY)
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/vast.service.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/vast.service" @ONLY)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.service"
           DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system/")
 endif ()
