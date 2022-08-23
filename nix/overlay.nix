@@ -96,7 +96,6 @@ in
       (inputs.nix-filter.lib.inDirectory ../plugins)
       (inputs.nix-filter.lib.inDirectory ../schema)
       (inputs.nix-filter.lib.inDirectory ../scripts)
-      (inputs.nix-filter.lib.inDirectory ../debian)
       (inputs.nix-filter.lib.inDirectory ../docs)
       (inputs.nix-filter.lib.inDirectory ../cmake)
       (inputs.nix-filter.lib.inDirectory ../changelog)

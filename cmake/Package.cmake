@@ -29,9 +29,9 @@ set(CPACK_DEBIAN_PACKAGE_NAME vast)
 set(CPACK_DEBIAN_PACKAGE_RELEASE 1)
 set(CPACK_DEBIAN_PACKAGE_SECTION "contrib/database")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
-    "${CMAKE_CURRENT_SOURCE_DIR}/debian/postinst"
-    "${CMAKE_CURRENT_SOURCE_DIR}/debian/postrm"
-    "${CMAKE_CURRENT_SOURCE_DIR}/debian/prerm")
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/debian/postinst"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/debian/postrm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/debian/prerm")
 set(CPACK_DEBIAN_PACKAGE_DEBUG ON)
 
 include(CPack)
