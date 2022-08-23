@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.3.0-rc1][v2.3.0-rc1]
+## [v2.3.0-rc2][v2.3.0-rc2]
 
 ### Changes
 
@@ -35,8 +35,23 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### Bug Fixes
 
+- VAST can now store data in segments bigger than 2GiB in size each.
+  [#2449](https://github.com/tenzir/vast/pull/2449)
+
+- VAST can now store column indices that are bigger than 2GiB.
+  [#2449](https://github.com/tenzir/vast/pull/2449)
+
 - VAST no longer occasionally prints warnings about no longer available partitions when queries run concurrently to imports.
   [#2500](https://github.com/tenzir/vast/pull/2500)
+
+- Configuration options representing durations with an associated command-line option like `vast.connection-timeout` and `--connection-timeout` were not picked up from configuration files or environment variables. This now works as expected.
+  [#2503](https://github.com/tenzir/vast/pull/2503)
+
+- Partitions now fail early when their stores fail to load from disk, detailing what went wrong in an error message.
+  [#2507](https://github.com/tenzir/vast/pull/2507)
+
+- The `rebuild` command, automatic rebuilds, and compaction are now much faster, and match the performance of the `import` command for building indexes.
+  [#2515](https://github.com/tenzir/vast/pull/2515)
 
 ## [v2.2.0][v2.2.0]
 
@@ -1902,7 +1917,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.3.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.3.0-rc1
+[v2.3.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.3.0-rc2
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
