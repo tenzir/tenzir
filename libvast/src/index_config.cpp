@@ -20,15 +20,29 @@ namespace vast {
 namespace {
 
 bool is_target_applicable(const qualified_record_field& index_qf,
-                          const std::string& target) {
-  constexpr auto rule_prefix = std::string_view{":"};
-  const auto is_type_rule = target.starts_with(rule_prefix);
-  if (is_type_rule) {
-    const auto type
-      = std::string_view{cbegin(target) + rule_prefix.size(), cend(target)};
-    return fmt::format("{}", index_qf.type()) == type;
-  }
-  return target == index_qf.name();
+                          std::string_view extractor) {
+  // TODO: Replace the logic of this function with a simple call to `resolve` on
+  // the typ with the extractor once we've unified type and field extractors.
+  // This is unnecessarily complicated for now, but we don't currently have a
+  // better API for it.
+  const auto is_type_extractor = extractor.starts_with(':');
+  if (!is_type_extractor)
+    return index_qf.name() == extractor;
+  const auto type_name = extractor.substr(1);
+  if (type_name.empty())
+    return false;
+  // First check whether the type name of any of the type names it aliases match
+  // the type extractor.
+  const auto type = index_qf.type();
+  for (const auto& name : type.names())
+    if (type_name == name)
+      return true;
+  // If that's not the case, check whether the type name is the name of any of
+  // the underlying basic type.
+  const auto basic_type_name = [](const concrete_type auto& x) noexcept {
+    return fmt::to_string(x);
+  };
+  return caf::visit(basic_type_name, type) == type_name;
 }
 
 bool should_use_rule(const std::vector<std::string>& targets,

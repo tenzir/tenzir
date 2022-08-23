@@ -36,6 +36,7 @@ const vast::type schema{
   "y",
   vast::record_type{
     {"x", vast::count_type{}},
+    {"y", vast::type{"foo", vast::count_type{}}},
   },
 };
 
@@ -84,6 +85,19 @@ TEST(should_create_partition_index will use create_partition_index from
 TEST(should_create_partition_index will will use create_partition_index from
        config if type is in the rule) {
   qualified_record_field in{schema, {0u}};
+  auto rules = std::vector{
+    index_config::rule{.targets = {":count"}, .create_partition_index = false}};
+  CHECK_EQUAL(should_create_partition_index(in, rules),
+              rules.front().create_partition_index);
+  // change config to true
+  rules.front().create_partition_index = true;
+  CHECK_EQUAL(should_create_partition_index(in, rules),
+              rules.front().create_partition_index);
+}
+
+TEST(should_create_partition_index will will use create_partition_index from
+       config if type alias is in the rule) {
+  qualified_record_field in{schema, {1u}};
   auto rules = std::vector{
     index_config::rule{.targets = {":count"}, .create_partition_index = false}};
   CHECK_EQUAL(should_create_partition_index(in, rules),
