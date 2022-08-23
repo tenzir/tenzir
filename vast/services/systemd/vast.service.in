@@ -24,7 +24,7 @@ AmbientCapabilities=
 RestrictSUIDSGID=yes
 
 # system access
-ExecPaths=@CMAKE_INSTALL_FULL_LIBEXECDIR@/dbsize.sh
+ExecPaths=@CMAKE_INSTALL_FULL_LIBEXECDIR@/vast-df-percent.sh
 ProtectSystem=strict
 ReadWritePaths=/var/lib/vast
 ReadWritePaths=/var/log/vast
