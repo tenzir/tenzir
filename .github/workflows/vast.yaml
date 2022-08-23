@@ -970,6 +970,20 @@ jobs:
           asset_name: "${{ matrix.nix.target }}-linux-static.tar.gz"
           asset_content_type: application/gzip
 
+      - name: Upload Debian Release Package
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
+          # The asset name is constant so we can permanently link to
+          # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb
+          # for a build of the latest release.
+          asset_name: "${{ matrix.nix.target }}-linux-static.deb"
+          asset_content_type: application/vnd.debian.binary-package
+
   python:
     name: Python
     runs-on: ${{ matrix.os }}
