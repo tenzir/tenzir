@@ -898,9 +898,9 @@ jobs:
       - name: Get Artifact Names
         id: get_artifact_names
         run: |
-          TAR_ZST=$(ls "${{ steps.build_static_package.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.tar.zst")
+          TAR_GZ=$(ls "${{ steps.build_static_package.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.tar.zst")
           DEB=$(ls "${{ steps.build_static_package.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.deb")
-          echo "::set-output name=tar_zst::${TAR_ZST}"
+          echo "::set-output name=tar_gz::${TAR_GZ}"
           echo "::set-output name=deb::${DEB}"
 
       - name: Upload Artifacts to Github
@@ -927,9 +927,9 @@ jobs:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
-          gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_zst }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_zst }}"
+          gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
           gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.outputs.deb }}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_zst }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
           gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-static-latest.deb"
 
       - name: Upload Artifact to GCS (release)
@@ -938,8 +938,8 @@ jobs:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
-          VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_zst }}" | cut -d"-" -f2)
-          gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_zst }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.tar.gz"
+          VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_gz }}" | cut -d"-" -f2)
+          gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.tar.gz"
           gsutil cp "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-${VERSION}-static-latest.deb"
 
       # This step ensures that assets from previous runs are cleaned up to avoid
