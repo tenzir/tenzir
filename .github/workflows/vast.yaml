@@ -898,7 +898,7 @@ jobs:
       - name: Get Artifact Names
         id: get_artifact_names
         run: |
-          TAR_GZ=$(ls "${{ steps.build_static_package.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.tar.zst")
+          TAR_GZ=$(ls "${{ steps.build_static_package.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.tar.gz")
           DEB=$(ls "${{ steps.build_static_package.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.deb")
           echo "::set-output name=tar_gz::${TAR_GZ}"
           echo "::set-output name=deb::${DEB}"
@@ -956,14 +956,14 @@ jobs:
           fail-if-no-release: true
           assets: "${{ matrix.nix.target }}-linux-static.tar.gz"
 
-      - name: Upload Release Assets
+      - name: Upload Release Tarball
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BUILD_DIR }}/${{ steps.get_artifact_names.outputs.tar_zst }}"
+          asset_path: "${{ steps.build_static_package.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
           # for a build of the latest release.
