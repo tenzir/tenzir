@@ -37,4 +37,3 @@ if [ "$1" = "purge" ]; then
 	fi
 fi
 # End automatically added section
-
