@@ -35,5 +35,6 @@ if [ "$1" = "purge" ]; then
 		deb-systemd-helper purge 'vast.service' >/dev/null || true
 		deb-systemd-helper unmask 'vast.service' >/dev/null || true
 	fi
+	rm -f /lib/systemd/system/vast.service
 fi
 # End automatically added section
