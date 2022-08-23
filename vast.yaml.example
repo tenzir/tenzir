@@ -211,7 +211,7 @@ vast:
     # compressed filesystem where raw file size is not the correct metric.
     # Must be the absolute path to an executable file, which will get passed
     # the database directory as its first and only argument.
-    #disk-budget-check-binary:
+    #disk-budget-check-binary: /opt/vast/libexec/vast-df-percent.sh
 
 
   # The `vast count` command counts hits for a query without exporting data.

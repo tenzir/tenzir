@@ -729,11 +729,11 @@ if (VAST_ENABLE_CORELIGHT_CAT)
           DESTINATION "${CMAKE_INSTALL_BINDIR}")
 endif ()
 
-option(VAST_ENABLE_DBSIZE_SH "Install dbsize.sh with VAST" ON)
-add_feature_info("VAST_ENABLE_DBSIZE_SH" VAST_ENABLE_DBSIZE_SH
-                 "install dbsize.sh with VAST.")
-if (VAST_ENABLE_DBSIZE_SH)
-  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/dbsize.sh"
+option(VAST_ENABLE_VAST_DF_PERCENT "Install vast-df-percent.sh with VAST" ON)
+add_feature_info("VAST_ENABLE_VAST_DF_PERCENT" VAST_ENABLE_VAST_DF_PERCENT
+                 "install vast-df-percent.sh with VAST.")
+if (VAST_ENABLE_VAST_DF_PERCENT)
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vast-df-percent.sh"
           # These should be inherited from the source but they
           # get lost in CPack, so we set them explicitly.
           PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
