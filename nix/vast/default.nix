@@ -111,6 +111,7 @@ stdenv.mkDerivation (rec {
     "-UCMAKE_INSTALL_LIBEXECDIR"
     "-UCMAKE_INSTALL_LOCALEDIR"
     "-DCMAKE_INSTALL_PREFIX=/opt/vast"
+    "-DCPACK_GENERATOR=TGZ;DEB"
   ] ++ extraCmakeFlags;
 
   # The executable is run to generate the man page as part of the build phase.
