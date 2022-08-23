@@ -148,7 +148,7 @@ stdenv.mkDerivation (rec {
 } // lib.optionalAttrs buildAsPackage {
   installPhase = ''
     cmake --build . --target package
-    install -m 644 -Dt $out *.deb *.tar.gz
+    install -m 644 -Dt $out package/*.deb package/*.tar.gz
   '';
   # We don't need the nix support files in this case.
   fixupPhase = "";

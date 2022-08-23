@@ -17,8 +17,11 @@ endif ()
 set(CPACK_PACKAGE_NAME "vast")
 set(CPACK_PACKAGE_VENDOR "Tenzir")
 set(CPACK_PACKAGE_CONTACT "engineering@tenzir.com")
-set(CPACK_VERBATIM_VARIABLES ON)
 set(CPACK_PACKAGE_VERSION "${VAST_VERSION_SHORT}")
+# Put packages into a dedicated package sub directory inside the
+# build directory so we can find them a little easier.
+set(CPACK_PACKAGE_DIRECTORY "package")
+set(CPACK_VERBATIM_VARIABLES ON)
 
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
