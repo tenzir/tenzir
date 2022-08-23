@@ -23,6 +23,9 @@ if [ "$1" = "configure" ]; then
 fi
 
 if [ "$1" = "configure" ] ; then
+	# Link the service into systemd's default service directory to make
+	# it known. This is normally done with `systemctl link`, but that
+	# command is not available in the dpkg context.
 	ln -sf /opt/vast/lib/systemd/system/vast.service /lib/systemd/system/
 fi
 
