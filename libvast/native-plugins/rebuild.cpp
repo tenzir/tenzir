@@ -405,6 +405,20 @@ struct rebuilder_state {
         [this, rp, current_run_events,
          num_partitions = current_run_partitions.size(), is_heterogeneous,
          is_oversized](std::vector<partition_info>& result) mutable {
+          if (result.empty()) {
+            VAST_DEBUG("{} skipped {} partitions as they are already being "
+                       "transformed by another actor",
+                       *self, num_partitions);
+            run->statistics.num_total -= num_partitions;
+            run->statistics.num_rebuilding -= num_partitions;
+            if (is_heterogeneous)
+              run->statistics.num_heterogeneous -= 1;
+            // Pick up new work until we run out of remainig partitions.
+            emit_telemetry();
+            rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
+                        atom::rebuild_v);
+            return;
+          }
           VAST_DEBUG("{} rebuilt {} into {} partitions", *self, num_partitions,
                      result.size());
           // Determines whether we moved partitions back.
