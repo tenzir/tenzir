@@ -484,18 +484,40 @@ endif ()
 option(VAST_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
 add_feature_info("VAST_ENABLE_CLANG_TIDY" VAST_ENABLE_CLANG_TIDY
                  "run clang-tidy during build.")
-if (VAST_ENABLE_CLANG_TIDY)
-  macro (VASTTargetEnableTooling _target)
-    set(_clang_tidy_args
-        "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
-    set_target_properties(
-      ${_target} PROPERTIES CXX_CLANG_TIDY "${_clang_tidy_args}"
-                            C_CLANG_TIDY "${_clang_tidy_args}")
-  endmacro ()
-else ()
-  macro (VASTTargetEnableTooling _target)
+set(VAST_CLANG_TIDY_ARGS
+    "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
 
-  endmacro ()
+option(VAST_ENABLE_CODE_COVERAGE "Add code-coverage targets" OFF)
+add_feature_info("VAST_ENABLE_CODE_COVERAGE" VAST_ENABLE_CODE_COVERAGE
+                 "add code-coverage targets.")
+if (VAST_ENABLE_CODE_COVERAGE)
+  set(CODE_COVERAGE "${VAST_ENABLE_CODE_COVERAGE}")
+  include(CodeCoverage)
+  mark_as_advanced(CODE_COVERAGE)
+endif ()
+
+macro (VASTTargetEnableTooling _target)
+  if (VAST_ENABLE_CLANG_TIDY)
+    set_target_properties(
+      "${_target}" PROPERTIES CXX_CLANG_TIDY "${VAST_CLANG_TIDY_ARGS}"
+                              C_CLANG_TIDY "${VAST_CLANG_TIDY_ARGS}")
+  endif ()
+  if (VAST_ENABLE_CODE_COVERAGE)
+    target_code_coverage("${_target}" ${ARGV} EXCLUDE
+                         "${PROJECT_SOURCE_DIR}/libvast/aux/*")
+  endif ()
+endmacro ()
+VASTTargetEnableTooling(libvast_internal INTERFACE)
+
+# Add a custom executable that runs the CMake build targets 'test' and
+# 'integration' so we can instrument them toether for combined code coverage.
+if (VAST_ENABLE_CODE_COVERAGE)
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/all_tests.c.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c" @ONLY)
+  set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c"
+                             PROPERTIES COMPILE_FLAGS -O0)
+  add_executable(vast-coverage "${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c")
+  VASTTargetEnableTooling(vast-coverage AUTO)
 endif ()
 
 # Build VAST in developer mode. This is enabled by default when not building

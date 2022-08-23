@@ -417,6 +417,7 @@ function (VASTRegisterPlugin)
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.h" "")
   list(APPEND PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.h")
   add_library(${PLUGIN_TARGET} OBJECT ${PLUGIN_SOURCES})
+  VASTTargetEnableTooling(${PLUGIN_TARGET})
   target_link_libraries(
     ${PLUGIN_TARGET}
     PUBLIC vast::libvast
@@ -501,6 +502,7 @@ function (VASTRegisterPlugin)
   # Create a static library target for our plugin with the entrypoint, and use
   # static versions of VAST_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
+  VASTTargetEnableTooling(${PLUGIN_TARGET}-static)
   VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
@@ -524,6 +526,7 @@ function (VASTRegisterPlugin)
 
     # Create a shared library target for our plugin.
     add_library(${PLUGIN_TARGET}-shared SHARED ${PLUGIN_ENTRYPOINT})
+    VASTTargetEnableTooling(${PLUGIN_TARGET}-shared)
     VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-shared PUBLIC ${PLUGIN_TARGET})
     target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE vast::internal)
 
@@ -602,6 +605,7 @@ function (VASTRegisterPlugin)
   # Setup unit tests.
   if (VAST_ENABLE_UNIT_TESTS AND PLUGIN_TEST_SOURCES)
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
+    VASTTargetEnableTooling(${PLUGIN_TARGET}-test)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
                                                         vast::internal)
     VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE

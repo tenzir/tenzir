@@ -1,0 +1,25 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#define RUN_CMAKE_TARGET(target)                                               \
+  {                                                                            \
+    pid_t pid = fork();                                                        \
+    if (pid == 0) {                                                            \
+      char* argv[6] = {                                                        \
+        "cmake", "--build", "@CMAKE_BINARY_DIR@", "--target", target, 0,       \
+      };                                                                       \
+      execv("@CMAKE_COMMAND@", argv);                                          \
+      exit(127);                                                               \
+    } else {                                                                   \
+      waitpid(pid, NULL, 0);                                                   \
+    }                                                                          \
+  }
+
+int main() {
+  RUN_CMAKE_TARGET("test")
+  RUN_CMAKE_TARGET("integration")
+  return EXIT_SUCCESS;
+}
