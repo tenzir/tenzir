@@ -44,6 +44,7 @@ struct partition_options {
 
 // Options specific to printing segments.
 struct segment_options {
+  bool print_header = false;
   bool print_contents = true;
 };
 

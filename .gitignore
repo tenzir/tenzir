@@ -53,6 +53,7 @@ __pycache__/
 /web/src/pages/changelog.md
 /web/docs/develop-vast/contributing/code-of-conduct.md
 /web/docs/develop-vast/contributing/coding-style.md
+/web/docs/develop-vast/contributing/notebooks.md
 /web/docs/develop-vast/contributing/workflow.md
 /web/docs/develop-vast/contributing/security.md
 /web/docs/try-vast/*.md

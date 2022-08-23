@@ -111,7 +111,6 @@ void serialize(
       std::make_pair(qf.name(), chunk_it->second));
   }
   // Create the partition flatbuffer.
-  flatbuffers::FlatBufferBuilder builder;
   auto combined_layout = self->state.combined_layout();
   if (!combined_layout) {
     auto err = caf::make_error(ec::logic_error, "unable to create "
@@ -121,7 +120,7 @@ void serialize(
     self->state.persistence_promise.deliver(err);
     return;
   }
-  auto partition = pack(builder, self->state.data, *combined_layout);
+  auto partition = pack_full(self->state.data, *combined_layout);
   if (!partition) {
     VAST_ERROR("{} failed to serialize {} with error: {}", *self,
                self->state.name, partition.error());
@@ -153,14 +152,13 @@ void serialize(
                 *self->state.synopsis_path, std::move(ps_chunk))
       .then([=](atom::ok) {}, [=](caf::error) {});
   }
-  auto fbchunk = fbs::release(builder);
   VAST_DEBUG("{} persists partition with a total size of "
              "{} bytes",
-             *self, fbchunk->size());
+             *self, (*partition)->size());
   // TODO: Add a proper timeout.
   self
     ->request(self->state.filesystem, caf::infinite, atom::write_v,
-              *self->state.persist_path, std::move(fbchunk))
+              *self->state.persist_path, std::move(*partition))
     .then(
       [=](atom::ok) {
         // Relinquish ownership and send the shrunken synopsis to
@@ -223,32 +221,48 @@ bool partition_selector::operator()(const qualified_record_field& filter,
   return filter == column.field();
 }
 
-caf::expected<flatbuffers::Offset<fbs::Partition>>
-pack(flatbuffers::FlatBufferBuilder& builder,
-     const active_partition_state::serialization_data& x,
-     const record_type& combined_layout) {
+caf::expected<vast::chunk_ptr>
+pack_full(const active_partition_state::serialization_data& x,
+          const record_type& combined_layout) {
+  flatbuffers::FlatBufferBuilder builder;
   auto uuid = pack(builder, x.id);
   if (!uuid)
     return uuid.error();
   std::vector<flatbuffers::Offset<fbs::value_index::LegacyQualifiedValueIndex>>
     indices;
+  std::vector<vast::chunk_ptr> external_indices;
   // Note that the deserialization code relies on the order of indexers within
   // the flatbuffers being preserved.
   for (const auto& [name, chunk] : x.indexer_chunks) {
     auto fieldname = builder.CreateString(name);
     auto data = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
+    auto size = size_t{0};
+    auto external_idx = size_t{0};
     if (chunk) {
       auto compressed_chunk = chunk::compress(as_bytes(chunk));
       if (!compressed_chunk)
         return compressed_chunk.error();
-      data = builder.CreateVector(
-        reinterpret_cast<const uint8_t*>((*compressed_chunk)->data()),
-        (*compressed_chunk)->size());
+      size = (*compressed_chunk)->size();
+      // This threshold is an educated guess to keep tiny indices inline
+      // to reduce additional page loads and huge indices out of the way.
+      constexpr auto INDEXER_INLINE_THRESHOLD = 4096ull;
+      if (size >= INDEXER_INLINE_THRESHOLD) {
+        data = builder.CreateVector(
+          reinterpret_cast<const uint8_t*>((*compressed_chunk)->data()), size);
+      } else {
+        external_indices.emplace_back(std::move(*compressed_chunk));
+        // The index into the flatbuffer_container is 1 + index into
+        // `external_indices`.
+        external_idx = external_indices.size();
+      }
     }
     fbs::value_index::detail::LegacyValueIndexBuilder vbuilder(builder);
-    vbuilder.add_data(data);
     if (chunk)
       vbuilder.add_decompressed_size(chunk->size());
+    if (external_idx > 0)
+      vbuilder.add_external_container_idx(external_idx);
+    else
+      vbuilder.add_data(data);
     auto vindex = vbuilder.Finish();
     fbs::value_index::LegacyQualifiedValueIndexBuilder qbuilder(builder);
     qbuilder.add_field_name(fieldname);
@@ -303,8 +317,16 @@ pack(flatbuffers::FlatBufferBuilder& builder,
   partition_builder.add_partition_type(fbs::partition::Partition::legacy);
   partition_builder.add_partition(partition_v0.Union());
   auto partition = partition_builder.Finish();
-  fbs::FinishPartitionBuffer(builder, partition);
-  return partition;
+  FinishPartitionBuffer(builder, partition);
+  auto chunk = chunk::make(builder.Release());
+  // To keep things simple we always write a `SegmentedFile`,
+  // even if all indices are inline.
+  fbs::flatbuffer_container_builder cbuilder;
+  cbuilder.add(as_bytes(chunk));
+  for (auto const& index : external_indices)
+    cbuilder.add(as_bytes(index));
+  auto container = std::move(cbuilder).finish(fbs::PartitionIdentifier());
+  return std::move(container).dissolve();
 }
 
 active_partition_actor::behavior_type active_partition(
@@ -627,7 +649,7 @@ active_partition_actor::behavior_type active_partition(
       // Reservation is necessary to make sure the entries don't get relocated
       // as the underlying vector grows - `ps` would refer to the wrong memory
       // otherwise.
-      const auto timeout = defaults::system::initial_request_timeout / 5 * 3;
+      const auto timeout = defaults::system::status_request_timeout / 5 * 3;
       indexer_states.reserve(self->state.indexers.size());
       for (auto& i : self->state.indexers) {
         auto& ps = caf::get<record>(indexer_states.emplace_back(record{}));

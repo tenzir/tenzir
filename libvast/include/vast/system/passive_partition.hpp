@@ -11,7 +11,9 @@
 #include "vast/fwd.hpp"
 
 #include "vast/aliases.hpp"
+#include "vast/fbs/flatbuffer_container.hpp"
 #include "vast/fbs/partition.hpp"
+#include "vast/fbs/segmented_file.hpp"
 #include "vast/ids.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -43,6 +45,8 @@ struct passive_partition_state {
   // -- constructor ------------------------------------------------------------
 
   passive_partition_state() = default;
+
+  caf::error initialize_from_chunk(const vast::chunk_ptr&);
 
   // -- member types -----------------------------------------------------------
 
@@ -114,6 +118,9 @@ struct passive_partition_state {
   /// A typed view into the `partition_chunk`.
   const fbs::partition::LegacyPartition* flatbuffer = {};
 
+  /// The flatbuffer container holding the index data
+  std::optional<fbs::flatbuffer_container> container = {};
+
   /// Maps qualified fields to indexer actors. This is mutable since
   /// indexers are spawned lazily on first access.
   mutable std::vector<indexer_actor> indexers = {};
@@ -122,10 +129,21 @@ struct passive_partition_state {
 // -- flatbuffers --------------------------------------------------------------
 
 [[nodiscard]] caf::error
-unpack(const fbs::partition::LegacyPartition& x, passive_partition_state& y);
+unpack(const fbs::partition::LegacyPartition&, passive_partition_state&);
 
 [[nodiscard]] caf::error
-unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& y);
+unpack(const fbs::partition::LegacyPartition&, partition_synopsis&);
+
+/// Get various parts of a passive partition from a chunk containing a partition
+/// file. These functions hide the differences of the underlying file formats
+/// used by different VAST versions. They are also a stop-gap until we introduce
+/// a dedicated class to wrap a partition flatbuffer.
+struct partition_chunk {
+  static caf::expected<index_statistics> get_statistics(vast::chunk_ptr);
+
+  static caf::expected<const vast::fbs::Partition*>
+    get_flatbuffer(vast::chunk_ptr);
+};
 
 // -- behavior -----------------------------------------------------------------
 

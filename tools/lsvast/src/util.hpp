@@ -36,6 +36,10 @@ public:
     levels_.pop_back();
   }
 
+  [[nodiscard]] const std::vector<int>& levels() const {
+    return levels_;
+  }
+
   friend std::ostream& operator<<(std::ostream&, const indentation&);
 
 private:
@@ -151,3 +155,20 @@ print_bytesize(size_t bytes, const formatting_options& formatting) {
 }
 
 } // namespace lsvast
+
+template <>
+struct fmt::formatter<lsvast::indentation> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const lsvast::indentation& value, FormatContext& ctx) const {
+    auto out = ctx.out();
+    for (auto level : value.levels())
+      for (int i = 0; i < level; ++i)
+        out = format_to(out, " ");
+    return out;
+  }
+};

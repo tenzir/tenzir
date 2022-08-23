@@ -8,45 +8,36 @@
 # captures outputs when converting to *.ipynb. So we use nbconvert afterwards to
 # translate the *.ipynb files to Markdown.
 
-VENV := venv
+POETRY := $(shell command -v poetry 2> /dev/null)
 BUILD := output
-NOTEBOOKS = $(wildcard *.md)
+NOTEBOOKS = $(filter-out README.md, $(wildcard *.md))
 MD = $(addprefix $(BUILD)/md/, $(NOTEBOOKS))
 IPYNB = $(addprefix $(BUILD)/ipynb/, $(NOTEBOOKS:.md=.ipynb))
 
-all: md
-
-md: $(MD)
+all: poetry poetry-install md
 
 ipynb: $(IPYNB)
 
-$(IPYNB) $(MD): $(VENV)
+md: $(MD)
 
-$(VENV):
-	@python3 -m venv $(VENV)
-	@[ -n "$$FISH_VERSION" ] && \
-    . $(VENV)/bin/activate.fish || \
-    . $(VENV)/bin/activate && \
-		cd $(VENV) && \
-		pip install nbconvert jupytext ipykernel bash_kernel && \
-		python -m bash_kernel.install
+poetry:
+ifndef POETRY
+	$(error "poetry not in $$PATH; please install system-wide")
+endif
+
+poetry-install:
+	@poetry install --no-root
+	@poetry	run python -m bash_kernel.install
 
 $(BUILD)/ipynb/%.ipynb: %.md
 	@echo "==> $@"
 	@mkdir -p $(BUILD)/ipynb
-	@[ -n "$$FISH_VERSION" ] && \
-    . $(VENV)/bin/activate.fish || \
-    . $(VENV)/bin/activate && \
-    jupytext --to notebook --execute -o $@ $<
+	@poetry run jupytext --to notebook --execute -o $@ $<
 
 $(BUILD)/md/%.md: $(BUILD)/ipynb/%.ipynb
 	@echo "==> $@"
 	@mkdir -p $(BUILD)/md
-	@[ -n "$$FISH_VERSION" ] && \
-    . $(VENV)/bin/activate.fish || \
-    . $(VENV)/bin/activate && \
-	  jupyter nbconvert --to markdown --output-dir $(BUILD)/md $<
+	@poetry run jupyter nbconvert --to markdown --output-dir $(BUILD)/md $<
 
 clean:
-	rm -rf $(VENV)
 	rm -rf $(BUILD)

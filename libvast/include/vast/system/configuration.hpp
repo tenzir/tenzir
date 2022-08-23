@@ -27,6 +27,11 @@ config_dirs(const caf::actor_system_config& cfg);
 /// @note This function is not threadsafe.
 const std::vector<std::filesystem::path>& loaded_config_files();
 
+/// @returns The duration value of the given option.
+caf::expected<duration>
+get_or_duration(const caf::settings& options, std::string_view key,
+                duration fallback);
+
 /// Bundles all configuration parameters of a VAST system.
 class configuration : public caf::actor_system_config {
 public:

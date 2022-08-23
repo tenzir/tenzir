@@ -19,6 +19,7 @@
 #include <vast/system/catalog.hpp>
 #include <vast/system/index.hpp>
 #include <vast/system/node.hpp>
+#include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/system/read_query.hpp>
 #include <vast/system/report.hpp>
@@ -404,6 +405,20 @@ struct rebuilder_state {
         [this, rp, current_run_events,
          num_partitions = current_run_partitions.size(), is_heterogeneous,
          is_oversized](std::vector<partition_info>& result) mutable {
+          if (result.empty()) {
+            VAST_DEBUG("{} skipped {} partitions as they are already being "
+                       "transformed by another actor",
+                       *self, num_partitions);
+            run->statistics.num_total -= num_partitions;
+            run->statistics.num_rebuilding -= num_partitions;
+            if (is_heterogeneous)
+              run->statistics.num_heterogeneous -= 1;
+            // Pick up new work until we run out of remainig partitions.
+            emit_telemetry();
+            rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
+                        atom::rebuild_v);
+            return;
+          }
           VAST_DEBUG("{} rebuilt {} into {} partitions", *self, num_partitions,
                      result.size());
           // Determines whether we moved partitions back.
@@ -591,10 +606,9 @@ get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
     = std::holds_alternative<system::node_actor>(node_opt)
         ? std::get<system::node_actor>(node_opt)
         : std::get<scope_linked<system::node_actor>>(node_opt).get();
+  const auto timeout = system::node_connection_timeout(config);
   auto result = caf::expected<caf::actor>{caf::no_error};
-  self
-    ->request(node, defaults::system::initial_request_timeout, atom::get_v,
-              atom::type_v, "rebuild")
+  self->request(node, timeout, atom::get_v, atom::type_v, "rebuild")
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {

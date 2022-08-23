@@ -1,0 +1,56 @@
+namespace vast.fbs.segmented_file;
+
+// A container to interpret a single file as a group of individual
+// chunks. The main use case is to work around the 2GiB limit for
+// individual flatbuffers by being able to store the versioned
+// flatbuffer part and the bulk of the data in different segments.
+//
+//  File Start                                                  File End
+//     |                                                           |
+//     |[SegmentedFileHeader][segment 1][segment 2][segment 3] ... |
+//                |                              ^
+//                \------------------------------/
+//
+//
+// This container cannot be embedded as "nested_flatbuffer" into another
+// class, because offsets are measured from the beginning of the file.
+
+struct FileSegment {
+  /// Offset of this segment. A byte offset measured from the beginning
+  /// of the file.
+  offset: uint64;
+
+  /// Size of this segment.
+  size: uint64;
+}
+
+struct FileIdentifier {
+  data: [ubyte: 4];
+}
+
+/// An overview of memory chunks contained in a file; used by
+/// the `flatbuffer_container`.
+table v0 {
+  /// Since many semantically different types can use the
+  /// `SegmentedFileHeader` for the outermost framing, this stores
+  /// the identifier of the inner flatbuffer to allow distinguishing
+  /// them.
+  inner_identifier: FileIdentifier;
+
+  /// The individual segments that make up this file.
+  file_segments: [FileSegment];
+}
+
+union SegmentedFileHeader {
+  v0,
+}
+
+namespace vast.fbs;
+
+table SegmentedFileHeader {
+  header: segmented_file.SegmentedFileHeader;  
+}
+
+root_type SegmentedFileHeader;
+
+file_identifier "vSFH";

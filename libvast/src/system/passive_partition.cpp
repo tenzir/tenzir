@@ -66,13 +66,23 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
   if (!indexer) {
     const auto* qualified_index = flatbuffer->indexes()->Get(position);
     const auto* index = qualified_index->index();
-    const auto* data = index->data();
-    if (!data)
+    auto data = index->data();
+    auto external_idx = index->external_container_idx();
+    if (!data && external_idx == 0)
       return {};
+    VAST_ASSERT_CHEAP(data || external_idx > 0);
+    auto data_view = std::span<const std::byte>{};
+    if (external_idx == 0) {
+      data_view = as_bytes(*data);
+    } else {
+      // If an external idx was specified, the data is not stored inline in
+      // the flatbuffer but in a separate segment of this file.
+      data_view = as_bytes(container->get_raw(external_idx));
+    }
     auto uncompressed_data
       = index->decompressed_size() != 0
-          ? chunk::decompress(as_bytes(*data), index->decompressed_size())
-          : chunk::make(as_bytes(*data), []() noexcept {});
+          ? chunk::decompress(data_view, index->decompressed_size())
+          : chunk::make(data_view, []() noexcept {});
     VAST_ASSERT(uncompressed_data);
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
@@ -102,11 +112,11 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   if (!partition.uuid())
     return caf::make_error(ec::format_error, //
                            "missing 'uuid' field in partition flatbuffer");
-  auto combined_layout = partition.combined_layout();
+  auto const* combined_layout = partition.combined_layout();
   if (!combined_layout)
     return caf::make_error(ec::format_error, //
                            "missing 'layouts' field in partition flatbuffer");
-  auto store_header = partition.store();
+  auto const* store_header = partition.store();
   // If no store_id is set, use the global store for backwards compatibility.
   if (store_header && !store_header->id())
     return caf::make_error(ec::format_error, //
@@ -120,15 +130,15 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
     state.store_header = std::span{
       reinterpret_cast<const std::byte*>(store_header->data()->data()),
       store_header->data()->size()};
-  auto indexes = partition.indexes();
+  auto const* indexes = partition.indexes();
   if (!indexes)
     return caf::make_error(ec::format_error, //
                            "missing 'indexes' field in partition flatbuffer");
-  for (auto qualified_index : *indexes) {
+  for (auto const* qualified_index : *indexes) {
     if (!qualified_index->field_name())
       return caf::make_error(ec::format_error, //
                              "missing field name in qualified index");
-    auto index = qualified_index->index();
+    auto const* index = qualified_index->index();
     if (!index)
       return caf::make_error(ec::format_error, //
                              "missing index field in qualified index");
@@ -157,11 +167,11 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   state.indexers.resize(indexes->size());
   VAST_DEBUG("{} found {} indexers for partition {}", state.name,
              indexes->size(), state.id);
-  auto type_ids = partition.type_ids();
+  auto const* type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
-    auto type_ids_tuple = type_ids->Get(i);
-    auto name = type_ids_tuple->name();
-    auto ids_data = type_ids_tuple->ids();
+    auto const* type_ids_tuple = type_ids->Get(i);
+    auto const* name = type_ids_tuple->name();
+    auto const* ids_data = type_ids_tuple->ids();
     auto& ids = state.type_ids_[name->str()];
     if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
@@ -182,6 +192,138 @@ unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
   if (!x.partition_synopsis()->id_range())
     return unpack(*x.partition_synopsis(), ps, x.offset(), x.events());
   return unpack(*x.partition_synopsis(), ps);
+}
+
+caf::expected<index_statistics>
+partition_chunk::get_statistics(vast::chunk_ptr chunk) {
+  auto result = index_statistics{};
+  if (flatbuffers::BufferHasIdentifier(chunk->data(),
+                                       fbs::PartitionIdentifier())) {
+    // For partitions written prior to VAST 2.3, the chunk contains the
+    // partition as top-level flatbuffer. For very old ones, it may also
+    // happen that it has multiple layouts.
+    using ::flatbuffers::soffset_t;
+    if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE)
+      return caf::make_error(ec::format_error, "chunk exceeds max buffer size");
+    const auto* partition = fbs::GetPartition(chunk->data());
+    if (partition->partition_type() != fbs::partition::Partition::legacy) {
+      return caf::make_error(ec::format_error, "unexpected format version");
+    }
+    vast::ids all_ids;
+    const auto* partition_legacy = partition->partition_as_legacy();
+    for (const auto* partition_stats : *partition_legacy->type_ids()) {
+      const auto* name = partition_stats->name();
+      vast::ids ids;
+      if (auto error = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
+        VAST_WARN("could not deserialize ids to adjust "
+                  "statistics: {}",
+                  error);
+        continue;
+      }
+      all_ids |= ids;
+      result.layouts[name->str()].count += rank(ids);
+    }
+  } else if (flatbuffers::BufferHasIdentifier(
+               chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
+    // For partitions with a SegmentedFileHeader at the root, we know
+    // they must be at least version 1 and thus have a fixed schema.
+    auto header = fbs::GetSegmentedFileHeader(chunk->data());
+    if (header->header_type() != fbs::segmented_file::SegmentedFileHeader::v0)
+      return caf::make_error(ec::format_error,
+                             fmt::format("with invalid version of type: {}",
+                                         header->GetFullyQualifiedName()));
+    auto container = fbs::flatbuffer_container(chunk);
+    VAST_ASSERT_CHEAP(container); // FIXME dev assertion
+    auto const* partition = container.as_flatbuffer<fbs::Partition>(0);
+    VAST_ASSERT_CHEAP(partition); // FIXME dev assertion
+    VAST_ASSERT_CHEAP(
+      partition->partition_type()
+      == vast::fbs::partition::Partition::legacy); // FIXME dev assertion
+    auto const* partition_legacy = partition->partition_as_legacy();
+    VAST_ASSERT_CHEAP(partition_legacy); // FIXME dev assertion
+    auto const* synopsis = partition_legacy->partition_synopsis();
+    VAST_ASSERT_CHEAP(synopsis->version() >= 1);
+    auto type = vast::type{chunk::copy(as_bytes(*synopsis->schema()))};
+    result.layouts[std::string{type.name()}].count
+      += partition_legacy->events();
+  } else {
+    return caf::make_error(ec::format_error, "unknown header");
+  }
+  return result;
+}
+
+caf::expected<const vast::fbs::Partition*>
+partition_chunk::get_flatbuffer(vast::chunk_ptr chunk) {
+  if (flatbuffers::BufferHasIdentifier(chunk->data(),
+                                       fbs::PartitionIdentifier())) {
+    // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'
+    // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
+    using ::flatbuffers::soffset_t;
+    if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+      return caf::make_error(ec::format_error, "partition exceeds the maximum "
+                                               "flatbuffer size");
+    }
+    return fbs::GetPartition(chunk->data());
+  } else if (flatbuffers::BufferHasIdentifier(
+               chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
+    auto container = fbs::flatbuffer_container(chunk);
+    if (!container)
+      return caf::make_error(ec::format_error, "invalid flatbuffer container");
+    return container.as_flatbuffer<fbs::Partition>(0);
+  } else {
+    return caf::make_error(ec::format_error, "unknown identifier {}",
+                           flatbuffers::GetBufferIdentifier(chunk->data()));
+  }
+}
+
+caf::error
+passive_partition_state::initialize_from_chunk(const vast::chunk_ptr& chunk) {
+  // For partitions written prior to VAST 2.3, the chunk contains the partition
+  // as top-level flatbuffer.
+  if (flatbuffers::BufferHasIdentifier(chunk->data(),
+                                       fbs::PartitionIdentifier())) {
+    // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'
+    // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
+    using ::flatbuffers::soffset_t;
+    if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("failed to load partition because its size of {} "
+                    "exceeds the "
+                    "maximum allowed size of {}",
+                    chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE));
+    }
+    auto partition = fbs::GetPartition(chunk->data());
+    if (partition->partition_type() != fbs::partition::Partition::legacy) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("unknown partition version {}",
+                    static_cast<uint8_t>(partition->partition_type())));
+    }
+    this->partition_chunk = chunk;
+    this->flatbuffer = partition->partition_as_legacy();
+  } else if (flatbuffers::BufferHasIdentifier(
+               chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
+    this->partition_chunk = chunk;
+    this->container = fbs::flatbuffer_container(chunk);
+    if (!this->container)
+      return caf::make_error(ec::format_error, "invalid flatbuffer container");
+    auto partition = container->as_flatbuffer<fbs::Partition>(0);
+    if (partition->partition_type() != fbs::partition::Partition::legacy)
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("unknown partition version {}",
+                    static_cast<uint8_t>(partition->partition_type())));
+    this->flatbuffer = partition->partition_as_legacy();
+  } else {
+    return caf::make_error(ec::format_error,
+                           "partition at contains unknown identifier {}",
+                           flatbuffers::GetBufferIdentifier(chunk->data()));
+  }
+  if (auto error = unpack(*flatbuffer, *this))
+    return caf::make_error(
+      ec::format_error, fmt::format("failed to unpack partition: {}", error));
+  return {};
 }
 
 partition_actor::behavior_type passive_partition(
@@ -255,30 +397,11 @@ partition_actor::behavior_type passive_partition(
           self->quit();
           return;
         }
-        // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'
-        // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
-        using ::flatbuffers::soffset_t;
-        if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
-          VAST_ERROR("failed to load partition at {} because its size of {} "
-                     "exceeds the "
-                     "maximum allowed size of {}",
-                     path, chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
-          return self->quit();
-        }
-        // Deserialize chunk from the filesystem actor
-        auto partition = fbs::GetPartition(chunk->data());
-        if (partition->partition_type() != fbs::partition::Partition::legacy) {
-          VAST_ERROR("{} found partition with invalid version of type: {}",
-                     *self, partition->GetFullyQualifiedName());
+        if (auto err = self->state.initialize_from_chunk(chunk)) {
+          VAST_ERROR("{} failed to initialize passive partition from file {}: "
+                     "{}",
+                     *self, path, err);
           self->quit();
-          return;
-        }
-        auto partition_legacy = partition->partition_as_legacy();
-        self->state.partition_chunk = chunk;
-        self->state.flatbuffer = partition_legacy;
-        if (auto error = unpack(*self->state.flatbuffer, self->state)) {
-          VAST_ERROR("{} failed to unpack partition: {}", *self, render(error));
-          self->quit(std::move(error));
           return;
         }
         if (self->state.id != id) {

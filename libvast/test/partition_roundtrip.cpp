@@ -159,20 +159,18 @@ TEST(empty partition roundtrip) {
   state.data.synopsis.unshared().add(
     slice, vast::defaults::system::max_partition_size, vast::index_config{});
   // Serialize partition.
-  flatbuffers::FlatBufferBuilder builder;
+  vast::chunk_ptr partition_chunk = {};
   {
     auto combined_layout = state.combined_layout();
     REQUIRE(combined_layout);
-    auto partition = pack(builder, state.data, *combined_layout);
+    auto partition = pack_full(state.data, *combined_layout);
     REQUIRE(partition);
-    vast::fbs::FinishPartitionBuffer(builder, *partition);
+    partition_chunk = *partition;
   }
-  auto ptr = builder.GetBufferPointer();
-  auto sz = builder.GetSize();
-  std::span span(ptr, sz);
   // Deserialize partition.
   vast::system::passive_partition_state recovered_state = {};
-  auto partition = vast::fbs::GetPartition(span.data());
+  auto container = vast::fbs::flatbuffer_container{partition_chunk};
+  auto partition = container.as_flatbuffer<vast::fbs::Partition>(0);
   REQUIRE(partition);
   REQUIRE_EQUAL(partition->partition_type(),
                 vast::fbs::partition::Partition::legacy);
@@ -306,8 +304,8 @@ TEST(full partition roundtrip) {
           [&tally](uint64_t x) {
             tally = x;
           },
-          [](caf::error&) {
-            REQUIRE(false);
+          [](caf::error& e) {
+            REQUIRE_EQUAL(e, caf::error{});
           });
         run();
         self->send_exit(dummy, caf::exit_reason::user_shutdown);
