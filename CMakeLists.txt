@@ -99,7 +99,6 @@ else ()
 endif ()
 unset(_VAST_PARENT_DIRECTORY)
 
-
 # -- changelog -----------------------------------------------------------------
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTChangelog.cmake.in"
