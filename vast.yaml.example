@@ -172,10 +172,10 @@ vast:
     #   fp-rate - false positive rate. Has effect on string and address type
     #             targets
     #
-    #   create-dense-index - VAST will not create dense index when set to false
+    #   partition-index - VAST will not create dense index when set to false
     #   - targets: [:string, :address]
     #     fp-rate: 0.01
-    #     create-dense-index: false
+    #     partition-index: false
 
   # The `vast start` command starts a new VAST server process.
   start:

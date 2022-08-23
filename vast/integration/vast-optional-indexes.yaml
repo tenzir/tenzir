@@ -4,4 +4,4 @@ vast:
       - targets: [argus.record.StartTime, argus.record.Flgs, argus.record.Proto, argus.record.SrcAddr,
                   argus.record.Sport, argus.record.Dir, argus.record.DstAddr, argus.record.Dport, argus.record.TotPkts,
                   argus.record.TotBytes, argus.record.State, argus.record.Dur, argus.record.UnknownField, argus.record.Cause]
-        create-dense-index: false
+        partition-index: false
