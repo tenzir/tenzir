@@ -721,7 +721,12 @@ add_feature_info("VAST_ENABLE_CORELIGHT_CAT" VAST_ENABLE_CORELIGHT_CAT
                  "install corelight-cat with VAST.")
 if (VAST_ENABLE_CORELIGHT_CAT)
   install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
-          DESTINATION ${CMAKE_INSTALL_BINDIR})
+          # These should be inherited from the source but they
+          # get lost in CPack, so we set them explicitly.
+          PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                      GROUP_READ GROUP_EXECUTE
+                      WORLD_READ WORLD_EXECUTE
+          DESTINATION "${CMAKE_INSTALL_BINDIR}")
 endif ()
 
 option(VAST_ENABLE_DBSIZE_SH "Install dbsize.sh with VAST" ON)
@@ -729,7 +734,12 @@ add_feature_info("VAST_ENABLE_DBSIZE_SH" VAST_ENABLE_DBSIZE_SH
                  "install dbsize.sh with VAST.")
 if (VAST_ENABLE_DBSIZE_SH)
   install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/dbsize.sh"
-          DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
+          # These should be inherited from the source but they
+          # get lost in CPack, so we set them explicitly.
+          PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                      GROUP_READ GROUP_EXECUTE
+                      WORLD_READ WORLD_EXECUTE
+          DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
 endif ()
 
 # -- docdir --------------------------------------------------------------------
@@ -754,7 +764,7 @@ include(Package)
 # Append the feature summary to summary.log.
 feature_summary(
   WHAT ALL
-  FILENAME ${CMAKE_CURRENT_BINARY_DIR}/summary.log
+  FILENAME "${CMAKE_CURRENT_BINARY_DIR}/summary.log"
   APPEND)
 
 # Print the feature and build summary if we're not a subproject.
