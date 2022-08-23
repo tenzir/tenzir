@@ -22,6 +22,10 @@ if [ "$1" = "configure" ]; then
     fi
 fi
 
+if [ "$1" = "configure" ] ; then
+	ln -sf /opt/vast/lib/systemd/system/vast.service /lib/systemd/system/
+fi
+
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	# This will only remove masks created by d-s-h on package removal.
