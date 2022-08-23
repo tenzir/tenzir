@@ -154,6 +154,19 @@
 //
 // clang-format on
 
+namespace {
+
+/// Test if the first four bytes of the are equal to `identifier`.
+bool test_file_identifier(std::filesystem::path file, const char* identifier) {
+  std::byte buffer[4];
+  if (auto err
+      = vast::io::read(file, std::span<std::byte>{buffer, sizeof(buffer)}))
+    return false;
+  return std::memcmp(buffer, identifier, sizeof(buffer)) == 0;
+}
+
+} // namespace
+
 namespace vast::system {
 
 caf::error extract_partition_synopsis(
@@ -163,11 +176,19 @@ caf::error extract_partition_synopsis(
   auto chunk = chunk::mmap(partition_path);
   if (!chunk)
     return std::move(chunk.error());
-  const auto* partition = fbs::GetPartition(chunk->get()->data());
+  auto maybe_partition = partition_chunk::get_flatbuffer(*chunk);
+  if (!maybe_partition)
+    return caf::make_error(
+      ec::format_error, fmt::format("malformed partition at {}: {}",
+                                    partition_path, maybe_partition.error()));
+  const auto* partition = *maybe_partition;
   if (partition->partition_type() != fbs::partition::Partition::legacy)
-    return caf::make_error(ec::format_error, "found unsupported version for "
-                                             "partition "
-                                               + partition_path.string());
+    return caf::make_error(
+      ec::format_error,
+      fmt::format("unknown version {} for "
+                  "partition at {}",
+                  static_cast<uint8_t>(partition->partition_type()),
+                  partition_path));
   const auto* partition_legacy = partition->partition_as_legacy();
   VAST_ASSERT(partition_legacy);
   partition_synopsis ps;
@@ -406,8 +427,18 @@ caf::error index_state::load_from_disk() {
           VAST_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
           uuid);
         const auto to_partition_synopsis = partition_synopsis_path(uuid);
-        std::filesystem::rename(from_partition, to_partition);
-        std::filesystem::rename(from_partition_synopsis, to_partition_synopsis);
+        auto ec = std::error_code{};
+        std::filesystem::rename(from_partition, to_partition, ec);
+        if (ec)
+          VAST_WARN("failed to rename '{}' to '{}': {}", from_partition,
+                    to_partition, ec.message());
+        ec.clear();
+        std::filesystem::rename(from_partition_synopsis, to_partition_synopsis,
+                                ec);
+        if (ec)
+          VAST_WARN("failed to rename '{}' to '{}': {}",
+                    from_partition_synopsis, to_partition_synopsis,
+                    ec.message());
       }
     }
     // TODO: This does not handle store files, which may already have been
@@ -434,7 +465,11 @@ caf::error index_state::load_from_disk() {
       continue;
     auto ext = entry.path().extension();
     if (ext.empty()) {
-      if (entry.file_size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+      // Newer partitions are not limited to FLATBUFFERS_MAX_BUFFER_SIZE,
+      // this is only a problem for older ones that still have `fbs::Partition`
+      // as root type.
+      if (entry.file_size() >= FLATBUFFERS_MAX_BUFFER_SIZE
+          && test_file_identifier(entry, fbs::PartitionIdentifier())) {
         auto store_path = dir / ".." / store_path_for_partition(partition_uuid);
         if (std::filesystem::exists(store_path, err))
           oversized_partitions.push_back(partition_uuid);
@@ -1498,7 +1533,9 @@ index(index_actor::stateful_pointer<index_state> self,
                   }
                   // Adjust layout stats by subtracting the events of the
                   // removed partition.
-                  if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+                  if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
+                      && flatbuffers::BufferHasIdentifier(
+                        chunk->data(), fbs::PartitionIdentifier())) {
                     VAST_WARN("failed to load partition for deletion at {} "
                               "because its size of {} exceeds the maximum "
                               "allowed size of {}. The index statistics will "
@@ -1544,32 +1581,19 @@ index(index_actor::stateful_pointer<index_state> self,
                                       *self, partition_id, store_path, err);
                         });
                   } else {
-                    const auto* partition = fbs::GetPartition(chunk->data());
-                    if (partition->partition_type()
-                        != fbs::partition::Partition::legacy) {
-                      rp.deliver(caf::make_error(ec::format_error, "unexpected "
-                                                                   "format "
-                                                                   "version"));
-                      return;
-                    }
-                    vast::ids all_ids;
-                    const auto* partition_legacy
-                      = partition->partition_as_legacy();
-                    for (const auto* partition_stats :
-                         *partition_legacy->type_ids()) {
-                      const auto* name = partition_stats->name();
-                      vast::ids ids;
-                      if (auto error = fbs::deserialize_bytes(
-                            partition_stats->ids(), ids)) {
-                        VAST_WARN("{} could not deserialize ids to adjust "
-                                  "statistics: {}",
-                                  *self, error);
-                        continue;
+                    if (adjust_stats) {
+                      auto stats = partition_chunk::get_statistics(chunk);
+                      if (!stats) {
+                        rp.deliver(caf::make_error(
+                          ec::format_error, fmt::format("{} could not adjust "
+                                                        "index statistics for "
+                                                        "partition: {}",
+                                                        *self, stats.error())));
+                        return;
+                      } else {
+                        for (auto [name, stats] : stats->layouts)
+                          self->state.stats.layouts[name].count -= stats.count;
                       }
-                      all_ids |= ids;
-                      if (adjust_stats)
-                        self->state.stats.layouts[name->str()].count
-                          -= rank(ids);
                     }
                     // TODO: We could send `all_ids` as the second argument
                     // here, which doesn't really make sense from an interface

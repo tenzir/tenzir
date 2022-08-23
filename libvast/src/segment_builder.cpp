@@ -12,6 +12,7 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/flatbuffer_container.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
@@ -50,19 +51,23 @@ caf::error segment_builder::add(table_slice x) {
   }
   VAST_ASSERT(x.is_serialized());
   auto last_fb_offset = flat_slices_.empty() ? 0ull : flat_slices_.back().o;
-  // Allow ca. 100MiB of extra space for the non-table data.
+  // Allow ca. 500MiB of extra space for the non-table data.
   constexpr auto REASONABLE_SIZE
-    = detail::narrow_cast<size_t>(0.95 * FLATBUFFERS_MAX_BUFFER_SIZE);
-  if (last_fb_offset + as_bytes(x).size() >= REASONABLE_SIZE) [[unlikely]] {
-    VAST_ERROR("discarding table slices due to flatbuffers size limit");
-    return caf::make_error(ec::format_error, "too much data for segment");
+    = detail::narrow_cast<size_t>(0.75 * FLATBUFFERS_MAX_BUFFER_SIZE);
+  if (overflow_idx_ < slices_.size()
+      || last_fb_offset + as_bytes(x).size() >= REASONABLE_SIZE) [[unlikely]] {
+    /* nop */;
+  } else {
+    // This is the happy path where everything fits into a single
+    // segment flatbuffer
+    ++overflow_idx_;
+    auto bytes = fbs::pack_bytes(builder_, x);
+    auto slice = fbs::CreateFlatTableSlice(builder_, bytes);
+    flat_slices_.push_back(slice);
   }
-  auto bytes = fbs::pack_bytes(builder_, x);
-  auto slice = fbs::CreateFlatTableSlice(builder_, bytes);
-  flat_slices_.push_back(slice);
   intervals_.emplace_back(x.offset(), x.offset() + x.rows());
   num_events_ += x.rows();
-  slices_.push_back(x);
+  slices_.emplace_back(std::move(x));
   return caf::none;
 }
 
@@ -75,15 +80,28 @@ segment segment_builder::finish() {
   segment_v0_builder.add_uuid(*uuid_offset);
   segment_v0_builder.add_ids(ids_offset);
   segment_v0_builder.add_events(num_events_);
+  segment_v0_builder.add_overflow_slices(slices_.size() - overflow_idx_);
   auto segment_v0_offset = segment_v0_builder.Finish();
   fbs::SegmentBuilder segment_builder{builder_};
   segment_builder.add_segment_type(vast::fbs::segment::Segment::v0);
   segment_builder.add_segment(segment_v0_offset.Union());
   auto segment_offset = segment_builder.Finish();
-  auto segment_flatbuffer = flatbuffer<fbs::Segment>{builder_, segment_offset,
-                                                     fbs::SegmentIdentifier()};
-  reset();
-  return segment{std::move(segment_flatbuffer)};
+  // The happy path.
+  if (overflow_idx_ == slices_.size()) [[likely]] {
+    auto segment_flatbuffer = flatbuffer<fbs::Segment>{
+      builder_, segment_offset, fbs::SegmentIdentifier()};
+    reset();
+    return segment{std::move(segment_flatbuffer)};
+  }
+  // The slightly less happy path.
+  FinishSegmentBuffer(builder_, segment_offset);
+  auto chunk = chunk::make(builder_.Release());
+  fbs::flatbuffer_container_builder cbuilder;
+  cbuilder.add(as_bytes(chunk));
+  for (size_t i = overflow_idx_; i < slices_.size(); ++i)
+    cbuilder.add(as_bytes(slices_.at(i)));
+  auto container = std::move(cbuilder).finish(fbs::SegmentIdentifier());
+  return segment{std::move(container)};
 }
 
 caf::expected<std::vector<table_slice>>
@@ -128,6 +146,7 @@ void segment_builder::reset(const std::optional<uuid>& id) {
   else
     id_ = uuid::random();
   min_table_slice_offset_ = 0;
+  overflow_idx_ = 0;
   num_events_ = 0;
   builder_.Clear();
   flat_slices_.clear();

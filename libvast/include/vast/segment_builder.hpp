@@ -73,6 +73,9 @@ private:
   flatbuffers::FlatBufferBuilder builder_;
   std::vector<flatbuffers::Offset<fbs::FlatTableSlice>> flat_slices_;
   std::vector<table_slice> slices_; // For queries to an unfinished segment.
+  // The slices from `slices_[overflow_idx]` to `slices_.end() didn't fit
+  // into the original flatbuffer.
+  size_t overflow_idx_;
   std::vector<fbs::uinterval> intervals_;
 };
 

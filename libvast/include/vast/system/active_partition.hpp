@@ -166,10 +166,11 @@ struct active_partition_state {
 
 // -- flatbuffers --------------------------------------------------------------
 
-caf::expected<flatbuffers::Offset<fbs::Partition>>
-pack(flatbuffers::FlatBufferBuilder& builder,
-     const active_partition_state::serialization_data& x,
-     const record_type& combined_layout);
+// The resulting chunk will start with either a `vast::fbs::Partition` or a
+// `vast::fbs::SegmentedFileHeader`.
+caf::expected<vast::chunk_ptr>
+pack_full(const active_partition_state::serialization_data& x,
+          const record_type& combined_layout);
 
 // -- behavior -----------------------------------------------------------------
 

@@ -13,6 +13,7 @@
 #include <vast/fbs/index.hpp>
 #include <vast/fbs/partition.hpp>
 #include <vast/fbs/segment.hpp>
+#include <vast/fbs/segmented_file.hpp>
 #include <vast/io/read.hpp>
 #include <vast/logger.hpp>
 #include <vast/system/configuration.hpp>
@@ -61,14 +62,23 @@ caf::expected<Kind> classify(const std::filesystem::path& path) {
   auto bytes = vast::io::read(path);
   if (!bytes)
     return Kind::Unknown;
-  auto buf = bytes->data();
-  if (vast::fbs::IndexBufferHasIdentifier(buf))
+  auto const* buf = bytes->data();
+  auto identifier = std::string(flatbuffers::GetBufferIdentifier(buf), 4);
+  if (identifier == vast::fbs::SegmentedFileHeaderIdentifier()) {
+    auto header
+      = flatbuffers::GetRoot<vast::fbs::SegmentedFileHeader>(bytes->data());
+    identifier = std::string(
+      reinterpret_cast<const char*>(
+        header->header_as_v0()->inner_identifier()->data()->data()),
+      4);
+  }
+  if (identifier == vast::fbs::IndexIdentifier())
     return Kind::Index;
-  if (vast::fbs::PartitionBufferHasIdentifier(buf))
+  if (identifier == vast::fbs::PartitionIdentifier())
     return Kind::Partition;
-  if (vast::fbs::SegmentBufferHasIdentifier(buf))
+  if (identifier == vast::fbs::SegmentIdentifier())
     return Kind::Segment;
-  if (vast::fbs::PartitionSynopsisBufferHasIdentifier(buf))
+  if (identifier == vast::fbs::PartitionSynopsisIdentifier())
     return Kind::PartitionSynopsis;
   return Kind::Unknown;
 }

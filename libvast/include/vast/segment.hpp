@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/detail/iterator.hpp"
+#include "vast/fbs/flatbuffer_container.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/flatbuffer.hpp"
 #include "vast/ids.hpp"
@@ -44,7 +45,7 @@ public:
       = flatbuffers::Vector<const fbs::uinterval*>::const_iterator;
 
   public:
-    iterator(flat_slice_iterator nested, interval_iterator intervals,
+    iterator(size_t slice_idx, interval_iterator intervals,
              const segment* parent);
 
     [[nodiscard]] table_slice dereference() const;
@@ -61,7 +62,7 @@ public:
     distance_to(iterator other) const;
 
   private:
-    flat_slice_iterator nested_;
+    size_t slice_idx_;
     interval_iterator intervals_;
     const segment* parent_;
   };
@@ -109,7 +110,18 @@ public:
 private:
   explicit segment(flatbuffer<fbs::Segment> flatbuffer);
 
+  explicit segment(fbs::flatbuffer_container container);
+
+  [[nodiscard]] std::vector<const vast::fbs::FlatTableSlice*>
+  flat_slices_() const;
+
+  [[nodiscard]] vast::table_slice get_slice_(size_t idx) const;
+
   flatbuffer<fbs::Segment> flatbuffer_ = {};
+
+  // Optionally, a container to store the table slices that
+  // exceed 2GiB.
+  std::optional<fbs::flatbuffer_container> container_ = std::nullopt;
 };
 
 } // namespace vast

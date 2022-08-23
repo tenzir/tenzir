@@ -107,10 +107,8 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   std::map<std::filesystem::path, std::vector<vast::chunk_ptr>>
     last_written_chunks;
   auto filesystem = sys.spawn(dummy_filesystem, std::ref(last_written_chunks));
-
   const auto partition_id = vast::uuid::random();
   const std::string input_store_id = "some-id";
-
   auto header_data = 3523532ull;
   auto partition_header
     = vast::chunk::make(&header_data, sizeof(header_data), []() noexcept {});
@@ -119,9 +117,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
                 vast::system::accountant_actor{}, filesystem, caf::settings{},
                 index_config_, vast::system::store_actor{}, input_store_id,
                 partition_header);
-
   REQUIRE(sut);
-
   auto builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, schema_);
   CHECK(builder->add(0u));
@@ -129,35 +125,28 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   slice.offset(0);
   const auto now = caf::make_timestamp();
   slice.import_time(now);
-
   auto src = vast::detail::spawn_container_source(sys, std::vector{slice}, sut);
   REQUIRE(src);
   run();
-
   auto persist_path = std::filesystem::path{"/persist"};
   auto synopsis_path = std::filesystem::path{"/synopsis"};
   auto promise = self->request(sut, caf::infinite, vast::atom::persist_v,
                                persist_path, synopsis_path);
   run();
-
   promise.receive([](vast::partition_synopsis_ptr&) {},
                   [](const caf::error& err) {
                     FAIL(err);
                   });
-
-  //  1 chunk for partition synopsis and one for partition itself
+  // 1 chunk for partition synopsis and one for partition itself
   REQUIRE_EQUAL(last_written_chunks.size(), 2u);
   REQUIRE_EQUAL(last_written_chunks.at(persist_path).size(), 1u);
   REQUIRE_EQUAL(last_written_chunks.at(synopsis_path).size(), 1u);
-
   const auto& synopsis_chunk = last_written_chunks.at(synopsis_path).front();
   auto* synopsis_fbs = vast::fbs::GetPartitionSynopsis(synopsis_chunk->data());
-
   vast::partition_synopsis synopsis;
   unpack(*synopsis_fbs->partition_synopsis_as<
            vast::fbs::partition_synopsis::LegacyPartitionSynopsis>(),
          synopsis);
-
   CHECK_EQUAL(synopsis.events, 1u);
   CHECK_EQUAL(synopsis.schema, schema_);
   CHECK_EQUAL(synopsis.min_import_time, now);
@@ -165,21 +154,18 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(synopsis.field_synopses_.size(), 1u);
   CHECK_EQUAL(synopsis.type_synopses_.size(), 1u);
   CHECK_EQUAL(synopsis.offset, 0u);
-
   const auto& partition_chunk = last_written_chunks.at(persist_path).front();
+  const auto container = vast::fbs::flatbuffer_container{partition_chunk};
   const auto part_fb
-    = vast::fbs::GetPartition(partition_chunk->data())
+    = container.as_flatbuffer<vast::fbs::Partition>(0)
         ->partition_as<vast::fbs::partition::LegacyPartition>();
-
   vast::system::passive_partition_state passive_state;
   const auto err = unpack(*part_fb, passive_state);
-
-  REQUIRE(!err);
+  REQUIRE_EQUAL(err, caf::error{});
   CHECK_EQUAL(passive_state.id, partition_id);
   REQUIRE(passive_state.combined_layout_);
   CHECK_EQUAL(*passive_state.combined_layout_,
               (vast::record_type{{"y.x", vast::count_type{}}}));
-
   vast::ids expected_ids;
   expected_ids.append_bit(true);
   CHECK_EQUAL(passive_state.type_ids_.at(std::string{schema_.name()}),
@@ -188,7 +174,6 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(passive_state.events, 1u);
   CHECK_EQUAL(passive_state.store_id, input_store_id);
   CHECK_EQUAL(passive_state.store_header, as_bytes(partition_header));
-
   const auto* indexes = part_fb->indexes();
   REQUIRE_EQUAL(indexes->size(), 1u);
   CHECK_EQUAL(indexes->Get(0)->field_name()->str(), "y.x");
