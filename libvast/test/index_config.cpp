@@ -84,26 +84,23 @@ TEST(should_create_partition_index will use create_partition_index from
 
 TEST(should_create_partition_index will will use create_partition_index from
        config if type is in the rule) {
-  qualified_record_field in{schema, {0u}};
-  auto rules = std::vector{
-    index_config::rule{.targets = {":count"}, .create_partition_index = false}};
-  CHECK_EQUAL(should_create_partition_index(in, rules),
-              rules.front().create_partition_index);
+  qualified_record_field in_x{schema, {0u}};
+  qualified_record_field in_y{schema, {1u}};
+  auto rules_x = std::vector{
+    index_config::rule{.targets = {":count"}, .create_partition_index = false},
+  };
+  auto rules_y = std::vector{
+    index_config::rule{.targets = {":foo"}, .create_partition_index = false},
+  };
+  CHECK_EQUAL(should_create_partition_index(in_x, rules_x), false);
+  CHECK_EQUAL(should_create_partition_index(in_x, rules_y), true);
+  CHECK_EQUAL(should_create_partition_index(in_y, rules_x), false);
+  CHECK_EQUAL(should_create_partition_index(in_y, rules_y), false);
   // change config to true
-  rules.front().create_partition_index = true;
-  CHECK_EQUAL(should_create_partition_index(in, rules),
-              rules.front().create_partition_index);
-}
-
-TEST(should_create_partition_index will will use create_partition_index from
-       config if type alias is in the rule) {
-  qualified_record_field in{schema, {1u}};
-  auto rules = std::vector{
-    index_config::rule{.targets = {":count"}, .create_partition_index = false}};
-  CHECK_EQUAL(should_create_partition_index(in, rules),
-              rules.front().create_partition_index);
-  // change config to true
-  rules.front().create_partition_index = true;
-  CHECK_EQUAL(should_create_partition_index(in, rules),
-              rules.front().create_partition_index);
+  rules_x.front().create_partition_index = true;
+  rules_y.front().create_partition_index = true;
+  CHECK_EQUAL(should_create_partition_index(in_x, rules_x), true);
+  CHECK_EQUAL(should_create_partition_index(in_x, rules_y), true);
+  CHECK_EQUAL(should_create_partition_index(in_y, rules_x), true);
+  CHECK_EQUAL(should_create_partition_index(in_y, rules_y), true);
 }
