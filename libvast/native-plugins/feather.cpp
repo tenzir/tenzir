@@ -83,31 +83,50 @@ class passive_feather_store final : public passive_store {
     const auto read_status = reader.MoveValueUnsafe()->Read(&table);
     if (!read_status.ok())
       return caf::make_error(ec::system_error, read_status.ToString());
-    for (auto rb : arrow::TableBatchReader(*table)) {
-      VAST_ASSERT(rb.ok(), rb.status().ToString().c_str());
-      auto time_col = rb.ValueUnsafe()->GetColumnByName("import_time");
-      auto unwrapped_rb = unwrap_record_batch(rb.MoveValueUnsafe());
-      auto slice = table_slice{unwrapped_rb};
-      slice.offset(num_events_);
-      num_events_ += slice.rows();
-      slice.import_time(derive_import_time(time_col));
-      slices_.push_back(std::move(slice));
+
+    table_ = std::move(table);
+    auto arrow_field = table_->schema()->GetFieldByName("event");
+    if (!arrow_field) {
+      return caf::make_error(ec::format_error, "schema does not have mandatory "
+                                               "`event` column");
     }
+    schema_ = type::from_arrow(*arrow_field);
+    if (!schema_)
+      return caf::make_error(ec::format_error,
+                             "Arrow schema incompatible with VAST type: {}",
+                             arrow_field->ToString(true));
+    num_events_ = table_->num_rows();
     return {};
   }
 
   [[nodiscard]] detail::generator<table_slice> slices() const override {
-    for (const auto& slice : slices_)
-      co_yield slice;
+    auto offset = id{};
+    for (auto rb : arrow::TableBatchReader(*table_)) {
+      VAST_ASSERT(rb.ok(), rb.status().ToString().c_str());
+      auto time_col = rb.ValueUnsafe()->GetColumnByName("import_time");
+      auto unwrapped_rb = unwrap_record_batch(rb.MoveValueUnsafe());
+      auto slice = table_slice{unwrapped_rb, schema_};
+      // auto slice = table_slice{unwrapped_rb, schema};
+      slice.offset(offset);
+      offset += slice.rows();
+      slice.import_time(derive_import_time(time_col));
+      co_yield std::move(slice);
+    }
+    VAST_ASSERT(offset == num_events_);
   }
 
   [[nodiscard]] uint64_t num_events() const override {
     return num_events_;
   }
 
+  [[nodiscard]] type schema() const override {
+    return schema_;
+  }
+
 private:
+  type schema_ = {};
+  std::shared_ptr<arrow::Table> table_ = {};
   uint64_t num_events_ = {};
-  std::vector<table_slice> slices_ = {};
 };
 
 class active_feather_store final : public active_store {

@@ -755,11 +755,12 @@ index_column_arrays(const std::shared_ptr<arrow::RecordBatch>& record_batch) {
 template <class FlatBuffer>
 arrow_table_slice<FlatBuffer>::arrow_table_slice(
   const FlatBuffer& slice, [[maybe_unused]] const chunk_ptr& parent,
-  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept
+  const std::shared_ptr<arrow::RecordBatch>& batch, type schema) noexcept
   : slice_{slice}, state_{} {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>) {
     VAST_ASSERT(!batch, "pre-existing record batches are only supported for "
                         "the most recent encoding");
+    VAST_ASSERT(!schema, "VAST schema must be none");
     VAST_DIAGNOSTIC_PUSH
     VAST_DIAGNOSTIC_IGNORE_DEPRECATED
     // This legacy type has to stay; it is deserialized from disk.
@@ -775,6 +776,7 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
   } else if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v1>) {
     VAST_ASSERT(!batch, "pre-existing record batches are only supported for "
                         "the most recent encoding");
+    VAST_ASSERT(!schema, "VAST schema must be none");
     VAST_DIAGNOSTIC_PUSH
     VAST_DIAGNOSTIC_IGNORE_DEPRECATED
     // We decouple the sliced type from the layout intentionally. This is an
@@ -812,7 +814,13 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
         as_arrow_buffer(parent->slice(as_bytes(*slice.arrow_ipc()))));
       state_.is_serialized = true;
     }
-    state_.layout = type::from_arrow(*state_.record_batch->schema());
+    if (schema) {
+      state_.layout = std::move(schema);
+      VAST_ASSERT(state_.layout
+                  == type::from_arrow(*state_.record_batch->schema()));
+    } else {
+      state_.layout = type::from_arrow(*state_.record_batch->schema());
+    }
     VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
     state_.flat_columns = index_column_arrays(state_.record_batch);
     VAST_ASSERT(state_.flat_columns.size()

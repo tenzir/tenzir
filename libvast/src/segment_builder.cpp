@@ -43,8 +43,8 @@ caf::error segment_builder::add(table_slice x) {
   if (x.offset() < min_table_slice_offset_)
     return caf::make_error(ec::unspecified, "slice offsets not increasing");
   if (!x.is_serialized()) {
-    auto serialized_x
-      = table_slice{to_record_batch(x), table_slice::serialize::yes};
+    auto serialized_x = table_slice{to_record_batch(x), x.layout(),
+                                    table_slice::serialize::yes};
     serialized_x.import_time(x.import_time());
     serialized_x.offset(x.offset());
     x = std::move(serialized_x);

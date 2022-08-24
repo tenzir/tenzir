@@ -253,10 +253,11 @@ msgpack_map_view::value_type msgpack_map_view::at(size_type i) const {
 template <class FlatBuffer>
 msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
   const FlatBuffer& slice, [[maybe_unused]] const chunk_ptr& parent,
-  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept
+  const std::shared_ptr<arrow::RecordBatch>& batch, type schema) noexcept
   : slice_{slice}, state_{} {
   VAST_ASSERT(!batch, "pre-existing record batches may only be used for new "
                       "table slices, which cannot be in msgpack format");
+  VAST_ASSERT(!schema, "VAST type must be none");
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::msgpack::v0>) {
     // This legacy type has to stay; it is deserialized from disk.
     auto intermediate = legacy_record_type{};

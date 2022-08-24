@@ -268,9 +268,10 @@ create_table_slices(const std::shared_ptr<arrow::RecordBatch>& rb,
   auto time_col = rb->GetColumnByName("import_time");
   auto slices = std::vector<table_slice>{};
   slices.reserve(rb->num_rows() / max_slice_size + 1);
+  auto schema = type::from_arrow(*final_rb->schema());
   for (int64_t offset = 0; offset < rb->num_rows(); offset += max_slice_size) {
     auto rb_sliced = final_rb->Slice(offset, max_slice_size);
-    auto& slice = slices.emplace_back(rb_sliced);
+    auto& slice = slices.emplace_back(rb_sliced, schema);
     slice.import_time(
       derive_import_time(time_col->Slice(offset, max_slice_size)));
     slice.offset(detail::narrow_cast<id>(offset));

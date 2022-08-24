@@ -57,7 +57,7 @@ namespace {
 /// @param serialize Embed the IPC format in the FlatBuffers table.
 table_slice
 create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                   flatbuffers::FlatBufferBuilder& builder,
+                   flatbuffers::FlatBufferBuilder& builder, type schema,
                    table_slice::serialize serialize) {
   VAST_ASSERT(record_batch);
 #if VAST_ENABLE_ASSERTIONS
@@ -102,7 +102,8 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   auto result = table_slice{std::move(chunk), table_slice::verify::no,
                             serialize == table_slice::serialize::yes
                               ? std::shared_ptr<arrow::RecordBatch>{}
-                              : record_batch};
+                              : record_batch,
+                            std::move(schema)};
   result.import_time(time{});
   return result;
 }
@@ -143,16 +144,19 @@ table_slice arrow_table_slice_builder::finish() {
     caf::get<type_to_arrow_array_t<record_type>>(*combined_array).fields());
   // Reset the builder state.
   num_rows_ = {};
-  return create_table_slice(record_batch, this->builder_,
+  return create_table_slice(record_batch, this->builder_, layout(),
                             table_slice::serialize::yes);
 }
 
 table_slice arrow_table_slice_builder::create(
-  const std::shared_ptr<arrow::RecordBatch>& record_batch,
+  const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema,
   table_slice::serialize serialize, size_t initial_buffer_size) {
+#if VAST_ENABLE_ASSERTIONS
   verify_record_batch(*record_batch);
+#endif // VAST_ENABLE_ASSERTIONS
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
-  return create_table_slice(record_batch, builder, serialize);
+  return create_table_slice(record_batch, builder, std::move(schema),
+                            serialize);
 }
 
 size_t arrow_table_slice_builder::rows() const noexcept {
