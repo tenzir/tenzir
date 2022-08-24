@@ -304,6 +304,7 @@ jobs:
           ccache --show-config
           cmake -B "$BUILD_DIR" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
+            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_GENERATOR:STRING="TGZ;DEB" \
             -DVAST_PLUGINS:STRING="plugins/pcap" \
             -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF \
@@ -355,10 +356,17 @@ jobs:
           cmake --build "$BUILD_DIR" --target package
           rm -rf "$BUILD_DIR/package/_CPack_Packages"
 
-      - name: Upload Artifacts to Github
+      - name: Upload Tarball to Github
         uses: actions/upload-artifact@v3
         with:
-          path: "${{ env.BUILD_DIR }}/package"
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.tar.gz"
+
+      - name: Upload Debian Package to Github
+        uses: actions/upload-artifact@v3
+        with:
+          name: "${{ env.PACKAGE_NAME }}.deb"
+          path: "${{ env.BUILD_DIR }}/${{ env.PACKAGE_NAME }}.deb"
 
       - name: Configure GCS Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
@@ -904,7 +912,7 @@ jobs:
         run: |
           STORE_PATH=$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
             ${{ matrix.nix.build-options }})
-          echo '::set-output name=store_path::${STORE_PATH}'
+          echo "::set-output name=store_path::${STORE_PATH}"
 
       - name: Get Artifact Names
         id: get_artifact_names
