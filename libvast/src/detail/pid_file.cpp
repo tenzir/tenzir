@@ -27,6 +27,29 @@
 
 namespace vast::detail {
 
+#if VAST_LINUX
+
+namespace {
+
+bool pid_belongs_to_vast(pid_t pid) {
+  const auto proc_pid_path = fmt::format("/proc/%d/status", pid);
+  const auto proc_pid_contents = detail::load_contents(proc_pid_path);
+  if (!proc_pid_contents) {
+    VAST_DEBUG("failed to read {}: {}", proc_pid_path,
+               proc_pid_contents.error());
+    return false;
+  }
+  // The maximum length of the "vast" process name is 4, so including the
+  // null-terminator we just need to read up to 4 bytes here.
+  auto process_name = std::array<char, 5>{};
+  ::sscanf(proc_pid_contents->c_str(), "%*s %4s", process_name.data());
+  return std::string_view{process_name.begin(), process_name.end()} == "vast";
+}
+
+} // namespace
+
+#endif // VAST_LINUX
+
 caf::error acquire_pid_file(const std::filesystem::path& filename) {
   auto pid = process_id();
   std::error_code err{};
@@ -47,11 +70,26 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
     // Safeguard in case the pid_file already belongs to this process.
     if (*other_pid == pid)
       return caf::none;
-    if (::getpgid(*other_pid) >= 0)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("PID file found: {}, terminate "
-                                         "process {}",
-                                         filename, *contents));
+    // Safeguard in case the pid_file contains a PID of a non-VAST process.
+    if (::getpgid(*other_pid) >= 0) {
+#if VAST_LINUX
+      // In deployments with containers it's rather likely that the PID in the
+      // PID file belongs to a different, non-VAST process after a crash,
+      // because after a restart of the container the PID may be assigned to
+      // another process. If it does, we ignore the PID in the PID file and
+      // don't stop execution.
+      const auto ignore_pid = !pid_belongs_to_vast(*other_pid);
+#else
+      const auto ignore_pid = false;
+#endif
+      if (!ignore_pid)
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("PID file found: {}, terminate "
+                                           "process {}",
+                                           filename, *contents));
+      VAST_DEBUG("ignores conflicting PID file because contained PID does not "
+                 "belong to a VAST process");
+    }
     // The previous owner is deceased, print a warning an assume ownership.
     VAST_WARN("node detected an irregular shutdown of the previous "
               "process on the database directory");
