@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-nix --version
-nix-prefetch-github --version workaround bug
+>&2 nix --version
+>&2 nix-prefetch-github --version
 
 log () {
   >&2 echo "$@"

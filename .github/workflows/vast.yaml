@@ -902,9 +902,9 @@ jobs:
           VAST_BUILD_VERSION: ${{ needs.determine-version.outputs.build-version }}
           VAST_BUILD_VERSION_SHORT: ${{ needs.determine-version.outputs.build-version-short }}
         run: |
-          nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
-            ${{ matrix.nix.build-options }}
-          echo '::set-output name=store_path::$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} ${{ matrix.nix.build-options }})'
+          STORE_PATH=$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
+            ${{ matrix.nix.build-options }})
+          echo '::set-output name=store_path::${STORE_PATH}'
 
       - name: Get Artifact Names
         id: get_artifact_names
