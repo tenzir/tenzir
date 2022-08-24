@@ -1,3 +1,3 @@
 from .backbone import Backbone
-from .fabric import Context, Fabric
+from .fabric import Fabric
 from .vast import VAST
