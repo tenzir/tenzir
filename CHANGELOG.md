@@ -38,6 +38,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 ### Bug Fixes
 
+- VAST properly processes queries for fields with `skip` attribute.
+  [#2430](https://github.com/tenzir/vast/pull/2430)
+
 - VAST can now store data in segments bigger than 2GiB in size each.
   [#2449](https://github.com/tenzir/vast/pull/2449)
 
