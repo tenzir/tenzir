@@ -1,5 +1,5 @@
-resource "aws_security_group" "vast_lambda" {
-  name        = "${module.env.module_name}-vast_lambda-${module.env.stage}"
+resource "aws_security_group" "vast_client" {
+  name        = "${module.env.module_name}-vast_client-${module.env.stage}"
   description = "Allow outbound access only"
   vpc_id      = module.network.new_vpc_id
 
@@ -21,7 +21,7 @@ resource "aws_security_group" "vast_server" {
     protocol        = "tcp"
     from_port       = local.vast_port
     to_port         = local.vast_port
-    security_groups = [aws_security_group.vast_lambda.id]
+    security_groups = [aws_security_group.vast_client.id]
   }
 
   egress {

@@ -52,7 +52,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             "height": 6,
             "properties": {
                 "metrics": [
-                    [ "ECS/ContainerInsights", "NetworkTxBytes", "TaskDefinitionFamily", "vast-cloud-vast-server-default", "ClusterName", "vast-cloud-cluster-default" ],
+                    [ "ECS/ContainerInsights", "NetworkTxBytes", "TaskDefinitionFamily", "vast-cloud-vast-server-${module.env.stage}", "ClusterName", "vast-cloud-cluster-${module.env.stage}" ],
                     [ ".", "NetworkRxBytes", ".", ".", ".", "." ]
                 ],
                 "view": "timeSeries",
@@ -71,7 +71,7 @@ resource "aws_cloudwatch_dashboard" "main" {
             "height": 6,
             "properties": {
                 "metrics": [
-                    [ "ECS/ContainerInsights", "CpuUtilized", "TaskDefinitionFamily", "vast-cloud-vast-server-default", "ClusterName", "vast-cloud-cluster-default" ],
+                    [ "ECS/ContainerInsights", "CpuUtilized", "TaskDefinitionFamily", "vast-cloud-vast-server-${module.env.stage}", "ClusterName", "vast-cloud-cluster-${module.env.stage}" ],
                     [ ".", "CpuReserved", ".", ".", ".", "." ]
                 ],
                 "view": "timeSeries",
@@ -90,8 +90,8 @@ resource "aws_cloudwatch_dashboard" "main" {
             "height": 6,
             "properties": {
                 "metrics": [
-                    [ "ECS/ContainerInsights", "MemoryUtilized", "TaskDefinitionFamily", "vast-cloud-vast-server-default", "ClusterName", "vast-cloud-cluster-default", { "region": "${var.region_name}" } ],
-                    [ "ECS/ContainerInsights", "MemoryReserved", "TaskDefinitionFamily", "vast-cloud-vast-server-default", "ClusterName", "vast-cloud-cluster-default", { "region": "${var.region_name}" } ]
+                    [ "ECS/ContainerInsights", "MemoryUtilized", "TaskDefinitionFamily", "vast-cloud-vast-server-${module.env.stage}", "ClusterName", "vast-cloud-cluster-${module.env.stage}", { "region": "${var.region_name}" } ],
+                    [ "ECS/ContainerInsights", "MemoryReserved", "TaskDefinitionFamily", "vast-cloud-vast-server-${module.env.stage}", "ClusterName", "vast-cloud-cluster-${module.env.stage}", { "region": "${var.region_name}" } ]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
