@@ -63,5 +63,5 @@ The analyzer takes following input datatype:
     ````
 ## Requirements
 - Vast binary should be available on host. Please refer to [Vast Documentation](vast.io) for instructions
-- Dependencies in reuirements.txt should be installed
+- Dependencies in requirements.txt should be installed
 - Vast server address should be provided as a parameter in Cortex
