@@ -116,6 +116,7 @@ in
   vast-ci = final.vast.override {
     buildType = "CI";
     arrow-cpp = final.arrow-cpp-no-simd;
+    packageName = "vast-ci";
   };
   speeve = final.buildGoModule rec {
     pname = "speeve";
