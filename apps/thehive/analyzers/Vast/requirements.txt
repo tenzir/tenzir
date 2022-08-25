@@ -1,0 +1,2 @@
+cortexutils==2.1.0
+pyvast==2.1.0
