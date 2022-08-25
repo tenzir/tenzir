@@ -10,6 +10,8 @@
 
 #include "vast/system/partition_transformer.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
@@ -429,8 +431,106 @@ TEST(identity partition pipeline via the index) {
       CHECK_EQUAL(infos[0].events, events);
     },
     [](const caf::error& e) {
-      FAIL("unexpected error" << e);
+      FAIL("unexpected error " << e);
     });
+  self->send_exit(index, caf::exit_reason::user_shutdown);
+}
+
+TEST(query after transform) {
+  // Spawn index and fill with data
+  auto index_dir = std::filesystem::path{"/vast/index"};
+  auto archive = vast::system::archive_actor{};
+  auto catalog = self->spawn(vast::system::catalog, accountant);
+  const auto partition_capacity = vast::defaults::system::max_partition_size;
+  const auto active_partition_timeout = vast::duration{};
+  const auto in_mem_partitions = 10;
+  const auto taste_count = 1;
+  const auto num_query_supervisors = 10;
+  const auto index_config = vast::index_config{};
+  auto index
+    = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
+                  type_registry, index_dir,
+                  vast::defaults::system::store_backend, partition_capacity,
+                  active_partition_timeout, in_mem_partitions, taste_count,
+                  num_query_supervisors, index_dir, index_config);
+  vast::detail::spawn_container_source(sys, zeek_conn_log, index);
+  run();
+  // Persist the partition to disk
+  self->request(index, caf::infinite, vast::atom::flush_v);
+  run();
+  // Get the uuid of the partition
+  auto matching_expression
+    = vast::to<vast::expression>("#type == \"zeek.conn\"");
+  auto rp1 = self->request(index, caf::infinite, vast::atom::resolve_v,
+                           unbox(matching_expression));
+  auto partition_uuid = vast::uuid{};
+  auto events = size_t{0ull};
+  run();
+  rp1.receive(
+    [&](vast::system::catalog_result cr) {
+      REQUIRE_EQUAL(cr.partitions.size(), 1ull);
+      auto& partition = cr.partitions[0];
+      partition_uuid = partition.uuid;
+      events = partition.events;
+    },
+    [&](const caf::error& e) {
+      FAIL("unexpected error " << e);
+    });
+  // Run a partition transformation.
+  auto pipeline = std::make_shared<vast::pipeline>(
+    "partition_transform"s, std::vector<std::string>{"zeek.conn"});
+  auto rename_settings = vast::record{
+    {"schemas", vast::list{vast::record{
+                  {"from", std::string{"zeek.conn"}},
+                  {"to", std::string{"zeek.totally_not_conn"}},
+                }}},
+  };
+  auto rename_operator
+    = vast::make_pipeline_operator("rename", rename_settings);
+  REQUIRE_NOERROR(rename_operator);
+  pipeline->add_operator(std::move(*rename_operator));
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
+                           std::vector<vast::uuid>{partition_uuid},
+                           vast::system::keep_original_partition::no);
+  run();
+  rp3.receive(
+    [=](const std::vector<vast::partition_info>& infos) {
+      REQUIRE_EQUAL(infos.size(), 1ull);
+      CHECK_EQUAL(infos[0].events, events);
+    },
+    [](const caf::error& e) {
+      FAIL("unexpected error " << e);
+    });
+  auto expression = vast::to<vast::expression>(
+    "#type == \"zeek.totally_not_conn\" && id.orig_h == 192.168.1.102");
+  auto query_context
+    = vast::query_context::make_extract("vast-test", self, unbox(expression));
+  auto rp4 = self->request(index, caf::infinite, vast::atom::evaluate_v,
+                           query_context);
+  run();
+  rp4.receive(
+    [&](const vast::system::query_cursor& cursor) {
+      CHECK_EQUAL(cursor.candidate_partitions, 1ull);
+      CHECK_EQUAL(cursor.scheduled_partitions, 1ull);
+    },
+    [&](const caf::error& e) {
+      FAIL("unexpected error " << e);
+    });
+  // We don't need to explicitly request results because the index sends data
+  // from the first few partitions automatically.
+  size_t total = 0ull;
+  bool query_done = false;
+  while (!query_done) {
+    self->receive(
+      [&](vast::table_slice& slice) {
+        total += slice.rows();
+      },
+      [&](vast::atom::done) {
+        CHECK(true);
+        query_done = true;
+      });
+  }
+  CHECK_EQUAL(total, 8ull);
   self->send_exit(index, caf::exit_reason::user_shutdown);
 }
 
