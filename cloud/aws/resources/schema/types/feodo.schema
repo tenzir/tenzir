@@ -1,8 +1,0 @@
-type feodo.blocklist = record {
-  first_seen_utc: time,
-  dst_ip: addr,
-  dst_port: port,
-  c2_status: string,
-  last_online: time,
-  malware: string,
-}
