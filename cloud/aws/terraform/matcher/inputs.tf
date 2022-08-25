@@ -13,6 +13,6 @@ module "env" {
 
 locals {
   name        = "matcher-client"
-  task_cpu    = 2048
+  task_cpu    = 512
   task_memory = 4096
 }

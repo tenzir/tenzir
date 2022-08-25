@@ -57,7 +57,6 @@ resource "aws_ecs_service" "fargate_service" {
 }
 
 resource "aws_sqs_queue" "matched_events" {
-  name                      = "${module.env.module_name}-${local.name}-${module.env.stage}"
-  message_retention_seconds = 60
-  receive_wait_time_seconds = 20
+  name                       = "${module.env.module_name}-${local.name}-${module.env.stage}"
+  message_retention_seconds  = 60
 }

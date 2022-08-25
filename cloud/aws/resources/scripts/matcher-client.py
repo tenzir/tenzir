@@ -4,9 +4,11 @@ import logging
 import sys
 import os
 
-logging.getLogger().setLevel(logging.DEBUG)
-sqs = boto3.client("sqs")
 QUEUE_URL = os.getenv("QUEUE_URL")
+AWS_REGION = os.getenv("AWS_REGION")
+
+logging.getLogger(__name__).setLevel(logging.DEBUG)
+sqs = boto3.client("sqs", region_name=AWS_REGION)
 
 
 async def vast(*cmd):
@@ -24,7 +26,7 @@ def check_code(proc, stderr):
     """Raise exception if proc has non-zero exit code"""
     if proc.returncode != 0:
         logging.error(stderr.decode())
-        raise sys.exit(f"Vast with code {proc.statuscode}")
+        raise sys.exit(f"Vast with code {proc.returncode}")
 
 
 async def matcher_list():
@@ -53,8 +55,9 @@ async def matcher_attach(matchers):
 
 async def main():
     matchers = await matcher_list()
-    logging.info("Attaching to matchers:", matchers)
+    logging.info(f"Attaching to matchers: {matchers}")
     await matcher_attach(matchers)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

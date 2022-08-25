@@ -7,6 +7,8 @@
 echo "arg1    (repo arn)    : " $1 
 echo "arg2..N (image types) : " ${@:2}
 
+set -e
+
 IMAGE_TFVARS_FILE=images.generated.tfvars
 rm -f $IMAGE_TFVARS_FILE
 for var in "${@:2}"
