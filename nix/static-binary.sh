@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 >&2 nix --version
->&2 nix-prefetch-github --version
 
 log () {
   >&2 echo "$@"
@@ -12,8 +13,6 @@ usage() {
   echo
   echo 'options:'
   echo "    -h,--help               print this message"
-  echo "       --use-head           build from the latest commit instead of your current"
-  echo "                            working copy"
   echo "       --with-plugin=<path> add <path> to the list of bundled plugins (pcap and"
   echo "                            broker are enabled automatically)"
   echo "    -D<CMake option>        options starting with "-D" are passed to CMake"
@@ -27,13 +26,12 @@ VAST_BUILD_VERSION="${VAST_BUILD_VERSION:=$(git -C "${toplevel}" describe --abbr
 VAST_BUILD_VERSION_SHORT="${VAST_BUILD_VERSION_SHORT:=$(git -C "${toplevel}" describe --abbrev=10 --match='v[0-9]*')}"
 
 desc="${VAST_BUILD_VERSION}"
-artifact_name="${VAST_BUILD_VERSION_SHORT}"
+desc_short="${VAST_BUILD_VERSION_SHORT}"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 log "rev is ${vast_rev}"
 
 target="${STATIC_BINARY_TARGET:-vast}"
 
-USE_HEAD="off"
 cmakeFlags=""
 # Enable the bundled plugins by default.
 plugins=(
@@ -62,9 +60,6 @@ while [ $# -ne 0 ]; do
       usage
       exit 1
       ;;
-    --use-head)
-      USE_HEAD="on"
-      ;;
     --with-plugin=*)
       plugins+=("$(realpath "${optarg}")")
       ;;
@@ -85,30 +80,16 @@ for plugin in "${plugins[@]}"; do
   cmakeFlags="${cmakeFlags} \"$(plugin_version ${plugin})\""
 done
 
-if [ "${USE_HEAD}" == "on" ]; then
-  source_json="$(nix-prefetch-github --rev=${vast_rev} tenzir vast)"
-  desc="$(git -C "${toplevel}" describe --abbrev=10 --long --dirty --match='v[0-9]*' HEAD)"
-  read -r -d '' exp <<EOF
-  let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
-  pkgs.pkgsStatic."${target}".override {
-    vast-source = pkgs.fetchFromGitHub (builtins.fromJSON ''${source_json}'');
-    versionOverride = "${desc}";
-    withPlugins = [ ${plugins[@]} ];
-    extraCmakeFlags = [ ${cmakeFlags} ];
-    buildAsPackage = true;
-  }
+read -r -d '' exp <<EOF || true
+let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
+pkgs.pkgsStatic."${target}".override {
+  versionOverride = "${desc}";
+  versionShortOverride = "${desc_short}";
+  withPlugins = [ ${plugins[@]} ];
+  extraCmakeFlags = [ ${cmakeFlags} ];
+  buildAsPackage = true;
+}
 EOF
-else
-  read -r -d '' exp <<EOF
-  let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
-  pkgs.pkgsStatic."${target}".override {
-    versionOverride = "${desc}";
-    withPlugins = [ ${plugins[@]} ];
-    extraCmakeFlags = [ ${cmakeFlags} ];
-    buildAsPackage = true;
-  }
-EOF
-fi
 
 log running "nix --print-build-logs build --print-out-paths --impure --expr  \'${exp}\'"
 nix --print-build-logs build --print-out-paths --impure --expr "${exp}"

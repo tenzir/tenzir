@@ -1,10 +1,11 @@
 include("${CMAKE_CURRENT_LIST_DIR}/VASTVersionFallback.cmake")
 
+find_package(Git QUIET)
+
 if (NOT VAST_VERSION_TAG)
   if (DEFINED ENV{VAST_VERSION_TAG})
     set(VAST_VERSION_TAG "${ENV{VAST_VERSION_TAG}}")
   elseif (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../.git")
-    find_package(Git QUIET)
     if (Git_FOUND)
       execute_process(
         COMMAND "${GIT_EXECUTABLE}" describe --abbrev=10 --long --dirty
@@ -20,10 +21,18 @@ if (NOT VAST_VERSION_TAG)
         )
         unset(VAST_VERSION_TAG)
       endif ()
+    endif ()
+  endif ()
+endif ()
+
+if (NOT VAST_VERSION_SHORT)
+  if (DEFINED ENV{VAST_VERSION_SHORT})
+    set(VAST_VERSION_SHORT "${ENV{VAST_VERSION_SHORT}}")
+  elseif (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../.git")
+    if (Git_FOUND)
       # Emit a "non-long" version for use in package file names.
       execute_process(
-        COMMAND "${GIT_EXECUTABLE}" describe --abbrev=10 --dirty
-                "--match=v[0-9]*"
+        COMMAND "${GIT_EXECUTABLE}" describe --abbrev=10 "--match=v[0-9]*"
         WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/.."
         OUTPUT_VARIABLE VAST_VERSION_SHORT
         OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -46,7 +55,6 @@ endif ()
 if (NOT VAST_VERSION_SHORT)
   set(VAST_VERSION_SHORT "${VAST_VERSION_FALLBACK}")
 endif ()
-
 
 # We accept:
 # (1) v1.0.0(-dirty)
