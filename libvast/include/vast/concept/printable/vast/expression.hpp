@@ -32,8 +32,7 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(caf::none_t) const {
-      using vast::print;
-      return print(out_, caf::none);
+      return vast::print(out_, caf::none);
     }
 
     bool operator()(const conjunction& c) const {

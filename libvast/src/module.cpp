@@ -117,7 +117,7 @@ caf::expected<module> get_module(const caf::settings& options) {
                     "provided");
   if (!sc && !mf)
     return module;
-  caf::expected<vast::module> update = caf::no_error;
+  caf::expected<vast::module> update = caf::error{};
   if (sc)
     update = to<vast::module>(*sc);
   else

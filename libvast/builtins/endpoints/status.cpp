@@ -108,9 +108,12 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
               return;
             }
             std::string result;
-            caf::message_handler{[&](std::string& str) {
-              result = std::move(str);
-            }}(e.context());
+            auto ctx = e.context();
+            caf::message_handler{[&](caf::message& msg) {
+              caf::message_handler{[&](std::string& str) {
+                result = std::move(str);
+              }}(msg);
+            }}(ctx);
             rsp->append(result);
           });
     },

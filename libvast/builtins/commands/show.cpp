@@ -39,7 +39,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(components.error()));
   auto [type_registry] = std::move(*components);
   // show!
-  auto command_result = caf::message{caf::none};
+  auto command_result = caf::message{};
   self->request(type_registry, caf::infinite, atom::get_v, atom::taxonomies_v)
     .receive(
       [&](taxonomies& taxonomies) mutable {

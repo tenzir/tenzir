@@ -24,6 +24,7 @@
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
 
+#include <caf/binary_serializer.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
@@ -112,30 +113,13 @@ public:
     }
   }
 
-  caf::error serialize(caf::serializer& sink) const override {
-    return caf::error::eval(
-      [&] {
-        return value_index::serialize(sink);
-      },
-      [&] {
-        return sink(bmi_);
-      });
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return caf::error::eval(
-      [&] {
-        return value_index::deserialize(source);
-      },
-      [&] {
-        return source(bmi_);
-      });
-  }
-
-  bool deserialize(detail::legacy_deserializer& source) override {
-    if (!value_index::deserialize(source))
-      return false;
-    return source(bmi_);
+  bool inspect_impl(supported_inspectors& inspector) override {
+    return value_index::inspect_impl(inspector)
+           && std::visit(
+             [this](auto visitor) {
+               return visitor.get().apply(bmi_);
+             },
+             inspector);
   }
 
 private:

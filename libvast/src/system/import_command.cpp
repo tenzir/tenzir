@@ -122,7 +122,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     .until(stop);
   if (err)
     return caf::make_message(std::move(err));
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

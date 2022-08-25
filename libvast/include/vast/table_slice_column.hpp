@@ -14,8 +14,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/view.hpp"
 
-#include <caf/meta/type_name.hpp>
-
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -56,12 +54,12 @@ public:
   /// @returns the viewed column's qualified record field.
   [[nodiscard]] const qualified_record_field& field() const noexcept;
 
-  /// Opt-in to CAF's type inspection API.
   template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice_column& x) ->
-    typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.table_slice_column"), x.slice_,
-             x.column_);
+  friend auto inspect(Inspector& f, table_slice_column& x) {
+    return f.object(x)
+      .pretty_name("vast.table_slice_column")
+      .fields(f.field("slice", x.slice_), f.field("column", x.column_),
+              f.field("field", x.field_));
   }
 
 private:

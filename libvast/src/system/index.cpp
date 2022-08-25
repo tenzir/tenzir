@@ -1314,12 +1314,12 @@ index(index_actor::stateful_pointer<index_state> self,
       // We get an 'unreachable' error when the stream becomes unreachable
       // during actor destruction; in this case we can't use `self->state`
       // anymore since it will already be destroyed.
-      VAST_DEBUG("index finalized streaming with error {}", render(err));
+      VAST_DEBUG("index finalized streaming with error {}", err);
       if (err && err != caf::exit_reason::unreachable) {
-        if (err != caf::exit_reason::user_shutdown)
-          VAST_ERROR("{} got a stream error: {}", *self, render(err));
-        else
-          VAST_DEBUG("{} got a user shutdown error: {}", *self, render(err));
+        if (err == caf::exit_reason::user_shutdown)
+          VAST_DEBUG("{} got a user shutdown error: {}", *self, err);
+        else if (err != ec::end_of_input)
+          VAST_ERROR("{} got a stream error: {}", *self, err);
         // We can shutdown now because we only get a single stream from the
         // importer.
         self->send_exit(self, err);
@@ -1863,7 +1863,8 @@ index(index_actor::stateful_pointer<index_state> self,
       // nested requests.
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
-          [self, deliver, old_partition_ids, keep, marker_path](
+          [self, deliver, old_partition_ids, keep, marker_path,
+           partition_transfomer](
             std::vector<augmented_partition_synopsis>& apsv) mutable {
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
@@ -1972,6 +1973,7 @@ index(index_actor::stateful_pointer<index_state> self,
                         VAST_WARN("{} failed to finalize partition transformer "
                                   "output: {}",
                                   *self, e);
+                        // deliver something here?
                       });
                 },
                 [deliver](const caf::error& e) mutable {
@@ -1991,7 +1993,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto counter = detail::make_fanout_counter(
         self->state.active_partitions.size(),
         [rp]() mutable {
-          static_cast<caf::response_promise&>(rp).deliver(caf::unit);
+          rp.deliver();
         },
         [rp](caf::error error) mutable {
           rp.deliver(std::move(error));

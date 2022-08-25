@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <caf/meta/type_name.hpp>
-
 #include <iterator>
 #define SUITE convertible
 
@@ -33,7 +31,7 @@ struct X {
 
   template <class Inspector>
   friend auto inspect(Inspector& fun, X& x) {
-    return fun(x.value);
+    return fun.apply(x.value);
   }
 
   inline static const record_type& layout() noexcept {
@@ -521,7 +519,7 @@ struct iList {
 
   template <class Inspector>
   friend auto inspect(Inspector& fun, iList& x) {
-    return fun(caf::meta::type_name("iList"), x.value);
+    return fun.apply(x.value);
   }
 
   inline static const record_type& layout() noexcept {

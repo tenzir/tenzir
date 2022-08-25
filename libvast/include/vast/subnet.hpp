@@ -54,7 +54,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, subnet& sn) {
-    return f(sn.network_, sn.length_);
+    return f.apply(sn.network_) && f.apply(sn.length_);
   }
 
   friend bool convert(const subnet& sn, data& d);

@@ -63,8 +63,8 @@ TEST(real with custom binner) {
   result = idx.lookup(relational_operator::not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, idx), true);
   auto idx2 = index_type{type{real_type{}}, opts};
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::not_equal, make_data_view(4711.14));
@@ -132,8 +132,8 @@ TEST(time) {
     = idx.lookup(relational_operator::greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(eighteen)) == "000101");
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, idx), true);
   arithmetic_index<vast::time> idx2{type{time_type{}}, opts};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   eighteen = idx2.lookup(relational_operator::greater_equal,

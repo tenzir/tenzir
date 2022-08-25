@@ -11,8 +11,7 @@
 #include "vast/detail/operators.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/hash/uniquely_represented.hpp"
-
-#include <caf/meta/type_name.hpp>
+#include "vast/logger.hpp"
 
 #include <cstdint>
 
@@ -39,8 +38,10 @@ struct integer : detail::totally_ordered<integer> {
   friend bool operator<(integer lhs, integer rhs);
 
   template <class Inspector>
-  friend typename Inspector::result_type inspect(Inspector& f, integer& x) {
-    return f(caf::meta::type_name("vast.integer"), x.value);
+  friend auto inspect(Inspector& f, integer& x) {
+    return f.object(x)
+      .pretty_name("vast.integer")
+      .fields(f.field("value", x.value));
   }
 };
 

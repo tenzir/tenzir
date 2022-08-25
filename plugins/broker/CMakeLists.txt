@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
-
+message(FATAL_ERROR "broker plugin disabled due to lack of compatibility with CAF 18.6")
 project(
   broker
   VERSION 1.0.0

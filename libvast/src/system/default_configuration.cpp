@@ -19,11 +19,11 @@ namespace vast::system {
 
 default_configuration::default_configuration() {
   // Tweak default logging options.
-  using caf::atom;
   using namespace std::chrono_literals;
-  set("logger.component-blacklist",
-      caf::make_config_value_list(atom("caf"), atom("caf_flow"),
-                                  atom("caf_stream")));
+  set("caf.logger.file.excluded-components",
+      caf::make_config_value_list("caf", "caf_flow", "caf_stream"));
+  set("caf.logger.console.excluded-components",
+      caf::make_config_value_list("caf", "caf_flow", "caf_stream"));
   // TODO: Move part of this text into the commit message
   // The `max-batch-delay` is the maximum amount of time that caf waits until
   // it attempts to send an underfull batch along the stream.
@@ -48,8 +48,8 @@ default_configuration::default_configuration() {
   //     deadlocked actors, eventually the downstream actors will be able to
   //     make progress and the deadlock can be resolved.
   // We do a combination of (1) and (2).
-  set("stream.max-batch-delay", caf::timespan{15ms});
-  set("scheduler.max-throughput", 500);
+  set("caf.stream.max-batch-delay", caf::timespan{15ms});
+  set("caf.scheduler.max-throughput", 500);
 }
 
 } // namespace vast::system

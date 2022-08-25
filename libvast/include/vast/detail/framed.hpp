@@ -10,12 +10,19 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/inspection_common.hpp"
+
 namespace vast::detail {
 
 enum class stream_control_header : uint8_t {
   data,
   eof,
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, stream_control_header& x) {
+  return detail::inspect_enum(f, x);
+}
 
 /// Adds minimal framing around the template type `T` when sending it
 /// through a caf stream. This enables the sender to insert an `eof`
@@ -47,7 +54,7 @@ public:
 
   template <typename Inspector>
   friend auto inspect(Inspector& f, framed<T>& sc) {
-    return f(sc.header, sc.body);
+    return f.apply(sc.header) && f.apply(sc.body);
   }
 };
 

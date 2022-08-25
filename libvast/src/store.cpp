@@ -363,7 +363,7 @@ system::default_active_store_actor::behavior_type default_active_store(
       return handle_query<system::default_active_store_actor>(self,
                                                               query_context);
     },
-    [self](atom::erase, const ids& selection) -> caf::expected<uint64_t> {
+    [self](atom::erase, const ids& selection) {
       // For new, partition-local stores we know that we always erase
       // everything.
       const auto num_events = self->state.store->num_events();
@@ -375,7 +375,7 @@ system::default_active_store_actor::behavior_type default_active_store(
       return num_events;
     },
     [self](caf::stream<table_slice> stream)
-      -> caf::inbound_stream_slot<table_slice> {
+      -> caf::result<caf::inbound_stream_slot<table_slice>> {
       struct stream_state {
         // We intentionally store a strong reference here: The store lifetime
         // is ref-counted, it should exit after all currently active queries
@@ -400,7 +400,9 @@ system::default_active_store_actor::behavior_type default_active_store(
             self->quit(std::move(error));
         },
         [self](stream_state& stream_state, const caf::error& error) {
-          if (error) {
+          if (ec::end_of_input == error) {
+            VAST_WARN("Encountered end of input before shutdown");
+          } else if (error) {
             self->quit(error);
             return;
           }
@@ -429,9 +431,8 @@ system::default_active_store_actor::behavior_type default_active_store(
         });
       return attach_sink_result.inbound_slot();
     },
-    [self](atom::status,
-           [[maybe_unused]] system::status_verbosity verbosity) -> record {
-      return {
+    [self](atom::status, [[maybe_unused]] system::status_verbosity verbosity) {
+      return record{
         {"events", self->state.store->num_events()},
         {"path", self->state.path.string()},
         {"store-type", self->state.store_type},

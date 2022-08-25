@@ -16,6 +16,8 @@
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 
+#include <caf/broadcast_downstream_manager.hpp>
+#include <caf/stream_stage.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <unordered_map>
@@ -36,9 +38,8 @@ struct partition_transformer_state {
   using synopsis_tuple = std::tuple<vast::uuid, chunk_ptr>;
 
   struct stream_data {
-    caf::expected<std::vector<partition_tuple>> partition_chunks
-      = caf::no_error;
-    caf::expected<std::vector<synopsis_tuple>> synopsis_chunks = caf::no_error;
+    caf::expected<std::vector<partition_tuple>> partition_chunks = caf::error{};
+    caf::expected<std::vector<synopsis_tuple>> synopsis_chunks = caf::error{};
   };
 
   struct path_data {

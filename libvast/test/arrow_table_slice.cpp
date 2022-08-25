@@ -76,9 +76,9 @@ auto make_single_column_slice(const VastType& t, const Ts&... xs) {
 
 table_slice roundtrip(table_slice slice) {
   table_slice slice_copy;
-  std::vector<char> buf;
+  caf::byte_buffer buf;
   caf::binary_serializer sink{nullptr, buf};
-  CHECK_EQUAL(inspect(sink, slice), caf::none);
+  CHECK_EQUAL(inspect(sink, slice), true);
   CHECK_EQUAL(detail::legacy_deserialize(buf, slice_copy), true);
   return slice_copy;
 }
@@ -234,10 +234,10 @@ TEST(batch project nested column) {
           .Get(*old_batch)
           .ValueOrDie()
           ->Equals(arrow::FieldPath{0}.Get(*batch).ValueOrDie()));
-  CHECK(arrow::FieldPath{2, 1}
-          .Get(*old_batch)
-          .ValueOrDie()
-          ->Equals(arrow::FieldPath{1, 0}.Get(*batch).ValueOrDie()));
+  CHECK((arrow::FieldPath{2, 1}
+           .Get(*old_batch)
+           .ValueOrDie()
+           ->Equals(arrow::FieldPath{1, 0}.Get(*batch).ValueOrDie())));
 }
 
 TEST(single column - equality) {
@@ -605,9 +605,9 @@ TEST(single column - serialization) {
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
   decltype(slice1) slice2 = {};
   {
-    std::vector<char> buf;
+    caf::byte_buffer buf;
     caf::binary_serializer sink{nullptr, buf};
-    CHECK_EQUAL(sink(slice1), caf::none);
+    CHECK_EQUAL(sink.apply(slice1), true);
     CHECK_EQUAL(detail::legacy_deserialize(buf, slice2), true);
   }
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, t), 0_c);

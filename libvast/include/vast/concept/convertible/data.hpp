@@ -14,6 +14,7 @@
 #include "vast/concept/parseable/parse.hpp"
 #include "vast/concepts.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
@@ -22,6 +23,7 @@
 #include "vast/view.hpp"
 
 #include <caf/error.hpp>
+#include <caf/message_handler.hpp>
 
 /// As a convention, in this file `From` and `To` refer to the source
 /// and target types, and `src` and `dst` refer to their values
@@ -89,22 +91,29 @@ caf::error insert_to_map(To& dst, typename To::key_type&& key,
 // clang-format on
 
 template <class... Args>
+// TODO in future CAF. Maybe it will be allowed to change the context of
+// caf::error instead of creating a new object
 [[nodiscard]] caf::error
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
-  if (in) {
-    auto new_msg = in.context().apply({
-      [&, f = fmt::format("{}{{}}", fstring)](std::string& s) {
-        return caf::make_message(fmt::format(
-          VAST_FMT_RUNTIME(f), std::forward<Args>(args)..., std::move(s)));
-      },
-    });
-    if (new_msg)
-      in.context() = std::move(*new_msg);
-    else
-      in.context() = caf::make_message(
-        fmt::format(VAST_FMT_RUNTIME(fstring), std::forward<Args>(args)...));
+  if (!in)
+    return std::move(in);
+  if (in.category() != caf::type_id_v<vast::ec>) {
+    VAST_WARN("Prepend got non vast error: {}. Returning original error", in);
+    return std::move(in);
   }
-  return std::move(in);
+  auto hdl = caf::message_handler{
+    [&, f = fmt::format("{}{{}}", fstring)](std::string& s) {
+      return caf::make_message(fmt::format(
+        VAST_FMT_RUNTIME(f), std::forward<Args>(args)..., std::move(s)));
+    },
+  };
+  auto ctx = in.context();
+  if (auto new_msg = hdl(ctx))
+    return {static_cast<vast::ec>(in.code()), std::move(*new_msg)};
+
+  return caf::make_error(static_cast<vast::ec>(in.code()),
+                         fmt::format(VAST_FMT_RUNTIME(fstring),
+                                     std::forward<Args>(args)...));
 }
 
 } // namespace detail
@@ -145,8 +154,8 @@ concept has_layout = requires {
 };
 
 // Overload for records.
-template <concepts::inspectable To>
-caf::error convert(const record& src, To& dst, const record_type& layout);
+caf::error convert(const record& src, concepts::inspectable auto& dst,
+                   const record_type& layout);
 
 template <has_layout To>
 caf::error convert(const record& src, To& dst);
@@ -479,7 +488,7 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
 
 class record_inspector {
 public:
-  using result_type = caf::error;
+  static constexpr bool is_loading = true;
 
   template <class To>
   caf::error apply(const record_type::field_view& field, To& dst) {
@@ -495,6 +504,9 @@ public:
         } else if constexpr (IS_UNTYPED_CONVERTIBLE(d, dst)) {
           return convert(d, dst);
         } else {
+          VAST_WARN(detail::pretty_type_name(d));
+          VAST_WARN(detail::pretty_type_name(dst));
+          VAST_WARN(detail::pretty_type_name(t));
           return caf::make_error(ec::convert_error,
                                  fmt::format("failed to find conversion "
                                              "operation for value {} of "
@@ -515,29 +527,44 @@ public:
     return field.type ? caf::visit(f, value, field.type) : caf::none;
   }
 
-  template <class... Ts>
-  caf::error operator()(Ts&&... xs) {
-    auto rng = layout.fields();
-    auto it = rng.begin();
-    return caf::error::eval([&]() -> caf::error {
-      if constexpr (!caf::meta::is_annotation<Ts>::value) {
-        auto result = apply(*it, xs);
-        ++it;
-        return result;
-      }
-      return caf::none;
-    }...);
+  template <class T>
+  bool apply(T& x) {
+    auto err = apply(*current_iterator_, x);
+    ++current_iterator_;
+    if (err) {
+      VAST_WARN("{}", err);
+      return false;
+    }
+    return true;
+  }
+
+  template <class T>
+  auto field(std::string_view, T& value) {
+    return detail::inspection_field{value};
+  }
+
+  template <class T>
+  auto object(const T&) {
+    return detail::inspection_object(*this);
   }
 
   const record_type& layout;
   const record& src;
+  detail::generator<record_type::field_view> field_generator_ = layout.fields();
+  detail::generator<record_type::field_view>::iterator current_iterator_
+    = field_generator_.begin();
 };
 
 // Overload for records.
-template <concepts::inspectable To>
-caf::error convert(const record& src, To& dst, const record_type& layout) {
+caf::error convert(const record& src, concepts::inspectable auto& dst,
+                   const record_type& layout) {
   auto ri = record_inspector{layout, src};
-  return inspect(ri, dst);
+  if (auto result = inspect(ri, dst); !result)
+    return caf::make_error(ec::convert_error,
+                           fmt::format("record inspection failed for record {} "
+                                       "with layout {}",
+                                       src, layout));
+  return {};
 }
 
 template <has_layout To>

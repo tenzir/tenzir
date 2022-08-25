@@ -31,36 +31,12 @@ synopsis::synopsis(vast::type x) : type_{std::move(x)} {
   // nop
 }
 
-synopsis::~synopsis() {
-  // nop
-}
-
 const vast::type& synopsis::type() const {
   return type_;
 }
 
 synopsis_ptr synopsis::shrink() const {
   return nullptr;
-}
-
-bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr) {
-  // Read synopsis type.
-  legacy_type t;
-  if (!source(t))
-    return false;
-  // Only nullptr has a none type.
-  if (!t) {
-    ptr.reset();
-    return true;
-  }
-  // Deserialize into a new instance.
-  auto new_ptr
-    = factory<synopsis>::make(type::from_legacy_type(t), caf::settings{});
-  if (!new_ptr || !new_ptr->deserialize(source))
-    return false;
-  // Change `ptr` only after successfully deserializing.
-  std::swap(ptr, new_ptr);
-  return true;
 }
 
 caf::expected<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>

@@ -18,6 +18,10 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
+#include <vast/detail/legacy_deserialize.hpp>
+
+#include <caf/binary_serializer.hpp>
+#include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
 
 #include <memory>
@@ -33,15 +37,16 @@ using synopsis_ptr = std::unique_ptr<synopsis>;
 class synopsis {
 public:
   using supported_inspectors
-    = std::variant<std::reference_wrapper<caf::serializer>,
-                   std::reference_wrapper<caf::deserializer>>;
+    = std::variant<std::reference_wrapper<caf::binary_serializer>,
+                   std::reference_wrapper<caf::detail::stringification_inspector>,
+                   std::reference_wrapper<detail::legacy_deserializer>>;
   // -- construction & destruction ---------------------------------------------
 
   /// Constructs a synopsis from a type.
   /// @param x The type the synopsis should act for.
   explicit synopsis(vast::type x);
 
-  virtual ~synopsis();
+  virtual ~synopsis() noexcept = default;
 
   /// Returns a copy of this synopsis.
   [[nodiscard]] virtual synopsis_ptr clone() const = 0;
@@ -78,10 +83,7 @@ public:
 
   // -- serialization ----------------------------------------------------------
 
-  virtual caf::error inspect(supported_inspectors& inspector) = 0;
-
-  /// Loads the contents for this slice from `source`.
-  virtual bool deserialize(vast::detail::legacy_deserializer& source) = 0;
+  virtual bool inspect_impl(supported_inspectors& inspector) = 0;
 
   /// @relates synopsis
   friend inline bool operator==(const synopsis& x, const synopsis& y) {
@@ -96,9 +98,6 @@ public:
 private:
   vast::type type_;
 };
-
-/// @relates synopsis
-bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr);
 
 /// Flatbuffer support.
 [[nodiscard]] caf::expected<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>
@@ -119,51 +118,63 @@ synopsis_ptr make_synopsis(const type& t);
 /// @relates synopsis
 
 /// Loads the contents for this synopsis from `source`.
-template <class Inspector>
-caf::error deserialize(Inspector& source, synopsis_ptr& ptr) {
-  // Read synopsis type.
+bool deserialize(auto& source, synopsis_ptr& ptr) {
+  // Read synopsis type
   legacy_type t;
-  if (auto err = source(t))
-    return err;
+  if (!source.apply(t))
+    return false;
   // Only nullptr has an none type.
   if (!t) {
     ptr.reset();
-    return caf::none;
+    return true;
   }
   // Deserialize into a new instance.
   auto new_ptr = make_synopsis(type::from_legacy_type(t));
-  if (!new_ptr)
-    return ec::invalid_synopsis_type;
+  if (!new_ptr) {
+    VAST_WARN("Error during synopsis deserialization {}",
+              caf::make_error(ec::invalid_synopsis_type));
+    return false;
+  }
   synopsis::supported_inspectors i{std::ref(source)};
-  if (auto err = new_ptr->inspect(i))
-    return err;
+  if (!new_ptr->inspect_impl(i))
+    return false;
   // Change `ptr` only after successfully deserializing.
   using std::swap;
   swap(ptr, new_ptr);
-  return caf::none;
+  return true;
 }
 
 /// Saves the contents (excluding the layout!) of this slice to `sink`.
-template <class Inspector>
-caf::error serialize(Inspector& sink, synopsis_ptr& ptr) {
+bool serialize(auto& sink, synopsis_ptr& ptr) {
   if (!ptr) {
     static legacy_type dummy;
-    return sink(dummy);
+    return sink.apply(dummy);
   }
-  return caf::error::eval(
+  auto err = caf::error::eval(
     [&] {
-      return sink(ptr->type().to_legacy_type());
+      if (!sink.apply(ptr->type().to_legacy_type()) && !sink.get_error())
+        return caf::make_error(ec::serialization_error, "Apply for "
+                                                        "synopsis_ptr failed");
+      return sink.get_error();
     },
     [&] {
       synopsis::supported_inspectors i{std::ref(sink)};
-      return ptr->inspect(i);
+      if (!ptr->inspect_impl(i) && !sink.get_error())
+        return caf::make_error(ec::serialization_error, "serialize for "
+                                                        "synopsis_ptr failed");
+      return sink.get_error();
     });
+
+  if (err) {
+    VAST_WARN("Error during synopsis_ptr serialization, {}", err);
+    return false;
+  }
+  return true;
 }
 
 template <class Inspector>
-  requires(std::is_same_v<typename Inspector::result_type, caf::error>)
-caf::error inspect(Inspector& inspector, synopsis_ptr& ptr) {
-  if constexpr (Inspector::writes_state) {
+bool inspect(Inspector& inspector, synopsis_ptr& ptr) {
+  if constexpr (Inspector::is_loading) {
     return deserialize(inspector, ptr);
   } else {
     return serialize(inspector, ptr);

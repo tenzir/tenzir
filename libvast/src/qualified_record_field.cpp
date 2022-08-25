@@ -9,9 +9,11 @@
 #include "vast/qualified_record_field.hpp"
 
 #include "vast/data.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/legacy_type.hpp"
 
+#include <caf/binary_serializer.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
 
@@ -92,18 +94,15 @@ bool operator<(const qualified_record_field& x,
          < std::tie(y.layout_name_, y.field_.name, y.field_.type);
 }
 
-caf::error inspect(caf::serializer& f, qualified_record_field& x) {
-  static_assert(std::is_same_v<caf::serializer::result_type, caf::error>);
-  static_assert(caf::serializer::reads_state);
+bool inspect(caf::binary_serializer& f, qualified_record_field& x) {
+  static_assert(!caf::serializer::is_loading);
   std::string layout_name = std::string{x.layout_name_};
-  std::string field_name = std::string{x.field_.name};
   legacy_type field_type = x.field_.type.to_legacy_type();
-  return f(layout_name, field_name, field_type);
+  return detail::apply_all(f, layout_name, x.field_.name, field_type);
 }
 
-caf::error inspect(caf::deserializer& f, qualified_record_field& x) {
-  static_assert(std::is_same_v<caf::deserializer::result_type, caf::error>);
-  static_assert(caf::deserializer::writes_state);
+bool inspect(caf::deserializer& f, qualified_record_field& x) {
+  static_assert(caf::deserializer::is_loading);
   // Need to switch logic below when this changes to bool with CAF 0.18.
   // This overload exists for backwards compatibility. In some cases, we used
   // to serialize qualified record fields using CAF. Back then, the qualified
@@ -114,16 +113,15 @@ caf::error inspect(caf::deserializer& f, qualified_record_field& x) {
   std::string layout_name = {};
   std::string field_name = {};
   legacy_type field_type = {};
-  auto result = f(layout_name, field_name, field_type);
-  if (result == caf::none)
+  auto result = detail::apply_all(f, layout_name, field_name, field_type);
+  if (result)
     x = qualified_record_field{layout_name, field_name,
                                type::from_legacy_type(field_type)};
   return result;
 }
 
 bool inspect(detail::legacy_deserializer& f, qualified_record_field& x) {
-  static_assert(std::is_same_v<detail::legacy_deserializer::result_type, bool>);
-  static_assert(detail::legacy_deserializer::writes_state);
+  static_assert(detail::legacy_deserializer::is_loading);
   std::string layout_name = {};
   std::string field_name = {};
   legacy_type field_type = {};

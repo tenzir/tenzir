@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "detail/inspection_common.hpp"
 #include "vast/atoms.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/data.hpp"
@@ -20,7 +21,6 @@
 
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
-#include <caf/meta/type_name.hpp>
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
 
@@ -43,6 +43,11 @@ struct meta_extractor : detail::totally_ordered<meta_extractor> {
     // nop
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, kind& x) {
+    return detail::inspect_enum(f, x);
+  }
+
   kind kind;
 };
 
@@ -51,7 +56,9 @@ bool operator<(const meta_extractor& x, const meta_extractor& y);
 
 template <class Inspector>
 auto inspect(Inspector& f, meta_extractor& x) {
-  return f(caf::meta::type_name("meta_extractor"), x.kind);
+  return f.object(x)
+    .pretty_name("meta_extractor")
+    .fields(f.field("kind", x.kind));
 }
 
 /// Extracts one or more values according to a given field.
@@ -70,7 +77,9 @@ bool operator<(const field_extractor& x, const field_extractor& y);
 /// @relates field_extractor
 template <class Inspector>
 auto inspect(Inspector& f, field_extractor& x) {
-  return f(caf::meta::type_name("field_extractor"), x.field);
+  return f.object(x)
+    .pretty_name("field_extractor")
+    .fields(f.field("field", x.field));
 }
 
 /// Extracts one or more values according to a given type.
@@ -89,7 +98,9 @@ bool operator<(const type_extractor& x, const type_extractor& y);
 /// @relates type_extractor
 template <class Inspector>
 auto inspect(Inspector& f, type_extractor& x) {
-  return f(caf::meta::type_name("type_extractor"), x.type);
+  return f.object(x)
+    .pretty_name("vast.type_extractor")
+    .fields(f.field("type", x.type));
 }
 
 /// Extracts a specific data value from a type according to an offset. During
@@ -114,7 +125,9 @@ bool operator<(const data_extractor& x, const data_extractor& y);
 /// @relates data_extractor
 template <class Inspector>
 auto inspect(Inspector& f, data_extractor& x) {
-  return f(caf::meta::type_name("data_extractor"), x.type, x.column);
+  return f.object(x)
+    .pretty_name("data_extractor")
+    .fields(f.field("type", x.type), f.field("column", x.column));
 }
 
 /// A predicate with two operands evaluated under a relational operator.
@@ -141,7 +154,9 @@ bool operator<(const predicate& x, const predicate& y);
 /// @relates predicate
 template <class Inspector>
 auto inspect(Inspector& f, predicate& x) {
-  return f(caf::meta::type_name("predicate"), x.lhs, x.op, x.rhs);
+  return f.object(x)
+    .pretty_name("predicate")
+    .fields(f.field("lhs", x.lhs), f.field("op", x.op), f.field("rhs", x.rhs));
 }
 
 /// A curried predicate, i.e., a predicate with its `lhs` operand fixed by an
@@ -156,7 +171,9 @@ struct curried_predicate {
 /// @relates curried_predicate
 template <class Inspector>
 auto inspect(Inspector& f, curried_predicate& x) {
-  return f(caf::meta::type_name("curried_predicate"), x.op, x.rhs);
+  return f.object(x)
+    .pretty_name("curried_predicate")
+    .fields(f.field("op", x.op), f.field("rhs", x.rhs));
 }
 
 /// @returns a curried version of `pred`.
@@ -175,8 +192,8 @@ struct conjunction : std::vector<expression> {
 /// @relates conjunction
 template <class Inspector>
 auto inspect(Inspector& f, conjunction& x) {
-  return f(caf::meta::type_name("conjunction"),
-           static_cast<std::vector<expression>&>(x));
+  return f.object(x).fields(
+    f.field("conjunction", static_cast<std::vector<expression>&>(x)));
 }
 
 /// A sequence of OR expressions.
@@ -190,8 +207,8 @@ struct disjunction : std::vector<expression> {
 /// @relates conjunction
 template <class Inspector>
 auto inspect(Inspector& f, disjunction& x) {
-  return f(caf::meta::type_name("disjunction"),
-           static_cast<std::vector<expression>&>(x));
+  return f.object(x).fields(
+    f.field("disjunction", static_cast<std::vector<expression>&>(x)));
 }
 
 /// A NOT expression.
@@ -222,7 +239,7 @@ bool operator<(const negation& x, const negation& y);
 /// @relates negation
 template <class Inspector>
 auto inspect(Inspector& f, negation& x) {
-  return f(caf::meta::type_name("negation"), x.expr());
+  return f.object(x).pretty_name("negation").fields(f.field("expr", x.expr()));
 }
 
 /// A query expression.
@@ -266,7 +283,9 @@ bool operator<(const expression& x, const expression& y);
 /// @relates expression
 template <class Inspector>
 auto inspect(Inspector& f, expression& x) {
-  return f(caf::meta::type_name("expression"), x.get_data());
+  return f.object(x)
+    .pretty_name("expression")
+    .fields(f.field("node", x.get_data()));
 }
 
 template <class F>

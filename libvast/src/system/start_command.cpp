@@ -54,7 +54,8 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
                       "unset the option vast.node"));
   // Construct an endpoint.
   endpoint node_endpoint;
-  auto str = get_or(inv.options, "vast.endpoint", defaults::system::endpoint);
+  auto str
+    = get_or(inv.options, "vast.endpoint", defaults::system::endpoint.data());
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
       caf::make_error(ec::parse_error, "invalid endpoint", str));

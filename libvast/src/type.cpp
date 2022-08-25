@@ -883,12 +883,9 @@ type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
   return *this ? caf::visit(f, *this) : nullptr;
 }
 
-void inspect(caf::detail::stringification_inspector& f, type& x) {
-  static_assert(
-    std::is_same_v<caf::detail::stringification_inspector::result_type, void>);
-  static_assert(caf::detail::stringification_inspector::reads_state);
+auto inspect(caf::detail::stringification_inspector& f, type& x) {
   auto str = fmt::to_string(x);
-  f(str);
+  return f.apply(str);
 }
 
 void type::assign_metadata(const type& other) noexcept {

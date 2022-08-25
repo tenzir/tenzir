@@ -401,9 +401,9 @@ TEST(roundtrip) {
   auto slice = zeek_dns_log[0];
   slice.offset(42u);
   table_slice slice_copy;
-  std::vector<char> buf;
+  caf::byte_buffer buf;
   caf::binary_serializer sink{nullptr, buf};
-  CHECK_EQUAL(inspect(sink, slice), caf::none);
+  CHECK_EQUAL(inspect(sink, slice), true);
   CHECK_EQUAL(detail::legacy_deserialize(buf, slice_copy), true);
   CHECK_EQUAL(slice_copy.offset(), 42u);
   CHECK_EQUAL(slice, slice_copy);

@@ -14,14 +14,32 @@
 
 #include "vast/span.hpp"
 
+#include <caf/detail/stringification_inspector.hpp>
+#include <caf/inspector_access.hpp>
 #include <caf/test/unit_test.hpp>
+#include <fmt/format.h>
 
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 
 // Work around missing namespace qualification in CAF header.
 using ::caf::term;
+
+namespace caf {
+
+template <>
+struct inspector_access<std::string_view> {
+  static auto apply(detail::stringification_inspector& f, std::string_view& x) {
+    // auto result = f.apply(str);
+    // return result;
+    auto str = std::string{x};
+    return f.apply(str);
+  }
+};
+
+} // namespace caf
 
 namespace vast::test::detail {
 
@@ -86,27 +104,21 @@ struct less_equal_compare {
 #define FIXTURE_SCOPE_END CAF_TEST_FIXTURE_SCOPE_END
 
 // -- macros for checking results ----------------------------------------------
-
+// fmt::format("{}", (x).error()
 // Checks that abort the current test on failure
 #define REQUIRE CAF_REQUIRE
-#define REQUIRE_EQUAL(x, y)                                                    \
-  CAF_REQUIRE_FUNC(vast::test::detail::equality_compare, (x), (y))
-#define REQUIRE_NOT_EQUAL(x, y)                                                \
-  CAF_REQUIRE_FUNC(vast::test::detail::inequality_compare, (x), (y))
-#define REQUIRE_LESS(x, y)                                                     \
-  CAF_REQUIRE_FUNC(vast::test::detail::less_compare, (x), (y))
-#define REQUIRE_LESS_EQUAL(x, y)                                               \
-  CAF_REQUIRE_FUNC(vast::test::detail::less_equal_compare, (x), (y))
-#define REQUIRE_GREATER(x, y)                                                  \
-  CAF_REQUIRE_FUNC(vast::test::detail::greater_compare, (x), (y))
-#define REQUIRE_GREATER_EQUAL(x, y)                                            \
-  CAF_REQUIRE_FUNC(vast::test::detail::greater_equal_compare, (x), (y))
+#define REQUIRE_EQUAL(x, y) CAF_REQUIRE_EQUAL((x), (y))
+#define REQUIRE_NOT_EQUAL(x, y) CAF_REQUIRE_NOT_EQUAL((x), (y))
+#define REQUIRE_LESS(x, y) CAF_REQUIRE_LESS((x), (y))
+#define REQUIRE_LESS_EQUAL(x, y) CAF_REQUIRE_LESS_OR_EQUAL((x), (y))
+#define REQUIRE_GREATER(x, y) CAF_REQUIRE_GREATER((x), (y))
+#define REQUIRE_GREATER_EQUAL(x, y) CAF_REQUIRE_GREATER_OR_EQUAL((x), (y))
 #define REQUIRE_NOERROR(x)                                                     \
   do {                                                                         \
     if (!(x)) {                                                                \
-      FAIL((x).error());                                                       \
+      CAF_FAIL(__FILE__, __LINE__);                                            \
     } else {                                                                   \
-      CAF_CHECK_PASSED(#x);                                                    \
+      MESSAGE("Successful check " #x);                                         \
     }                                                                          \
   } while (false)
 #define REQUIRE_ERROR(x) REQUIRE_EQUAL(!(x), true)
@@ -115,32 +127,24 @@ struct less_equal_compare {
 #define FAIL CAF_FAIL
 // Checks that continue with the current test on failure
 #define CHECK CAF_CHECK
-#define CHECK_EQUAL(x, y)                                                      \
-  CAF_CHECK_FUNC(vast::test::detail::equality_compare, (x), (y))
-#define CHECK_NOT_EQUAL(x, y)                                                  \
-  CAF_CHECK_FUNC(vast::test::detail::inequality_compare, (x), (y))
-#define CHECK_LESS(x, y)                                                       \
-  CAF_CHECK_FUNC(vast::test::detail::less_compare, (x), (y))
-#define CHECK_LESS_EQUAL(x, y)                                                 \
-  CAF_CHECK_FUNC(vast::test::detail::less_equal_compare, (x), (y))
-#define CHECK_GREATER(x, y)                                                    \
-  CAF_CHECK_FUNC(vast::test::detail::greater_compare, (x), (y))
-#define CHECK_GREATER_EQUAL(x, y)                                              \
-  CAF_CHECK_FUNC(vast::test::detail::greater_equal_compare, (x), (y))
-#define CHECK_NOERROR(x)                                                       \
-  do {                                                                         \
-    if (!(x)) {                                                                \
-      CAF_CHECK_FAILED((x).error());                                           \
-    } else {                                                                   \
-      CAF_CHECK_PASSED(#x);                                                    \
-    }                                                                          \
-  } while (false)
+#define CHECK_EQUAL(x, y) CAF_CHECK_EQUAL((x), (y))
+#define CHECK_NOT_EQUAL(x, y) CAF_CHECK_NOT_EQUAL((x), (y))
+#define CHECK_LESS(x, y) CAF_CHECK_LESS((x), (y))
+#define CHECK_LESS_EQUAL(x, y) CAF_CHECK_LESS_OR_EQUAL((x), (y))
+#define CHECK_GREATER(x, y) CAF_CHECK_GREATER((x), (y))
+#define CHECK_GREATER_EQUAL(x, y) CAF_CHECK_GREATER_OR_EQUAL((x), (y))
 #define CHECK_ERROR(x) CHECK_EQUAL(!(x), true)
 #define CHECK_SUCCESS(x) CHECK_EQUAL((x), caf::none)
 #define CHECK_FAILURE(x) CHECK_NOT_EQUAL((x), caf::none)
 #define CHECK_FAIL CAF_CHECK_FAIL
 // Checks that automagically handle caf::variant types.
-#define CHECK_VARIANT_EQUAL CAF_CHECK_EQUAL
+#define CHECK_VARIANT_EQUAL(x, y)                                              \
+  do {                                                                         \
+    auto v1 = x;                                                               \
+    auto v2 = y;                                                               \
+    decltype(v1) y_as_variant = y;                                             \
+    CHECK_EQUAL(v1, y_as_variant);                                             \
+  } while (false)
 #define CHECK_VARIANT_NOT_EQUAL CAF_CHECK_NOT_EQUAL
 #define CHECK_VARIANT_LESS CAF_CHECK_LESS
 #define CHECK_VARIANT_LESS_EQUAL CAF_CHECK_LESS_OR_EQUAL

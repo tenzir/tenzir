@@ -54,7 +54,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector&f, null_bitmap& bm) {
-    return f(bm.bitvector_);
+    return f.apply(bm.bitvector_);
   }
 
   friend null_bitmap_range bit_range(const null_bitmap& bm);

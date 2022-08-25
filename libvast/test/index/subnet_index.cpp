@@ -81,8 +81,8 @@ TEST(subnet) {
   auto multi = unbox(idx.lookup(relational_operator::in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "111100");
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, idx), true);
   subnet_index idx2{type{subnet_type{}}};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   bm = idx2.lookup(relational_operator::not_equal, make_data_view(s1));

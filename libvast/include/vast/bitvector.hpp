@@ -188,7 +188,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bitvector& b) {
-    return f(b.blocks_, b.size_);
+    return f.apply(b.blocks_) && f.apply(b.size_);
   }
 
   friend auto

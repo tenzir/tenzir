@@ -128,10 +128,10 @@ public:
 
     /// Support CAF's type inspection.
     template <class Inspector>
-    friend auto inspect(Inspector& f, iterator& x) ->
-      typename Inspector::result_type {
-      return f(caf::meta::type_name("vast.projection.iterator"), x.proj_,
-               x.row_);
+    friend auto inspect(Inspector& f, iterator& x) {
+      return f.object(x)
+        .pretty_name("vast.projection.iterator")
+        .fields(f.field("proj", x.proj_), f.field("row", x.row_));
     }
 
     // -- utility functions ----------------------------------------------------
@@ -208,10 +208,11 @@ public:
 
   /// Support CAF's type inspection.
   template <class Inspector>
-  friend auto inspect(Inspector& f, projection& x) ->
-    typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.projection"), x.slice_, x.types_,
-             x.indices_);
+  friend auto inspect(Inspector& f, projection& x) {
+    return f.object(x)
+      .pretty_name("vast.projection")
+      .fields(f.field("slice", x.slice_), f.field("types", x.types_),
+              f.field("indices", x.indices_));
   }
 
   // -- implementation details -------------------------------------------------

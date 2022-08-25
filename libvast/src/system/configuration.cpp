@@ -90,44 +90,6 @@ caf::expected<caf::config_value> to_config_value(std::string_view value) {
   return caf::config_value{std::move(result)};
 }
 
-caf::expected<caf::config_value>
-to_config_value(const caf::config_value& value, const caf::config_option& opt) {
-  // The config_option (from our commands) includes type information on what
-  // value to accept. Command line values are checked against this.
-  // Unfortunately our YAML config operates purely based on values. This means
-  // we may have previously parsed a value incorrectly, e.g., where an atom was
-  // expected we got a string. This trouble will be gone with CAF > 0.18, but
-  // until then we have to *go back* into a string reprsentation to create
-  // ambiguity (i.e., allow for parsing input as either string or atom), and
-  // then come back to the config_value that matches the typing.
-  auto no_quote_stringify = detail::overload{
-    [](const auto& x) {
-      return caf::deep_to_string(x);
-    },
-    [](const std::string& x) {
-      return x;
-    },
-  };
-  auto str = caf::visit(no_quote_stringify, value);
-  auto result = opt.parse(str);
-  if (!result) {
-    // We now try to parse strings as atom using a regex, since we get
-    // recursive types like lists for free this way. A string-vs-atom type
-    // clash is the only instance we currently cannot distinguish. Everything
-    // else is a true type clash.
-    // (With CAF 0.18, this heuristic will be obsolete.)
-    str = detail::replace_all(std::move(str), "\"", "'");
-    result = opt.parse(str);
-    if (!result)
-      return caf::make_error(ec::type_clash,
-                             fmt::format( //
-                               "failed to parse config option {} as {}: {}",
-                               caf::deep_to_string(opt.full_name()),
-                               caf::deep_to_string(opt.type_name()), str));
-  }
-  return result;
-}
-
 caf::expected<std::vector<std::filesystem::path>>
 collect_config_files(std::vector<std::filesystem::path> dirs,
                      std::vector<std::string> cli_configs) {
@@ -320,7 +282,7 @@ get_or_duration(const caf::settings& options, std::string_view key,
 }
 
 configuration::configuration() {
-  detail::add_message_types(*this);
+  detail::add_message_types();
   // Load I/O module.
   load<caf::io::middleman>();
   // Initialize factories.
@@ -485,10 +447,11 @@ caf::error configuration::embed_config(const caf::settings& settings) {
     // contains the valid type information, as defined by the command
     // hierarchy. The passed in config (file and environment) must abide to it.
     if (const auto* option = custom_options_.qualified_name_lookup(key)) {
-      if (auto x = to_config_value(value, *option))
-        put(content, key, std::move(*x));
+      auto val = value;
+      if (auto err = option->sync(val))
+        return err;
       else
-        return x.error();
+        put(content, key, std::move(val));
     } else {
       // If the option is not relevant to CAF's custom options, we just store
       // the value directly in the content.

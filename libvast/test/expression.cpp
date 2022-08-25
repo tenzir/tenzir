@@ -86,8 +86,8 @@ TEST(construction) {
 
 TEST(serialization) {
   expression ex0, ex1;
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, expr0, expr1), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, expr0, expr1), true);
   CHECK_EQUAL(detail::legacy_deserialize(buf, ex0, ex1), true);
   auto d = caf::get_if<disjunction>(&ex1);
   REQUIRE(d);

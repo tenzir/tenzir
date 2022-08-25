@@ -36,7 +36,7 @@ caf::expected<distribution> make_distribution(const type& t) {
   using parsers::real;
   auto tag = t.attribute("default");
   if (!tag || tag->empty())
-    return caf::no_error;
+    return {caf::error{}};
   auto parser = +alpha >> '(' >> real >> ',' >> real >> ')';
   std::string name;
   double p0 = {};
@@ -92,7 +92,7 @@ caf::expected<blueprint> make_blueprint(const type& t) {
           // that case when visiting the distributions by printing a warning and
           // just adding nil. As-is, we just skip the field, which may result in
           // errors for layouts that such fields anywhere but at the end.
-          if (dist.error() == caf::no_error)
+          if (!dist.error())
             continue;
           return dist.error();
         }

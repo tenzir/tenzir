@@ -60,7 +60,4 @@ TEST(render) {
               "!! type_mismatch: {\"argument\" = \"ttt\"}");
   CHECK_EQUAL(render(caf::make_error(caf::sec::unexpected_message, "msg")),
               "!! unexpected_message: msg");
-  CHECK_EQUAL(
-    render(caf::error(255, caf::atom("foobar"), caf::make_message(255, "msg"))),
-    "!! foobar: 255 msg");
 }

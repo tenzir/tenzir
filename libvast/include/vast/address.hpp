@@ -167,7 +167,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, address& x) {
-    return f(x.bytes_);
+    return f.apply(x.bytes_);
   }
 
   template <class Byte = std::byte>

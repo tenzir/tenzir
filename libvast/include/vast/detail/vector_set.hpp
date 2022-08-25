@@ -192,7 +192,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector&f, vector_set& xs) {
-    return f(xs.xs_);
+    return f.apply(xs.xs_);
   }
 
 private:

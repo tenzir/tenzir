@@ -14,7 +14,6 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/meta/type_name.hpp>
 #include <caf/ref_counted.hpp>
 
 #include <span>
@@ -102,9 +101,10 @@ public:
 
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice_builder& x) ->
-    typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.table_slice_builder"), x.layout_);
+  friend auto inspect(Inspector& f, table_slice_builder& x) {
+    return f.object(x)
+      .pretty_name("vast.table_slice_builder")
+      .fields(f.field("layout", x.layout_));
   }
 
 protected:

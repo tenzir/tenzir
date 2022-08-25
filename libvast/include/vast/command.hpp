@@ -174,8 +174,10 @@ struct invocation {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, invocation& x) {
-    return f(caf::meta::type_name("invocation"), x.full_name, x.arguments,
-             x.options);
+    return f.object(x)
+      .pretty_name("invocation")
+      .fields(f.field("full-name", x.full_name),
+              f.field("arguments", x.arguments), f.field("options", x.options));
   }
 
   // -- mutators -------------------------------------------------------------

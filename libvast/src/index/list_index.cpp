@@ -18,6 +18,7 @@
 #include "vast/type.hpp"
 #include "vast/value_index_factory.hpp"
 
+#include <caf/binary_serializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
@@ -46,30 +47,14 @@ list_index::list_index(vast::type t, caf::settings opts)
   size_ = size_bitmap_index{base::uniform(10, components)};
 }
 
-caf::error list_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval(
-    [&] {
-      return value_index::serialize(sink);
-    },
-    [&] {
-      return sink(elements_, size_, max_size_, value_type_);
-    });
-}
-
-caf::error list_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval(
-    [&] {
-      return value_index::deserialize(source);
-    },
-    [&] {
-      return source(elements_, size_, max_size_, value_type_);
-    });
-}
-
-bool list_index::deserialize(detail::legacy_deserializer& source) {
-  if (!value_index::deserialize(source))
-    return false;
-  return source(elements_, size_, max_size_, value_type_);
+bool list_index::inspect_impl(supported_inspectors& inspector) {
+  return value_index::inspect_impl(inspector)
+         && std::visit(
+           [this](auto visitor) {
+             return detail::apply_all(visitor.get(), elements_, size_,
+                                      max_size_, value_type_);
+           },
+           inspector);
 }
 
 bool list_index::append_impl(data_view x, id pos) {

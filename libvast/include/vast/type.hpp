@@ -23,7 +23,6 @@
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
 #include <caf/detail/type_list.hpp>
-#include <caf/meta/type_name.hpp>
 #include <caf/sum_type.hpp>
 #include <fmt/format.h>
 
@@ -289,16 +288,17 @@ public:
 
   /// Enables integration with CAF's type inspection.
   template <class Inspector>
-  friend auto inspect(Inspector& f, type& x) ->
-    typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.type"), x.table_);
+  friend auto inspect(Inspector& f, type& x) {
+    return f.object(x)
+      .pretty_name("vast.type")
+      .fields(f.field("table", x.table_));
   }
 
   /// Integrates with hash_append.
   template <class Hasher>
   friend auto inspect(detail::hash_inspector<Hasher>& f, type& x) ->
     typename detail::hash_inspector<Hasher>::result_type {
-    static_assert(detail::hash_inspector<Hasher>::reads_state,
+    static_assert(!detail::hash_inspector<Hasher>::is_loading,
                   "this inspect overload is read-only");
     // Because the underlying table is a chunk_ptr, which cannot be hashed
     // directly, we instead forward the unique representation of it to the hash
@@ -308,11 +308,7 @@ public:
 
   /// Integrates with the CAF stringification inspector.
   /// TODO: Implement for all fmt::is_formattable<T, char>.
-  friend void inspect(caf::detail::stringification_inspector& f, type& x);
-
-  /// Explicitly forbid usage of the CAF binary serializer/deserializer.
-  friend auto inspect(caf::binary_serializer&, type&) = delete;
-  friend auto inspect(caf::binary_deserializer&, type&) = delete;
+  friend auto inspect(caf::detail::stringification_inspector& f, type& x);
 
   /// Assigns the metadata of another type to this type.
   void assign_metadata(const type& other) noexcept;

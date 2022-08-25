@@ -202,9 +202,9 @@ auto generate_default_value_for_argument_type(std::string_view type_name) {
   if (type_name.starts_with("uint") || type_name.starts_with("int")
       || type_name.starts_with("long")) {
     return "0";
-  } else if (type_name == "timespan") {
+  } else if (type_name.find("timespan") != std::string_view::npos) {
     return "0s";
-  } else if (type_name.starts_with("list")) {
+  } else if (type_name.starts_with("std::vector")) {
     return "[]";
   }
   VAST_ASSERT(false && "option has type with no default value support");
@@ -348,7 +348,7 @@ parse(const command& root, command::argument_iterator first,
   }
   if (get_or(result.options, "help", false)) {
     helptext(*target, std::cout);
-    return caf::no_error;
+    return {caf::error{}};
   }
   return result;
 }

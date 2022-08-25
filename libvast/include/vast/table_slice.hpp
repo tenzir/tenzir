@@ -16,9 +16,6 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/meta/load_callback.hpp>
-#include <caf/meta/type_name.hpp>
-
 #include <cstddef>
 #include <span>
 #include <vector>
@@ -221,29 +218,36 @@ public:
 
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice& x) ->
-    typename Inspector::result_type {
+  friend auto inspect(Inspector& f, table_slice& x) {
     auto chunk = x.chunk_;
-    return f(caf::meta::type_name("vast.table_slice"),
-             caf::meta::save_callback([&]() noexcept -> caf::error {
-               if (!x.is_serialized()) {
-                 auto serialized_x = table_slice{to_record_batch(x), x.layout(),
-                                                 serialize::yes};
-                 serialized_x.import_time(x.import_time());
-                 chunk = serialized_x.chunk_;
-                 x = std::move(serialized_x);
-               }
-               return caf::none;
-             }),
-             chunk, caf::meta::load_callback([&]() noexcept -> caf::error {
-               // When VAST allows for external tools to hook directly into the
-               // table slice streams, this should be switched to verify if the
-               // chunk is unique.
-               x = table_slice{std::move(chunk), table_slice::verify::no};
-               VAST_ASSERT(x.is_serialized());
-               return caf::none;
-             }),
-             x.offset_);
+    if constexpr (Inspector::is_loading) {
+      auto offset = vast::id{};
+      auto callback = [&]() noexcept {
+        // When VAST allows for external tools to hook directly into the
+        // table slice streams, this should be switched to verify if the
+        // chunk is unique.
+        x = table_slice{std::move(chunk), table_slice::verify::no};
+        x.offset_ = offset;
+        VAST_ASSERT(x.is_serialized());
+        return true;
+      };
+
+      return f.object(x)
+        .pretty_name("vast.table_slice")
+        .on_load(callback)
+        .fields(f.field("chunk", chunk), f.field("offset", offset));
+    } else {
+      if (!x.is_serialized()) {
+        auto serialized_x
+          = table_slice{to_record_batch(x), x.layout(), serialize::yes};
+        serialized_x.import_time(x.import_time());
+        chunk = serialized_x.chunk_;
+        x = std::move(serialized_x);
+      }
+      return f.object(x)
+        .pretty_name("vast.table_slice")
+        .fields(f.field("chunk", chunk), f.field("offset", x.offset_));
+    }
   }
 
   // -- operations -------------------------------------------------------------

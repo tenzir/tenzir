@@ -17,8 +17,8 @@
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
 
-#include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
+#include <caf/init_global_meta_objects.hpp>
 #include <caf/stream.hpp>
 #include <caf/typed_actor.hpp>
 
@@ -68,7 +68,7 @@ template <typename Plugin>
 const Plugin* find(const std::string& name);
 
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
-std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
+std::vector<std::pair<plugin_type_id_block, void (*)()>>&
 get_static_type_id_blocks() noexcept;
 
 /// Load plugins specified in the configuration.
@@ -541,8 +541,8 @@ extern const char* VAST_PLUGIN_VERSION;
         ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name::begin,           \
                                        ::caf::id_block::name::end},            \
-          +[](::caf::actor_system_config& cfg) noexcept {                      \
-            cfg.add_message_types<::caf::id_block::name>();                    \
+          +[]() noexcept {                                                     \
+            caf::init_global_meta_objects<::caf::id_block::name>();            \
           });                                                                  \
         return true;                                                           \
       }                                                                        \
@@ -575,19 +575,17 @@ extern const char* VAST_PLUGIN_VERSION;
     }
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
-    extern "C" void vast_plugin_register_type_id_block(                        \
-      ::caf::actor_system_config& cfg) {                                       \
-      cfg.add_message_types<::caf::id_block::name>();                          \
+    extern "C" void vast_plugin_register_type_id_block() {                     \
+      caf::init_global_meta_objects<::caf::id_block::name>();                  \
     }                                                                          \
     extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {      \
       return {::caf::id_block::name::begin, ::caf::id_block::name::end};       \
     }
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                   \
-    extern "C" void vast_plugin_register_type_id_block(                        \
-      ::caf::actor_system_config& cfg) {                                       \
-      cfg.add_message_types<::caf::id_block::name1>();                         \
-      cfg.add_message_types<::caf::id_block::name2>();                         \
+    extern "C" void vast_plugin_register_type_id_block() {                     \
+      caf::init_global_meta_objects<::caf::id_block::name1>();                 \
+      caf::init_global_meta_objects<::caf::id_block::name2>();                 \
     }                                                                          \
     extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {      \
       return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin    \

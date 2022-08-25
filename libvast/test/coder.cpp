@@ -530,8 +530,8 @@ TEST(multi - level range coder) {
 TEST(serialization range coder) {
   range_coder<null_bitmap> x{100}, c;
   fill(x, 42, 84, 42, 21, 30);
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, x), true);
   CHECK_EQUAL(detail::legacy_deserialize(buf, c), true);
   CHECK_EQUAL(x, c);
   CHECK_DECODE(relational_operator::equal, 21, "00010");
@@ -555,8 +555,8 @@ TEST(serialization multi - level coder) {
   using coder_type = multi_level_coder<equality_coder<null_bitmap>>;
   auto x = coder_type{base{10, 10}};
   fill(x, 42, 84, 42, 21, 30);
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, x), true);
   auto c = coder_type{};
   CHECK_EQUAL(detail::legacy_deserialize(buf, c), true);
   CHECK_EQUAL(x, c);

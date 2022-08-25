@@ -8,13 +8,15 @@
 
 #pragma once
 
+#include <caf/string_view.hpp>
+
 #include <string_view>
 #include <type_traits>
 #include <utility>
 
 namespace vast::detail {
 
-/// A Common class used by VAST inspectors as return type for the object method.
+/// A common class used by VAST inspectors as return type for the object method.
 /// The CAF inspector API requires inspectors to have an object method.
 /// This method should return an object which guides the inspection procedure.
 /// Example of usage:
@@ -37,11 +39,11 @@ public:
   }
 
   template <class... Fields>
-  constexpr bool fields(Fields&&... fields) {
-    return (fields(inspector_) && ...) && callback_();
+  constexpr bool fields(Fields&&... fs) {
+    return (fs(inspector_) && ...) && callback_();
   }
 
-  constexpr inspection_object& pretty_name(std::string_view) noexcept {
+  constexpr inspection_object& pretty_name(caf::string_view) noexcept {
     return *this;
   }
 
@@ -80,13 +82,30 @@ public:
   }
 
   template <class Inspector>
-  constexpr bool operator()(Inspector& inspector) noexcept(
-    std::declval<Inspector>().apply(std::declval<T&>())) {
+  constexpr bool operator()(Inspector& inspector) {
     return inspector.apply(value_);
   }
 
 private:
   T& value_;
 };
+
+template <class Inspector, class... Args>
+auto apply_all(Inspector& f, Args&&... args) {
+  return (f.apply(std::forward<Args>(args)) && ...);
+}
+
+template <class Inspector, class Enum>
+  requires std::is_enum_v<Enum>
+bool inspect_enum(Inspector& f, Enum& x) {
+  using underlying_type = std::underlying_type_t<Enum>;
+  auto setter = [&x](underlying_type value) {
+    x = static_cast<Enum>(value);
+  };
+  auto getter = [&x] {
+    return static_cast<underlying_type>(x);
+  };
+  return f.apply(getter, setter);
+}
 
 } // namespace vast::detail

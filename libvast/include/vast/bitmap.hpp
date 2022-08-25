@@ -79,7 +79,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bitmap& bm) {
-    return f(bm.bitmap_);
+    return f.apply(bm.bitmap_);
   }
 
   // -- flatbuffers -----------------------------------------------------------

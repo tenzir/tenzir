@@ -27,7 +27,6 @@
 #include <caf/error.hpp>
 #include <caf/intrusive_cow_ptr.hpp>
 #include <caf/make_counted.hpp>
-#include <caf/meta/omittable.hpp>
 #include <caf/none.hpp>
 #include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
@@ -51,8 +50,8 @@ struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
   friend bool operator<(const legacy_attribute& x, const legacy_attribute& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, legacy_attribute& a) {
-    return f(a.key, a.value);
+  friend auto inspect(Inspector& f, legacy_attribute& a) -> bool {
+    return f.apply(a.key) && f.apply(a.value);
   }
 
   std::string key;
@@ -183,7 +182,13 @@ public:
   struct inspect_helper {
     type_id_type& type_tag;
     legacy_type& x;
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, inspect_helper& x) -> bool;
   };
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, legacy_type& x) -> bool;
 
   /// @endcond
 
@@ -227,13 +232,13 @@ public:
 
   /// @endcond
   template <class Inspector>
-  friend auto inspect(Inspector& f, legacy_abstract_type& x) {
-    return f(caf::meta::type_name("vast.abstract_type"),
-             caf::meta::omittable_if_empty(), x.name_,
-             caf::meta::omittable_if_empty(), x.attributes_);
+  friend auto inspect(Inspector& f, legacy_abstract_type& x) -> bool {
+    return f.object(x)
+      .pretty_name("vast.abstract_type")
+      .fields(f.field("name", x.name_), f.field("attributes", x.attributes_));
   }
 
-  friend auto inspect(caf::binary_deserializer&, legacy_abstract_type&)
+  friend auto inspect(caf::binary_deserializer&, legacy_abstract_type&) -> bool
     = delete;
 
 protected:
@@ -326,8 +331,8 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, legacy_concrete_type& x) {
-    const char* name = nullptr;
+  friend auto inspect(Inspector& f, legacy_concrete_type& x) -> bool {
+    auto name = std::string_view{};
     if constexpr (std::is_same_v<Derived, legacy_none_type>) {
       name = "vast.none_type";
     } else if constexpr (std::is_same_v<Derived, legacy_bool_type>) {
@@ -364,10 +369,11 @@ public:
       static_assert(detail::always_false_v<Derived>, "cannot inspect non-leaf "
                                                      "type");
     }
-    VAST_ASSERT(name != nullptr);
-    return f(caf::meta::type_name(name), type_id<Derived>(),
-             caf::meta::omittable_if_empty(), x.name_,
-             caf::meta::omittable_if_empty(), x.attributes_);
+    VAST_ASSERT(!name.empty());
+    auto tid = type_id<Derived>();
+    return f.object(x).pretty_name(name).fields(
+      f.field("type-id", tid), f.field("name", x.name_),
+      f.field("attributes", x.attributes_));
   }
 
 protected:
@@ -401,12 +407,24 @@ private:
 /// @relates type
 template <class Derived>
 struct legacy_basic_type : legacy_concrete_type<Derived> {
+  using super = legacy_concrete_type<Derived>;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, legacy_basic_type<Derived>& x) -> bool {
+    return f.apply(static_cast<super&>(x));
+  }
 };
 
 /// The base type for types that depend on runtime information.
 /// @relates legacy_basic_type type
 template <class Derived>
 struct legacy_complex_type : legacy_concrete_type<Derived> {
+  using super = legacy_concrete_type<Derived>;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, legacy_complex_type<Derived>& x) -> bool {
+    return f.apply(static_cast<super&>(x));
+  }
 };
 
 /// The base type for types that contain nested types.
@@ -414,6 +432,11 @@ struct legacy_complex_type : legacy_concrete_type<Derived> {
 template <class Derived>
 struct legacy_recursive_type : legacy_complex_type<Derived> {
   using super = legacy_complex_type<Derived>;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, legacy_recursive_type<Derived>& x) -> bool {
+    return f.apply(static_cast<super&>(x));
+  }
 };
 
 /// The base type for types that a single nested type.
@@ -429,9 +452,11 @@ struct legacy_nested_type : legacy_recursive_type<Derived> {
   legacy_type value_type; ///< The type of the enclosed element(s).
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, Derived& x) {
-    return f(caf::meta::type_name("vast.nested_type"), super::upcast(x),
-             x.value_type);
+  friend auto inspect(Inspector& f, legacy_nested_type<Derived>& x) -> bool {
+    return f.object(x)
+      .pretty_name("vast.nested_type")
+      .fields(f.field("value", static_cast<super&>(x)),
+              f.field("value-type", x.value_type));
   }
 
   [[nodiscard]] bool equals(const legacy_abstract_type& other) const final {
@@ -503,9 +528,10 @@ struct legacy_enumeration_type final
   std::vector<std::string> fields;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, legacy_enumeration_type& x) {
-    return f(caf::meta::type_name("vast.enumeration_type"), super::upcast(x),
-             caf::meta::omittable_if_empty(), x.fields);
+  friend auto inspect(Inspector& f, legacy_enumeration_type& x) -> bool {
+    return f.object(x)
+      .pretty_name("vast.enumeration_type")
+      .fields(f.field("value", super::upcast(x)), f.field("fields", x.fields));
   }
 
   bool equals(const legacy_abstract_type& other) const final {
@@ -521,9 +547,12 @@ struct legacy_enumeration_type final
 /// @relates type
 struct legacy_list_type final : legacy_nested_type<legacy_list_type> {
   using super = legacy_nested_type<legacy_list_type>;
-
   using super::super;
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, legacy_list_type& x) -> bool {
+    return f.apply(static_cast<super&>(x));
+  }
 };
 
 /// A type representinng an associative array.
@@ -538,11 +567,13 @@ struct legacy_map_type final : legacy_recursive_type<legacy_map_type> {
   legacy_type key_type;   ///< The type of the map keys.
   legacy_type value_type; ///< The type of the map values.
 
-
   template <class Inspector>
-  friend auto inspect(Inspector& f, legacy_map_type& x) {
-    return f(caf::meta::type_name("vast.map_type"), super::upcast(x),
-             x.key_type, x.value_type);
+  friend auto inspect(Inspector& f, legacy_map_type& x) -> bool {
+    return f.object(x)
+      .pretty_name("vast.map_type")
+      .fields(f.field("value", super::upcast(x)),
+              f.field("key-type", x.key_type),
+              f.field("value-type", x.value_type));
   }
 
   bool equals(const legacy_abstract_type& other) const final {
@@ -583,8 +614,10 @@ struct record_field : detail::totally_ordered<record_field> {
   friend bool operator<(const record_field& x, const record_field& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, record_field& x) {
-    return f(caf::meta::type_name("vast.record_field"), x.name, x.type);
+  friend auto inspect(Inspector& f, record_field& x) -> bool {
+    return f.object(x)
+      .pretty_name("vast.record_field")
+      .fields(f.field("name", x.name), f.field("type", x.type));
   }
 };
 
@@ -611,8 +644,10 @@ struct legacy_record_type final : legacy_recursive_type<legacy_record_type> {
   operator<(const legacy_record_type& x, const legacy_record_type& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, legacy_record_type& x) {
-    return f(caf::meta::type_name("vast.record_type"), upcast(x), x.fields);
+  friend auto inspect(Inspector& f, legacy_record_type& x) -> bool {
+    return f.object(x)
+      .pretty_name("vast.record_type")
+      .fields(f.field("value", upcast(x)), f.field("fields", x.fields));
   }
 
   std::vector<record_field> fields;
@@ -627,6 +662,11 @@ struct legacy_record_type final : legacy_recursive_type<legacy_record_type> {
 struct legacy_alias_type final : legacy_nested_type<legacy_alias_type> {
   using super = legacy_nested_type<legacy_alias_type>;
   using super::super;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, legacy_alias_type& x) -> bool {
+    return inspect(f, static_cast<super&>(x));
+  }
 };
 
 // -- free functions ----------------------------------------------------------
@@ -743,95 +783,58 @@ namespace vast {
 /// @private
 template <class Inspector, class T>
 auto make_inspect_fun() {
-  using fun = typename Inspector::result_type (*)(Inspector&, legacy_type&);
+  using fun = bool (*)(Inspector&, legacy_type&);
   auto lambda = [](Inspector& g, legacy_type& ref) {
-    T tmp;
-    auto res = g(caf::meta::type_name("vast.type"), tmp);
+    auto tmp = T{};
+    auto res
+      = g.object(tmp).pretty_name("vast.type").fields(g.field("value", tmp));
     ref = std::move(tmp);
     return res;
   };
   return static_cast<fun>(lambda);
 }
 
-// TODO: after upgrading to CAF 0.18 this can be removed.
-template <class Inspector, class... Ts>
-  requires(std::is_same_v<typename Inspector::result_type, caf::error>)
-auto make_inspect(caf::detail::type_list<Ts...>) {
-  return [](Inspector& f, legacy_type::inspect_helper& x) -> caf::error {
-    using result_type = typename Inspector::result_type;
-    if constexpr (Inspector::reads_state) {
-      if (x.type_tag != invalid_type_id)
-        caf::visit(f, x.x);
-      return caf::none;
-    } else {
-      using reference = legacy_type&;
-      using fun = result_type (*)(Inspector&, reference);
-      static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
-      if (x.type_tag != invalid_type_id)
-        return tbl[x.type_tag](f, x.x);
-      x.x = legacy_type{};
-      return caf::none;
-    }
-  };
-}
-
 /// @private
 template <class Inspector, class... Ts>
-  requires(std::is_same_v<typename Inspector::result_type, bool>)
 auto make_inspect(caf::detail::type_list<Ts...>) {
   return [](Inspector& f, legacy_type::inspect_helper& x) -> bool {
-    using result_type = typename Inspector::result_type;
-    if constexpr (Inspector::reads_state) {
-      if (x.type_tag != invalid_type_id)
-        caf::visit(f, x.x);
+    if constexpr (!Inspector::is_loading) {
+      if (x.type_tag != invalid_type_id) {
+        return caf::visit(
+          [&f](auto& v) -> bool {
+            return f.apply(v);
+          },
+          x.x);
+      }
       return true;
     } else {
       using reference = legacy_type&;
-      using fun = result_type (*)(Inspector&, reference);
+      using fun = bool (*)(Inspector&, reference);
       static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
       if (x.type_tag != invalid_type_id)
         return tbl[x.type_tag](f, x.x);
       x.x = legacy_type{};
       return true;
-    }
-  };
-}
-
-// TODO: after upgrading to CAF 0.18 this can be removed.
-template <class Inspector, class... Ts>
-  requires(std::is_same_v<typename Inspector::result_type, void>)
-auto make_inspect(caf::detail::type_list<Ts...>) {
-  return [](Inspector& f, legacy_type::inspect_helper& x) -> void {
-    using result_type = typename Inspector::result_type;
-    if constexpr (Inspector::reads_state) {
-      if (x.type_tag != invalid_type_id)
-        caf::visit(f, x.x);
-    } else {
-      using reference = legacy_type&;
-      using fun = result_type (*)(Inspector&, reference);
-      static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
-      if (x.type_tag != invalid_type_id)
-        return tbl[x.type_tag](f, x.x);
-      x.x = legacy_type{};
     }
   };
 }
 
 /// @relates type
 template <class Inspector>
-auto inspect(Inspector& f, legacy_type::inspect_helper& x) {
+auto inspect(Inspector& f, legacy_type::inspect_helper& x) -> bool {
   auto g = make_inspect<Inspector>(legacy_concrete_types{});
   return g(f, x);
 }
 
 /// @relates type
 template <class Inspector>
-auto inspect(Inspector& f, legacy_type& x) {
+auto inspect(Inspector& f, legacy_type& x) -> bool {
   // We use a single byte for the type index on the wire.
   auto type_tag = x ? static_cast<type_id_type>(x->index()) : invalid_type_id;
   legacy_type::inspect_helper helper{type_tag, x};
-  return f(caf::meta::type_name("vast.type"), caf::meta::omittable(), type_tag,
-           helper);
+  return f.object(x)
+    .pretty_name("vast.type")
+    .fields(f.field("type-tag", type_tag), f.field("value", helper));
 }
 
 auto inspect(caf::binary_deserializer& f, legacy_type& x) = delete;

@@ -136,7 +136,7 @@ TEST(query pruning with index config) {
       ps = std::move(result);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      REQUIRE(!e);
     });
   auto catalog = self->spawn(vast::system::catalog, accountant);
   auto rp2 = self->request(catalog, caf::infinite, vast::atom::merge_v, id, ps);
@@ -146,7 +146,7 @@ TEST(query pruning with index config) {
       /* nop */
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      REQUIRE(!e);
     });
   // Check that the pruning works as expected. If it does, it will be
   // unnoticeable from the outside, so we have to access the internal

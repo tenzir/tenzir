@@ -355,8 +355,8 @@ TEST(serialization) {
   bmi1.append(-100);
   CHECK_EQUAL(to_string(bmi1.lookup(relational_operator::not_equal, 100)),
               "11011");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, bmi1), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, bmi1), true);
   auto bmi2 = bitmap_index_type{};
   CHECK_EQUAL(detail::legacy_deserialize(buf, bmi2), true);
   CHECK(bmi1 == bmi2);

@@ -90,8 +90,8 @@ TEST(address) {
     to_string(unbox(idx.lookup(relational_operator::equal, make_data_view(x)))),
     str);
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, idx), true);
   address_index idx2{type{address_type{}}};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   CHECK_EQUAL(to_string(unbox(

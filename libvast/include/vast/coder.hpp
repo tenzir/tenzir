@@ -13,6 +13,7 @@
 #include "vast/base.hpp"
 #include "vast/bitmap.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/coder.hpp"
@@ -150,7 +151,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, singleton_coder& sc) {
-    return f(sc.bitmap_);
+    return f.apply(sc.bitmap_);
   }
 
   friend flatbuffers::Offset<fbs::coder::SingletonCoder>
@@ -226,7 +227,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, vector_coder& ec) {
-    return f(ec.size_, ec.bitmaps_);
+    return detail::apply_all(f, ec.size_, ec.bitmaps_);
   }
 
   friend flatbuffers::Offset<fbs::coder::VectorCoder>
@@ -694,7 +695,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, multi_level_coder& mlc) {
-    return f(mlc.base_, mlc.xs_, mlc.coders_);
+    return detail::apply_all(f, mlc.base_, mlc.xs_, mlc.coders_);
   }
 
   friend flatbuffers::Offset<fbs::coder::MultiLevelCoder>

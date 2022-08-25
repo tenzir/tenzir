@@ -73,8 +73,8 @@ TEST(LRU cache insertion) {
 }
 
 TEST(cache serialization) {
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, xs), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, xs), true);
   decltype(xs) ys;
   CHECK_EQUAL(detail::legacy_deserialize(buf, ys), true);
   CHECK(xs == ys);

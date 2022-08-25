@@ -28,7 +28,7 @@ struct configuration {
 
     template <class Inspector>
     friend auto inspect(Inspector& f, name_mapping& x) {
-      return f(x.from, x.to);
+      return f.apply(x.from) && f.apply(x.to);
     }
 
     static inline const record_type& layout() noexcept {
@@ -45,7 +45,7 @@ struct configuration {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.schemas, x.fields);
+    return f.apply(x.schemas) && f.apply(x.fields);
   }
 
   static inline const record_type& layout() noexcept {

@@ -112,8 +112,8 @@ TEST(serialization) {
   };
   mod.add(t);
   // Save & load
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, mod), caf::none);
+  caf::byte_buffer buf;
+  CHECK_EQUAL(detail::serialize(buf, mod), true);
   module mod2;
   CHECK_EQUAL(detail::legacy_deserialize(buf, mod2), true);
   // Check integrity

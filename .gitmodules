@@ -1,6 +1,3 @@
-[submodule "libvast/aux/caf"]
-	path = libvast/aux/caf
-	url = https://github.com/tenzir/actor-framework
 [submodule "libvast/aux/fast_float"]
 	path = libvast/aux/fast_float
 	url = https://github.com/fastfloat/fast_float

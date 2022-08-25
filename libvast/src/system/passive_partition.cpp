@@ -71,12 +71,10 @@ void deliver_error_to_deferred_requests(passive_partition_state& state,
   for (auto&& [expr, rp] : std::exchange(state.deferred_evaluations, {})) {
     // Because of a deficiency in the typed_response_promise API, we must
     // access the underlying response_promise to deliver the error.
-    caf::response_promise& untyped_rp = rp;
-    untyped_rp.deliver(static_cast<partition_actor>(state.self), err);
+    rp.deliver(err);
   }
   for (auto&& rp : std::exchange(state.deferred_erasures, {})) {
-    caf::response_promise& untyped_rp = rp;
-    untyped_rp.deliver(static_cast<partition_actor>(state.self), err);
+    rp.deliver(err);
   }
 }
 

@@ -15,9 +15,6 @@
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 
-#include <caf/meta/load_callback.hpp>
-#include <caf/meta/type_name.hpp>
-
 #include <climits>
 #include <cstddef>
 #include <numeric>
@@ -114,15 +111,18 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bloom_filter& x) {
-    auto load_callback = caf::meta::load_callback([&]() -> caf::error {
+    auto load_callback = [&x]() {
       // When deserializing into a vector that was already bigger than
       // required, CAF will reuse the storage but not release the
       // excess afterwards.
       x.bits_.shrink_to_fit();
-      return caf::none;
-    });
-    return f(caf::meta::type_name("bloom_filter"), x.hasher_, x.bits_,
-             std::move(load_callback));
+      return true;
+    };
+
+    return f.object(x)
+      .pretty_name("bloom_filter")
+      .on_load(load_callback)
+      .fields(f.field("hasher", x.hasher_), f.field("bits", x.bits_));
   }
 
 private:

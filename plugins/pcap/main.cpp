@@ -296,7 +296,8 @@ public:
     std::string category = "vast.import.pcap";
     if (auto interface = get_if<std::string>(&options, category + ".interface"))
       interface_ = *interface;
-    input_ = get_or(options, "vast.import.read", vast::defaults::import::read);
+    input_ = get_or(options, "vast.import.read",
+                    vast::defaults::import::read.data());
     cutoff_ = get_or(options, category + ".cutoff", defaults_t::cutoff);
     max_flows_
       = get_or(options, category + ".max-flows", defaults_t::max_flows);
@@ -651,8 +652,8 @@ public:
   explicit writer(const caf::settings& options) {
     flush_interval_ = get_or(options, "vast.export.pcap.flush-interval",
                              defaults::flush_interval);
-    trace_
-      = get_or(options, "vast.export.write", vast::defaults::export_::write);
+    trace_ = get_or(options, "vast.export.write",
+                    vast::defaults::export_::write.data());
   }
 
   ~writer() override = default;
@@ -722,7 +723,7 @@ public:
                total_packets_);
     if (::pcap_dump_flush(dumper_.get()) == -1)
       return caf::make_error(ec::format_error, "failed to flush");
-    return caf::no_error;
+    return {};
   }
 
   [[nodiscard]] const char* name() const override {

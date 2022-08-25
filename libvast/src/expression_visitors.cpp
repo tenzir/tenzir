@@ -262,7 +262,7 @@ caf::expected<void> validator::operator()(const conjunction& c) {
     if (!m)
       return m;
   }
-  return caf::no_error;
+  return {};
 }
 
 caf::expected<void> validator::operator()(const disjunction& d) {
@@ -271,7 +271,7 @@ caf::expected<void> validator::operator()(const disjunction& d) {
     if (!m)
       return m;
   }
-  return caf::no_error;
+  return {};
 }
 
 caf::expected<void> validator::operator()(const negation& n) {
@@ -323,7 +323,7 @@ validator::operator()(const meta_extractor& ex, const data& d) {
                                          "#import_time {} {}",
                                          op_, d));
   }
-  return caf::no_error;
+  return {};
 }
 
 caf::expected<void>
@@ -331,17 +331,17 @@ validator::operator()(const type_extractor& ex, const data& d) {
   // References to aliases can't be checked here because the expression parser
   // can't possible know about them. We defer the check to the type resolver.
   if (!ex.type)
-    return caf::no_error;
+    return {};
   if (!compatible(ex.type, op_, d))
     return caf::make_error(
       ec::syntax_error, "type extractor type check failure", ex.type, op_, d);
-  return caf::no_error;
+  return {};
 }
 
 caf::expected<void> validator::operator()(const field_extractor&, const data&) {
   // Validity of a field extractor requires a specific schema, which we don't
   // have in this context.
-  return caf::no_error;
+  return {};
 }
 
 type_resolver::type_resolver(const type& layout)

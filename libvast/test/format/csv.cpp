@@ -267,7 +267,7 @@ TEST(csv reader - list of count) {
   auto t = type{list_type{count_type{}}};
   auto l2_vp = type{"l2", record_type{{"lc", t}}};
   REQUIRE_EQUAL(slices[0].layout(), l2_vp);
-  CHECK(slices[0].at(0, 0, t) == data{list{1u, 2u, 3u, 4u, 5u}});
+  CHECK((slices[0].at(0, 0, t) == data{list{1u, 2u, 3u, 4u, 5u}}));
   CHECK(slices[0].at(1, 0, t) == data{list{}});
 }
 
@@ -332,9 +332,9 @@ TEST(csv reader - reordered layout) {
     },
   };
   REQUIRE_EQUAL(slices[0].layout(), l2_sub);
-  CHECK(slices[0].at(0, 0)
-        == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
-                    {data{"bar"}, unbox(to<address>("2001:db8::"))}}});
+  CHECK((slices[0].at(0, 0)
+         == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
+                     {data{"bar"}, unbox(to<address>("2001:db8::"))}}}));
   CHECK(slices[0].at(0, 1) == data{count{424242}});
   CHECK(slices[0].at(0, 2) == data{real{4.2}});
   CHECK(slices[0].at(0, 3) == data{integer{-1337}});
@@ -345,7 +345,7 @@ TEST(csv reader - reordered layout) {
   CHECK(slices[0].at(0, 8) == data{enumeration{2}});
   CHECK(slices[0].at(0, 9)
         == data{unbox(to<vast::time>("2011-08-12+14:59:11.994970"))});
-  CHECK(slices[0].at(0, 10) == data{list{5555u, 0u}});
+  CHECK((slices[0].at(0, 10) == data{list{5555u, 0u}}));
   CHECK(slices[0].at(0, 11)
         == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
   CHECK(slices[0].at(0, 12) == data{real{3.}});

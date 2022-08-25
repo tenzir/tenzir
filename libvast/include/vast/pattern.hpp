@@ -83,7 +83,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, pattern& p) {
-    return f(p.str_);
+    return f.apply(p.str_);
   }
 
   friend bool convert(const pattern& p, data& d);
