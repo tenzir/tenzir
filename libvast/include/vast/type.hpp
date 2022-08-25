@@ -128,6 +128,13 @@ public:
     no,  ///< Include internal types. Use with caution.
   };
 
+  /// indicates whether we want to recursively process the type's children
+  /// or just work on the first level.
+  enum class recurse : uint8_t {
+    yes,
+    no,
+  };
+
   /// The corresponding Arrow DataType.
   using arrow_type = arrow::DataType;
 
@@ -340,8 +347,10 @@ public:
   [[nodiscard]] bool has_attributes() const noexcept;
 
   /// Returns a view on all attributes.
-  [[nodiscard]] detail::generator<attribute_view> attributes() const& noexcept;
-  [[nodiscard]] detail::generator<attribute_view> attributes() && = delete;
+  [[nodiscard]] detail::generator<attribute_view>
+  attributes(type::recurse recurse = type::recurse::yes) const& noexcept;
+  [[nodiscard]] detail::generator<attribute_view>
+  attributes(type::recurse recurse = type::recurse::yes) && = delete;
 
   /// Returns all aliases of this type, excluding this type itself.
   [[nodiscard]] detail::generator<type> aliases() const noexcept;
@@ -2026,7 +2035,8 @@ struct formatter<vast::type> {
           out = format_to(out, "{}", x);
         },
         value);
-    for (bool first = false; const auto& attribute : value.attributes()) {
+    for (bool first = false;
+         const auto& attribute : value.attributes(vast::type::recurse::no)) {
       if (!first) {
         out = format_to(out, " ");
         first = false;

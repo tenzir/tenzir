@@ -762,6 +762,16 @@ TEST(arrow record type to schema roundtrip tp) {
     {{"keyx", "vx"}},
   };
   schema_roundtrip(outer);
+  const auto nested = type{
+    "outer",
+    type{"inner",
+         type{record_type{{"a", bool_type{}}}, {{"record_key"}}},
+         {
+           {"xnner_attr", "iv"},
+         }},
+    {{"outer_attr", "ov"}},
+  };
+  schema_roundtrip(nested);
 }
 
 TEST(full_table_slice) {

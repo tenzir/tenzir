@@ -459,6 +459,11 @@ type::type(std::string_view name, const type& nested,
         attributes_offsets.emplace_back(fbs::type::detail::CreateAttribute(
           builder, key_offset, value_offset));
       };
+      std::sort(attributes.begin(), attributes.end(),
+                [](const attribute_view& lhs,
+                   const attribute_view& rhs) noexcept {
+                  return lhs.key < rhs.key;
+                });
       for (const auto& attribute : attributes)
         add_attribute(attribute);
       return builder.CreateVectorOfSortedTables(&attributes_offsets);
@@ -1073,7 +1078,8 @@ bool type::has_attributes() const noexcept {
   __builtin_unreachable();
 }
 
-detail::generator<type::attribute_view> type::attributes() const& noexcept {
+detail::generator<type::attribute_view>
+type::attributes(type::recurse recurse) const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
@@ -1105,6 +1111,8 @@ detail::generator<type::attribute_view> type::attributes() const& noexcept {
               co_yield {attribute->key()->string_view(), std::string_view{}};
           }
         }
+        if (recurse == type::recurse::no)
+          co_return;
         root = enriched_type->type_nested_root();
         VAST_ASSERT(root);
         break;
