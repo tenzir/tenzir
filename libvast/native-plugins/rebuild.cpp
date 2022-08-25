@@ -81,6 +81,9 @@ struct run {
   std::vector<partition_info> remaining_partitions = {};
   struct statistics statistics = {};
   start_options options = {};
+  std::vector<caf::typed_response_promise<void>> stop_requests = {};
+  std::vector<caf::typed_response_promise<void>> delayed_homogeneous_rebuilds
+    = {};
 };
 
 /// The interface of the REBUILDER actor.
@@ -194,6 +197,8 @@ struct rebuilder_state {
           VAST_INFO("{} rebuilt {} into {} partitions", *self,
                     run->statistics.num_completed, run->statistics.num_results);
       }
+      for (auto&& rp : std::exchange(run->stop_requests, {}))
+        static_cast<caf::response_promise&>(rp).deliver(caf::unit);
       run.reset();
       emit_telemetry();
       if (run->options.detached)
@@ -306,7 +311,8 @@ struct rebuilder_state {
     }
     if (options.detached)
       return {};
-    return caf::skip;
+    auto rp = self->make_response_promise<void>();
+    return run->stop_requests.emplace_back(std::move(rp));
   }
 
   /// Make progress on the ongoing rebuild.
@@ -335,7 +341,8 @@ struct rebuilder_state {
         // Wait until we have all heterogeneous partitions transformed into
         // homogenous partitions before starting to work on the homogenous
         // parittions. In practice, this leads to less undeful partitions.
-        return caf::skip;
+        auto rp = self->make_response_promise<void>();
+        return run->delayed_homogeneous_rebuilds.emplace_back(std::move(rp));
       }
     } else {
       // Take the first homogenous partition and collect as many of the same
@@ -413,7 +420,7 @@ struct rebuilder_state {
             run->statistics.num_total -= num_partitions;
             run->statistics.num_rebuilding -= num_partitions;
             if (is_heterogeneous)
-              run->statistics.num_heterogeneous -= 1;
+              finish_heterogeneous();
             // Pick up new work until we run out of remainig partitions.
             emit_telemetry();
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
@@ -485,10 +492,12 @@ struct rebuilder_state {
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                       atom::rebuild_v);
         },
-        [this, num_partitions = current_run_partitions.size(),
+        [this, is_heterogeneous, num_partitions = current_run_partitions.size(),
          rp](caf::error& error) mutable {
           VAST_WARN("{} failed to rebuild partititons: {}", *self, error);
           run->statistics.num_rebuilding -= num_partitions;
+          if (is_heterogeneous)
+            finish_heterogeneous();
           // Pick up new work until we run out of remainig partitions.
           emit_telemetry();
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
@@ -543,6 +552,15 @@ private:
     };
     self->send(accountant, atom::metrics_v, std::move(report));
   }
+
+  void finish_heterogeneous() {
+    run->statistics.num_heterogeneous -= 1;
+    if (run->statistics.num_heterogeneous == 0u)
+      for (auto&& delayed_rp :
+           std::exchange(run->delayed_homogeneous_rebuilds, {}))
+        delayed_rp.delegate(static_cast<rebuilder_actor>(self),
+                            atom::internal_v, atom::rebuild_v);
+  }
 };
 
 /// Defines the behavior of the REBUILDER actor.
@@ -569,6 +587,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
                     defaults::system::active_partition_timeout);
     self->state.schedule();
   }
+  self->set_exit_handler([self](const caf::exit_msg& msg) {
+    VAST_DEBUG("{} received EXIT from {}: {}", *self, msg.source, msg.reason);
+    if (!self->state.run)
+      return;
+    for (auto&& rp : std::exchange(self->state.run->stop_requests, {}))
+      rp.deliver(msg.reason);
+    for (auto&& rp :
+         std::exchange(self->state.run->delayed_homogeneous_rebuilds, {}))
+      rp.deliver(msg.reason);
+  });
   return {
     [self](atom::status, system::status_verbosity verbosity) {
       return self->state.status(verbosity);

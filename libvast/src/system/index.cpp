@@ -649,6 +649,9 @@ caf::error index_state::load_from_disk() {
         VAST_INFO("{} finished initializing and is ready to accept queries",
                   *self);
         this->accept_queries = true;
+        for (auto&& [rp, query_context] : std::exchange(delayed_queries, {}))
+          rp.delegate(static_cast<index_actor>(self), atom::evaluate_v,
+                      std::move(query_context));
       },
       [this](caf::error& err) {
         VAST_ERROR("{} could not load catalog state from disk, shutting "
@@ -1259,6 +1262,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
+    for (auto&& [rp, _] : std::exchange(self->state.delayed_queries, {}))
+      rp.deliver(msg.reason);
     // Flush buffered batches and end stream.
     detail::shutdown_stream_stage(self->state.stage);
     // We gather the schemas first before we call decomission active partition
@@ -1414,12 +1419,14 @@ index(index_actor::stateful_pointer<index_state> self,
         auto& [_, ids] = *it;
         ids.emplace(query_context.id);
       }
+      auto rp = self->make_response_promise<query_cursor>();
       if (!self->state.accept_queries) {
         VAST_VERBOSE("{} delays query {} because it is still starting up",
                      *self, query_context);
-        return caf::skip;
+
+        self->state.delayed_queries.emplace_back(rp, std::move(query_context));
+        return rp;
       }
-      auto rp = self->make_response_promise<query_cursor>();
       std::vector<uuid> candidates;
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());

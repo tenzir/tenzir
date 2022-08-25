@@ -392,14 +392,11 @@ partition_actor::behavior_type passive_partition(
   // the flatbuffer and switch to the "normal" partition behavior for responding
   // to queries.
   self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
-    .then(
+    .await(
       [=](chunk_ptr chunk) {
         VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(chunk));
         VAST_TRACEPOINT(passive_partition_loaded, id_string.c_str());
-        if (self->state.partition_chunk) {
-          VAST_WARN("{} ignores duplicate chunk", *self);
-          return;
-        }
+        VAST_ASSERT(!self->state.partition_chunk);
         if (!chunk) {
           VAST_ERROR("{} got invalid chunk", *self);
           self->quit();
@@ -444,43 +441,16 @@ partition_actor::behavior_type passive_partition(
           self->state.store = *store;
           self->monitor(self->state.store);
         }
-        if (id != self->state.id)
-          VAST_WARN("{} encountered partition ID mismatch: restored {}"
-                    "from disk, expected {}",
-                    *self, self->state.id, id);
-        // Delegate all deferred evaluations now that we have the partition chunk.
-        VAST_DEBUG("{} delegates {} deferred evaluations", *self,
-                   self->state.deferred_evaluations.size());
-        for (auto&& [expr, rp] :
-             std::exchange(self->state.deferred_evaluations, {}))
-          rp.delegate(static_cast<partition_actor>(self), atom::query_v,
-                      std::move(expr));
       },
       [=](caf::error err) {
-        VAST_ERROR("{} failed to load partition: {}", *self, render(err));
-        // Deliver the error for all deferred evaluations.
-        for (auto&& [expr, rp] :
-             std::exchange(self->state.deferred_evaluations, {})) {
-          // Because of a deficiency in the typed_response_promise API, we must
-          // access the underlying response_promise to deliver the error.
-          caf::response_promise& untyped_rp = rp;
-          untyped_rp.deliver(static_cast<partition_actor>(self), err);
-        }
-        // Quit the partition.
+        VAST_ERROR("{} failed to load partition: {}", *self, err);
         self->quit(std::move(err));
       });
   return {
     [self](atom::query,
            vast::query_context query_context) -> caf::result<uint64_t> {
       VAST_DEBUG("{} received query {}", *self, query_context);
-      if (!self->state.partition_chunk) {
-        VAST_DEBUG("{} waits for its state", *self);
-        return std::get<1>(self->state.deferred_evaluations.emplace_back(
-          std::move(query_context), self->make_response_promise<uint64_t>()));
-      }
-      // We can safely assert that if we have the partition chunk already, all
-      // deferred evaluations were taken care of.
-      VAST_ASSERT(self->state.deferred_evaluations.empty());
+      VAST_ASSERT(self->state.partition_chunk);
       // Don't handle queries after we already received an exit message, while
       // the terminator is running. Since we require every partition to have at
       // least one indexer, we can use this to check.
@@ -547,10 +517,7 @@ partition_actor::behavior_type passive_partition(
       return rp;
     },
     [self](atom::erase) -> caf::result<atom::done> {
-      if (!self->state.partition_chunk) {
-        VAST_DEBUG("{} skips an erase request", *self);
-        return caf::skip;
-      }
+      VAST_ASSERT(self->state.partition_chunk);
       VAST_DEBUG("{} received an erase message and deletes {}", *self,
                  self->state.path);
       self
@@ -579,11 +546,8 @@ partition_actor::behavior_type passive_partition(
       return rp;
     },
     [self](atom::status, status_verbosity /*v*/) -> record {
+      VAST_ASSERT(self->state.partition_chunk);
       record result;
-      if (!self->state.partition_chunk) {
-        result["state"] = "waiting for chunk";
-        return result;
-      }
       result["size"] = self->state.partition_chunk->size();
       size_t mem_indexers = 0;
       for (size_t i = 0; i < self->state.indexers.size(); ++i)
@@ -596,7 +560,7 @@ partition_actor::behavior_type passive_partition(
       result["memory-usage-indexers"] = mem_indexers;
       auto x = self->state.partition_chunk->incore();
       if (!x) {
-        result["memory-usage-incore"] = render(x.error());
+        result["memory-usage-incore"] = fmt::to_string(x.error());
         result["memory-usage"] = self->state.partition_chunk->size()
                                  + mem_indexers + sizeof(self->state);
       } else {

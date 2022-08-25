@@ -24,7 +24,7 @@ namespace vast::system {
 // -- constructors, destructors, and assignment operators ----------------------
 
 query_processor::query_processor(caf::event_based_actor* self)
-  : state_(idle), self_(self), block_end_of_hits_(false) {
+  : state_(idle), self_(self) {
   auto status_handler = [this](atom::status, status_verbosity v) {
     return status(v);
   };
@@ -47,8 +47,6 @@ query_processor::query_processor(caf::event_based_actor* self)
     status_handler);
   behaviors_[await_results_until_done].assign(
     [this](atom::done) -> caf::result<void> {
-      if (block_end_of_hits_)
-        return caf::skip;
       partitions_.received += partitions_.scheduled;
       process_done();
       return caf::unit;

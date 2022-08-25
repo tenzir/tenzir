@@ -98,10 +98,6 @@ struct passive_partition_state {
   /// The raw memory of the partition, used to spawn indexers on demand.
   chunk_ptr partition_chunk = {};
 
-  /// Stores a list of expressions that could not be answered immediately.
-  std::vector<std::tuple<query_context, caf::typed_response_promise<uint64_t>>>
-    deferred_evaluations = {};
-
   /// Actor handle of the accountant.
   accountant_actor accountant = {};
 
