@@ -28,7 +28,7 @@ VAST_IMAGE=tenzir/vast-pro
 ```
 - (Re)Deploy the vast server:
 ```bash
-./vast-cloud deloy -a
+./vast-cloud deploy -a
 ```
 - Verify that you are running VAST Pro (commercial features such as `matcher` should appear in the `plugins` list)
 ```bash
