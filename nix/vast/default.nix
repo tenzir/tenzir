@@ -31,6 +31,7 @@
 , disableTests ? true
 , buildType ? "Release"
 , buildAsPackage ? false
+, packageName ? "vast"
 }:
 let
   inherit (stdenv.hostPlatform) isStatic;
@@ -112,6 +113,7 @@ stdenv.mkDerivation (rec {
     "-UCMAKE_INSTALL_LOCALEDIR"
     "-DCMAKE_INSTALL_PREFIX=/opt/vast"
     "-DCPACK_GENERATOR=TGZ;DEB"
+    "-DCPACK_PACKAGE_NAME=${packageName}"
   ] ++ extraCmakeFlags;
 
   # The executable is run to generate the man page as part of the build phase.
