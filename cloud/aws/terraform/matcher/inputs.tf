@@ -15,4 +15,5 @@ locals {
   name        = "matcher-client"
   task_cpu    = 512
   task_memory = 4096
+  message_retention_seconds = 60
 }

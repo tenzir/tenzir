@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Tuple
 from common import TFDIR, FargateService, auto_app_fmt, aws, conf, terraform_output
 from vast_invoke import Context, pty_task, task
 import plugins.workbucket as workbucket
@@ -37,7 +37,7 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
 @task
 def client_status(c):
     """Get the status of the matcher client"""
-    print(FargateService(*service_outputs(c)).get_task_status)
+    print(FargateService(*service_outputs(c)).get_task_status())
 
 
 @task
@@ -59,16 +59,8 @@ def restart_client(c):
 
 
 @task
-def post(c):
-    queue_url = terraform_output(c, "matcher", "matched_events_queue_url")
-    aws("sqs").send_message(
-        QueueUrl=queue_url,
-        MessageBody="hello",
-    )
-
-
-@task
 def attach(c):
+    """Consume matched events from a queue alimented by the matcher client"""
     queue_url = terraform_output(c, "matcher", "matched_events_queue_url")
     queue = aws("sqs", resource=True).Queue(queue_url)
     while True:
@@ -76,45 +68,3 @@ def attach(c):
         for message in messages:
             print(message.body, flush=True)
             message.delete()
-
-
-MATCHER_INPUT = {
-    "feodo": {
-        "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.csv",
-        "type": "feodo.blocklist",
-        "format": "csv",
-        "pipe": "tr -d '\015' | grep -v '^#' |",
-    },
-    "pulsedive": {
-        "url": "https://pulsedive.com/premium/?key=&header=true&fields=id,type,risk,threats,feeds,usersubmissions,riskfactors,reference&types=ip,ipv6,domain,url&risk=unknown,none,low,medium,high,critical&period=all&retired=true",
-        "type": "pulsedive",
-        "format": "csv",
-        "predicate": "risk !~ /:retired/ && type == 'ip'",
-    },
-}
-
-
-def script(matcher_name: str, input: Dict) -> str:
-    return f"""
-vast matcher start \
-  --mode=exact \
-  --match-types=addr \
-  {matcher_name} 
-
-curl -sSL "{input["url"]}" |
-  {input.get("pipe", "")}
-  vast matcher import --type={input["type"]} {input["format"]} {matcher_name} {input.get("predicate", "")}
-
-echo -n "imported lines: "
-vast matcher save {matcher_name} | wc -l
-"""
-
-
-@task
-def feodo(c):
-    core.run_lambda(c, script("feodo", MATCHER_INPUT["feodo"]))
-
-
-@task
-def pulsedive(c):
-    core.run_lambda(c, script("pulsedive", MATCHER_INPUT["pulsedive"]))
