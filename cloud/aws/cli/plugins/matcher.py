@@ -1,7 +1,63 @@
-from typing import Dict
-from vast_invoke import task
+from typing import Dict, Tuple
+from common import TFDIR, FargateService, auto_app_fmt, conf, terraform_output
+from vast_invoke import Context, pty_task, task
 import plugins.workbucket as workbucket
 import core
+
+VALIDATORS = core.VALIDATORS
+
+
+@pty_task
+def deploy(c, auto_approve=False):
+    """Deploy the matcher module"""
+    core.init_step(c, "matcher")
+    c.run(
+        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/matcher",
+        env=conf(VALIDATORS),
+    )
+
+
+@pty_task
+def destroy(c, auto_approve=False):
+    """Remove the matcher module"""
+    core.init_step(c, "matcher")
+    c.run(
+        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/matcher",
+        env=conf(VALIDATORS),
+    )
+
+
+def service_outputs(c: Context) -> Tuple[str, str, str]:
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+    family = terraform_output(c, "matcher", "matcher_task_family")
+    service_name = terraform_output(c, "matcher", "matcher_service_name")
+    return (cluster, service_name, family)
+
+
+@task(autoprint=True)
+def get_client(c, max_wait_time_sec=0):
+    """Get the task id of the matcher client. If no server is running, it waits
+    until max_wait_time_sec for a new server to be started."""
+    FargateService(*service_outputs(c)).get_task_id(max_wait_time_sec)
+
+
+@task
+def start_client(c):
+    """Start the matcher client instance as an AWS Fargate task. Noop if the client is already running"""
+    FargateService(*service_outputs(c)).start_service()
+
+
+@task
+def stop_client(c):
+    """Stop the matcher client instance"""
+    FargateService(*service_outputs(c)).stop_service()
+
+
+@task
+def restart_client(c):
+    """Stop the running matcher client task, the service starts a new one"""
+    FargateService(*service_outputs(c)).restart_service()
+
 
 MATCHER_INPUT = {
     "feodo": {
@@ -43,27 +99,3 @@ def feodo(c):
 @task
 def pulsedive(c):
     core.run_lambda(c, script("pulsedive", MATCHER_INPUT["pulsedive"]))
-
-
-@task
-def attach(c, matcher_name, output_type="csv"):
-    core.execute_command(
-        c,
-        f"vast matcher attach {output_type} {matcher_name}",
-    )
-
-
-@task
-def save(c, matcher_name, workbucket_key):
-    core.run_lambda(
-        c,
-        f"vast matcher save {matcher_name} | aws s3 cp - s3://{workbucket.name(c)}/{workbucket_key}",
-    )
-
-
-@task
-def load(c, matcher_name, workbucket_key):
-    core.run_lambda(
-        c,
-        f"aws s3 cp s3://{workbucket.name(c)}/{workbucket_key} - | vast matcher load {matcher_name}",
-    )

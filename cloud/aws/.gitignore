@@ -3,3 +3,4 @@
 .env
 cmd.tmp
 *.generated.tf
+*.generated.tfvars
