@@ -398,7 +398,6 @@ partition_transformer_actor::behavior_type partition_transformer(
       [&] {
         for (auto& [layout, partition_data] :
              self->state.data) { // Pack partitions
-          // flatbuffers::FlatBufferBuilder builder;
           auto indexers_it
             = self->state.partition_buildup.find(partition_data.id);
           if (indexers_it == self->state.partition_buildup.end()) {
