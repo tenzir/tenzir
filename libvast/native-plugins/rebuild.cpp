@@ -589,13 +589,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {}: {}", *self, msg.source, msg.reason);
-    if (!self->state.run)
+    if (!self->state.run) {
+      self->quit(msg.reason);
       return;
+    }
     for (auto&& rp : std::exchange(self->state.run->stop_requests, {}))
       rp.deliver(msg.reason);
     for (auto&& rp :
          std::exchange(self->state.run->delayed_homogeneous_rebuilds, {}))
       rp.deliver(msg.reason);
+    self->quit(msg.reason);
   });
   return {
     [self](atom::status, system::status_verbosity verbosity) {
