@@ -1,0 +1,99 @@
+version: "3"
+services:
+  thehive:
+    image: strangebee/thehive:latest
+    container_name: thehive
+    depends_on:
+      - cassandra
+      - elasticsearch
+      - minio
+    mem_limit: 1000m
+    ports:
+      - "9000:9000"
+    environment:
+      - JVM_OPTS="-Xms1024M -Xmx1024M"
+    command:
+      - --secret
+      - "mySecretForTheHive"
+      - "--cql-hostnames"
+      - "cassandra"
+      - "--cql-username"
+      - "cassandra"
+      - "--cql-password"
+      - "cassandra"
+      - "--index-backend"
+      - "elasticsearch"
+      - "--es-hostnames"
+      - "elasticsearch"
+      - "--s3-endpoint"
+      - "http://minio:9000"
+      - "--s3-access-key"
+      - "minioadmin"
+      - "--s3-secret-key"
+      - "minioadmin"
+      - "--s3-use-path-access-style"
+      - "--no-config-cortex"
+    volumes:
+      - ./vol/thehive/application.conf:/etc/thehive/application.conf
+      - ./vol/thehive/data:/opt/thp/thehive/data
+      - ./vol/thehive/index:/opt/thp/thehive/index
+
+  cassandra:
+    container_name: cassandra
+    image: bitnami/cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=TheHive
+    volumes:
+      - ./vol/cassandra/data:/var/lib/cassandra/data
+
+  elasticsearch:
+    container_name: elastic
+    mem_limit: 1000m
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    volumes:
+      - ./vol/elasticsearch/data:/usr/share/elasticsearch/data
+      - ./vol/elasticsearch/logs:/usr/share/elasticsearch/logs
+
+  minio:
+    container_name: minio
+    mem_limit: 1000m
+    image: quay.io/minio/minio
+    command: ["minio", "server", "/data", "--console-address", ":9001"]
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9001:9001"
+
+  cortex:
+    container_name: cortex
+    #image: thehiveproject/cortex:latest
+    build: ./vol/cortex
+    depends_on:
+      - elasticsearch
+    ports:
+      - "9002:9001"
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock'
+      - './vol/cortex/application.conf:/etc/cortex/application.conf'
+      - './vol/cortex/jobs:/opt/cortex/jobs'
+      - './analyzers:/opt/cortex/analyzers'
+
+  vast:
+    container_name: vast
+    image: tenzir/vast:latest
+    environment:
+      - VAST_ENDPOINT=vast:42000
+    ports:
+      - ${VAST_PORT:-42000}:42000
+    command:
+      - start
+    volumes:
+      - './vol/vast:/var/lib/vast/'  
