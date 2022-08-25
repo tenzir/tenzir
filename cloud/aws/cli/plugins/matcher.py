@@ -20,6 +20,11 @@ def deploy(c, auto_approve=False):
 @pty_task
 def destroy(c, auto_approve=False):
     """Remove the matcher module"""
+    try:
+        stop_client(c)
+    except Exception as e:
+        print(str(e))
+        print("Failed to stop tasks. Continuing destruction...")
     core.init_step(c, "matcher")
     c.run(
         f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/matcher",
