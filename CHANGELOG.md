@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.3.0-rc2][v2.3.0-rc2]
+## [v2.3.0-rc3][v2.3.0-rc3]
 
 ### Changes
 
@@ -23,6 +23,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST's partition indexes are now optional, allowing operators to control the trade-off between disk-usage and query performance for every field.
   [#2430](https://github.com/tenzir/vast/pull/2430)
+
+- We can now use matchers in AWS using the vast-cloud CLI matcher plugin.
+  [#2473](https://github.com/tenzir/vast/pull/2473)
 
 - VAST now continuously rebuilds outdated and merges undersized partitions in the background. The new option `vast.automatic-rebuild` controls how many resources to spend on this. To disable this behavior, set the option to 0; the default is 1.
   [#2493](https://github.com/tenzir/vast/pull/2493)
@@ -1917,7 +1920,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.3.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.3.0-rc2
+[v2.3.0-rc3]: https://github.com/tenzir/vast/releases/tag/v2.3.0-rc3
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
