@@ -1,0 +1,8 @@
+- concept:
+    name: matcher.indicator.value
+    fields:
+      - feodo.blocklist.dst_ip
+- concept:
+    name: matcher.indicator.context
+    fields:
+      - feodo.blocklist.malware
