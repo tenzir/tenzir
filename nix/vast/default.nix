@@ -26,6 +26,7 @@
 , utillinux
 , dpkg
 , versionOverride ? null
+, versionShortOverride ? null
 , withPlugins ? []
 , extraCmakeFlags ? []
 , disableTests ? true
@@ -48,6 +49,7 @@ let
   src = vast-source;
 
   version = if (versionOverride != null) then versionOverride else "v2.3.1";
+  versionShort = if (versionShortOverride != null) then versionShortOverride else version;
 in
 
 stdenv.mkDerivation (rec {
@@ -84,6 +86,7 @@ stdenv.mkDerivation (rec {
     "-DCMAKE_BUILD_TYPE:STRING=${buildType}"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DVAST_VERSION_TAG=${version}"
+    "-DVAST_VERSION_SHORT=${versionShort}"
     "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_ENABLE_BACKTRACE=ON"
     "-DVAST_ENABLE_JEMALLOC=ON"
