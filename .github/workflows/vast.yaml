@@ -349,7 +349,7 @@ jobs:
         with:
           name: "vast-integration-test-debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}"
           path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
-          if-no-files-found: ignore
+          if-no-files-found: error
 
       - name: Package
         env:
@@ -574,7 +574,7 @@ jobs:
         with:
           name: "vast-integration-test-macos-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}"
           path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
-          if-no-files-found: ignore
+          if-no-files-found: error
 
       - name: Package
         env:
@@ -756,7 +756,7 @@ jobs:
         with:
           name: "vast-${{ matrix.plugin.target }}-integration-test"
           path: "${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test"
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Install
         run: |
           cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
