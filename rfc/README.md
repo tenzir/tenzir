@@ -35,7 +35,7 @@ The workflow to add a new RFC works as follows:
    cp 000-TEMPLATE.md 042-proposal-name.md
    ```
 
-2. Write the proposal in Github Markdown.
+2. Write the proposal in [GitHub Flavored Markdown](https://github.github.com/gfm/).
 
 3. [Open a pull request][vast-prs] and add the `rfp` label.
 
