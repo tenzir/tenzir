@@ -97,8 +97,9 @@ stdenv.mkDerivation (rec {
     "-DVAST_ENABLE_ASSERTIONS=ON"
   ] ++ lib.optionals isStatic [
     "-DBUILD_SHARED_LIBS:BOOL=OFF"
-    "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+    "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
+    "-DVAST_PACKAGE_FILE_NAME_SUFFIX=static"
   ] ++ lib.optionals disableTests [
     "-DVAST_ENABLE_UNIT_TESTS=OFF"
   ] ++ lib.optionals (withPlugins != []) [
