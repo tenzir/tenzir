@@ -1,6 +1,9 @@
-FROM tenzir/vast as vast
+ARG VAST_VERSION=latest
+ARG PYTHON_VERSION=latest
 
-FROM python:3.10-slim
+FROM tenzir/vast:$VAST_VERSION as vast
+
+FROM python:$PYTHON_VERSION
 
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}"

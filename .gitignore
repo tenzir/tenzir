@@ -58,3 +58,11 @@ __pycache__/
 /web/docs/develop-vast/contributing/security.md
 /web/docs/try-vast/*.md
 /web/docs/try-vast/*_files
+
+#Apps Integration artifacts & debugging 
+/apps/thehive/vol/cassandra/
+/apps/thehive/vol/cortex/jobs/
+/apps/thehive/vol/elasticsearch/
+/apps/thehive/vol/thehive/data/
+/apps/thehive/vol/thehive/index/
+/apps/thehive/vol/vast/

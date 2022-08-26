@@ -1,15 +1,22 @@
-FROM thehiveproject/cortex:latest
+ARG VAST_VERSION=latest
+ARG CORTEX_VERSION=latest
 
-ENV DEBIAN_FRONTEND noninteractive
+FROM tenzir/vast:$VAST_VERSION as vast
+
+FROM thehiveproject/cortex:$CORTEX_VERSION
+
+ENV PREFIX="/opt/tenzir/vast" \
+    PATH="/opt/tenzir/vast/bin:${PATH}"
 
 RUN apt-get update && \
-apt-get install -y python3-pip && \
-mkdir /opt/vast && \
-cd /opt/vast && \
-wget https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz && \
-mkdir -p /opt/vast && \
-tar xzf vast-linux-static.tar.gz -C /opt/vast
+apt-get install -y python3-pip
+
+COPY --from=vast --chown=cortex:cortex $PREFIX/ $PREFIX/
+COPY --from=vast --chown=cortex:cortex /var/lib/vast/ /var/lib/vast
+COPY --from=vast --chown=cortex:cortex /var/log/vast/ /var/log/vast
+COPY --from=vast --chown=cortex:cortex /usr/lib/ /usr/lib/
 
 
 
-ENV PATH="${PATH}:/opt/vast/bin"
+
+

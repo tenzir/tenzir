@@ -75,7 +75,11 @@ services:
   cortex:
     container_name: cortex
     #image: thehiveproject/cortex:latest
-    build: ./vol/cortex
+    build: 
+      dockerfile: ./vol/cortex/Dockerfile
+      args:
+        - VAST_VERSION=${VAST_VERSION:-latest}
+        - CORTEX_VERSION=${CORTEX_VERSION:-latest}
     depends_on:
       - elasticsearch
     ports:
@@ -88,7 +92,7 @@ services:
 
   vast:
     container_name: vast
-    image: tenzir/vast:latest
+    image: tenzir/vast:${VAST_VERSION:-latest}
     environment:
       - VAST_ENDPOINT=vast:42000
     ports:
