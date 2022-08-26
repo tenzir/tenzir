@@ -20,6 +20,17 @@ endif ()
 set(CPACK_PACKAGE_VENDOR "Tenzir")
 set(CPACK_PACKAGE_CONTACT "engineering@tenzir.com")
 set(CPACK_PACKAGE_VERSION "${VAST_VERSION_SHORT}")
+if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
+  # CPACK_SYSTEM_NAME is empty when this is evaluated.
+  string(TOLOWER "${CMAKE_SYSTEM_NAME}" system_name_lower)
+  set(CPACK_PACKAGE_FILE_NAME
+      "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${system_name_lower}")
+  unset(system_name_lower)
+  if (VAST_PACKAGE_FILE_NAME_SUFFIX)
+    string(APPEND CPACK_PACKAGE_FILE_NAME "-${VAST_PACKAGE_FILE_NAME_SUFFIX}")
+  endif ()
+  set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+endif ()
 # Put packages into a dedicated package sub directory inside the
 # build directory so we can find them a little easier.
 set(CPACK_PACKAGE_DIRECTORY "package")
@@ -30,7 +41,6 @@ set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_INSTALLED_DIRECTORIES "/var/lib/vast" "/var/log/vast")
 
 set(CPACK_DEBIAN_COMPRESSION_TYPE "gzip")
-set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(CPACK_DEBIAN_PACKAGE_SECTION "contrib/database")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/debian/postinst"
