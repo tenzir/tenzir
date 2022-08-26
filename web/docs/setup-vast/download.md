@@ -41,9 +41,18 @@ We offer pre-built versions of VAST containing a statically linked binary, for
 the [latest release][latest-release-build] and the [current development
 version][development-version-build].
 
+### Generic Linux
+
 <div align="center" class="padding-bottom--md">
   <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz">Static Build (Release)</a>
   <a class="button button--md button--info margin-left--md" href="https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz">Static Build (Development)</a>
+</div>
+
+### Debian
+
+<div align="center" class="padding-bottom--md">
+  <a class="button button--md button--primary margin-right--md" href="https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb">Static Build (Release)</a>
+  <a class="button button--md button--info margin-left--md" href="https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.deb">Static Build (Development)</a>
 </div>
 
 We also offer prebuilt statically linked binaries for every git commit to the
@@ -51,6 +60,7 @@ We also offer prebuilt statically linked binaries for every git commit to the
 
 ```bash
 https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-${version}-linux-static.tar.gz
+https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast_${version}_amd64.deb
 ```
 
 To determine the version, check out the desired commit locally and run this
