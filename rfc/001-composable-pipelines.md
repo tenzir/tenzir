@@ -235,7 +235,7 @@ node, and could be seen as a combination of `pull` and `push` that executes
 remotely. For example:
 
 ```bash
-vast mutate --types=A,B,C 'where 10.0.0.0/8 | put orig.h resp.h'
+vast mutate 'where 10.0.0.0/8 | put orig.h resp.h'
 ```
 
 This would apply the pipeline to filter and project in schema types `A`, `B`,
