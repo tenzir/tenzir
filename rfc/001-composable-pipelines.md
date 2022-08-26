@@ -32,8 +32,7 @@ Assume for a moment everything is a pipeline operator. Then we may write:
  ```bash
 vast 'from s3://aws |
       read json |
-      group-by src |
-      summarize count(dst) |
+      summarize count(dst) group-by src |
       write feather |
       to /path/to/file.feather'
 ```
@@ -44,8 +43,7 @@ performance doesn't matter:
 ```bash
 vast from s3://aws |
   vast read json |
-  vast group-by src |
-  vast 'summarize count(dst)' |
+  vast 'summarize count(dst) group-by src' |
   vast write feather |
   vast to /path/to/file.feather
 ```
@@ -56,11 +54,57 @@ The UX would translate seamlessly to other languages, e.g., Python:
 import vast as v
 await v.from("s3://aws")
        .read_json() # or read("json")
-       .group_by("src")
+       .group_by("src") # could also be merged with summarize()
        .summarize(v.count("dst"))
        .write_feather() # or write("feather")
        .to("/path/to/file.feather")
 ```
+
+### Operator Synopsis
+
+The core of this proposal introduces pipeline operators as function with input
+and output types. The following overview introduces the pipeline building
+blocks used throughout this proposal.
+
+#### I/O
+
+| Operator | Input Type | Output Type | Description
+| -------- | ---------- | ----------- | ------------------------------------------
+| `from`   | `Void`     | `Bytes`     | Loads bytes from a source as a side effect
+| `to`     | `Bytes`    | `Void`      | Writes bytes to a sink as a side effect
+| `read`   | `Bytes`    | `Arrow`     | Parses a specific format into Arrow
+| `write`  | `Arrow`    | `Bytes`     | Prints input in a specific format
+| `pull`   | `Void`     | `Arrow`     | Loads Arrow from a remote source
+| `push`   | `Arrow`    | `Void`      | Stores Arrow in a remote source
+
+#### Computation
+
+The following operators have a fixed input and output type of `Arrow`. We can
+group them into "filter" operators that do not change the schema, and "reshape"
+operators where execution yields a new schema.
+
+##### Filter
+
+| Operator | Non-Blocking | Description
+| -------- |:------------:| ------------------------------------------
+| `head`   | ✅           | Retrieve first N records
+| `tail`   | ❌           | Retrieve last N records
+| `where`  | ✅           | Filter with expression
+| `sort`   | ❌           | Sort according to field
+| `uniq`   | ✅           | Produce deduplicated output
+
+##### Reshape
+
+| Operator    | Non-Blocking | Description
+| ----------- |:------------:| ------------------------------------------
+| `put`       | ✅           | Select a set of columns (projection)
+| `drop`      | ❌           | Remove a set of columns (projection)
+| `replace`   | ✅           | Replaces field described by extractors with values
+| `extend`    | ✅           | Adds new fields with (initially fixed) values
+| `rename`    | ✅           | Renames schema meta data (type & fields)
+| `summarize` | ❌/✅[^1]    | Aggregate group and compute a summary function
+
+[^1]: Depending on the aggregate function.
 
 ### Pipeline Execution
 
@@ -72,20 +116,20 @@ parser, then send off to a remote VAST node. For example, we would rewrite
 `vast import zeek` as:
 
 ```bash
-vast exec 'from - | parse zeek | to vast://1.2.3.4'
+vast exec 'from - | parse zeek | push vast://1.2.3.4'
 ```
 
 Likewise, `vast export json EXPRESSION` would become:
 
 ```bash
-vast exec 'from vast://1.2.3.4 |
+vast exec 'pull vast://1.2.3.4 |
            where EXPRESSION |
            write json |
            to -'
 ```
 
-The beauty is that we can almost write the same without requiring a VAST node
-and execute *in situ*:
+The beauty is that VAST nodes are now longer required. Pipelines provide value
+locally as well:
 
 ```bash
 vast exec 'from - |
@@ -94,17 +138,15 @@ vast exec 'from - |
            to -'
 ```
 
-The only difference being `-` here.
-
-The VAST node basically becomes a **pipeline manager** with persistent state. We
-can keep everything as is, e.g., start a node:
+What would the role of the node be then? Basically a **pipeline manager** with
+persistent state. A lot of things wouldn't change, e.g., starting a node:
 
 ```bash
 vast -e 1.2.3.4 start
 ```
 
-There are of course a bunch of convenience things we can do, like assuming `from
--` and `to -` being the default. This would make the above look like this:
+There are of course convenience defaults we can use, like assuming `from -` and
+`to -` being the default. This would make the above look like this:
 
 ```bash
 vast exec 'where EXPRESSION |
@@ -122,34 +164,36 @@ vast exec 'convert zeek csv'
 ### Node Interaction
 
 When considering pipelines in conjunction with VAST nodes, we may want to
-improve the UX of working with pipelines.
+improve the UX of working with pipelines. In the new model, VAST would be
+an `Arrow` source or sink, making the primary interaction on the data plane
+through `push` and `pull` operators.
 
-One example would be specifying the VAST node as a source or sink of a pipeline.
-To this end, we could have dedicated commands to prepend or append a pipeline
-operator:
-
-- `vast pull` → `from vast://...`
-- `vast push` → `to vast://...`
-
-An `export` would then become:
+Making `push` and `pull` top-level commands would streamline UX. For example,
+consider this `vast export` pipeline:
 
 ```bash
-vast pull 'where EXPRESSION | print json'
-# Same with exec:
-vast exec 'from vast://.... | where EXPRESSION | print json'
-# Same with export:
-vast export json EXPRESSION
+# exec
+vast exec 'pull vast://1.2.3.4 |
+           where EXPRESSION |
+           write json'
+# pull
+vast pull 'where EXPRESSION |
+           write json
 ```
+
+This assumes that `pull` tries the default VAST endpoint of 1.2.3.4 to connect.
 
 An `import` degenerates to:
 
 ```bash
+# exec
+vast exec 'parse zeek | where EXPRESSION | push vast:///'
+# push
 vast push 'parse zeek | where EXPRESSION'
-# Same with exec
-vast exec 'parse zeek | where EXPRESSION | to vast://...'
-# Same with import
-vast import zeek EXPRESSION
 ```
+
+Note that this hoisting into commands only works because `pull` and `push` are
+head/tail of the pipeline.
 
 ### Mutating existing data
 
