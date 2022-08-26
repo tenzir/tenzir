@@ -8,6 +8,7 @@
 - **Contributors**:
   - [Anthony Verez](https://github.com/netantho)
   - [Dominik Lohmann](https://github.com/dominiklohmann)
+  - [Rémi Dettai](https://github.com/rdettai)
 - **Discussion**: [PR #2511](https://github.com/tenzir/vast/pull/2511)
 
 ## Overview
