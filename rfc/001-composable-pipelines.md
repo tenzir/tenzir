@@ -96,6 +96,13 @@ operators where execution yields a new schema.
 
 [^1]: Depending on the aggregate function.
 
+##### Matcher Plugin
+
+| Operator | Input Type | Output Type | Description
+| -------- | ---------- | ----------- | ------------------------------------------
+| `build`  | `Arrow`    | `Matcher`   | Creates a matcher from a data stream
+| `match`  | `Arrow`    | `Arrow`     | Matches input based on its state
+
 #### Commands
 
 The following table illustrate how existing VAST commands map to pipeline
