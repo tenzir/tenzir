@@ -88,7 +88,7 @@ operators where execution yields a new schema.
 | Operator    | Non-Blocking | Description
 | ----------- |:------------:| ------------------------------------------
 | `put`       | ✅           | Select a set of columns (projection)
-| `drop`      | ❌           | Remove a set of columns (projection)
+| `drop`      | ✅           | Remove a set of columns (projection)
 | `replace`   | ✅           | Replaces field described by extractors with values
 | `extend`    | ✅           | Adds new fields with (initially fixed) values
 | `rename`    | ✅           | Renames schema meta data (type & fields)
