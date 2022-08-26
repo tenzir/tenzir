@@ -240,11 +240,12 @@ Out>` takes as input `In` and produces instances of `Out`.
 
 ### Matcher Example
 
-This can come in handy for working with the matcher plugin. Consider the use
-case of constructing a matcher from data. Consider this pipeline:
+This can come in handy for working with the `matcher` plugin. Consider the use
+case of constructing a matcher from CSV data, e.g., using this pipeline:
 
 ```bash
-vast exec 'read csv |
+vast exec 'from file:///tmp/bad-stuff.csv |
+           read csv |
            matcher build --extract=net.src.ip' > ips.flatbuffer
 ```
 
@@ -254,8 +255,7 @@ Here, we have:
 - `matcher build<Arrow, Flatbuffer>`: consumes `Arrow` and create a matcher
   state object.
 
-Let `Void` be a valid type where the operator as only a side effect. Then we can
-pre-load a matcher at a VAST node as follows:
+Then we can pre-load a matcher at a VAST node as follows:
 
 ```bash
 vast exec 'from file:///ips.flatbuffer |
