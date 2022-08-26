@@ -251,7 +251,7 @@ Here, we have:
 
 - `read<Bytes, Arrow>`: reads `Bytes` and produces `Arrow` record batches
 - `matcher build<Arrow, Flatbuffer>`: consumes `Arrow` and create a matcher
-  backend.
+  state object.
 
 Let `Void` be a valid type where the operator as only a side effect. Then we can
 pre-load a matcher at a VAST node as follows:
