@@ -249,65 +249,82 @@ may be too restrictive. Let's assume that input and output are dynamically
 typed. An operator must then define its input and output types, e.g., `from<In,
 Out>` takes as input `In` and produces instances of `Out`.
 
-### Matcher Example
+### Case Study: Matcher
 
-This can come in handy for working with the `matcher` plugin. Consider the use
-case of constructing a matcher from CSV data, e.g., using this pipeline:
+The `matcher` plugin is an analyzer plugin that operator on the input stream. We
+can also rewrite the matcher use cases in term of pipelines, albeit with a
+slight change in CLI.
+
+#### Local execution
+
+Let's assume that the matcher introduces the following new pipeline operators:
+
+- `build<Arrow, Matcher>`: consumes a data stream to produce a matcher state object
+- `match<Arrow, Arrow>`: produces sightings for the configured matchers
+
+Now consider the use case of constructing a matcher from CSV data:
 
 ```bash
-vast exec 'from file:///tmp/bad-stuff.csv |
+vast exec 'from file:///tmp/blacklist.csv |
            read csv |
-           matcher build --extract=net.src.ip' > ips.flatbuffer
+           build --extract=net.src.ip' > matcher.flatbuf
 ```
 
-Here, we have:
-
-- `read<Bytes, Arrow>`: reads `Bytes` and produces `Arrow` record batches
-- `matcher build<Arrow, Flatbuffer>`: consumes `Arrow` and create a matcher
-  state object.
-
-Then we can pre-load a matcher at a VAST node as follows:
+After having constructed a matcher, we can now use it in a pipeline for
+matching:
 
 ```bash
-vast exec 'from file:///ips.flatbuffer |
-           matcher load --name=ips vast:///1.2.3.4'
+vast exec 'from kafka -t /zeek/conn |
+           read zeek |
+           match --state matcher.flatbuf --on=:addr
 ```
 
-Or more UNIX'ish, assuming an implicit `from -`:
+The idea is that `match` gets the opaque matcher state as input. (We may
+generalize this builder pattern to deploy arbitrarily complex detections, e.g.,
+pre-trained models.)
+
+#### Remote execution
+
+In the above example, we passed in a state file via `--state`. This is a
+different pattern from today's matchers that run remotely. Assuming that we have
+a mechanism for remote state management (specifically matcher state), we can
+apply our existing UX pattern of remote matcher management.
+
+Let's assume the matcher plugin provides the `matcher` command for state
+management, just like today. To load the matcher state into a remote matcher, we
+nothing would change:
 
 ```bash
-vast exec 'matcher load --name=ips' < ips.flatbuffer
+vast matcher load foo < matcher.flatbuf
 ```
 
-Here, `matcher load<Flatbuffer, Void>` is the operator that updates the remote
-matcher state.
-
-Finally, the `matcher` sub-command `match` does the actual matching:
+Assuming this operations updates the state of matcher `foo`, we can then
+reference it in a remote pipeline:
 
 ```bash
-vast pull 'where #type == "suricata.flow" |
-           matcher match --on=:addr ips'
+vast spawn 'live | match --on=:addr foo'
 ```
+
+Here, `live` is a dummy operator that represents the ingest path.
 
 ### Pipeline Management
 
-The above is a locally running pipeline, but most likely we want this to run at
-a node remotely, independent of where the client is. This begs the challenge:
-how do we manage all these pipelines? As with all other VAST functions, there
-could be a client command.
+In many cases we want to run pipelines remotely, independent of where the client
+is. This begs the challenge: how do we manage pipelines? As with all other VAST
+functions, there could be a client command.
 
 ```bash
 # Show all pipelines:
 vast pipeline list
 ```
 
-Create remote pipelines at ease:
+Create remote pipelines:
 
 ```bash
-vast pipeline create foo 'where #type == "suricata.flow" | matcher match ips'
+vast pipeline create foo 'where #type == "suricata.flow"'
 vast pipeline list
 # Output:
-# foo: where #type == "suricata.flow" | matcher match ips
+# foo: where #type == "suricata.flow"
 ```
 
 The idea would be that only clients can manipulate server state. This fixes
@@ -342,7 +359,7 @@ In the future, it would also be nice to offer the same pipeline management
 functionality through a REST API to make it easier to integrate with a
 remote VAST node, e.g., build a web UI.)
 
-### Other Remarks
+## Other Remarks
 
 To illustrate the composability of pipelines, we could take this to an extreme
 when performance doesn't matter:
