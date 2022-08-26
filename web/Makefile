@@ -13,7 +13,10 @@ NOTEBOOK_OUTPUTS := $(addprefix $(NOTEBOOK_OUTPUT_DIR)/, $(notdir $(NOTEBOOK_INP
 NOTEBOOK_DOCS_INPUT := $(NOTEBOOK_INPUT_DIR)/README.md
 NOTEBOOK_DOCS_OUTPUT := $(CONTRIBUTING_DIR)/notebooks.md
 
-all: changelog notebooks dot-github
+RFC_INPUT := ../rfc/README.md
+RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
+
+all: changelog notebooks dot-github rfc
 
 changelog: $(CHANGELOG_OUTPUT)
 
@@ -45,6 +48,12 @@ $(CONTRIBUTING_DIR)/workflow.md: .github
 	@printf -- "---\nsidebar_position: 1\n---\n" > $@
 	@cat .github/$(@F) >> $@
 
+rfc: $(RFC_OUTPUT)
+
+$(RFC_OUTPUT): $(RFC_INPUT)
+	@printf -- "---\nsidebar_position: 9\n---\n" > $@
+	@cat $< >> $@
+
 notebooks: $(NOTEBOOK_DOCS_OUTPUT) $(NOTEBOOK_OUTPUTS)
 
 $(NOTEBOOK_DOCS_OUTPUT): $(NOTEBOOK_DOCS_INPUT)
@@ -60,6 +69,7 @@ clean:
 	$(MAKE) -C $(NOTEBOOK_INPUT_DIR) clean
 	git clean -f -d -x $(NOTEBOOK_OUTPUT_DIR)
 	rm -rf .github
+	rm $(RFC_OUTPUT)
 	rm $(CONTRIBUTING_DIR)/code-of-conduct.md
 	rm $(CONTRIBUTING_DIR)/coding-style.md
 	rm $(CONTRIBUTING_DIR)/security.md
