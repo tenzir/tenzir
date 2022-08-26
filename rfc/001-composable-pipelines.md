@@ -134,6 +134,7 @@ locally as well:
 
 ```bash
 vast exec 'from - |
+           read zeek |
            where EXPRESSION |
            write json |
            to -'
@@ -150,14 +151,15 @@ There are of course convenience defaults we can use, like assuming `from -` and
 `to -` being the default. This would make the above look like this:
 
 ```bash
-vast exec 'where EXPRESSION |
+vast exec 'read zeek |
+           where EXPRESSION |
            write json
 ```
 
 Side effect: we would get our envisioned convert operator almost for free:
 
 ```bash
-vast exec 'read zeek | print csv'
+vast exec 'read zeek | write csv'
 # Obviates the need for:
 vast exec 'convert zeek csv'
 ```
