@@ -38,17 +38,6 @@ vast 'from s3://aws |
       to /path/to/file.feather'
 ```
 
-Just to illustrate the composability, we could take this to an extreme when
-performance doesn't matter:
-
-```bash
-vast from s3://aws |
-  vast read json |
-  vast 'summarize count(dst) group-by src' |
-  vast write feather |
-  vast to /path/to/file.feather
-```
-
 The UX would translate seamlessly to other languages, e.g., Python:
 
 ```python
@@ -332,6 +321,22 @@ in a WAL manner.
 In the future, it would also be nice to offer the same pipeline management
 functionality through a REST API to make it easier to integrate with a
 remote VAST node, e.g., build a web UI.)
+
+### Other Remarks
+
+To illustrate the composability of pipelines, we could take this to an extreme
+when performance doesn't matter:
+
+```bash
+vast from s3://aws |
+  vast read json |
+  vast 'summarize count(dst) group-by src' |
+  vast write feather |
+  vast to /path/to/file.feather
+```
+
+As there is no clear underlying use case outside of testing and debugging, we
+are not going to discuss this idea in more depth.
 
 ## Alternatives
 
