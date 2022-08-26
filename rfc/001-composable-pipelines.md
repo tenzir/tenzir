@@ -116,7 +116,7 @@ parser, then send off to a remote VAST node. For example, we would rewrite
 `vast import zeek` as:
 
 ```bash
-vast exec 'from - | parse zeek | push vast://1.2.3.4'
+vast exec 'from - | read zeek | push vast://1.2.3.4'
 ```
 
 Likewise, `vast export json EXPRESSION` would become:
@@ -156,7 +156,7 @@ vast exec 'where EXPRESSION |
 Side effect: we would get our envisioned convert operator almost for free:
 
 ```bash
-vast exec 'parse zeek | print csv'
+vast exec 'read zeek | print csv'
 # Obviates the need for:
 vast exec 'convert zeek csv'
 ```
@@ -187,9 +187,9 @@ An `import` degenerates to:
 
 ```bash
 # exec
-vast exec 'parse zeek | where EXPRESSION | push vast:///'
+vast exec 'read zeek | where EXPRESSION | push vast:///'
 # push
-vast push 'parse zeek | where EXPRESSION'
+vast push 'read zeek | where EXPRESSION'
 ```
 
 Note that this hoisting into commands only works because `pull` and `push` are
