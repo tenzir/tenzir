@@ -50,7 +50,7 @@ await v.from("s3://aws")
        .to("/path/to/file.feather")
 ```
 
-### Operator Synopsis
+### Synopsis
 
 The core of this proposal introduces pipeline operators as function with input
 and output types. The following overview introduces the pipeline building
@@ -67,10 +67,10 @@ blocks used throughout this proposal.
 | `pull`   | `Void`     | `Arrow`     | Loads Arrow from a remote source
 | `push`   | `Arrow`    | `Void`      | Stores Arrow in a remote source
 
-#### Computation
+#### Compute
 
 The following operators have a fixed input and output type of `Arrow`. We can
-group them into "filter" operators that do not change the schema, and "reshape"
+group them into *filter* operators that do not change the schema, and *reshape*
 operators where execution yields a new schema.
 
 ##### Filter
@@ -96,14 +96,34 @@ operators where execution yields a new schema.
 
 [^1]: Depending on the aggregate function.
 
+#### Commands
+
+The following table illustrate how existing VAST commands map to pipeline
+execution.
+
+| Command Synatx                    | Pipeline Syntax
+| --------------------------------- | -------------------------------------------
+| `vast infer`                      | `vast exec 'read | infer`
+| `vast import FORMAT EXPR`         | `vast exec 'read FORMAT | where EXPR | push'`
+| `vast export FORMAT EXPR`         | `vast spawn 'where EXPR | write FORMAT'`
+| `vast count [-e] EXPR`            | `vast spawn 'where EXPR | count [-e]` (TBD)
+| `vast pivot --format=FORMAT EXPR` | `vast spawn 'where EXPR | pivot | write FORMAT`
+| `vast explore [-A] [...] EXPR`    | `vast spawn 'where EXPR | explore [-A] [...]`
+
+The `spawn` command create a remote pipeline and attaches immediately to it.
+
 ### Pipeline Execution
 
 Let's take a step back and just assume that we add a new `exec` command that
-just executes a pipeline.
+executes a pipeline *locally*, i.e., where the VAST process runs.
 
-Then we can model the ingestion as follows: load data via stdin, push into a
-parser, then send off to a remote VAST node. For example, we would rewrite
-`vast import zeek` as:
+Then we can model `vast import zeek` as follows:
+
+1. Load data via stdin (`from`)
+2. Push into a parser (`read`)
+3. Send data off to a remote VAST node (`push`)
+
+As pipeline:
 
 ```bash
 vast exec 'from - | read zeek | push vast://1.2.3.4'
