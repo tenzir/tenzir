@@ -75,6 +75,8 @@ operators where execution yields a new schema.
 
 ##### Filter
 
+Filter operators have input and output type `Arrow`.
+
 | Operator | Non-Blocking | Description
 | -------- |:------------:| ------------------------------------------
 | `head`   | ✅           | Retrieve first N records
@@ -84,6 +86,8 @@ operators where execution yields a new schema.
 | `uniq`   | ✅           | Produce deduplicated output
 
 ##### Reshape
+
+Reshape operators have input and output type `Arrow`.
 
 | Operator    | Non-Blocking | Description
 | ----------- |:------------:| ------------------------------------------
