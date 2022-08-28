@@ -73,22 +73,27 @@ public:
   [[nodiscard]] virtual caf::expected<chunk_ptr> finish() = 0;
 };
 
-struct count_query_state {
-  detail::generator<uint64_t> count_generator = {};
-  detail::generator<uint64_t>::iterator count_iterator = {};
+/// Shared state for in-flight queries for both count and extract operations.
+template <class ResultType>
+struct base_query_state {
+  /// Generator producing results per stored table slice.
+  detail::generator<ResultType> generator = {};
+  /// Iterator for result of processing current table lsice.
+  typename detail::generator<ResultType>::iterator result_iterator = {};
+  /// Aggregator for number of matching events.
   uint64_t num_hits = {};
-  system::receiver_actor<uint64_t> sink = {};
+  /// Actor to send the final / intermediate results to.
+  system::receiver_actor<ResultType> sink = {};
+  /// Start time for metrics tracking.
   std::chrono::steady_clock::time_point start
     = std::chrono::steady_clock::now();
 };
 
-struct extract_query_state {
-  detail::generator<table_slice> extract_generator = {};
-  detail::generator<table_slice>::iterator extract_iterator = {};
-  uint64_t num_hits = {};
-  system::receiver_actor<table_slice> sink = {};
-  std::chrono::steady_clock::time_point start = {};
-};
+/// Keeps track of all relevant state for an in-progress count query.
+struct count_query_state : public base_query_state<uint64_t> {};
+
+/// Keeps track of all relevant state for an in-progress extract query.
+struct extract_query_state : public base_query_state<table_slice> {};
 
 /// The state of the default passive store actor implementation.
 struct default_passive_store_state {

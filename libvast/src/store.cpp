@@ -51,9 +51,9 @@ handle_query(const auto& self, const query_context& query_context) {
                                        *self, query_context.id)));
         return;
       }
-      state->second.count_generator
+      state->second.generator
         = self->state.store->count(*tailored_expr, query_context.ids);
-      state->second.count_iterator = state->second.count_generator.begin();
+      state->second.iterator = state->second.generator.begin();
       state->second.sink = count.sink;
       state->second.start = start;
       self
@@ -114,9 +114,9 @@ handle_query(const auto& self, const query_context& query_context) {
                                        *self, query_context.id)));
         return;
       }
-      state->second.extract_generator
+      state->second.generator
         = self->state.store->extract(*tailored_expr, query_context.ids);
-      state->second.extract_iterator = state->second.extract_generator.begin();
+      state->second.iterator = state->second.generator.begin();
       state->second.sink = extract.sink;
       state->second.start = start;
       self
@@ -221,13 +221,14 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       [self](caf::error& error) {
         self->quit(std::move(error));
       });
+  // We monitor all query sinks, and remove queries associated with the sink.
   self->set_down_handler([self](const caf::down_msg& down_msg) {
     for (const auto& [query_id, state] : self->state.running_extractions) {
       if (state.sink->address() == down_msg.source) {
         VAST_DEBUG("{} received DOWN from extract query {}: {}", *self,
                    query_id, down_msg.reason);
         self->state.running_extractions.erase(query_id);
-        break;
+        break; // a sink can only have one active extract query, so we stop
       }
     }
     for (const auto& [query_id, state] : self->state.running_counts) {
@@ -235,7 +236,7 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
         VAST_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
                    down_msg.reason);
         self->state.running_counts.erase(query_id);
-        break;
+        break; // a sink can only have one active count query, so we stop
       }
     }
   });
@@ -273,10 +274,10 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       if (it == self->state.running_extractions.end())
         return {};
       auto& [_, state] = *it;
-      auto slice = *state.extract_iterator;
+      auto slice = *state.result_iterator;
       state.num_hits += slice.rows();
       self->send(state.sink, std::move(slice));
-      if (++state.extract_iterator == state.extract_generator.end()) {
+      if (++state.result_iterator == state.generator.end()) {
         return {};
       }
       return self->delegate(
@@ -290,8 +291,8 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       if (it == self->state.running_counts.end())
         return {};
       auto& [_, state] = *it;
-      state.num_hits += *state.count_iterator;
-      if (++state.count_iterator == state.count_generator.end()) {
+      state.num_hits += *state.result_iterator;
+      if (++state.result_iterator == state.generator.end()) {
         return {};
       }
       return self->delegate(
@@ -420,10 +421,10 @@ system::default_active_store_actor::behavior_type default_active_store(
       if (it == self->state.running_extractions.end())
         return {};
       auto& [_, state] = *it;
-      auto slice = *state.extract_iterator;
+      auto slice = *state.result_iterator;
       state.num_hits += slice.rows();
       self->send(state.sink, std::move(slice));
-      if (++state.extract_iterator == state.extract_generator.end()) {
+      if (++state.result_iterator == state.generator.end()) {
         return {};
       }
       return self->delegate(
@@ -437,8 +438,8 @@ system::default_active_store_actor::behavior_type default_active_store(
       if (it == self->state.running_counts.end())
         return {};
       auto& [_, state] = *it;
-      state.num_hits += *state.count_iterator;
-      if (++state.count_iterator == state.count_generator.end()) {
+      state.num_hits += *state.result_iterator;
+      if (++state.result_iterator == state.generator.end()) {
         return {};
       }
       return self->delegate(
