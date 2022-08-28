@@ -307,6 +307,7 @@ jobs:
           cmake -B "$BUILD_DIR" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
+            -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DVAST_PLUGINS:STRING="plugins/pcap" \
             -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF \
