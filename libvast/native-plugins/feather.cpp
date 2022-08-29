@@ -88,7 +88,7 @@ class passive_feather_store final : public passive_store {
     auto arrow_field = table_->schema()->GetFieldByName("event");
     if (!arrow_field) {
       return caf::make_error(ec::format_error, "schema does not have mandatory "
-                                               "`event` column");
+                                               "'event' column");
     }
     schema_ = type::from_arrow(*arrow_field);
     if (!schema_)
@@ -106,7 +106,6 @@ class passive_feather_store final : public passive_store {
       auto time_col = rb.ValueUnsafe()->GetColumnByName("import_time");
       auto unwrapped_rb = unwrap_record_batch(rb.MoveValueUnsafe());
       auto slice = table_slice{unwrapped_rb, schema_};
-      // auto slice = table_slice{unwrapped_rb, schema};
       slice.offset(offset);
       offset += slice.rows();
       slice.import_time(derive_import_time(time_col));

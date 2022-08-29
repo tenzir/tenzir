@@ -23,6 +23,20 @@ namespace vast {
 
 namespace {
 
+// A query execution is performed incrementally on individual table slices.
+// On each invocation, only a single table slice is processed via filter
+// or count, then execution is paused to allow incremental processing and
+// early exit (e.g., when the query limit is reached or the query client
+// disconnects).
+// To achieve that, the defaut store actor implementation:
+// 1. Keeps track of all queries currently in progress in maps keyed by uuid,
+//    separated by query type (count, extract).
+// 2. After processing a table slice, sends a message to self, which is
+//    the trigger to continue processing the qery, and makes processing
+//    interruptable.
+// 3. Monitors all query sinks and removes queries from the map whos sink is
+//    no longer available, which allows timely cancellation and avoids
+//    superfluous computations.
 template <class Actor>
 caf::result<uint64_t>
 handle_query(const auto& self, const query_context& query_context) {
@@ -51,12 +65,13 @@ handle_query(const auto& self, const query_context& query_context) {
                                        *self, query_context.id)));
         return;
       }
+      // set up query state
       state->second.generator
         = self->state.store->count(*tailored_expr, query_context.ids);
-      state->second.iterator = state->second.generator.begin();
+      state->second.result_iterator = state->second.generator.begin();
       state->second.sink = count.sink;
       state->second.start = start;
-      self
+      self // schedule query processing beginning at the first table slice
         ->request(static_cast<Actor>(self), caf::infinite, atom::internal_v,
                   atom::count_v, query_context.id)
         .then(
@@ -116,7 +131,7 @@ handle_query(const auto& self, const query_context& query_context) {
       }
       state->second.generator
         = self->state.store->extract(*tailored_expr, query_context.ids);
-      state->second.iterator = state->second.generator.begin();
+      state->second.result_iterator = state->second.generator.begin();
       state->second.sink = extract.sink;
       state->second.start = start;
       self
@@ -167,6 +182,25 @@ handle_query(const auto& self, const query_context& query_context) {
   };
   caf::visit(f, query_context.cmd);
   return rp;
+}
+
+auto remove_down_source(auto* self, const caf::down_msg& down_msg) {
+  for (const auto& [query_id, state] : self->state.running_extractions) {
+    if (state.sink->address() == down_msg.source) {
+      VAST_DEBUG("{} received DOWN from extract query {}: {}", *self, query_id,
+                 down_msg.reason);
+      self->state.running_extractions.erase(query_id);
+      break; // a sink can only have one active extract query, so we stop
+    }
+  }
+  for (const auto& [query_id, state] : self->state.running_counts) {
+    if (state.sink->address() == down_msg.source) {
+      VAST_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
+                 down_msg.reason);
+      self->state.running_counts.erase(query_id);
+      break; // a sink can only have one active count query, so we stop
+    }
+  }
 }
 
 } // namespace
@@ -223,22 +257,7 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       });
   // We monitor all query sinks, and remove queries associated with the sink.
   self->set_down_handler([self](const caf::down_msg& down_msg) {
-    for (const auto& [query_id, state] : self->state.running_extractions) {
-      if (state.sink->address() == down_msg.source) {
-        VAST_DEBUG("{} received DOWN from extract query {}: {}", *self,
-                   query_id, down_msg.reason);
-        self->state.running_extractions.erase(query_id);
-        break; // a sink can only have one active extract query, so we stop
-      }
-    }
-    for (const auto& [query_id, state] : self->state.running_counts) {
-      if (state.sink->address() == down_msg.source) {
-        VAST_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
-                   down_msg.reason);
-        self->state.running_counts.erase(query_id);
-        break; // a sink can only have one active count query, so we stop
-      }
-    }
+    remove_down_source(self, down_msg);
   });
   return {
     [self](atom::query,
@@ -316,22 +335,7 @@ system::default_active_store_actor::behavior_type default_active_store(
   self->state.path = std::move(path);
   self->state.store_type = std::move(store_type);
   self->set_down_handler([self](const caf::down_msg& down_msg) {
-    for (const auto& [query_id, state] : self->state.running_extractions) {
-      if (state.sink->address() == down_msg.source) {
-        VAST_DEBUG("{} received DOWN from extract query {}: {}", *self,
-                   query_id, down_msg.reason);
-        self->state.running_extractions.erase(query_id);
-        break;
-      }
-    }
-    for (const auto& [query_id, state] : self->state.running_counts) {
-      if (state.sink->address() == down_msg.source) {
-        VAST_DEBUG("{} received DOWN from count query {}: {}", *self, query_id,
-                   down_msg.reason);
-        self->state.running_counts.erase(query_id);
-        break;
-      }
-    }
+    remove_down_source(self, down_msg);
   });
   return {
     [self](atom::query,

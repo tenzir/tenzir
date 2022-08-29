@@ -46,7 +46,8 @@ public:
   /// @param slice The encoding-specific FlatBuffers table.
   /// @param parent The surrounding chunk.
   /// @param batch A pre-existing record batch. Must always be nullptr.
-  /// @param schema A VAST schema matching the record batch. Must always be none.
+  /// @param schema VAST schema matching the record batch schema. Must always be
+  /// none.
   msgpack_table_slice(const FlatBuffer& slice, const chunk_ptr& parent,
                       const std::shared_ptr<arrow::RecordBatch>& batch,
                       type schema) noexcept;

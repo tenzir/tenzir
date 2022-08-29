@@ -128,7 +128,7 @@ public:
     no,  ///< Include internal types. Use with caution.
   };
 
-  /// indicates whether we want to recursively process the type's children
+  /// Indicates whether we want to recursively process the type's children
   /// or just work on the first level.
   enum class recurse : uint8_t {
     yes,

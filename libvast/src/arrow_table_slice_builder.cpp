@@ -108,7 +108,7 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   return result;
 }
 
-void verify_record_batch(const arrow::RecordBatch& record_batch) {
+bool verify_record_batch(const arrow::RecordBatch& record_batch) {
   auto check_col
     = [](auto&& check_col, const arrow::Array& column) noexcept -> void {
     auto f = detail::overload{
@@ -129,6 +129,7 @@ void verify_record_batch(const arrow::RecordBatch& record_batch) {
   };
   for (const auto& column : record_batch.columns())
     check_col(check_col, *column);
+  return true;
 }
 
 } // namespace
@@ -151,9 +152,7 @@ table_slice arrow_table_slice_builder::finish() {
 table_slice arrow_table_slice_builder::create(
   const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema,
   table_slice::serialize serialize, size_t initial_buffer_size) {
-#if VAST_ENABLE_ASSERTIONS
-  verify_record_batch(*record_batch);
-#endif // VAST_ENABLE_ASSERTIONS
+  VAST_ASSERT(verify_record_batch(*record_batch));
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
   return create_table_slice(record_batch, builder, std::move(schema),
                             serialize);
