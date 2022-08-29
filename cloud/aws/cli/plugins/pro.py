@@ -1,3 +1,6 @@
+"""This cloud plugin offers helpers to download the VAST Pro image from the
+Tenzir private repository"""
+
 from vast_invoke import pty_task, task
 import dynaconf
 from common import conf

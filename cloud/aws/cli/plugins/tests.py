@@ -7,14 +7,8 @@ import time
 import json
 import os
 import io
-import threading
 import common
 
-
-VALIDATORS = [
-    *common.COMMON_VALIDATORS,
-    common.AWS_REGION_VALIDATOR,
-]
 
 # A common prefix for all test files to help cleanup
 TEST_PREFIX = "vastcloudtest"

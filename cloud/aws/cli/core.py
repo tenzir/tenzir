@@ -7,18 +7,16 @@ import json
 import io
 from common import (
     AWS_REGION,
-    COMMON_VALIDATORS,
     RESOURCEDIR,
     FargateService,
-    active_include_dirs,
     active_modules,
     clean_modules,
     conf,
     TFDIR,
-    AWS_REGION_VALIDATOR,
     auto_app_fmt,
     REPOROOT,
     DOCKERDIR,
+    AWS_REGION_VALIDATOR,
     default_vast_version,
     load_cmd,
     parse_env,
@@ -26,9 +24,21 @@ from common import (
     aws,
 )
 
+# Validate and provide defaults for the terraform state backend configuration
+TF_BACKEND_VALIDATORS = [
+    dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
+    dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
+    # if we use tf cloud as backend, the right variables must be configured
+    dynaconf.Validator("TF_STATE_BACKEND", ne="cloud")
+    | (
+        dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne="")
+        & dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne="")
+    ),
+]
+
 
 VALIDATORS = [
-    *COMMON_VALIDATORS,
+    *TF_BACKEND_VALIDATORS,
     AWS_REGION_VALIDATOR,
     dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
@@ -47,6 +57,11 @@ CMD_HELP = {
     "env": "List of environment variables to be passed to the execution context,\
  name and values are separated by = (e.g --env BUCKET=mybucketname)",
 }
+
+
+def active_include_dirs(c: Context) -> str:
+    """The --include-dir arguments for modules activated and core modules"""
+    return " ".join([f"--terragrunt-include-dir={mod}" for mod in active_modules(c)])
 
 
 ## Tasks
@@ -80,8 +95,9 @@ def docker_login(c):
 @task
 def init_step(c, step):
     """Manually run terraform init on a specific step"""
-    if step not in active_modules(c):
-        raise Exit(f"Step {step} not activated")
+    mods = active_modules(c)
+    if step not in mods:
+        raise Exit(f"Step {step} not part of the active modules {mods}")
     c.run(
         f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
         env=conf(VALIDATORS),
@@ -111,7 +127,7 @@ def deploy_step(c, step, auto_approve=False):
 
 @pty_task
 def deploy(c, auto_approve=False):
-    """One liner build and deploy of the stack to AWS"""
+    """One liner build and deploy of the stack to AWS with all the modules associated with active plugins"""
     c.run(
         f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
         env=conf(VALIDATORS),
@@ -292,13 +308,17 @@ def destroy_step(c, step, auto_approve=False):
 
 @pty_task
 def destroy(c, auto_approve=False):
-    """Tear down the entire terraform stack"""
-    try:
-        stop_vast_server(c)
-    except Exception as e:
-        print(str(e))
-        print("Failed to stop tasks. Continuing destruction...")
+    """Tear down the entire terraform stack with all the active plugins
+
+    Note that if a module was deployed and the associated plugin was removed
+    from the config afterwards, it will not be destroyed"""
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+    serviceArns = aws("ecs").list_services(cluster=cluster, maxResults=100)[
+        "serviceArns"
+    ]
+    for serviceArn in serviceArns:
+        aws("ecs").update_service(cluster=cluster, service=serviceArn, desiredCount=0)
     c.run(
-        f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}",
+        f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
         env=conf(VALIDATORS),
     )

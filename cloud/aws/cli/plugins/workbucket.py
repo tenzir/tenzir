@@ -1,40 +1,11 @@
-from vast_invoke import pty_task, task
-import core
+from vast_invoke import task
 from common import (
     AWS_REGION,
-    auto_app_fmt,
     check_absolute,
-    conf,
-    TFDIR,
     container_path,
     terraform_output,
     aws,
 )
-
-
-VALIDATORS = core.VALIDATORS
-
-
-@pty_task
-def deploy(c, auto_approve=False):
-    """Deploy a bucket that can be used to persist data from the client"""
-    core.init_step(c, "workbucket")
-    c.run(
-        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/workbucket",
-        env=conf(VALIDATORS),
-        pty=True,
-    )
-
-
-@task
-def destroy(c, auto_approve=False):
-    """Destroy the bucket"""
-    core.init_step(c, "workbucket")
-    c.run(
-        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/workbucket",
-        env=conf(VALIDATORS),
-        pty=True,
-    )
 
 
 @task(autoprint=True)

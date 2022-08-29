@@ -1,10 +1,9 @@
 from vast_invoke import task
 import dynaconf
 import requests
-from common import conf, COMMON_VALIDATORS, list_modules, tf_version
+from common import conf, list_modules, tf_version
 
 VALIDATORS = [
-    *COMMON_VALIDATORS,
     dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne=""),
     dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne=""),
 ]
