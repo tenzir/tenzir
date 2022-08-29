@@ -1,4 +1,4 @@
-"""Instantiate a bucket to persist state objects"""
+"""Instantiate a bucket to persist larger data objects"""
 
 from vast_invoke import task
 from common import (
