@@ -53,6 +53,20 @@ const config = {
         },
       }),
     ],
+    [
+      'redocusaurus',
+      {
+        specs: [
+          {
+            spec: 'openapi/openapi.yaml',
+            route: '/api/',
+          },
+        ],
+        theme: {
+          primaryColor: '#00a4f1',
+        },
+      },
+    ],
   ],
 
   themeConfig:
@@ -86,6 +100,12 @@ const config = {
             label: 'Changelog',
             position: 'left',
           },
+          // TODO: Uncomment once the API is available.
+          //{
+          //  to: '/api',
+          //  label: 'API',
+          //  position: 'left',
+          //},
           {
             type: 'search',
             position: 'right',
