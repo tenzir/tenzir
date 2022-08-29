@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # AWS
 
-:::caution Expiremental
+:::caution Experimental
 VAST's native cloud architecture is still highly experimental and
 subject to change without notice.
 :::
@@ -84,7 +84,7 @@ VASTCLOUD_REBUILD=1 ./vast-cloud
 
 With the toolchain Docker image in place, `vast-cloud` is now ready to execute
 commands via `docker run` that transports the `.env` configuration to the main
-script [`core.py`][core.py] driving the Terragrunt invocation. To see what
+script [`main.py`][main.py] driving the Terragrunt invocation. To see what
 commands are available, run `./vast-cloud --list`.
 
 To create the AWS services, run:
@@ -110,9 +110,6 @@ To tear everything down, use:
   cannot specify existing ones. They will be billed at [an hourly
   rate](https://aws.amazon.com/vpc/pricing/) even when you aren't running any
   workload, until you tear down the entire stack.
-- You might sometime bump into the message *"error waiting for Lambda Function
-  creation: InsufficientRolePermissions"* while deploying the stack. You can
-  usually solve this by running `./vast-cloud deploy` again a few minutes later.
 :::
 
 ### Start a VAST server (Fargate)
@@ -124,8 +121,14 @@ a VAST server as Fargate task, run:
 ./vast-cloud start-vast-server
 ```
 
-This launches the official `tenzir/vast` Docker image and executes the command
-`vast start`.
+By default, this launches the official `tenzir/vast` Docker image and executes
+the command `vast start`. To use the VAST Pro image, check out the [AWS
+Pro](/docs/setup-vast/deploy/aws-pro) documentation.
+
+Check the status of the running server with:
+```bash
+./vast-cloud vast-server-status
+```
 
 You can replace the running server with a new Fargate task:
 ```bash
@@ -172,6 +175,13 @@ To run a VAST client from Lambda, use the `run-lambda` target:
 The Lambda image also contains extra tooling, such as the AWS CLI, which is
 useful to run batch imports or exports to other AWS services.
 
+## Configure and deploy cloud plugins
+
+You can set activate a number of "cloud plugins" using the `.env` config file:
+```
+VAST_CLOUD_PLUGINS = workbucket,tests
+```
+
 ### Continuously load data from Cloudtrail
 
 If you have Cloudtrail enabled and pushing data into a bucket that is located in
@@ -179,6 +189,7 @@ the same AWS account as your VAST deployment, you can deploy an optional module
 that will stream all the new events arriving in that bucket to the VAST
 instance. To achieve this, assuming that VAST is already deployed, configure the
 following in the `.env` file:
+- `VAST_CLOUD_PLUGINS`: add `cloudtrail` to the list of plugins
 - `VAST_CLOUDTRAIL_BUCKET_NAME`: the name of the bucket where Cloudtrail is
   pushing its events
 - `VAST_CLOUDTRAIL_BUCKET_REGION`: the region where that bucket is located
@@ -186,7 +197,7 @@ following in the `.env` file:
 Then run:
 
 ```bash
-./vast-cloud cloudtrail.deploy
+./vast-cloud deploy
 ```
 
 You should see new events flowing into VAST within a few minutes:
@@ -200,7 +211,7 @@ modules such as the Cloudtrail datasource. If you want to destroy the Cloudtrail
 datasource resources only, use:
 
 ```bash
-./vast-cloud cloudtrail.destroy
+./vast-cloud destroy-step --step cloudtrail
 ```
 
 :::warning Caveats

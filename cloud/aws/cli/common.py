@@ -1,5 +1,5 @@
 from functools import cache
-from typing import Dict, List
+from typing import Dict, List, Set
 from vast_invoke import Context, Exit
 import dynaconf
 import json
@@ -22,20 +22,6 @@ def s3_regions():
 AWS_REGION_VALIDATOR = dynaconf.Validator(
     "VAST_AWS_REGION", must_exist=True, is_in=s3_regions()
 )
-
-# Common validators should always have defaults to avoid forcing a variable on a
-# plugin that doesn't need it
-# Side note: an empty variable is considered as existing
-COMMON_VALIDATORS = [
-    dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
-    dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
-    # if we use tf cloud as backend, the right variable must be configured
-    dynaconf.Validator("TF_STATE_BACKEND", ne="cloud")
-    | (
-        dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne="")
-        & dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne="")
-    ),
-]
 
 EXIT_CODE_TASK_NOT_RUNNING = 8
 
@@ -71,12 +57,25 @@ def auto_app_fmt(val: bool) -> str:
         return ""
 
 
-def list_modules(c: Context):
+def list_modules(c: Context) -> List[str]:
     """List available Terragrunt modules"""
-    deps = c.run(
-        """terragrunt graph-dependencies""", hide="out", env=conf(COMMON_VALIDATORS)
-    ).stdout
+    deps = c.run("""terragrunt graph-dependencies""", hide="out").stdout
     return re.findall('terraform/(.*)" ;', deps)
+
+
+def active_plugins() -> Set[str]:
+    """Cloud CLI plugins activated"""
+    plugin_var = conf([dynaconf.Validator("VAST_CLOUD_PLUGINS", default="")])[
+        "VAST_CLOUD_PLUGINS"
+    ]
+    plugin_set = {plugin.strip() for plugin in plugin_var.split(",")}
+    plugin_set.discard("")
+    return plugin_set
+
+
+def active_modules(c: Context) -> Set[str]:
+    """Terragrunt modules activated and core modules"""
+    return {*active_plugins().intersection(list_modules(c)), "core-1", "core-2"}
 
 
 def tf_version(c: Context):
