@@ -212,7 +212,10 @@ def push_images(c, step):
 
 @task
 def print_image_vars(c, step):
-    """Display the tfvars file with the image tags"""
+    """Display the tfvars file with the image tags.
+
+    The output variable name for each service is the service name (as defined in
+    the docker compose file) suffixed by "_image" """
     cf_str = c.run(f"{docker_compose(step)} convert --format json", hide="out").stdout
     cf_dict = json.loads(cf_str)["services"]
     for svc_name in cf_dict.keys():

@@ -27,9 +27,9 @@ terraform {
     commands = ["apply"]
     execute = ["/bin/bash", "-c", <<EOT
 ../../vast-cloud docker-login \
-                 build-images --step=matcher_client \
-                 push-images --step=matcher_client && \
-../../vast-cloud print-image-vars --step=matcher_client > images.generated.tfvars
+                 build-images --step=matcher \
+                 push-images --step=matcher && \
+../../vast-cloud print-image-vars --step=matcher > images.generated.tfvars
 EOT
     ]
   }
