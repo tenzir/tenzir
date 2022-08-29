@@ -146,32 +146,49 @@ void print_partition_legacy(
   vast::fbs::deserialize_bytes(partition->combined_layout(), intermediate);
   auto combined_layout
     = caf::get<vast::record_type>(vast::type::from_legacy_type(intermediate));
-  if (auto indexes = partition->indexes()) {
+  if (auto const* indexes = partition->indexes()) {
     if (indexes->size() != combined_layout.num_fields()) {
       fmt::print("{}!! wrong number of fields\n", indent);
       return;
     }
-    const auto& expand_indexes = options.partition.expand_indexes;
+    auto const& expand_indexes = options.partition.expand_indexes;
     indented_scope _(indent);
     for (size_t i = 0; i < indexes->size(); ++i) {
       auto field = combined_layout.field(i);
       auto name = field.name;
-      const auto* index = indexes->Get(i);
+      auto const* index = indexes->Get(i);
       if (!index) {
         fmt::print("{}(missing index field {})\n", indent, name);
         continue;
       }
-      auto sz = index->index() && index->index()->data()
-                  ? index->index()->data()->size()
-                  : 0;
       fmt::print("{}{}: {}", indent, name, field.type);
-      if (options.format.print_bytesizes)
-        fmt::print(" ({})", print_bytesize(sz, options.format));
+      auto const* legacy_index = index->index();
+      if (!legacy_index) {
+        fmt::print(" (no legacy_index)\n");
+        continue;
+      }
+      if (options.format.print_bytesizes) {
+        auto size_string = std::string{};
+        if (!legacy_index->data())
+          size_string = "null";
+        else
+          size_string
+            = print_bytesize(legacy_index->data()->size(), options.format);
+        if (legacy_index->external_container_idx() > 0) {
+          if (legacy_index->data())
+            fmt::print("!! index {} has both inline and external data\n", name);
+          size_string = fmt::format("in external chunk {}",
+                                    legacy_index->external_container_idx());
+        } else
+          size_string += " inline";
+
+        fmt::print(" ({})", size_string);
+      }
       fmt::print("\n");
       bool expand
         = std::find(expand_indexes.begin(), expand_indexes.end(), name)
           != expand_indexes.end();
-      if (expand && index->index()) {
+      if (expand) {
         vast::factory_traits<vast::value_index>::initialize();
         vast::value_index_ptr state_ptr;
         if (auto error
@@ -198,6 +215,12 @@ void print_partition(const std::filesystem::path& path, indentation& indent,
   if (!chunk) {
     fmt::print("(failed to open file: {})\n", chunk.error());
     return;
+  }
+  if (flatbuffers::BufferHasIdentifier(
+        (*chunk)->data(), vast::fbs::SegmentedFileHeaderIdentifier())
+      && formatting.partition.print_header) {
+    auto const* header = vast::fbs::GetSegmentedFileHeader((*chunk)->data());
+    print_segmented_file_header(header, indent, formatting);
   }
   auto maybe_partition = vast::system::partition_chunk::get_flatbuffer(*chunk);
   if (!maybe_partition) {
