@@ -100,11 +100,12 @@ const config = {
             label: 'Changelog',
             position: 'left',
           },
-          {
-            to: '/api',
-            label: 'API',
-            position: 'left',
-          },
+          // TODO: Uncomment once the API is available.
+          //{
+          //  to: '/api',
+          //  label: 'API',
+          //  position: 'left',
+          //},
           {
             type: 'search',
             position: 'right',
