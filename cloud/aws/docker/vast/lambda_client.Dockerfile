@@ -43,7 +43,7 @@ USER vast:vast
 
 COPY scripts/lambda-handler.py .
 COPY schema/ /opt/tenzir/vast/etc/vast/schema/
-COPY configs/vast-lambda.yaml /opt/tenzir/vast/etc/vast/vast.yaml
+COPY configs/vast/lambda.yaml /opt/tenzir/vast/etc/vast/vast.yaml
 
 ENTRYPOINT [ "/usr/bin/python3.9", "-m", "awslambdaric" ]
 CMD [ "lambda-handler.handler" ]

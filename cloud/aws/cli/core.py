@@ -18,6 +18,7 @@ from common import (
     DOCKERDIR,
     AWS_REGION_VALIDATOR,
     default_vast_version,
+    list_modules,
     load_cmd,
     parse_env,
     terraform_output,
@@ -130,28 +131,66 @@ def deploy(c, auto_approve=False):
     )
 
 
-@task(autoprint=True)
-def current_image(c, repo_arn, type):
+@task(
+    autoprint=True,
+    help={
+        "service": "The qualifier of the service this image will be used for, as specified in deploy-image"
+    },
+)
+def current_image(c, service):
     """Get the current Lambda image URI. In case of failure, returns the error message instead of the URI."""
+    repo_arn = terraform_output(c, "core-1", f"vast_repository_arn")
     try:
         tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
     except Exception as e:
         return str(e)
     current = next(
-        (tag["Value"] for tag in tags if tag["Key"] == f"current-{type}"),
+        (tag["Value"] for tag in tags if tag["Key"] == f"current-{service}"),
         "current-image-not-defined",
     )
     return current
 
 
-@task(help={"type": "Can be either 'lambda' or 'fargate'"})
-def deploy_image(c, type):
-    """Build and push the image, fails if core-1 is not deployed"""
+@task(
+    help={
+        "dockerfile": "Filename in the `docker/vast` directory\
+ (e.g lambda_client.Dockerfile, server.Dockerfile...)",
+        "tag": "The tag of the built image",
+    }
+)
+def build_vast_image(c, dockerfile, tag):
+    """Build the provided VAST based Dockerfile using the configured base image
+    and version"""
+    base_image = conf(VALIDATORS)["VAST_IMAGE"]
+    vast_version = conf(VALIDATORS)["VAST_VERSION"]
+    if vast_version == "build":
+        c.run(f"docker build -t {base_image}:build {REPOROOT}")
+    c.run(
+        f"""docker build \
+            --build-arg VAST_VERSION={vast_version} \
+            --build-arg BASE_IMAGE={base_image} \
+            -f {DOCKERDIR}/vast/{dockerfile} \
+            -t {tag} \
+            {RESOURCEDIR}"""
+    )
+
+
+@task(
+    help={
+        "service": "The service name of the deployed image",
+        "tag": "The tag of the image to deploy",
+    }
+)
+def deploy_image(c, service, tag):
+    """Push the provided image to the core image repository"""
+    ## We are using the repository tags as a key value store to flag
+    ## the current image of each service. This allows a controlled
+    ## version rollout in the downstream infra (lambda or fargate)
     image_url = terraform_output(c, "core-1", f"vast_repository_url")
     repo_arn = terraform_output(c, "core-1", f"vast_repository_arn")
     # get the digest of the current image
     try:
-        current_img = current_image(c, repo_arn, type)
+        current_img = current_image(c, service)
         c.run(f"docker pull {current_img}")
         old_digest = c.run(
             f"docker inspect --format='{{{{.RepoDigests}}}}' {current_img}",
@@ -159,23 +198,9 @@ def deploy_image(c, type):
         ).stdout
     except:
         old_digest = "current-image-not-found"
-    # build the image and get the new digest
-    base_image = conf(VALIDATORS)["VAST_IMAGE"]
-    image_tag = f"{type}-{int(time.time())}"
-    version = conf(VALIDATORS)["VAST_VERSION"]
-    if version == "build":
-        c.run(f"docker build -t {base_image}:{image_tag} {REPOROOT}")
-        version = image_tag
-    c.run(
-        f"""docker build \
-            --build-arg VAST_VERSION={version} \
-            --build-arg BASE_IMAGE={base_image} \
-            -f {DOCKERDIR}/{type}.Dockerfile \
-            -t {image_url}:{image_tag} \
-            {RESOURCEDIR}"""
-    )
+    # get the new digest
     new_digest = c.run(
-        f"docker inspect --format='{{{{.RepoDigests}}}}' {image_url}:{image_tag}",
+        f"docker inspect --format='{{{{.RepoDigests}}}}' {tag}",
         hide="out",
     ).stdout
     # compare old an new digests
@@ -183,10 +208,13 @@ def deploy_image(c, type):
         print("Docker image didn't change, skipping push")
         return
     # if a change occured, push and tag the new image as current
-    c.run(f"docker push {image_url}:{image_tag}")
+    ecr_tag = f"{image_url}:{service}-{int(time.time())}"
+    c.run(f"docker image tag {tag} {ecr_tag}")
+    c.run(f"docker push {ecr_tag}")
+    c.run(f"docker rmi {ecr_tag}")
     aws("ecr").tag_resource(
         resourceArn=repo_arn,
-        tags=[{"Key": f"current-{type}", "Value": f"{image_url}:{image_tag}"}],
+        tags=[{"Key": f"current-{service}", "Value": f"{ecr_tag}"}],
     )
 
 
