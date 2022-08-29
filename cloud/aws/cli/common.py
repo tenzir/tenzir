@@ -1,5 +1,5 @@
 from functools import cache
-from typing import Dict, List
+from typing import Dict, List, Set
 from vast_invoke import Context, Exit
 import dynaconf
 import json
@@ -27,6 +27,7 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
 # plugin that doesn't need it
 # Side note: an empty variable is considered as existing
 COMMON_VALIDATORS = [
+    dynaconf.Validator("VAST_CLOUD_PLUGINS", ""),
     dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
     dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
     # if we use tf cloud as backend, the right variable must be configured
@@ -71,12 +72,29 @@ def auto_app_fmt(val: bool) -> str:
         return ""
 
 
-def list_modules(c: Context):
+def list_modules(c: Context) -> List[str]:
     """List available Terragrunt modules"""
     deps = c.run(
         """terragrunt graph-dependencies""", hide="out", env=conf(COMMON_VALIDATORS)
     ).stdout
     return re.findall('terraform/(.*)" ;', deps)
+
+
+def active_plugins() -> Set[str]:
+    """Cloud CLI plugins activated in VAST_CLOUD_PLUGINS"""
+    plugin_var = conf(COMMON_VALIDATORS)["VAST_CLOUD_PLUGINS"]
+    plugin_set = set(plugin_var.split(","))
+    return plugin_set.discard("")
+
+
+def active_modules(c: Context) -> Set[str]:
+    """Terragrunt modules activated by VAST_CLOUD_PLUGINS and core modules"""
+    return active_plugins().intersection([*list_modules(c), "core-1", "core-2"])
+
+
+def active_include_dirs(c: Context) -> str:
+    """The --include-dir arguments for modules activated by VAST_CLOUD_PLUGINS and core modules"""
+    return " ".join([f"--terragrunt-include-dir={mod}" for mod in active_modules(c)])
 
 
 def tf_version(c: Context):

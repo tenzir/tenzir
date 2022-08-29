@@ -1,6 +1,8 @@
+import os
 from invoke import Program, Collection
 import sys
 import core
+import common
 import plugins
 import pkgutil
 import flags
@@ -36,10 +38,18 @@ if __name__ == "__main__":
 
     namespace = Collection.from_module(core)
 
+    plugin_set = common.active_plugins()
+
     # import all the modules in the plugins folder as collections
     for importer, modname, ispkg in pkgutil.iter_modules(plugins.__path__):
-        mod = importer.find_module(modname).load_module(modname)
-        namespace.add_collection(Collection.from_module(mod))
+        if modname in plugin_set:
+            mod = importer.find_module(modname).load_module(modname)
+            namespace.add_collection(Collection.from_module(mod))
+            # TODO add conf(validator) to env
+            plugin_set.remove(modname)
+
+    if len(plugin_set) > 0:
+        sys.exit(f"Unkown plugins: {plugin_set}")
 
     program = VastCloudProgram(
         binary="./vast-cloud",
