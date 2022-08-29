@@ -1,3 +1,4 @@
+"""Stream data from AWS Cloudtrail to VAST"""
 import dynaconf
 
 

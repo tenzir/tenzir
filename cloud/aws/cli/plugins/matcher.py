@@ -1,4 +1,4 @@
-"""This cloud plugin requires the VAST Pro image to be deployed"""
+"""[VAST Pro] Deploy a matcher client task and attach to the stream of matched events"""
 
 from typing import Tuple
 from common import FargateService, aws, terraform_output

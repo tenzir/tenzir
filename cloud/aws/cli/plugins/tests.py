@@ -1,3 +1,5 @@
+"""Execute tests scripts and interact with test data"""
+
 import filecmp
 import sys
 import flags

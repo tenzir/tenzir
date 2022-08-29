@@ -1,3 +1,5 @@
+"""Instantiate a bucket to persist state objects"""
+
 from vast_invoke import task
 from common import (
     AWS_REGION,

@@ -1,3 +1,5 @@
+"""Configure the Terraform Cloud account used as Terraform state backend"""
+
 from vast_invoke import task
 import dynaconf
 import requests

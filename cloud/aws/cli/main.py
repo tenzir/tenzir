@@ -15,6 +15,12 @@ def unhandled_exception(type, value, traceback):
         print(f"{type.__name__}: {str(value)}", file=sys.stderr)
 
 
+def list_plugins():
+    for importer, modname, _ in pkgutil.iter_modules(plugins.__path__):
+        mod = importer.find_module(modname).load_module(modname)
+        yield (modname, mod)
+
+
 class VastCloudProgram(Program):
     """A custom Program that doesn't print useless core options"""
 
@@ -28,10 +34,12 @@ Core options:
   -h [STRING], --help[=STRING]   Show core or per-task help and exit.
   -V, --version                  Show version and exit.
 
-Supported plugins: {", ".join([mod_tup[1] for mod_tup in pkgutil.iter_modules(plugins.__path__)])}
-Active plugins: {", ".join(common.active_plugins())}
+Plugins:
 """
         )
+        active = common.active_plugins()
+        plugin_entry = lambda name: f"[{'x' if name in active else ' '}] {name}"
+        self.print_columns([(plugin_entry(p[0]), p[1].__doc__) for p in list_plugins()])
         self.list_tasks()
 
 
@@ -43,9 +51,8 @@ if __name__ == "__main__":
 
     plugin_set = common.active_plugins()
     # import all the modules in the plugins folder as collections
-    for importer, modname, ispkg in pkgutil.iter_modules(plugins.__path__):
+    for modname, mod in list_plugins():
         if modname in plugin_set:
-            mod = importer.find_module(modname).load_module(modname)
             namespace.add_collection(Collection.from_module(mod))
             if hasattr(mod, "VALIDATORS"):
                 namespace.configure({"run": {"env": common.conf(mod.VALIDATORS)}})
