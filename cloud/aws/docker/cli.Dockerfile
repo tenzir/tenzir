@@ -22,7 +22,7 @@ RUN curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID"
     $(lsb_release -cs) \
     stable" && \
     apt-get update && \
-    apt-get -y install docker-ce
+    apt-get -y install docker-ce docker-compose-plugin
 
 # Install AWS Session Manager Plugin
 RUN curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb" && \

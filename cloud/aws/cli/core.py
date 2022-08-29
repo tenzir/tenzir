@@ -18,7 +18,6 @@ from common import (
     DOCKERDIR,
     AWS_REGION_VALIDATOR,
     default_vast_version,
-    list_modules,
     load_cmd,
     parse_env,
     terraform_output,
@@ -63,6 +62,11 @@ CMD_HELP = {
 def active_include_dirs(c: Context) -> str:
     """The --include-dir arguments for modules activated and core modules"""
     return " ".join([f"--terragrunt-include-dir={mod}" for mod in active_modules(c)])
+
+
+def docker_compose(step):
+    """The docker compose command in the directory of the specified step"""
+    return f"docker compose --project-directory {DOCKERDIR}/{step}"
 
 
 ## Tasks
@@ -151,36 +155,15 @@ def current_image(c, service):
     return current
 
 
-@task(
-    help={
-        "dockerfile": "Filename in the `docker/vast` directory\
- (e.g lambda_client.Dockerfile, server.Dockerfile...)",
-        "tag": "The tag of the built image",
-    }
-)
-def build_vast_image(c, dockerfile, tag):
+@task
+def build_images(c, step):
     """Build the provided VAST based Dockerfile using the configured base image
     and version"""
-    base_image = conf(VALIDATORS)["VAST_IMAGE"]
-    vast_version = conf(VALIDATORS)["VAST_VERSION"]
-    if vast_version == "build":
-        c.run(f"docker build -t {base_image}:build {REPOROOT}")
-    c.run(
-        f"""docker build \
-            --build-arg VAST_VERSION={vast_version} \
-            --build-arg BASE_IMAGE={base_image} \
-            -f {DOCKERDIR}/vast/{dockerfile} \
-            -t {tag} \
-            {RESOURCEDIR}"""
-    )
+    if conf(VALIDATORS)["VAST_VERSION"] == "build":
+        c.run(f"docker build -t $VAST_IMAGE:build {REPOROOT}")
+    c.run(f"{docker_compose(step)} build")
 
 
-@task(
-    help={
-        "service": "The service name of the deployed image",
-        "tag": "The tag of the image to deploy",
-    }
-)
 def deploy_image(c, service, tag):
     """Push the provided image to the core image repository"""
     ## We are using the repository tags as a key value store to flag
@@ -216,6 +199,24 @@ def deploy_image(c, service, tag):
         resourceArn=repo_arn,
         tags=[{"Key": f"current-{service}", "Value": f"{ecr_tag}"}],
     )
+
+
+@task
+def push_images(c, step):
+    """Push the images specified in the docker compose for that step"""
+    cf_str = c.run(f"{docker_compose(step)} convert --format json", hide="out").stdout
+    cf_dict = json.loads(cf_str)["services"]
+    for svc in cf_dict.items():
+        deploy_image(c, svc[0], svc[1]["image"])
+
+
+@task
+def print_image_vars(c, step):
+    """Display the tfvars file with the image tags"""
+    cf_str = c.run(f"{docker_compose(step)} convert --format json", hide="out").stdout
+    cf_dict = json.loads(cf_str)["services"]
+    for svc_name in cf_dict.keys():
+        print(f'{svc_name}_image = "{current_image(c, svc_name)}"')
 
 
 def service_outputs(c: Context) -> Tuple[str, str, str]:

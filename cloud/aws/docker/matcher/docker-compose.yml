@@ -1,0 +1,10 @@
+version: '3'
+services:
+  matcher:
+    image: tenzir/vastcloud:matcher
+    build:
+      context: ../../resources
+      dockerfile: ./matcher.Dockerfile
+      args:
+        - VAST_IMAGE
+        - VAST_VERSION
