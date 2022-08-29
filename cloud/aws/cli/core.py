@@ -100,7 +100,6 @@ def init_step(c, step):
         raise Exit(f"Step {step} not part of the active modules {mods}")
     c.run(
         f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
-        env=conf(VALIDATORS),
     )
 
 
@@ -111,7 +110,6 @@ def init(c, clean=False):
         clean_modules()
     c.run(
         f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
-        env=conf(VALIDATORS),
     )
 
 
@@ -121,7 +119,6 @@ def deploy_step(c, step, auto_approve=False):
     init_step(c, step)
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
-        env=conf(VALIDATORS),
     )
 
 
@@ -130,7 +127,6 @@ def deploy(c, auto_approve=False):
     """One liner build and deploy of the stack to AWS with all the modules associated with active plugins"""
     c.run(
         f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
-        env=conf(VALIDATORS),
     )
 
 
@@ -302,7 +298,6 @@ def destroy_step(c, step, auto_approve=False):
     init_step(c, step)
     c.run(
         f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
-        env=conf(VALIDATORS),
     )
 
 
@@ -320,5 +315,4 @@ def destroy(c, auto_approve=False):
         aws("ecs").update_service(cluster=cluster, service=serviceArn, desiredCount=0)
     c.run(
         f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
-        env=conf(VALIDATORS),
     )
