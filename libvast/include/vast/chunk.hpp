@@ -244,3 +244,22 @@ private:
 };
 
 } // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::chunk_ptr> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::chunk_ptr& value, FormatContext& ctx) const {
+    if (!value)
+      return format_to(ctx.out(), "{}", "nullptr");
+    return format_to(ctx.out(), "*{}", fmt::ptr(value.get()));
+  }
+};
+
+} // namespace fmt
