@@ -1020,7 +1020,7 @@ std::size_t index_state::memusage() const {
     usage += as_bytes(type).size() + sizeof(partition_info);
   }
   usage += persisted_partitions.size()
-           * sizeof(decltype(persisted_partitions)::key_type);
+           * sizeof(decltype(persisted_partitions)::value_type);
   usage += pending_queries.memusage();
   for (const auto& [addr, uuids] : monitored_queries) {
     usage += sizeof(addr) + calculate_usage(uuids);
