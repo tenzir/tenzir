@@ -1015,7 +1015,7 @@ std::size_t index_state::memusage() const {
   auto calculate_usage = []<class T>(const T& collection) -> std::size_t {
     return collection.size() * sizeof(typename T::value_type);
   };
-  auto usage = std::size_t{0u};
+  auto usage = std::size_t{sizeof(*this)};
   for (const auto& [type, partition_info] : active_partitions) {
     usage += as_bytes(type).size() + sizeof(partition_info);
   }
