@@ -377,11 +377,12 @@ partition_transformer_actor::behavior_type partition_transformer(
         mutable_synopsis.events = data.events;
         for (auto& [qf, idx] :
              self->state.partition_buildup.at(data.id).indexers) {
-          // Special case to preserve null values, since `chunkify(nullptr)`
-          // returns an empty chunk. We defensively treat every value index
-          // of size 0 as nonexistent, even if the input was not null.
-          auto chunk = chunkify(idx);
-          if (chunk->size() == 0)
+          auto chunk = chunk_ptr{};
+          // Note that `chunkify(nullptr)` return a chunk of size > 0.
+          if (idx)
+            chunk = chunkify(idx);
+          // We defensively treat every empty chunk as non-existing.
+          if (chunk && chunk->size() == 0)
             chunk = nullptr;
           data.indexer_chunks.emplace_back(qf.name(), chunk);
         }
