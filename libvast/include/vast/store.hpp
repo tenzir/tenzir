@@ -42,14 +42,14 @@ public:
   /// @param selection Pre-filtered ids to consider.
   /// @return The results of applying the count query to each table slice.
   [[nodiscard]] virtual detail::generator<uint64_t>
-  count(const expression& expr, const ids& selection) const;
+  count(expression expr, ids selection) const;
 
   /// Execute an extract query against the store.
   /// @param expr The expression to filter events.
   /// @param selection Pre-filtered ids to consider.
   /// @return The results of applying the extract query to each table slice.
   [[nodiscard]] virtual detail::generator<table_slice>
-  extract(const expression& expr, const ids& selection) const;
+  extract(expression expr, ids selection) const;
 };
 
 /// A base class for passive stores used by the store plugin.

@@ -84,6 +84,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     uint64_t rows = 0;
     std::vector<table_slice> result;
     auto query = query_context::make_extract("test", self, expr);
+    query.id = uuid::random();
     query.ids = ids;
     self->send(actor, atom::query_v, query);
     run();
@@ -282,13 +283,13 @@ TEST(active feather store fetchall query) {
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, uuid)->store_builder;
-  auto slices = std::vector<table_slice>{slice};
+  auto slices = std::vector<table_slice>{slice, slice, slice};
   vast::detail::spawn_container_source(sys, slices, builder);
   run();
   auto results = query(builder, vast::ids{});
   run();
-  CHECK_EQUAL(results.size(), 1ull);
-  compare_table_slices(slice, results[0]);
+  CHECK_EQUAL(results.size(), 3ull);
+  compare_table_slices(slice, results[2]);
 }
 
 TEST(passive feather store fetchall query) {

@@ -213,14 +213,14 @@ type base_store::schema() const {
 }
 
 detail::generator<uint64_t>
-base_store::count(const expression& expr, const ids& selection) const {
+base_store::count(expression expr, ids selection) const {
   for (const auto& slice : slices()) {
     co_yield count_matching(slice, expr, selection);
   }
 }
 
 detail::generator<table_slice>
-base_store::extract(const expression& expr, const ids& selection) const {
+base_store::extract(expression expr, ids selection) const {
   for (const auto& slice : slices()) {
     if (auto filtered_slice = filter(slice, expr, selection))
       co_yield std::move(*filtered_slice);
