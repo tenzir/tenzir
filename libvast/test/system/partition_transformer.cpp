@@ -446,7 +446,12 @@ TEST(query after transform) {
   const auto in_mem_partitions = 10;
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
-  const auto index_config = vast::index_config{};
+  const auto index_config = vast::index_config{
+    .rules = {{
+      .targets = {":string"},
+      .create_partition_index = false,
+    }},
+  };
   auto index
     = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
                   type_registry, index_dir,
@@ -501,36 +506,45 @@ TEST(query after transform) {
     [](const caf::error& e) {
       FAIL("unexpected error " << e);
     });
-  auto expression = vast::to<vast::expression>(
-    "#type == \"zeek.totally_not_conn\" && id.orig_h == 192.168.1.102");
-  auto query_context
-    = vast::query_context::make_extract("vast-test", self, unbox(expression));
-  auto rp4 = self->request(index, caf::infinite, vast::atom::evaluate_v,
-                           query_context);
-  run();
-  rp4.receive(
-    [&](const vast::system::query_cursor& cursor) {
-      CHECK_EQUAL(cursor.candidate_partitions, 1ull);
-      CHECK_EQUAL(cursor.scheduled_partitions, 1ull);
-    },
-    [&](const caf::error& e) {
-      FAIL("unexpected error " << e);
-    });
-  // We don't need to explicitly request results because the index sends data
-  // from the first few partitions automatically.
-  size_t total = 0ull;
-  bool query_done = false;
-  while (!query_done) {
-    self->receive(
-      [&](vast::table_slice& slice) {
-        total += slice.rows();
+  auto count_results = [&](const std::string& query_string) -> size_t {
+    auto expression = vast::to<vast::expression>(query_string);
+    auto query_context
+      = vast::query_context::make_extract("vast-test", self, unbox(expression));
+    auto rp4 = self->request(index, caf::infinite, vast::atom::evaluate_v,
+                             query_context);
+    run();
+    rp4.receive(
+      [&](const vast::system::query_cursor& cursor) {
+        CHECK_EQUAL(cursor.candidate_partitions, 1ull);
+        CHECK_EQUAL(cursor.scheduled_partitions, 1ull);
       },
-      [&](vast::atom::done) {
-        CHECK(true);
-        query_done = true;
+      [&](const caf::error& e) {
+        FAIL("unexpected error " << e);
       });
-  }
-  CHECK_EQUAL(total, 8ull);
+    // We don't need to explicitly request results because the index sends data
+    // from the first few partitions automatically.
+    size_t total = 0ull;
+    bool query_done = false;
+    while (!query_done) {
+      self->receive(
+        [&](vast::table_slice& slice) {
+          total += slice.rows();
+        },
+        [&](vast::atom::done) {
+          CHECK(true);
+          query_done = true;
+        });
+    }
+    return total;
+  };
+  CHECK_EQUAL(count_results("id.orig_h == 192.168.1.102"), 8ull);
+  CHECK_EQUAL(count_results("#type == \"zeek.totally_not_conn\" &&"
+                            " id.orig_h == 192.168.1.102"),
+              8ull);
+  CHECK_EQUAL(count_results("service == \"dns\""), 11ull);
+  CHECK_EQUAL(count_results("proto == \"udp\""), 20ull);
+  CHECK_EQUAL(count_results("proto == \"udp\" && id.orig_h == 192.168.1.102"),
+              8ull);
   self->send_exit(index, caf::exit_reason::user_shutdown);
 }
 

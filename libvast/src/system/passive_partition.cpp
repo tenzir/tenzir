@@ -586,15 +586,13 @@ partition_actor::behavior_type passive_partition(
       }
       result["size"] = self->state.partition_chunk->size();
       size_t mem_indexers = 0;
-      for (size_t i = 0; i < self->state.indexers.size(); ++i) {
+      for (size_t i = 0; i < self->state.indexers.size(); ++i)
         if (self->state.indexers[i])
           mem_indexers += sizeof(indexer_state)
                           + self->state.flatbuffer->indexes()
                               ->Get(i)
                               ->index()
-                              ->data()
-                              ->size();
-      }
+                              ->decompressed_size();
       result["memory-usage-indexers"] = mem_indexers;
       auto x = self->state.partition_chunk->incore();
       if (!x) {

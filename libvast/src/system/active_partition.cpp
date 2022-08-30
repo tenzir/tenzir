@@ -246,7 +246,7 @@ pack_full(const active_partition_state::serialization_data& x,
       // This threshold is an educated guess to keep tiny indices inline
       // to reduce additional page loads and huge indices out of the way.
       constexpr auto INDEXER_INLINE_THRESHOLD = 4096ull;
-      if (size >= INDEXER_INLINE_THRESHOLD) {
+      if (size < INDEXER_INLINE_THRESHOLD) {
         data = builder.CreateVector(
           reinterpret_cast<const uint8_t*>((*compressed_chunk)->data()), size);
       } else {
