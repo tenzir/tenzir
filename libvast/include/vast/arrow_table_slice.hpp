@@ -72,7 +72,7 @@ public:
   /// @param parent The surrounding chunk.
   /// @param batch A pre-existing record batch.
   /// @param schema VAST schema matching the record batch schema. Parameter
-  ///     is optional and derived from the record batch if not provided.
+  ///     is optional and derived from the record batch if set to none.
   arrow_table_slice(const FlatBuffer& slice, const chunk_ptr& parent,
                     const std::shared_ptr<arrow::RecordBatch>& batch,
                     type schema) noexcept;

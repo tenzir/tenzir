@@ -176,7 +176,7 @@ class active_feather_store final : public active_store {
       co_yield slice;
   }
 
-  [[nodiscard]] size_t num_events() const override {
+  [[nodiscard]] uint64_t num_events() const override {
     return num_events_;
   }
 
