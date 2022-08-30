@@ -328,6 +328,7 @@ struct rebuilder_state {
                        });
       if (heterogenenous_partition != run->remaining_partitions.end()) {
         is_heterogeneous = true;
+        current_run_events += heterogenenous_partition->events;
         current_run_partitions.push_back(*heterogenenous_partition);
         run->remaining_partitions.erase(heterogenenous_partition);
       } else {
@@ -392,9 +393,9 @@ struct rebuilder_state {
     if (!identity_operator)
       return identity_operator.error();
     pipeline->add_operator(std::move(*identity_operator));
+    emit_telemetry();
     auto current_run_partition_ids = std::vector<uuid>{};
     current_run_partition_ids.reserve(current_run_partitions.size());
-    emit_telemetry();
     for (const auto& partition : current_run_partitions)
       current_run_partition_ids.push_back(partition.uuid);
     self
