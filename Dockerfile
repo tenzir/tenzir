@@ -96,7 +96,9 @@ RUN cmake -B build -G Ninja \
     cmake --install build
 
 RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
-COPY systemd/vast.yaml $PREFIX/etc/vast/vast.yaml
+ENV VAST_DB_DIRECTORY="/var/lib/vast" \
+    VAST_LOG_FILE="/var/log/vast/server.log" \
+    VAST_PLUGINS="all"
 
 EXPOSE 42000/tcp
 
