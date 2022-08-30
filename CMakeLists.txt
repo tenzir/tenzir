@@ -191,7 +191,8 @@ if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
         \"For non-relocatable builds the configured build-time install prefix (\${build_time_prefix}) must match the configured install-time install prefix (\${install_time_prefix})\"
       )
     endif ()
-  ")
+    "
+    COMPONENT Development)
 endif ()
 
 # -- silence policy-related warnings -------------------------------------------
@@ -211,7 +212,10 @@ endif ()
 add_library(libvast_internal INTERFACE)
 set_target_properties(libvast_internal PROPERTIES EXPORT_NAME internal)
 add_library(vast::internal ALIAS libvast_internal)
-install(TARGETS libvast_internal EXPORT VASTTargets)
+install(
+  TARGETS libvast_internal
+  EXPORT VASTTargets
+  COMPONENT Development)
 
 # Require standard C++20.
 target_compile_features(libvast_internal INTERFACE cxx_std_20)
@@ -681,8 +685,10 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
 endif ()
 
 if (VAST_ENABLE_BUNDLED_SCHEMAS)
-  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-          DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
+  install(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
+    COMPONENT Runtime)
 endif ()
 
 # -- manpages ------------------------------------------------------------------
@@ -711,7 +717,8 @@ export(
 install(
   EXPORT VASTTargets
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-  NAMESPACE vast::)
+  NAMESPACE vast::
+  COMPONENT Development)
 
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
@@ -728,7 +735,8 @@ install(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTMacDependencyPaths.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
+  COMPONENT Development)
 
 # -- scripts -------------------------------------------------------------------
 
@@ -750,7 +758,8 @@ if (VAST_ENABLE_CORELIGHT_CAT)
       GROUP_EXECUTE
       WORLD_READ
       WORLD_EXECUTE
-    DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    COMPONENT Runtime)
 endif ()
 
 option(VAST_ENABLE_VAST_DF_PERCENT "Install vast-df-percent.sh with VAST" ON)
@@ -769,7 +778,8 @@ if (VAST_ENABLE_VAST_DF_PERCENT)
       GROUP_EXECUTE
       WORLD_READ
       WORLD_EXECUTE
-    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}"
+    COMPONENT Runtime)
 endif ()
 
 # -- docdir --------------------------------------------------------------------
@@ -782,7 +792,8 @@ install(
         "${CMAKE_CURRENT_SOURCE_DIR}/VAST.spdx"
         "${CMAKE_CURRENT_SOURCE_DIR}/VERSIONING.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
-  DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+  DESTINATION "${CMAKE_INSTALL_DOCDIR}"
+  COMPONENT Runtime)
 
 # -- packaging -----------------------------------------------------------------
 

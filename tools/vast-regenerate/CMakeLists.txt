@@ -12,4 +12,7 @@ VASTTargetEnableTooling(vast-regenerate)
 
 target_link_libraries(vast-regenerate PRIVATE vast::libvast vast::internal)
 
-install(TARGETS vast-regenerate DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(
+  TARGETS vast-regenerate
+  DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  COMPONENT Runtime)

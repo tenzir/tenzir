@@ -11,16 +11,19 @@ add_executable(vast vast.cpp)
 VASTTargetEnableTooling(vast)
 target_link_libraries(vast PRIVATE vast::internal vast::libvast)
 VASTTargetLinkWholeArchive(vast PRIVATE vast::libvast_native_plugins)
-install(TARGETS vast DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(
+  TARGETS vast
+  DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  COMPONENT Runtime)
 add_executable(vast::vast ALIAS vast)
 
 # Install vast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
   TARGETS vast
   EXPORT VASTTargets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
 # -- example configuration file -----------------------------------------------
 
@@ -42,7 +45,8 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
   install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/services/rc.d/vast"
     DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/rc.d"
-    PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE)
+    PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE
+    COMPONENT Runtime)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   # Install launchd script on macOS into ~/Library/LaunchAgents
   install(
@@ -56,7 +60,8 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
       \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\")
     configure_file(
       \"${CMAKE_CURRENT_SOURCE_DIR}/services/launchd/com.tenzir.vast.plist.in\"
-      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\" @ONLY)")
+      \"\$ENV{HOME}/Library/LaunchAgents/com.tenzir.vast.plist\" @ONLY)"
+    COMPONENT Runtime)
 elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   # Not all Linux distros use systemd, but those we care about at the moment do.
   # TODO: We don't consider CPACK_PACKAGE_INSTALL_PREFIX here, this could
@@ -64,8 +69,10 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   # comment at the beginning of cmake/Package.cmake.
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/services/systemd/vast.service.in"
                  "${CMAKE_CURRENT_BINARY_DIR}/vast.service" @ONLY)
-  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.service"
-          DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system/")
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.service"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system/"
+    COMPONENT Runtime)
 endif ()
 
 # -- integration tests ---------------------------------------------------------
@@ -124,11 +131,14 @@ add_custom_target(
 
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
+  COMPONENT Development
   DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
   PATTERN "integration/vast.yaml.example" EXCLUDE)
 
-install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/integration")
+install(
+  FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
+  COMPONENT Development
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/integration")
 
 # -- add plugins ---------------------------------------------------------------
 
@@ -190,6 +200,8 @@ if (VAST_ENABLE_MANPAGES)
     COMMENT "Generating vast.1"
     VERBATIM)
   add_dependencies(vast vast-manpage)
-  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
-          DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/vast.1"
+    DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
+    COMPONENT Runtime)
 endif ()

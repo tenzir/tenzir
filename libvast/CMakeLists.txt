@@ -38,7 +38,8 @@ if (NOT tsl-robin-map_FOUND)
   install(
     EXPORT tsl-robin-mapTargets
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-    NAMESPACE tsl::)
+    NAMESPACE tsl::
+    COMPONENT Development)
   string(APPEND VAST_EXTRA_TARGETS_FILES
          "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
   add_dependencies(robin_map tsl-robin-map-targets-link)
@@ -229,10 +230,11 @@ else ()
     add_library(CAF::io ALIAS libcaf_io_${_linkage_suffix})
     install(
       TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
+      COMPONENT Runtime
       EXPORT CAFTargets
-      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+      ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
     if (VAST_ENABLE_OPENSSL)
       if (NOT TARGET libcaf_openssl_${_linkage_suffix})
         string(
@@ -261,10 +263,11 @@ else ()
       add_library(CAF::openssl ALIAS libcaf_openssl_${_linkage_suffix})
       install(
         TARGETS libcaf_openssl_${_linkage_suffix}
+        COMPONENT Runtime
         EXPORT CAFTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
     endif ()
     add_library(libcaf_test INTERFACE)
     target_link_libraries(libcaf_test INTERFACE CAF::core)
@@ -279,9 +282,9 @@ else ()
     install(
       TARGETS libcaf_test
       EXPORT CAFTargets
-      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+      ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Development)
     set(caf_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf)
     export(
       EXPORT CAFTargets
@@ -297,7 +300,8 @@ else ()
     install(
       EXPORT CAFTargets
       DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-      NAMESPACE CAF::)
+      NAMESPACE CAF::
+      COMPONENT Development)
     mark_as_advanced(caf_build_header_path)
     string(APPEND VAST_EXTRA_TARGETS_FILES
            "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")"
@@ -312,8 +316,10 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   # Copy CAF libraries to installation directory
   get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
   file(GLOB CAF_INSTALLED_LIBRARIES "${CAF_LIBDIR}/libcaf*.so")
-  install(FILES ${CAF_INSTALLED_LIBRARIES}
-          DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+  install(
+    FILES ${CAF_INSTALLED_LIBRARIES}
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    COMPONENT Runtime)
 endif ()
 
 # -- libvast -------------------------------------------------------------------
@@ -578,22 +584,33 @@ endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
-  TARGETS libvast libvast_native_plugins
+  TARGETS libvast
+  COMPONENT Runtime
   EXPORT VASTTargets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+
+install(
+  TARGETS libvast_native_plugins
+  COMPONENT Development
+  EXPORT VASTTargets
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 install(
   DIRECTORY include/vast
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  COMPONENT Development
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   FILES_MATCHING
   PATTERN "*.hpp")
 
 # Install generated config headers.
 install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/vast"
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  COMPONENT Development
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   FILES_MATCHING
   PATTERN "*.hpp")
 

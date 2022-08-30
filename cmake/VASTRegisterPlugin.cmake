@@ -250,7 +250,8 @@ function (VASTCompileFlatBuffers)
     TARGETS ${FBS_TARGET}
     EXPORT VASTTargets
     PUBLIC_HEADER
-      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FBS_INCLUDE_DIRECTORY}")
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${FBS_INCLUDE_DIRECTORY}"
+      COMPONENT Development)
 endfunction ()
 
 # Install a commented-out version of an example configuration file.
@@ -310,8 +311,10 @@ macro (VASTInstallExampleConfiguration target source prefix destination)
 
   add_dependencies(${target} ${target}-copy-example-configuration-file)
 
-  install(FILES "${CMAKE_BINARY_DIR}/${_example_dir}/${prefix}${destination}"
-          DESTINATION "${_example_dir}/${prefix}")
+  install(
+    FILES "${CMAKE_BINARY_DIR}/${_example_dir}/${prefix}${destination}"
+    DESTINATION "${_example_dir}/${prefix}"
+    COMPONENT Runtime)
 
   unset(_example_dir)
 endmacro ()
@@ -568,8 +571,10 @@ function (VASTRegisterPlugin)
                    "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
                    OUTPUT_NAME "vast-plugin-${PLUGIN_TARGET}")
     endif ()
-    install(TARGETS ${PLUGIN_TARGET}-shared
-            DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins")
+    install(
+      TARGETS ${PLUGIN_TARGET}-shared
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins"
+      COMPONENT Runtime)
 
     # Ensure that VAST only runs after all dynamic plugin libraries are built.
     if (TARGET vast)
@@ -591,14 +596,17 @@ function (VASTRegisterPlugin)
     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${doc}")
       install(
         FILES "${CMAKE_CURRENT_SOURCE_DIR}/${doc}"
-        DESTINATION "${VAST_CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}")
+        DESTINATION "${VAST_CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}"
+        COMPONENT Runtime)
     endif ()
   endforeach ()
 
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
     # Install the bundled schema files to <datadir>/vast.
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-            DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}")
+    install(
+      DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+      DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/plugin/${PLUGIN_TARGET}"
+      COMPONENT Runtime)
     if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
       # Copy schemas from bundled plugins to the build directory so they can be
       # used from a VAST in a build directory (instead if just an installed VAST).
