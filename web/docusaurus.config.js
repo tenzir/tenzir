@@ -100,6 +100,11 @@ const config = {
             label: 'Changelog',
             position: 'left',
           },
+          {
+            to: '/roadmap',
+            label: 'Roadmap',
+            position: 'left',
+          },
           // TODO: Uncomment once the API is available.
           //{
           //  to: '/api',
