@@ -8,9 +8,7 @@
 if (NOT DEFINED CPACK_PACKAGING_INSTALL_PREFIX)
   set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 else ()
-  cmake_path(COMPARE "${CPACK_PACKAGING_INSTALL_PREFIX}" EQUAL
-             "${CMAKE_INSTALL_PREFIX}" prefix_equal)
-  if (NOT prefix_equal)
+  if (NOT CPACK_PACKAGING_INSTALL_PREFIX STREQUAL CMAKE_INSTALL_PREFIX)
     message(WARNING "Mismatches between ${CPACK_PACKAGING_INSTALL_PREFIX} and \
         ${CMAKE_INSTALL_PREFIX} are known to produce broken packages")
   endif ()
