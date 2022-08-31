@@ -109,9 +109,10 @@ locals {
       capabilities = {
         add = ["SYS_NICE"]
       }
+      user      = "${local.mysql_uid}:${local.mysql_gid}"
       mountPoints = [
         {
-          sourceVolume  = "storage",
+          sourceVolume  = "mysql",
           containerPath = "/var/lib/mysql",
           readOnly      = false
         }
@@ -156,6 +157,7 @@ locals {
         name  = "NGINX_PROXY_PASS"
         value = "http://localhost:80"
       }]
+      logConfiguration = local.log_config
     },
     {
       image     = "linuxserver/openssh-server:latest"
@@ -168,14 +170,15 @@ locals {
       }]
       environment = [{
         name  = "PUBLIC_KEY"
-        value = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINBtjQQ3SxIzW5IhviByGdr3Y0x5vroJRf6Rw9DM7jD7"
+        value = tls_private_key.tunneling_key.public_key_openssh
         }, {
         name  = "DOCKER_MODS"
         value = "linuxserver/mods:openssh-server-ssh-tunnel"
         }, {
         name  = "USER_NAME"
         value = "tunneler"
-        }]
+      }]
+      logConfiguration = local.log_config
     }
     # we don't instantiate the smtp server
   ]

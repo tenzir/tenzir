@@ -9,8 +9,71 @@ provider "aws" {
   }
 }
 
+provider "tls" {}
+
+resource "tls_private_key" "tunneling_key" {
+  algorithm = "ED25519"
+}
+
 resource "aws_cloudwatch_log_group" "fargate_logging" {
   name = "/ecs/gateway/${module.env.module_name}-${local.name}-${module.env.stage}"
+}
+
+resource "aws_efs_access_point" "access_point" {
+  file_system_id = var.efs_id
+  count          = var.efs_id == "" ? 0 : 1
+
+  root_directory {
+    path = "/misp"
+    creation_info {
+      owner_gid   = local.mysql_uid
+      owner_uid   = local.mysql_gid
+      permissions = "755"
+    }
+  }
+
+  posix_user {
+    gid = local.mysql_gid
+    uid = local.mysql_uid
+  }
+}
+
+resource "aws_efs_access_point" "mysql" {
+  file_system_id = var.efs_id
+  count          = var.efs_id == "" ? 0 : 1
+
+  root_directory {
+    path = "/misp/mysql"
+    creation_info {
+      owner_gid   = local.mysql_uid
+      owner_uid   = local.mysql_gid
+      permissions = "755"
+    }
+  }
+
+  posix_user {
+    gid = local.mysql_gid
+    uid = local.mysql_uid
+  }
+}
+
+resource "aws_efs_access_point" "files" {
+  file_system_id = var.efs_id
+  count          = var.efs_id == "" ? 0 : 1
+
+  root_directory {
+    path = "/misp/files"
+    creation_info {
+      owner_gid   = 1000
+      owner_uid   = 1000
+      permissions = "755"
+    }
+  }
+
+  posix_user {
+    gid = 1000
+    uid = 1000
+  }
 }
 
 resource "aws_ecs_task_definition" "fargate_task_def" {
@@ -25,14 +88,29 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
   depends_on               = [aws_cloudwatch_log_group.fargate_logging] // make sure the first task does not fail because log group is not available yet
 
   volume {
-    name = "storage"
+    name = "mysql"
     dynamic "efs_volume_configuration" {
-      for_each = var.efs.file_system_id == "" ? [] : [1]
+      for_each = var.efs_id == "" ? [] : [1]
       content {
-        file_system_id     = var.efs.file_system_id
+        file_system_id     = var.efs_id
         transit_encryption = "ENABLED"
         authorization_config {
-          access_point_id = var.efs.access_point_id
+          access_point_id = aws_efs_access_point.mysql[0].id
+          iam             = "ENABLED"
+        }
+      }
+    }
+  }
+
+  volume {
+    name = "files"
+    dynamic "efs_volume_configuration" {
+      for_each = var.efs_id == "" ? [] : [1]
+      content {
+        file_system_id     = var.efs_id
+        transit_encryption = "ENABLED"
+        authorization_config {
+          access_point_id = aws_efs_access_point.files[0].id
           iam             = "ENABLED"
         }
       }
@@ -75,7 +153,7 @@ resource "aws_ecs_service" "fargate_service" {
 
   network_configuration {
     subnets          = [var.public_subnet_id]
-    security_groups  = [aws_security_group.service.id]
+    security_groups  = [aws_security_group.service.id, var.efs_client_security_group_id]
     assign_public_ip = true
   }
 

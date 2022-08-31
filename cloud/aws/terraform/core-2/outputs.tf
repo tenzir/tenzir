@@ -30,6 +30,10 @@ output "vast_client_security_group_id" {
   value = aws_security_group.vast_client.id
 }
 
+output "efs_client_security_group_id" {
+  value = aws_security_group.client_efs.id
+}
+
 output "vast_lambda_name" {
   value = module.vast_client.lambda_name
 }
@@ -48,4 +52,8 @@ output "vast_server_hostname" {
 
 output "service_discov_namespace_id" {
   value = aws_service_discovery_private_dns_namespace.main.id
+}
+
+output "efs_id" {
+  value = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
 }

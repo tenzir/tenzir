@@ -6,7 +6,7 @@ ARG TERRAGRUNT_VERSION=0.36.0
 RUN apt-get update
 
 # Install Terraform
-RUN apt-get install -y gnupg software-properties-common curl unzip git wget expect && \
+RUN apt-get install -y gnupg software-properties-common curl unzip git wget expect sudo && \
     curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add - && \
     apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" && \
     apt-get update && \
@@ -50,7 +50,9 @@ ARG CALLER_GID
 RUN groupadd -g $CALLER_GID -o $UNAME && \
     useradd -m -u $CALLER_UID -g $CALLER_GID -o -s /bin/bash $UNAME && \
     groupadd -g $DOCKER_GID -o hostdocker && \
-    usermod --append --groups hostdocker $UNAME
+    usermod --append --groups hostdocker $UNAME && \
+    adduser $UNAME sudo && \
+    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # Setup persistent folders for configs
 RUN owneddir() { mkdir -p $1 && chown $UNAME $1 ; } && \

@@ -229,6 +229,20 @@ class FargateService:
             )["tasks"][0]
             return f"Desired status {desc['desiredStatus']} and current status {desc['lastStatus']}"
 
+    def describe_task(self):
+        """Describe the running tasks, erroring out if the state is unexpected"""
+        task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
+        nb_vast_tasks = len(task_res["taskArns"])
+        if nb_vast_tasks == 0:
+            raise Exit("No task")
+        if nb_vast_tasks > 1:
+            raise Exit("{nb_vast_tasks} tasks running")
+        else:
+            desc = aws("ecs").describe_tasks(
+                cluster=self.cluster, tasks=task_res["taskArns"]
+            )["tasks"][0]
+            return desc
+
     def start_service(self):
         """Start the service. Noop if it is already running"""
         aws("ecs").update_service(
