@@ -22,6 +22,6 @@ COPY --from=build /dependencies/ ./
 
 COPY scripts/matcher-client.py .
 COPY schema/ /opt/tenzir/vast/etc/vast/schema/
-COPY configs/vast-fargate.yaml /opt/tenzir/vast/etc/vast/vast.yaml
+COPY configs/vast/fargate.yaml /opt/tenzir/vast/etc/vast/vast.yaml
 
 ENTRYPOINT [ "/usr/bin/python3.9", "matcher-client.py" ]

@@ -31,7 +31,7 @@ variable "lambda_client_image" {
   description = "The VAST Lambda Docker image in ECR"
 }
 
-variable "vast_server_image" {
+variable "server_image" {
   description = "The VAST server Docker image in ECR"
 }
 
