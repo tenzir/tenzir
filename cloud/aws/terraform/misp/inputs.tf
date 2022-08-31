@@ -1,5 +1,6 @@
 variable "region_name" {}
 variable "misp_image" {}
+variable "misp_proxy_image" {}
 variable "misp_version" {}
 variable "fargate_cluster_name" {}
 variable "fargate_task_execution_role_arn" {}

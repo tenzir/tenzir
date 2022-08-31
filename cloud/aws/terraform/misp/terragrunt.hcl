@@ -29,7 +29,13 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute  = ["../../resources/scripts/deploy-misp-image.sh"]
+    execute = ["/bin/bash", "-c", <<EOT
+../../vast-cloud docker-login \
+                 build-images --step=misp \
+                 push-images --step=misp && \
+../../vast-cloud print-image-vars --step=misp > images.generated.tfvars
+EOT
+    ]
   }
 
   extra_arguments "image_vars" {
@@ -43,6 +49,7 @@ inputs = {
   region_name                     = local.region_name
   misp_version                    = local.misp_version
   misp_image                      = "dummy_overriden_by_before_hook"
+  misp_proxy_image                = "dummy_overriden_by_before_hook"
   fargate_task_execution_role_arn = dependency.core_2.outputs.fargate_task_execution_role_arn
   fargate_cluster_name            = dependency.core_2.outputs.fargate_cluster_name
   vast_vpc_id                     = dependency.core_2.outputs.vast_vpc_id

@@ -42,11 +42,12 @@ resource "aws_ecs_service" "fargate_service" {
   name                               = "${module.env.module_name}-${local.name}-${module.env.stage}"
   cluster                            = var.fargate_cluster_name
   task_definition                    = aws_ecs_task_definition.fargate_task_def.arn
-  desired_count                      = 1
+  desired_count                      = 0
   deployment_maximum_percent         = 100
   deployment_minimum_healthy_percent = 0
   propagate_tags                     = "SERVICE"
   enable_ecs_managed_tags            = true
+  enable_execute_command             = true
   launch_type                        = "FARGATE"
 
   network_configuration {
