@@ -77,11 +77,16 @@ services:
   cortex:
     container_name: cortex
     mem_limit: 1000m
-    build: 
-      dockerfile: ./vol/cortex/Dockerfile
-      args:
-        - VAST_VERSION=${VAST_VERSION:-latest}
-        - CORTEX_VERSION=${CORTEX_VERSION:-latest}
+    image: thehiveproject/cortex:latest
+    #build: 
+    #  dockerfile: ./vol/cortex/Dockerfile
+    #  args:
+    #    - VAST_VERSION=${VAST_VERSION:-latest}
+    #    - CORTEX_VERSION=${CORTEX_VERSION:-latest}
+    command:
+      --job-directory /tmp/cortex-jobs
+    environment:
+      - 'JOB_DIRECTORY=/tmp/cortex-jobs'
     depends_on:
       - elasticsearch
     ports:
@@ -89,7 +94,7 @@ services:
     volumes:
       - '/var/run/docker.sock:/var/run/docker.sock'
       - './vol/cortex/application.conf:/etc/cortex/application.conf'
-      - './vol/cortex/jobs:/opt/cortex/jobs'
+      - '/tmp/cortex-jobs:/tmp/cortex-jobs'
       - './analyzers:/opt/cortex/analyzers'
 
   vast:
