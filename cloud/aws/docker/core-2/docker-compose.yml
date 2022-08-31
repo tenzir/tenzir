@@ -1,6 +1,6 @@
 version: '3'
 services:
-  server:
+  vast_server:
     image: tenzir/vastcloud:server
     build:
       context: ../../resources

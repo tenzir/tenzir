@@ -33,7 +33,7 @@ EOT
 
 inputs = {
   lambda_client_image      = "dummy_overriden_by_before_hook"
-  server_image             = "dummy_overriden_by_before_hook"
+  vast_server_image        = "dummy_overriden_by_before_hook"
   region_name              = get_env("VAST_AWS_REGION")
   peered_vpc_id            = get_env("VAST_PEERED_VPC_ID")
   vast_cidr                = get_env("VAST_CIDR")
