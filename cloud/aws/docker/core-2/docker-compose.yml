@@ -1,0 +1,18 @@
+version: '3'
+services:
+  server:
+    image: tenzir/vastcloud:server
+    build:
+      context: ../../resources
+      dockerfile: ../docker/core-2/server.Dockerfile
+      args:
+        - VAST_IMAGE
+        - VAST_VERSION
+  lambda_client:
+    image: tenzir/vastcloud:lambda_client
+    build:
+      context: ../../resources
+      dockerfile: ../docker/core-2/lambda_client.Dockerfile
+      args:
+        - VAST_IMAGE
+        - VAST_VERSION

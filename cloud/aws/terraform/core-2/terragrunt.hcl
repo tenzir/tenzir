@@ -14,7 +14,13 @@ retryable_errors = [
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute  = ["../../resources/scripts/deploy-vast-images.sh", "lambda_client", "server"]
+    execute = ["/bin/bash", "-c", <<EOT
+../../vast-cloud docker-login \
+                 build-images --step=core-2 \
+                 push-images --step=core-2 && \
+../../vast-cloud print-image-vars --step=core-2 > images.generated.tfvars
+EOT
+    ]
   }
 
   extra_arguments "image_vars" {

@@ -25,7 +25,13 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute  = ["../../resources/scripts/deploy-vast-images.sh", "matcher_client"]
+    execute = ["/bin/bash", "-c", <<EOT
+../../vast-cloud docker-login \
+                 build-images --step=matcher_client \
+                 push-images --step=matcher_client && \
+../../vast-cloud print-image-vars --step=matcher_client > images.generated.tfvars
+EOT
+    ]
   }
 
   extra_arguments "image_vars" {
