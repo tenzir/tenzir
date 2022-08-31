@@ -3,11 +3,11 @@ services:
   thehive:
     image: strangebee/thehive:latest
     container_name: thehive
+    mem_limit: 1000m
     depends_on:
       - cassandra
       - elasticsearch
       - minio
-    mem_limit: 1000m
     ports:
       - "9000:9000"
     environment:
@@ -35,35 +35,37 @@ services:
       - "--no-config-cortex"
     volumes:
       - ./vol/thehive/application.conf:/etc/thehive/application.conf
-      - ./vol/thehive/data:/opt/thp/thehive/data
-      - ./vol/thehive/index:/opt/thp/thehive/index
+      - thehive-data:/opt/thp/thehive/data
+ #    - thehive-index:/opt/thp/thehive/index
 
   cassandra:
     container_name: cassandra
     image: bitnami/cassandra
+    mem_limit: 1000m
     ports:
       - "9042:9042"
     environment:
+      - HEAP_NEWSIZE=128M
+      - MAX_HEAP_SIZE=512M
       - CASSANDRA_CLUSTER_NAME=TheHive
     volumes:
-      - ./vol/cassandra/data:/var/lib/cassandra/data
+      - cassandra-data:/var/lib/cassandra/data
 
   elasticsearch:
-    container_name: elastic
-    mem_limit: 1000m
+    container_name: elasticsearch
     image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2
+    mem_limit: 1000m
     ports:
       - "9200:9200"
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
     volumes:
-      - ./vol/elasticsearch/data:/usr/share/elasticsearch/data
-      - ./vol/elasticsearch/logs:/usr/share/elasticsearch/logs
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      - elasticsearch-logs:/usr/share/elasticsearch/logs
 
   minio:
     container_name: minio
-    mem_limit: 1000m
     image: quay.io/minio/minio
     command: ["minio", "server", "/data", "--console-address", ":9001"]
     environment:
@@ -74,7 +76,7 @@ services:
 
   cortex:
     container_name: cortex
-    #image: thehiveproject/cortex:latest
+    mem_limit: 1000m
     build: 
       dockerfile: ./vol/cortex/Dockerfile
       args:
@@ -100,4 +102,12 @@ services:
     command:
       - start
     volumes:
-      - './vol/vast:/var/lib/vast/'  
+      - vast-data:/var/lib/vast/
+
+volumes:
+  vast-data:
+  elasticsearch-data:
+  elasticsearch-logs:
+  cassandra-data:
+  thehive-data:
+  thehive-index:
