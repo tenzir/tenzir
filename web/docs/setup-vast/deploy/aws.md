@@ -112,6 +112,11 @@ To tear everything down, use:
   workload, until you tear down the entire stack.
 :::
 
+:::tip Get modules back in sync
+Terragrunt sometimes fails to detect when it must run `terraform init`. When
+that happens, you can force an init on all modules using `./vast-cloud init`.
+:::
+
 ### Start a VAST server (Fargate)
 
 Now that the AWS infrastructure is in place, you start the containers. To start
