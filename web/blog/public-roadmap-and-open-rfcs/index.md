@@ -20,8 +20,8 @@ As a community-first open-source project, we constantly strive for increasing
 transparency. Our long-term goal is establishing a fully open governance model.
 This will allow for a clear delineation of the open-source project and unbiased
 commercial offerings that we, the engineering team behind VAST at
-[Tenzir](https://tenzir.com), provides on top. Until we have bootstrapped
-ourselves and an active community, we aim for the right balanced between open
+[Tenzir](https://tenzir.com), provide on top. Until we have bootstrapped
+ourselves and an active community, we aim for the right balance between open
 and closed.
 
 One step in the direction of open is publishing our [roadmap][roadmap] and
@@ -45,7 +45,7 @@ Let's go through them one by one.
 Regarding audience, we want to avoid an overly narrow target group, as we are in
 phase of growth where breadth instead of depth is more important. Moreover, we
 gain more transparency if we can unveil all ongoing thrusts. Therefore, we want
-ot cover the full spectrum of personas, but make it possible for each individual
+to cover the full spectrum of personas, but make it possible for each individual
 type of persona to get a relevant view.
 
 Regarding interaction, we are actively looking for engagement. Throwing a
@@ -71,7 +71,7 @@ across multiple dimensions in a visually appealing way.
 
 ## Open RFCs
 
-The roadmap providing a lens into the short-term future. We don't want it to be
+The roadmap provides a lens into the short-term future. We don't want it to be
 just read-only. Fundamentally, we want to build something that our users love.
 We also want to tap into the full potential of our enthusiasts by making it
 possible to engage in technical depth with upcoming changes. Therefore, we are
@@ -89,8 +89,8 @@ import Template from '!!raw-loader!@site/../rfc/000-TEMPLATE.md';
 [RFC-001: Composable Pipelines](https://github.com/tenzir/vast/pull/2511) is an
 example instantiation of this template.
 
-When it comes to reviwing RFCs, we face biased governance as of today, given
-that Tenzir develops VAST. Rather than the Tenzir' engineering making acceptance
+When it comes to reviewing RFCs, we face biased governance as of today, given
+that Tenzir develops VAST. Rather than the Tenzir's engineering making acceptance
 decisions, we'd rather have an independent governing board. Until then, we
 perform all reviews fully in the open.
 
