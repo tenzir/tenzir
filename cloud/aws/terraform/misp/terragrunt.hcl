@@ -13,11 +13,8 @@ dependency "core_2" {
   mock_outputs = {
     fargate_task_execution_role_arn = "arn:aws:iam:::role/temporary-dummy-arn"
     fargate_cluster_name            = "dummy_name"
-    vast_server_domain_name         = "dummy.local"
     vast_vpc_id                     = "dummy_id"
-    vast_subnet_id                  = "dummy_id"
-    vast_client_security_group_id   = "dummy_id"
-    service_discov_namespace_id     = "dummy_id"
+    public_subnet_id                = "dummy_id"
   }
 }
 
@@ -53,6 +50,5 @@ inputs = {
   fargate_task_execution_role_arn = dependency.core_2.outputs.fargate_task_execution_role_arn
   fargate_cluster_name            = dependency.core_2.outputs.fargate_cluster_name
   vast_vpc_id                     = dependency.core_2.outputs.vast_vpc_id
-  vast_subnet_id                  = dependency.core_2.outputs.vast_subnet_id
-  service_discov_namespace_id     = dependency.core_2.outputs.service_discov_namespace_id
+  public_subnet_id                = dependency.core_2.outputs.public_subnet_id
 }

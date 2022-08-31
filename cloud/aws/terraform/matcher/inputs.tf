@@ -1,7 +1,7 @@
 variable "region_name" {}
 variable "fargate_cluster_name" {}
 variable "fargate_task_execution_role_arn" {}
-variable "vast_server_domain_name" {}
+variable "vast_server_hostname" {}
 variable "matcher_client_image" {}
 variable "vast_client_security_group_id" {}
 variable "vast_subnet_id" {}

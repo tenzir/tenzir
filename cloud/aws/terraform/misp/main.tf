@@ -43,14 +43,14 @@ resource "aws_ecs_task_definition" "fargate_task_def" {
 
 resource "aws_security_group" "service" {
   name        = "${module.env.module_name}-${local.name}-${module.env.stage}"
-  description = "Allow outbound access only"
+  description = "Allow local access"
   vpc_id      = var.vast_vpc_id
 
-  # TODO: make this more selective
+  # SSH tunnel
   ingress {
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
+    protocol    = "tcp"
+    from_port   = 2222
+    to_port     = 2222
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -59,26 +59,6 @@ resource "aws_security_group" "service" {
     from_port   = 0
     to_port     = 0
     cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_service_discovery_service" "fargate_svc" {
-  name = local.name
-
-  dns_config {
-    namespace_id = var.service_discov_namespace_id
-
-    dns_records {
-      ttl  = 5
-      type = "A"
-    }
-
-    routing_policy = "WEIGHTED"
-  }
-
-  # This health state is updated by ECS using container level health checks
-  health_check_custom_config {
-    failure_threshold = 1
   }
 }
 
@@ -94,14 +74,9 @@ resource "aws_ecs_service" "fargate_service" {
   launch_type                        = "FARGATE"
 
   network_configuration {
-    subnets          = [var.vast_subnet_id]
+    subnets          = [var.public_subnet_id]
     security_groups  = [aws_security_group.service.id]
-    assign_public_ip = false
-  }
-
-  service_registries {
-    registry_arn   = aws_service_discovery_service.fargate_svc.arn
-    container_name = local.misp_container_name
+    assign_public_ip = true
   }
 
   lifecycle {

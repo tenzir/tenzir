@@ -70,5 +70,6 @@ def pty_task(*args, **kwargs):
 
 # Re-export important classes to keep only one interface to PyInvoke
 
+Failure = invoke.Failure
 Exit = invoke.Exit
 Context = invoke.Context

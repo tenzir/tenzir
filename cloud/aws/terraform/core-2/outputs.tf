@@ -22,6 +22,10 @@ output "vast_subnet_id" {
   value = module.network.private_subnet_id
 }
 
+output "public_subnet_id" {
+  value = module.network.public_subnet_id
+}
+
 output "vast_client_security_group_id" {
   value = aws_security_group.vast_client.id
 }
@@ -38,8 +42,8 @@ output "vast_lambda_role_name" {
   value = module.vast_client.lambda_role_name
 }
 
-output "vast_server_domain_name" {
-  value = local.vast_server_domain_name
+output "vast_server_hostname" {
+  value = local.vast_server_hostname
 }
 
 output "service_discov_namespace_id" {

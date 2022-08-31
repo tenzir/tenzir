@@ -11,7 +11,7 @@ locals {
       volumesFrom  = []
       environment = [{
         name  = "VAST_ENDPOINT"
-        value = var.vast_server_domain_name
+        value = var.vast_server_hostname
         }, {
         name  = "QUEUE_URL"
         value = aws_sqs_queue.matched_events.url
