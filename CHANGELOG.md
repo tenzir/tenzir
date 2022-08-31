@@ -62,6 +62,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `rebuild` command, automatic rebuilds, and compaction are now much faster, and match the performance of the `import` command for building indexes.
   [#2515](https://github.com/tenzir/vast/pull/2515)
 
+- Fixed a race condition where the output of a partition transform could be reused before it was fully written to disk, for example when running `vast rebuild`.
+  [#2543](https://github.com/tenzir/vast/pull/2543)
+
 ## [v2.2.0][v2.2.0]
 
 ### Changes
