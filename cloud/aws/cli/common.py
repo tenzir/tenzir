@@ -1,6 +1,8 @@
 from functools import cache
+import sys
 from typing import Dict, List, Set
-from vast_invoke import Context, Exit
+from flags import TRACE
+from vast_invoke import Context, Exit, Failure
 import dynaconf
 import json
 import re
@@ -84,15 +86,27 @@ def tf_version(c: Context):
 
 
 def terraform_output(c: Context, step, key) -> str:
-    output = c.run(
-        f"terraform -chdir={TFDIR}/{step} output --raw {key}",
-        hide="out",
-        # avoid unintentionally capturing stdin
-        in_stream=False,
-    ).stdout
-    if "No outputs found" in output:
+    cmd = f"terraform -chdir={TFDIR}/{step} output --raw {key}"
+    try:
+        output = c.run(
+            cmd,
+            hide=True,
+            # avoid unintentionally capturing stdin
+            in_stream=False,
+        ).stdout
+        # `terraform output` sometimes raises errors, sometimes only prints
+        # warnings, according to the actual output state. Here, we streamline
+        # both cases into a single exit message.
+        if "No outputs found" in output:
+            raise Exit(output)
+    except Failure as e:
+        _, err = e.streams_for_display()
+        if TRACE:
+            print(cmd, file=sys.stderr)
+            print(err.strip(), file=sys.stderr)
         raise Exit(
-            f"The step '{step}' was not deployed or is improperly initialized (No outputs found)",
+            f"The step '{step}' was not deployed, is not up to date, "
+            + f"or is improperly initialized (Terraform output '{key}' not found)",
             code=1,
         )
     return output
@@ -214,6 +228,20 @@ class FargateService:
                 cluster=self.cluster, tasks=task_res["taskArns"]
             )["tasks"][0]
             return f"Desired status {desc['desiredStatus']} and current status {desc['lastStatus']}"
+
+    def describe_task(self):
+        """Describe the running tasks, erroring out if the state is unexpected"""
+        task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
+        nb_vast_tasks = len(task_res["taskArns"])
+        if nb_vast_tasks == 0:
+            raise Exit("No task")
+        if nb_vast_tasks > 1:
+            raise Exit("{nb_vast_tasks} tasks running")
+        else:
+            desc = aws("ecs").describe_tasks(
+                cluster=self.cluster, tasks=task_res["taskArns"]
+            )["tasks"][0]
+            return desc
 
     def start_service(self):
         """Start the service. Noop if it is already running"""

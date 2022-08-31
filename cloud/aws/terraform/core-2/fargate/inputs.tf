@@ -61,7 +61,7 @@ variable "service_discov_namespace_id" {
   description = "The id of the private service discovery dns namespace."
 }
 
-variable "security_group_id" {}
+variable "security_group_ids" {}
 
 locals {
   id_raw = "${var.name}-${module.env.stage}-${var.region_name}"

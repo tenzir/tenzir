@@ -1,0 +1,14 @@
+version: '3'
+services:
+  misp:
+    image: tenzir/vastcloud:misp
+    build:
+      context: ../../resources
+      dockerfile: ../docker/misp/misp.Dockerfile
+      args:
+        - VAST_MISP_VERSION
+  misp_proxy:
+    image: tenzir/vastcloud:misp_proxy
+    build:
+      context: ../../resources
+      dockerfile: ../docker/misp/misp_proxy.Dockerfile
