@@ -14,6 +14,10 @@ output "fargate_task_execution_role_arn" {
   value = aws_iam_role.fargate_task_execution_role.arn
 }
 
+output "vast_vpc_id" {
+  value = module.network.new_vpc_id
+}
+
 output "vast_subnet_id" {
   value = module.network.private_subnet_id
 }
@@ -36,4 +40,8 @@ output "vast_lambda_role_name" {
 
 output "vast_server_domain_name" {
   value = local.vast_server_domain_name
+}
+
+output "service_discov_namespace_id" {
+  value = aws_service_discovery_private_dns_namespace.main.id
 }
