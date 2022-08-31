@@ -25,13 +25,14 @@ locals {
         hostPort      = 80
         protocol      = "tcp"
       }],
-      mountPoints = [
-        {
-          sourceVolume  = "files",
-          containerPath = "/var/www/MISP/app/files",
-          readOnly      = false
-        }
-      ]
+      # TODO re-enable this once we figure out how to map the right uid
+      # mountPoints = [
+      #   {
+      #     sourceVolume  = "files",
+      #     containerPath = "/var/www/MISP/app/files",
+      #     readOnly      = false
+      #   }
+      # ]
       user = "${local.misp_uid}:${local.misp_gid}"
       environment = [{
         name  = "HOSTNAME"
