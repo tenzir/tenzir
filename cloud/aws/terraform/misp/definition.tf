@@ -32,7 +32,7 @@ locals {
           readOnly      = false
         }
       ]
-      user      = "${local.misp_uid}:${local.misp_gid}"
+      user = "${local.misp_uid}:${local.misp_gid}"
       environment = [{
         name  = "HOSTNAME"
         value = "http://${local.placeholder_hostname}"
@@ -116,7 +116,7 @@ locals {
       capabilities = {
         add = ["SYS_NICE"]
       }
-      user      = "${local.mysql_uid}:${local.mysql_gid}"
+      user = "${local.mysql_uid}:${local.mysql_gid}"
       mountPoints = [
         {
           sourceVolume  = "mysql",
