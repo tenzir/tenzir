@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.3.0-rc3][v2.3.0-rc3]
+## [v2.3.0-rc4][v2.3.0-rc4]
 
 ### Changes
 
@@ -55,6 +55,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - Partitions now fail early when their stores fail to load from disk, detailing what went wrong in an error message.
   [#2507](https://github.com/tenzir/vast/pull/2507)
+
+- We changed the way `vast-cloud` is loading its cloud plugins to make it more explicit. This avoids inconsitent defaults assigned to variables when using core commands on specific plugins.
+  [#2510](https://github.com/tenzir/vast/pull/2510)
 
 - The `rebuild` command, automatic rebuilds, and compaction are now much faster, and match the performance of the `import` command for building indexes.
   [#2515](https://github.com/tenzir/vast/pull/2515)
@@ -1923,7 +1926,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.3.0-rc3]: https://github.com/tenzir/vast/releases/tag/v2.3.0-rc3
+[v2.3.0-rc4]: https://github.com/tenzir/vast/releases/tag/v2.3.0-rc4
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
 [v2.0.0]: https://github.com/tenzir/vast/releases/tag/v2.0.0
