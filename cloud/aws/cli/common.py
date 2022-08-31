@@ -6,7 +6,6 @@ import json
 import re
 import os
 import time
-import subprocess
 import boto3.session
 import boto3
 import botocore.client
@@ -137,16 +136,6 @@ def load_cmd(cmd: str) -> bytes:
         return aws("s3").get_object(Bucket=chunks[0], Key=chunks[1])["Body"].read()
     else:
         return cmd.encode()
-
-
-def default_vast_version():
-    """If VAST_VERSION is not defined, use latest version"""
-    # dynaconf cannot run default lazily
-    if "VAST_VERSION" in os.environ:
-        return
-    cmd = "git describe --match='v[0-9]*' --abbrev=0 --exclude='*-rc*'"
-    args = ["bash", "-c", cmd]
-    return subprocess.check_output(args, text=True).rstrip()
 
 
 def parse_env(env: List[str]) -> Dict[str, str]:

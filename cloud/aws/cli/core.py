@@ -7,7 +7,6 @@ import json
 import io
 from common import (
     AWS_REGION,
-    RESOURCEDIR,
     FargateService,
     active_modules,
     clean_modules,
@@ -17,7 +16,6 @@ from common import (
     REPOROOT,
     DOCKERDIR,
     AWS_REGION_VALIDATOR,
-    default_vast_version,
     load_cmd,
     parse_env,
     terraform_output,
@@ -43,7 +41,7 @@ VALIDATORS = [
     dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
     dynaconf.Validator("VAST_IMAGE", default="tenzir/vast"),
-    dynaconf.Validator("VAST_VERSION", default=default_vast_version()),
+    dynaconf.Validator("VAST_VERSION", default="latest"),
     dynaconf.Validator(
         "VAST_SERVER_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]
     ),
@@ -339,12 +337,18 @@ def destroy(c, auto_approve=False):
 
     Note that if a module was deployed and the associated plugin was removed
     from the config afterwards, it will not be destroyed"""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    serviceArns = aws("ecs").list_services(cluster=cluster, maxResults=100)[
-        "serviceArns"
-    ]
-    for serviceArn in serviceArns:
-        aws("ecs").update_service(cluster=cluster, service=serviceArn, desiredCount=0)
+    try:
+        cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+        serviceArns = aws("ecs").list_services(cluster=cluster, maxResults=100)[
+            "serviceArns"
+        ]
+        for serviceArn in serviceArns:
+            aws("ecs").update_service(
+                cluster=cluster, service=serviceArn, desiredCount=0
+            )
+    except Exception as e:
+        print(e)
+        print("Could not stop services, continuing with destroy...")
     c.run(
         f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
     )

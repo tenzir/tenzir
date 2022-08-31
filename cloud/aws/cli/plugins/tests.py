@@ -314,10 +314,6 @@ class Common(unittest.TestCase):
         res = common.tf_version(self.c)
         self.assertRegex(res, r"^\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
-    def test_default_vast_version(self):
-        res = common.default_vast_version()
-        self.assertRegex(res, r"^v\d{1,3}\.\d{1,3}\.\d{1,3}$")
-
     def test_parse_env(self):
         res = common.parse_env(["var1=val1", "var2=val2"])
         self.assertEqual(res, {"var1": "val1", "var2": "val2"})
