@@ -154,5 +154,14 @@ EXPOSE 42000/tcp
 WORKDIR /var/lib/vast
 VOLUME ["/var/lib/vast"]
 
+# Every 15 seconds, run the least expensive remote request there is: the status
+# request limited to the getting the remote version. We only start this after 2
+# seconds to give the VAST server some time to start. The health check is
+# primarily useful container orchestration, where it allows for detecting (1)
+# when a VAST server can first be connected to and (2) when a VAST server is
+# unresponsive.
+HEALTHCHECK --start-period=2s --interval=15s --timeout=15s \
+  CMD vast status version || exit 1
+
 ENTRYPOINT ["vast"]
 CMD ["--help"]
