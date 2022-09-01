@@ -44,7 +44,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST can now store data in segments bigger than 2GiB in size each.
   [#2449](https://github.com/tenzir/vast/pull/2449)
 
-- VAST can now store column indices that are bigger than 2GiB.
+- VAST can now store column indexes that are bigger than 2GiB.
   [#2449](https://github.com/tenzir/vast/pull/2449)
 
 - VAST no longer occasionally prints warnings about no longer available partitions when queries run concurrently to imports.
