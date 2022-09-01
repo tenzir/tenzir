@@ -9,6 +9,7 @@
   - [Anthony Verez](https://github.com/netantho)
   - [Dominik Lohmann](https://github.com/dominiklohmann)
   - [Rémi Dettai](https://github.com/rdettai)
+  - [Thomas Peiselt](https://github.com/dispanser)
 - **Discussion**: [PR #2511](https://github.com/tenzir/vast/pull/2511)
 
 ## Overview
@@ -233,7 +234,7 @@ data. Otherwise data races may occur. Consequently, we need transactional
 interface (ACID) to support this operation.
 
 As long as VAST owns the underlying data (i.e., only VAST is allowed to make
-changes), VAST can already mutate of data at rest. [Spatial
+changes), VAST can already mutate data at rest. [Spatial
 compaction][mutate-at-rest] uses a pre-defined disk quota as trigger to apply
 pipelines to a subset of to-be-transformed data. After VAST applies the
 pipeline, VAST optionally removes the original data in an atomic fashion.
