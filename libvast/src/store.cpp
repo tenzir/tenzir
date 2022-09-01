@@ -235,6 +235,7 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
                       system::filesystem_actor filesystem,
                       system::accountant_actor accountant,
                       std::filesystem::path path, std::string store_type) {
+  const auto start = std::chrono::steady_clock::now();
   // Configure our actor state.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
@@ -247,8 +248,14 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
     ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
               self->state.path)
     .await(
-      [self](chunk_ptr& chunk) {
+      [self, start](chunk_ptr& chunk) {
         auto load_error = self->state.store->load(std::move(chunk));
+        auto startup_duration = std::chrono::steady_clock::now() - start;
+        self->send(self->state.accountant, atom::metrics_v,
+                   "passive-store.init.runtime", startup_duration,
+                   system::metrics_metadata{
+                     {"store-type", self->state.store_type},
+                   });
         if (load_error)
           self->quit(std::move(load_error));
       },
