@@ -58,7 +58,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   VAST_DEBUG("client connects to remote node with id {}", id);
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
-    node_endpoint.host = "localhost";
+    node_endpoint.host = defaults::system::endpoint_host;
   VAST_INFO("client connects to VAST node at {}", endpoint_str);
   auto result = [&]() -> caf::expected<node_actor> {
     if (self->system().has_openssl_manager()) {
