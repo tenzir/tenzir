@@ -46,6 +46,15 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
   return expr;
 }
 
+template <class... Args>
+void send_to_source(caf::actor& source, Args&&... args) {
+  static_assert(
+    caf::detail::tl_count_type<source_actor::signatures,
+                               caf::reacts_to<std::decay_t<Args>...>>::value,
+    "Args are incompatible with source actor's API");
+  caf::anon_send(source, std::forward<Args>(args)...);
+}
+
 } // namespace
 
 caf::expected<caf::actor>
@@ -145,11 +154,11 @@ make_source(caf::actor_system& sys, const std::string& format,
     auto expr = parse_expression(inv.arguments.begin(), inv.arguments.end());
     if (!expr)
       return expr.error();
-    anon_send(src, std::move(*expr));
+    send_to_source(src, atom::normalize_v, std::move(*expr));
   }
   // Connect source to importer.
   VAST_DEBUG("{} connects to {}", inv.full_name, VAST_ARG(importer));
-  anon_send(src, importer);
+  send_to_source(src, importer);
   return src;
 }
 

@@ -49,7 +49,6 @@ bool push_to(caf::broadcast_downstream_manager<T>& manager,
   return false;
 }
 
-} // namespace
 
 void store_or_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
@@ -60,7 +59,7 @@ void store_or_fulfill(
   } else {
     auto* path_data = std::get_if<partition_transformer_state::path_data>(
       &self->state.persist);
-    VAST_ASSERT(path_data != nullptr, "unexpected variant content");
+    VAST_ASSERT_CHEAP(path_data != nullptr, "unexpected variant content");
     self->state.fulfill(self, std::move(stream_data), std::move(*path_data));
   }
 }
@@ -74,10 +73,46 @@ void store_or_fulfill(
   } else {
     auto* stream_data = std::get_if<partition_transformer_state::stream_data>(
       &self->state.persist);
-    VAST_ASSERT(stream_data != nullptr, "unexpected variant content");
+    VAST_ASSERT_CHEAP(stream_data != nullptr, "unexpected variant content");
     self->state.fulfill(self, std::move(*stream_data), std::move(path_data));
   }
 }
+
+void quit_or_stall(
+  partition_transformer_actor::stateful_pointer<partition_transformer_state>
+    self,
+  partition_transformer_state::transformer_is_finished&& result) {
+  using stores_are_finished = partition_transformer_state::stores_are_finished;
+  auto& shutdown_state = self->state.shutdown_state;
+  if (std::holds_alternative<std::monostate>(shutdown_state)) {
+    shutdown_state = std::move(result);
+  } else {
+    VAST_ASSERT_CHEAP(
+      std::holds_alternative<stores_are_finished>(shutdown_state),
+      "unexpected variant content");
+    result.promise.deliver(std::move(result.result));
+    self->quit();
+  }
+}
+
+void quit_or_stall(
+  partition_transformer_actor::stateful_pointer<partition_transformer_state>
+    self,
+  partition_transformer_state::stores_are_finished&& result) {
+  using transformer_is_finished
+    = partition_transformer_state::transformer_is_finished;
+  auto& shutdown_state = self->state.shutdown_state;
+  if (std::holds_alternative<std::monostate>(shutdown_state)) {
+    shutdown_state = std::move(result);
+  } else {
+    auto* finished = std::get_if<transformer_is_finished>(&shutdown_state);
+    VAST_ASSERT_CHEAP(finished != nullptr, "unexpected variant content");
+    finished->promise.deliver(std::move(finished->result));
+    self->quit();
+  }
+}
+
+} // namespace
 
 active_partition_state::serialization_data&
 partition_transformer_state::create_or_get_partition(const table_slice& slice) {
@@ -192,8 +227,12 @@ void partition_transformer_state::fulfill(
       stream_data.partition_chunks->size(),
       [self,
        promise](std::vector<augmented_partition_synopsis>&& result) mutable {
-        promise.deliver(std::move(result));
-        self->quit();
+        // We're done now, but we may still need to wait for the stores.
+        quit_or_stall(self,
+                      partition_transformer_state::transformer_is_finished{
+                        .promise = std::move(promise),
+                        .result = std::move(result),
+                      });
       },
       [self, promise](std::vector<augmented_partition_synopsis>&&,
                       caf::error&& e) mutable {
@@ -251,6 +290,18 @@ partition_transformer_actor::behavior_type partition_transformer(
   // transform can be an aggregate transform here
   self->state.transform = std::move(transform);
   self->state.store_id = std::move(store_id);
+  self->set_down_handler([self](caf::down_msg& msg) {
+    // This is currently safe because we do all increases to
+    // `launched_stores` within the same continuation, but when
+    // that changes we need to take a bit more care here to avoid
+    // a race.
+    ++self->state.stores_finished;
+    VAST_DEBUG("{} sees {} finished for a total of {}/{} stores", *self,
+               msg.source, self->state.stores_finished,
+               self->state.stores_launched);
+    if (self->state.stores_finished >= self->state.stores_launched)
+      quit_or_stall(self, partition_transformer_state::stores_are_finished{});
+  });
   return {
     [self](vast::table_slice& slice) {
       update_statistics(self->state.stats_in, slice);
@@ -340,6 +391,8 @@ partition_transformer_actor::behavior_type partition_transformer(
           store_or_fulfill(self, std::move(stream_data));
           return {};
         }
+        self->monitor(builder_and_header->store_builder);
+        ++self->state.stores_launched;
         partition_data.store_header = builder_and_header->header;
         // Empirically adding the outbound path and pushing data to it
         // need to be separated by a continuation, although I'm not
@@ -375,10 +428,17 @@ partition_transformer_actor::behavior_type partition_transformer(
         mutable_synopsis.shrink();
         mutable_synopsis.offset = 0;
         mutable_synopsis.events = data.events;
-        // Create the value indices.
         for (auto& [qf, idx] :
-             self->state.partition_buildup.at(data.id).indexers)
-          data.indexer_chunks.emplace_back(qf.name(), chunkify(idx));
+             self->state.partition_buildup.at(data.id).indexers) {
+          auto chunk = chunk_ptr{};
+          // Note that `chunkify(nullptr)` return a chunk of size > 0.
+          if (idx)
+            chunk = chunkify(idx);
+          // We defensively treat every empty chunk as non-existing.
+          if (chunk && chunk->size() == 0)
+            chunk = nullptr;
+          data.indexer_chunks.emplace_back(qf.name(), chunk);
+        }
       }
       detail::shutdown_stream_stage(self->state.stage);
       auto stream_data = partition_transformer_state::stream_data{
@@ -392,7 +452,6 @@ partition_transformer_actor::behavior_type partition_transformer(
       [&] {
         for (auto& [layout, partition_data] :
              self->state.data) { // Pack partitions
-          // flatbuffers::FlatBufferBuilder builder;
           auto indexers_it
             = self->state.partition_buildup.find(partition_data.id);
           if (indexers_it == self->state.partition_buildup.end()) {

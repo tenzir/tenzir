@@ -19,6 +19,16 @@ import invoke
 import flags
 
 
+def update(config):
+    """Configs updates that should always apply"""
+    # increase input read speed, at the expense of CPU useage
+    # the read should be blocking but
+    config.runners["local"].input_sleep = 0.0001
+    # forward trace flags
+    if flags.TRACE:
+        config.run.env[flags.TRACE_FLAG_VAR] = "1"
+
+
 class _Task(invoke.Task):
     """PyInvoke Task that supports PTY checking calls"""
 
@@ -28,8 +38,7 @@ class _Task(invoke.Task):
         else:
             # specify no PTY for recursive calls to the CLI
             args[0].config.run.env[flags.NO_PTY_FLAG_VAR] = "1"
-            if flags.TRACE:
-                args[0].config.run.env[flags.TRACE_FLAG_VAR] = "1"
+            update(args[0].config)
             return super().__call__(*args, **kwargs)
 
 
@@ -43,8 +52,7 @@ class _PTYTask(invoke.Task):
             return ""
         else:
             args[0].config.run.pty = True
-            if flags.TRACE:
-                args[0].config.run.env[flags.TRACE_FLAG_VAR] = "1"
+            update(args[0].config)
             return super().__call__(*args, **kwargs)
 
 

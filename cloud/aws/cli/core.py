@@ -1,4 +1,5 @@
-from vast_invoke import pty_task, task, Context, Exit
+from typing import Tuple
+from vast_invoke import Context, pty_task, task, Exit
 import dynaconf
 import time
 import base64
@@ -6,15 +7,16 @@ import json
 import io
 from common import (
     AWS_REGION,
-    COMMON_VALIDATORS,
     RESOURCEDIR,
+    FargateService,
+    active_modules,
     clean_modules,
     conf,
     TFDIR,
-    AWS_REGION_VALIDATOR,
     auto_app_fmt,
     REPOROOT,
     DOCKERDIR,
+    AWS_REGION_VALIDATOR,
     default_vast_version,
     load_cmd,
     parse_env,
@@ -22,9 +24,21 @@ from common import (
     aws,
 )
 
+# Validate and provide defaults for the terraform state backend configuration
+TF_BACKEND_VALIDATORS = [
+    dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
+    dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
+    # if we use tf cloud as backend, the right variables must be configured
+    dynaconf.Validator("TF_STATE_BACKEND", ne="cloud")
+    | (
+        dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne="")
+        & dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne="")
+    ),
+]
+
 
 VALIDATORS = [
-    *COMMON_VALIDATORS,
+    *TF_BACKEND_VALIDATORS,
     AWS_REGION_VALIDATOR,
     dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
@@ -45,8 +59,9 @@ CMD_HELP = {
 }
 
 
-##  Aliases
-EXIT_CODE_VAST_SERVER_NOT_RUNNING = 8
+def active_include_dirs(c: Context) -> str:
+    """The --include-dir arguments for modules activated and core modules"""
+    return " ".join([f"--terragrunt-include-dir={mod}" for mod in active_modules(c)])
 
 
 ## Tasks
@@ -80,9 +95,11 @@ def docker_login(c):
 @task
 def init_step(c, step):
     """Manually run terraform init on a specific step"""
+    mods = active_modules(c)
+    if step not in mods:
+        raise Exit(f"Step {step} not part of the active modules {mods}")
     c.run(
         f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
-        env=conf(VALIDATORS),
     )
 
 
@@ -92,8 +109,7 @@ def init(c, clean=False):
     if clean:
         clean_modules()
     c.run(
-        f"terragrunt run-all init --terragrunt-working-dir {TFDIR}",
-        env=conf(VALIDATORS),
+        f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
     )
 
 
@@ -103,26 +119,26 @@ def deploy_step(c, step, auto_approve=False):
     init_step(c, step)
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
-        env=conf(VALIDATORS),
     )
 
 
 @pty_task
 def deploy(c, auto_approve=False):
-    """One liner build and deploy of the stack to AWS"""
-    deploy_step(c, "core-1", auto_approve)
-    deploy_step(c, "core-2", auto_approve)
+    """One liner build and deploy of the stack to AWS with all the modules associated with active plugins"""
+    c.run(
+        f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+    )
 
 
 @task(autoprint=True)
-def current_image(c, repo_arn):
+def current_image(c, repo_arn, type):
     """Get the current Lambda image URI. In case of failure, returns the error message instead of the URI."""
     try:
         tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
     except Exception as e:
         return str(e)
     current = next(
-        (tag["Value"] for tag in tags if tag["Key"] == "current"),
+        (tag["Value"] for tag in tags if tag["Key"] == f"current-{type}"),
         "current-image-not-defined",
     )
     return current
@@ -131,11 +147,11 @@ def current_image(c, repo_arn):
 @task(help={"type": "Can be either 'lambda' or 'fargate'"})
 def deploy_image(c, type):
     """Build and push the image, fails if core-1 is not deployed"""
-    image_url = terraform_output(c, "core-1", f"vast_{type}_repository_url")
-    repo_arn = terraform_output(c, "core-1", f"vast_{type}_repository_arn")
+    image_url = terraform_output(c, "core-1", f"vast_repository_url")
+    repo_arn = terraform_output(c, "core-1", f"vast_repository_arn")
     # get the digest of the current image
     try:
-        current_img = current_image(c, repo_arn)
+        current_img = current_image(c, repo_arn, type)
         c.run(f"docker pull {current_img}")
         old_digest = c.run(
             f"docker inspect --format='{{{{.RepoDigests}}}}' {current_img}",
@@ -145,7 +161,7 @@ def deploy_image(c, type):
         old_digest = "current-image-not-found"
     # build the image and get the new digest
     base_image = conf(VALIDATORS)["VAST_IMAGE"]
-    image_tag = int(time.time())
+    image_tag = f"{type}-{int(time.time())}"
     version = conf(VALIDATORS)["VAST_VERSION"]
     if version == "build":
         c.run(f"docker build -t {base_image}:{image_tag} {REPOROOT}")
@@ -170,67 +186,39 @@ def deploy_image(c, type):
     c.run(f"docker push {image_url}:{image_tag}")
     aws("ecr").tag_resource(
         resourceArn=repo_arn,
-        tags=[{"Key": "current", "Value": f"{image_url}:{image_tag}"}],
+        tags=[{"Key": f"current-{type}", "Value": f"{image_url}:{image_tag}"}],
     )
 
 
-@task(autoprint=True)
-def get_vast_server(c, max_wait_time_sec=0):
-    """Get the task id of the VAST server. If no server is running, it waits
-    until max_wait_time_sec for a new server to be started."""
+def service_outputs(c: Context) -> Tuple[str, str, str]:
     cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     family = terraform_output(c, "core-2", "vast_task_family")
-    start_time = time.time()
-    while True:
-        task_res = aws("ecs").list_tasks(family=family, cluster=cluster)
-        nb_vast_tasks = len(task_res["taskArns"])
-        if nb_vast_tasks == 1:
-            task_id = task_res["taskArns"][0].split("/")[-1]
-            return task_id
-        if nb_vast_tasks > 1:
-            raise Exit(f"{nb_vast_tasks} VAST servers running", 1)
-        if nb_vast_tasks == 0 and time.time() - start_time > max_wait_time_sec:
-            raise Exit("No VAST server running", EXIT_CODE_VAST_SERVER_NOT_RUNNING)
-        time.sleep(1)
+    service_name = terraform_output(c, "core-2", "vast_server_service_name")
+    return (cluster, service_name, family)
+
+
+@task
+def vast_server_status(c):
+    """Get the status of the VAST server"""
+    print(FargateService(*service_outputs(c)).get_task_status())
 
 
 @task
 def start_vast_server(c):
     """Start the VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    service_name = terraform_output(c, "core-2", "vast_service_name")
-    aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=1)
-    task_id = get_vast_server(c, max_wait_time_sec=120)
-    print(f"Started task {task_id}")
-
-
-def stop_vast_task(c):
-    "Stop the current running VAST Fargate Task"
-    task_id = get_vast_server(c)
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    aws("ecs").stop_task(task=task_id, cluster=cluster)
-    return task_id
+    FargateService(*service_outputs(c)).start_service()
 
 
 @task
 def stop_vast_server(c):
     """Stop the VAST server instance"""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    service_name = terraform_output(c, "core-2", "vast_service_name")
-    aws("ecs").update_service(cluster=cluster, service=service_name, desiredCount=0)
-    task_id = stop_vast_task(c)
-    print(f"Stopped task {task_id}")
+    FargateService(*service_outputs(c)).stop_service()
 
 
 @task
 def restart_vast_server(c):
     """Stop the running VAST server Fargate task, the service starts a new one"""
-    task_id = stop_vast_task(c)
-    print(f"Stopped task {task_id}")
-    # 120 seconds corresponding to the task stopTimeout grace period
-    # + 120 seconds for the new task to start
-    task_id = get_vast_server(c, max_wait_time_sec=240)
-    print(f"Started task {task_id}")
+    FargateService(*service_outputs(c)).restart_service()
 
 
 def print_lambda_output(json_response: str, json_output: bool):
@@ -283,7 +271,7 @@ def run_lambda(c, cmd, env=[], json_output=False):
 @pty_task(help=CMD_HELP, iterable=["env"])
 def execute_command(c, cmd="/bin/bash", env=[]):
     """Run ad-hoc or interactive commands from the VAST server Fargate task"""
-    task_id = get_vast_server(c)
+    task_id = FargateService(*service_outputs(c)).get_task_id()
     cluster = terraform_output(c, "core-2", "fargate_cluster_name")
     # if we are not running the default interactive shell, encode the command to avoid escaping issues
     buf = ""
@@ -310,19 +298,21 @@ def destroy_step(c, step, auto_approve=False):
     init_step(c, step)
     c.run(
         f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
-        env=conf(VALIDATORS),
     )
 
 
 @pty_task
 def destroy(c, auto_approve=False):
-    """Tear down the entire terraform stack"""
-    try:
-        stop_vast_server(c)
-    except Exception as e:
-        print(str(e))
-        print("Failed to stop tasks. Continuing destruction...")
+    """Tear down the entire terraform stack with all the active plugins
+
+    Note that if a module was deployed and the associated plugin was removed
+    from the config afterwards, it will not be destroyed"""
+    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+    serviceArns = aws("ecs").list_services(cluster=cluster, maxResults=100)[
+        "serviceArns"
+    ]
+    for serviceArn in serviceArns:
+        aws("ecs").update_service(cluster=cluster, service=serviceArn, desiredCount=0)
     c.run(
-        f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}",
-        env=conf(VALIDATORS),
+        f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
     )

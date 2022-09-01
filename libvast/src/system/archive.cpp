@@ -45,7 +45,7 @@ void archive_state::send_report() {
   }
 #endif
   measurement = vast::system::measurement{};
-  self->send(accountant, std::move(r));
+  self->send(accountant, atom::metrics_v, std::move(r));
 }
 
 std::unique_ptr<segment_store::lookup> archive_state::next_session() {
@@ -236,7 +236,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
     [](caf::stream<table_slice>) -> caf::inbound_stream_slot<table_slice> {
       die("cannot add new events to legacy archive");
     },
-    [self](accountant_actor accountant) {
+    [self](atom::set, accountant_actor accountant) {
       namespace defs = defaults::system;
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());

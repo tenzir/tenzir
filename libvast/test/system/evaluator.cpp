@@ -59,7 +59,7 @@ ids select(const counts& xs, curried_predicate pred) {
 // Dummy actor representing an INDEXER for field `x`.
 vast::system::indexer_actor::behavior_type dummy_indexer(counts xs) {
   return {
-    [xs = std::move(xs)](curried_predicate pred) {
+    [xs = std::move(xs)](atom::evaluate, curried_predicate pred) {
       return select(xs, pred);
     },
     [](atom::shutdown) {

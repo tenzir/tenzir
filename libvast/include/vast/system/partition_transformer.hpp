@@ -30,16 +30,19 @@ namespace vast::system {
 struct partition_transformer_state {
   static constexpr const char* name = "partition-transformer";
 
+  using result_type = std::vector<augmented_partition_synopsis>;
+  using promise_type = caf::typed_response_promise<result_type>;
+  using partition_tuple = std::tuple<vast::uuid, vast::type, chunk_ptr>;
+  using synopsis_tuple = std::tuple<vast::uuid, chunk_ptr>;
+
   struct stream_data {
-    caf::expected<std::vector<std::tuple<vast::uuid, vast::type, chunk_ptr>>>
-      partition_chunks = caf::no_error;
-    caf::expected<std::vector<std::tuple<vast::uuid, chunk_ptr>>> synopsis_chunks
+    caf::expected<std::vector<partition_tuple>> partition_chunks
       = caf::no_error;
+    caf::expected<std::vector<synopsis_tuple>> synopsis_chunks = caf::no_error;
   };
 
   struct path_data {
-    caf::typed_response_promise<std::vector<augmented_partition_synopsis>> promise
-      = {};
+    promise_type promise = {};
   };
 
   partition_transformer_state() = default;
@@ -147,6 +150,21 @@ struct partition_transformer_state {
   /// has arrived. Depending on what happens first, a different set of
   /// variables need to be stored in the meantime.
   std::variant<std::monostate, stream_data, path_data> persist;
+
+  /// Number of stores launched and finished.
+  size_t stores_launched = 0ull;
+  size_t stores_finished = 0ull;
+
+  struct stores_are_finished {};
+  struct transformer_is_finished {
+    promise_type promise;
+    result_type result;
+  };
+
+  /// This actor shuts down when both all stores it spawned have shut down,
+  /// and its own result is ready.
+  std::variant<std::monostate, stores_are_finished, transformer_is_finished>
+    shutdown_state;
 };
 
 /// Spawns a PARTITION TRANSFORMER actor with the given parameters.

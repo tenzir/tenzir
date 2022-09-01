@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <vast/fbs/segmented_file.hpp>
 #include <vast/fbs/synopsis.hpp>
 
 #include <filesystem>
@@ -39,12 +40,13 @@ struct formatting_options {
 
 // Options specific to printing partitions.
 struct partition_options {
+  bool print_header = true; // TODO: Expose as CLI option
   std::vector<std::string> expand_indexes = {};
 };
 
 // Options specific to printing segments.
 struct segment_options {
-  bool print_header = false;
+  bool print_header = false; // TODO: Expose as CLI option
   bool print_contents = true;
 };
 
@@ -79,5 +81,7 @@ void print_segment(const std::filesystem::path&, indentation&, const options&);
 // Helpers for internal flatbuffer structs.
 void print_synopsis(const vast::fbs::synopsis::LegacySynopsis* synopsis,
                     indentation&, const options&);
+void print_segmented_file_header(const vast::fbs::SegmentedFileHeader* header,
+                                 indentation&, const options&);
 
 } // namespace lsvast

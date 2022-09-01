@@ -72,6 +72,7 @@ jobs:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
+      VAST_CLOUD_PLUGINS: "workbucket,tests,tfcloud"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -95,15 +96,15 @@ jobs:
       - name: Deploy
         run: ./vast-cloud deploy --auto-approve
 
-      - name: Deploy bucket
-        run: ./vast-cloud workbucket.deploy --auto-approve
-
       - name: Run test playbook
         run: |
           ./vast-cloud tests.run
 
       - name: Init clean
         run: ./vast-cloud init --clean
+
+      - name: Deploy step (noop)
+        run: ./vast-cloud deploy-step --step=workbucket --auto-approve
 
       - name: Run test playbook after init
         run: |

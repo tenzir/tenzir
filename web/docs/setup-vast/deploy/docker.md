@@ -1,3 +1,7 @@
+---
+sidebar_position: 0
+---
+
 # Docker
 
 Our Docker image contains a dynamic of VAST build with plugins as shared

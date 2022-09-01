@@ -355,38 +355,43 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         st.mgr->add_outbound_path(self->current_sender(),
                                   std::make_tuple(std::string{"accountant"}));
     },
-    [self](const std::string& key, duration value, metrics_metadata& metadata) {
+    [self](atom::metrics, const std::string& key, duration value,
+           metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(self->current_sender()->id(), key, value, metadata,
                           {});
     },
-    [self](const std::string& key, time value, metrics_metadata& metadata) {
+    [self](atom::metrics, const std::string& key, time value,
+           metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(self->current_sender()->id(), key, value, metadata,
                           {});
     },
-    [self](const std::string& key, integer value, metrics_metadata& metadata) {
+    [self](atom::metrics, const std::string& key, integer value,
+           metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(self->current_sender()->id(), key,
                           detail::narrow_cast<double>(value.value), metadata,
                           {});
     },
-    [self](const std::string& key, count value, metrics_metadata& metadata) {
+    [self](atom::metrics, const std::string& key, count value,
+           metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(self->current_sender()->id(), key,
                           detail::narrow_cast<double>(value), metadata, {});
     },
-    [self](const std::string& key, real value, metrics_metadata& metadata) {
+    [self](atom::metrics, const std::string& key, real value,
+           metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(self->current_sender()->id(), key, value, metadata,
                           {});
     },
-    [self](const report& r) {
+    [self](atom::metrics, const report& r) {
       VAST_TRACE_SCOPE("{} received a report from {}", *self,
                        self->current_sender());
       time ts = std::chrono::system_clock::now();
@@ -398,7 +403,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         caf::visit(f, value);
       }
     },
-    [self](const performance_report& r) {
+    [self](atom::metrics, const performance_report& r) {
       VAST_TRACE_SCOPE("{} received a performance report from {}", *self,
                        self->current_sender());
       time ts = std::chrono::system_clock::now();

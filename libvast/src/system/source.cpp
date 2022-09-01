@@ -38,6 +38,18 @@
 
 namespace vast::system {
 
+namespace {
+template <class... Args>
+void send_to_accountant(caf::scheduled_actor* self, accountant_actor accountant,
+                        Args&&... args) {
+  static_assert(
+    caf::detail::tl_count_type<accountant_actor::signatures,
+                               caf::reacts_to<std::decay_t<Args>...>>::value,
+    "Args are incompatible with accountant actor's API");
+  caf::unsafe_send_as(self, accountant, std::forward<Args>(args)...);
+}
+} // namespace
+
 void source_state::initialize(const type_registry_actor& type_registry,
                               std::string type_filter) {
   // Figure out which modules we need.
@@ -92,7 +104,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
 void source_state::send_report() {
   // Send the reader-specific status report to the accountant.
   if (auto status = reader->status(); !status.data.empty())
-    caf::unsafe_send_as(self, accountant, std::move(status));
+    send_to_accountant(self, accountant, atom::metrics_v, std::move(status));
   // Send the source-specific performance metrics to the accountant.
   auto r = performance_report{{{std::string{name}, metrics}}};
   for (const auto& [key, m, _] : r.data) {
@@ -111,12 +123,12 @@ void source_state::send_report() {
     }
   }
   metrics = measurement{};
-  caf::unsafe_send_as(self, accountant, std::move(r));
+  send_to_accountant(self, accountant, atom::metrics_v, std::move(r));
   // Send the per-event counters to the accountant.
   for (auto&& [name, count] : std::exchange(event_counters, {}))
-    caf::unsafe_send_as(self, accountant,
-                        fmt::format("{}.events.{}", reader->name(), name),
-                        count, metrics_metadata{});
+    send_to_accountant(self, accountant, atom::metrics_v,
+                       fmt::format("{}.events.{}", reader->name(), name), count,
+                       metrics_metadata{});
 }
 
 void source_state::filter_and_push(
@@ -197,7 +209,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     // init
     [self](caf::unit_t&) {
       caf::timestamp now = std::chrono::system_clock::now();
-      self->send(self->state.accountant, "source.start", now,
+      self->send(self->state.accountant, atom::metrics_v, "source.start", now,
                  metrics_metadata{});
     },
     // get next element
@@ -309,7 +321,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         return err;
       return caf::unit;
     },
-    [self](expression& expr) -> caf::result<void> {
+    [self](atom::normalize, expression& expr) -> caf::result<void> {
       auto normalized_expr = normalize_and_validate(std::move(expr));
       if (!normalized_expr) {
         return caf::make_error(ec::invalid_argument,

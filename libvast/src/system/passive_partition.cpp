@@ -227,22 +227,30 @@ partition_chunk::get_statistics(vast::chunk_ptr chunk) {
                chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
     // For partitions with a SegmentedFileHeader at the root, we know
     // they must be at least version 1 and thus have a fixed schema.
-    auto header = fbs::GetSegmentedFileHeader(chunk->data());
+    auto const* header = fbs::GetSegmentedFileHeader(chunk->data());
     if (header->header_type() != fbs::segmented_file::SegmentedFileHeader::v0)
-      return caf::make_error(ec::format_error,
-                             fmt::format("with invalid version of type: {}",
-                                         header->GetFullyQualifiedName()));
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("unsupported version {}",
+                    static_cast<uint8_t>(header->header_type())));
     auto container = fbs::flatbuffer_container(chunk);
-    VAST_ASSERT_CHEAP(container); // FIXME dev assertion
+    if (!container)
+      return caf::make_error(ec::format_error, "could not read container");
+    if (container.size() == 0)
+      return caf::make_error(ec::format_error, "no container");
     auto const* partition = container.as_flatbuffer<fbs::Partition>(0);
-    VAST_ASSERT_CHEAP(partition); // FIXME dev assertion
-    VAST_ASSERT_CHEAP(
-      partition->partition_type()
-      == vast::fbs::partition::Partition::legacy); // FIXME dev assertion
+    if (!partition)
+      return caf::make_error(ec::format_error, "initial flatbuffer not a "
+                                               "container");
+    if (partition->partition_type() != vast::fbs::partition::Partition::legacy)
+      return caf::make_error(ec::format_error, "initial flatbuffer not a "
+                                               "container");
     auto const* partition_legacy = partition->partition_as_legacy();
-    VAST_ASSERT_CHEAP(partition_legacy); // FIXME dev assertion
+    VAST_ASSERT_CHEAP(partition_legacy);
     auto const* synopsis = partition_legacy->partition_synopsis();
-    VAST_ASSERT_CHEAP(synopsis->version() >= 1);
+    if (!synopsis || !synopsis->schema())
+      return caf::make_error(ec::format_error, "could not get schema from "
+                                               "synopsis");
     auto type = vast::type{chunk::copy(as_bytes(*synopsis->schema()))};
     result.layouts[std::string{type.name()}].count
       += partition_legacy->events();
@@ -507,15 +515,15 @@ partition_actor::behavior_type passive_partition(
             VAST_DEBUG("{} received results from the evaluator", *self);
             duration runtime = std::chrono::steady_clock::now() - start;
             auto id_str = fmt::to_string(query_context.id);
-            self->send(self->state.accountant, "partition.lookup.runtime",
-                       runtime,
+            self->send(self->state.accountant, atom::metrics_v,
+                       "partition.lookup.runtime", runtime,
                        metrics_metadata{
                          {"query", id_str},
                          {"issuer", query_context.issuer},
                          {"partition-type", "passive"},
                        });
-            self->send(self->state.accountant, "partition.lookup.hits",
-                       rank(hits),
+            self->send(self->state.accountant, atom::metrics_v,
+                       "partition.lookup.hits", rank(hits),
                        metrics_metadata{
                          {"query", std::move(id_str)},
                          {"issuer", query_context.issuer},
@@ -578,15 +586,13 @@ partition_actor::behavior_type passive_partition(
       }
       result["size"] = self->state.partition_chunk->size();
       size_t mem_indexers = 0;
-      for (size_t i = 0; i < self->state.indexers.size(); ++i) {
+      for (size_t i = 0; i < self->state.indexers.size(); ++i)
         if (self->state.indexers[i])
           mem_indexers += sizeof(indexer_state)
                           + self->state.flatbuffer->indexes()
                               ->Get(i)
                               ->index()
-                              ->data()
-                              ->size();
-      }
+                              ->decompressed_size();
       result["memory-usage-indexers"] = mem_indexers;
       auto x = self->state.partition_chunk->incore();
       if (!x) {

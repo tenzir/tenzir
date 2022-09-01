@@ -27,7 +27,7 @@ The storage type that should be used for the VAST server task:
   }
 }
 
-variable "vast_lambda_image" {
+variable "lambda_client_image" {
   description = "The VAST Lambda Docker image in ECR"
 }
 
@@ -39,8 +39,9 @@ locals {
   id_raw = "${module.env.module_name}-${module.env.stage}-${var.region_name}"
   id     = substr(md5(local.id_raw), 0, 6)
   # this namespace will be specific to this region
-  service_namespace = "${local.id}.vast.local"
-  vast_port         = 42000
+  service_namespace       = "${local.id}.vast.local"
+  vast_server_domain_name = "vast-server.${local.service_namespace}"
+  vast_port               = 42000
 }
 
 module "env" {

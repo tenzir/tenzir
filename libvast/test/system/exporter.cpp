@@ -89,7 +89,7 @@ struct fixture : fixture_base {
 
   void exporter_setup(query_options opts) {
     spawn_exporter(opts);
-    send(exporter, index);
+    send(exporter, atom::set_v, index);
     send(exporter, atom::sink_v, self);
     send(exporter, atom::run_v);
     send(exporter, atom::extract_v);

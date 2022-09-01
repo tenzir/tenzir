@@ -44,7 +44,7 @@ spawn_archive(node_actor::stateful_pointer<node_state> self,
   VAST_VERBOSE("{} spawned the archive", *self);
   if (auto [accountant] = self->state.registry.find<accountant_actor>();
       accountant)
-    self->send(handle, accountant);
+    self->send(handle, atom::set_v, accountant);
   return caf::actor_cast<caf::actor>(handle);
 }
 

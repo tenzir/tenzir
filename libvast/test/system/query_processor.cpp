@@ -74,10 +74,10 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         vast::query_context&) -> caf::result<system::query_cursor> {
       auto query_id = unbox(to<uuid>(uuid_str));
       self->state.client = self->current_sender()->address();
-      self->send(self, query_id, 3u);
+      self->send(self, atom::query_v, query_id, 3u);
       return system::query_cursor{query_id, 5u, 3u};
     },
-    [=](const uuid&, uint32_t n) {
+    [=](atom::query, const uuid&, uint32_t n) {
       auto* anon_self = caf::actor_cast<caf::event_based_actor*>(self);
       auto hdl = caf::actor_cast<caf::actor>(self->state.client);
       for (uint32_t i = 0; i < n; ++i)
@@ -156,13 +156,13 @@ TEST(state transitions) {
              index);
   expect((vast::query_context, system::index_actor), from(self).to(aut));
   expect((atom::evaluate, vast::query_context), from(aut).to(index));
-  expect((uuid, uint32_t), from(index).to(index));
+  expect((vast::atom::query, uuid, uint32_t), from(index).to(index));
   expect((system::query_cursor), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((atom::done), from(index).to(aut));
-  expect((uuid, uint32_t), from(aut).to(index));
+  expect((vast::atom::query, uuid, uint32_t), from(aut).to(index));
   expect((uint64_t), from(index).to(aut));
   expect((uint64_t), from(index).to(aut));
   expect((atom::done), from(index).to(aut));

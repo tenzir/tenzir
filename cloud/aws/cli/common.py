@@ -1,10 +1,11 @@
 from functools import cache
-from typing import Dict, List
+from typing import Dict, List, Set
 from vast_invoke import Context, Exit
 import dynaconf
 import json
 import re
 import os
+import time
 import subprocess
 import boto3.session
 import boto3
@@ -22,19 +23,7 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
     "VAST_AWS_REGION", must_exist=True, is_in=s3_regions()
 )
 
-# Common validators should always have defaults to avoid forcing a variable on a
-# plugin that doesn't need it
-# Side note: an empty variable is considered as existing
-COMMON_VALIDATORS = [
-    dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
-    dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
-    # if we use tf cloud as backend, the right variable must be configured
-    dynaconf.Validator("TF_STATE_BACKEND", ne="cloud")
-    | (
-        dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne="")
-        & dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne="")
-    ),
-]
+EXIT_CODE_TASK_NOT_RUNNING = 8
 
 # Path aliases
 CLOUDROOT = "."
@@ -68,12 +57,25 @@ def auto_app_fmt(val: bool) -> str:
         return ""
 
 
-def list_modules(c: Context):
+def list_modules(c: Context) -> List[str]:
     """List available Terragrunt modules"""
-    deps = c.run(
-        """terragrunt graph-dependencies""", hide="out", env=conf(COMMON_VALIDATORS)
-    ).stdout
+    deps = c.run("""terragrunt graph-dependencies""", hide="out").stdout
     return re.findall('terraform/(.*)" ;', deps)
+
+
+def active_plugins() -> Set[str]:
+    """Cloud CLI plugins activated"""
+    plugin_var = conf([dynaconf.Validator("VAST_CLOUD_PLUGINS", default="")])[
+        "VAST_CLOUD_PLUGINS"
+    ]
+    plugin_set = {plugin.strip() for plugin in plugin_var.split(",")}
+    plugin_set.discard("")
+    return plugin_set
+
+
+def active_modules(c: Context) -> Set[str]:
+    """Terragrunt modules activated and core modules"""
+    return {*active_plugins().intersection(list_modules(c)), "core-1", "core-2"}
 
 
 def tf_version(c: Context):
@@ -101,10 +103,13 @@ def AWS_REGION():
     return conf(AWS_REGION_VALIDATOR)["VAST_AWS_REGION"]
 
 
-def aws(service):
+def aws(service, resource=False):
     # timeout set to 1000 to be larger than lambda max duration
     config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
-    return boto3.client(service, region_name=AWS_REGION(), config=config)
+    if resource:
+        return boto3.resource(service, region_name=AWS_REGION(), config=config)
+    else:
+        return boto3.client(service, region_name=AWS_REGION(), config=config)
 
 
 def container_path(host_path: str):
@@ -172,3 +177,82 @@ def clean_modules():
                     generated_file = f"{TFDIR}/{path}/{sub_path}"
                     print(f"deleting {generated_file}")
                     os.remove(generated_file)
+
+
+## Task management
+
+
+class FargateService:
+    """A service with a single task running"""
+
+    def __init__(self, fargate_cluster_name, service_name, task_family):
+        self.cluster = fargate_cluster_name
+        self.service_name = service_name
+        self.task_family = task_family
+
+    def get_task_id(self, max_wait_time_sec=0):
+        """Get the task id for this service. If no server is running, it waits
+        until max_wait_time_sec for a new server to be started."""
+        start_time = time.time()
+        while True:
+            task_res = aws("ecs").list_tasks(
+                family=self.task_family, cluster=self.cluster
+            )
+            nb_vast_tasks = len(task_res["taskArns"])
+            if nb_vast_tasks == 1:
+                task_id = task_res["taskArns"][0].split("/")[-1]
+                return task_id
+            if nb_vast_tasks > 1:
+                raise Exit(f"{nb_vast_tasks} {self.task_family} tasks running", 1)
+            if max_wait_time_sec == 0:
+                raise Exit(
+                    f"No {self.task_family} task running", EXIT_CODE_TASK_NOT_RUNNING
+                )
+            if time.time() - start_time > max_wait_time_sec:
+                raise Exit(f"{self.task_family} task timed out", 1)
+            time.sleep(1)
+
+    def get_task_status(self):
+        """Get the status of the task for this service"""
+        task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
+        nb_vast_tasks = len(task_res["taskArns"])
+        if nb_vast_tasks == 0:
+            return "No task"
+        if nb_vast_tasks > 1:
+            return f"{nb_vast_tasks} tasks running"
+        else:
+            desc = aws("ecs").describe_tasks(
+                cluster=self.cluster, tasks=task_res["taskArns"]
+            )["tasks"][0]
+            return f"Desired status {desc['desiredStatus']} and current status {desc['lastStatus']}"
+
+    def start_service(self):
+        """Start the service. Noop if it is already running"""
+        aws("ecs").update_service(
+            cluster=self.cluster, service=self.service_name, desiredCount=1
+        )
+        task_id = self.get_task_id(max_wait_time_sec=120)
+        print(f"Started task {task_id}")
+
+    def stop_task(self):
+        "Stop the current running task in this service."
+        task_id = self.get_task_id()
+        aws("ecs").stop_task(task=task_id, cluster=self.cluster)
+        return task_id
+
+    def stop_service(self):
+        """Stop the service and its task"""
+        aws("ecs").update_service(
+            cluster=self.cluster, service=self.service_name, desiredCount=0
+        )
+        task_id = self.stop_task()
+        print(f"Stopped task {task_id}")
+
+    def restart_service(self):
+        """Stop the task within the service, the service starts a new one"""
+        task_id = self.stop_task()
+        print(f"Stopped task {task_id}")
+        # 120 seconds corresponding to the task stopTimeout grace period
+        # + 120 seconds for the new task to start
+        task_id = self.get_task_id(max_wait_time_sec=240)
+        print(f"Started task {task_id}")

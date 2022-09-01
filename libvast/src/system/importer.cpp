@@ -175,7 +175,7 @@ void importer_state::send_report() {
   beat(r.data[1]);
 #endif
   measurement_ = measurement{};
-  self->send(accountant, std::move(r));
+  self->send(accountant, atom::metrics_v, std::move(r));
   last_report = now;
 }
 

@@ -1,9 +1,8 @@
 ---
-draft: true
 title: VAST v2.3
 description: Automatic Rebuilds
 authors: dominiklohmann
-date: 2022-08-19
+date: 2022-09-01
 tags: [release, rebuild, performance]
 ---
 

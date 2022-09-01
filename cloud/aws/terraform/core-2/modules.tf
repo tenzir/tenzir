@@ -34,7 +34,7 @@ module "vast_server" {
   service_discov_namespace_id = aws_service_discovery_private_dns_namespace.main.id
 
   task_cpu    = 2048
-  task_memory = 4096
+  task_memory = 8192
 
   docker_image = var.vast_server_image
   efs = {
@@ -57,17 +57,17 @@ module "vast_client" {
 
   function_base_name = "client"
   region_name        = var.region_name
-  docker_image       = var.vast_lambda_image
+  docker_image       = var.lambda_client_image
   memory_size        = 2048
   timeout            = 300
 
   vpc_id            = module.network.new_vpc_id
   subnets           = [module.network.private_subnet_id]
-  security_group_id = aws_security_group.vast_lambda.id
+  security_group_id = aws_security_group.vast_client.id
 
   additional_policies = []
   environment = {
-    VAST_ENDPOINT = "vast-server.${local.service_namespace}"
+    VAST_ENDPOINT = local.vast_server_domain_name
   }
 
 }

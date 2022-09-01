@@ -114,7 +114,7 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
   //       partition could instead maintain this actor lazily.
   return state.self->spawn([row_ids]() -> system::indexer_actor::behavior_type {
     return {
-      [=](const curried_predicate&) {
+      [=](atom::evaluate, const curried_predicate&) {
         return row_ids;
       },
       [](atom::shutdown) {

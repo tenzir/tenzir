@@ -68,7 +68,7 @@ cd /opt/vast
 wget https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
 mkdir -p /opt/vast
 tar xzf vast-linux-static.tar.gz -C /opt/vast
-export PATH="/opt/bin/vast:$PATH" # based on your shell, e.g., fish_add_path /opt/bin/vast
+export PATH="/opt/vast/bin:$PATH" # based on your shell, e.g., fish_add_path /opt/vast/bin
 vast start
 ```
 </TabItem>

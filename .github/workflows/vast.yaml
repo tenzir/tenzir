@@ -160,7 +160,7 @@ jobs:
         with:
           python-version: "3.10"
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.1.5
+        uses: abatilo/actions-poetry@v2.1.6
         with:
           poetry-version: 1.1.14
       - name: Install dependencies
@@ -537,7 +537,6 @@ jobs:
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_GENERATOR:STRING=TGZ \
-            -DVAST_PLUGINS:STRING="plugins/pcap" \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
             -DVAST_ENABLE_DSCAT:BOOL=ON \
@@ -983,7 +982,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.1.5
+        uses: abatilo/actions-poetry@v2.1.6
         with:
           poetry-version: 1.1.14
       - name: Run poetry install

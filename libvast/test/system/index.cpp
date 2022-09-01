@@ -111,7 +111,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     fetch(scheduled);
     while (collected < hits) {
       auto batch = std::min(hits - collected, taste_count);
-      self->send(index, query_id, batch);
+      self->send(index, atom::query_v, query_id, batch);
       run();
       fetch(batch);
     }
