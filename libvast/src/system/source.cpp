@@ -28,6 +28,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/type_set.hpp"
 
+#include <caf/attach_continuous_stream_source.hpp>
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -205,7 +206,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
-  self->state.mgr = self->make_continuous_source(
+  self->state.mgr = caf::attach_continuous_stream_source(
+    self,
     // init
     [self](caf::unit_t&) {
       caf::timestamp now = std::chrono::system_clock::now();

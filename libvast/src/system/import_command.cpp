@@ -99,7 +99,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
         } else if (msg.source == src) {
           VAST_DEBUG("{} received DOWN from source", __PRETTY_FUNCTION__);
           if (caf::get_or(inv.options, "vast.import.blocking", false))
-            self->send(importer, atom::subscribe_v, atom::flush::value,
+            self->send(importer, atom::subscribe_v, atom::flush_v,
                        caf::actor_cast<flush_listener_actor>(self));
           else
             stop = true;

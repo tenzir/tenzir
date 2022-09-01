@@ -19,6 +19,8 @@
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
+#include <caf/attach_stream_sink.hpp>
+
 #include <optional>
 
 using namespace vast;
@@ -40,18 +42,17 @@ stream_sink_actor<table_slice, std::string>::behavior_type test_sink(
   return {
     [=](caf::stream<table_slice> in,
         const std::string&) -> caf::inbound_stream_slot<table_slice> {
-      return self
-        ->make_sink(
-          in,
-          [](caf::unit_t&) {
-            // nop
-          },
-          [=](caf::unit_t&, table_slice slice) {
-            self->state.slices.emplace_back(std::move(slice));
-          },
-          [=](caf::unit_t&, const caf::error&) {
-            MESSAGE(self->name() << " is done");
-          })
+      return caf::attach_stream_sink(
+               self, in,
+               [](caf::unit_t&) {
+                 // nop
+               },
+               [=](caf::unit_t&, table_slice slice) {
+                 self->state.slices.emplace_back(std::move(slice));
+               },
+               [=](caf::unit_t&, const caf::error&) {
+                 MESSAGE(self->name() << " is done");
+               })
         .inbound_slot();
     },
   };

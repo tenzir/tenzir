@@ -22,6 +22,7 @@
 #include <vast/system/status.hpp>
 #include <vast/table_slice.hpp>
 
+#include <caf/attach_stream_sink.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <flatbuffers/flatbuffers.h>
@@ -190,7 +191,11 @@ system::store_actor::behavior_type passive_local_store(
         if (!seg) {
           VAST_ERROR("{} couldn't create segment from chunk: {}", *self,
                      seg.error());
-          self->send_exit(self, caf::exit_reason::unhandled_exception);
+          self->send_exit(self,
+                          caf::make_error(vast::ec::format_error,
+                                          fmt::format("{} failed to create "
+                                                      "segment from chunk: {}",
+                                                      *self, seg.error())));
           return;
         }
         self->state.segment = std::move(*seg);
@@ -393,22 +398,22 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
     // store builder
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      return self
-        ->make_sink(
-          in, [=](caf::unit_t&) {},
-          [=](caf::unit_t&, std::vector<table_slice>& batch) {
-            VAST_TRACE("{} gets batch of {} table slices", *self, batch.size());
-            for (auto& slice : batch) {
-              if (auto error = self->state.builder->add(slice))
-                VAST_ERROR("{} failed to add table slice to store {}", *self,
-                           render(error));
-              self->state.events += slice.rows();
-            }
-          },
-          [=](caf::unit_t&, const caf::error&) {
-            VAST_DEBUG("{} stream shuts down", *self);
-            self->send(self, atom::internal_v, atom::persist_v);
-          })
+      return caf::attach_stream_sink(
+               self, in, [=](caf::unit_t&) {},
+               [=](caf::unit_t&, std::vector<table_slice>& batch) {
+                 VAST_TRACE("{} gets batch of {} table slices", *self,
+                            batch.size());
+                 for (auto& slice : batch) {
+                   if (auto error = self->state.builder->add(slice))
+                     VAST_ERROR("{} failed to add table slice to store {}",
+                                *self, render(error));
+                   self->state.events += slice.rows();
+                 }
+               },
+               [=](caf::unit_t&, const caf::error&) {
+                 VAST_DEBUG("{} stream shuts down", *self);
+                 self->send(self, atom::internal_v, atom::persist_v);
+               })
         .inbound_slot();
     },
     // Conform to the protocol of the STATUS CLIENT actor.

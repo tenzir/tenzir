@@ -26,6 +26,7 @@
 #include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/attach_continuous_stream_source.hpp>
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/io/broker.hpp>
@@ -79,7 +80,8 @@ caf::behavior datagram_source(
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
-  self->state.mgr = self->make_continuous_source(
+  self->state.mgr = caf::attach_continuous_stream_source(
+    self,
     // init
     [self](caf::unit_t&) {
       self->state.start_time = std::chrono::system_clock::now();
