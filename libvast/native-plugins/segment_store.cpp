@@ -191,7 +191,11 @@ system::store_actor::behavior_type passive_local_store(
         if (!seg) {
           VAST_ERROR("{} couldn't create segment from chunk: {}", *self,
                      seg.error());
-          self->send_exit(self, caf::exit_reason::unknown);
+          self->send_exit(self,
+                          caf::make_error(vast::ec::format_error,
+                                          fmt::format("{} failed to create "
+                                                      "segment from chunk: {}",
+                                                      *self, seg.error())));
           return;
         }
         self->state.segment = std::move(*seg);
