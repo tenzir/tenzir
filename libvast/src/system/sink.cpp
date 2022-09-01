@@ -35,7 +35,7 @@ void sink_state::send_report() {
   if (statistics_subscriber)
     self->send(statistics_subscriber, r);
   if (accountant)
-    self->send(accountant, r);
+    self->send(accountant, atom::metrics_v, r);
 }
 
 caf::behavior sink(caf::stateful_actor<sink_state>* self,

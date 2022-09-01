@@ -800,7 +800,7 @@ void index_state::decommission_active_partition(
               {"schema", std::string{schema.name()}},
             },
           };
-          self->send(accountant, report);
+          self->send(accountant, atom::metrics_v, report);
         }
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
@@ -998,9 +998,9 @@ void index_state::send_report() {
        max_concurrent_partition_lookups - running_partition_lookups},
       {"scheduler.partition.current-lookups", running_partition_lookups},
     }};
-  self->send(accountant, std::move(msg));
+  self->send(accountant, atom::metrics_v, std::move(msg));
   auto r = performance_report{.data = {{{"scheduler", scheduler_measurement}}}};
-  self->send(accountant, std::move(r));
+  self->send(accountant, atom::metrics_v, std::move(r));
   scheduler_measurement = measurement{};
 }
 
@@ -1473,7 +1473,7 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->delegate(self->state.catalog, atom::candidates_v,
                             std::move(query_context));
     },
-    [self](const uuid& query_id, uint32_t num_partitions) {
+    [self](atom::query, const uuid& query_id, uint32_t num_partitions) {
       if (auto err
           = self->state.pending_queries.activate(query_id, num_partitions))
         VAST_WARN("{} can't activate unknown query: {}", *self, err);

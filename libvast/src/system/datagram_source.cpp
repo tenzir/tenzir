@@ -160,7 +160,7 @@ caf::behavior datagram_source(
         return err;
       return caf::unit;
     },
-    [self](expression& expr) {
+    [self](atom::normalize, expression& expr) {
       self->state.filter = std::move(expr);
     },
     [self](atom::status, status_verbosity v) {

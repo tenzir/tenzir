@@ -102,7 +102,7 @@ void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
         {"query", fmt::to_string(self->state.query_context.id)},
       },
     };
-    self->send(st.accountant, std::move(msg));
+    self->send(st.accountant, atom::metrics_v, std::move(msg));
   }
 }
 
@@ -151,7 +151,7 @@ void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
   st.query_status.scheduled = n;
   // Request more hits from the INDEX.
   VAST_DEBUG("{} asks index to process {} more partitions", *self, n);
-  self->send(st.index, st.id, detail::narrow<uint32_t>(n));
+  self->send(st.index, atom::query_v, st.id, detail::narrow<uint32_t>(n));
 }
 
 void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
@@ -260,11 +260,11 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       request_more_hits(self);
       return {};
     },
-    [self](accountant_actor accountant) {
+    [self](atom::set, accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
-    [self](index_actor index) {
+    [self](atom::set, index_actor index) {
       VAST_DEBUG("{} registers index {}", *self, index);
       self->state.index = std::move(index);
       if (has_continuous_option(self->state.options))
@@ -374,7 +374,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         VAST_TRACEPOINT(query_done, self->state.id.as_u64().first);
         if (self->state.accountant)
           self->send(
-            self->state.accountant, "exporter.hits.runtime", runtime,
+            self->state.accountant, atom::metrics_v, "exporter.hits.runtime",
+            runtime,
             metrics_metadata{
               {"query", fmt::to_string(self->state.query_context.id)}});
         shutdown(self);

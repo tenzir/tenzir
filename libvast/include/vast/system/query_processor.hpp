@@ -84,7 +84,7 @@ public:
   /// @warning Calls `set_default_handler(caf::skip)`.
   query_processor(caf::event_based_actor* self);
 
-  virtual ~query_processor();
+  virtual ~query_processor() = default;
 
   // -- convenience functions --------------------------------------------------
 

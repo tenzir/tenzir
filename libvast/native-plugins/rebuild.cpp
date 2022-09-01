@@ -541,7 +541,7 @@ private:
       .metadata = {
       },
     };
-    self->send(accountant, std::move(report));
+    self->send(accountant, atom::metrics_v, std::move(report));
   }
 };
 

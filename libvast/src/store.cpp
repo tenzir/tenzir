@@ -128,14 +128,14 @@ system::store_actor::behavior_type default_passive_store(
         return num_hits.error();
       const auto runtime = std::chrono::steady_clock::now() - start;
       const auto id_str = fmt::to_string(query_context.id);
-      self->send(self->state.accountant,
+      self->send(self->state.accountant, atom::metrics_v,
                  fmt::format("{}.lookup.runtime", self->name()), runtime,
                  system::metrics_metadata{
                    {"query", id_str},
                    {"issuer", query_context.issuer},
                    {"store-type", self->state.store_type},
                  });
-      self->send(self->state.accountant,
+      self->send(self->state.accountant, atom::metrics_v,
                  fmt::format("{}.lookup.hits", self->name()), *num_hits,
                  system::metrics_metadata{
                    {"query", id_str},
@@ -186,14 +186,14 @@ system::store_builder_actor::behavior_type default_active_store(
         return num_hits.error();
       const auto runtime = std::chrono::steady_clock::now() - start;
       const auto id_str = fmt::to_string(query_context.id);
-      self->send(self->state.accountant,
+      self->send(self->state.accountant, atom::metrics_v,
                  fmt::format("{}.lookup.runtime", self->name()), runtime,
                  system::metrics_metadata{
                    {"query", id_str},
                    {"issuer", query_context.issuer},
                    {"store-type", self->state.store_type},
                  });
-      self->send(self->state.accountant,
+      self->send(self->state.accountant, atom::metrics_v,
                  fmt::format("{}.lookup.hits", self->name()), *num_hits,
                  system::metrics_metadata{
                    {"query", id_str},

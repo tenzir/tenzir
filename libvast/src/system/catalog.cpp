@@ -458,17 +458,19 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       auto result = self->state.lookup(query_context.expr);
       duration runtime = std::chrono::steady_clock::now() - start;
       auto id_str = fmt::to_string(query_context.id);
-      self->send(self->state.accountant, "catalog.lookup.runtime", runtime,
+      self->send(self->state.accountant, atom::metrics_v,
+                 "catalog.lookup.runtime", runtime,
                  metrics_metadata{
                    {"query", id_str},
                    {"issuer", query_context.issuer},
                  });
-      self->send(self->state.accountant, "catalog.lookup.candidates",
-                 result.partitions.size(),
+      self->send(self->state.accountant, atom::metrics_v,
+                 "catalog.lookup.candidates", result.partitions.size(),
                  metrics_metadata{
                    {"query", std::move(id_str)},
                    {"issuer", query_context.issuer},
                  });
+
       return result;
     },
     [=](atom::status, status_verbosity v) {
@@ -536,7 +538,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
           },
         });
       }
-      self->send(self->state.accountant, std::move(r));
+      self->send(self->state.accountant, atom::metrics_v, std::move(r));
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     }};
