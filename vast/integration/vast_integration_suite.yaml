@@ -622,3 +622,19 @@ tests:
       - command: -N import --schema-file="@./misc/schema/zeek-with-skip.schema" zeek-json
         input: data/zeek/zeek.json
       - command: -N export json 'username == "steve"'
+  Rebuild undersized partitions:
+    fixture: ExampleConfigFileTester
+    tags: [import, export, rebuild]
+    steps:
+      - command: import --blocking suricata
+        input: data/suricata/eve.json
+      - command: flush
+      - command: import --blocking suricata
+        input: data/suricata/eve.json
+      - command: flush
+      - command: status --detailed catalog
+        transformation: jq '.catalog.partitions | length'
+      - command: rebuild start --undersized
+      - command: status --detailed catalog
+        transformation: jq '.catalog.partitions | length'
+      - command: export json

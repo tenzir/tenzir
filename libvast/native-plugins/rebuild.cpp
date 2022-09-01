@@ -452,7 +452,7 @@ struct rebuilder_state {
           VAST_ASSERT(!result.empty());
           if (is_heterogeneous) {
             VAST_ASSERT(num_partitions == 1);
-            run->statistics.num_heterogeneous -= 1;
+            finish_heterogeneous();
             if (result.size() > 1
                 || result[0].events <= detail::narrow_cast<size_t>(
                      detail::narrow_cast<double>(max_partition_size)
@@ -554,7 +554,7 @@ private:
   }
 
   void finish_heterogeneous() {
-    run->statistics.num_heterogeneous -= 1;
+    --run->statistics.num_heterogeneous;
     if (run->statistics.num_heterogeneous == 0u)
       for (auto&& delayed_rp :
            std::exchange(run->delayed_homogeneous_rebuilds, {}))
