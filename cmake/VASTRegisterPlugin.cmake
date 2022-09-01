@@ -252,7 +252,7 @@ macro (VASTInstallExampleConfiguration target source prefix destination)
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/${target}-example-config.cmake"
     "\
-    cmake_minimum_required(VERSION 3.18...3.23 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.18...3.24 FATAL_ERROR)
     file(READ \"${source}\" content)
     # Randomly generated string that temporarily replaces semicolons.
     set(dummy \"J.3t26kvfjEoi9BXbf2j.qMY\")
