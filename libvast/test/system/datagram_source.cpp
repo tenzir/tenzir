@@ -15,6 +15,7 @@
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
+#include <caf/attach_stream_sink.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/send.hpp>
@@ -46,8 +47,8 @@ test_sink(test_sink_actor::stateful_pointer<test_sink_state> self,
   return {
     [=](caf::stream<table_slice> in,
         const std::string&) -> caf::inbound_stream_slot<table_slice> {
-      auto result = self->make_sink(
-        in,
+      auto result = caf::attach_stream_sink(
+        self, in,
         [](caf::unit_t&) {
           // nop
         },

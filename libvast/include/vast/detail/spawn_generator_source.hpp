@@ -10,6 +10,7 @@
 
 #include <caf/actor.hpp>
 #include <caf/actor_system.hpp>
+#include <caf/attach_stream_source.hpp>
 #include <caf/event_based_actor.hpp>
 
 namespace vast::detail {
@@ -29,21 +30,22 @@ caf::actor spawn_generator_source(caf::actor_system& system,
               Handle y, Handles... ys) {
     using value_type = decltype(f());
     using ds_type = downstream<value_type>;
-    auto mgr = self->make_source(
-      std::move(y),
-      [&](size_t& remaining) {
-        remaining = n;
-      },
-      [f{std::move(f)}](size_t& remaining, ds_type& out, size_t hint) mutable {
-        auto n = std::min(hint, remaining);
-        for (size_t pushed = 0; pushed < n; ++pushed)
-          out.push(f());
-        remaining -= n;
-      },
-      [](const size_t& remaining) {
-        return remaining == 0;
-      }
-    ).ptr();
+    auto mgr = caf::attach_stream_source(
+                 self, std::move(y),
+                 [&](size_t& remaining) {
+                   remaining = n;
+                 },
+                 [f{std::move(f)}](size_t& remaining, ds_type& out,
+                                   size_t hint) mutable {
+                   auto n = std::min(hint, remaining);
+                   for (size_t pushed = 0; pushed < n; ++pushed)
+                     out.push(f());
+                   remaining -= n;
+                 },
+                 [](const size_t& remaining) {
+                   return remaining == 0;
+                 })
+                 .ptr();
     if constexpr (sizeof...(Handles) > 0)
       std::make_tuple(mgr->add_outbound_path(ys)...);
   };

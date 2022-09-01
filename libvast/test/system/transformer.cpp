@@ -24,6 +24,8 @@
 #include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
 
+#include <caf/attach_stream_sink.hpp>
+
 namespace {
 
 const std::string pipeline_config = R"_(
@@ -58,8 +60,8 @@ dummy_sink(vast::system::stream_sink_actor<vast::table_slice>::pointer self,
            vast::table_slice* result) {
   return {
     [=](caf::stream<vast::table_slice> in) {
-      auto sink = self->make_sink(
-        in,
+      auto sink = caf::attach_stream_sink(
+        self, in,
         [=](caf::unit_t&) {
           // nop
         },

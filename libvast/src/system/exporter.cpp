@@ -29,6 +29,7 @@
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/attach_stream_sink.hpp>
 #include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -308,19 +309,18 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      return self
-        ->make_sink(
-          in,
-          [](caf::unit_t&) {
-            // nop
-          },
-          [=](caf::unit_t&, table_slice slice) {
-            handle_batch(self, std::move(slice));
-          },
-          [=](caf::unit_t&, const caf::error& err) {
-            if (err)
-              VAST_ERROR("{} got error during streaming: {}", *self, err);
-          })
+      return caf::attach_stream_sink(
+               self, in,
+               [](caf::unit_t&) {
+                 // nop
+               },
+               [=](caf::unit_t&, table_slice slice) {
+                 handle_batch(self, std::move(slice));
+               },
+               [=](caf::unit_t&, const caf::error& err) {
+                 if (err)
+                   VAST_ERROR("{} got error during streaming: {}", *self, err);
+               })
         .inbound_slot();
     },
     // -- status_client_actor --------------------------------------------------

@@ -24,6 +24,8 @@
 #include "vast/test/test.hpp"
 #include "vast/uuid.hpp"
 
+#include <caf/attach_stream_sink.hpp>
+
 #include <optional>
 
 using namespace vast;
@@ -39,8 +41,8 @@ dummy_sink(system::stream_sink_actor<table_slice>::pointer self,
     [=](caf::stream<table_slice> in) {
       self->unbecome();
       anon_send(overseer, atom::ok_v);
-      auto sink = self->make_sink(
-        in,
+      auto sink = caf::attach_stream_sink(
+        self, in,
         [=](std::vector<table_slice>&) {
           // nop
         },

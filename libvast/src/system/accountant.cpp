@@ -27,6 +27,7 @@
 #include "vast/time.hpp"
 #include "vast/view.hpp"
 
+#include <caf/attach_continuous_stream_source.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -323,7 +324,8 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       VAST_DEBUG("{} received DOWN from {}", *self, msg.source);
     st.actor_map.erase(msg.source.id());
   });
-  self->state->mgr = self->make_continuous_source(
+  self->state->mgr = caf::attach_continuous_stream_source(
+    self,
     // init
     [](bool&) {},
     // get next element

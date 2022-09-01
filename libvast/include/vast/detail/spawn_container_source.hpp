@@ -13,6 +13,7 @@
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/actor_system.hpp>
+#include <caf/attach_stream_source.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/is_actor_handle.hpp>
 #include <caf/is_typed_actor.hpp>
@@ -51,7 +52,7 @@ spawn_container_source(caf::actor_system& system, Container container,
       y.erase(y.begin());
     }
     // clang-format off
-    auto mgr = self->make_source(
+    auto mgr = caf::attach_stream_source(self,
       std::move(first_sink),
       [&](state& st) {
         st.xs = std::move(xs);
