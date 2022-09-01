@@ -35,32 +35,33 @@ The analyzer takes following input datatype:
         "proxy_http": null
     }
     ```
-- While running the script in debug mode, provide `.` as second parameter to indicate `job-directory` is current folder
-- Example `launch.json` file for VSCode
-    ```
-        {
-        "version": "0.2.0",
-        "configurations": [
-                {
-                    "name": "Python: Main file",
-                    "type": "python",
-                    "request": "launch",
-                    "program": "search.py",
-                    "console": "integratedTerminal",
-                    "justMyCode": false,
-                    "args": ["."]
-                },
-                {
-                    "name": "Python: Current File",
-                    "type": "python",
-                    "request": "launch",
-                    "program": "${file}",
-                    "console": "integratedTerminal",
-                    "justMyCode": false
-                }
-            ]
-        }
-    ````
+- While running the script, provide `.` as second parameter to indicate `job-directory` is current folder
+
+## Example `launch.json` file for VSCode
+```
+    {
+    "version": "0.2.0",
+    "configurations": [
+            {
+                "name": "Python: Main file",
+                "type": "python",
+                "request": "launch",
+                "program": "search.py",
+                "console": "integratedTerminal",
+                "justMyCode": false,
+                "args": ["."]
+            },
+            {
+                "name": "Python: Current File",
+                "type": "python",
+                "request": "launch",
+                "program": "${file}",
+                "console": "integratedTerminal",
+                "justMyCode": false
+            }
+        ]
+    }
+````
 ## Requirements
 - Vast binary should be available on host. Please refer to [Vast Documentation](vast.io) for instructions
 - Dependencies in requirements.txt should be installed
