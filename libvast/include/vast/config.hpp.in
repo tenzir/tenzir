@@ -94,6 +94,8 @@ extern bool has_undefined_behavior_sanitizer;
       _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
 #  define VAST_DIAGNOSTIC_IGNORE_ADDRESS             /* nop */
 #  define VAST_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED /* nop */
+#  define VAST_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                         \
+    _Pragma("clang diagnostic ignored \"-Wunused-const-variable\"")
 #elif VAST_GCC
 #  define VAST_DIAGNOSTIC_PUSH _Pragma("GCC diagnostic push")
 #  define VAST_DIAGNOSTIC_POP _Pragma("GCC diagnostic pop")
@@ -105,6 +107,8 @@ extern bool has_undefined_behavior_sanitizer;
     _Pragma("GCC diagnostic ignored \"-Waddress\"")
 #  define VAST_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED                           \
     _Pragma("GCC diagnostic ignored \"-Wmaybe-uninitialized\"")
+#  define VAST_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                         \
+    _Pragma("GCC diagnostic ignored \"-Wunused-const-variable\"")
 #endif
 
 #ifdef CAF_BSD

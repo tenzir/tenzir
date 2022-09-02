@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/config.hpp"
 #include "vast/detail/collect.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -40,15 +41,15 @@ using mock_filesystem_actor
 
 //  CAF_ADD_TYPE_ID generated unused const variable warning when compiled with
 //  clang. The other fix would be to place the macros in a header file
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-const-variable"
+VAST_DIAGNOSTIC_PUSH
+VAST_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE
 
 CAF_BEGIN_TYPE_ID_BLOCK(partition_ut_block, 10000)
   CAF_ADD_TYPE_ID(partition_ut_block, (mock_filesystem_actor))
   CAF_ADD_TYPE_ID(partition_ut_block, (deliver_mmap_promise))
 CAF_END_TYPE_ID_BLOCK(partition_ut_block)
 
-#pragma GCC diagnostic pop
+VAST_DIAGNOSTIC_POP
 
 namespace {
 mock_filesystem_actor::behavior_type mock_filesystem(
