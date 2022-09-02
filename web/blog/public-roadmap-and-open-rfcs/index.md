@@ -38,7 +38,7 @@ In the process of opening the roadmap, we had to answer several questions:
 2. **Interaction**: should this just be a read-only page or something the
    community can directly interact with?
 
-3. **Tooling**: What is the right tool to encode the roadmap?
+3. **Tooling**: what is the right tool to encode the roadmap?
 
 Let's go through them one by one.
 
