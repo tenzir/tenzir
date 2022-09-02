@@ -121,8 +121,7 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
         }
         if (msg.reason) {
           VAST_WARN("{} received error message: {}",
-                    detail::pretty_type_name(inv.full_name),
-                    self->system().render(msg.reason));
+                    detail::pretty_type_name(inv.full_name), msg.reason);
           err = std::move(msg.reason);
         }
         stop = true;

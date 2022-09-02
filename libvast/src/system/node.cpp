@@ -366,7 +366,6 @@ caf::expected<caf::actor>
 spawn_component(node_actor::stateful_pointer<node_state> self,
                 const invocation& inv, spawn_arguments& args) {
   VAST_TRACE_SCOPE("{} {}", VAST_ARG(inv), VAST_ARG(args));
-  using caf::atom_uint;
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
     return caf::make_error(ec::unspecified, "invalid spawn component");

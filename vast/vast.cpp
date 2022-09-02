@@ -155,7 +155,9 @@ int main(int argc, char** argv) {
   std::string_view max_threads_key = CAF_VERSION < 1800
                                        ? "scheduler.max-threads"
                                        : "caf.scheduler.max-threads";
-  if (!is_server && !caf::holds_alternative<int>(cfg, max_threads_key))
+  if (!is_server
+      && !caf::holds_alternative<caf::config_value::integer>(cfg,
+                                                             max_threads_key))
     cfg.set(max_threads_key, 2);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(*invocation, cfg.content);
@@ -220,9 +222,9 @@ int main(int argc, char** argv) {
   if (auto result = run(*invocation, sys, root_factory); !result)
     run_error = std::move(result.error());
   else
-    result->apply({[&](caf::error& err) {
+    caf::message_handler{[&](caf::error& err) {
       run_error = std::move(err);
-    }});
+    }}(*result);
   if (run_error) {
     system::render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;

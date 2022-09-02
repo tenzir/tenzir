@@ -12,25 +12,22 @@
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
-#include <caf/streambuf.hpp>
 
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
-#include <type_traits>
 
 namespace vast::detail {
 
 caf::expected<std::string> load_contents(const std::filesystem::path& p) {
-  std::string contents;
-  caf::containerbuf<std::string> obuf{contents};
-  std::ostream out{&obuf};
-  std::ifstream in{p.string()};
+  std::ifstream in{p};
+  std::stringstream ss;
   if (!in)
     return caf::make_error(ec::filesystem_error,
                            "failed to read from file " + p.string());
-  out << in.rdbuf();
-  return contents;
+  ss << in.rdbuf();
+  return ss.str();
 }
 
 } // namespace vast::detail
