@@ -24,11 +24,15 @@
 , jq
 , tcpdump
 , utillinux
+, dpkg
 , versionOverride ? null
+, versionShortOverride ? null
 , withPlugins ? []
 , extraCmakeFlags ? []
 , disableTests ? true
 , buildType ? "Release"
+, buildAsPackage ? false
+, packageName ? "vast"
 }:
 let
   inherit (stdenv.hostPlatform) isStatic;
@@ -45,9 +49,10 @@ let
   src = vast-source;
 
   version = if (versionOverride != null) then versionOverride else "v2.3.0";
+  versionShort = if (versionShortOverride != null) then versionShortOverride else version;
 in
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (rec {
   inherit src version;
   pname = "vast";
 
@@ -57,7 +62,7 @@ stdenv.mkDerivation rec {
       --replace nm "''${NM}"
   '';
 
-  nativeBuildInputs = [ cmake cmake-format ];
+  nativeBuildInputs = [ cmake cmake-format dpkg ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [
     fast_float
@@ -81,6 +86,7 @@ stdenv.mkDerivation rec {
     "-DCMAKE_BUILD_TYPE:STRING=${buildType}"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DVAST_VERSION_TAG=${version}"
+    "-DVAST_VERSION_SHORT=${versionShort}"
     "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_ENABLE_BACKTRACE=ON"
     "-DVAST_ENABLE_JEMALLOC=ON"
@@ -91,13 +97,28 @@ stdenv.mkDerivation rec {
     "-DVAST_ENABLE_ASSERTIONS=ON"
   ] ++ lib.optionals isStatic [
     "-DBUILD_SHARED_LIBS:BOOL=OFF"
-    "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-  ] ++ lib.optional disableTests "-DVAST_ENABLE_UNIT_TESTS=OFF"
-    # Plugin Section
-    ++ lib.optional (withPlugins != [])
-       "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
-    ++ extraCmakeFlags;
+    "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
+    "-DVAST_PACKAGE_FILE_NAME_SUFFIX=static"
+  ] ++ lib.optionals disableTests [
+    "-DVAST_ENABLE_UNIT_TESTS=OFF"
+  ] ++ lib.optionals (withPlugins != []) [
+    "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
+  ] ++ lib.optionals buildAsPackage [
+    "-UCMAKE_INSTALL_BINDIR"
+    "-UCMAKE_INSTALL_SBINDIR"
+    "-UCMAKE_INSTALL_INCLUDEDIR"
+    "-UCMAKE_INSTALL_OLDINCLUDEDIR"
+    "-UCMAKE_INSTALL_MANDIR"
+    "-UCMAKE_INSTALL_INFODIR"
+    "-UCMAKE_INSTALL_DOCDIR"
+    "-UCMAKE_INSTALL_LIBDIR"
+    "-UCMAKE_INSTALL_LIBEXECDIR"
+    "-UCMAKE_INSTALL_LOCALEDIR"
+    "-DCMAKE_INSTALL_PREFIX=/opt/vast"
+    "-DCPACK_GENERATOR=TGZ;DEB"
+    "-DCPACK_PACKAGE_NAME=${packageName}"
+  ] ++ extraCmakeFlags;
 
   # The executable is run to generate the man page as part of the build phase.
   # libvast.{dyld,so} is put into the libvast subdir if relocatable installation
@@ -114,7 +135,7 @@ stdenv.mkDerivation rec {
 
   dontStrip = true;
 
-  doInstallCheck = true;
+  doInstallCheck = !buildAsPackage;
   installCheckInputs = [ py3 jq tcpdump ];
   # TODO: Investigate why the disk monitor test fails in the build sandbox.
   installCheckPhase = ''
@@ -130,4 +151,11 @@ stdenv.mkDerivation rec {
     platforms = platforms.unix;
     maintainers = with maintainers; [ tobim ];
   };
-}
+} // lib.optionalAttrs buildAsPackage {
+  installPhase = ''
+    cmake --build . --target package
+    install -m 644 -Dt $out package/*.deb package/*.tar.gz
+  '';
+  # We don't need the nix support files in this case.
+  fixupPhase = "";
+})

@@ -95,6 +95,7 @@ in
       (inputs.nix-filter.lib.inDirectory ../tools)
       (inputs.nix-filter.lib.inDirectory ../plugins)
       (inputs.nix-filter.lib.inDirectory ../schema)
+      (inputs.nix-filter.lib.inDirectory ../scripts)
       (inputs.nix-filter.lib.inDirectory ../docs)
       (inputs.nix-filter.lib.inDirectory ../cmake)
       (inputs.nix-filter.lib.inDirectory ../changelog)
@@ -115,6 +116,7 @@ in
   vast-ci = final.vast.override {
     buildType = "CI";
     arrow-cpp = final.arrow-cpp-no-simd;
+    packageName = "vast-ci";
   };
   speeve = final.buildGoModule rec {
     pname = "speeve";

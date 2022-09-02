@@ -13,7 +13,7 @@ project(
   VERSION
     ${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}.${VAST_VERSION_TWEAK}
   DESCRIPTION "Visibility Across Space and Time"
-  HOMEPAGE_URL "https://github.com/tenzir/vast"
+  HOMEPAGE_URL "https://vast.io"
   LANGUAGES C CXX)
 
 # -- sanity checks -------------------------------------------------------------
@@ -73,7 +73,6 @@ endif ()
 include(CMakeDependentOption)
 include(CMakePackageConfigHelpers)
 include(CMakePrintHelpers)
-include(CPack)
 include(CTest)
 include(CheckCXXSourceCompiles)
 include(CheckLibraryExists)
@@ -720,8 +719,38 @@ option(VAST_ENABLE_CORELIGHT_CAT "Install corelight-cat with VAST" OFF)
 add_feature_info("VAST_ENABLE_CORELIGHT_CAT" VAST_ENABLE_CORELIGHT_CAT
                  "install corelight-cat with VAST.")
 if (VAST_ENABLE_CORELIGHT_CAT)
-  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
-          DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
+    # These should be inherited from the source but they
+    # get lost in CPack, so we set them explicitly.
+    PERMISSIONS
+      OWNER_READ
+      OWNER_WRITE
+      OWNER_EXECUTE
+      GROUP_READ
+      GROUP_EXECUTE
+      WORLD_READ
+      WORLD_EXECUTE
+    DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif ()
+
+option(VAST_ENABLE_VAST_DF_PERCENT "Install vast-df-percent.sh with VAST" ON)
+add_feature_info("VAST_ENABLE_VAST_DF_PERCENT" VAST_ENABLE_VAST_DF_PERCENT
+                 "install vast-df-percent.sh with VAST.")
+if (VAST_ENABLE_VAST_DF_PERCENT)
+  install(
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vast-df-percent.sh"
+    # These should be inherited from the source but they
+    # get lost in CPack, so we set them explicitly.
+    PERMISSIONS
+      OWNER_READ
+      OWNER_WRITE
+      OWNER_EXECUTE
+      GROUP_READ
+      GROUP_EXECUTE
+      WORLD_READ
+      WORLD_EXECUTE
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
 endif ()
 
 # -- docdir --------------------------------------------------------------------
@@ -736,12 +765,16 @@ install(
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
   DESTINATION "${CMAKE_INSTALL_DOCDIR}")
 
+# -- packaging -----------------------------------------------------------------
+
+include(VASTPackage)
+
 # -- feature summary -----------------------------------------------------------
 
 # Append the feature summary to summary.log.
 feature_summary(
   WHAT ALL
-  FILENAME ${CMAKE_CURRENT_BINARY_DIR}/summary.log
+  FILENAME "${CMAKE_CURRENT_BINARY_DIR}/summary.log"
   APPEND)
 
 # Print the feature and build summary if we're not a subproject.
