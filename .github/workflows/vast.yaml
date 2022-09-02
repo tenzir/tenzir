@@ -1129,5 +1129,5 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: code-coverage-vast-${{ needs.determine-version.outputs.build-version }}
-          path: ${{ env.BUILD_DIR }}/build/ccov
+          path: ${{ env.BUILD_DIR }}/ccov
           if-no-files-found: error
