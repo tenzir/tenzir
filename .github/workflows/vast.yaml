@@ -1116,7 +1116,8 @@ jobs:
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
-            -DVAST_PLUGINS:STRING='plugins/*'
+            -DVAST_PLUGINS:STRING='plugins/*' \
+            -DVAST_UNIT_TEST_TIMEOUT=180
       - name: Compile All Targets
         run: |
           cmake --build "$BUILD_DIR" --target all --parallel --verbose
@@ -1124,6 +1125,7 @@ jobs:
         run: |
           cmake --build "$BUILD_DIR" --target ccov
       - name: Upload Code Coverage Report
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: code-coverage-vast-${{ needs.determine-version.outputs.build-version }}

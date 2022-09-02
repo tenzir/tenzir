@@ -25,8 +25,9 @@ set_tests_properties(build-vast-test PROPERTIES FIXTURES_SETUP
 # Helper macro to construct a CMake test from a VAST test suite.
 macro (make_test suite)
   string(REPLACE " " "_" test_name ${suite})
-  add_test(NAME ${test_name} COMMAND vast-test -v 4 -r 60 -s "^${suite}$"
-                                     ${ARGN})
+  add_test(NAME ${test_name}
+           COMMAND vast-test -v 4 -r "${VAST_UNIT_TEST_TIMEOUT}" -s
+                   "^${suite}$" ${ARGN})
   set_tests_properties(${test_name} PROPERTIES FIXTURES_REQUIRED
                                                vast_unit_test_fixture)
 endmacro ()

@@ -137,6 +137,9 @@ cmake_dependent_option(VAST_ENABLE_UNIT_TESTS "Build unit tests for libvast" ON
                        "NOT CMAKE_CROSS_COMPILING" OFF)
 add_feature_info("VAST_ENABLE_UNIT_TESTS" VAST_ENABLE_UNIT_TESTS
                  "build unit tests for libvast.")
+set(VAST_UNIT_TEST_TIMEOUT
+    "60"
+    CACHE STRING "The per-test timeout in unit tests" FORCE)
 
 # -- library flavor ------------------------------------------------------------
 
