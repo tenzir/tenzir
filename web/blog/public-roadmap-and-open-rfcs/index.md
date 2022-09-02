@@ -7,9 +7,9 @@ date: 2022-09-07
 tags: [roadmap, github, open-source]
 ---
 
-We are happy to announce that we have published [our technical roadmap][roadmap]
-along with an [RFC process][rfc] to actively participate in shaping upcoming
-topics. This blog post explains why and how we did it.
+We are happy to announce that we have published [our engineering
+roadmap][roadmap] along with an [RFC process][rfc] to actively participate in
+shaping upcoming topics. This blog post explains why and how we did it.
 
 [roadmap]: https://vast.io/roadmap
 [rfc]: /docs/develop-vast/contributing/rfc
@@ -64,8 +64,8 @@ We decided against dual-purposing the issue tracker of our main repository
 <https://github.com/tenzir/vast> because it would add roadmap items as many
 open, long-running issues that scatter the attention and potentially confuse the
 community. That said, the primary value of the issue tracker is the layer on top
-of issues: [Projects][github-projects], which allows for organizing issues
-across multiple dimensions in a visually appealing way.
+of issues: [GitHub Projects][github-projects], which allows for organizing
+issues across multiple dimensions in a visually appealing way.
 
 [github-projects]: https://docs.github.com/en/issues/planning-and-tracking-with-projects
 
@@ -103,6 +103,6 @@ enthusiastic about supporting external projects that we can support within our
 capacities.
 
 These are our "growing pains" that we can hopefully overcome together while
-building a thriving community. We still have our [Community
+building a thriving community. We still have our [community
 Slack](http://slack.tenzir.com) where we are looking forward to interact with
 everyone with questions or feedback. See you there!
