@@ -10,6 +10,11 @@ FileCopyrightText: (c) 2014, Tenzir GmbH
 LicenseConcluded: BSD-3-clause
 
 SPDXID: SPDXRef-File
+FileName: ./cmake/CodeCoverage.cmake
+FIleCopyrightText: Copyright (C) 2018-2020 by George Cave - gcave@stablecoder.ca
+LicenseConcluded: Apache-2.0
+
+SPDXID: SPDXRef-File
 FileName: ./libvast/aux/robin-map/*
 FIleCopyrightText: (c) 2017 Tessil
 LicenseConcluded: MIT

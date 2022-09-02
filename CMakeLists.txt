@@ -483,18 +483,34 @@ endif ()
 option(VAST_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
 add_feature_info("VAST_ENABLE_CLANG_TIDY" VAST_ENABLE_CLANG_TIDY
                  "run clang-tidy during build.")
-if (VAST_ENABLE_CLANG_TIDY)
-  macro (VASTTargetEnableTooling _target)
-    set(_clang_tidy_args
-        "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
-    set_target_properties(
-      ${_target} PROPERTIES CXX_CLANG_TIDY "${_clang_tidy_args}"
-                            C_CLANG_TIDY "${_clang_tidy_args}")
-  endmacro ()
-else ()
-  macro (VASTTargetEnableTooling _target)
+set(VAST_CLANG_TIDY_ARGS
+    "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
 
-  endmacro ()
+option(VAST_ENABLE_CODE_COVERAGE "Add code coverage targets" OFF)
+add_feature_info("VAST_ENABLE_CODE_COVERAGE" VAST_ENABLE_CODE_COVERAGE
+                 "add code coverage targets.")
+if (VAST_ENABLE_CODE_COVERAGE)
+  if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(
+      WARNING
+        "Code coverage reports may be inaccurate for compilers other than gcc")
+  endif ()
+  set(CODE_COVERAGE "${VAST_ENABLE_CODE_COVERAGE}")
+  include(CodeCoverage)
+  mark_as_advanced(CODE_COVERAGE)
+  install(CODE "\
+    message(FATAL_ERROR \"Builds with code coverage must not be installed.\")")
+endif ()
+
+VASTTargetEnableTooling(libvast_internal INTERFACE)
+
+# Add a custom executable that runs the CMake build targets 'test' and
+# 'integration' so we can instrument them toether for combined code coverage.
+if (VAST_ENABLE_CODE_COVERAGE)
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/all_tests.c.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c" @ONLY)
+  add_executable(all-tests "${CMAKE_CURRENT_BINARY_DIR}/cmake/all_tests.c")
+  VASTTargetEnableTooling(all-tests AUTO)
 endif ()
 
 # Build VAST in developer mode. This is enabled by default when not building
@@ -631,8 +647,8 @@ endif ()
 
 # -- compiler setup ------------------------------------------------------------
 
-set(CLANG_MINIMUM_VERSION 11.0)
-set(APPLE_CLANG_MINIMUM_VERSION 12.0.5)
+set(CLANG_MINIMUM_VERSION 13.0)
+set(APPLE_CLANG_MINIMUM_VERSION 14.0)
 set(GCC_MINIMUM_VERSION 10.0)
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")

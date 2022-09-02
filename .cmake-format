@@ -37,6 +37,12 @@ with section("parse"):
             "pargs": {
                 "nargs": 1,
             },
+            "kwargs": {
+                "AUTO": 0,
+                "INTERFACE": 0,
+                "PRIVATE": 0,
+                "PUBLIC": 0,
+            },
         },
         "vastinstallexampleconfiguration": {
             "spelling": "VASTInstallExampleConfiguration",
