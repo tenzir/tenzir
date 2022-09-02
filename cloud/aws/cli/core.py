@@ -7,7 +7,6 @@ import json
 import io
 from common import (
     AWS_REGION,
-    RESOURCEDIR,
     FargateService,
     active_modules,
     clean_modules,
@@ -17,7 +16,6 @@ from common import (
     REPOROOT,
     DOCKERDIR,
     AWS_REGION_VALIDATOR,
-    default_vast_version,
     load_cmd,
     parse_env,
     terraform_output,
@@ -43,7 +41,7 @@ VALIDATORS = [
     dynaconf.Validator("VAST_CIDR", must_exist=True, ne=""),
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
     dynaconf.Validator("VAST_IMAGE", default="tenzir/vast"),
-    dynaconf.Validator("VAST_VERSION", default=default_vast_version()),
+    dynaconf.Validator("VAST_VERSION", default="latest"),
     dynaconf.Validator(
         "VAST_SERVER_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]
     ),
@@ -62,6 +60,11 @@ CMD_HELP = {
 def active_include_dirs(c: Context) -> str:
     """The --include-dir arguments for modules activated and core modules"""
     return " ".join([f"--terragrunt-include-dir={mod}" for mod in active_modules(c)])
+
+
+def docker_compose(step):
+    """The docker compose command in the directory of the specified step"""
+    return f"docker compose --project-directory {DOCKERDIR}/{step}"
 
 
 ## Tasks
@@ -130,28 +133,45 @@ def deploy(c, auto_approve=False):
     )
 
 
-@task(autoprint=True)
-def current_image(c, repo_arn, type):
+@task(
+    autoprint=True,
+    help={
+        "service": "The qualifier of the service this image will be used for, as specified in deploy-image"
+    },
+)
+def current_image(c, service):
     """Get the current Lambda image URI. In case of failure, returns the error message instead of the URI."""
+    repo_arn = terraform_output(c, "core-1", f"vast_repository_arn")
     try:
         tags = aws("ecr").list_tags_for_resource(resourceArn=repo_arn)["tags"]
     except Exception as e:
         return str(e)
     current = next(
-        (tag["Value"] for tag in tags if tag["Key"] == f"current-{type}"),
+        (tag["Value"] for tag in tags if tag["Key"] == f"current-{service}"),
         "current-image-not-defined",
     )
     return current
 
 
-@task(help={"type": "Can be either 'lambda' or 'fargate'"})
-def deploy_image(c, type):
-    """Build and push the image, fails if core-1 is not deployed"""
+@task
+def build_images(c, step):
+    """Build the provided VAST based Dockerfile using the configured base image
+    and version"""
+    if conf(VALIDATORS)["VAST_VERSION"] == "build":
+        c.run(f"docker build -t $VAST_IMAGE:build {REPOROOT}")
+    c.run(f"{docker_compose(step)} build")
+
+
+def deploy_image(c, service, tag):
+    """Push the provided image to the core image repository"""
+    ## We are using the repository tags as a key value store to flag
+    ## the current image of each service. This allows a controlled
+    ## version rollout in the downstream infra (lambda or fargate)
     image_url = terraform_output(c, "core-1", f"vast_repository_url")
     repo_arn = terraform_output(c, "core-1", f"vast_repository_arn")
     # get the digest of the current image
     try:
-        current_img = current_image(c, repo_arn, type)
+        current_img = current_image(c, service)
         c.run(f"docker pull {current_img}")
         old_digest = c.run(
             f"docker inspect --format='{{{{.RepoDigests}}}}' {current_img}",
@@ -159,23 +179,9 @@ def deploy_image(c, type):
         ).stdout
     except:
         old_digest = "current-image-not-found"
-    # build the image and get the new digest
-    base_image = conf(VALIDATORS)["VAST_IMAGE"]
-    image_tag = f"{type}-{int(time.time())}"
-    version = conf(VALIDATORS)["VAST_VERSION"]
-    if version == "build":
-        c.run(f"docker build -t {base_image}:{image_tag} {REPOROOT}")
-        version = image_tag
-    c.run(
-        f"""docker build \
-            --build-arg VAST_VERSION={version} \
-            --build-arg BASE_IMAGE={base_image} \
-            -f {DOCKERDIR}/{type}.Dockerfile \
-            -t {image_url}:{image_tag} \
-            {RESOURCEDIR}"""
-    )
+    # get the new digest
     new_digest = c.run(
-        f"docker inspect --format='{{{{.RepoDigests}}}}' {image_url}:{image_tag}",
+        f"docker inspect --format='{{{{.RepoDigests}}}}' {tag}",
         hide="out",
     ).stdout
     # compare old an new digests
@@ -183,11 +189,35 @@ def deploy_image(c, type):
         print("Docker image didn't change, skipping push")
         return
     # if a change occured, push and tag the new image as current
-    c.run(f"docker push {image_url}:{image_tag}")
+    ecr_tag = f"{image_url}:{service}-{int(time.time())}"
+    c.run(f"docker image tag {tag} {ecr_tag}")
+    c.run(f"docker push {ecr_tag}")
+    c.run(f"docker rmi {ecr_tag}")
     aws("ecr").tag_resource(
         resourceArn=repo_arn,
-        tags=[{"Key": f"current-{type}", "Value": f"{image_url}:{image_tag}"}],
+        tags=[{"Key": f"current-{service}", "Value": f"{ecr_tag}"}],
     )
+
+
+@task
+def push_images(c, step):
+    """Push the images specified in the docker compose for that step"""
+    cf_str = c.run(f"{docker_compose(step)} convert --format json", hide="out").stdout
+    cf_dict = json.loads(cf_str)["services"]
+    for svc in cf_dict.items():
+        deploy_image(c, svc[0], svc[1]["image"])
+
+
+@task
+def print_image_vars(c, step):
+    """Display the tfvars file with the image tags.
+
+    The output variable name for each service is the service name (as defined in
+    the docker compose file) suffixed by "_image" """
+    cf_str = c.run(f"{docker_compose(step)} convert --format json", hide="out").stdout
+    cf_dict = json.loads(cf_str)["services"]
+    for svc_name in cf_dict.keys():
+        print(f'{svc_name}_image = "{current_image(c, svc_name)}"')
 
 
 def service_outputs(c: Context) -> Tuple[str, str, str]:
@@ -307,12 +337,18 @@ def destroy(c, auto_approve=False):
 
     Note that if a module was deployed and the associated plugin was removed
     from the config afterwards, it will not be destroyed"""
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    serviceArns = aws("ecs").list_services(cluster=cluster, maxResults=100)[
-        "serviceArns"
-    ]
-    for serviceArn in serviceArns:
-        aws("ecs").update_service(cluster=cluster, service=serviceArn, desiredCount=0)
+    try:
+        cluster = terraform_output(c, "core-2", "fargate_cluster_name")
+        serviceArns = aws("ecs").list_services(cluster=cluster, maxResults=100)[
+            "serviceArns"
+        ]
+        for serviceArn in serviceArns:
+            aws("ecs").update_service(
+                cluster=cluster, service=serviceArn, desiredCount=0
+            )
+    except Exception as e:
+        print(e)
+        print("Could not stop services, continuing with destroy...")
     c.run(
         f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
     )

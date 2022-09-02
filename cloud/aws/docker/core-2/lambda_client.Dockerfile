@@ -1,9 +1,9 @@
 ARG VAST_VERSION
-ARG BASE_IMAGE
+ARG VAST_IMAGE
 ARG AWS_CLI_VERSION=2.4.20
 ARG AWSLAMBDARIC_VERSION=2.0.1
 
-FROM $BASE_IMAGE:$VAST_VERSION AS common_base
+FROM $VAST_IMAGE:$VAST_VERSION AS common_base
 
 USER root
 
@@ -43,7 +43,7 @@ USER vast:vast
 
 COPY scripts/lambda-handler.py .
 COPY schema/ /opt/tenzir/vast/etc/vast/schema/
-COPY configs/vast-lambda.yaml /opt/tenzir/vast/etc/vast/vast.yaml
+COPY configs/vast/lambda.yaml /opt/tenzir/vast/etc/vast/vast.yaml
 
 ENTRYPOINT [ "/usr/bin/python3.9", "-m", "awslambdaric" ]
 CMD [ "lambda-handler.handler" ]

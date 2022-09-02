@@ -2,12 +2,10 @@ include "root" {
   path = find_in_parent_folders("terragrunt.${get_env("TF_STATE_BACKEND")}.hcl")
 }
 
+# Core 1 is required for image deployment
 dependency "core_1" {
   config_path = "../core-1"
-
-  mock_outputs = {
-    vast_repository_arn = "arn:aws:ecr:::repository/temporary-dummy-arn"
-  }
+  skip_outputs = true
 }
 
 retryable_errors = [
@@ -17,7 +15,13 @@ retryable_errors = [
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute  = ["../../resources/scripts/deploy-images.sh", dependency.core_1.outputs.vast_repository_arn, "lambda_client", "vast_server"]
+    execute = ["/bin/bash", "-c", <<EOT
+../../vast-cloud docker-login \
+                 build-images --step=core-2 \
+                 push-images --step=core-2 && \
+../../vast-cloud print-image-vars --step=core-2 > images.generated.tfvars
+EOT
+    ]
   }
 
   extra_arguments "image_vars" {
