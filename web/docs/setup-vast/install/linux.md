@@ -2,15 +2,17 @@
 
 Use our [pre-built build packages](/docs/setup-vast/download#packages) or [build
 from source](/docs/setup-vast/build) to install VAST on any Linux distribution.
+This package is relocatable, which means you can extract it in any filesystem
+location and it will work.
 
 To deploy VAST as system service, you can use our [systemd
 configuration](#systemd).
 
 ## systemd
 
-VAST has native [systemd
-support](https://github.com/tenzir/vast/tree/master/systemd/) for running as
-system service. The service is sandboxed and runs with limited privileges.
+The VAST package bundles a systemd service unit under
+`<extraction_path>/lib/systemd/system/vast.service`. The service is sandboxed
+and runs with limited privileges.
 
 ### Prepare the host system
 
@@ -31,16 +33,11 @@ mkdir -p /var/lib/vast
 chown -R vast:vast /var/lib/vast
 ```
 
-The systemd unit passes a
-[vast.yaml](https://github.com/tenzir/vast/tree/master/systemd/) configuration
-file to the VAST process. Make sure that the new user can read the `vast.yaml`.
-
 ### Configure the unit
 
-Before you begin, find the line beginning with `ExecStart=` at the very bottom
-of the `[Service]` section in the unit file. Depending on your installation path
-you might need to change the location of the `vast` binary and configuration
-file.
+Before you begin, find the lines beginning with `ExecStart=` and `ExecStop=` at
+the very bottom of the `[Service]` section in the unit file. Depending on your
+installation path you might need to change the location of the `vast` binary.
 
 ```config
 ExecStart=/path/to/vast start

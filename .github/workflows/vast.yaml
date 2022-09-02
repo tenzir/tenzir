@@ -304,6 +304,11 @@ jobs:
           # Zero the cache statistics (but not the configuration options).
           ccache --zero-stats
           ccache --show-config
+          # Setting different values for CMAKE_INSTALL_PREFIX and
+          # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported
+          # and causes a warning. We accept this drawback because the package
+          # we generate here is built specifically as input for the plugin CI
+          # jobs and not suitable for general use.
           cmake -B "$BUILD_DIR" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
