@@ -89,6 +89,7 @@ services:
       - 'JOB_DIRECTORY=/tmp/cortex-jobs'
     depends_on:
       - elasticsearch
+      - vast
     ports:
       - "9002:9001"
     volumes:

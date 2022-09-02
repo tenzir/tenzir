@@ -1,4 +1,4 @@
-# Vast Neuron
+# VAST Neuron
 
 VAST is an embeddable telemetry engine for structured event data, purpose-built for use cases in security operations. VAST is an acronym and stands for Visibility Across Space and Time.
 
@@ -7,6 +7,28 @@ The analyzer takes following input datatype:
 2. subnet (custom)
 3. domain
 4. hash
+
+## Requirements For Non-Dockerized Analyzer
+- VAST binary should be available on Cortex host. We are providing example [Cortex Dockerfile](/thehive/vol/cortex/Dockerfile). Please refer to [VAST Documentation](vast.io) for instructions on manual installation.
+- Install [analyzer dependencies](/thehive/analyzers/VAST/requirements.txt) on the host by `pip3 install -r requirements.txt`
+- VAST server address should be provided as a parameter in Cortex
+
+## Requirements For Dockerized Analyzer
+- Currently `VAST Cortex Analyzer` Docker image is not provided under official [Cortex Neurons Library](https://hub.docker.com/u/cortexneurons)
+- Build and push analyzer image to local image repo. We are providing [analyzers.json](analyzers/local-analyzers.json) to be used in [Cortex Config](vol/cortex/application.conf):
+
+    ```
+    ## ANALYZERS
+    analyzer {
+    urls = [
+        #"https://download.thehive-project.org/analyzers.json",
+        "/opt/cortex/analyzers/local-analyzers.json"
+        #"/opt/cortex/analyzers"
+        ]
+    }
+    ```
+- For local development and debugging make sure to include `docker.autoUpdate=false` in [Cortex Config](vol/cortex/application.conf) and build/pull the image into local image repository.
+- If you are utilizing `VAST Server` as containerized on host, make sure to include `docker.container.networkMode=host` in [Cortex Config](vol/cortex/application.conf) and use local addres to reach. Example: `localhost:42000`
 
 ## How to Debug
 - Create `/input` and `/output` folders in where the analyzer script runs
@@ -37,7 +59,7 @@ The analyzer takes following input datatype:
     ```
 - While running the script, provide `.` as second parameter to indicate `job-directory` is current folder
 
-## Example `launch.json` file for VSCode
+## Example launch.json file for VSCode
 ```
     {
     "version": "0.2.0",
@@ -62,7 +84,3 @@ The analyzer takes following input datatype:
         ]
     }
 ````
-## Requirements
-- Vast binary should be available on host. Please refer to [Vast Documentation](vast.io) for instructions
-- Dependencies in requirements.txt should be installed
-- Vast server address should be provided as a parameter in Cortex

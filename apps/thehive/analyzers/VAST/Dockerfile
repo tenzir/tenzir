@@ -43,8 +43,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /worker
-COPY . Vast
-RUN chmod +x Vast/search.py && \
-pip3 install --no-cache-dir -r Vast/requirements.txt
+COPY . VAST
+RUN chmod +x VAST/search.py && \
+pip3 install --no-cache-dir -r VAST/requirements.txt
 
-ENTRYPOINT ["sh", "-c", "sleep 2073600"]
+ENTRYPOINT VAST/search.py

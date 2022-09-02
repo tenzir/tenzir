@@ -6,8 +6,8 @@
     "license": "BSD-3-Clause",
     "description": "Search hash, IP and domain in VAST.",
     "dataTypeList": ["hash", "domain", "ip", "subnet"],
-    "command": "Vast/search.py",
-    "baseConfig": "Vast",
+    "command": "VAST/search.py",
+    "baseConfig": "VAST",
     "config": {
       "service": "get"
     },
