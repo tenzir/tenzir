@@ -89,16 +89,17 @@ import Template from '!!raw-loader!@site/../rfc/000-TEMPLATE.md';
 [RFC-001: Composable Pipelines](https://github.com/tenzir/vast/pull/2511) is an
 example instantiation of this template.
 
-When it comes to reviewing RFCs, we face biased governance as of today, given
-that Tenzir develops VAST. Rather than the Tenzir's engineering making acceptance
-decisions, we'd rather have an independent governing board. Until then, we
-perform all reviews fully in the open.
+The RFC reviews take place 100% in the open. As of today, reviewers constitute
+members from Tenzir's engineering team. Given our current resource constraints
+and project state, we can only support a corporate-backed governance model. That
+said, opening ourselves up is laying the foundation of trust and committment
+that we want to go beyond a walled garden. We understand that this is a long
+journey and are excited about what's ahead of us.
 
-Acceptance and scheduling are also two different things. When an RFC gets
-accepted, it means that we put it on the roadmap, adjacent to existing items
-that compete for prioritization. In other words, even though we accepted an RFC,
-there will be an indeterminate period of time until we can devote internal
-resources. That said, we will always encourage community-led efforts and are
+When an RFC gets accepted, it means that we put it on the roadmap, adjacent to
+existing items that compete for prioritization. In other words, even though we
+accepted an RFC, there will be an indeterminate period of time until we can
+devote resources. We will always encourage community-led efforts and are
 enthusiastic about supporting external projects that we can support within our
 capacities.
 
