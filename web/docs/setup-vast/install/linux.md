@@ -73,13 +73,13 @@ systemctl start vast
 ### Debian
 
 We provide [pre-built packages](/docs/setup-vast/download#debian) for Debian
-and Debian derived distributions. After downloading, you can install VAST with
+and Debian-derived distributions. After downloading, install VAST using `dpkg`:
 
 ```bash
 dpkg -i vast-${version}_amd64.deb
 ```
 
-The debian package will automatically create a `vast` system user and install
+The Debian package automatically creates a `vast` system user and installs
 the systemd server service.
 
 :::tip Community contributions wanted!
