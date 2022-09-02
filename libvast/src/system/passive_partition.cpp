@@ -57,6 +57,31 @@
 
 namespace vast::system {
 
+namespace {
+void delegate_deferred_requests(passive_partition_state& state) {
+  for (auto&& [expr, rp] : std::exchange(state.deferred_evaluations, {}))
+    rp.delegate(static_cast<partition_actor>(state.self), atom::query_v,
+                std::move(expr));
+  for (auto&& rp : std::exchange(state.deferred_erasures, {}))
+    rp.delegate(static_cast<partition_actor>(state.self), atom::erase_v);
+}
+
+void deliver_error_to_deferred_requests(passive_partition_state& state,
+                                        const caf::error& err) {
+  for (auto&& [expr, rp] : std::exchange(state.deferred_evaluations, {})) {
+    // Because of a deficiency in the typed_response_promise API, we must
+    // access the underlying response_promise to deliver the error.
+    caf::response_promise& untyped_rp = rp;
+    untyped_rp.deliver(static_cast<partition_actor>(state.self), err);
+  }
+  for (auto&& rp : std::exchange(state.deferred_erasures, {})) {
+    caf::response_promise& untyped_rp = rp;
+    untyped_rp.deliver(static_cast<partition_actor>(state.self), err);
+  }
+}
+
+} // namespace
+
 /// Gets the INDEXER at a certain position.
 indexer_actor passive_partition_state::indexer_at(size_t position) const {
   VAST_ASSERT(position < indexers.size());
@@ -383,8 +408,7 @@ partition_actor::behavior_type passive_partition(
           self->quit();
         },
         [=](const caf::error& err) {
-          VAST_ERROR("{} failed to shut down all indexers: {}", *self,
-                     render(err));
+          VAST_ERROR("{} failed to shut down all indexers: {}", *self, err);
           self->quit(err);
         });
   });
@@ -396,10 +420,7 @@ partition_actor::behavior_type passive_partition(
       [=](chunk_ptr chunk) {
         VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(chunk));
         VAST_TRACEPOINT(passive_partition_loaded, id_string.c_str());
-        if (self->state.partition_chunk) {
-          VAST_WARN("{} ignores duplicate chunk", *self);
-          return;
-        }
+        VAST_ASSERT(!self->state.partition_chunk);
         if (!chunk) {
           VAST_ERROR("{} got invalid chunk", *self);
           self->quit();
@@ -435,8 +456,7 @@ partition_actor::behavior_type passive_partition(
             = plugin->make_store(self->state.accountant, self->state.filesystem,
                                  self->state.store_header);
           if (!store) {
-            VAST_ERROR("{} failed to spawn store: {}", *self,
-                       render(store.error()));
+            VAST_ERROR("{} failed to spawn store: {}", *self, store.error());
             self->quit(caf::make_error(ec::system_error, "failed to spawn "
                                                          "store"));
             return;
@@ -444,28 +464,14 @@ partition_actor::behavior_type passive_partition(
           self->state.store = *store;
           self->monitor(self->state.store);
         }
-        if (id != self->state.id)
-          VAST_WARN("{} encountered partition ID mismatch: restored {}"
-                    "from disk, expected {}",
-                    *self, self->state.id, id);
         // Delegate all deferred evaluations now that we have the partition chunk.
         VAST_DEBUG("{} delegates {} deferred evaluations", *self,
                    self->state.deferred_evaluations.size());
-        for (auto&& [expr, rp] :
-             std::exchange(self->state.deferred_evaluations, {}))
-          rp.delegate(static_cast<partition_actor>(self), atom::query_v,
-                      std::move(expr));
+        delegate_deferred_requests(self->state);
       },
       [=](caf::error err) {
-        VAST_ERROR("{} failed to load partition: {}", *self, render(err));
-        // Deliver the error for all deferred evaluations.
-        for (auto&& [expr, rp] :
-             std::exchange(self->state.deferred_evaluations, {})) {
-          // Because of a deficiency in the typed_response_promise API, we must
-          // access the underlying response_promise to deliver the error.
-          caf::response_promise& untyped_rp = rp;
-          untyped_rp.deliver(static_cast<partition_actor>(self), err);
-        }
+        VAST_ERROR("{} failed to load partition: {}", *self, err);
+        deliver_error_to_deferred_requests(self->state, err);
         // Quit the partition.
         self->quit(std::move(err));
       });
@@ -547,9 +553,10 @@ partition_actor::behavior_type passive_partition(
       return rp;
     },
     [self](atom::erase) -> caf::result<atom::done> {
+      auto rp = self->make_response_promise<atom::done>();
       if (!self->state.partition_chunk) {
         VAST_DEBUG("{} skips an erase request", *self);
-        return caf::skip;
+        return self->state.deferred_erasures.emplace_back(std::move(rp));
       }
       VAST_DEBUG("{} received an erase message and deletes {}", *self,
                  self->state.path);
@@ -565,7 +572,6 @@ partition_actor::behavior_type passive_partition(
       for (const auto& kv : self->state.type_ids_) {
         all_ids |= kv.second;
       }
-      auto rp = self->make_response_promise<atom::done>();
       self
         ->request(self->state.store, caf::infinite, atom::erase_v,
                   std::move(all_ids))
@@ -578,7 +584,7 @@ partition_actor::behavior_type passive_partition(
           });
       return rp;
     },
-    [self](atom::status, status_verbosity /*v*/) -> record {
+    [self](atom::status, status_verbosity) -> record {
       record result;
       if (!self->state.partition_chunk) {
         result["state"] = "waiting for chunk";
@@ -596,7 +602,7 @@ partition_actor::behavior_type passive_partition(
       result["memory-usage-indexers"] = mem_indexers;
       auto x = self->state.partition_chunk->incore();
       if (!x) {
-        result["memory-usage-incore"] = render(x.error());
+        result["memory-usage-incore"] = fmt::to_string(x.error());
         result["memory-usage"] = self->state.partition_chunk->size()
                                  + mem_indexers + sizeof(self->state);
       } else {
