@@ -69,6 +69,15 @@ issues across multiple dimensions in a visually appealing way.
 
 [github-projects]: https://docs.github.com/en/issues/planning-and-tracking-with-projects
 
+The quarterly board view make it easy to understand ongoing thrusts:
+
+[![Github Roadmap - Board](roadmap-board.jpg)][roadmap]
+
+The milestones view provides a different perspective that focuses more on the
+bigger-picture theme:
+
+[![Github Roadmap - Milestones](roadmap-milestones.jpg)][roadmap]
+
 ## Open RFCs
 
 The roadmap provides a lens into the short-term future. We don't want it to be
