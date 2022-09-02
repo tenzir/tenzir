@@ -86,9 +86,9 @@ macro (VASTTargetEnableTooling _target)
                               C_CLANG_TIDY "${VAST_CLANG_TIDY_ARGS}")
   endif ()
   if (VAST_ENABLE_CODE_COVERAGE)
-    target_code_coverage("${_target}" ${ARGV} EXCLUDE
-                         "${PROJECT_SOURCE_DIR}/libvast/aux/*"
-                         "${PROJECT_BINARY_DIR}/*")
+    target_code_coverage(
+      "${_target}" ${ARGV} EXCLUDE "${PROJECT_SOURCE_DIR}/libvast/aux/*"
+      "${PROJECT_BINARY_DIR}/*")
   endif ()
 endmacro ()
 
