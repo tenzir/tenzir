@@ -2,9 +2,8 @@
 title: Public Roadmap and Open RFCs
 description: Open Source needs Open Governance
 authors: mavam
-draft: true
 date: 2022-09-07
-tags: [roadmap, github, open-source]
+tags: [roadmap, github, rfc, open-source]
 ---
 
 We are happy to announce that we have published [our engineering
