@@ -379,7 +379,7 @@ jobs:
       - name: Upload Artifact to GCS
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
-          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ secrets.GCS_BUCKET }}/$PACKAGE_NAME.tar.gz"
+          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
 
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
