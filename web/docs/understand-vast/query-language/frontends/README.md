@@ -9,9 +9,6 @@ query frontend by replacing it with a different language.
 The [**VAST** **Q**uery **L**anguage (VASTQL)](.) is the default query language
 frontend. Besides VAST, the following frontends ship with VAST:
 
-```mdx-code-block
 import DocCardList from '@theme/DocCardList';
-import {useCurrentSidebarCategory} from '@docusaurus/theme-common';
 
-<DocCardList items={useCurrentSidebarCategory().items}/>
-```
+<DocCardList />
