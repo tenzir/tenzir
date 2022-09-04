@@ -42,36 +42,45 @@ library(lubridate)
 theme_set(theme_minimal())
 
 data <- read_table("/tmp/vast-merge-commits.txt",
-                   col_names = c("time", "tag"),
-                   col_types = "Tc") |>
-        arrange(time) |>
-        mutate(count = row_number())
+  col_names = c("time", "tag"),
+  col_types = "Tc"
+) |>
+  arrange(time) |>
+  mutate(count = row_number())
 
-first_contrib <- \(x) data |> filter(time >= x) |> pull(count) |> first()
+first_contribution <- \(x) data |>
+  filter(time >= x) |>
+  pull(count) |>
+  first()
+
 events <- tribble(
-    ~time, ~event,
-    ymd("2016-03-17"), "NSDI '16\npublication",
-    ymd("2017-08-31"), "Tenzir\nincorporated",
-    ymd("2018-07-01"), "Tobias",
-    ymd("2019-09-01"), "Dominik",
-    ymd("2020-01-01"), "Benno",
-    ymd("2021-12-01"), "Thomas",
-    ymd("2022-07-01"), "Patryk",
-  ) |>
-  mutate(time = as.POSIXct(time), count = Vectorize(first_contrib)(time))
+  ~time, ~event,
+  ymd("2016-03-17"), "NSDI '16\npublication",
+  ymd("2017-08-31"), "Tenzir\nincorporated",
+  ymd("2018-07-01"), "Tobias",
+  ymd("2019-09-01"), "Dominik",
+  ymd("2020-01-01"), "Benno",
+  ymd("2021-12-01"), "Thomas",
+  ymd("2022-07-01"), "Patryk",
+) |>
+  mutate(time = as.POSIXct(time), count = Vectorize(first_contribution)(time))
 
 data |>
-  ggplot(aes(x = time, y = count, label = tag)) +
-    geom_point(size = 1, alpha = 0.2) +
-    geom_segment(data = events,
-                 aes(xend = time, yend = count + 200, label = event),
-                 color = "red") +
-    geom_label(data = events,
-               aes(y = count + 200, label = event),
-               color = "red",
-               size = 2) +
-    scale_x_datetime(date_breaks = "1 year", date_labels = "%Y") +
-    labs(x = "Time", y = "Merge Commits")
+  ggplot(aes(x = time, y = count)) +
+  geom_point(size = 1, alpha = 0.2) +
+  geom_segment(
+    data = events,
+    aes(xend = time, yend = count + 200),
+    color = "red"
+  ) +
+  geom_label(
+    data = events,
+    aes(y = count + 200, label = event),
+    color = "red",
+    size = 2
+  ) +
+  scale_x_datetime(date_breaks = "1 year", date_labels = "%Y") +
+  labs(x = "Time", y = "Merge Commits")
 ```
 
 Prior to Tenzir taking ownership of the project and developing VAST, it was a
@@ -92,17 +101,21 @@ library(ggrepel)
 
 data |>
   ggplot(aes(x = time, y = count, label = tag)) +
-    geom_point(size = 1, alpha = 0.1) +
-    geom_text_repel(size = 2,
-                    min.segment.length = 0,
-                    max.overlaps = Inf,
-                    segment.color = "red",
-                    segment.alpha = 0.2,
-                    box.padding = 0.2) +
-    scale_x_datetime(date_breaks = "1 year",
-                     limits = c(as.POSIXct(ymd("2020-01-01")), max(data$time)),
-                     date_labels = "%Y") +
-    labs(x = "Time", y = "Merge Commits")
+  geom_point(size = 1, alpha = 0.1) +
+  geom_text_repel(
+    size = 2,
+    min.segment.length = 0,
+    max.overlaps = Inf,
+    segment.color = "red",
+    segment.alpha = 0.2,
+    box.padding = 0.2
+  ) +
+  scale_x_datetime(
+    date_breaks = "1 year",
+    limits = c(as.POSIXct(ymd("2020-01-01")), max(data$time)),
+    date_labels = "%Y"
+  ) +
+  labs(x = "Time", y = "Merge Commits")
 ```
 
 As visible from the tag labels, we were at [CalVer](https://calver.org) for a
@@ -116,30 +129,47 @@ engineering and release process in place.
 ```{r}
 #| code-fold: true
 #| label: since-v1.0
-v1_0_0_rc1_time <- data |> filter(tag == "v1.0.0-rc1") |> pull(time)
+v1_0_0_rc1_time <- data |>
+  filter(tag == "v1.0.0-rc1") |>
+  pull(time)
+
 since_v1_0_0_rc1 <- data |> filter(time >= v1_0_0_rc1_time)
-rc <- since_v1_0_0_rc1 |> drop_na() |> filter(grepl("rc", tag))
-non_rc <- since_v1_0_0_rc1 |> drop_na() |> filter(!grepl("rc", tag))
+
+rc <- since_v1_0_0_rc1 |>
+  drop_na() |>
+  filter(grepl("rc", tag))
+
+non_rc <- since_v1_0_0_rc1 |>
+  drop_na() |>
+  filter(!grepl("rc", tag))
 
 since_v1_0_0_rc1 |>
   ggplot(aes(x = time, y = count, label = tag)) +
-    geom_point(size = 1, alpha = 0.2) +
-    geom_segment(data = non_rc,
-                 aes(xend = time, yend = min(count)), color = "red") +
-    geom_text_repel(size = 2,
-                    min.segment.length = 0,
-                    max.overlaps = Inf,
-                    segment.color = "grey",
-                    box.padding = 0.7) +
-    geom_point(data = rc, aes(x = time, y = count),
-               color = "blue",
-               size = 2) +
-    geom_point(data = non_rc, aes(x = time, y = count),
-               color = "red",
-               size = 2) +
-    geom_label(data = non_rc, aes(y = min(count)), size = 2, color = "red") +
-    scale_x_datetime(date_breaks = "1 month", date_labels = "%b %y") +
-    labs(x = "Time", y = "Merge Commits")
+  geom_point(size = 1, alpha = 0.2) +
+  geom_segment(
+    data = non_rc,
+    aes(xend = time, yend = min(count)), color = "red"
+  ) +
+  geom_text_repel(
+    size = 2,
+    min.segment.length = 0,
+    max.overlaps = Inf,
+    segment.color = "grey",
+    box.padding = 0.7
+  ) +
+  geom_point(
+    data = rc, aes(x = time, y = count),
+    color = "blue",
+    size = 2
+  ) +
+  geom_point(
+    data = non_rc, aes(x = time, y = count),
+    color = "red",
+    size = 2
+  ) +
+  geom_label(data = non_rc, aes(y = min(count)), size = 2, color = "red") +
+  scale_x_datetime(date_breaks = "1 month", date_labels = "%b %y") +
+  labs(x = "Time", y = "Merge Commits")
 ```
 
 The v2.0 release was a hard one for us, given the long distance to v1.1. We
