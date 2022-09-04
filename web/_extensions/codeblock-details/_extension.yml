@@ -1,0 +1,6 @@
+title: CodeBlock Details
+author: Tenzir
+version: 0.1.0
+contributes:
+  filters:
+    - codeblock-details.lua

@@ -11,3 +11,8 @@ format:
   gfm:
     keep-yaml: true
     fig-format: svg
+# For the lack of native code folding, we use our own extension that respects
+# the "code-fold: true" attribute. This may be come obsolete in the future; see
+# also: https://github.com/quarto-dev/quarto-cli/issues/2279.
+filters:
+  - codeblock-details
