@@ -64,6 +64,9 @@ $(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
 	@$(MAKE) -C $(NOTEBOOK_INPUT_DIR)
 	cp -r $(NOTEBOOK_INPUT_DIR)/output/md/* $(NOTEBOOK_OUTPUT_DIR)
 
+quarto:
+	@quarto render
+
 clean:
 	rm -f $(CHANGELOG_OUTPUT)
 	$(MAKE) -C $(NOTEBOOK_INPUT_DIR) clean
