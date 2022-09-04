@@ -37,6 +37,7 @@ venv/
 /examples/notebooks/output
 
 # Website
+/web/**/.gitignore
 /web/env
 /web/node_modules
 /web/build

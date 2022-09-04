@@ -1,0 +1,13 @@
+project:
+  render:
+    - blog/**/*.qmd
+    - web/**/*.qmd
+  execute-dir: file
+execute:
+  cache: true
+  warning: false
+  error: false
+format:
+  gfm:
+    keep-yaml: true
+    fig-format: svg
