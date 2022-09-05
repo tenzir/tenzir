@@ -4,7 +4,7 @@ include "root" {
 
 # Core 1 is required for image deployment
 dependency "core_1" {
-  config_path = "../core-1"
+  config_path  = "../core-1"
   skip_outputs = true
 }
 

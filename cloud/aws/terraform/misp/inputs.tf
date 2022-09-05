@@ -18,19 +18,19 @@ module "env" {
 }
 
 locals {
-  name            = "misp"
-  task_cpu        = 2048
-  task_memory     = 4096
-  
-  mysql_version   = "8.0.19"
-  # mysql requires its user id to match the owner of the `/var/lib/mysql` dir
-  mysql_uid       = 1000 
-  mysql_gid       = 1000
+  name        = "misp"
+  task_cpu    = 2048
+  task_memory = 4096
 
-  redis_version   = "5.0.6"
+  mysql_version = "8.0.19"
+  # mysql requires its user id to match the owner of the `/var/lib/mysql` dir
+  mysql_uid = 1000
+  mysql_gid = 1000
+
+  redis_version = "5.0.6"
 
   misp_proxy_port = 8080
   # misp requires its user id to match the owner of the `/var/www/MISP/app/` dir
-  misp_uid       = 1000 
-  misp_gid       = 1000
+  misp_uid = 1000
+  misp_gid = 1000
 }
