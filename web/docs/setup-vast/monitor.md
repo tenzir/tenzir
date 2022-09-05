@@ -140,6 +140,7 @@ The following list describes all available metrics keys:
 |`active-store.lookup.hits`|The number of results of a query in an active store.|#events|🔎🪪💾|
 |`passive-store.lookup.runtime`|The number of results of a query in a passive store.|#events|🔎🪪💾|
 |`passive-store.lookup.hits`|The number of results of a query in a passive store.|#events|🔎🪪💾|
+|`passive-store.init.runtime`|Time until the store is ready serve queries.|nanoseconds|💾|
 |`source.start`|Timepoint when the source started.|nanoseconds since epoch||
 |`source.stop`|Timepoint when the source stopped.|nanoseconds since epoch||
 |`syslog-reader.rate`|The rate of events processed by the syslog source.|#events/second||
