@@ -225,3 +225,18 @@ datasource resources only, use:
   bucket when the stack is destroyed to avoid interfering with your existing
   notification systems.
 :::
+
+### Run MISP
+
+[MISP](https://www.misp-project.org/) is a popular community driven open source
+thread intelligence platform. It integrates naturally with VAST. To deployed a
+preconfigured instance:
+- add `misp` to the list of plugins in `VAST_CLOUD_PLUGINS`
+- deploy (or re-deploy) the VAST stack including MISP with `./vast-cloud deploy`
+- start the MISP server with `./vast-cloud misp.start`, wait a few minutes, MISP
+  is rather slow to start :-)
+- open an ssh tunnel to your instance running `./vast-cloud misp.tunnel`
+- you can now connect to MISP `localhost:8080` on you local browser
+  - Default login: demo@tenzir.com / demo
+  - Default API KEY: demodemodemodemodemodemodemodemodemodemo
+- you can also subscribe to MISP's ZeroMQ feed on `localhost:50000`
