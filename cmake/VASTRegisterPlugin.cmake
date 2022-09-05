@@ -86,6 +86,15 @@ macro (VASTTargetEnableTooling _target)
                               C_CLANG_TIDY "${VAST_CLANG_TIDY_ARGS}")
   endif ()
   if (VAST_ENABLE_CODE_COVERAGE)
+    unset(_absolute_plugin_test_sources)
+    foreach (plugin_test_source IN LISTS PLUGIN_TEST_SOURCES)
+      if (IS_ABSOLUTE "${plugin_test_source}")
+        list(APPEND _absolute_plugin_test_sources "${plugin_test_source}")
+      else ()
+        list(APPEND _absolute_plugin_test_sources
+             "${CMAKE_CURRENT_SOURCE_DIR}/${plugin_test_source}")
+      endif ()
+    endforeach ()
     target_code_coverage(
       "${_target}"
       ${ARGV}
@@ -94,7 +103,7 @@ macro (VASTTargetEnableTooling _target)
       "${PROJECT_SOURCE_DIR}/libvast/test/*"
       "${PROJECT_SOURCE_DIR}/libvast_test/*"
       "${PROJECT_BINARY_DIR}/*"
-      ${PLUGIN_TEST_SOURCES})
+      ${_plugin_test_sources})
   endif ()
 endmacro ()
 
