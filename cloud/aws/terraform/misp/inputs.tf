@@ -30,7 +30,8 @@ locals {
   redis_version = "5.0.6"
 
   misp_proxy_port = 8080
-  # misp requires its user id to match the owner of the `/var/www/MISP/app/` dir
-  misp_uid = 1000
-  misp_gid = 1000
+  # the base MISP image that we use runs as root, so we also configure the
+  # mounted volumes as such
+  misp_uid = 0
+  misp_gid = 0
 }
