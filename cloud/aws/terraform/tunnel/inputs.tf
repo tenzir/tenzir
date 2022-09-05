@@ -1,4 +1,5 @@
 variable "region_name" {}
+variable "tunnel_image" {}
 variable "fargate_cluster_name" {}
 variable "fargate_task_execution_role_arn" {}
 variable "vast_vpc_id" {}

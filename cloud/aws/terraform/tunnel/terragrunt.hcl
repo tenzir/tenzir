@@ -21,7 +21,7 @@ locals {
 # terraform {
 #   before_hook "deploy_images" {
 #     commands = ["apply"]
-#     execute  = ["../../resources/scripts/deploy-cloudflared-image.sh"]
+#     execute  = ["../../resources/scripts/deploy-tunnel-image.sh"]
 #   }
 
 #   extra_arguments "image_vars" {
@@ -33,6 +33,7 @@ locals {
 
 inputs = {
   region_name                     = local.region_name
+  tunnel_image                    = "dummy_overriden_by_before_hook"
   fargate_task_execution_role_arn = dependency.core_2.outputs.fargate_task_execution_role_arn
   fargate_cluster_name            = dependency.core_2.outputs.fargate_cluster_name
   vast_vpc_id                     = dependency.core_2.outputs.vast_vpc_id

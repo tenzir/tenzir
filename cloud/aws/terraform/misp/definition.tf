@@ -1,4 +1,5 @@
 locals {
+  placeholder_hostname = "placeholder-hostname-to-rewrite-in-nginx"
   log_config = {
     logDriver = "awslogs"
     options = {
@@ -11,21 +12,21 @@ locals {
   container_definition = [
     {
       image     = var.misp_image
-      name      = local.misp_container_name
+      name      = "misp-core"
       essential = true
       portMappings = [{
         containerPort = 50000
         hostPort      = 50000
         protocol      = "tcp"
         }, {
-        containerPort = 5000
-        hostPort      = 5000
+        containerPort = 80
+        hostPort      = 80
         protocol      = "tcp"
       }],
       volumesFrom = []
       environment = [{
         name  = "HOSTNAME"
-        value = "http://localhost:5000" # TODO: can we make this dynamic?
+        value = "https://${local.placeholder_hostname}"
         }, {
         name  = "REDIS_FQDN"
         value = "localhost"
@@ -133,6 +134,26 @@ locals {
       name             = "redis"
       essential        = true
       logConfiguration = local.log_config
+    },
+    {
+      image     = var.misp_proxy_image
+      name      = "misp-proxy"
+      essential = true
+      portMappings = [{
+        containerPort = 8080
+        hostPort      = 8080
+        protocol      = "tcp"
+      }]
+      environment = [{
+        name  = "NGINX_PLACEHOLDER_HOSTNAME"
+        value = local.placeholder_hostname
+      }, {
+        name  = "NGINX_PORT"
+        value = "8080"
+      }, {
+        name  = "NGINX_PROXY_PASS"
+        value = "http://localhost:80"
+      }]
     }
     # we don't instantiate the smtp server
   ]
