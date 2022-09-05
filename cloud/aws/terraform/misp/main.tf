@@ -45,15 +45,15 @@ resource "aws_efs_access_point" "files" {
   root_directory {
     path = "/misp/files"
     creation_info {
-      owner_gid   = 1000
-      owner_uid   = 1000
+      owner_gid   = local.misp_gid
+      owner_uid   = local.misp_uid
       permissions = "755"
     }
   }
 
   posix_user {
-    gid = 1000
-    uid = 1000
+    gid = local.misp_gid
+    uid = local.misp_uid
   }
 }
 

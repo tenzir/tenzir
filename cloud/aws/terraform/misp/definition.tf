@@ -32,7 +32,7 @@ locals {
           readOnly      = false
         }
       ]
-      volumesFrom = []
+      user      = "${local.misp_uid}:${local.misp_gid}"
       environment = [{
         name  = "HOSTNAME"
         value = "http://${local.placeholder_hostname}"
