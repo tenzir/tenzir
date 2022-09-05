@@ -233,8 +233,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     if (auto telemetry = self->state.telemetry(); !telemetry.data.empty())
       self->send(self->state.accountant, atom::metrics_v, std::move(telemetry));
     if (auto err = self->state.save_to_disk())
-      VAST_ERROR("{} failed to persist state to disk: {}", *self,
-                 self->system().render(err));
+      VAST_ERROR("{} failed to persist state to disk: {}", *self, err);
     self->quit(msg.reason);
   });
   // Load existing state from disk if possible.

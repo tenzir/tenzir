@@ -37,7 +37,7 @@ class expression;
 struct meta_extractor : detail::totally_ordered<meta_extractor> {
   enum kind { type, field, import_time };
 
-  meta_extractor() = default;
+  explicit meta_extractor() = default;
 
   meta_extractor(kind k) : kind{k} {
     // nop

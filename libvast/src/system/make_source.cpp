@@ -70,7 +70,8 @@ make_source(caf::actor_system& sys, const std::string& format,
   // Parse options.
   const auto& options = inv.options;
   auto max_events
-    = to_std(caf::get_if<size_t>(&options, "vast.import.max-events"));
+    = to_std(caf::get_if<caf::config_value::integer>(&options, //
+                                                     "vast.import.max-events"));
   auto uri = caf::get_if<std::string>(&options, "vast.import.listen");
   auto file = caf::get_if<std::string>(&options, "vast.import.read");
   auto type = caf::get_if<std::string>(&options, "vast.import.type");
@@ -91,8 +92,6 @@ make_source(caf::actor_system& sys, const std::string& format,
   if (uri && file)
     return caf::make_error(ec::invalid_configuration, //
                            "only one source possible (-r or -l)");
-  if (!uri && !file)
-    file = std::string{defaults::import::read};
   if (uri) {
     endpoint ep;
     if (!vast::parsers::endpoint(*uri, ep))
