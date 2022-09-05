@@ -22,7 +22,7 @@ module "efs" {
 module "vast_server" {
   source = "./fargate"
 
-  name        = "vast-server"
+  name        = local.vast_server_name
   region_name = var.region_name
 
   vpc_id                      = module.network.new_vpc_id
@@ -67,7 +67,7 @@ module "vast_client" {
 
   additional_policies = []
   environment = {
-    VAST_ENDPOINT = local.vast_server_domain_name
+    VAST_ENDPOINT = local.vast_server_hostname
   }
 
 }

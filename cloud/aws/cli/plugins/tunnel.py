@@ -4,6 +4,7 @@ from vast_invoke import Context, pty_task, task
 from common import (
     AWS_REGION,
     FargateService,
+    active_modules,
     load_cmd,
     parse_env,
     terraform_output,
@@ -39,6 +40,15 @@ def stop(c):
 def restart(c):
     """Stop the running tunnel task, the service starts a new one"""
     FargateService(*service_outputs(c)).restart_service()
+
+
+@task
+def list_services(c):
+    for mod in active_modules(c):
+        try:
+            print(terraform_output(c, mod, "exposed_services"))
+        except:
+            pass
 
 
 @pty_task(iterable=["env"])

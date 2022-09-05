@@ -19,6 +19,8 @@ locals {
         hostPort      = 50000
         protocol      = "tcp"
         }, {
+        // Use this for REST API only
+        // MISP UI requires hostname rewrite proxy
         containerPort = 80
         hostPort      = 80
         protocol      = "tcp"
@@ -26,7 +28,7 @@ locals {
       volumesFrom = []
       environment = [{
         name  = "HOSTNAME"
-        value = "https://${local.placeholder_hostname}"
+        value = "http://${local.placeholder_hostname}"
         }, {
         name  = "REDIS_FQDN"
         value = "localhost"
@@ -140,20 +142,40 @@ locals {
       name      = "misp-proxy"
       essential = true
       portMappings = [{
-        containerPort = 8080
-        hostPort      = 8080
+        containerPort = local.misp_proxy_port
+        hostPort      = local.misp_proxy_port
         protocol      = "tcp"
       }]
       environment = [{
         name  = "NGINX_PLACEHOLDER_HOSTNAME"
         value = local.placeholder_hostname
-      }, {
+        }, {
         name  = "NGINX_PORT"
         value = "8080"
-      }, {
+        }, {
         name  = "NGINX_PROXY_PASS"
         value = "http://localhost:80"
       }]
+    },
+    {
+      image     = "linuxserver/openssh-server:latest"
+      name      = "ssh-server"
+      essential = true
+      portMappings = [{
+        containerPort = 2222
+        hostPort      = 2222
+        protocol      = "tcp"
+      }]
+      environment = [{
+        name  = "PUBLIC_KEY"
+        value = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINBtjQQ3SxIzW5IhviByGdr3Y0x5vroJRf6Rw9DM7jD7"
+        }, {
+        name  = "DOCKER_MODS"
+        value = "linuxserver/mods:openssh-server-ssh-tunnel"
+        }, {
+        name  = "USER_NAME"
+        value = "tunneler"
+        }]
     }
     # we don't instantiate the smtp server
   ]

@@ -12,7 +12,7 @@ dependency "core_2" {
   mock_outputs = {
     fargate_task_execution_role_arn = "arn:aws:iam:::role/temporary-dummy-arn"
     fargate_cluster_name            = "dummy_name"
-    vast_server_domain_name         = "dummy.local"
+    vast_server_hostname            = "dummy.local"
     vast_subnet_id                  = "dummy_id"
     vast_client_security_group_id   = "dummy_id"
   }
@@ -45,7 +45,7 @@ inputs = {
   region_name                     = local.region_name
   matcher_client_image            = "dummy_overriden_by_before_hook"
   fargate_task_execution_role_arn = dependency.core_2.outputs.fargate_task_execution_role_arn
-  vast_server_domain_name         = dependency.core_2.outputs.vast_server_domain_name
+  vast_server_hostname            = dependency.core_2.outputs.vast_server_hostname
   fargate_cluster_name            = dependency.core_2.outputs.fargate_cluster_name
   vast_subnet_id                  = dependency.core_2.outputs.vast_subnet_id
   vast_client_security_group_id   = dependency.core_2.outputs.vast_client_security_group_id
