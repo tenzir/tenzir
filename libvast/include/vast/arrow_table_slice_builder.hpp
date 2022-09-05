@@ -42,9 +42,13 @@ public:
 
   [[nodiscard]] table_slice finish() override;
 
+  /// Creates a table slice from a record batch.
   /// @pre `record_batch->schema()->Equals(make_experimental_schema(layout))``
+  /// @param batch A pre-existing record batch.
+  /// @param schema VAST schema matching the record batch schema. Parameter
+  ///     is optional and derived from the record batch if not provided.
   [[nodiscard]] table_slice static create(
-    const std::shared_ptr<arrow::RecordBatch>& record_batch,
+    const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema = {},
     table_slice::serialize serialize = table_slice::serialize::no,
     size_t initial_buffer_size = default_buffer_size);
 
