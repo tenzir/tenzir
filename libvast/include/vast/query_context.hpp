@@ -105,6 +105,10 @@ struct query_context {
              q.priority, q.issuer);
   }
 
+  std::size_t memusage() const {
+    return sizeof(*this) + ids.memusage();
+  }
+
   // -- data members -----------------------------------------------------------
 
   /// The query id.

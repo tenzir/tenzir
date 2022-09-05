@@ -238,6 +238,8 @@ struct index_state {
   [[nodiscard]] caf::typed_response_promise<record>
   status(status_verbosity v) const;
 
+  size_t memusage() const;
+
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
