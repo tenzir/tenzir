@@ -93,7 +93,8 @@ macro (VASTTargetEnableTooling _target)
       "${PROJECT_SOURCE_DIR}/libvast/aux/*"
       "${PROJECT_SOURCE_DIR}/libvast/test/*"
       "${PROJECT_SOURCE_DIR}/libvast_test/*"
-      "${PROJECT_BINARY_DIR}/*")
+      "${PROJECT_BINARY_DIR}/*"
+      ${PLUGIN_TEST_SOURCES})
   endif ()
 endmacro ()
 
