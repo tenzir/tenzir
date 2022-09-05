@@ -1136,3 +1136,10 @@ jobs:
           name: code-coverage-report
           path: ${{ env.BUILD_DIR }}/ccov
           if-no-files-found: error
+      - name: Upload to codecov.io
+        # FIXME: Restrict to master before merging.
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: codecov/codecov-action@v3
+        with:
+            token: ${{ secrets.VAST_CODECOV_TOKEN }}
+            files: ${{ env.BUILD_DIR }}/ccov/all-tests.info
