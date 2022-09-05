@@ -1141,5 +1141,5 @@ jobs:
         # if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: codecov/codecov-action@v3
         with:
-            token: ${{ secrets.VAST_CODECOV_TOKEN }}
-            files: ${{ env.BUILD_DIR }}/ccov/all-tests.info
+          token: ${{ secrets.VAST_CODECOV_TOKEN }}
+          files: ${{ env.BUILD_DIR }}/ccov/all-tests.info
