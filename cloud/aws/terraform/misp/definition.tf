@@ -25,6 +25,13 @@ locals {
         hostPort      = 80
         protocol      = "tcp"
       }],
+      mountPoints = [
+        {
+          sourceVolume  = "files",
+          containerPath = "/var/www/MISP/app/files",
+          readOnly      = false
+        }
+      ]
       volumesFrom = []
       environment = [{
         name  = "HOSTNAME"
