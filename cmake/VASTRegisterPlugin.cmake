@@ -87,7 +87,12 @@ macro (VASTTargetEnableTooling _target)
   endif ()
   if (VAST_ENABLE_CODE_COVERAGE)
     target_code_coverage(
-      "${_target}" ${ARGV} EXCLUDE "${PROJECT_SOURCE_DIR}/libvast/aux/*"
+      "${_target}"
+      ${ARGV}
+      EXCLUDE
+      "${PROJECT_SOURCE_DIR}/libvast/aux/*"
+      "${PROJECT_SOURCE_DIR}/libvast/test/*"
+      "${PROJECT_SOURCE_DIR}/libvast_test/*"
       "${PROJECT_BINARY_DIR}/*")
   endif ()
 endmacro ()
