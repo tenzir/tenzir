@@ -1123,11 +1123,16 @@ jobs:
           cmake --build "$BUILD_DIR" --target all --parallel --verbose
       - name: Generate Code Coverage
         run: |
-          cmake --build "$BUILD_DIR" --target ccov
-      - name: Upload Code Coverage Report
-        if: always()
+          cmake --build "$BUILD_DIR" --target ccov > all-tests.log || exit 0
+      - name: Upload Code Coverage Logs
         uses: actions/upload-artifact@v3
         with:
-          name: code-coverage-vast-${{ needs.determine-version.outputs.build-version }}
+          name: code-coverage-logs
+          path: all-tests.log
+          if-no-files-found: error
+      - name: Upload Code Coverage Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: code-coverage-report
           path: ${{ env.BUILD_DIR }}/ccov
           if-no-files-found: error
