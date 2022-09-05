@@ -60,7 +60,7 @@ def start_misp(c):
     print("Start MISP Server")
     c.run("./vast-cloud misp.start")
     print("The task needs a bit of time to boot, sleeping for a while...")
-    time.sleep(200)
+    time.sleep(300)
 
 
 class VastCloudTestLoader(unittest.TestLoader):
@@ -334,7 +334,7 @@ class MISP(unittest.TestCase):
 
     def test(self):
         """Test that we can get the MISP login page"""
-        sleep = 5
+        sleep = 10
         self.c.run(
             f"nohup timeout {sleep+2} ./vast-cloud misp.tunnel > /dev/null 2>&1 &"
         )
