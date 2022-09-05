@@ -15,6 +15,7 @@ dependency "core_2" {
     fargate_cluster_name            = "dummy_name"
     vast_vpc_id                     = "dummy_id"
     public_subnet_id                = "dummy_id"
+    efs_client_security_group_id    = "dummy_id"
   }
 }
 
@@ -47,8 +48,10 @@ inputs = {
   misp_version                    = local.misp_version
   misp_image                      = "dummy_overriden_by_before_hook"
   misp_proxy_image                = "dummy_overriden_by_before_hook"
+  efs_client_security_group_id    = dependency.core_2.outputs.efs_client_security_group_id
   fargate_task_execution_role_arn = dependency.core_2.outputs.fargate_task_execution_role_arn
   fargate_cluster_name            = dependency.core_2.outputs.fargate_cluster_name
   vast_vpc_id                     = dependency.core_2.outputs.vast_vpc_id
   public_subnet_id                = dependency.core_2.outputs.public_subnet_id
+  efs_id                          = dependency.core_2.outputs.efs_id
 }

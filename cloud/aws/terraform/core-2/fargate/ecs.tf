@@ -64,7 +64,7 @@ resource "aws_ecs_service" "fargate_service" {
 
   network_configuration {
     subnets          = [var.subnet_id]
-    security_groups  = [var.security_group_id]
+    security_groups  = var.security_group_ids
     assign_public_ip = false
   }
 
