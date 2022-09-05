@@ -58,7 +58,7 @@ def get_public_ip(c):
     return eni_desc["NetworkInterfaces"][0]["Association"]["PublicIp"]
 
 
-@pty_task
+@task
 def tunnel(c, ui_port="8080", zmq_port="50000"):
     """Open an SSH tunnel to the MISP instance and forward the ports"""
     print("Getting public ip...")

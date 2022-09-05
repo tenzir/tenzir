@@ -10,6 +10,7 @@ import json
 import os
 import io
 import common
+import requests
 
 
 # A common prefix for all test files to help cleanup
@@ -52,6 +53,14 @@ def start_vast(c):
     c.run("./vast-cloud start-vast-server")
     print("The task needs a bit of time to boot, sleeping for a while...")
     time.sleep(100)
+
+
+def start_misp(c):
+    """Start MISP, noop if already running"""
+    print("Start MISP Server")
+    c.run("./vast-cloud misp.start")
+    print("The task needs a bit of time to boot, sleeping for a while...")
+    time.sleep(200)
 
 
 class VastCloudTestLoader(unittest.TestLoader):
@@ -317,6 +326,22 @@ class Common(unittest.TestCase):
     def test_parse_env(self):
         res = common.parse_env(["var1=val1", "var2=val2"])
         self.assertEqual(res, {"var1": "val1", "var2": "val2"})
+
+
+class MISP(unittest.TestCase):
+    def setUp(self):
+        start_misp(self.c)
+
+    def test(self):
+        """Test that we can get the MISP login page"""
+        sleep = 5
+        self.c.run(
+            f"nohup timeout {sleep+2} ./vast-cloud misp.tunnel > /dev/null 2>&1 &"
+        )
+        time.sleep(sleep)
+        resp = requests.get("http://localhost:8080")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("<title>Users - MISP</title>", resp.text)
 
 
 @task(

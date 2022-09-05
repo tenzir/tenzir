@@ -50,10 +50,6 @@ output "vast_server_hostname" {
   value = local.vast_server_hostname
 }
 
-output "service_discov_namespace_id" {
-  value = aws_service_discovery_private_dns_namespace.main.id
-}
-
 output "efs_id" {
   value = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
 }
