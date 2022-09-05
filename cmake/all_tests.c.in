@@ -4,22 +4,27 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define RUN_CMAKE_TARGET(target)                                               \
-  {                                                                            \
-    pid_t pid = fork();                                                        \
-    if (pid == 0) {                                                            \
-      char* argv[6] = {                                                        \
-        "cmake", "--build", "@CMAKE_BINARY_DIR@", "--target", target, 0,       \
-      };                                                                       \
-      execv("@CMAKE_COMMAND@", argv);                                          \
-      exit(127);                                                               \
-    } else {                                                                   \
-      waitpid(pid, NULL, 0);                                                   \
-    }                                                                          \
+int run_cmake_target(char* target) {
+  pid_t pid = fork();
+  if (pid == 0) {
+    char* argv[6] = {
+      "cmake", "--build", "@CMAKE_BINARY_DIR@", "--target", target, 0,
+    };
+    execv("@CMAKE_COMMAND@", argv);
+    exit(127);
+  } else {
+    int status = EXIT_SUCCESS;
+    waitpid(pid, &status, 0);
+    return status;
   }
+}
 
 int main() {
-  RUN_CMAKE_TARGET("test")
-  RUN_CMAKE_TARGET("integration")
+  int test_status = run_cmake_target("test");
+  int integration_status = run_cmake_target("integration");
+  if (test_status != EXIT_SUCCESS)
+    return test_status;
+  if (integration_status != EXIT_SUCCESS)
+    return integration_status;
   return EXIT_SUCCESS;
 }
