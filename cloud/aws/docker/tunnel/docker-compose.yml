@@ -1,7 +1,0 @@
-version: '3'
-services:
-  tunnel:
-    image: tenzir/vastcloud:tunnel
-    build:
-      context: ../../resources
-      dockerfile: ../docker/tunnel/tunnel.Dockerfile
