@@ -1,0 +1,44 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+// This program exists so we have a single process that executes all unit and
+// integration tests (for VAST and for its bundled plugins) for use in the CMake
+// target `ccov` for generating a unified code coverage report. To build this
+// file, configure VAST with `-D VAST_ENABLE_CODE_COVERAGE=ON` and build the
+// CMake target `all-tests`.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+int run_cmake_target(char* target) {
+  pid_t pid = fork();
+  if (pid == 0) {
+    char* argv[6] = {
+      "cmake", "--build", "@CMAKE_BINARY_DIR@", "--target", target, 0,
+    };
+    execv("@CMAKE_COMMAND@", argv);
+    exit(127);
+  } else {
+    int status = EXIT_SUCCESS;
+    waitpid(pid, &status, 0);
+    return status;
+  }
+}
+
+int main() {
+  int test_status = run_cmake_target("test");
+  int integration_status = run_cmake_target("integration");
+  if (test_status != EXIT_SUCCESS)
+    return test_status;
+  if (integration_status != EXIT_SUCCESS)
+    return integration_status;
+  return EXIT_SUCCESS;
+}

@@ -78,6 +78,35 @@ macro (VASTTargetLinkWholeArchive target visibility library)
   target_link_libraries(${target} ${visibility} ${library})
 endmacro ()
 
+# A utility macro for enabling tooling on a target.
+macro (VASTTargetEnableTooling _target)
+  if (VAST_ENABLE_CLANG_TIDY)
+    set_target_properties(
+      "${_target}" PROPERTIES CXX_CLANG_TIDY "${VAST_CLANG_TIDY_ARGS}"
+                              C_CLANG_TIDY "${VAST_CLANG_TIDY_ARGS}")
+  endif ()
+  if (VAST_ENABLE_CODE_COVERAGE)
+    unset(_absolute_plugin_test_sources)
+    foreach (plugin_test_source IN LISTS PLUGIN_TEST_SOURCES)
+      if (IS_ABSOLUTE "${plugin_test_source}")
+        list(APPEND _absolute_plugin_test_sources "${plugin_test_source}")
+      else ()
+        list(APPEND _absolute_plugin_test_sources
+             "${CMAKE_CURRENT_SOURCE_DIR}/${plugin_test_source}")
+      endif ()
+    endforeach ()
+    target_code_coverage(
+      "${_target}"
+      ${ARGV}
+      EXCLUDE
+      "${PROJECT_SOURCE_DIR}/libvast/aux/*"
+      "${PROJECT_SOURCE_DIR}/libvast/test/*"
+      "${PROJECT_SOURCE_DIR}/libvast_test/*"
+      "${PROJECT_BINARY_DIR}/*"
+      ${_absolute_plugin_test_sources})
+  endif ()
+endmacro ()
+
 macro (make_absolute vars)
   foreach (var IN LISTS "${vars}")
     get_filename_component(var_abs "${var}" ABSOLUTE)
@@ -417,6 +446,7 @@ function (VASTRegisterPlugin)
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.h" "")
   list(APPEND PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.h")
   add_library(${PLUGIN_TARGET} OBJECT ${PLUGIN_SOURCES})
+  VASTTargetEnableTooling(${PLUGIN_TARGET})
   target_link_libraries(
     ${PLUGIN_TARGET}
     PUBLIC vast::libvast
@@ -501,6 +531,7 @@ function (VASTRegisterPlugin)
   # Create a static library target for our plugin with the entrypoint, and use
   # static versions of VAST_REGISTER_PLUGIN family of macros.
   add_library(${PLUGIN_TARGET}-static STATIC ${PLUGIN_ENTRYPOINT})
+  VASTTargetEnableTooling(${PLUGIN_TARGET}-static)
   VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-static PUBLIC ${PLUGIN_TARGET})
   target_link_libraries(${PLUGIN_TARGET}-static PRIVATE vast::internal)
   target_compile_definitions(${PLUGIN_TARGET}-static
@@ -524,6 +555,7 @@ function (VASTRegisterPlugin)
 
     # Create a shared library target for our plugin.
     add_library(${PLUGIN_TARGET}-shared SHARED ${PLUGIN_ENTRYPOINT})
+    VASTTargetEnableTooling(${PLUGIN_TARGET}-shared)
     VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-shared PUBLIC ${PLUGIN_TARGET})
     target_link_libraries(${PLUGIN_TARGET}-shared PRIVATE vast::internal)
 
@@ -602,6 +634,7 @@ function (VASTRegisterPlugin)
   # Setup unit tests.
   if (VAST_ENABLE_UNIT_TESTS AND PLUGIN_TEST_SOURCES)
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
+    VASTTargetEnableTooling(${PLUGIN_TARGET}-test)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
                                                         vast::internal)
     VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
