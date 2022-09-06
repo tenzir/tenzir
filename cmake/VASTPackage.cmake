@@ -81,7 +81,7 @@ cpack_add_component(
 cpack_add_component(
   Unspecified
   DISPLAY_NAME "Unspecified"
-  DISABLED)
+  HIDDEN)
 cpack_add_component(
   Development
   DISPLAY_NAME "Development"
