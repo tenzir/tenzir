@@ -4,9 +4,13 @@ project:
     - web/**/*.qmd
   execute-dir: file
 execute:
-  cache: true
+  #cache: true
   warning: false
   error: false
+knitr:
+  opts_chunk:
+    dev: "svglite"
+    dev.args: transparent
 format:
   gfm:
     keep-yaml: true
@@ -17,3 +21,4 @@ format:
 # also: https://github.com/quarto-dev/quarto-cli/issues/2279.
 filters:
   - codeblock-details
+  - inline-svg

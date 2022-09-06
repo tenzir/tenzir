@@ -1,0 +1,6 @@
+title: Inline SVG
+author: Tenzir
+version: 0.1.0
+contributes:
+  filters:
+    - inline-svg.lua

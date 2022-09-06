@@ -44,6 +44,19 @@
   display: none;
 }
 
+/* This enable dark mode for inline SVGs. For our GFM content, inlining an SVG
+ * requires doing this:
+ *
+ *     import Svg from './path/to/image.svg';
+ *
+ *     <Svg />
+ *
+ * Thereafter, we have an Exalidraw-style dark mode "for free."
+ */
+[data-theme='dark'] .svglite {
+  filter: invert(100%) hue-rotate(180deg);
+}
+
 @mixin MakeHeaderLogo($name, $srcLight, $srcDark) {
 	.header-#{$name}-link {
 		padding: 5px;
