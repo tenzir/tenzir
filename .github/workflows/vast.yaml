@@ -1237,7 +1237,10 @@ jobs:
         run: |
           mkdir clang-tidy-results
           git diff -U0 $(git merge-base origin/master HEAD) |
-            clang-tidy-diff -p1 -path build -export-fixes clang-tidy-results/fixes.yml
+            ./scripts/clang-tidy-diff.py \
+              -p1 \
+              -path build \
+              -export-fixes clang-tidy-results/fixes.yml
       - name: Report clang-tidy Fixes
         uses: platisd/clang-tidy-pr-comments@1.2.0
         with:
