@@ -29,10 +29,11 @@ Here are the direct links to open, closed, or all RFC pull requests:
 
 The workflow to add a new RFC works as follows:
 
-1. Copy the template and increase the running counter:
+1. Create a new RFC directory (increase the counter) and copy the template:
    ```bash
-   # Assumption: the last proposal is 041-proposal.md
-   cp 000-TEMPLATE.md 042-proposal-name.md
+   # Assumption: the last proposal is 041-proposal
+   mkdir 042-proposal-name
+   cp -r 000-template 042-proposal-name
    ```
 
 2. Write the proposal in [GitHub Flavored Markdown](https://github.github.com/gfm/).
