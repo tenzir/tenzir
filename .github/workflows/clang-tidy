@@ -1,0 +1,15 @@
+---
+Checks: >
+  readability-*,
+  -dummy-must-be-last-entry-without-trailing-comma
+WarningsAsErrors:      ''
+HeaderFilterRegex:     '/vast/'
+AnalyzeTemporaryDtors: false
+CheckOptions:
+  - key:             readability-implicit-bool-conversion.AllowPointerConditions
+    value:           true
+  - key:             misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value:           true
+  - key:             cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
+    value:           true
+...

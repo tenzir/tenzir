@@ -483,11 +483,16 @@ endif ()
 
 # -- developer mode ------------------------------------------------------------
 
+if (NOT VAST_CLANG_TIDY_CONFIG_FILE)
+  set(VAST_CLANG_TIDY_CONFIG_FILE ".clang-tidy")
+endif ()
+
 option(VAST_ENABLE_CLANG_TIDY "Run clang-tidy during build" OFF)
 add_feature_info("VAST_ENABLE_CLANG_TIDY" VAST_ENABLE_CLANG_TIDY
                  "run clang-tidy during build.")
 set(VAST_CLANG_TIDY_ARGS
-    "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy")
+    "clang-tidy;--config-file=${PROJECT_SOURCE_DIR}/${VAST_CLANG_TIDY_CONFIG_FILE}"
+)
 
 option(VAST_ENABLE_CODE_COVERAGE "Add code coverage targets" OFF)
 add_feature_info("VAST_ENABLE_CODE_COVERAGE" VAST_ENABLE_CODE_COVERAGE

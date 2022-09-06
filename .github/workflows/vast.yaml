@@ -1227,15 +1227,14 @@ jobs:
           "$CXX" --version
           clang-tidy --version
           cmake -B "$BUILD_DIR" \
-            -DCMAKE_BUILD_TYPE:STRING=Debug \
+            -DCMAKE_BUILD_TYPE:STRING=CI \
+            -DVAST_CLANG_TIDY_CONFIG_FILE:STRING=.github/workflows/clang-tidy \
             -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF \
+            -DVAST_ENABLE_CLANG_TIDY:BOOL=ON \
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
             -DVAST_PLUGINS:STRING='plugins/*'
       - name: Run clang-tidy
         run: |
-          mkdir clang-tidy-results
-          git diff -U0 --no-color $(git merge-base origin/master HEAD) |
-            scripts/clang-tidy-diff.py -p1 -fix
-          git diff --exit-code
+          cmake --build build --parallel --verbose
