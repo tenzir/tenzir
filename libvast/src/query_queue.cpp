@@ -12,6 +12,15 @@
 
 namespace vast {
 
+namespace {
+std::size_t memusage(const std::vector<query_queue::entry>& entries) {
+  return std::accumulate(cbegin(entries), cend(entries), std::size_t{0u},
+                         [](const auto& accumulated, const auto& current) {
+                           return accumulated + current.memusage();
+                         });
+}
+} // namespace
+
 bool operator<(const query_queue::entry& lhs,
                const query_queue::entry& rhs) noexcept {
   return lhs.priority < rhs.priority;
@@ -234,6 +243,19 @@ query_queue::handle_completion(const uuid& qid) {
     queries_.erase(qid);
   }
   return result;
+}
+
+std::size_t query_queue::entry::memusage() const {
+  return sizeof(*this) + queries.size() * sizeof(decltype(queries)::value_type);
+}
+
+std::size_t query_queue::memusage() const {
+  auto usage = std::size_t{sizeof(*this)};
+  for (const auto& [uid, query_state] : queries_) {
+    usage += sizeof(uid) + query_state.memusage();
+  }
+  return usage + vast::memusage(partitions)
+         + vast::memusage(inactive_partitions);
 }
 
 } // namespace vast

@@ -238,6 +238,8 @@ struct index_state {
   [[nodiscard]] caf::typed_response_promise<record>
   status(status_verbosity v) const;
 
+  size_t memusage() const;
+
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
@@ -350,6 +352,10 @@ struct index_state {
 
   /// Config options for the index.
   caf::settings index_opts;
+
+  /// Requested queries before the index started up.
+  std::vector<std::pair<caf::typed_response_promise<query_cursor>, query_context>>
+    delayed_queries;
 
   constexpr static inline auto name = "index";
 };

@@ -649,6 +649,9 @@ caf::error index_state::load_from_disk() {
         VAST_INFO("{} finished initializing and is ready to accept queries",
                   *self);
         this->accept_queries = true;
+        for (auto&& [rp, query_context] : std::exchange(delayed_queries, {}))
+          rp.delegate(static_cast<index_actor>(self), atom::evaluate_v,
+                      std::move(query_context));
       },
       [this](caf::error& err) {
         VAST_ERROR("{} could not load catalog state from disk, shutting "
@@ -998,10 +1001,37 @@ void index_state::send_report() {
        max_concurrent_partition_lookups - running_partition_lookups},
       {"scheduler.partition.current-lookups", running_partition_lookups},
     }};
+  msg.data.push_back(data_point{
+          .key = "memory-usage",
+          .value = memusage(),
+          .metadata = {
+            {"component", std::string{name}},
+          },
+        });
   self->send(accountant, atom::metrics_v, std::move(msg));
   auto r = performance_report{.data = {{{"scheduler", scheduler_measurement}}}};
   self->send(accountant, atom::metrics_v, std::move(r));
   scheduler_measurement = measurement{};
+}
+
+std::size_t index_state::memusage() const {
+  auto calculate_usage = []<class T>(const T& collection) -> std::size_t {
+    return collection.size() * sizeof(typename T::value_type);
+  };
+  auto usage = std::size_t{sizeof(*this)};
+  for (const auto& [type, partition_info] : active_partitions) {
+    usage += as_bytes(type).size() + sizeof(partition_info);
+  }
+  usage += persisted_partitions.size()
+           * sizeof(decltype(persisted_partitions)::value_type);
+  usage += pending_queries.memusage();
+  for (const auto& [addr, uuids] : monitored_queries) {
+    usage += sizeof(addr) + calculate_usage(uuids);
+  }
+  usage += calculate_usage(flush_listeners);
+  usage += calculate_usage(partition_creation_listeners);
+  usage += calculate_usage(partitions_in_transformation);
+  return usage;
 }
 
 caf::typed_response_promise<record>
@@ -1259,6 +1289,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
+    for (auto&& [rp, _] : std::exchange(self->state.delayed_queries, {}))
+      rp.deliver(msg.reason);
     // Flush buffered batches and end stream.
     detail::shutdown_stream_stage(self->state.stage);
     // We gather the schemas first before we call decomission active partition
@@ -1401,8 +1433,19 @@ index(index_actor::stateful_pointer<index_state> self,
                   query_context);
         return ec::remote_node_down;
       }
+      // If we're not yet ready to start, we delay the query until further
+      // notice.
+      if (!self->state.accept_queries) {
+        VAST_VERBOSE("{} delays query {} because it is still starting up",
+                     *self, query_context);
+        auto rp = self->make_response_promise<query_cursor>();
+        self->state.delayed_queries.emplace_back(rp, std::move(query_context));
+        return rp;
+      }
       // Allows the client to query further results after initial taste.
-      VAST_ASSERT(query_context.id == uuid::nil());
+      if (query_context.id != uuid::nil())
+        return caf::make_error(ec::logic_error, "query must not have an ID "
+                                                "when arriving at the index");
       query_context.id = self->state.pending_queries.create_query_id();
       // Monitor the sender so we can cancel the query in case it goes down.
       if (const auto it = self->state.monitored_queries.find(sender->address());
@@ -1414,12 +1457,6 @@ index(index_actor::stateful_pointer<index_state> self,
         auto& [_, ids] = *it;
         ids.emplace(query_context.id);
       }
-      if (!self->state.accept_queries) {
-        VAST_VERBOSE("{} delays query {} because it is still starting up",
-                     *self, query_context);
-        return caf::skip;
-      }
-      auto rp = self->make_response_promise<query_cursor>();
       std::vector<uuid> candidates;
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
@@ -1427,6 +1464,7 @@ index(index_actor::stateful_pointer<index_state> self,
         candidates.push_back(active_partition.id);
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
+      auto rp = self->make_response_promise<query_cursor>();
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
                   query_context)

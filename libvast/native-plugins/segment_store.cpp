@@ -171,6 +171,7 @@ system::store_actor::behavior_type passive_local_store(
   system::store_actor::stateful_pointer<passive_store_state> self,
   system::accountant_actor accountant, system::filesystem_actor fs,
   const std::filesystem::path& path) {
+  const auto start = std::chrono::steady_clock::now();
   self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
   self->state.path = path;
@@ -186,7 +187,7 @@ system::store_actor::behavior_type passive_local_store(
   VAST_DEBUG("{} loads passive store from path {}", *self, self->state.path);
   self->request(self->state.fs, caf::infinite, atom::mmap_v, self->state.path)
     .then(
-      [self](chunk_ptr chunk) {
+      [self, start](chunk_ptr chunk) {
         auto seg = segment::make(std::move(chunk));
         if (!seg) {
           VAST_ERROR("{} couldn't create segment from chunk: {}", *self,
@@ -217,6 +218,12 @@ system::store_actor::behavior_type passive_local_store(
           rp.delegate(static_cast<system::store_actor>(self), atom::erase_v,
                       std::move(ids));
         }
+        auto startup_duration = std::chrono::steady_clock::now() - start;
+        self->send(self->state.accountant, atom::metrics_v,
+                   "passive-store.init.runtime", startup_duration,
+                   system::metrics_metadata{
+                     {"store-type", "segment-store"},
+                   });
       },
       [self](caf::error& err) {
         VAST_ERROR("{} could not map passive store segment into memory: {}",

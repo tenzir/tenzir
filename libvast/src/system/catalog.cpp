@@ -538,6 +538,13 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
           },
         });
       }
+      r.data.push_back(data_point{
+          .key = "memory-usage",
+          .value = self->state.memusage(),
+          .metadata = {
+            {"component", std::string{self->state.name}},
+          },
+        });
       self->send(self->state.accountant, atom::metrics_v, std::move(r));
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);

@@ -67,7 +67,8 @@ public:
   /// FlatBuffers table fails.
   explicit table_slice(chunk_ptr&& chunk, enum verify verify,
                        const std::shared_ptr<arrow::RecordBatch>& batch
-                       = nullptr) noexcept;
+                       = nullptr,
+                       type schema = {}) noexcept;
 
   /// Construct a table slice from a flattened table slice embedded in a chunk,
   /// and shares the chunk's lifetime.
@@ -83,8 +84,10 @@ public:
 
   /// Construct an Arrow-encoded table slice from an existing record batch.
   /// @param record_batch The record batch containing the table slice data.
+  /// @param VAST type for the provided record batch.
   /// @param serialize Whether to store IPC format as a backing.
   explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
+                       type schema = {},
                        enum serialize serialize = serialize::no);
 
   /// Copy-construct a table slice.
@@ -221,26 +224,26 @@ public:
   friend auto inspect(Inspector& f, table_slice& x) ->
     typename Inspector::result_type {
     auto chunk = x.chunk_;
-    return f(
-      caf::meta::type_name("vast.table_slice"),
-      caf::meta::save_callback([&]() noexcept -> caf::error {
-        if (!x.is_serialized()) {
-          auto serialized_x = table_slice{to_record_batch(x), serialize::yes};
-          serialized_x.import_time(x.import_time());
-          chunk = serialized_x.chunk_;
-          x = std::move(serialized_x);
-        }
-        return caf::none;
-      }),
-      chunk, caf::meta::load_callback([&]() noexcept -> caf::error {
-        // When VAST allows for external tools to hook directly into the
-        // table slice streams, this should be switched to verify if the
-        // chunk is unique.
-        x = table_slice{std::move(chunk), table_slice::verify::no};
-        VAST_ASSERT(x.is_serialized());
-        return caf::none;
-      }),
-      x.offset_);
+    return f(caf::meta::type_name("vast.table_slice"),
+             caf::meta::save_callback([&]() noexcept -> caf::error {
+               if (!x.is_serialized()) {
+                 auto serialized_x = table_slice{to_record_batch(x), x.layout(),
+                                                 serialize::yes};
+                 serialized_x.import_time(x.import_time());
+                 chunk = serialized_x.chunk_;
+                 x = std::move(serialized_x);
+               }
+               return caf::none;
+             }),
+             chunk, caf::meta::load_callback([&]() noexcept -> caf::error {
+               // When VAST allows for external tools to hook directly into the
+               // table slice streams, this should be switched to verify if the
+               // chunk is unique.
+               x = table_slice{std::move(chunk), table_slice::verify::no};
+               VAST_ASSERT(x.is_serialized());
+               return caf::none;
+             }),
+             x.offset_);
   }
 
   // -- operations -------------------------------------------------------------

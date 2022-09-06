@@ -714,8 +714,7 @@ TEST(enriched types) {
   CHECK_EQUAL(aat.attribute("second"), "");
   CHECK_EQUAL(aat.attribute("third"), "nestingworks");
   CHECK_EQUAL(aat.attribute("fourth"), std::nullopt);
-  CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks #first=value "
-                                      "#second");
+  CHECK_EQUAL(fmt::format("{}", aat), "l2 #third=nestingworks");
   const auto lat = type::from_legacy_type(
     legacy_bool_type{}.attributes({{"first", "value"}, {"second"}}).name("l1"));
   CHECK_EQUAL(lat, at);
@@ -756,6 +755,7 @@ TEST(metadata layer merging) {
     {{"one", "eins"}},
   };
   CHECK_EQUAL(t1, t2);
+
   MESSAGE("attributes do not get merged in named metadata layers");
   const auto t3 = type{
     type{
@@ -776,6 +776,8 @@ TEST(metadata layer merging) {
     {{"one", "eins"}},
   };
   CHECK_EQUAL(t1, t4);
+  CHECK_EQUAL((type{"x", bool_type{}, {{"first"}, {"second"}}}),
+              (type{"x", bool_type{}, {{"second"}, {"first"}}}));
 }
 
 TEST(sorting) {

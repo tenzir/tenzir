@@ -45,6 +45,10 @@ struct query_state {
              x.candidate_partitions, x.requested_partitions,
              x.scheduled_partitions, x.completed_partitions);
   }
+
+  std::size_t memusage() const {
+    return sizeof(*this) + query_context.memusage();
+  }
 };
 
 class query_queue {
@@ -67,6 +71,8 @@ public:
 
     friend bool operator<(const entry& lhs, const entry& rhs) noexcept;
     friend bool operator==(const entry& lhs, const uuid& rhs) noexcept;
+
+    std::size_t memusage() const;
   };
 
   // -- observers --------------------------------------------------------------
@@ -114,6 +120,8 @@ public:
   /// Returns a client handle in case the requested batch has been completed.
   [[nodiscard]] std::optional<system::receiver_actor<atom::done>>
   handle_completion(const uuid& qid);
+
+  std::size_t memusage() const;
 
 private:
   /// Maps query IDs to pending queries lookup state.

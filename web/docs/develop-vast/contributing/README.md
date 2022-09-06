@@ -8,9 +8,6 @@ as transparent as possible. If you have any questions about the process, please
 do not hesitate to reach out to us in [Community Slack](http://slack.tenzir.com)
 or by opening a [GitHub Discussion](https://github.com/tenzir/vast/discussions).
 
-```mdx-code-block
 import DocCardList from '@theme/DocCardList';
-import {useCurrentSidebarCategory} from '@docusaurus/theme-common';
 
-<DocCardList items={useCurrentSidebarCategory().items}/>
-```
+<DocCardList />

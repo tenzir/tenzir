@@ -144,9 +144,9 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
 
 table_slice::table_slice() noexcept = default;
 
-table_slice::table_slice(
-  chunk_ptr&& chunk, enum verify verify,
-  const std::shared_ptr<arrow::RecordBatch>& batch) noexcept
+table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
+                         const std::shared_ptr<arrow::RecordBatch>& batch,
+                         type schema) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   VAST_ASSERT(!chunk_ || chunk_->unique());
   if (chunk_) {
@@ -158,7 +158,7 @@ table_slice::table_slice(
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
         auto state = std::make_unique<std::decay_t<decltype(*state_ptr)>>(
-          encoded, chunk_, batch);
+          encoded, chunk_, batch, std::move(schema));
         state_ptr = state.get();
         const auto bytes = as_bytes(chunk_);
         // We create a second chunk with an intentionally decoupled reference
@@ -190,8 +190,9 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                         enum serialize serialize) {
-  *this = arrow_table_slice_builder::create(record_batch, serialize);
+                         type schema, enum serialize serialize) {
+  *this = arrow_table_slice_builder::create(record_batch, std::move(schema),
+                                            serialize);
 }
 
 table_slice::table_slice(const table_slice& other) noexcept = default;

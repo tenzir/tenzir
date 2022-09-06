@@ -98,6 +98,7 @@ The following list describes all available metrics keys:
 |`exporter.selectivity`|The rate of results out of processed events.|#events-results/#events-processed|🔎|
 |`exporter.shipped`|The number of shipped events for the current query.|#events|🔎|
 |`importer.rate`|The rate of events processed by the importer component.|#events/second||
+|`index.memory-usage`|The rough estimate of memory used by the index|#bytes||
 |`ingest.rate`|The ingest rate keyed by the schema name.|#events/second|🗂️|
 |`json-reader.invalid-line`|The number of invalid NDJSON lines.|#events||
 |`json-reader.rate`|The rate of events processed by the JSON source.|#events/second||
@@ -106,6 +107,7 @@ The following list describes all available metrics keys:
 |`catalog.lookup.candidates`|The number of candidate partitions considered for a query.|#partitions|🔎🪪|
 |`catalog.lookup.runtime`|The duration of a query evaluation in the catalog.|#milliseconds|🔎🪪|
 |`catalog.lookup.hits`|The number of results of a query in the catalog.|#events|🔎🪪|
+|`catalog.memory-usage`|The rough estimate of memory used by the catalog|#bytes||
 |`catalog.num-partitions`|The number of partitions registered in the catalog per schema.|#partitions|🗂️#️⃣|
 |`catalog.num-events`|The number of events registered in the catalog per schema.|#events|🗂️#️⃣|
 |`node_throughput.rate`|The rate of events processed by the node component.|#events/second||
@@ -138,6 +140,7 @@ The following list describes all available metrics keys:
 |`active-store.lookup.hits`|The number of results of a query in an active store.|#events|🔎🪪💾|
 |`passive-store.lookup.runtime`|The number of results of a query in a passive store.|#events|🔎🪪💾|
 |`passive-store.lookup.hits`|The number of results of a query in a passive store.|#events|🔎🪪💾|
+|`passive-store.init.runtime`|Time until the store is ready serve queries.|nanoseconds|💾|
 |`source.start`|Timepoint when the source started.|nanoseconds since epoch||
 |`source.stop`|Timepoint when the source stopped.|nanoseconds since epoch||
 |`syslog-reader.rate`|The rate of events processed by the syslog source.|#events/second||

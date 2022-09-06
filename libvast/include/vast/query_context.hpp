@@ -58,17 +58,17 @@ struct query_context {
   // -- constructor & destructor -----------------------------------------------
 
   query_context() = default;
-  query_context(query_context&&) = default;
+  query_context(query_context&&) noexcept = default;
   query_context(const query_context&) = default;
 
   query_context(std::string issuer, command cmd, expression expr)
     : cmd(std::move(cmd)), expr(std::move(expr)), issuer{std::move(issuer)} {
   }
 
-  query_context& operator=(query_context&&) = default;
+  query_context& operator=(query_context&&) noexcept = default;
   query_context& operator=(const query_context&) = default;
 
-  ~query_context() = default;
+  ~query_context() noexcept = default;
 
   // -- helper functions to make query creation less boiler-platey -------------
 
@@ -103,6 +103,10 @@ struct query_context {
   friend auto inspect(Inspector& f, query_context& q) {
     return f(caf::meta::type_name("vast.query"), q.id, q.cmd, q.expr, q.ids,
              q.priority, q.issuer);
+  }
+
+  std::size_t memusage() const {
+    return sizeof(*this) + ids.memusage();
   }
 
   // -- data members -----------------------------------------------------------

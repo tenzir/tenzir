@@ -119,12 +119,30 @@ using store_actor = typed_actor_fwd<
   // TODO: Replace usage of `atom::erase` with `query::erase` in call sites.
   caf::replies_to<atom::erase, ids>::with<uint64_t>>::unwrap;
 
+/// Passive store default implementation actor interface.
+using default_passive_store_actor = typed_actor_fwd<
+  // Proceed with a previously received `extract` query.
+  caf::reacts_to<atom::internal, atom::extract, uuid>,
+  // Proceed with a previously received `count` query.
+  caf::reacts_to<atom::internal, atom::count, uuid>>
+  // Based on the store_actor interface.
+  ::extend_with<store_actor>::unwrap;
+
 /// The STORE BUILDER actor interface.
 using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
+
+/// Active store default implementation actor interface.
+using default_active_store_actor = typed_actor_fwd<
+  // Proceed with a previously received `extract` query.
+  caf::reacts_to<atom::internal, atom::extract, uuid>,
+  // Proceed with a previously received `count` query.
+  caf::reacts_to<atom::internal, atom::count, uuid>>
+  // Based on the store_builder_actor interface.
+  ::extend_with<store_builder_actor>::unwrap;
 
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
@@ -497,18 +515,20 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::active_partition_actor))
   VAST_ADD_TYPE_ID((vast::system::analyzer_plugin_actor))
   VAST_ADD_TYPE_ID((vast::system::archive_actor))
+  VAST_ADD_TYPE_ID((vast::system::catalog_actor))
+  VAST_ADD_TYPE_ID((vast::system::default_active_store_actor))
+  VAST_ADD_TYPE_ID((vast::system::default_passive_store_actor))
   VAST_ADD_TYPE_ID((vast::system::disk_monitor_actor))
   VAST_ADD_TYPE_ID((vast::system::evaluator_actor))
   VAST_ADD_TYPE_ID((vast::system::exporter_actor))
   VAST_ADD_TYPE_ID((vast::system::filesystem_actor))
   VAST_ADD_TYPE_ID((vast::system::flush_listener_actor))
-  VAST_ADD_TYPE_ID((vast::system::partition_creation_listener_actor))
   VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::index_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))
-  VAST_ADD_TYPE_ID((vast::system::catalog_actor))
   VAST_ADD_TYPE_ID((vast::system::node_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
+  VAST_ADD_TYPE_ID((vast::system::partition_creation_listener_actor))
   VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>))
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))

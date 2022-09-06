@@ -84,6 +84,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     uint64_t rows = 0;
     std::vector<table_slice> result;
     auto query = query_context::make_extract("test", self, expr);
+    query.id = uuid::random();
     query.ids = ids;
     self->send(actor, atom::query_v, query);
     run();

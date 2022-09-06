@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/config.hpp"
 #include "vast/detail/collect.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -25,11 +26,44 @@ namespace {
 
 using namespace vast;
 
-struct mock_filesystem_state {};
+struct mock_filesystem_state {
+  std::optional<caf::typed_response_promise<vast::chunk_ptr>>
+    mmap_response_promise;
+};
 
-system::filesystem_actor::behavior_type mock_filesystem(
-  system::filesystem_actor::stateful_pointer<mock_filesystem_state> self) {
+struct deliver_mmap_promise {};
+
+using mock_filesystem_actor
+  = vast::system::typed_actor_fwd<caf::reacts_to<deliver_mmap_promise>>::
+    extend_with<system::filesystem_actor>::unwrap;
+
+} // namespace
+
+//  CAF_ADD_TYPE_ID generated unused const variable warning when compiled with
+//  clang. The other fix would be to place the macros in a header file
+VAST_DIAGNOSTIC_PUSH
+VAST_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE
+
+CAF_BEGIN_TYPE_ID_BLOCK(partition_ut_block, 10000)
+  CAF_ADD_TYPE_ID(partition_ut_block, (mock_filesystem_actor))
+  CAF_ADD_TYPE_ID(partition_ut_block, (deliver_mmap_promise))
+CAF_END_TYPE_ID_BLOCK(partition_ut_block)
+
+VAST_DIAGNOSTIC_POP
+
+namespace {
+mock_filesystem_actor::behavior_type mock_filesystem(
+  mock_filesystem_actor::stateful_pointer<mock_filesystem_state> self) {
+  auto mmap_rp
+    = std::make_shared<caf::typed_response_promise<vast::chunk_ptr>>();
   return {
+    [mmap_rp, self](deliver_mmap_promise) {
+      REQUIRE(self->state.mmap_response_promise);
+      caf::response_promise& untyped_rp = *self->state.mmap_response_promise;
+      untyped_rp.deliver(static_cast<mock_filesystem_actor>(self),
+                         vast::chunk_ptr{});
+      MESSAGE("Mock filesystem delivering mmap promise");
+    },
     [](atom::write, const std::filesystem::path&,
        const chunk_ptr& chk) -> caf::result<atom::ok> {
       VAST_ASSERT(chk != nullptr);
@@ -39,7 +73,7 @@ system::filesystem_actor::behavior_type mock_filesystem(
       return nullptr;
     },
     [](vast::atom::move, const std::filesystem::path&,
-       const std::filesystem::path&) -> caf::result<vast::atom::done> {
+       const std::filesystem::path&) mutable -> caf::result<vast::atom::done> {
       FAIL("not implemented");
     },
     [](
@@ -48,8 +82,11 @@ system::filesystem_actor::behavior_type mock_filesystem(
       -> caf::result<vast::atom::done> {
       FAIL("not implemented");
     },
-    [self](atom::mmap, const std::filesystem::path&) -> caf::result<chunk_ptr> {
-      return self->make_response_promise<chunk_ptr>();
+    [mmap_rp, self](atom::mmap,
+                    const std::filesystem::path&) -> caf::result<chunk_ptr> {
+      MESSAGE("Mock filesystem mmap received");
+      return self->state.mmap_response_promise.emplace(
+        self->make_response_promise<chunk_ptr>());
     },
     [](vast::atom::erase, std::filesystem::path&) {
       return vast::atom::done_v;
@@ -80,14 +117,14 @@ TEST(passive_partition - load) {
   auto store = system::store_actor{};
   auto fs = self->spawn(mock_filesystem);
   auto path = std::filesystem::path{};
-  // The mmap message to the filesystem actor will never receive a response.
   auto aut = self->spawn(system::passive_partition, id,
                          vast::system::accountant_actor{}, store, fs, path);
   sched.run();
   self->send(aut, atom::erase_v);
   CHECK_EQUAL(sched.jobs.size(), 1u);
-  sched.run_once();
-  // We don't expect any response, because the request should get skipped.
+  sched.run();
+  // We don't expect any response, because the request should get deferred with
+  // response promise.
   self->send(aut, atom::status_v, system::status_verbosity::debug);
   sched.run();
   self->receive(
@@ -101,6 +138,8 @@ TEST(passive_partition - load) {
       [&] {
         FAIL("PARTITION did not respond to status request");
       });
+  self->send(fs, deliver_mmap_promise{});
+  sched.run();
 }
 
 FIXTURE_SCOPE_END()
