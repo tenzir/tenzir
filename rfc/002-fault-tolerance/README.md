@@ -9,7 +9,7 @@
   - [Matthias Vallentin](https://github.com/mavam)
 - **Contributors**:
   - [Dominik Lohmann](https://github.com/dominiklohmann)
-- **Discussion**: [PR #2511](https://github.com/tenzir/vast/pull/2511)
+- **Discussion**: [PR #2562](https://github.com/tenzir/vast/pull/2562)
 
 ## Overview
 
