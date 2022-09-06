@@ -25,6 +25,11 @@
     let
       overlay = import ./nix/overlay.nix { inherit inputs; };
       pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
+      versionList = (builtins.split ''VAST_VERSION_FALLBACK "(v[0-9]+\.[0-9]+\.[0-9]+)'' 
+        (builtins.readFile ./cmake/VASTVersionFallback.cmake));
+      versionFallback = builtins.head (builtins.elemAt versionList 1);
+      shortrev = builtins.substring 0 10 self.rev;
+      versionString = "${versionFallback}-${builtins.toString self.revCount}-g${shortrev}";
     in
     rec {
       inherit pkgs;
@@ -37,6 +42,11 @@
           buildInputs = with pkgs; [
             git nixUnstable coreutils nix-prefetch-github
           ];
+        };
+        vast-package = pkgs.pkgsStatic.vast.override {
+          versionOverride = versionString;
+          versionShortOverride = versionFallback;
+          buildAsPackage = true;
         };
         default = pkgs.vast;
       };
