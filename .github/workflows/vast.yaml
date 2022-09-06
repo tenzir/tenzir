@@ -1147,3 +1147,101 @@ jobs:
         with:
           token: ${{ secrets.VAST_CODECOV_TOKEN }}
           files: ${{ env.BUILD_DIR }}/ccov/all-tests.info
+
+  clang-tidy:
+    needs:
+      - determine-version
+    if: github.event_name == 'pull_request'
+    name: Clang Tidy
+    runs-on: ubuntu-20.04
+    container: debian:bullseye-slim
+    strategy:
+      fail-fast: false
+    env:
+      BUILD_DIR: build
+      CC: gcc-10
+      CXX: g++-10
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Install Dependencies
+        run: |
+          apt-get update
+          apt-get -y install \
+            apt-transport-https \
+            build-essential \
+            ca-certificates \
+            curl \
+            flatbuffers-compiler-dev \
+            g++-10 \
+            gcc-10 \
+            git \
+            gnupg2 gnupg-agent \
+            jq \
+            libbroker-dev \
+            libcaf-dev \
+            libcaf-dev \
+            libflatbuffers-dev \
+            libfmt-dev \
+            libpcap-dev tcpdump \
+            libsimdjson-dev \
+            libspdlog-dev \
+            libssl-dev \
+            libunwind-dev \
+            libyaml-cpp-dev \
+            libxxhash-dev \
+            lsb-release \
+            ninja-build \
+            pandoc \
+            pkg-config \
+            python3-dev \
+            python3-pip \
+            python3-venv \
+            software-properties-common \
+            wget
+          # Apache Arrow (c.f. https://arrow.apache.org/install/)
+          wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
+          apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
+          apt-get update
+          apt-get -y install libarrow-dev libparquet-dev
+          # Install CMake from pip -- we need at least 3.17 in CI for CCache
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --upgrade cmake
+          python3 -m pip install --upgrade clang-tidy
+          cmake --version
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Fetch Submodules and Tags
+        run: |
+          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
+          git submodule sync --recursive
+          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
+          git fetch origin +refs/tags/*:refs/tags/*
+      - name: Configure
+        run: |
+          python3 --version
+          python3 -m pip --version
+          "$CC" --version
+          "$CXX" --version
+          clang-tidy --version
+          cmake -B "$BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE:STRING=Debug \
+            -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF \
+            -DVAST_ENABLE_DSCAT:BOOL=ON \
+            -DVAST_ENABLE_LSVAST:BOOL=ON \
+            -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
+            -DVAST_PLUGINS:STRING='plugins/*'
+      - name: Analyze clang-tidy Fixes
+        run: |
+          mkdir clang-tidy-results
+          git diff -U0 $(git merge-base origin/master HEAD) |
+            clang-tidy-diff -p1 -path build -export-fixes clang-tidy-results/fixes.yml
+      - name: Report clang-tidy Fixes
+        uses: platisd/clang-tidy-pr-comments@1.2.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          clang_tidy_fixes: clang-tidy-result/fixes.yml
+          request_changes: true
+          suggestions_per_comment: 10
