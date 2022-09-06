@@ -98,10 +98,11 @@ try_handle_deprecations(vast::system::default_configuration& cfg) {
                  "remove it from your configuration and use "
                  "'vast.pipeline-triggers' instead");
       return EXIT_FAILURE;
+    } else {
+      VAST_WARN("key 'vast.transform-triggers' is deprecated; automatically "
+                "setting the replacement 'vast.pipeline-triggers' instead");
+      caf::put(cfg.content, "vast.pipeline-triggers", *transform_triggers);
     }
-    VAST_WARN("key 'vast.transform-triggers' is deprecated; automatically "
-              "setting the replacement 'vast.pipeline-triggers' instead");
-    caf::put(cfg.content, "vast.pipeline-triggers", *transform_triggers);
   }
   return std::nullopt;
 }
