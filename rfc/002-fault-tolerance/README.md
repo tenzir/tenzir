@@ -309,7 +309,7 @@ The semantics the function signatures are as follows:
    deleting the given UUIDs and adding new partition metadata.
 
 In theory, the functionality of `replace` is a superset of `add` and `delete`.
-For ease of exposition, we kept them as separate API functions. 
+For ease of exposition, we kept them as separate API functions.
 
 #### Subscription API
 
@@ -364,7 +364,6 @@ FDB primitives. We found the following:
 
 We need to read further on how to XXX.
 
-
 ##### etcd
 
 Etcd is a distributed key-value store that uses Raft for quorum-based consensus. From a CAP Theorem perspective, this brings us into the CP realm, because a master must be elected to perform writes. Stale reads may be supported, though, which we can tolerate.
@@ -378,18 +377,17 @@ Here are some incomplete notes of taking a first look:
   allow us to model our use-case naturally.
 
 - Etcd comes with a gRPC API, making it easy to embed for us. We're already
-  depending on gRPC transitively via Apache Arrow (cf. Flight). 
+  depending on gRPC transitively via Apache Arrow (cf. Flight).
 
 ##### Consul
 
 TBD
 
-
 ##### Native Raft
 
 Instead of depending on etcd, we may consider our own actor-based Raft
 implementation. In this case, Raft would be a frontend for a key-value store
-that supports the desired transactional operations natively. 
+that supports the desired transactional operations natively.
 
 The shape of a metastore would be dedicated CAF service that VAST can speak
 natively to. Not every VAST node should include a Raft metastore, as a typical
@@ -404,7 +402,7 @@ time. There are some [open questions on composability of log and state
 machine](https://groups.google.com/g/raft-dev/c/O80OSWrQieo) that we should
 revisit.
 
-## Alternatives 
+## Alternatives
 
 TBD
 
