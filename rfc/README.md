@@ -33,7 +33,7 @@ The workflow to add a new RFC works as follows:
    ```bash
    # Assumption: the last proposal is 041-proposal
    mkdir 042-proposal-name
-   cp 000-TEMPLATE.md 042-proposal-name/README.md
+   cp -r 000-template 042-proposal-name
    ```
 
 2. Write the proposal in [GitHub Flavored Markdown](https://github.github.com/gfm/).
