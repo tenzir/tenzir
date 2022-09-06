@@ -2,11 +2,11 @@ from unittest.mock import Mock
 import pytest
 import stix2
 
-from vast.utils.stix import VAST_IDENTITY
+from vast.utils.stix import IDENTITIES
 
 @pytest.mark.asyncio
 async def test_fabric_push_pull(fabric):
-    bundle = stix2.Bundle(VAST_IDENTITY)
+    bundle = stix2.Bundle(IDENTITIES["vast"])
     callback = Mock()
     await fabric.pull(callback)
     await fabric.push(bundle)

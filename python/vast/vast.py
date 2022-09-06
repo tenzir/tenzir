@@ -2,17 +2,12 @@ import asyncio
 import io
 from collections import defaultdict
 
-from dynaconf import Dynaconf
 import pyarrow as pa
-import stix2
-
-from .fabric import Fabric
-import vast.backbones
-import vast.bridges.stix
 import vast.utils.arrow
+import vast.utils.config
 import vast.utils.logging
 
-logger = vast.utils.logging.get("node")
+logger = vast.utils.logging.get(__name__)
 
 
 class CLI:
@@ -71,63 +66,22 @@ class CLI:
 
 
 class VAST:
-    """An instance of a VAST node that sits between an application and the
-    fabric."""
+    """An instance of a VAST node."""
+
+    def __init__(self, config=vast.utils.config.parse()):
+        self.config = config
 
     @staticmethod
-    async def create(config: Dynaconf):
-        backbone = vast.backbones.InMemory()
-        fabric = Fabric(config, backbone)
-        self = VAST(config, fabric)
-        logger.debug("subscribing to STIX topics")
-        await self.fabric.pull(self._on_stix_indicator)
-        return self
-
-    def __init__(self, config: Dynaconf, fabric: Fabric):
-        self.config = config
-        self.fabric = fabric
-        self.stix_bridge = vast.bridges.stix.STIX()
-
-    async def start(self, **kwargs):
+    async def start(config=vast.utils.config.parse(), **kwargs):
         """Starts a VAST node."""
-        proc = await CLI(**kwargs).start().exec()
+        self = VAST(config)
+        proc = await CLI().start(**kwargs).exec()
         await proc.communicate()
         logger.debug(proc.stderr.decode())
-        # TODO: Start a matcher
-        # cmd = CLI(plugins="matcher").matcher().start(match_types="[:string]").test()
-        return proc
+        return self
 
-    async def republish(self, type: str):
-        """Subscribes to an event type on ingest path and publishes the events
-        directly to the fabric."""
-        callback = lambda line: self.fabric.backbone.publish(type, line)
-        await self._live_query(f'#type == "{type}"', callback)
-
-    # Translates an STIX Indicator into a VAST query and publishes the results
-    # as STIX Bundle.
-    async def _on_stix_indicator(self, indicator: stix2.Indicator):
-        logger.debug(f"got {indicator}")
-        if indicator.pattern_type == "vast":
-            logger.debug(f"got VAST expression {indicator.pattern}")
-        elif indicator.pattern_type == "sigma":
-            logger.debug(f"got Sigma rule {indicator.pattern}")
-        else:
-            logger.warn(f"got unsupported pattern type {indicator.pattern_type}")
-            return
-        # Run the query.
-        results = await self._query(indicator.pattern)
-        if len(results) == 0:
-            logger.info(f"got no results for query: {indicator.pattern}")
-            return
-        # TODO: go beyond Zeek connection events.
-        zeek_conn = results["zeek.conn"]
-        if not zeek_conn:
-            logger.warning("no connection events found")
-            return
-        bundle = self.stix_bridge.make_sighting_from_flows(indicator, zeek_conn)
-        await self.fabric.push(bundle)
-
-    async def _live_query(self, expression: str, callback):
+    # TODO: agree on API.
+    async def live_query(self, expression: str, callback):
         proc = await CLI().export(continuous=True).json(expression).exec()
         while True:
             if proc.stdout.at_eof():
@@ -138,7 +92,7 @@ class VAST:
         if proc.returncode != 0:
             logger.warning(f"vast exited with non-zero code: {proc.returncode}")
 
-    async def _query(self, expression: str, limit: int = 100):
+    async def export(self, expression: str, limit: int = 100):
         """Executes a VAST and receives results as Arrow Tables."""
         proc = await CLI().export(max_events=limit).arrow(expression).exec()
         stdout, stderr = await proc.communicate()

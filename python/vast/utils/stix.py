@@ -6,8 +6,10 @@ import stix2
 # The namespace UUID for STIX.
 STIX_NAMESPACE_UUID = uuid.UUID("00abedb4-aa42-466c-9c01-fed23315a9b7")
 
-# The identity of a VAST node.
-VAST_IDENTITY = stix2.Identity(name="VAST", identity_class="system")
+IDENTITIES = {
+        "vast": stix2.Identity(name="VAST", identity_class="system"),
+        "zeek": stix2.Identity(name="Zeek", identity_class="system"),
+        }
 
 def to_addr_sdo(data):
     """Translate a potentially ipv4-mapped IPv6 address into the right IP
