@@ -119,6 +119,7 @@ jobs:
         with:
           name: CHANGELOG.md
           path: build/CHANGELOG.md
+          if-no-files-found: error
       - name: Check CHANGELOG.md
         if: github.event_name == 'pull_request'
         run: |
@@ -368,6 +369,7 @@ jobs:
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
+          if-no-files-found: error
 
       - name: Configure GCS Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
@@ -541,6 +543,7 @@ jobs:
           ccache --show-config
           cmake -B "$BUILD_DIR" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
+            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
@@ -594,6 +597,7 @@ jobs:
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
+          if-no-files-found: error
 
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
@@ -914,12 +918,14 @@ jobs:
         with:
           name: "${{ steps.get_artifact_names.outputs.tar_gz }}"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
+          if-no-files-found: error
 
       - name: Upload Debian Package to Github
         uses: actions/upload-artifact@v3
         with:
           name: "${{ steps.get_artifact_names.outputs.deb }}"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
+          if-no-files-found: error
 
       - name: Setup Python
         uses: actions/setup-python@v4
