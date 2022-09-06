@@ -230,11 +230,10 @@ else ()
     add_library(CAF::io ALIAS libcaf_io_${_linkage_suffix})
     install(
       TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
-      COMPONENT Runtime
       EXPORT CAFTargets
-      ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-      RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+      ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
+      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
+      RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
     if (VAST_ENABLE_OPENSSL)
       if (NOT TARGET libcaf_openssl_${_linkage_suffix})
         string(
@@ -263,11 +262,10 @@ else ()
       add_library(CAF::openssl ALIAS libcaf_openssl_${_linkage_suffix})
       install(
         TARGETS libcaf_openssl_${_linkage_suffix}
-        COMPONENT Runtime
         EXPORT CAFTargets
-        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
     endif ()
     add_library(libcaf_test INTERFACE)
     target_link_libraries(libcaf_test INTERFACE CAF::core)
@@ -282,8 +280,8 @@ else ()
     install(
       TARGETS libcaf_test
       EXPORT CAFTargets
-      ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
+      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
       RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Development)
     set(caf_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf)
     export(
@@ -585,19 +583,18 @@ endif ()
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
   TARGETS libvast
-  COMPONENT Runtime
   EXPORT VASTTargets
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
 install(
   TARGETS libvast_native_plugins
   COMPONENT Development
   EXPORT VASTTargets
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
 install(
   DIRECTORY include/vast
