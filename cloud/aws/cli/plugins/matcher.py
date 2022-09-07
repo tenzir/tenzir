@@ -44,5 +44,5 @@ def attach(c):
     while True:
         messages = queue.receive_messages(VisibilityTimeout=10, WaitTimeSeconds=20)
         for message in messages:
-            print(message.body, flush=True)
+            print(message.body)
             message.delete()

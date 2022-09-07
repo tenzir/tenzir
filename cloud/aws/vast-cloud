@@ -60,7 +60,7 @@ run () {
     --env-file <(env | grep HOST_) \
     --rm \
     --workdir /host$HOST_DIRNAME \
-    tenzir/vast-cloud-cli python ./cli/main.py "${@:2}"
+    tenzir/vast-cloud-cli python -u ./cli/main.py "${@:2}"
 }
 
 # Use the VASTCLOUD_CHECK_PTY to execute the command in a dry run mode that

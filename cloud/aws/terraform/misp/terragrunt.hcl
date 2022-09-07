@@ -21,7 +21,7 @@ dependency "core_2" {
 
 locals {
   region_name  = get_env("VAST_AWS_REGION")
-  misp_version = get_env("VAST_MISP_VERSION")
+  misp_version = get_env("VAST_MISP_VERSION", "dummy-version")
 }
 
 terraform {

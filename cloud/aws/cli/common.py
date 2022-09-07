@@ -60,8 +60,11 @@ def auto_app_fmt(val: bool) -> str:
 
 def list_modules(c: Context) -> List[str]:
     """List available Terragrunt modules"""
-    deps = c.run("""terragrunt graph-dependencies""", hide="out").stdout
-    return re.findall('terraform/(.*)" ;', deps)
+    return [
+        mod
+        for mod in os.listdir(TFDIR)
+        if os.path.isfile(f"{TFDIR}/{mod}/terragrunt.hcl")
+    ]
 
 
 def active_plugins() -> Set[str]:
