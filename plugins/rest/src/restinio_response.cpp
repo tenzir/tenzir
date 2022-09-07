@@ -14,8 +14,8 @@ static std::string content_type_to_string(vast::http_content_type type) {
   switch (type) {
     case http_content_type::json:
       return "application/json; charset=utf-8";
-    default:
-      return "TODO";
+    case http_content_type::ldjson:
+      return "application/ld+json; charset=utf-8";
   }
 }
 
@@ -31,11 +31,7 @@ restinio_response::restinio_response(
 
 restinio_response::~restinio_response() {
   // `done()` must only be called exactly once.
-  // auto& response = *response_;
-  response_.append_header_date_field().set_content_length(body_size_).done(
-    /*[response_](const restinio::asio_ns::error_code & ec) {
-      // static
-    }*/);
+  response_.append_header_date_field().set_content_length(body_size_).done();
 }
 
 void restinio_response::append(std::string_view body) {

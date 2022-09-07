@@ -389,12 +389,14 @@ public:
   }
 
   /// OpenAPI YAML spec for the plugin endpoints.
+  /// This should only consist of entries for the `paths` array,
+  /// not a full YAML document.
   //  (The idea here is to make a unit test that loops over all plugins and
   //   compares the `specification` with the list returned by `api_endpoints()`
   //   and fails on any detectable mismatch. The same can be done on node
   //   startup. This is not as cool as actually generating the description from
   //   the structs, but more efficient to implement)
-  [[nodiscard]] virtual std::string_view openapi_specification() const = 0;
+  [[nodiscard]] virtual data openapi_specification() const = 0;
 
   /// List of API endpoints provided by this plugin.
   [[nodiscard]] virtual const std::vector<api_endpoint>&

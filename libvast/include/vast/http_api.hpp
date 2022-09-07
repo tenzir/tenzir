@@ -27,7 +27,7 @@ enum class http_method {
 
 enum class http_content_type {
   json,
-  arrow,
+  ldjson,
 };
 
 enum class http_status_code {
@@ -42,10 +42,6 @@ enum class http_status_code {
 class http_response {
 public:
   virtual ~http_response() = default;
-
-  /// Add a custom header field.
-  // TODO: Is it a good idea to expose this?
-  // virtual void add_header() = 0;
 
   /// Append data to the response body.
   virtual void append(std::string_view body) = 0;
@@ -70,10 +66,6 @@ class http_request {
 public:
   /// Data according to the type of the endpoint.
   vast::record params;
-
-  /// Request body
-  // (may be useful, but currently I can't really think of a use case)
-  // std::string body;
 
   // TODO: Probably use caf::cow_ptr
   std::shared_ptr<http_response> response;

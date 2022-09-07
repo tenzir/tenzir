@@ -23,9 +23,8 @@ VASTRegisterPlugin(
   TEST_SOURCES ${rest_tests}
   INCLUDE_DIRECTORIES include)
 
-# find_package(http-parser REQUIRED)
-# 3. fmtlib
 find_package(fmt REQUIRED)
+
 # RESTinio itself
 find_package(restinio REQUIRED)
 

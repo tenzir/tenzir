@@ -44,14 +44,14 @@ struct configuration {
 // The resolved and validated configuration that gets used at runtime.
 class server_config {
 public:
-  enum class server_mode {
+  enum class mode {
     debug,
     server,
     upstream,
     mtls,
   };
 
-  server_mode mode = {};
+  mode mode = {};
   std::filesystem::path certfile = {};
   std::filesystem::path keyfile = {};
   std::filesystem::path dhtmpfile = {};

@@ -15,6 +15,7 @@
 
 #include <rest/configuration.hpp>
 #include <rest/server_command.hpp>
+#include <rest/server_state.hpp>
 
 namespace vast::plugins::rest {
 
@@ -57,16 +58,33 @@ class plugin final : public virtual command_plugin {
                                  command::opts("?rest.spec"));
     auto token_command
       = [](const vast::invocation&, caf::actor_system&) -> caf::message {
-      fmt::print("TODO!\n");
+      auto& server = server_singleton();
+      auto token = server.generate();
+      fmt::print("{}\n", token);
       return {};
     };
     auto spec_command
       = [](const vast::invocation&, caf::actor_system&) -> caf::message {
       // TODO: It would probably make more sense to execute this on the server?
-      for (auto const* plugin :
-           vast::plugins::get<vast::rest_endpoint_plugin>()) {
-        fmt::print("{}\n", plugin->openapi_specification());
+      auto paths = record{};
+      for (auto const* plugin : plugins::get<rest_endpoint_plugin>()) {
+        auto spec = plugin->openapi_specification();
+        VAST_ASSERT_CHEAP(caf::holds_alternative<record>(spec));
+        for (auto& [key, value] : caf::get<record>(spec))
+          paths.emplace(key, value);
       }
+      auto openapi = record{
+        {"openapi", "3.0.0"},
+        {"info",
+         record{
+           {"description", "VAST API"},
+           {"version", "0.1"},
+         }},
+        {"paths", std::move(paths)},
+      };
+      auto yaml = to_yaml(openapi);
+      VAST_ASSERT_CHEAP(yaml);
+      fmt::print("---\n{}\n", *yaml);
       return {};
     };
     auto factory = command::factory{};

@@ -85,24 +85,23 @@ class plugin final : public virtual rest_endpoint_plugin {
     return "";
   }
 
-  /// OpenAPI documentation for the plugin endpoints.
-  [[nodiscard]] std::string_view openapi_specification() const override {
-    return R"_(
----
-openapi: 3.0.0
-paths:
-  /status:
-    get:
-      summary: Returns current status
-      description: Returns the current status of the whole node.
-      responses:
-        '200':
-          description: A JSON dictionary with various pieces of info per component.
-          content:
-            application/json:
-              schema:
-                type: dict
+  [[nodiscard]] data openapi_specification() const override {
+    static auto const* spec = R"_(
+/status:
+  get:
+    summary: Returns current status
+    description: Returns the current status of the whole node.
+    responses:
+      '200':
+        description: A JSON dictionary with various pieces of info per component.
+        content:
+          application/json:
+            schema:
+              type: dict
     )_";
+    auto result = from_yaml(spec);
+    VAST_ASSERT(result);
+    return *result;
   }
 
   /// List of API endpoints provided by this plugin.

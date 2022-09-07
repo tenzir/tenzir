@@ -10,7 +10,7 @@
 
 #include "rest/configuration.hpp"
 #include "rest/restinio_response.hpp"
-#include "rest/server_command.hpp"
+#include "rest/server_state.hpp"
 
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -38,11 +38,9 @@
 namespace vast::plugins::rest {
 
 using router_t = restinio::router::express_router_t<>;
-using auth_token = std::array<std::byte, 32>;
 
 // FIXME: Don't use static variable for this.
 static bool s_require_authentication = true;
-static std::vector<std::string> s_tokens;
 
 static restinio::http_method_id_t to_restinio_method(vast::http_method method) {
   switch (method) {
@@ -53,6 +51,19 @@ static restinio::http_method_id_t to_restinio_method(vast::http_method method) {
   }
   // Unreachable.
   return restinio::http_method_get();
+}
+
+static caf::expected<enum server_config::mode>
+to_server_mode(const std::string& str) {
+  if (str == "debug")
+    return server_config::mode::debug;
+  else if (str == "upstream")
+    return server_config::mode::upstream;
+  else if (str == "server")
+    return server_config::mode::server;
+  else if (str == "mtls")
+    return server_config::mode::mtls;
+  return caf::make_error(ec::invalid_argument, "unknown mode");
 }
 
 static void
@@ -67,8 +78,8 @@ setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
   VAST_INFO("setting up route {}", path); // FIXME: INFO -> debug
   router->add_handler(
     method, path,
-    [&self, &endpoint, handler](auto req,
-                                restinio::router::route_params_t /*params*/)
+    [&self, &endpoint,
+     handler](auto req, restinio::router::route_params_t /*route_params*/)
       -> restinio::request_handling_status_t {
       if (s_require_authentication) {
         auto token = req->header().try_get_field("X-VAST-Token");
@@ -79,18 +90,38 @@ setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
           return restinio::request_rejected();
         }
         VAST_INFO("got token: {}", *token); // FIXME: remove msg
-        if (std::find(s_tokens.begin(), s_tokens.end(), *token)
-            == s_tokens.end()) {
+        auto& server = server_singleton();
+        if (server.authenticate(*token)) {
           req->create_response(restinio::status_unauthorized())
             .set_body("invalid token")
             .done();
           return restinio::request_rejected();
         }
       }
-      // TODO: Convert params to `vast::record` and validate.
-      // auto as_data = convert<>(params)
+      restinio::query_string_params_t string_params
+        = restinio::parse_query(req->header().query());
+      VAST_INFO("handling request with {}  parameters", string_params.size());
+      // TODO: warn about unknown/unexpected paramers
+      // for (auto& value : string_params) {
+      // }
+      vast::record params;
+      if (endpoint.params) {
+        for (auto const& leaf : endpoint.params->leaves()) {
+          auto name = leaf.field.name;
+          auto restinio_name
+            = restinio::string_view_t{name.data(), name.size()};
+          VAST_INFO("checking request parameter {}", name);
+          if (string_params.has(restinio_name)) {
+            auto value = std::string{string_params[restinio_name]};
+            VAST_INFO("...setting it to {}", value);
+            params[name] = std::move(value);
+          } else {
+            params[name] = "<insert default value>";
+          }
+        }
+      }
       auto vast_request = vast::http_request{
-        .params = vast::record{}, // FIXME
+        .params = std::move(params),
         .response
         = std::make_shared<restinio_response>(std::move(req), endpoint),
       };
@@ -156,32 +187,35 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         .done();
     });
   // Run server.
-  const server_config::server_mode server_mode
-    = server_config::server_mode::debug; // FIXME
+  // TODO: Move this into a general configuration -> server_config conversion.
+  auto maybe_mode = to_server_mode("debug");
+  if (!maybe_mode)
+    return caf::make_message(std::move(maybe_mode.error()));
+  const enum server_config::mode server_mode = *maybe_mode;
   bool require_https = true;
   bool require_clientcerts = false;
   bool require_authtoken = true;
   bool require_localhost = true;
   switch (server_mode) {
-    case server_config::server_mode::debug:
+    case server_config::mode::debug:
       require_https = false;
       require_clientcerts = false;
       require_authtoken = false;
       require_localhost = false;
       break;
-    case server_config::server_mode::upstream:
+    case server_config::mode::upstream:
       require_https = false;
       require_clientcerts = false;
       require_authtoken = true;
       require_localhost = true;
       break;
-    case server_config::server_mode::mtls:
+    case server_config::mode::mtls:
       require_https = true;
       require_clientcerts = true;
       require_authtoken = true;
       require_localhost = false;
       break;
-    case server_config::server_mode::server:
+    case server_config::mode::server:
       require_https = true;
       require_clientcerts = false;
       require_authtoken = true;
@@ -229,6 +263,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     using namespace std::literals::chrono_literals;
     restinio::run(restinio::on_this_thread<traits_t>()
                     .address(config.bind_address)
+                    .port(config.port)
                     .request_handler(std::move(router))
                     .read_next_http_message_timelimit(10s)
                     .write_http_response_timelimit(1s)
