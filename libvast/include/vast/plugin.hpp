@@ -12,8 +12,11 @@
 
 #include "vast/command.hpp"
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/pp.hpp"
+#include "vast/http_api.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/type.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
@@ -337,6 +340,73 @@ public:
   parse(std::string_view query) const = 0;
 };
 
+// -- rest endpoint plugin -----------------------------------------------------
+
+class rest_endpoint_plugin : public virtual plugin {
+public:
+  enum class api_version : uint8_t {
+    v0,
+  };
+
+  // TODO: Move into separate file
+  //
+  struct api_endpoint {
+    /// Arbitrary id for endpoint identification
+    uint64_t endpoint_id = 0ull;
+
+    /// The HTTP verb of this endpoint
+    http_method method;
+
+    /// Path can use the express.js conventions
+    std::string path;
+
+    /// Expected parameters.
+    //  (a record_type cannot be empty, so we need an optional)
+    std::optional<vast::record_type> params;
+
+    /// Version for that endpoint.
+    //  TODO: Maybe this would be better as a `uint8` to allow
+    //  each plugin to use its own version numbers.
+    api_version version;
+
+    /// Response content type.
+    http_content_type content_type;
+
+    // TODO: Probably useful in the future.
+    // required_authorization authz;
+
+    // TODO: Probably useful in the future.
+    // enum class transport_encoding {
+    //    regular,
+    //    chunked,
+    //    websocket,
+    // }
+  };
+
+  /// Defaults to the plugin name
+  [[nodiscard]] virtual std::string prefix() const {
+    return std::string{"/"} + this->name();
+  }
+
+  /// OpenAPI YAML spec for the plugin endpoints.
+  //  (The idea here is to make a unit test that loops over all plugins and
+  //   compares the `specification` with the list returned by `api_endpoints()`
+  //   and fails on any detectable mismatch. The same can be done on node
+  //   startup. This is not as cool as actually generating the description from
+  //   the structs, but more efficient to implement)
+  [[nodiscard]] virtual std::string_view openapi_specification() const = 0;
+
+  /// List of API endpoints provided by this plugin.
+  [[nodiscard]] virtual const std::vector<api_endpoint>&
+  api_endpoints() const = 0;
+
+  /// Actor that will handle this endpoint.
+  //  TODO: This should get some integration with component_plugin so that
+  //  the component can be used to answer requests directly.
+  [[nodiscard]] virtual system::rest_handler_actor
+  handler(caf::actor_system& system, system::node_actor node) const = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
@@ -391,9 +461,9 @@ public:
   const plugin& operator*() const noexcept;
   plugin& operator&() noexcept;
 
-  /// Upcast a plugin to a more specific plugin type.
-  /// @tparam Plugin The specific plugin type to try to upcast to.
-  /// @returns A pointer to the upcasted plugin, or 'nullptr' on failure.
+  /// Downcast a plugin to a more specific plugin type.
+  /// @tparam Plugin The specific plugin type to try to downcast to.
+  /// @returns A pointer to the downcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
   [[nodiscard]] const Plugin* as() const {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
@@ -401,9 +471,9 @@ public:
     return dynamic_cast<const Plugin*>(instance_);
   }
 
-  /// Upcast a plugin to a more specific plugin type.
-  /// @tparam Plugin The specific plugin type to try to upcast to.
-  /// @returns A pointer to the upcasted plugin, or 'nullptr' on failure.
+  /// Downcast a plugin to a more specific plugin type.
+  /// @tparam Plugin The specific plugin type to try to downcast to.
+  /// @returns A pointer to the downcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
   Plugin* as() {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "

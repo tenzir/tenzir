@@ -105,6 +105,7 @@ class data;
 class duration_type;
 class enumeration_type;
 class expression;
+class http_request;
 class integer_type;
 class legacy_abstract_type;
 class legacy_type;
@@ -387,6 +388,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
+  VAST_ADD_TYPE_ID((vast::http_request))
   VAST_ADD_TYPE_ID((vast::integer))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))

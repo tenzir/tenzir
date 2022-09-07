@@ -1,0 +1,8 @@
+
+struct AuthenticationToken {
+	bytes : [ubyte:32];	
+};
+
+table server {
+	valid_tokens: [AuthenticationToken];
+}

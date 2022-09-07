@@ -421,6 +421,9 @@ using exporter_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
+using rest_handler_actor = system::typed_actor_fwd<
+  caf::reacts_to<atom::http_request, uint64_t, http_request>>::unwrap;
+
 /// The interface of a COMPONENT PLUGIN actor.
 using component_plugin_actor = typed_actor_fwd<>
   // Conform to the protocol of the STATUS CLIENT actor.
@@ -553,6 +556,7 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::partition_synopsis_pair>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::augmented_partition_synopsis)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::augmented_partition_synopsis>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::pipeline_ptr)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::http_request)
 #undef vast_uuid_synopsis_map
 
 #undef VAST_ADD_TYPE_ID
