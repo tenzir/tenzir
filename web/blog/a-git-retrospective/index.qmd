@@ -36,8 +36,10 @@ overplotting.
 ```{r}
 #| code-fold: true
 #| label: full-time-spectrum
-library(tidyverse)
+library(dplyr)
+library(ggplot2)
 library(lubridate)
+library(readr)
 
 theme_set(theme_minimal())
 
@@ -129,6 +131,7 @@ engineering and release process in place.
 ```{r}
 #| code-fold: true
 #| label: since-v1.0
+library(tidyr)
 v1_0_0_rc1_time <- data |>
   filter(tag == "v1.0.0-rc1") |>
   pull(time)
