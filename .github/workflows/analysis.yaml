@@ -15,8 +15,6 @@ concurrency:
 
 jobs:
   code-coverage:
-    needs:
-      - determine-version
     name: Code Coverage
     runs-on: ubuntu-20.04
     container: debian:bullseye-slim
