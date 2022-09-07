@@ -56,6 +56,10 @@ std::vector<plugin_ptr>& get_mutable() noexcept;
 /// Retrieves the system-wide plugin singleton.
 const std::vector<plugin_ptr>& get() noexcept;
 
+/// Retrieves all plugins of a given plugin type.
+template <typename Plugin>
+vast::detail::generator<const Plugin*> get() noexcept;
+
 /// Retrieves the plugin of type `Plugin` with the given name, or nullptr
 /// if it doesn't exist.
 template <typename Plugin>
@@ -442,6 +446,13 @@ const Plugin* find(const std::string& name) {
   if (it == plugins.end())
     return nullptr;
   return it->template as<Plugin>();
+}
+
+template <typename Plugin>
+vast::detail::generator<const Plugin*> get() noexcept {
+  for (auto const& plugin : get())
+    if (auto const* specific_plugin = plugin.as<Plugin>())
+      co_yield specific_plugin;
 }
 
 } // namespace vast::plugins
