@@ -588,6 +588,8 @@ install(
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
+# We install the static libvast_native_plugins archive for development targets
+# because the plugin unit test binaries need to be able to link against it.
 install(
   TARGETS libvast_native_plugins
   COMPONENT Development

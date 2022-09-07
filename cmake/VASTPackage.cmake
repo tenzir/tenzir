@@ -53,9 +53,10 @@ if (VAST_ENABLE_STATIC_EXECUTABLE)
 endif ()
 
 # Create only a single package with all enabled install components rather than
-# creating one package per install component that potentially duplicates the
-# files. We should reconsider this in the future when we want to offer separate
-# runtime and development Debian packages.
+# creating one package per install component that duplicates files because
+# dependent packages are included in the installation for some CPack generators.
+# We should reconsider this in the future when we want to offer separate runtime
+# and development Debian packages.
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 
 # Enable the component-based packages for the Debian and the Archive CPack
@@ -78,6 +79,9 @@ cpack_add_component(
   DISPLAY_NAME "Runtime"
   DESCRIPTION "Runtime files for VAST"
   REQUIRED)
+# TODO: Remove all Unspecified install components. The vendored fast_float
+# library always installs itself; once fastfloat/fast_float#142 is merged we can
+# update the vendored library and reconsider this.
 cpack_add_component(
   Unspecified
   DISPLAY_NAME "Unspecified"
