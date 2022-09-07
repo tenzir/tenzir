@@ -106,12 +106,17 @@ verify that your build works as expected:
   ```
 ## Install
 
-6. Install VAST system-wide or into a custom prefix:
+6. Install VAST system-wide.
   ```bash
   cmake --install build
-  # Optional: Install to a custom prefix
-  cmake --install build --prefix /path/to/install/prefix
   ```
+
+:::note Customize Installation
+If you prefer to install into a custom install prefix, install with `--prefix
+/path/to/install/prefix`. To remove debug symbols from the installed binaries
+and libraries, pass `--strip`. To install only files relevant for running VAST
+and not for plugin development pass `--component Runtime`.
+:::
 
 ## Clean
 

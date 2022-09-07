@@ -9,4 +9,7 @@ endif ()
 add_executable(dscat dscat.cpp)
 VASTTargetEnableTooling(dscat)
 target_link_libraries(dscat PRIVATE vast::libvast vast::internal CAF::core)
-install(TARGETS dscat DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(
+  TARGETS dscat
+  DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  COMPONENT Runtime)

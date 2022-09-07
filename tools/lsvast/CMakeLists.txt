@@ -17,7 +17,10 @@ add_executable(
   src/print_segmented_file_header.cpp)
 VASTTargetEnableTooling(lsvast)
 target_link_libraries(lsvast PRIVATE vast::libvast vast::internal)
-install(TARGETS lsvast DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(
+  TARGETS lsvast
+  DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  COMPONENT Runtime)
 
 if (VAST_ENABLE_MANPAGES)
   add_custom_command(
@@ -30,6 +33,8 @@ if (VAST_ENABLE_MANPAGES)
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
     COMMENT "Generating lsvast.1"
     VERBATIM)
-  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
-          DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/lsvast.1"
+    DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
+    COMPONENT Runtime)
 endif ()

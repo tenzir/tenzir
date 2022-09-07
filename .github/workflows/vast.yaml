@@ -306,20 +306,20 @@ jobs:
           ccache --zero-stats
           ccache --show-config
           # Setting different values for CMAKE_INSTALL_PREFIX and
-          # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported
-          # and causes a warning. We accept this drawback because the package
-          # we generate here is built specifically as input for the plugin CI
-          # jobs and not suitable for general use.
+          # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported and causes
+          # a warning. We accept this drawback because the package we generate
+          # here is built specifically as input for the plugin CI jobs and not
+          # suitable for general use.
           cmake -B "$BUILD_DIR" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
-            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
-            -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="" \
             -DCPACK_GENERATOR:STRING=TGZ \
-            -DVAST_PLUGINS:STRING="plugins/pcap" \
+            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
+            -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF \
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
+            -DVAST_PLUGINS:STRING="plugins/pcap" \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 
@@ -729,8 +729,8 @@ jobs:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Install VAST
         run: |
-          mkdir ${INSTALL_DIR}
-          tar -C ${INSTALL_DIR} -xzvf "${PACKAGE_NAME}.tar.gz" --strip-components 1
+          mkdir "${INSTALL_DIR}"
+          tar -C "${INSTALL_DIR}" -xzvf "${PACKAGE_NAME}.tar.gz"
           echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
       - name: Configure Build
         env:

@@ -7,5 +7,5 @@ macro (provide_find_module name)
   install(
     FILES "${CMAKE_BINARY_DIR}/Find${name}.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-    COMPONENT dev)
+    COMPONENT Development)
 endmacro ()
