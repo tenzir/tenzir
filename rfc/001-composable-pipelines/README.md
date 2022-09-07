@@ -263,16 +263,16 @@ Out>` takes as input `In` and produces instances of `Out`.
 
 ### Case Study: Matcher
 
-The `matcher` plugin is an analyzer plugin that operator on the input stream. We
-can also rewrite the matcher use cases in term of pipelines, albeit with a
-slight change in CLI.
+The `matcher` plugin is an analyzer plugin that operates on the input stream by
+matching an opaque state object against. We call this opaque state object the
+"matcher."
 
 #### Local execution
 
-Let's assume that the matcher introduces the following new pipeline operators:
+Let's assume that the following new pipeline operators:
 
-- `build<Arrow, Matcher>`: consumes a data stream to produce a matcher state object
-- `match<Arrow, Arrow>`: produces sightings for the configured matchers
+- `build<Arrow, Matcher>`: consumes a data stream to produce a matcher
+- `match<Arrow, Arrow>`: produces sightings for the active matchers
 
 Now consider the use case of constructing a matcher from CSV data:
 
@@ -288,12 +288,13 @@ matching:
 ```bash
 vast exec 'from kafka -t /zeek/conn |
            read zeek |
-           match --state matcher.flatbuf --on=:addr
+           put id.orig_h, id_resp_h |
+           match --state matcher.flatbuf
 ```
 
-The idea is that `match` gets the opaque matcher state as input. (We may
-generalize this builder pattern to deploy arbitrarily complex detections, e.g.,
-pre-trained models.)
+The idea is that `match` receives the data as input and exposes it to the
+matcher. The pipeline writer is responsible for reshaping the data so that the
+matcher can make sense of it.
 
 #### Remote execution
 
