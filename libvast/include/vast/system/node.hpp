@@ -75,7 +75,9 @@ struct node_state {
 /// @param self The actor handle
 /// @param name The unique name of the node.
 /// @param dir The directory where to store persistent state.
-node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
-                               std::string name, std::filesystem::path dir);
+/// @param accounting Whether to spawn the ACCOUNTANT actor.
+node_actor::behavior_type
+node(node_actor::stateful_pointer<node_state> self, std::string name,
+     std::filesystem::path dir, bool accounting);
 
 } // namespace vast::system

@@ -21,7 +21,8 @@ namespace fixtures {
 node::node(std::string_view suite)
   : fixtures::deterministic_actor_system_and_events(suite) {
   MESSAGE("spawning node");
-  test_node = self->spawn(system::node, "test", directory / "node");
+  constexpr auto accounting = false;
+  test_node = self->spawn(system::node, "test", directory / "node", accounting);
   run();
   MESSAGE("spawning components");
   spawn_component("type-registry");

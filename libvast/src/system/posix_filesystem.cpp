@@ -44,10 +44,11 @@ posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
 
 filesystem_actor::behavior_type
 posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
-                 const std::filesystem::path& root) {
+                 std::filesystem::path root, accountant_actor accountant) {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("vast.posix-filesystem");
-  self->state.root = root;
+  self->state.root = std::move(root);
+  self->state.accountant = std::move(accountant);
   return {
     [self](atom::write, const std::filesystem::path& filename,
            const chunk_ptr& chk) -> caf::result<atom::ok> {

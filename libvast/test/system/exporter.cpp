@@ -56,7 +56,8 @@ struct fixture : fixture_base {
   }
 
   void spawn_index() {
-    auto fs = self->spawn(system::posix_filesystem, directory);
+    auto fs = self->spawn(system::posix_filesystem, directory,
+                          system::accountant_actor{});
     auto indexdir = directory / "index";
     index = self->spawn(system::index, system::accountant_actor{}, fs,
                         system::archive_actor{}, catalog, type_registry,

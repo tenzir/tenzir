@@ -29,7 +29,8 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
   fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
-    filesystem = self->spawn<caf::detached>(posix_filesystem, directory);
+    filesystem = self->spawn<caf::detached>(posix_filesystem, directory,
+                                            accountant_actor{});
   }
 
   filesystem_actor filesystem;

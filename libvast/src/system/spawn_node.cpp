@@ -80,7 +80,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Spawn the node.
   VAST_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to system::node.
-  auto actor = self->spawn(system::node, id, abs_dir);
+  auto actor = self->spawn(system::node, id, abs_dir, accounting);
   actor->attach_functor([=, pid_file = std::move(pid_file)](
                           const caf::error&) -> caf::result<void> {
     VAST_DEBUG("node removes PID lock: {}", pid_file);
@@ -108,8 +108,6 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   };
   std::list components = {"type-registry", "catalog", "archive",     "index",
                           "importer",      "eraser",  "disk-monitor"};
-  if (accounting)
-    components.push_front("accountant");
   for (auto& c : components) {
     if (auto err = spawn_component(c)) {
       VAST_ERROR("node failed to spawn {}: {}", c, err);
