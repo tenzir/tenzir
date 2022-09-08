@@ -79,16 +79,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     return err;
   // Spawn the node.
   VAST_DEBUG("{} spawns local node: {}", __func__, id);
-  auto shutdown_grace_period = defaults::system::shutdown_grace_period;
-  if (auto str = caf::get_if<std::string>(&opts, "vast.shutdown-grace-"
-                                                 "period")) {
-    if (auto x = to<std::chrono::milliseconds>(*str))
-      shutdown_grace_period = *x;
-    else
-      return x.error();
-  }
   // Pointer to the root command to system::node.
-  auto actor = self->spawn(system::node, id, abs_dir, shutdown_grace_period);
+  auto actor = self->spawn(system::node, id, abs_dir);
   actor->attach_functor([=, pid_file = std::move(pid_file)](
                           const caf::error&) -> caf::result<void> {
     VAST_DEBUG("node removes PID lock: {}", pid_file);

@@ -22,9 +22,7 @@
 namespace vast::system {
 
 template <class Policy>
-void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
-              std::chrono::milliseconds grace_period,
-              std::chrono::milliseconds kill_timeout) {
+void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs) {
   // Ignore duplicate EXIT messages except for hard kills.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     if (msg.reason == caf::exit_reason::kill) {
@@ -36,52 +34,41 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
     }
   });
   // Terminate actors as requested.
-  terminate<Policy>(self, std::move(xs), grace_period, kill_timeout)
+  terminate<Policy>(self, std::move(xs))
     .then(
       [=](atom::done) {
         VAST_DEBUG("{} terminates after shutting down all dependents", *self);
         self->quit(caf::exit_reason::user_shutdown);
       },
       [=](const caf::error& err) {
-        VAST_ERROR("{} failed to cleanly terminate dependent actors {}", *self,
-                   err);
-        die("failed to terminate dependent actors in given time window");
+        die(
+          fmt::format("failed to cleanly terminate dependent actors: {}", err));
       });
 }
 
 template void
-shutdown<policy::sequential>(caf::event_based_actor*, std::vector<caf::actor>,
-                             std::chrono::milliseconds,
-                             std::chrono::milliseconds);
+shutdown<policy::sequential>(caf::event_based_actor*, std::vector<caf::actor>);
 
 template void
-shutdown<policy::parallel>(caf::event_based_actor*, std::vector<caf::actor>,
-                           std::chrono::milliseconds,
-                           std::chrono::milliseconds);
+shutdown<policy::parallel>(caf::event_based_actor*, std::vector<caf::actor>);
 
 template <class Policy>
-void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
-              std::chrono::milliseconds grace_period,
-              std::chrono::milliseconds kill_timeout) {
-  terminate<Policy>(self, std::move(xs), grace_period, kill_timeout)
+void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs) {
+  terminate<Policy>(self, std::move(xs))
     .receive(
       [&](atom::done) {
         VAST_DEBUG("{} terminates after shutting down all dependents", *self);
       },
       [&](const caf::error& err) {
-        VAST_ERROR("failed to terminated all dependent actors {}", err);
-        die("failed to terminate dependent actors in given time window");
+        die(
+          fmt::format("failed to cleanly terminate dependent actors: {}", err));
       });
 }
 
 template void
-shutdown<policy::sequential>(caf::scoped_actor&, std::vector<caf::actor>,
-                             std::chrono::milliseconds,
-                             std::chrono::milliseconds);
+shutdown<policy::sequential>(caf::scoped_actor&, std::vector<caf::actor>);
 
 template void
-shutdown<policy::parallel>(caf::scoped_actor&, std::vector<caf::actor>,
-                           std::chrono::milliseconds,
-                           std::chrono::milliseconds);
+shutdown<policy::parallel>(caf::scoped_actor&, std::vector<caf::actor>);
 
 } // namespace vast::system

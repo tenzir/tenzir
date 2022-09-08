@@ -613,10 +613,8 @@ node_state::spawn_command(const invocation& inv,
   return spawn_actually(args);
 }
 
-node_actor::behavior_type
-node(node_actor::stateful_pointer<node_state> self, std::string name,
-     std::filesystem::path dir,
-     std::chrono::milliseconds shutdown_grace_period) {
+node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
+                               std::string name, std::filesystem::path dir) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
@@ -686,15 +684,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     }
     // Drop everything.
     registry.clear();
-    auto shutdown_kill_timeout = shutdown_grace_period / 5;
     auto core_shutdown_sequence
       = [=, core_shutdown_handles = std::move(core_shutdown_handles),
          filesystem_handle = std::move(filesystem_handle)]() mutable {
           for (const auto& comp : core_shutdown_handles)
             self->demonitor(comp);
-          shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
-                                       shutdown_grace_period,
-                                       shutdown_kill_timeout);
+          shutdown<policy::sequential>(self, std::move(core_shutdown_handles));
           // We deliberately do not send an exit message to the filesystem
           // actor, as that would mean that actors not tracked by the component
           // registry which hold a strong handle to the filesystem actor cannot
@@ -702,8 +697,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
           self->demonitor(filesystem_handle);
           filesystem_handle = {};
         };
-    terminate<policy::parallel>(self, std::move(aux_components),
-                                shutdown_grace_period, shutdown_kill_timeout)
+    terminate<policy::parallel>(self, std::move(aux_components))
       .then(
         [self, core_shutdown_sequence](atom::done) mutable {
           VAST_DEBUG("{} terminated auxiliary actors, commencing core shutdown "

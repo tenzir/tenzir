@@ -21,15 +21,7 @@ namespace fixtures {
 node::node(std::string_view suite)
   : fixtures::deterministic_actor_system_and_events(suite) {
   MESSAGE("spawning node");
-  // We are using an infinite grace period due to CAF's special clock in the
-  // unit test that doesn't actually delay send operations but instead just
-  // orders them. If we used a non-zero grace period, request timeouts and
-  // delayed send operations would immediately trigger, causing the shutdown
-  // procedure to abort too early, before the to-be-terminated components had a
-  // chance to deliver their DOWN message.
-  auto infinte_grace_period = std::chrono::milliseconds::zero();
-  test_node = self->spawn(system::node, "test", directory / "node",
-                          infinte_grace_period);
+  test_node = self->spawn(system::node, "test", directory / "node");
   run();
   MESSAGE("spawning components");
   spawn_component("type-registry");
