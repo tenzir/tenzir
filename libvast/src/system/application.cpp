@@ -434,9 +434,6 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("aging-frequency", "interval between two aging "
                                              "cycles")
         .add<std::string>("aging-query", "query for aging out obsolete data")
-        .add<std::string>("shutdown-grace-period",
-                          "time to wait until component shutdown "
-                          "finishes cleanly before inducing a hard kill")
         .add<std::string>("store-backend", "store plugin to use for imported "
                                            "data")
         .add<std::string>("connection-timeout", "the timeout for connecting to "

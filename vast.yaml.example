@@ -150,12 +150,6 @@ vast:
       path: /tmp/vast-metrics.sock
       type: datagram
 
-  # The period to wait until a shutdown sequence finishes cleanly. After the
-  # period elapses, the shutdown procedure escalates into a "hard kill". A
-  # value of "0x", where "x" is any duration unit, means an infinite grace
-  # period without escalation into a hard kill.
-  shutdown-grace-period: 3m
-
   # The `index` key is used to adjust the false-positive rate of
   # the first-level lookup data structures (called synopses) in the
   # catalog. The lower the false-positive rate the more space will be

@@ -22,11 +22,8 @@
 namespace vast::system {
 
 template <class Policy>
-caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
-                         std::chrono::milliseconds grace_period,
-                         std::chrono::milliseconds kill_timeout) {
-  VAST_TRACE_SCOPE("terminator {} {} {}", VAST_ARG(self->id()),
-                   VAST_ARG(grace_period), VAST_ARG(kill_timeout));
+caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
+  VAST_TRACE_SCOPE("terminator {}", VAST_ARG(self->id()));
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
     VAST_DEBUG("{} received DOWN from actor {}", *self, msg.source);
@@ -105,64 +102,14 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
       } else {
         static_assert(detail::always_false_v<Policy>, "unsupported policy");
       }
-      // Send a reminder for killing all alive actors.
-      if (grace_period > std::chrono::milliseconds::zero())
-        self->delayed_send(self, grace_period, atom::shutdown_v);
     },
-    [=](atom::shutdown) {
-      VAST_ASSERT(!self->state.remaining_actors.empty());
-      VAST_WARN("{} failed to terminate actors within grace period of "
-                "{}",
-                *self, grace_period);
-      VAST_WARN("{} initiates hard kill of {} remaining actors", *self,
-                self->state.remaining_actors.size());
-      // Kill remaining actors.
-      for (auto& actor : self->state.remaining_actors) {
-        VAST_DEBUG("{} sends KILL to actor {}", *self, actor->id());
-        if constexpr (std::is_same_v<Policy, policy::sequential>)
-          self->monitor(actor);
-        self->send_exit(actor, caf::exit_reason::kill);
-      }
-      // Handle them now differently.
-      self->set_down_handler([=](const caf::down_msg& msg) {
-        VAST_DEBUG("{} killed actor {}", *self, msg.source.id());
-        auto pred = [=](auto& actor) { return actor == msg.source; };
-        auto& remaining = self->state.remaining_actors;
-        auto i = std::find_if(remaining.begin(), remaining.end(), pred);
-        if (i == remaining.end()) {
-          VAST_DEBUG("{} ignores duplicate DOWN message", *self);
-          return;
-        }
-        remaining.erase(i);
-        if (remaining.empty()) {
-          VAST_DEBUG("{} killed all remaining actors", *self);
-          self->state.promise.deliver(atom::done_v);
-          self->quit(caf::exit_reason::user_shutdown);
-        }
-      });
-      // Send the final reminder for a hard-kill.
-      if (kill_timeout > std::chrono::milliseconds::zero())
-        self->delayed_send(self, kill_timeout, atom::stop_v);
-      else
-        self->send(self, atom::stop_v);
-    },
-    [=](atom::stop) {
-      auto n = self->state.remaining_actors.size();
-      VAST_ERROR("{} failed to kill {} actors", *self, n);
-      self->state.promise.deliver(
-        caf::make_error(ec::timeout, "failed to kill remaining actors", n));
-      self->quit(caf::exit_reason::user_shutdown);
-    }};
+  };
 }
 
 template caf::behavior
-terminator<policy::sequential>(caf::stateful_actor<terminator_state>*,
-                               std::chrono::milliseconds,
-                               std::chrono::milliseconds);
+terminator<policy::sequential>(caf::stateful_actor<terminator_state>*);
 
 template caf::behavior
-terminator<policy::parallel>(caf::stateful_actor<terminator_state>*,
-                             std::chrono::milliseconds,
-                             std::chrono::milliseconds);
+terminator<policy::parallel>(caf::stateful_actor<terminator_state>*);
 
 } // namespace vast::system
