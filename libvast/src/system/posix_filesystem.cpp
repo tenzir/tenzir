@@ -37,10 +37,9 @@ posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
     return caf::make_error(ec::system_error,
                            fmt::format("failed to move {} to {}: {}", from, to,
                                        err.message()));
-  } else {
-    ++stats.moves.successful;
-    return atom::done_v;
   }
+  ++stats.moves.successful;
+  return atom::done_v;
 }
 
 filesystem_actor::behavior_type
