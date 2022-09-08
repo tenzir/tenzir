@@ -2,7 +2,7 @@
 
 `VAST` is perfect companion for Security specialists, threat hunters, SOC analysts who are utilizing TheHive. Users of TheHive can enrich and contextualize their investigations effortlessly with `VAST` integrations.
 
-Use `docker-compose` with provided `docker-compose.yml` to create a new environment and test the integrations. After instantiating environment, make sure to manually integrate Cortex/TheHive by creating users and generating API Keys.
+Use `docker-compose` with provided `docker-compose.yml` to create a new environment and test the integrations. After instantiating environment, service `cortex-initializer` sets-up Cortex with VAST analyzer with users: `admin@thehive.local:secret` and `orgadmin@thehive.local:secret`. 
 
 ```
 docker-compose up -d

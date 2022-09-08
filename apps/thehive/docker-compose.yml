@@ -97,6 +97,16 @@ services:
       - './vol/cortex/application.conf:/etc/cortex/application.conf'
       - '/tmp/cortex-jobs:/tmp/cortex-jobs'
       - './analyzers:/opt/cortex/analyzers'
+    
+  # Ephemeral container for initiating Cortex users/org/analyzer
+  cortex-initializer:
+    container_name: cortex-initializer
+    image: ubuntu:latest
+    command: sh /tmp/initialize.sh
+    depends_on:
+      - cortex
+    volumes:
+      - './vol/cortex/initialize.sh:/tmp/initialize.sh'
 
   vast:
     container_name: vast

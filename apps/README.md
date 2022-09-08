@@ -1,7 +1,7 @@
 VAST - Integrations
 ================================
 
-Under this section, we provide various integrations and example implementations with VAST.
+Under this section, we provide various integrations and example implementations with `VAST`.
 
 Available integrations:
 * TheHive
