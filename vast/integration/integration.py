@@ -57,6 +57,7 @@ class Step(NamedTuple):
     command: List[str]
     input: Optional[Path]
     transformation: Optional[str]
+    prepend_vast: Optional[bool]
     expected_result: Optional[Result]
 
 
@@ -208,10 +209,10 @@ def run_step(
         db_dir = work_dir / "vast.db"
         stdout = work_dir / f"{step_id}.out"
         stderr = work_dir / f"{step_id}.err"
-        cmd = basecmd + step.command
+        cmd = basecmd + step.command if step.prepend_vast else step.command
         info_string = " ".join(map(str, cmd))
         client = spawn(
-            basecmd + step.command,
+            cmd,
             stdin=(subprocess.PIPE if step.input else subprocess.DEVNULL),
             stdout=open(stdout, "w+"),
             stderr=open(stderr, "w"),
@@ -535,6 +536,7 @@ def validate(data):
                 schema.Optional("expected_result", default=Result.SUCCESS): schema.Use(
                     to_result
                 ),
+                schema.Optional("prepend_vast", default=True): bool,
             },
             schema.Use(to_step),
         )
