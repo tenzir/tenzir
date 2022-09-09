@@ -404,15 +404,15 @@ active_partition_actor::behavior_type active_partition(
           auto value_index
             = factory<vast::value_index>::make(field.type, index_opts);
           if (!value_index) {
-            VAST_WARN("{} could not spawn value index with options {} for "
-                      "field {}",
+            VAST_WARN("{} failed to spawn active indexer with options {} for "
+                      "field {}: value index missing",
                       *self, index_opts, field);
             continue;
           }
           idx = self->spawn(active_indexer, qf.name(), std::move(value_index));
           auto slot = self->state.stage->add_outbound_path(idx);
           self->state.stage->out().set_filter(slot, qf);
-          VAST_DEBUG("{} spawned new indexer for field {} at slot {}", *self,
+          VAST_DEBUG("{} spawned new active indexer for field {} at slot {}", *self,
                      field.name, slot);
         }
         out.push(table_slice_column{x, col++});

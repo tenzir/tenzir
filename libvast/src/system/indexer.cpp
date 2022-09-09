@@ -30,15 +30,11 @@ namespace vast::system {
 
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               const std::string& name, value_index_ptr value_index) {
+               const std::string& name, value_index_ptr index) {
+  VAST_ASSERT_CHEAP(!name.empty());
+  VAST_ASSERT_CHEAP(index);
   self->state.name = fmt::format("indexer-{}", name);
-  self->state.idx = std::move(value_index);
-  if (!self->state.idx) {
-    VAST_ERROR("{} failed to construct value index", *self);
-    self->quit(caf::make_error(ec::unspecified, "failed to construct value "
-                                                "index"));
-    return active_indexer_actor::behavior_type::make_empty_behavior();
-  }
+  self->state.idx = std::move(index);
   return {
     [self](caf::stream<table_slice_column> in)
       -> caf::inbound_stream_slot<table_slice_column> {
@@ -108,16 +104,11 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
 
 indexer_actor::behavior_type
 passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
-                uuid partition_id, value_index_ptr idx) {
-  if (!idx) {
-    VAST_ERROR("{} got invalid value index pointer", *self);
-    self->quit(caf::make_error(ec::end_of_input, "invalid value index "
-                                                 "pointer"));
-    return indexer_actor::behavior_type::make_empty_behavior();
-  }
-  self->state.name = fmt::format("indexer-{}", idx->type());
+                uuid partition_id, value_index_ptr index) {
+  VAST_ASSERT_CHEAP(index);
+  self->state.name = fmt::format("indexer-{}", index->type());
   self->state.partition_id = partition_id;
-  self->state.idx = std::move(idx);
+  self->state.idx = std::move(index);
   return {
     [self](atom::evaluate, const curried_predicate& pred) -> caf::result<ids> {
       VAST_DEBUG("{} got predicate: {}", *self, pred);
