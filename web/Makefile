@@ -64,7 +64,10 @@ $(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
 	@$(MAKE) -C $(NOTEBOOK_INPUT_DIR)
 	cp -r $(NOTEBOOK_INPUT_DIR)/output/md/* $(NOTEBOOK_OUTPUT_DIR)
 
-quarto:
+quarto-r-deps:
+	@Rscript -e 'library(pak); pak::local_install_dev_deps()'
+
+quarto: quarto-r-deps
 	@quarto render
 
 clean:
