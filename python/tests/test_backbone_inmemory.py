@@ -4,6 +4,7 @@ import stix2
 
 import vast.backbones
 
+
 @pytest.mark.asyncio
 async def test_backbone_pub_sub():
     callback = Mock()

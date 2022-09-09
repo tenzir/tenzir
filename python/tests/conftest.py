@@ -8,6 +8,7 @@ import vast
 import vast.backbones
 import vast.utils.config
 
+
 @pytest.fixture
 def sighting(request):
     tests = pathlib.Path(request.node.fspath.strpath).parent
@@ -15,6 +16,7 @@ def sighting(request):
     with bundle.open() as f:
         bundle = json.load(f)
         return stix2.parse(bundle)
+
 
 @pytest.fixture
 def fabric():

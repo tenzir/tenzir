@@ -4,6 +4,7 @@ import stix2
 
 from vast.utils.stix import IDENTITIES
 
+
 @pytest.mark.asyncio
 async def test_fabric_push_pull(fabric):
     bundle = stix2.Bundle(IDENTITIES["vast"])
