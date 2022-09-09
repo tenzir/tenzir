@@ -13,10 +13,12 @@ NOTEBOOK_OUTPUTS := $(addprefix $(NOTEBOOK_OUTPUT_DIR)/, $(notdir $(NOTEBOOK_INP
 NOTEBOOK_DOCS_INPUT := $(NOTEBOOK_INPUT_DIR)/README.md
 NOTEBOOK_DOCS_OUTPUT := $(CONTRIBUTING_DIR)/notebooks.md
 
+QUARTO_INPUTS := $(shell find . -type f -name "*.qmd" -exec dirname '{}' \; | xargs -I{} find "{}" -type f -not -name "*.md")
+
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
 
-all: changelog notebooks dot-github rfc
+all: changelog notebooks dot-github rfc quarto
 
 changelog: $(CHANGELOG_OUTPUT)
 
@@ -65,9 +67,10 @@ $(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
 	cp -r $(NOTEBOOK_INPUT_DIR)/output/md/* $(NOTEBOOK_OUTPUT_DIR)
 
 quarto-r-deps:
-	@Rscript -e 'library(pak); pak::local_install_dev_deps()'
+	@Rscript -e 'if("pak" %in% rownames(installed.packages()) == FALSE) { install.packages("pak", repos = "http://cran.us.r-project.org") }'
+	@Rscript -e 'require(pak); pak::local_install_dev_deps()'
 
-quarto: quarto-r-deps
+quarto: quarto-r-deps $(QUARTO_INPUTS)
 	@quarto render
 
 clean:
