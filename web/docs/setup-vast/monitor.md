@@ -141,6 +141,12 @@ The following list describes all available metrics keys:
 |`passive-store.lookup.runtime`|The number of results of a query in a passive store.|#events|🔎🪪💾|
 |`passive-store.lookup.hits`|The number of results of a query in a passive store.|#events|🔎🪪💾|
 |`passive-store.init.runtime`|Time until the store is ready serve queries.|nanoseconds|💾|
+|`posix-filesystem.checks`|The number of file checks since process start.|||
+|`posix-filesystem.writes`|The number of file writes since process start.|||
+|`posix-filesystem.reads`|The number of file reads since process start.|||
+|`posix-filesystem.mmaps`|The number of file mmaps since process start.|||
+|`posix-filesystem.erases`|The number of file erasures since process start.|||
+|`posix-filesystem.moves`|The number of file moves since process start.|||
 |`source.start`|Timepoint when the source started.|nanoseconds since epoch||
 |`source.stop`|Timepoint when the source stopped.|nanoseconds since epoch||
 |`syslog-reader.rate`|The rate of events processed by the syslog source.|#events/second||

@@ -11,6 +11,7 @@
 #include "vast/chunk.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
 
 #include <caf/config_value.hpp>
@@ -180,7 +181,18 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         return;
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
-      // TODO: generate report
+      auto msg = report{
+        .data = {
+          {"posix-filesystem.checks", self->state.stats.checks},
+          {"posix-filesystem.writes", self->state.stats.writes},
+          {"posix-filesystem.reads", self->state.stats.reads},
+          {"posix-filesystem.mmaps", self->state.stats.mmaps},
+          {"posix-filesystem.erases", self->state.stats.erases},
+          {"posix-filesystem.moves", self->state.stats.moves},
+        },
+        .metadata = {},
+      };
+      self->send(self->state.accountant, atom::metrics_v, std::move(msg));
     },
   };
 }
