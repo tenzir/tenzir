@@ -170,6 +170,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         add_stats("writes", self->state.stats.writes);
         add_stats("reads", self->state.stats.reads);
         add_stats("mmaps", self->state.stats.mmaps);
+        // TODO: this should be called "deletes" or "erasures".
         add_stats("erases", self->state.stats.erases);
         add_stats("moves", self->state.stats.moves);
         result["operations"] = std::move(ops);
