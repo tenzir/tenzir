@@ -5,7 +5,7 @@
 - **ETA**: Oct 5, 2022
 - **Authors**:
   - [Tobias Mayer](https://github.com/tobim)
-  - [Thomas Peiselt](https://github.com/mavam)
+  - [Thomas Peiselt](https://github.com/dispanser)
   - [Matthias Vallentin](https://github.com/mavam)
 - **Contributors**:
   - [Dominik Lohmann](https://github.com/dominiklohmann)
@@ -149,7 +149,7 @@ instances to achieve the desired level of redundancy.
 ### Case Studies
 
 We now turn to deployment case studies to validate the architectural approach of
-a fault-tolerant catalog. Furthermore, we assume that VAST has an resilient
+a fault-tolerant catalog. Furthermore, we assume that VAST has a resilient
 write path, e.g., by reading data from Kafka. Consequently, faulty data sources
 will not cause a global inconsistency and simply respawn upon failure. We also
 assume that VAST has a resilient read path, assuming that downstream workloads
@@ -224,7 +224,7 @@ The most extreme variant of this scenario would be to create a dedicated
 instance for each query, which can be realized on top of serverless
 architectures such as AWS Lambda or Azure Cloud Functions. However, for systems
 with an at-least medium query rate we recommend to use longer-running read nodes
-to exploit IO synergies and in memory caches.
+to exploit IO synergies and in-memory caches.
 
 ## Implementation
 
