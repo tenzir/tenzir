@@ -13,7 +13,8 @@ NOTEBOOK_OUTPUTS := $(addprefix $(NOTEBOOK_OUTPUT_DIR)/, $(notdir $(NOTEBOOK_INP
 NOTEBOOK_DOCS_INPUT := $(NOTEBOOK_INPUT_DIR)/README.md
 NOTEBOOK_DOCS_OUTPUT := $(CONTRIBUTING_DIR)/notebooks.md
 
-QUARTO_INPUTS := $(shell find . -type f -name "*.qmd" -exec dirname '{}' \; | xargs -I{} find "{}" -type f -not -name "*.md")
+QUARTO_INPUTS := $(shell find . -type f -name "*.qmd" -exec dirname '{}' \; | xargs -I{} find "{}" -type f -not -name "*.md" | grep -v "index_files")
+QUARTO_OUTPUTS := $(shell find . -type f -name "*.qmd" | sed 's/\.qmd/.md/')
 
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
@@ -66,12 +67,12 @@ $(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
 	@$(MAKE) -C $(NOTEBOOK_INPUT_DIR)
 	cp -r $(NOTEBOOK_INPUT_DIR)/output/md/* $(NOTEBOOK_OUTPUT_DIR)
 
-quarto-r-deps:
+$(QUARTO_OUTPUTS): $(QUARTO_INPUTS)
 	@Rscript -e 'if("pak" %in% rownames(installed.packages()) == FALSE) { install.packages("pak", repos = "http://cran.us.r-project.org") }'
 	@Rscript -e 'require(pak); pak::local_install_dev_deps()'
-
-quarto: quarto-r-deps $(QUARTO_INPUTS)
 	@quarto render
+
+quarto: $(QUARTO_OUTPUTS)
 
 clean:
 	rm -f $(CHANGELOG_OUTPUT)
@@ -83,3 +84,4 @@ clean:
 	rm $(CONTRIBUTING_DIR)/coding-style.md
 	rm $(CONTRIBUTING_DIR)/security.md
 	rm $(CONTRIBUTING_DIR)/workflow.md
+	rm $(QUARTO_OUTPUTS)
