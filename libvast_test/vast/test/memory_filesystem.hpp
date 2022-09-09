@@ -77,5 +77,8 @@ inline vast::system::filesystem_actor::behavior_type memory_filesystem() {
     [](vast::atom::status, vast::system::status_verbosity) -> vast::record {
       return {};
     },
+    [](vast::atom::telemetry) {
+      // nop
+    },
   };
 }

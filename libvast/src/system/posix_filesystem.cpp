@@ -49,6 +49,9 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
     caf::detail::set_thread_name("vast.posix-filesystem");
   self->state.root = std::move(root);
   self->state.accountant = std::move(accountant);
+  if (self->state.accountant)
+    self->delayed_send(self, defaults::system::telemetry_rate,
+                       atom::telemetry_v);
   return {
     [self](atom::write, const std::filesystem::path& filename,
            const chunk_ptr& chk) -> caf::result<atom::ok> {
@@ -171,6 +174,13 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         result["operations"] = std::move(ops);
       }
       return result;
+    },
+    [self](atom::telemetry) {
+      if (!self->state.accountant)
+        return;
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         atom::telemetry_v);
+      // TODO: generate report
     },
   };
 }

@@ -364,7 +364,9 @@ using filesystem_actor = typed_actor_fwd<
     chunk_ptr>,
   // Deletes a file.
   caf::replies_to<atom::erase, std::filesystem::path>::with< //
-    atom::done>>
+    atom::done>,
+  // The internal telemetry loop of the filesystem.
+  caf::reacts_to<atom::telemetry>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
