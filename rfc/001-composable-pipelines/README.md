@@ -35,8 +35,7 @@ Assume for a moment everything is a pipeline operator. Then we may write:
 vast 'from s3://aws |
       read json |
       summarize count(dst) group-by src |
-      write feather |
-      to /path/to/file.feather'
+      store parquet /path/to/directory'
 ```
 
 The UX would translate seamlessly to other languages, e.g., Python:
@@ -44,11 +43,10 @@ The UX would translate seamlessly to other languages, e.g., Python:
 ```python
 import vast as v
 await v.from("s3://aws")
-       .read_json() # or read("json")
+       .read_json()
        .group_by("src") # could also be merged with summarize()
        .summarize(v.count("dst"))
-       .write_feather() # or write("feather")
-       .to("/path/to/file.feather")
+       .store_parquet("/path/to/directory")
 ```
 
 ### Synopsis
@@ -59,14 +57,36 @@ blocks used throughout this proposal.
 
 #### I/O
 
+Input:
+
 | Operator | Input Type | Output Type | Description
 | -------- | ---------- | ----------- | ------------------------------------------
 | `from`   | `Void`     | `Bytes`     | Loads bytes from a source as a side effect
-| `to`     | `Bytes`    | `Void`      | Writes bytes to a sink as a side effect
 | `read`   | `Bytes`    | `Arrow`     | Parses a specific format into Arrow
-| `write`  | `Arrow`    | `Bytes`     | Prints input in a specific format
+| `load`   | `Void`     | `Arrow`     | Performs `from` and `read` in one step
 | `pull`   | `Void`     | `Arrow`     | Loads Arrow from a remote source
+
+Output:
+
+| Operator | Input Type | Output Type | Description
+| -------- | ---------- | ----------- | ------------------------------------------
+| `to`     | `Bytes`    | `Void`      | Writes bytes to a sink as a side effect
+| `write`  | `Arrow`    | `Bytes`     | Prints input in a specific format
+| `store`  | `Arrow`    | `Void`      | Performs `write` and `to` in one step
 | `push`   | `Arrow`    | `Void`      | Stores Arrow in a remote source
+
+The reason where `load`/`store` exist, in addition to `from`/`to` and
+`read`/`write`, is that it's not always possible to encapsulate data acquisition
+in a two-step operation. For example, when using a C library that yields
+structured objects, the parsing step already took place and it wouldn't make
+sense to re-serialize them into `Bytes`. At this point, it makes more sense to
+continue working with the objects and convert them to `Arrow`.
+
+Zeek's Broker library is a good example for `load<Void, Arrow>`: it yields
+`broker::data` objects when subscribing to data from a remote machine. Likewise,
+Parquet is a good example for `store<Arrow, Void>`: since one Parquet file has a
+fixed scheme, but `Arrow` is a heterogenous stream, the implemention is
+responsible for demultiplexing it and writing it to one file per schema.
 
 #### Compute
 
@@ -180,9 +200,9 @@ vast exec 'read zeek |
 Side effect: we would get our envisioned convert operator almost for free:
 
 ```bash
-vast exec 'read zeek | write csv'
+vast exec 'read zeek | write json'
 # Obviates the need for:
-vast exec 'convert zeek csv'
+vast exec 'convert zeek json'
 ```
 
 ### Node Interaction
