@@ -296,6 +296,9 @@ reshaping according to the positional arguments that are a list of extractors.
 The pipeline writer is responsible for reshaping the data so that the matcher
 can make sense of it.
 
+A successful "match" wraps the corresponding event into a sighting envelope
+record.
+
 #### Remote execution
 
 In the above example, we passed in a state file via `--state`. This is a
