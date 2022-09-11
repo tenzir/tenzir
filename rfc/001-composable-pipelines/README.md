@@ -288,13 +288,13 @@ matching:
 ```bash
 vast exec 'from kafka -t /zeek/conn |
            read zeek |
-           put id.orig_h, id_resp_h |
-           match --state matcher.flatbuf
+           match --state matcher.flatbuf id.orig_h, id.resp_h
 ```
 
-The idea is that `match` receives the data as input and exposes it to the
-matcher. The pipeline writer is responsible for reshaping the data so that the
-matcher can make sense of it.
+The `match` operator exposes the structured data to a specific matcher instance,
+reshaping according to the positional arguments that are a list of extractors.
+The pipeline writer is responsible for reshaping the data so that the matcher
+can make sense of it.
 
 #### Remote execution
 
