@@ -192,7 +192,7 @@ struct rebuilder_state {
     auto finish = [this, rp](caf::error err, bool silent = false) mutable {
       if (!silent) {
         if (run->statistics.num_completed == 0)
-          VAST_INFO("{} had nothing to do", *self);
+          VAST_VERBOSE("{} had nothing to do", *self);
         else
           VAST_INFO("{} rebuilt {} into {} partitions", *self,
                     run->statistics.num_completed, run->statistics.num_results);
