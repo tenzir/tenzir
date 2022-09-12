@@ -808,7 +808,6 @@ jobs:
             VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
-      
       - name: Build Dependencies Docker Image
         run: |
           docker build . -t tenzir/vast-deps:latest --target dependencies \
@@ -868,9 +867,8 @@ jobs:
             docker tag tenzir/vast:latest "tenzir/vast:${release_tag}"
             docker push "tenzir/vast:${release_tag}"
           fi
-
   docker-integrations:
-     needs:
+    needs:
       - build-docker
     if: github.event_name != 'workflow_dispatch'
     name: Docker Integrations
@@ -899,15 +897,13 @@ jobs:
           docker-compose ps
           docker-compose logs
           # Assert that all containers that exited have exited cleanly.
-          exited_all="$(docker ps --all --filter 'name=event-horizon_' --filter 'status=exited' -q | sort -u)"
-          exited_cleanly="$(docker ps --all --filter 'name=event-horizon_' --filter 'exited=0' -q | sort -u)"
+          exited_all="$(docker ps --all --filter 'name=tenzir-' --filter 'status=exited' -q | sort -u)"
+          exited_cleanly="$(docker ps --all --filter 'name=tenzir-' --filter 'exited=0' -q | sort -u)"
           [[ "${exited_all}" == "${exited_cleanly}" ]]
       - name: Stop Docker Compose
         run: |
           docker-compose down
-    
 
-    
   build-nix:
     needs:
       - determine-version
