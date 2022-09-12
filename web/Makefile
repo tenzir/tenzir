@@ -13,8 +13,8 @@ NOTEBOOK_OUTPUTS := $(addprefix $(NOTEBOOK_OUTPUT_DIR)/, $(notdir $(NOTEBOOK_INP
 NOTEBOOK_DOCS_INPUT := $(NOTEBOOK_INPUT_DIR)/README.md
 NOTEBOOK_DOCS_OUTPUT := $(CONTRIBUTING_DIR)/notebooks.md
 
-QUARTO_INPUTS := $(shell find . -type f -name "*.qmd" -exec dirname '{}' \; | xargs -I{} find "{}" -type f -not -name "*.md" | grep -v "index_files")
-QUARTO_OUTPUTS := $(shell find . -type f -name "*.qmd" | sed 's/\.qmd/.md/')
+QUARTO_INPUTS := $(shell ../scripts/quarto-inputs.sh)
+QUARTO_OUTPUTS := $(shell ../scripts/quarto-outputs.sh)
 
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
