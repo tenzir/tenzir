@@ -23,7 +23,7 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
 @task
 def status(c):
     """Get the status of the MISP service"""
-    print(FargateService(*service_outputs(c)).get_task_status())
+    print(FargateService(*service_outputs(c)).service_status())
 
 
 @task
@@ -58,7 +58,7 @@ def get_public_ip(c):
     return eni_desc["NetworkInterfaces"][0]["Association"]["PublicIp"]
 
 
-@task
+@pty_task
 def tunnel(c, ui_port="8080", zmq_port="50000"):
     """Open an SSH tunnel to the MISP instance and forward the ports"""
     print("Getting public ip...")

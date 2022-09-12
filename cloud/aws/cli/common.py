@@ -218,32 +218,50 @@ class FargateService:
                 raise Exit(f"{self.task_family} task timed out", 1)
             time.sleep(1)
 
-    def get_task_status(self):
-        """Get the status of the task for this service"""
+    def _task_desc(self, task_arn):
+        return aws("ecs").describe_tasks(cluster=self.cluster, tasks=[task_arn])[
+            "tasks"
+        ][0]
+
+    def service_status(self):
+        """Get the status of the service and the associated task"""
+        # describe task
         task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
         nb_vast_tasks = len(task_res["taskArns"])
-        if nb_vast_tasks == 0:
-            return "No task"
+        if nb_vast_tasks == 1:
+            task_status = self._task_desc(task_res["taskArns"][0])["lastStatus"]
+        # describe service
+        srv_res = aws("ecs").describe_services(
+            cluster=self.cluster, services=[self.service_name]
+        )
+        desired_tasks = srv_res["services"][0]["desiredCount"]
+
+        # state machine
         if nb_vast_tasks > 1:
-            return f"{nb_vast_tasks} tasks running"
-        else:
-            desc = aws("ecs").describe_tasks(
-                cluster=self.cluster, tasks=task_res["taskArns"]
-            )["tasks"][0]
-            return f"Desired status {desc['desiredStatus']} and current status {desc['lastStatus']}"
+            return f"Unexpected number of tasks: {nb_vast_tasks}"
+        if desired_tasks == 1 and nb_vast_tasks == 1 and task_status == "RUNNING":
+            return "Service running"
+        if desired_tasks == 1:
+            if nb_vast_tasks == 0:
+                task_status = "no task running"
+            else:
+                task_status = f"task status: {task_status}"
+            return f"Service starting... ({task_status})"
+        if desired_tasks == 0 and nb_vast_tasks == 1:
+            return f"Service stopping... (task status: {task_status})"
+        if desired_tasks == 0:
+            return "Service stopped"
 
     def describe_task(self):
-        """Describe the running tasks, erroring out if the state is unexpected"""
+        """Describe the running tasks, erroring out if there is not exactly one task"""
         task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
         nb_vast_tasks = len(task_res["taskArns"])
         if nb_vast_tasks == 0:
-            raise Exit("No task")
+            raise Exit("No task running")
         if nb_vast_tasks > 1:
             raise Exit("{nb_vast_tasks} tasks running")
         else:
-            desc = aws("ecs").describe_tasks(
-                cluster=self.cluster, tasks=task_res["taskArns"]
-            )["tasks"][0]
+            desc = self._task_desc(task_res["taskArns"][0])
             return desc
 
     def start_service(self):

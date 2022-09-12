@@ -55,14 +55,6 @@ def start_vast(c):
     time.sleep(100)
 
 
-def start_misp(c):
-    """Start MISP, noop if already running"""
-    print("Start MISP Server")
-    c.run("./vast-cloud misp.start")
-    print("The task needs a bit of time to boot, sleeping for a while...")
-    time.sleep(300)
-
-
 class VastCloudTestLoader(unittest.TestLoader):
     """Load TestCase instances with an additional Context attribute"""
 
@@ -330,18 +322,27 @@ class Common(unittest.TestCase):
 
 class MISP(unittest.TestCase):
     def setUp(self):
-        start_misp(self.c)
+        print("Start MISP Server")
+        self.c.run("./vast-cloud misp.start")
+        print("The task needs a bit of time to boot, sleeping for a while...")
+        time.sleep(300)
 
     def test(self):
         """Test that we can get the MISP login page"""
-        sleep = 10
-        self.c.run(
-            f"nohup timeout {sleep+2} ./vast-cloud misp.tunnel > /dev/null 2>&1 &"
-        )
-        time.sleep(sleep)
-        resp = requests.get("http://localhost:8080")
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("<title>Users - MISP</title>", resp.text)
+        self.c.run("nohup ./vast-cloud misp.tunnel > /dev/null 2>&1 &")
+        time.sleep(30)
+        try:
+            resp = requests.get("http://localhost:8080")
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("<title>Users - MISP</title>", resp.text)
+        finally:
+            self.c.run(
+                "docker stop $(docker ps --no-trunc | grep misp.tunnel | cut -d ' ' -f 1)"
+            )
+
+    def tearDown(self):
+        print("Stop MISP Server")
+        self.c.run("./vast-cloud misp.stop")
 
 
 @task(

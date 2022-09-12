@@ -230,7 +230,7 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
 @task
 def vast_server_status(c):
     """Get the status of the VAST server"""
-    print(FargateService(*service_outputs(c)).get_task_status())
+    print(FargateService(*service_outputs(c)).service_status())
 
 
 @task
