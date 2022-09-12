@@ -1383,6 +1383,13 @@ public:
 
   /// Returns a new, flattened record type.
   friend record_type flatten(const record_type& type) noexcept;
+
+  /// Enables integration with CAF's type inspection.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, record_type& x) ->
+    typename Inspector::result_type {
+    return f(caf::meta::type_name("vast.record_type"), x.table_);
+  }
 };
 
 } // namespace vast
