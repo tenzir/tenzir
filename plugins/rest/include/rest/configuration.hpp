@@ -19,7 +19,7 @@ namespace vast::plugins::rest {
 struct configuration {
   static const record_type& layout() noexcept {
     static auto result = vast::record_type{
-      {"bind", vast::string_type{}},    {"port", vast::count_type{}},
+      {"bind", vast::string_type{}},    {"port", vast::integer_type{}},
       {"mode", vast::string_type{}},    {"certfile", vast::string_type{}},
       {"keyfile", vast::string_type{}},
     };
@@ -43,7 +43,7 @@ struct configuration {
   std::string certfile = {};
   std::string keyfile = {};
   std::string bind_address = "127.0.0.1";
-  uint16_t port = 42001;
+  int port = 42001;
 };
 
 // The resolved and validated configuration that gets used at runtime.

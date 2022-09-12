@@ -24,6 +24,7 @@
 #include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/system/spawn_or_connect_to_node.hpp>
+#include <vast/validate.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -50,7 +51,7 @@ using request_dispatcher_actor = system::typed_actor_fwd<
 
 namespace {
 
-static restinio::http_method_id_t to_restinio_method(vast::http_method method) {
+restinio::http_method_id_t to_restinio_method(vast::http_method method) {
   switch (method) {
     case vast::http_method::get:
       return restinio::http_method_get();
@@ -85,7 +86,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       // Ask the authenticator to validate the passed token.
       auto token = response->request()->header().try_get_field("X-VAST-Token");
       if (!token) {
-        response->abort(401, "missing token");
+        response->abort(401, "missing header X-VAST-Token\n");
         return;
       }
       self
@@ -99,12 +100,12 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                          std::move(response), std::move(endpoint),
                          std::move(handler));
             else
-              response->abort(401, "invalid token");
+              response->abort(401, "invalid token\n");
           },
           [self, response](const caf::error& err) mutable {
             VAST_WARN("{} received error while authenticating request: {}",
                       *self, err);
-            response->abort(500, "internal server error");
+            response->abort(500, "internal server error\n");
           });
     },
     [self](atom::internal, atom::request, restinio_response_ptr& response,
@@ -112,7 +113,6 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       // TODO: Also consider params in the request body here.
       restinio::query_string_params_t string_params
         = restinio::parse_query(response->request()->header().query());
-      VAST_INFO("handling request with {} parameters", string_params.size());
       vast::record params;
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
@@ -135,7 +135,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                   return *result;
                 },
                 []<complex_type Type>(const Type&) -> caf::expected<data> {
-                  // TODO: Also allow list.
+                  // TODO: Also allow lists.
                   return caf::make_error(ec::invalid_argument,
                                          "REST API only accepts basic type "
                                          "parameters");
@@ -195,16 +195,27 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   auto self = caf::scoped_actor{system};
   auto rest_options = caf::get_or(inv.options, "rest", caf::settings{});
   auto data = vast::data{};
+  // TODO: Implement a single `convert_and_validate()` function for going
+  // from caf::settings -> record_type
+  if (!inv.arguments.empty())
+    return caf::make_message(caf::make_error(
+      ec::invalid_argument,
+      fmt::format("unexpected positional args: {}", inv.arguments)));
   bool success = convert(rest_options, data);
   if (!success)
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt parse options"));
+  auto invalid
+    = vast::validate(data, vast::plugins::rest::configuration::layout(),
+                     vast::validate::permissive);
+  if (invalid)
+    return caf::make_message(caf::make_error(
+      ec::invalid_argument, fmt::format("invalid options: {}", invalid)));
   rest::configuration config;
   caf::error error = convert(data, config);
   if (error)
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt convert options"));
-  VAST_INFO("options: {}\ndata: {}", inv.options, data);
   auto server_config = convert_and_validate(config);
   if (!server_config)
     return caf::make_message(caf::make_error(
@@ -229,6 +240,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   auto router = std::make_unique<router_t>();
   VAST_ASSERT_CHEAP(dispatcher);
   // Set up API routes from plugins.
+  std::vector<system::rest_handler_actor> handlers;
   for (auto const* rest_plugin : plugins::get<rest_endpoint_plugin>()) {
     auto prefix = rest_plugin->prefix();
     if (!prefix.empty() && prefix[0] != '/') {
@@ -241,6 +253,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         VAST_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;
       }
+      handlers.push_back(handler);
       setup_route(self, router, rest_plugin->prefix(), dispatcher,
                   std::move(endpoint), handler);
     }
@@ -248,7 +261,9 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   // Set up non-API routes.
   router->non_matched_request_handler([](auto req) {
     VAST_VERBOSE("404 not found: {}", req->header().path());
-    return req->create_response(restinio::status_not_found()).done();
+    return req->create_response(restinio::status_not_found())
+      .set_body("404 not found")
+      .done();
   });
   router->http_get(
     "/", [](auto request, auto) -> restinio::request_handling_status_t {
@@ -305,7 +320,9 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
                     .handle_request_timeout(1s)
                     .tls_context(std::move(tls_context)));
   }
-  // FIXME: Kill spawned actors.
+  self->send_exit(dispatcher, caf::error{});
+  for (auto& handler : handlers)
+    self->send_exit(handler, caf::error{});
   return {};
 }
 

@@ -266,6 +266,7 @@ def run_step(
                 try:
                     out = subprocess.run(
                         [step.transformation],
+                        cwd=work_dir,
                         stdin=out_handle,
                         stdout=subprocess.PIPE,
                         timeout=STEP_TIMEOUT,

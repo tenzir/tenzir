@@ -140,10 +140,12 @@ export_multiplexer_actor::behavior_type export_multiplexer(
   return {
     [self](atom::http_request, uint64_t, http_request rq) {
       VAST_VERBOSE("{} handles /export request", *self);
-      auto query_param = rq.params.at("expression");
       auto query_string = std::optional<std::string>{};
-      if (auto* input = caf::get_if<std::string>(&query_param.get_data())) {
-        query_string = *input;
+      if (rq.params.contains("expression")) {
+        auto& param = rq.params.at("expression");
+        // Should be type-checked by the server.
+        VAST_ASSERT(caf::holds_alternative<std::string>(param));
+        query_string = caf::get<std::string>(param);
       } else {
         // TODO: For the REST API this default feels a bit more dangerous than
         // for the CLI, since the user can not quickly notice the error and
@@ -155,10 +157,12 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         rq.response->abort(400, "couldn't parse expression\n");
         return;
       }
-      auto limit_param = rq.params.at("limit");
       size_t limit = std::string::npos;
-      if (auto* input = caf::get_if<count>(&limit_param.get_data())) {
-        limit = *input;
+      if (rq.params.contains("limit")) {
+        auto& param = rq.params.at("limit");
+        // Should be type-checked by the server.
+        VAST_ASSERT(caf::holds_alternative<count>(param));
+        limit = caf::get<count>(param);
       }
       // TODO: Abort the request after some time limit has passed.
       auto exporter = self->spawn(export_helper, self->state.index_, *expr,
@@ -213,7 +217,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   api_endpoints() const override {
     static auto endpoints = std::vector<vast::api_endpoint>{
     {
-      .method = http_method::post,
+      .method = http_method::get,
       .path = "/export",
       .params = vast::record_type{
         {"expression", vast::string_type{}},
