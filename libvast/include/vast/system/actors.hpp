@@ -535,6 +535,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_creation_listener_actor))
   VAST_ADD_TYPE_ID((vast::system::receiver_actor<vast::atom::done>))
+  VAST_ADD_TYPE_ID((vast::system::rest_handler_actor))
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))
   VAST_ADD_TYPE_ID(

@@ -57,8 +57,6 @@ struct export_multiplexer_state {
   export_multiplexer_state() = default;
 
   system::index_actor index_ = {};
-  size_t query_id_counter_ = {};
-  std::unordered_map<size_t, export_helper_actor> live_queries_ = {};
 };
 
 export_helper_actor::behavior_type
@@ -71,7 +69,6 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
   auto initial_response = fmt::format(
     "{{\n  \"version\": \"{}\",\n  \"events\": [\n", vast::version::version);
   self->state.request_.response->append(initial_response);
-  VAST_INFO("setting limit {}", limit);
   auto query = vast::query_context::make_extract("api", self, std::move(expr));
   self->request(self->state.index_, caf::infinite, atom::evaluate_v, query)
     .await(
@@ -136,21 +133,13 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         self->state.index_
           = caf::actor_cast<system::index_actor>(components[0]);
       },
-      [self](caf::error& err) { //
+      [self](caf::error& err) {
         VAST_ERROR("failed to get index from node: {}", std::move(err));
         self->quit();
       });
-  self->set_down_handler([=](const caf::down_msg& msg) {
-    VAST_INFO("{} goes down", msg.source); // FIXME: INFO -> DEBUG
-    // FIXME
-    // auto it = self->state.live_queries_.find(msg.source);
-    // if (msg.reason != caf::exit_reason::normal) {
-    //   request->response->abort(500, "error");
-    // }
-  });
   return {
-    [self](atom::http_request, uint64_t endpoint_id, http_request rq) {
-      VAST_INFO("handling export request");
+    [self](atom::http_request, uint64_t, http_request rq) {
+      VAST_VERBOSE("{} handles /export request", *self);
       auto query_param = rq.params.at("expression");
       auto query_string = std::optional<std::string>{};
       if (auto* input = caf::get_if<std::string>(&query_param.get_data())) {
@@ -168,13 +157,12 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       }
       auto limit_param = rq.params.at("limit");
       size_t limit = std::string::npos;
-      if (auto* input = caf::get_if<std::string>(&limit_param.get_data())) {
-        limit = *to<count>(*input);
+      if (auto* input = caf::get_if<count>(&limit_param.get_data())) {
+        limit = *input;
       }
-      auto query_id = ++self->state.query_id_counter_;
-      auto exporter = self->spawn<caf::monitored>(
-        export_helper, self->state.index_, *expr, limit, std::move(rq));
-      self->state.live_queries_[query_id] = exporter;
+      // TODO: Abort the request after some time limit has passed.
+      auto exporter = self->spawn(export_helper, self->state.index_, *expr,
+                                  limit, std::move(rq));
     },
   };
 }
@@ -192,8 +180,8 @@ class plugin final : public virtual rest_endpoint_plugin {
     return "";
   }
 
-  [[nodiscard]] data openapi_specification() const override {
-    auto const* spec = R"_(
+  [[nodiscard]] data openapi_specification(api_version version) const override {
+    auto const* spec_v0 = R"_(
 /export:
   post:
     summary: Start a new query
@@ -212,102 +200,26 @@ class plugin final : public virtual rest_endpoint_plugin {
             events:
               type: array
               items: object
-/query:
-  post:
-    summary: Start a new query
-    description: Create a new export query in VAST
-    parameters:
-      - in: query
-        name: expression
-        schema:
-          type: string
-        required: true
-        description: Query string.
-    responses:
-      '200':
-        description: Success.
-        content: application/json
-        schema:
-          type: object
-          properties:
-            id:
-              type: string
-/query/{id}:
-  get:
-    summary: Start a new query
-    description: Create a new export query in VAST
-    parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-        description: The query ID.
-      - in: query
-        name: n
-        schema:
-          type: integer
-        required: false
-        description: Maximum number of returned events
-    responses:
-      '200':
-        description: Success.
-        content: application/json
-        schema:
-          type: object
-          properties:
-            position:
-              type: integer
-              description: The number of events that had already been returned before this call.
-            events:
-              type: array
-              items: object
     )_";
-    auto result = from_yaml(spec);
+    if (version != api_version::v0)
+      return vast::record{};
+    auto result = from_yaml(spec_v0);
     VAST_ASSERT(result);
     return *result;
   }
 
-  // TODO: This is a bit silly, probably it makes more sense to just
-  // return a `map` from `plugin::endpoints()`?
-  constexpr static uint64_t EXPORT_ENDPOINT = 0ull;
-  constexpr static uint64_t QUERY_NEW_ENDPOINT = 0ull;
-  constexpr static uint64_t QUERY_NEXT_ENDPOINT = 0ull;
-
   /// List of API endpoints provided by this plugin.
   [[nodiscard]] const std::vector<api_endpoint>&
   api_endpoints() const override {
-    static auto endpoints = std::vector<vast::rest_endpoint_plugin::api_endpoint>{
+    static auto endpoints = std::vector<vast::api_endpoint>{
     {
-      .endpoint_id = EXPORT_ENDPOINT,
       .method = http_method::post,
       .path = "/export",
       .params = vast::record_type{
         {"expression", vast::string_type{}},
         {"limit", vast::count_type{}},
       },
-      .version = rest_endpoint_plugin::api_version::v0,
-      .content_type = http_content_type::json,
-    },
-    {
-      .endpoint_id = QUERY_NEW_ENDPOINT,
-      .method = http_method::post,
-      .path = "/query",
-      .params = vast::record_type{
-        {"expression", vast::string_type{}},
-        {"lifetime", vast::duration_type{}},
-      },
-      .version = rest_endpoint_plugin::api_version::v0,
-      .content_type = http_content_type::json,
-    },
-    {
-      .endpoint_id = EXPORT_ENDPOINT,
-      .method = http_method::get,
-      .path = "/query/:id",
-      .params = vast::record_type{
-        {"n", vast::count_type{}},
-      },
-      .version = rest_endpoint_plugin::api_version::v0,
+      .version = api_version::v0,
       .content_type = http_content_type::json,
     },
   };

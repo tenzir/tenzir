@@ -6,60 +6,82 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-// FIXME: Figure out what to do with `http.hpp`
-
 #pragma once
 
 #include <vast/data.hpp>
 #include <vast/type.hpp>
 
 #include <caf/actor_addr.hpp>
+#include <caf/meta/annotation.hpp>
+#include <caf/optional.hpp>
 
 #include <string>
 
 namespace vast {
 
-// TODO: Move HTTP support classes into separate headers
-enum class http_method {
+enum class http_method : uint8_t {
   get,
   post,
 };
 
-enum class http_content_type {
+enum class http_content_type : uint16_t {
   json,
   ldjson,
 };
 
-enum class http_status_code {
+enum class http_status_code : uint16_t {
   bad_request = 400,
   unprocessable_entity = 422,
+};
+
+enum class api_version : uint8_t {
+  v0,
+  latest = v0,
+};
+
+struct api_endpoint {
+  /// Arbitrary id for endpoint identification
+  uint64_t endpoint_id = 0ull;
+
+  /// The HTTP verb of this endpoint
+  http_method method;
+
+  /// Path can use the express.js conventions
+  std::string path;
+
+  /// Expected parameters.
+  //  (A record_type cannot be empty, so we need an optional.
+  //  TODO: Use `std::optional` after the upgrade to CAF 0.18.
+  caf::optional<vast::record_type> params;
+
+  /// Version for that endpoint.
+  //  TODO: Maybe this would be better as a `uint8` to allow
+  //  each plugin to use its own version numbers.
+  api_version version;
+
+  /// Response content type.
+  http_content_type content_type;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, api_endpoint& e) {
+    return f(caf::meta::type_name("vast.api_endpoint"), e.endpoint_id, e.method,
+             e.path, e.params, e.version, e.content_type);
+  }
 };
 
 // We use the virtual inheritance as a compilation firewall to
 // avoid having the dependency on restinio creep into main VAST
 // until we gained a bit more implementation experience and are
-// confident that it's what we want in the long term.
+// confident that it is what we want in the long term.
 class http_response {
 public:
   virtual ~http_response() = default;
 
   /// Append data to the response body.
-  virtual void append(std::string_view body) = 0;
+  virtual void append(std::string body) = 0;
 
-  /// Return an error and close the connection.
-  //  TODO: Statically verify that we can only abort
-  //  with the documented error codes.
-  virtual void abort(uint16_t error_code, std::string_view message) = 0;
-
-  /// Flush the response body.
-  // (This may be useful from time to time, but only in limited
-  //  circumstances: For non-chunked responses, all response headers
-  //  must be set before the first flush. For chunked responses,
-  //  every chunk can have its own headers. So flushing makes sense
-  //  if we know the whole size in advance and want to stream it (ie.
-  //  a big video file) or if we don't know the whole size, are using HTTP 1,
-  //  and want to send a single chunk.)
-  // virtual void flush() = 0;
+  /// Return an HTTP error code and close the connection.
+  virtual void abort(uint16_t error_code, std::string message) = 0;
 };
 
 class http_request {
@@ -67,7 +89,8 @@ public:
   /// Data according to the type of the endpoint.
   vast::record params;
 
-  // TODO: Probably use caf::cow_ptr
+  /// Shared response data.
+  // TODO: Probably makes sense to use a `caf::cow_ptr`.
   std::shared_ptr<http_response> response;
 };
 

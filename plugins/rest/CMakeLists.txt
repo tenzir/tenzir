@@ -25,8 +25,16 @@ VASTRegisterPlugin(
 
 find_package(fmt REQUIRED)
 
-# RESTinio itself
-find_package(restinio REQUIRED)
-
 find_package(restinio REQUIRED)
 target_link_libraries(rest PRIVATE restinio::restinio)
+
+# Compile the rest FlatBuffers schemas.
+file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/fbs/*.fbs")
+
+VASTCompileFlatBuffers(
+  TARGET rest-fbs
+  SCHEMAS ${flatbuffers_schemas}
+  INCLUDE_DIRECTORY "rest/fbs")
+
+target_link_libraries(rest PUBLIC rest-fbs)

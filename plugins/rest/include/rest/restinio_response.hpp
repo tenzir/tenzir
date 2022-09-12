@@ -26,16 +26,21 @@ using response_t
 
 class restinio_response final : public vast::http_response {
 public:
-  restinio_response(request_handle_t&& handle,
-                    const rest_endpoint_plugin::api_endpoint&);
+  restinio_response(request_handle_t&& handle, const api_endpoint&);
   ~restinio_response() override;
 
+  restinio_response(restinio_response&&) = default;
   restinio_response(const restinio_response&) = delete;
   restinio_response& operator=(const restinio_response&) = delete;
+  restinio_response& operator=(restinio_response&&) = delete;
 
-  void append(std::string_view body) override;
+  void append(std::string body) override;
 
-  void abort(uint16_t error_code, std::string_view message) override;
+  // TODO: Add `&&` qualifier?
+  void abort(uint16_t error_code, std::string message) override;
+
+  // Get a handle to the original request.
+  [[nodiscard]] const request_handle_t& request() const;
 
 private:
   request_handle_t request_;

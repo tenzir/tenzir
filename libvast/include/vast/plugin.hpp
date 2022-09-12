@@ -344,59 +344,16 @@ public:
 
 class rest_endpoint_plugin : public virtual plugin {
 public:
-  enum class api_version : uint8_t {
-    v0,
-  };
-
-  // TODO: Move into separate file
-  //
-  struct api_endpoint {
-    /// Arbitrary id for endpoint identification
-    uint64_t endpoint_id = 0ull;
-
-    /// The HTTP verb of this endpoint
-    http_method method;
-
-    /// Path can use the express.js conventions
-    std::string path;
-
-    /// Expected parameters.
-    //  (a record_type cannot be empty, so we need an optional)
-    std::optional<vast::record_type> params;
-
-    /// Version for that endpoint.
-    //  TODO: Maybe this would be better as a `uint8` to allow
-    //  each plugin to use its own version numbers.
-    api_version version;
-
-    /// Response content type.
-    http_content_type content_type;
-
-    // TODO: Probably useful in the future.
-    // required_authorization authz;
-
-    // TODO: Probably useful in the future.
-    // enum class transport_encoding {
-    //    regular,
-    //    chunked,
-    //    websocket,
-    // }
-  };
-
   /// Defaults to the plugin name
   [[nodiscard]] virtual std::string prefix() const {
     return std::string{"/"} + this->name();
   }
 
-  /// OpenAPI YAML spec for the plugin endpoints.
-  /// This should only consist of entries for the `paths` array,
-  /// not a full YAML document.
-  //  (The idea here is to make a unit test that loops over all plugins and
-  //   compares the `specification` with the list returned by `api_endpoints()`
-  //   and fails on any detectable mismatch. The same can be done on node
-  //   startup. This is not as cool as actually generating the description from
-  //   the structs, but more efficient to implement)
-  [[nodiscard]] virtual data openapi_specification() const = 0;
+  /// OpenAPI spec for the plugin endpoints.
+  /// @returns A `vast::data` that is a record containing entries for
+  /// the `paths` element of an OpenAPI spec.
+  [[nodiscard]] virtual data
+  openapi_specification(api_version version = api_version::latest) const = 0;
 
   /// List of API endpoints provided by this plugin.
   [[nodiscard]] virtual const std::vector<api_endpoint>&

@@ -8,14 +8,13 @@
 
 #include "rest/server_command.hpp"
 
+#include "rest/authenticator.hpp"
 #include "rest/configuration.hpp"
 #include "rest/restinio_response.hpp"
-#include "rest/server_state.hpp"
 
 #include <vast/concept/convertible/data.hpp>
-#include <vast/concept/convertible/to.hpp>
-#include <vast/concept/parseable/numeric.hpp>
 #include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/format/json.hpp>
 #include <vast/logger.hpp>
@@ -35,12 +34,21 @@
 #include <restinio/tls.hpp>
 #include <restinio/websocket/websocket.hpp>
 
+// Needed to forward incoming requests to the request_dispatcher
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
+  std::shared_ptr<vast::plugins::rest::restinio_response>);
+
 namespace vast::plugins::rest {
 
 using router_t = restinio::router::express_router_t<>;
 
-// FIXME: Don't use static variable for this.
-static bool s_require_authentication = true;
+using request_dispatcher_actor = system::typed_actor_fwd<
+  caf::reacts_to<atom::request, restinio_response_ptr, api_endpoint,
+                 system::rest_handler_actor>,
+  caf::reacts_to<atom::internal, atom::request, restinio_response_ptr,
+                 api_endpoint, system::rest_handler_actor>>::unwrap;
+
+namespace {
 
 static restinio::http_method_id_t to_restinio_method(vast::http_method method) {
   switch (method) {
@@ -53,92 +61,156 @@ static restinio::http_method_id_t to_restinio_method(vast::http_method method) {
   return restinio::http_method_get();
 }
 
-static caf::expected<enum server_config::mode>
-to_server_mode(const std::string& str) {
-  if (str == "debug")
-    return server_config::mode::debug;
-  else if (str == "upstream")
-    return server_config::mode::upstream;
-  else if (str == "server")
-    return server_config::mode::server;
-  else if (str == "mtls")
-    return server_config::mode::mtls;
-  return caf::make_error(ec::invalid_argument, "unknown mode");
-}
+struct request_dispatcher_state {
+  request_dispatcher_state() = default;
 
-static void
-setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
-            std::string_view prefix,
-            const vast::rest_endpoint_plugin::api_endpoint& endpoint,
-            system::rest_handler_actor handler) {
-  auto method = to_restinio_method(endpoint.method);
-  auto path
-    = fmt::format("/api/v{}{}{}", static_cast<uint8_t>(endpoint.version),
-                  prefix, endpoint.path);
-  VAST_INFO("setting up route {}", path); // FIXME: INFO -> debug
-  router->add_handler(
-    method, path,
-    [&self, &endpoint,
-     handler](auto req, restinio::router::route_params_t /*route_params*/)
-      -> restinio::request_handling_status_t {
-      if (s_require_authentication) {
-        auto token = req->header().try_get_field("X-VAST-Token");
-        if (!token) {
-          req->create_response(restinio::status_unauthorized())
-            .set_body("missing `X-VAST-Token` header")
-            .done();
-          return restinio::request_rejected();
-        }
-        VAST_INFO("got token: {}", *token); // FIXME: remove msg
-        auto& server = server_singleton();
-        if (server.authenticate(*token)) {
-          req->create_response(restinio::status_unauthorized())
-            .set_body("invalid token")
-            .done();
-          return restinio::request_rejected();
-        }
+  rest::server_config server_config;
+  authenticator_actor authenticator;
+};
+
+request_dispatcher_actor::behavior_type request_dispatcher(
+  request_dispatcher_actor::stateful_pointer<request_dispatcher_state> self,
+  server_config config, authenticator_actor authenticator) {
+  self->state.server_config = config;
+  self->state.authenticator = authenticator;
+  return {
+    [self](atom::request, restinio_response_ptr& response,
+           api_endpoint& endpoint, system::rest_handler_actor handler) {
+      // Skip authentication if its not required.
+      if (!self->state.server_config.require_authentication) {
+        self->send(self, atom::internal_v, atom::request_v, std::move(response),
+                   std::move(endpoint), std::move(handler));
+        return;
       }
+      // Ask the authenticator to validate the passed token.
+      auto token = response->request()->header().try_get_field("X-VAST-Token");
+      if (!token) {
+        response->abort(401, "missing token");
+        return;
+      }
+      self
+        ->request(self->state.authenticator, caf::infinite, atom::validate_v,
+                  *token)
+        .then(
+          [self, response, endpoint = std::move(endpoint),
+           handler](bool valid) mutable {
+            if (valid)
+              self->send(self, atom::internal_v, atom::request_v,
+                         std::move(response), std::move(endpoint),
+                         std::move(handler));
+            else
+              response->abort(401, "invalid token");
+          },
+          [self, response](const caf::error& err) mutable {
+            VAST_WARN("{} received error while authenticating request: {}",
+                      *self, err);
+            response->abort(500, "internal server error");
+          });
+    },
+    [self](atom::internal, atom::request, restinio_response_ptr& response,
+           const api_endpoint& endpoint, system::rest_handler_actor handler) {
+      // TODO: Also consider params in the request body here.
       restinio::query_string_params_t string_params
-        = restinio::parse_query(req->header().query());
-      VAST_INFO("handling request with {}  parameters", string_params.size());
-      // TODO: warn about unknown/unexpected paramers
-      // for (auto& value : string_params) {
-      // }
+        = restinio::parse_query(response->request()->header().query());
+      VAST_INFO("handling request with {} parameters", string_params.size());
       vast::record params;
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
           auto restinio_name
             = restinio::string_view_t{name.data(), name.size()};
-          VAST_INFO("checking request parameter {}", name);
           if (string_params.has(restinio_name)) {
-            auto value = std::string{string_params[restinio_name]};
-            VAST_INFO("...setting it to {}", value);
-            params[name] = std::move(value);
-          } else {
-            params[name] = "<insert default value>";
+            auto string_value = std::string{string_params[restinio_name]};
+            auto typed_value = caf::visit(
+              detail::overload{
+                [&string_value](const string_type&) -> caf::expected<data> {
+                  return data{string_value};
+                },
+                [&string_value]<basic_type Type>(
+                  const Type&) -> caf::expected<data> {
+                  using data_t = type_to_data_t<Type>;
+                  auto result = to<data_t>(string_value);
+                  if (!result)
+                    return result.error();
+                  return *result;
+                },
+                []<complex_type Type>(const Type&) -> caf::expected<data> {
+                  // TODO: Also allow list.
+                  return caf::make_error(ec::invalid_argument,
+                                         "REST API only accepts basic type "
+                                         "parameters");
+                },
+              },
+              leaf.field.type);
+            if (!typed_value) {
+              response->abort(
+                422, fmt::format("failed to parse parameter '{}'\n", name));
+              return;
+            }
+            params[name] = std::move(*typed_value);
           }
         }
       }
       auto vast_request = vast::http_request{
         .params = std::move(params),
-        .response
-        = std::make_shared<restinio_response>(std::move(req), endpoint),
+        .response = std::move(response),
       };
-      // TODO: Choose reasonable request timeout.
       self->send(handler, atom::http_request_v, endpoint.endpoint_id,
                  std::move(vast_request));
+    },
+  };
+}
+
+void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
+                 std::string_view prefix, request_dispatcher_actor dispatcher,
+                 vast::api_endpoint endpoint,
+                 system::rest_handler_actor handler) {
+  auto method = to_restinio_method(endpoint.method);
+  auto path
+    = fmt::format("/api/v{}{}{}", static_cast<uint8_t>(endpoint.version),
+                  prefix, endpoint.path);
+  VAST_VERBOSE("setting up route {}", path);
+  // The handler just injects the request into the actor system, the
+  // actual processing starts in the request_dispatcher.
+  router->add_handler(
+    method, path,
+    [=, &self](request_handle_t req,
+               restinio::router::route_params_t /*route_params*/)
+      -> restinio::request_handling_status_t {
+      auto response
+        = std::make_shared<restinio_response>(std::move(req), endpoint);
+      self->send(dispatcher, atom::request_v, std::move(response),
+                 std::move(endpoint), handler);
+      // TODO: Measure if always accepting introduces a noticeable
+      // overhead and if so whether we can reject immediately in
+      // some cases here.
       return restinio::request_accepted();
     });
 }
 
+} // namespace
+
 auto server_command(const vast::invocation& inv, caf::actor_system& system)
   -> caf::message {
   auto self = caf::scoped_actor{system};
-  auto data = to<vast::data>(inv.options);
+  auto rest_options = caf::get_or(inv.options, "rest", caf::settings{});
+  auto data = vast::data{};
+  bool success = convert(rest_options, data);
+  if (!success)
+    return caf::make_message(
+      caf::make_error(ec::invalid_argument, "couldnt parse options"));
   rest::configuration config;
-  convert(*data, config);
-  // Get VAST node.
+  caf::error error = convert(data, config);
+  if (error)
+    return caf::make_message(
+      caf::make_error(ec::invalid_argument, "couldnt convert options"));
+  VAST_INFO("options: {}\ndata: {}", inv.options, data);
+  auto server_config = convert_and_validate(config);
+  if (!server_config)
+    return caf::make_message(caf::make_error(
+      ec::invalid_configuration,
+      fmt::format("invalid server configuration: {}", server_config.error())));
+  // Create necessary actors.
   auto node_opt = vast::system::spawn_or_connect_to_node(
     self, inv.options, content(system.config()));
   if (auto* err = std::get_if<caf::error>(&node_opt))
@@ -148,17 +220,14 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         ? std::get<system::node_actor>(node_opt)
         : std::get<scope_linked<system::node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
+  auto authenticator = get_authenticator(self, node, caf::infinite);
+  if (!authenticator)
+    return caf::make_message(std::move(authenticator.error()));
+  auto dispatcher
+    = self->spawn(request_dispatcher, *server_config, *authenticator);
   // Set up router.
   auto router = std::make_unique<router_t>();
-  router->non_matched_request_handler([](auto req) {
-    VAST_INFO("not found: {}", req->header().path());
-    return req
-      ->create_response(restinio::status_not_found())
-      // TODO: probably the `connection_close()` isn't needed, all it
-      // seems to do is to turn `keepalive` to `off`.
-      // .connection_close()
-      .done();
-  });
+  VAST_ASSERT_CHEAP(dispatcher);
   // Set up API routes from plugins.
   for (auto const* rest_plugin : plugins::get<rest_endpoint_plugin>()) {
     auto prefix = rest_plugin->prefix();
@@ -172,10 +241,15 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         VAST_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;
       }
-      setup_route(self, router, rest_plugin->prefix(), endpoint, handler);
+      setup_route(self, router, rest_plugin->prefix(), dispatcher,
+                  std::move(endpoint), handler);
     }
   }
-  // Set up some non-API convenience routes.
+  // Set up non-API routes.
+  router->non_matched_request_handler([](auto req) {
+    VAST_VERBOSE("404 not found: {}", req->header().path());
+    return req->create_response(restinio::status_not_found()).done();
+  });
   router->http_get(
     "/", [](auto request, auto) -> restinio::request_handling_status_t {
       return request->create_response()
@@ -187,48 +261,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         .done();
     });
   // Run server.
-  // TODO: Move this into a general configuration -> server_config conversion.
-  auto maybe_mode = to_server_mode("debug");
-  if (!maybe_mode)
-    return caf::make_message(std::move(maybe_mode.error()));
-  const enum server_config::mode server_mode = *maybe_mode;
-  bool require_https = true;
-  bool require_clientcerts = false;
-  bool require_authtoken = true;
-  bool require_localhost = true;
-  switch (server_mode) {
-    case server_config::mode::debug:
-      require_https = false;
-      require_clientcerts = false;
-      require_authtoken = false;
-      require_localhost = false;
-      break;
-    case server_config::mode::upstream:
-      require_https = false;
-      require_clientcerts = false;
-      require_authtoken = true;
-      require_localhost = true;
-      break;
-    case server_config::mode::mtls:
-      require_https = true;
-      require_clientcerts = true;
-      require_authtoken = true;
-      require_localhost = false;
-      break;
-    case server_config::mode::server:
-      require_https = true;
-      require_clientcerts = false;
-      require_authtoken = true;
-      require_localhost = true;
-  }
-  s_require_authentication = require_authtoken;
-  auto bind = config.bind_address;
-  if (require_localhost)
-    if (bind != "localhost" && bind != "127.0.0.1" && bind != "::1")
-      return caf::make_message(caf::make_error(
-        ec::invalid_argument,
-        fmt::format("can only bind to localhost in {} mode", config.mode)));
-  if (!require_https) {
+  if (!server_config->require_tls) {
     struct my_server_traits : public restinio::default_single_thread_traits_t {
       using request_handler_t = restinio::router::express_router_t<>;
     };
@@ -244,21 +277,23 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
 
     asio::ssl::context tls_context{asio::ssl::context::tls};
     // Most examples also set `asio::ssl::context::default_workarounds`, but
-    // based on [1] these are mainly relevant for SSL which we don't support
+    // based on [1] these are only relevant for SSL which we don't support
     // anyways.
     // [1]: https://www.openssl.org/docs/man1.0.2/man3/SSL_CTX_set_options.html
     tls_context.set_options(asio::ssl::context::tls_server
                             | asio::ssl::context::single_dh_use);
-    if (require_clientcerts) {
+    if (server_config->require_clientcerts)
       tls_context.set_verify_mode(
         asio::ssl::context::verify_peer
         | asio::ssl::context::verify_fail_if_no_peer_cert);
-    } else {
+    else
       tls_context.set_verify_mode(asio::ssl::context::verify_none);
-    }
     tls_context.use_certificate_chain_file(config.certfile);
     tls_context.use_private_key_file(config.keyfile, asio::ssl::context::pem);
-    tls_context.use_tmp_dh_file(config.dhtmpfile);
+    // Manually specifying DH parameters is deprecated in favor of using
+    // the OpenSSL built-in defaults, but asio has not been updated to
+    // expose this API so we need to use the raw context.
+    SSL_CTX_set_dh_auto(tls_context.native_handle(), true);
     VAST_INFO("listening on https://{}:{}", config.bind_address, config.port);
     using namespace std::literals::chrono_literals;
     restinio::run(restinio::on_this_thread<traits_t>()

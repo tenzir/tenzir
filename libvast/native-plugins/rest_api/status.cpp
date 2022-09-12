@@ -28,7 +28,7 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
   self->state.node_ = std::move(node);
   return {
     [self](atom::http_request, uint64_t, http_request rq) {
-      VAST_INFO("got a new request");
+      VAST_VERBOSE("{} handles /status request", *self);
       auto request_in_progress = !self->state.pending_.empty();
       self->state.pending_.emplace_back(std::move(rq));
       if (request_in_progress)
@@ -45,26 +45,19 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
             for (auto& rq : std::exchange(self->state.pending_, {}))
               rq.response->abort(500, "unexpected response");
           },
-          [self](const caf::error& e) {
-            // The NODE uses some hacky ways to respond to the request with
-            // a `std::string`, which is not what its signature says so this
-            // will arrive as an "unexpected_response" error. An error also
-            // has no way to access its message. So we have to pile some more
-            // hackery on top and treat it as a success.
-            auto context = to_string(e.context());
-            auto from = context.find_first_of('{');
-            auto to = context.find_last_of('}');
-            bool escape = false;
-            for (auto& c : context)
-              if (c == '\\') {
-                escape = true;
-                c = ' ';
-              } else if (escape && c == 'n')
-                c = ' ';
-              else
-                escape = false;
-            auto result = context.substr(from, to - from + 1);
-            VAST_INFO("responding {}", result);
+          [self](caf::error& e) {
+            // The NODE uses some black magic to respond to the request with
+            // a `std::string`, which is not what its type signature says. This
+            // will arrive as an "unexpected_response" error here.
+            if (caf::sec{e.code()} != caf::sec::unexpected_response) {
+              for (auto& rq : std::exchange(self->state.pending_, {}))
+                rq.response->abort(500, "internal error");
+              return;
+            }
+            std::string result;
+            caf::message_handler{[&](std::string& str) {
+              result = std::move(str);
+            }}(e.context());
             for (auto& rq : std::exchange(self->state.pending_, {}))
               rq.response->append(result);
           });
@@ -85,8 +78,8 @@ class plugin final : public virtual rest_endpoint_plugin {
     return "";
   }
 
-  [[nodiscard]] data openapi_specification() const override {
-    static auto const* spec = R"_(
+  [[nodiscard]] data openapi_specification(api_version version) const override {
+    static auto const* spec_v0 = R"_(
 /status:
   get:
     summary: Returns current status
@@ -99,7 +92,9 @@ class plugin final : public virtual rest_endpoint_plugin {
             schema:
               type: dict
     )_";
-    auto result = from_yaml(spec);
+    if (version != api_version::v0)
+      return vast::record{};
+    auto result = from_yaml(spec_v0);
     VAST_ASSERT(result);
     return *result;
   }
@@ -111,8 +106,8 @@ class plugin final : public virtual rest_endpoint_plugin {
       {
         .method = http_method::get,
         .path = "/status",
-        .params = std::nullopt,
-        .version = rest_endpoint_plugin::api_version::v0,
+        .params = caf::none,
+        .version = api_version::v0,
         .content_type = http_content_type::json,
       },
     };

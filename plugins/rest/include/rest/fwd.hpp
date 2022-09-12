@@ -9,7 +9,7 @@
 #pragma once
 
 #include <vast/fwd.hpp>
-#include <vast/http_api.hpp>
+// #include <vast/http_api.hpp>
 #include <vast/plugin.hpp>
 #include <vast/system/actors.hpp>
 
@@ -18,8 +18,35 @@
 namespace vast::plugins::rest {
 
 class restinio_response;
+using restinio_response_ptr = std::shared_ptr<restinio_response>;
 
-}
+using token_t = std::string;
 
-// FIXME
+} // namespace vast::plugins::rest
+
+CAF_BEGIN_TYPE_ID_BLOCK(vast_rest_plugin_types, 1500)
+  CAF_ADD_TYPE_ID(vast_rest_plugin_types,
+                  (vast::plugins::rest::restinio_response))
+  CAF_ADD_TYPE_ID(vast_rest_plugin_types,
+                  (std::shared_ptr<vast::plugins::rest::restinio_response>))
+
+  CAF_ADD_ATOM(vast_rest_plugin_types, vast::atom, generate, "generate")
+  CAF_ADD_ATOM(vast_rest_plugin_types, vast::atom, validate, "validate")
+CAF_END_TYPE_ID_BLOCK(vast_rest_plugin_types)
+
+namespace vast::plugins::rest {
+
+/// Server-side AUTHENTICATOR actor.
+using authenticator_actor = system::typed_actor_fwd<
+  caf::replies_to<atom::generate>::with<token_t>,
+  caf::replies_to<atom::validate, token_t>::with<bool>>::
+  extend_with<system::status_client_actor>::unwrap;
+
+} // namespace vast::plugins::rest
+
+CAF_BEGIN_TYPE_ID_BLOCK(vast_rest_plugin_actors, vast_rest_plugin_types::end)
+  CAF_ADD_TYPE_ID(vast_rest_plugin_actors,
+                  (vast::plugins::rest::authenticator_actor))
+CAF_END_TYPE_ID_BLOCK(vast_rest_plugin_actors)
+
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::plugins::rest::restinio_response);
