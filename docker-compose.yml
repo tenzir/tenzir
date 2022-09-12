@@ -1,0 +1,26 @@
+version: "3"
+services:
+  vast:
+    container_name: tenzir-vast
+    image: tenzir/vast:${VAST_VERSION:-latest}
+    environment:
+      - VAST_ENDPOINT=vast:42000
+    ports:
+      - ${VAST_PORT:-42000}:42000
+    command:
+      - start
+    volumes:
+      - vast-database:/var/lib/vast/
+      - vast-logs:/var/log/vast/
+    networks:
+      - vast-network
+
+volumes:
+  vast-database:
+    driver: local
+  vast-logs:
+    driver: local
+
+networks:
+  vast-network:
+    driver: bridge

@@ -927,6 +927,48 @@ jobs:
             done
           done
 
+  docker-integrations:
+    needs:
+      - build-docker
+    if: github.event_name != 'workflow_dispatch'
+    name: Docker Integrations
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      - name: Install Compose
+        uses: ndeloof/install-compose-action@v0.0.1
+        with:
+          version: latest
+          legacy: true
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Download Docker Image
+        uses: actions/download-artifact@v3
+        with:
+          name: vast_latest.tar
+      - name: Save Production Docker Image to Disk
+        run: |
+          docker load -i vast_latest.tar
+      - name: Start Docker Compose
+        run: |
+          docker-compose -f docker-compose.yml \
+                         up --no-build --detach
+      - name: Run Integration Tests
+        run: |
+          find . -path "./docker/*/tests.sh" -exec {} \;
+      - name: Check Container Status
+        run: |
+          docker-compose ps
+          docker-compose logs
+          # Assert that all containers that exited have exited cleanly.
+          exited_all="$(docker ps --all --filter 'name=tenzir-' --filter 'status=exited' -q | sort -u)"
+          exited_cleanly="$(docker ps --all --filter 'name=tenzir-' --filter 'exited=0' -q | sort -u)"
+          [[ "${exited_all}" == "${exited_cleanly}" ]]
+      - name: Stop Docker Compose
+        run: |
+          docker-compose down
+
   build-nix:
     needs:
       - determine-version
