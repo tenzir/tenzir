@@ -1,0 +1,25 @@
+version: "3"
+services:
+  vast:
+    container_name: tenzir-vast
+    image: tenzir/vast:${VAST_VERSION:-latest}
+    build: 
+      dockerfile: Dockerfile
+      args:
+        - VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS:-}
+    environment:
+      - VAST_ENDPOINT=vast:42000
+    ports:
+      - ${VAST_PORT:-42000}:42000
+    command:
+      - start
+    volumes:
+      - vast-data:/var/lib/vast/
+      - vast-log:/var/log/vast/
+
+volumes:
+  vast-data:
+    driver: local
+  vast-log:
+    driver: local
+

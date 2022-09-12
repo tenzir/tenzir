@@ -808,6 +808,7 @@ jobs:
             VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
+      
       - name: Build Dependencies Docker Image
         run: |
           docker build . -t tenzir/vast-deps:latest --target dependencies \
@@ -820,6 +821,14 @@ jobs:
         run: |
           docker build . -t tenzir/vast:latest --target production \
             --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+      - name: Save Production Docker Image to Disk
+        run: |
+          docker save tenzir/vast:latest -o vast_latest.tar
+      - name: Upload Docker Image
+        uses: actions/upload-artifact@v3
+        with:
+          name: vast_latest.tar
+          path: vast_latest.tar
       - name: Login to Docker Hub
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         uses: docker/login-action@v2
@@ -860,6 +869,45 @@ jobs:
             docker push "tenzir/vast:${release_tag}"
           fi
 
+  docker-integrations:
+     needs:
+      - build-docker
+    if: github.event_name != 'workflow_dispatch'
+    name: Docker Integrations
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Download Docker Image
+        uses: actions/download-artifact@v3
+        with:
+          name: vast_latest.tar
+      - name: Save Production Docker Image to Disk
+        run: |
+          docker load -i vast_latest.tar
+      - name: Start Docker Compose
+        run: |
+          docker-compose -f docker-compose.yml \
+                         up --no-build --detach
+      - name: Simple Test
+        run: |
+          docker-compose run vast status
+      - name: Check Container Status
+        run: |
+          docker-compose ps
+          docker-compose logs
+          # Assert that all containers that exited have exited cleanly.
+          exited_all="$(docker ps --all --filter 'name=event-horizon_' --filter 'status=exited' -q | sort -u)"
+          exited_cleanly="$(docker ps --all --filter 'name=event-horizon_' --filter 'exited=0' -q | sort -u)"
+          [[ "${exited_all}" == "${exited_cleanly}" ]]
+      - name: Stop Docker Compose
+        run: |
+          docker-compose down
+    
+
+    
   build-nix:
     needs:
       - determine-version
