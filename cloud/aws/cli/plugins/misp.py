@@ -72,7 +72,14 @@ def tunnel(c, ui_port="8080", zmq_port="50000"):
         f.write(private_key.replace("\r\n", "\n"))
     os.chmod(key_file, stat.S_IREAD | stat.S_IWRITE)
 
-    cmd = (
+    print(
+        f"""Running tunneling (Ctrl+C to exit):
+    {"MISP UI":<10} http://localhost:{ui_port}
+    {"MISP ZMQ":<10} tcp://localhost:{zmq_port}
+    """
+    )
+
+    c.run(
         "sudo ssh "
         + '-o "StrictHostKeyChecking=no" '
         + "-i ~/.ssh/tunneling "
@@ -82,5 +89,3 @@ def tunnel(c, ui_port="8080", zmq_port="50000"):
         + f"-L {zmq_port}:localhost:50000 "
         + f"tunneler@{pub_ip}"
     )
-    print(f"Running tunneling (Ctrl+C to exit): {cmd}")
-    c.run(cmd)
