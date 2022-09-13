@@ -3,7 +3,8 @@ services:
   vast:
     container_name: tenzir-vast
     image: tenzir/vast:${VAST_VERSION:-latest}
-    build: 
+    build:
+      context: .
       dockerfile: Dockerfile
       args:
         - VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS:-}
