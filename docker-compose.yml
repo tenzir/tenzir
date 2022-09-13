@@ -17,10 +17,16 @@ services:
     volumes:
       - vast-data:/var/lib/vast/
       - vast-log:/var/log/vast/
+    networks:
+      - vast-network
 
 volumes:
   vast-data:
     driver: local
   vast-log:
     driver: local
+
+networks:
+  vast-network:
+    driver: bridge
 
