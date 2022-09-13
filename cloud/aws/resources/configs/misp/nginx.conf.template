@@ -13,6 +13,11 @@ server {
     access_log off;
     log_not_found off;
     error_log  off;
+
+    error_page 502 /502.html;
+    location /502.html {
+        root /var/www/html;
+    }
     
     location / {
         proxy_set_header Accept-Encoding "";
