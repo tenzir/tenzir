@@ -808,10 +808,12 @@ jobs:
             VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
-      - name: Download existing image
+      - name: Download existing images
         if: github.event_name == 'pull_request'
         run: |
           docker pull tenzir/vast:$(git merge-base origin/master HEAD)
+          docker pull tenzir/vast-deps:$(git merge-base origin/master HEAD)
+          docker pull tenzir/vast-dev:$(git merge-base origin/master HEAD)
       - name: Build Dependencies Docker Image
         run: |
           docker build . -t tenzir/vast-deps:latest --target dependencies \
@@ -898,10 +900,8 @@ jobs:
           docker-compose run vast status
       - name: Ingest Test Data
         run: |
-          docker cp "vast/integration/data/suricata/eve.json" \ 
-            tenzir-vast:/var/lib/vast
-          docker exec -t tenzir-vast \
-            vast import -r "/var/lib/vast/eve.json" suricata
+          docker cp "vast/integration/data/suricata/eve.json" tenzir-vast:/var/lib/vast
+          docker exec -t tenzir-vast vast import -r "/var/lib/vast/eve.json" suricata
       - name: Query ingested Suricata data set
         run: |
           result=$(docker run --network vast_vast-network tenzir/vast --endpoint=tenzir-vast:42000 export json '147.32.84.165')
