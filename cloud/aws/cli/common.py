@@ -209,13 +209,11 @@ class FargateService:
                 task_id = task_res["taskArns"][0].split("/")[-1]
                 return task_id
             if nb_vast_tasks > 1:
-                raise Exit(f"{nb_vast_tasks} {self.task_family} tasks running", 1)
+                raise Exit(f"{nb_vast_tasks} tasks running", 1)
             if max_wait_time_sec == 0:
-                raise Exit(
-                    f"No {self.task_family} task running", EXIT_CODE_TASK_NOT_RUNNING
-                )
+                raise Exit(f"No task running", EXIT_CODE_TASK_NOT_RUNNING)
             if time.time() - start_time > max_wait_time_sec:
-                raise Exit(f"{self.task_family} task timed out", 1)
+                raise Exit(f"Task timed out", 1)
             time.sleep(1)
 
     def _task_desc(self, task_arn):
