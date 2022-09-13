@@ -549,6 +549,7 @@ jobs:
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
+            -DVAST_PLUGINS:STRING="plugins/*" \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 
