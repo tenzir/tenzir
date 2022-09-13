@@ -15,7 +15,7 @@ Feature work takes place in dedicated branches, with the merge to the main
 branch sealing the deal. Some feature branches have just one commit, whereas
 others dozens. The distribution is not uniform. As of
 `6f9c841980b2333028b1ac19e2a21e99d96cbd36` on Sep 2, 2022, there are a total of
-13,067 commits, with 2,335 being merges (17,9%). We'll take a deeper look at the
+13,067 commits, with 2,335 being merges (17.9%). We'll take a deeper look at the
 merge commits.
 
 ```{bash}
