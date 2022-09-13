@@ -69,7 +69,7 @@ $(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
 
 $(QUARTO_OUTPUTS): $(QUARTO_INPUTS)
 	@Rscript -e 'if("pak" %in% rownames(installed.packages()) == FALSE) { install.packages("pak", repos = "http://cran.us.r-project.org") }'
-	@Rscript -e 'require(pak); pak::local_install_dev_deps()'
+	@Rscript -e 'require(pak); pak::local_install_dev_deps(upgrade = FALSE)'
 	@quarto render
 
 quarto: $(QUARTO_OUTPUTS)
