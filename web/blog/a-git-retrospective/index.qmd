@@ -60,7 +60,7 @@ events <- tribble(
   ymd("2016-03-17"), "NSDI '16\npublication",
   ymd("2017-08-31"), "Tenzir\nincorporated",
   ymd("2018-07-01"), "Tobias",
-  ymd("2019-09-01"), "Dominik",
+  ymd("2019-09-15"), "Dominik",
   ymd("2020-01-01"), "Benno",
   ymd("2021-12-01"), "Thomas",
   ymd("2022-07-01"), "Patryk",
