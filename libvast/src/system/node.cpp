@@ -259,7 +259,7 @@ deregister_component(node_actor::stateful_pointer<node_state> self,
 /// Spawns the accountant actor.
 accountant_actor
 spawn_accountant(node_actor::stateful_pointer<node_state> self) {
-if (!caf::get_or(content(self->system().config()), "vast.enable-metrics",
+  if (!caf::get_or(content(self->system().config()), "vast.enable-metrics",
                    false))
     return {};
   const auto metrics_opts = caf::get_or(content(self->system().config()),
