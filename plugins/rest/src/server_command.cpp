@@ -270,12 +270,10 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   });
   router->http_get(
     "/", [](auto request, auto) -> restinio::request_handling_status_t {
-      return request->create_response()
+      return request->create_response(restinio::status_temporary_redirect())
         .append_header(restinio::http_field::server, "VAST")
         .append_header_date_field()
-        .append_header(restinio::http_field::content_type, "text/html; "
-                                                           "charset=utf-8")
-        .set_body(restinio::sendfile("../plugins/rest/www/status.html"))
+        .append_header(restinio::http_field::location, "/api/v0/status")
         .done();
     });
   // Run server.
