@@ -34,7 +34,6 @@ caf::expected<scope_linked<node_actor>>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   using namespace std::string_literals;
   // Fetch values from config.
-  auto accounting = get_or(opts, "vast.enable-metrics", false);
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
   auto db_dir
     = get_or(opts, "vast.db-directory", defaults::system::db_directory);
@@ -80,7 +79,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Spawn the node.
   VAST_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to system::node.
-  auto actor = self->spawn(system::node, id, abs_dir, accounting);
+  auto actor = self->spawn(system::node, id, abs_dir);
   actor->attach_functor([=, pid_file = std::move(pid_file)](
                           const caf::error&) -> caf::result<void> {
     VAST_DEBUG("node removes PID lock: {}", pid_file);

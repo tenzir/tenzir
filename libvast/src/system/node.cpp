@@ -256,6 +256,30 @@ deregister_component(node_actor::stateful_pointer<node_state> self,
   return component->actor;
 }
 
+/// Spawns the accountant actor.
+accountant_actor
+spawn_accountant(node_actor::stateful_pointer<node_state> self) {
+  auto accountant = accountant_actor{};
+  if (caf::get_or(content(self->system().config()), "vast.enable-metrics",
+                  false)) {
+    auto metrics_opts = caf::get_or(content(self->system().config()),
+                                    "vast.metrics", caf::settings{});
+    auto cfg = to_accountant_config(metrics_opts);
+    if (!cfg) {
+      VAST_ERROR("{} failed to parse metrics configuration: {}", *self,
+                 cfg.error());
+    } else {
+      accountant = self->spawn(vast::system::accountant, std::move(*cfg),
+                               self->state.dir);
+      auto err = register_component(
+        self, caf::actor_cast<caf::actor>(accountant), "accountant");
+      // Registration cannot fail; empty registry.
+      VAST_ASSERT(err == caf::none);
+    }
+  }
+  return accountant;
+}
+
 } // namespace
 
 caf::message dump_command(const invocation& inv, caf::actor_system&) {
@@ -613,35 +637,18 @@ node_state::spawn_command(const invocation& inv,
   return spawn_actually(args);
 }
 
-node_actor::behavior_type
-node(node_actor::stateful_pointer<node_state> self, std::string name,
-     std::filesystem::path dir, bool accounting) {
+node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
+                               std::string name, std::filesystem::path dir) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
   node_state::component_factory = make_component_factory();
   node_state::command_factory = make_command_factory();
   // Initialize the accountant.
-  auto accountant = accountant_actor{};
-  if (accounting) {
-    auto metrics_opts = caf::get_or(content(self->system().config()),
-                                    "vast.metrics", caf::settings{});
-    auto cfg = to_accountant_config(metrics_opts);
-    if (!cfg) {
-      VAST_ERROR("{} failed to parse metrics configuration: {}", *self,
-                 cfg.error());
-    } else {
-      accountant = self->spawn(vast::system::accountant, std::move(*cfg),
-                               self->state.dir);
-      auto err = register_component(
-        self, caf::actor_cast<caf::actor>(accountant), "accountant");
-      VAST_ASSERT(err
-                  == caf::none); // Registration cannot fail; empty registry.
-    }
-  }
+  auto accountant = spawn_accountant(self);
   // Initialize the file system with the node directory as root.
-  auto fs
-    = self->spawn<caf::detached>(posix_filesystem, self->state.dir, accountant);
+  auto fs = self->spawn<caf::detached>(posix_filesystem, self->state.dir,
+                                       std::move(accountant));
   auto err
     = register_component(self, caf::actor_cast<caf::actor>(fs), "filesystem");
   VAST_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
