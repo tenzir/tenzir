@@ -64,7 +64,6 @@ Input:
 | `from`   | `Void`     | `Bytes`     | Loads bytes from a source as a side effect
 | `read`   | `Bytes`    | `Arrow`     | Parses a specific format into Arrow
 | `load`   | `Void`     | `Arrow`     | Performs `from` and `read` in one step
-| `pull`   | `Void`     | `Arrow`     | Loads Arrow from a remote source
 
 Output:
 
@@ -73,7 +72,6 @@ Output:
 | `to`     | `Bytes`    | `Void`      | Writes bytes to a sink as a side effect
 | `write`  | `Arrow`    | `Bytes`     | Prints input in a specific format
 | `store`  | `Arrow`    | `Void`      | Performs `write` and `to` in one step
-| `push`   | `Arrow`    | `Void`      | Stores Arrow in a remote source
 
 The reason where `load`/`store` exist, in addition to `from`/`to` and
 `read`/`write`, is that it's not always possible to encapsulate data acquisition
@@ -85,7 +83,7 @@ continue working with the objects and convert them to `Arrow`.
 Zeek's Broker library is a good example for `load<Void, Arrow>`: it yields
 `broker::data` objects when subscribing to data from a remote machine. Likewise,
 Parquet is a good example for `store<Arrow, Void>`: since one Parquet file has a
-fixed scheme, but `Arrow` is a heterogenous stream, the implemention is
+fixed scheme, but `Arrow` is a heterogeneous stream, the implementation is
 responsible for demultiplexing it and writing it to one file per schema.
 
 #### Compute
@@ -130,74 +128,63 @@ Reshape operators have input and output type `Arrow`.
 
 #### Commands
 
-The following table illustrate how existing VAST commands map to pipeline
-execution.
+The following table illustrates how the current CLI would change after this
+proposal:
 
-| Command Synatx                    | Pipeline Syntax
-| --------------------------------- | -------------------------------------------
-| `vast infer`                      | `vast exec 'read | infer`
-| `vast import FORMAT EXPR`         | `vast exec 'read FORMAT | where EXPR | push'`
-| `vast export FORMAT EXPR`         | `vast spawn 'where EXPR | write FORMAT'`
-| `vast count [-e] EXPR`            | `vast spawn 'where EXPR | count [-e]` (TBD)
-| `vast pivot --format=FORMAT EXPR` | `vast spawn 'where EXPR | pivot | write FORMAT`
-| `vast explore [-A] [...] EXPR`    | `vast spawn 'where EXPR | explore [-A] [...]`
+| Old Syntax                               | New Syntax
+| ---------------------------------------- | -------------------------------------------
+| `vast infer`                             | `vast exec 'read [FORMAT] | infer"`
+| `vast import FORMAT EXPR`                | `vast import FORMAT 'EXPR | op1 .. | op2 ..'`
+| `vast export FORMAT EXPR`                | `vast export FORMAT 'EXPR | op1 .. | op2 ..'`
+| `vast count [args] EXPR`                 | `vast export FORMAT 'EXPR | count [args]'`
+| `vast pivot --format=FORMAT [args] EXPR` | `vast export FORMAT 'EXPR | pivot [args]'`
+| `vast explore [args] EXPR`               | `vast export 'EXPR | explore [-A] [...]'`
 
-The `spawn` command create a remote pipeline and attaches immediately to it.
+In essence, we keep `import` and `export` and incrementally enhance the
+expressiveness, by making it possible to append a pipeline after an expression.
+That is, valid input has the form `EXPR | OPERATOR | OPERATOR | ...`. Note that
+this is *not* valid pipeline, because `EXPR` is not an operator.
 
-### Pipeline Execution
+Additionally, we add a new command `exec` that accepts a "pure" pipeline, i.e.,
+just a composition of operators. Execution takes place locally, without any
+implicit remote communication. For the remainder of the discussion, we focus
+on `exec` only.
 
-Let's take a step back and just assume that we add a new `exec` command that
-executes a pipeline *locally*, i.e., where the VAST process runs.
+### Local Execution
 
-Then we can model `vast import zeek` as follows:
-
-1. Load data via stdin (`from`)
-2. Push into a parser (`read`)
-3. Send data off to a remote VAST node (`push`)
-
-As pipeline:
-
-```bash
-vast exec 'from - | read zeek | push vast://1.2.3.4'
-```
-
-Likewise, `vast export json EXPRESSION` would become:
-
-```bash
-vast exec 'pull vast://1.2.3.4 |
-           where EXPRESSION |
-           write json |
-           to -'
-```
-
-The beauty is that VAST nodes are now longer required. Pipelines provide value
-locally as well:
+Given the new `exec` command, we can start processing data in situ. For example,
+we can directly compute insights over telemetry:
 
 ```bash
 vast exec 'from - |
            read zeek |
-           where EXPRESSION |
+           summarize sum(orig_bytes), sum(resp_bytes) group-by id.orig_h, id.resp_h |
+           sort |
+           head -n 10 |
            write json |
            to -'
 ```
 
-What would the role of the node be then? Basically a **pipeline manager** with
-persistent state. A lot of things wouldn't change, e.g., starting a node:
+This pipeline answers the question "who are the top talkers in my network" by
+summing originator and responder bytes per host pair. The dataflow happens as
+follows:
 
-```bash
-vast -e 1.2.3.4 start
-```
+1. Load data via stdin (`from`)
+2. Push data into a parser (`read`)
+3. Aggregate data (`summarize`)
+4. Sort the aggregate (`sort`)
+5. Only consider the top 10 (`head`)
+6. Push data into a printer (`write`)
+7. Write data to stdout (`to`)
+
+Local pipeline execution opens the door for a lot of new modes of operations,
+because a VAST server node is no longer required.
+
+**This makes VAST a swiss army knife for security data.**
 
 There are of course convenience defaults we can use, like assuming `from -` and
-`to -` being the default. This would make the above look like this:
-
-```bash
-vast exec 'read zeek |
-           where EXPRESSION |
-           write json
-```
-
-Side effect: we would get our envisioned convert operator almost for free:
+`to -` being the default. VAST can then easily used as a conversion utility
+between different types of security data:
 
 ```bash
 vast exec 'read zeek | write json'
@@ -205,81 +192,17 @@ vast exec 'read zeek | write json'
 vast exec 'convert zeek json'
 ```
 
-### Node Interaction
-
-When considering pipelines in conjunction with VAST nodes, we may want to
-improve the UX of working with pipelines. In the new model, VAST would be
-an `Arrow` source or sink, making the primary interaction on the data plane
-through `push` and `pull` operators.
-
-Making `push` and `pull` top-level commands would streamline UX. For example,
-consider this `vast export` pipeline:
-
-```bash
-# exec
-vast exec 'pull vast://1.2.3.4 |
-           where EXPRESSION |
-           write json'
-# pull
-vast pull 'where EXPRESSION |
-           write json
-```
-
-This assumes that `pull` tries the default VAST endpoint of 1.2.3.4 to connect.
-
-An `import` degenerates to:
-
-```bash
-# exec
-vast exec 'read zeek | where EXPRESSION | push vast:///'
-# push
-vast push 'read zeek | where EXPRESSION'
-```
-
-Note that this hoisting into commands only works because `pull` and `push` are
-head/tail of the pipeline.
-
-### Mutating existing data
-
-Security telemetry data is often messy. After the data collection aspects have
-been sorted out and analysts interact with the data, it becomes clear that some
-part of the data needs to be cleaned. This matches ELT mindset of dumping
-everything first so that the data is there, and then tweak as you go.
-
-Example operations include, migrating data to a different schema, enriching
-telemetry (e.g., with GeoIP data), and fixing invalid entries.
-
-Mutation of data is non-trivial in that it requires exclusive access to the
-data. Otherwise data races may occur. Consequently, we need transactional
-interface (ACID) to support this operation.
-
-As long as VAST owns the underlying data (i.e., only VAST is allowed to make
-changes), VAST can already mutate data at rest. [Spatial
-compaction][mutate-at-rest] uses a pre-defined disk quota as trigger to apply
-pipelines to a subset of to-be-transformed data. After VAST applies the
-pipeline, VAST optionally removes the original data in an atomic fashion.
-
-[mutate-at-rest]: https://vast.io/docs/use-vast/transform#modify-data-at-rest
-
-Modeled after the `compaction` plugin, we may consider exposing a mutable
-pipeline interface through a dedicate command. This command interacts with a
-node, and could be seen as a combination of `pull` and `push` that executes
-remotely. For example:
-
-```bash
-vast mutate 'where 10.0.0.0/8 | put orig.h resp.h'
-```
-
-This would apply the pipeline to filter and project in schema types `A`, `B`,
-and `C`.
-
 ## Implementation
 
 We could implement the entire pipeline with Arrow IPC streams in the "interior"
-operators, with only `from` and `to` taking raw input as byte stream. But this
-may be too restrictive. Let's assume that input and output are dynamically
-typed. An operator must then define its input and output types, e.g., `from<In,
-Out>` takes as input `In` and produces instances of `Out`.
+operators, with only `from` and `to` taking raw input as byte stream. This
+may be too restrictive, preventing a wide array of flexible operators. Let's
+assume that input and output are dynamically typed. Operators must then define
+their input and output types, e.g., `from<In, Out>` takes as input `In` and
+produces instances of `Out`.
+
+An pipeline *executor* orchestrates the execution of a pipeline, connecting
+inputs and outputs from operators into a dataflow.
 
 ### Case Study: Matcher
 
@@ -308,7 +231,7 @@ matching:
 ```bash
 vast exec 'from kafka -t /zeek/conn |
            read zeek |
-           match --state matcher.flatbuf id.orig_h, id.resp_h
+           match --state matcher.flatbuf --on id.orig_h,id.resp_h
 ```
 
 The `match` operator exposes the structured data to a specific matcher instance,
@@ -319,86 +242,15 @@ can make sense of it.
 A successful "match" wraps the corresponding event into a sighting envelope
 record.
 
-#### Remote execution
+## Alternatives
 
-In the above example, we passed in a state file via `--state`. This is a
-different pattern from today's matchers that run remotely. Assuming that we have
-a mechanism for remote state management (specifically matcher state), we can
-apply our existing UX pattern of remote matcher management.
+We already agreed that we want to broaden VASTQL to include a pipeline syntax.
+The alternative would be doing just and make pipelines only applicable to
+queries. As this limits us unnecessarily, we consider pipelines as general
+building block that is deployable in various contexts.
 
-Let's assume the matcher plugin provides the `matcher` command for state
-management, just like today. To load the matcher state into a remote matcher, we
-nothing would change:
-
-```bash
-vast matcher load foo < matcher.flatbuf
-```
-
-Assuming this operations updates the state of matcher `foo`, we can then
-reference it in a remote pipeline:
-
-```bash
-vast spawn 'live | match --on=:addr foo'
-```
-
-Here, `live` is a dummy operator that represents the ingest path.
-
-### Pipeline Management
-
-In many cases we want to run pipelines remotely, independent of where the client
-is. This begs the challenge: how do we manage pipelines? As with all other VAST
-functions, there could be a client command.
-
-```bash
-# Show all pipelines:
-vast pipeline list
-```
-
-Create remote pipelines:
-
-```bash
-vast pipeline create foo 'where #type == "suricata.flow"'
-vast pipeline list
-# Output:
-# foo: where #type == "suricata.flow"
-```
-
-The idea would be that only clients can manipulate server state. This fixes
-the mess of having server-side YAML that goes out of sync with the server
-state when new things happen, e.g., new schemas arrive or new matchers get
-spawned.
-
-From now on, everything is client-side managed *only*. No more server-side
-state configuration beyond options/settings. This is where you can
-have your YAML for declarative ops:
-
-```bash
-vast pipeline load < pipelines.yaml
-```
-
-If you want the current server-side state for reproducing pipelines elsewhere,
-just dump it (as YAML or JSON):
-
-```bash
-vast pipeline dump --json
-vast pipeline dump --yaml
-```
-
-The output is not to be confused with the settings in `vast.yaml`. The pipeline
-state is still persisted on the server, though, because it must survive
-restarts. Consequently, the state changes must be atomic and be applied
-in a WAL manner.
-
-### REST API
-
-In the future, it would also be nice to offer the same pipeline management
-functionality through a REST API to make it easier to integrate with a
-remote VAST node, e.g., build a web UI.)
-
-## Other Remarks
-
-To illustrate the composability of pipelines, we could take this to an extreme
-when performance doesn't matter:
+To illustrate the composability of pipelines, we could make every VAST command
+an operator:
 
 ```bash
 vast from s3://aws |
@@ -410,8 +262,3 @@ vast from s3://aws |
 
 As there is no clear underlying use case outside of testing and debugging, we
 are not going to discuss this idea in more depth.
-
-## Alternatives
-
-We already agreed that we want to broaden VASTQL to include a pipeline syntax.
-The alternative would be doing just that: do not change the CLI UX.
