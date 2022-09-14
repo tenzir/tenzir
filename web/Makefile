@@ -79,9 +79,9 @@ clean:
 	$(MAKE) -C $(NOTEBOOK_INPUT_DIR) clean
 	git clean -f -d -x $(NOTEBOOK_OUTPUT_DIR)
 	rm -rf .github
-	rm $(RFC_OUTPUT)
-	rm $(CONTRIBUTING_DIR)/code-of-conduct.md
-	rm $(CONTRIBUTING_DIR)/coding-style.md
-	rm $(CONTRIBUTING_DIR)/security.md
-	rm $(CONTRIBUTING_DIR)/workflow.md
-	rm $(QUARTO_OUTPUTS)
+	rm -f $(RFC_OUTPUT)
+	rm -f $(CONTRIBUTING_DIR)/code-of-conduct.md
+	rm -f $(CONTRIBUTING_DIR)/coding-style.md
+	rm -f $(CONTRIBUTING_DIR)/security.md
+	rm -f $(CONTRIBUTING_DIR)/workflow.md
+	rm -f $(QUARTO_OUTPUTS)
