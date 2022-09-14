@@ -11,6 +11,7 @@
 #include "vast/chunk.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
 
 #include <caf/config_value.hpp>
@@ -37,18 +38,21 @@ posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
     return caf::make_error(ec::system_error,
                            fmt::format("failed to move {} to {}: {}", from, to,
                                        err.message()));
-  } else {
-    ++stats.moves.successful;
-    return atom::done_v;
   }
+  ++stats.moves.successful;
+  return atom::done_v;
 }
 
 filesystem_actor::behavior_type
 posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
-                 const std::filesystem::path& root) {
+                 std::filesystem::path root, accountant_actor accountant) {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("vast.posix-filesystem");
-  self->state.root = root;
+  self->state.root = std::move(root);
+  self->state.accountant = std::move(accountant);
+  if (self->state.accountant)
+    self->delayed_send(self, defaults::system::telemetry_rate,
+                       atom::telemetry_v);
   return {
     [self](atom::write, const std::filesystem::path& filename,
            const chunk_ptr& chk) -> caf::result<atom::ok> {
@@ -166,11 +170,40 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         add_stats("writes", self->state.stats.writes);
         add_stats("reads", self->state.stats.reads);
         add_stats("mmaps", self->state.stats.mmaps);
+        // TODO: this should be called "deletes" or "erasures".
         add_stats("erases", self->state.stats.erases);
         add_stats("moves", self->state.stats.moves);
         result["operations"] = std::move(ops);
       }
       return result;
+    },
+    [self](atom::telemetry) {
+      if (!self->state.accountant)
+        return;
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         atom::telemetry_v);
+      auto msg = report{
+        .data = {
+          {"posix-filesystem.checks.sucessful", self->state.stats.checks.successful},
+          {"posix-filesystem.checks.failed", self->state.stats.checks.failed},
+          {"posix-filesystem.writes.sucessful", self->state.stats.writes.successful},
+          {"posix-filesystem.writes.failed", self->state.stats.writes.failed},
+          {"posix-filesystem.writes.bytes", self->state.stats.writes.bytes},
+          {"posix-filesystem.reads.sucessful", self->state.stats.reads.successful},
+          {"posix-filesystem.reads.failed", self->state.stats.reads.failed},
+          {"posix-filesystem.reads.bytes", self->state.stats.reads.bytes},
+          {"posix-filesystem.mmaps.sucessful", self->state.stats.mmaps.successful},
+          {"posix-filesystem.mmaps.failed", self->state.stats.mmaps.failed},
+          {"posix-filesystem.mmaps.bytes", self->state.stats.mmaps.bytes},
+          {"posix-filesystem.erases.sucessful", self->state.stats.erases.successful},
+          {"posix-filesystem.erases.failed", self->state.stats.erases.failed},
+          {"posix-filesystem.erases.bytes", self->state.stats.erases.bytes},
+          {"posix-filesystem.moves.sucessful", self->state.stats.moves.successful},
+          {"posix-filesystem.moves.failed", self->state.stats.moves.failed},
+        },
+        .metadata = {},
+      };
+      self->send(self->state.accountant, atom::metrics_v, std::move(msg));
     },
   };
 }

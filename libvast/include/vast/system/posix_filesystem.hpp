@@ -23,10 +23,13 @@ namespace vast::system {
 /// @relates posix_filesystem
 struct posix_filesystem_state {
   /// Statistics about filesystem operations.
-  filesystem_statistics stats;
+  filesystem_statistics stats = {};
 
   /// The filesystem root.
-  std::filesystem::path root;
+  std::filesystem::path root = {};
+
+  /// A handle to the ACCOUNTANT actor.
+  accountant_actor accountant = {};
 
   /// The actor name.
   static inline const char* name = "posix-filesystem";
@@ -40,9 +43,10 @@ struct posix_filesystem_state {
 /// @param self The actor handle.
 /// @param root The filesystem root. The actor prepends this path to all
 ///             operations that include a path parameter.
+/// @param accountant A handle to the ACCOUNTANT actor.
 /// @returns The actor behavior.
 filesystem_actor::behavior_type
 posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
-                 const std::filesystem::path& root);
+                 std::filesystem::path root, accountant_actor accountant);
 
 } // namespace vast::system

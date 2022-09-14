@@ -141,6 +141,22 @@ The following list describes all available metrics keys:
 |`passive-store.lookup.runtime`|The number of results of a query in a passive store.|#events|🔎🪪💾|
 |`passive-store.lookup.hits`|The number of results of a query in a passive store.|#events|🔎🪪💾|
 |`passive-store.init.runtime`|Time until the store is ready serve queries.|nanoseconds|💾|
+|`posix-filesystem.checks.failed`|The number of failed file checks since process start.|||
+|`posix-filesystem.checks.successful`|The number of successful file checks since process start.|||
+|`posix-filesystem.erases.bytes`|The number of bytes erased since process start.|#bytes||
+|`posix-filesystem.erases.failed`|The number of failed file erasures since process start.|||
+|`posix-filesystem.erases.successful`|The number of successful file erasures since process start.|||
+|`posix-filesystem.mmaps.bytes`|The number of bytes memory-mapped since process start.|#bytes||
+|`posix-filesystem.mmaps.failed`|The number of failed file memory-maps since process start.|||
+|`posix-filesystem.mmaps.successful`|The number of successful file memory-maps since process start.|||
+|`posix-filesystem.moves.failed`|The number of failed file moves since process start.|||
+|`posix-filesystem.moves.successful`|The number of successful file moves since process start.|||
+|`posix-filesystem.reads.bytes`|The number of bytes read since process start.|#bytes||
+|`posix-filesystem.reads.failed`|The number of success file reads since process start.|||
+|`posix-filesystem.reads.successful`|The number of success file reads since process start.|||
+|`posix-filesystem.writes.bytes`|The number of bytes written since process start.|#bytes||
+|`posix-filesystem.writes.failed`|The number of failed file writes since process start.|||
+|`posix-filesystem.writes.successful`|The number of successful file writes since process start.|||
 |`source.start`|Timepoint when the source started.|nanoseconds since epoch||
 |`source.stop`|Timepoint when the source stopped.|nanoseconds since epoch||
 |`syslog-reader.rate`|The rate of events processed by the syslog source.|#events/second||

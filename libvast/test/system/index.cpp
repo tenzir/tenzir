@@ -43,7 +43,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
-    auto fs = self->spawn(system::posix_filesystem, directory);
+    auto fs = self->spawn(system::posix_filesystem, directory,
+                          system::accountant_actor{});
     auto index_dir = directory / "index";
     catalog = self->spawn(system::catalog, system::accountant_actor{});
     index = self->spawn(system::index, system::accountant_actor{}, fs,

@@ -67,7 +67,11 @@ dummy_filesystem(std::reference_wrapper<
     [](vast::atom::move, const std::filesystem::path&,
        const std::filesystem::path&) -> caf::result<vast::atom::done> {
       return vast::atom::done_v;
-    }};
+    },
+    [](vast::atom::telemetry) {
+      // nop
+    },
+  };
 }
 
 vast::system::store_actor::behavior_type dummy_store(

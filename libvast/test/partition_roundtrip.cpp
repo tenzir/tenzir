@@ -228,9 +228,8 @@ TEST(empty partition roundtrip) {
 // able to return correct results.
 TEST(full partition roundtrip) {
   // Spawn a partition.
-  auto fs = self->spawn(
-    vast::system::posix_filesystem,
-    directory); // `directory` is provided by the unit test fixture
+  auto fs = self->spawn(vast::system::posix_filesystem, directory,
+                        vast::system::accountant_actor{});
   auto partition_uuid = vast::uuid::random();
   auto store_id = std::string{"segment-store"};
   auto partition

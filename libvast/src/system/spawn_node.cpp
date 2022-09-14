@@ -34,7 +34,6 @@ caf::expected<scope_linked<node_actor>>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   using namespace std::string_literals;
   // Fetch values from config.
-  auto accounting = get_or(opts, "vast.enable-metrics", false);
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
   auto db_dir
     = get_or(opts, "vast.db-directory", defaults::system::db_directory);
@@ -108,8 +107,6 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   };
   std::list components = {"type-registry", "catalog", "archive",     "index",
                           "importer",      "eraser",  "disk-monitor"};
-  if (accounting)
-    components.push_front("accountant");
   for (auto& c : components) {
     if (auto err = spawn_component(c)) {
       VAST_ERROR("node failed to spawn {}: {}", c, err);
