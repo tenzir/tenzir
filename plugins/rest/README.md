@@ -1,23 +1,47 @@
 # VAST Rest Plugin
 
-This plugin provides a REST frontend for VAST. It can be run either
+This plugin provides a web server and access to the REST frontend for VAST.
+
+## Usage
+
+To spin up the REST server as a separate process, the `vast rest server`
+subcommand can be used:
+
+    vast rest server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
+
+By default, the server will only accept TLS requests. To allow clients to
+connect succesfully, a valid certificate and the corresponding private key
+need to be passed with the `--certfile` and `--keyfile` arguments.
+
+Alternatively, one can run the server within the main VAST process by
+specifying a start command:
+
+    vast start --commands="rest server [...]"
+
+All requests must be authenticated by a valid authentication token,
+which is a short string that must be sent in the `X-VAST-Token` request
+header.
+
+A valid token can be generated on the command line using the following command
+
+    vast rest generate-token
+
+For local testing and development, generating suitable certificates and tokens
+can be a hassle. For this scenario, the server can be started in "development"
+mode where plain HTTP connections are accepted and no authentication is performed:
+
+    vast rest server --mode=dev
 
 ## Security
 
-We provide presets for four common deployment scenarios via the `--mode`
-parameter of VAST:
+When providing the API as a network-facing service, it is the plugin enforces the
+use of TLS to provide data confidentiality.
 
 ### Development Mode
 
 This is suitable for developers who work on VAST and want to test the
 API on their local machines. In this mode, VAST accepts plain HTTP connections
 and ignores all authentication tokens.
-
-    /-------\ 
-    | VAST  |<-\
-    |       |  |
-    |  User |--/
-    \-------/
 
 
 ### Server Mode

@@ -22,7 +22,7 @@ static std::string content_type_to_string(vast::http_content_type type) {
 }
 
 restinio_response::restinio_response(request_handle_t&& handle,
-                                     const api_endpoint& endpoint)
+                                     const rest_endpoint& endpoint)
   : request_(std::move(handle)),
     // Note that ownership of the `connection` is transferred when creating a
     // response.

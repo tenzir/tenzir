@@ -19,15 +19,37 @@ auto specification_command(const vast::invocation&, caf::actor_system&)
     for (auto& [key, value] : caf::get<record>(spec))
       paths.emplace(key, value);
   }
+  // clang-format off
   auto openapi = record{
     {"openapi", "3.0.0"},
     {"info",
      record{
-       {"description", "VAST API"},
+       {"title", "VAST Rest API"},
        {"version", "0.1"},
+       {"description", R"_(
+This API can be used to interact with a VAST Node in a RESTful manner.
+
+All API requests must be authenticated with a valid token, which must be
+supplied in the `X-VAST-Token` request header. The token can be generated
+on the command-line using the `vast rest generate-token` command.)_"},
      }},
+    {"servers", list{{
+      record{{"url", "https://vast.example.com/api/v0"}},
+    }}},
+    {"security", list {{
+      record {{"VastToken", list{}}},
+    }}},
+    {"components", record{
+      {"securitySchemes",
+        record{{"VastToken", record {
+            {"type", "apiKey"},
+            {"in", "header"},
+            {"name", "X-VAST-Token"}
+        }}}},
+    }},
     {"paths", std::move(paths)},
   };
+  // clang-format on
   auto yaml = to_yaml(openapi);
   VAST_ASSERT_CHEAP(yaml);
   fmt::print("---\n{}\n", *yaml);

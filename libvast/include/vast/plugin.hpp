@@ -342,22 +342,28 @@ public:
 
 // -- rest endpoint plugin -----------------------------------------------------
 
+// A rest endpoint plugin declares a set of routes on which it can respond
+// to HTTP requests, together with a `handler` actor that is responsible
+// for doing that. A server (usually the `web` plugin) can then accept
+// incoming requests and dispatch them to the correct handler according to the
+// request path.
 class rest_endpoint_plugin : public virtual plugin {
 public:
-  /// Defaults to the plugin name
+  /// A path prefix to prepend to all routes declared by this plugin.
+  /// Defaults to the plugin name.
   [[nodiscard]] virtual std::string prefix() const {
     return std::string{"/"} + this->name();
   }
 
   /// OpenAPI spec for the plugin endpoints.
-  /// @returns A `vast::data` that is a record containing entries for
+  /// @returns A `vast::data` object that is a record containing entries for
   /// the `paths` element of an OpenAPI spec.
   [[nodiscard]] virtual data
   openapi_specification(api_version version = api_version::latest) const = 0;
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] virtual const std::vector<api_endpoint>&
-  api_endpoints() const = 0;
+  [[nodiscard]] virtual const std::vector<rest_endpoint>&
+  rest_endpoints() const = 0;
 
   /// Actor that will handle this endpoint.
   //  TODO: This should get some integration with component_plugin so that

@@ -11,11 +11,10 @@
 #include <vast/detail/base64.hpp>
 
 #include <caf/scoped_actor.hpp>
+#include <openssl/err.h>
+#include <openssl/rand.h>
 
 #include <array>
-
-// TODO: Investigate if this is available on mac
-#include <sys/random.h>
 
 namespace vast::plugins::rest {
 
@@ -76,15 +75,16 @@ caf::expected<chunk_ptr> authenticator_state::save() {
   return chunk::make(builder.Release());
 }
 
-auto authenticator_state::generate() -> token_t {
+auto authenticator_state::generate() -> caf::expected<token_t> {
   auto random_bytes = std::array<char, 16>{};
   // Use `getrandom()` for cryptographically secure random bytes.
-  while (auto error
-         = ::getrandom(random_bytes.data(), random_bytes.size(), 0)) {
-    // We should never get EFAULT or EINVAL unless our arguments
-    // are incorrect, and we already checked that the kernel
-    // supports `getrandom()`. (TODO on the last part)
-    VAST_ASSERT_CHEAP(error == EAGAIN || error == EINTR);
+  auto error = RAND_bytes(reinterpret_cast<unsigned char*>(random_bytes.data()),
+                          random_bytes.size());
+  if (error != 1) {
+    auto code = ERR_get_error();
+    return caf::make_error(ec::system_error, fmt::format("could not get random "
+                                                         "bytes: error {}",
+                                                         code));
   }
   auto token = detail::base64::encode(
     std::string_view{random_bytes.data(), random_bytes.size()});
@@ -163,17 +163,15 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
         VAST_WARN("{} failed to load server state: {}", *self, e);
       });
   return {
-    [self](atom::generate) -> token_t {
+    [self](atom::generate) -> caf::result<token_t> {
       auto result = self->state.generate();
       // We don't expect token generation to be very frequent and the total
       // number of tokens to be relatively small, so it should be fine to
       // re-write the complete file every time.
       self->state.save();
-      VAST_INFO("generated token {}", result); // FIXME: remove log message
       return result;
     },
     [self](atom::validate, const token_t& token) -> bool {
-      VAST_INFO("authenticating token {}", token); // FIXME: remove log message
       return self->state.authenticate(token);
     },
     [self](atom::status, system::status_verbosity) -> vast::record {

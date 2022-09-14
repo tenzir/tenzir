@@ -39,7 +39,7 @@ enum class api_version : uint8_t {
   latest = v0,
 };
 
-struct api_endpoint {
+struct rest_endpoint {
   /// Arbitrary id for endpoint identification
   uint64_t endpoint_id = 0ull;
 
@@ -50,22 +50,19 @@ struct api_endpoint {
   std::string path;
 
   /// Expected parameters.
-  //  (A record_type cannot be empty, so we need an optional.
-  //  TODO: Use `std::optional` after the upgrade to CAF 0.18.
-  caf::optional<vast::record_type> params;
+  //  (A record_type cannot be empty, so we need an optional)
+  std::optional<vast::record_type> params;
 
   /// Version for that endpoint.
-  //  TODO: Maybe this would be better as a `uint8` to allow
-  //  each plugin to use its own version numbers.
   api_version version;
 
   /// Response content type.
   http_content_type content_type;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, api_endpoint& e) {
-    return f(caf::meta::type_name("vast.api_endpoint"), e.endpoint_id, e.method,
-             e.path, e.params, e.version, e.content_type);
+  friend auto inspect(Inspector& f, rest_endpoint& e) {
+    return f(caf::meta::type_name("vast.rest_endpoint"), e.endpoint_id,
+             e.method, e.path, e.params, e.version, e.content_type);
   }
 };
 
@@ -81,6 +78,7 @@ public:
   virtual void append(std::string body) = 0;
 
   /// Return an HTTP error code and close the connection.
+  //  TODO: Add a `&&` qualifier to ensure one-time use.
   virtual void abort(uint16_t error_code, std::string message) = 0;
 };
 
@@ -89,8 +87,7 @@ public:
   /// Data according to the type of the endpoint.
   vast::record params;
 
-  /// Shared response data.
-  // TODO: Probably makes sense to use a `caf::cow_ptr`.
+  /// The response corresponding to this request.
   std::shared_ptr<http_response> response;
 };
 

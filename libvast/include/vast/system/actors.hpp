@@ -421,7 +421,9 @@ using exporter_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
+/// The interface of a REST HANDLER actor.
 using rest_handler_actor = system::typed_actor_fwd<
+  // Receive an incoming HTTP request.
   caf::reacts_to<atom::http_request, uint64_t, http_request>>::unwrap;
 
 /// The interface of a COMPONENT PLUGIN actor.

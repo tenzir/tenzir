@@ -82,15 +82,23 @@ class plugin final : public virtual rest_endpoint_plugin {
     static auto const* spec_v0 = R"_(
 /status:
   get:
-    summary: Returns current status
+    summary: Return current status
     description: Returns the current status of the whole node.
     responses:
-      '200':
-        description: A JSON dictionary with various pieces of info per component.
+      200:
+        description: OK.
         content:
           application/json:
             schema:
               type: dict
+            example:
+              catalog:
+                num-partitions: 7092
+                memory-usage: 52781901584
+              version:
+                VAST: v2.3.0-rc3-32-g8529a6c43f
+      401:
+        description: Not authenticated.
     )_";
     if (version != api_version::v0)
       return vast::record{};
@@ -100,13 +108,13 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] const std::vector<api_endpoint>&
-  api_endpoints() const override {
-    static const auto endpoints = std::vector<api_endpoint>{
+  [[nodiscard]] const std::vector<rest_endpoint>&
+  rest_endpoints() const override {
+    static const auto endpoints = std::vector<rest_endpoint>{
       {
         .method = http_method::get,
         .path = "/status",
-        .params = caf::none,
+        .params = std::nullopt,
         .version = api_version::v0,
         .content_type = http_content_type::json,
       },

@@ -30,12 +30,9 @@ namespace vast::plugins::rest {
 /// The API plugin.
 class plugin final : public virtual command_plugin,
                      public virtual component_plugin {
-  /// Initializes a plugin with its respective entries from the YAML config
-  /// file, i.e., `plugin.<NAME>`.
-  /// @param config The relevant subsection of the configuration.
-  [[nodiscard]] caf::error initialize(data data) override {
-    // FIXME
-    auto config = to<configuration>(data);
+  [[nodiscard]] caf::error initialize(data) override {
+    // We don't need to do anything here since the plugin config currently
+    // only applies to the server command, which gets its own settings.
     return {};
   }
 
@@ -51,10 +48,6 @@ class plugin final : public virtual command_plugin,
     return node->spawn(authenticator, std::move(filesystem));
   }
 
-  /// Creates additional commands.
-  /// @note VAST calls this function before initializing the plugin, which
-  /// means that this function cannot depend on any plugin state. The logger
-  /// is unavailable when this function is called.
   [[nodiscard]] std::pair<std::unique_ptr<command>, command::factory>
   make_command() const override {
     auto rest_command = std::make_unique<command>(
@@ -65,8 +58,8 @@ class plugin final : public virtual command_plugin,
         .add<bool>("help,h?", "prints the help text")
         .add<std::string>("mode", "Server mode. One of "
                                   "dev,server,upstream,mtls.")
-        .add<std::string>("certificate-path", "path to TLS cert")
-        .add<std::string>("key-path", "path to TLS private key")
+        .add<std::string>("certfile", "path to TLS server certificate")
+        .add<std::string>("keyfile", "path to TLS private key")
         .add<std::string>("bind", "listen address of server")
         .add<uint16_t>("port", "listen port"));
     rest_command->add_subcommand("generate-token", "generate auth token",

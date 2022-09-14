@@ -78,6 +78,7 @@ jobs:
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \
+            librestinio-dev \
             libsimdjson-dev \
             libspdlog-dev \
             libssl-dev \
@@ -251,6 +252,7 @@ jobs:
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \
+            librestinio-dev \
             libsimdjson-dev \
             libspdlog-dev \
             libssl-dev \
@@ -334,7 +336,7 @@ jobs:
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
-            -DVAST_PLUGINS:STRING="plugins/pcap" \
+            -DVAST_PLUGINS:STRING="plugins/pcap;plugins/rest" \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 

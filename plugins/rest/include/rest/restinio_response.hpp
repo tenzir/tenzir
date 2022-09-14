@@ -17,8 +17,8 @@
 
 namespace vast::plugins::rest {
 
-// TODO: Does it make sense to make use of the "extra data" to store a
-// caf::intrusive_ptr ?
+// Note: If desired, `restinio` provides users to embed arbitrary `extra_data`
+// into each request.
 using request_handle_t
   = restinio::generic_request_handle_t<restinio::no_extra_data_factory_t::data_t>;
 using response_t
@@ -26,7 +26,7 @@ using response_t
 
 class restinio_response final : public vast::http_response {
 public:
-  restinio_response(request_handle_t&& handle, const api_endpoint&);
+  restinio_response(request_handle_t&& handle, const rest_endpoint&);
   ~restinio_response() override;
 
   restinio_response(restinio_response&&) = default;
@@ -36,7 +36,6 @@ public:
 
   void append(std::string body) override;
 
-  // TODO: Add `&&` qualifier?
   void abort(uint16_t error_code, std::string message) override;
 
   // Get a handle to the original request.
@@ -44,7 +43,7 @@ public:
 
 private:
   request_handle_t request_;
-  response_t response_; // it looks like we need to keep this alive artificially
+  response_t response_;
   size_t body_size_ = {};
 };
 

@@ -27,11 +27,13 @@ struct token_description {
 };
 
 struct authenticator_state {
-  static constexpr auto name = "authenticator";
+  static constexpr inline auto name = "authenticator";
+
+  // Member functions
 
   authenticator_state() = default;
 
-  token_t generate();
+  caf::expected<token_t> generate();
 
   [[nodiscard]] bool authenticate(token_t) const;
 
@@ -39,8 +41,15 @@ struct authenticator_state {
 
   caf::expected<chunk_ptr> save();
 
+  // Data members
+
+  /// Filesystem path of the authenticator state, relative to db directory.
   std::filesystem::path path_ = {};
+
+  /// Handle of the filesystem actor.
   system::filesystem_actor filesystem_ = {};
+
+  /// The list of all known authentication tokens.
   std::vector<token_description> tokens_ = {};
 };
 

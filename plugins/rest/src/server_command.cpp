@@ -44,10 +44,10 @@ namespace vast::plugins::rest {
 using router_t = restinio::router::express_router_t<>;
 
 using request_dispatcher_actor = system::typed_actor_fwd<
-  caf::reacts_to<atom::request, restinio_response_ptr, api_endpoint,
+  caf::reacts_to<atom::request, restinio_response_ptr, rest_endpoint,
                  system::rest_handler_actor>,
   caf::reacts_to<atom::internal, atom::request, restinio_response_ptr,
-                 api_endpoint, system::rest_handler_actor>>::unwrap;
+                 rest_endpoint, system::rest_handler_actor>>::unwrap;
 
 namespace {
 
@@ -76,7 +76,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
   self->state.authenticator = authenticator;
   return {
     [self](atom::request, restinio_response_ptr& response,
-           api_endpoint& endpoint, system::rest_handler_actor handler) {
+           rest_endpoint& endpoint, system::rest_handler_actor handler) {
       // Skip authentication if its not required.
       if (!self->state.server_config.require_authentication) {
         self->send(self, atom::internal_v, atom::request_v, std::move(response),
@@ -109,7 +109,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
           });
     },
     [self](atom::internal, atom::request, restinio_response_ptr& response,
-           const api_endpoint& endpoint, system::rest_handler_actor handler) {
+           const rest_endpoint& endpoint, system::rest_handler_actor handler) {
       // TODO: Also consider params in the request body here.
       restinio::query_string_params_t string_params
         = restinio::parse_query(response->request()->header().query());
@@ -163,7 +163,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
 
 void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                  std::string_view prefix, request_dispatcher_actor dispatcher,
-                 vast::api_endpoint endpoint,
+                 vast::rest_endpoint endpoint,
                  system::rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
   auto path
@@ -217,10 +217,13 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt convert options"));
   auto server_config = convert_and_validate(config);
-  if (!server_config)
+  if (!server_config) {
+    VAST_ERROR("{}", server_config.error());
     return caf::make_message(caf::make_error(
       ec::invalid_configuration,
       fmt::format("invalid server configuration: {}", server_config.error())));
+  }
+  VAST_INFO("valid config"); // FIXME: remove
   // Create necessary actors.
   auto node_opt = vast::system::spawn_or_connect_to_node(
     self, inv.options, content(system.config()));
@@ -248,7 +251,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       continue;
     }
     auto handler = rest_plugin->handler(system, node);
-    for (auto const& endpoint : rest_plugin->api_endpoints()) {
+    for (auto const& endpoint : rest_plugin->rest_endpoints()) {
       if (endpoint.path.empty() || endpoint.path[0] != '/') {
         VAST_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;

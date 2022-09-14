@@ -24,12 +24,12 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
-namespace vast::plugins::rest_api::export_ {
+namespace vast::plugins::rest_api::query {
 
 // clang-format off
 
 /// An actor to help with handling a single query.
-using export_helper_actor = system::typed_actor_fwd<
+using query_manager_actor = system::typed_actor_fwd<
     caf::reacts_to<atom::done>
   >
   ::extend_with<system::receiver_actor<table_slice>>
@@ -37,14 +37,14 @@ using export_helper_actor = system::typed_actor_fwd<
 
 /// An actor to receive REST endpoint requests and spawn exporters
 /// as needed.
-using export_multiplexer_actor = system::typed_actor_fwd<>
+using request_multiplexer_actor = system::typed_actor_fwd<>
   ::extend_with<system::rest_handler_actor>
   ::unwrap;
 
 // clang-format on
 
-struct export_helper_state {
-  export_helper_state() = default;
+struct query_manager_state {
+  query_manager_state() = default;
 
   system::index_actor index_ = {};
   size_t events_ = 0;
@@ -53,14 +53,14 @@ struct export_helper_state {
   http_request request_;
 };
 
-struct export_multiplexer_state {
-  export_multiplexer_state() = default;
+struct request_multiplexer_state {
+  request_multiplexer_state() = default;
 
   system::index_actor index_ = {};
 };
 
-export_helper_actor::behavior_type
-export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
+query_manager_actor::behavior_type
+query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
               system::index_actor index, vast::expression expr, size_t limit,
               http_request&& request) {
   self->state.index_ = std::move(index);
@@ -121,8 +121,8 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
           }};
 }
 
-export_multiplexer_actor::behavior_type export_multiplexer(
-  export_multiplexer_actor::stateful_pointer<export_multiplexer_state> self,
+request_multiplexer_actor::behavior_type request_multiplexer(
+  request_multiplexer_actor::stateful_pointer<request_multiplexer_state> self,
   const system::node_actor& node) {
   self
     ->request(node, caf::infinite, atom::get_v, atom::label_v,
@@ -165,7 +165,7 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         limit = caf::get<count>(param);
       }
       // TODO: Abort the request after some time limit has passed.
-      auto exporter = self->spawn(export_helper, self->state.index_, *expr,
+      auto exporter = self->spawn(query_manager, self->state.index_, *expr,
                                   limit, std::move(rq));
     },
   };
@@ -186,10 +186,59 @@ class plugin final : public virtual rest_endpoint_plugin {
 
   [[nodiscard]] data openapi_specification(api_version version) const override {
     auto const* spec_v0 = R"_(
-/export:
+/query:
   post:
-    summary: Start a new query
+    summary: Create new query
     description: Create a new export query in VAST
+    parameters:
+      - in: query
+        name: expression
+        schema:
+          type: string
+          example: ":ip in 10.42.0.0/16"
+        required: true
+        description: Query string.
+      - in: query
+        name: lifetime
+        schema:
+          type: string
+          example: "4 days"
+        required: false
+        default: "2 hours"
+        description: How long to keep the query state alive.
+    responses:
+      200:
+        description: Success.
+        content: application/json
+        schema:
+          type: object
+          example:
+            id: c91019bf-21fe-4999-8323-4d28aeb111ab
+          properties:
+            id:
+              type: string
+      401:
+        description: Not authenticated.
+      422:
+        description: Invalid expression or invalid lifetime.
+
+/query/{id}:
+  get:
+    summary: Get additional query results
+    description: Return `n` additional results from the specified query.
+    parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+        description: The query ID.
+      - in: query
+        name: n
+        schema:
+          type: integer
+        required: false
+        description: Maximum number of returned events
     responses:
       '200':
         description: Success.
@@ -197,13 +246,14 @@ class plugin final : public virtual rest_endpoint_plugin {
         schema:
           type: object
           properties:
-            num_events:
+            position:
               type: integer
-            version:
-              type: string
+              description: The number of events that had already been returned before this call.
             events:
               type: array
               items: object
+      401:
+        description: Not authenticated.
     )_";
     if (version != api_version::v0)
       return vast::record{};
@@ -213,15 +263,28 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] const std::vector<api_endpoint>&
-  api_endpoints() const override {
-    static auto endpoints = std::vector<vast::api_endpoint>{
+  [[nodiscard]] const std::vector<rest_endpoint>&
+  rest_endpoints() const override {
+    static constexpr auto QUERY_ENDPOINT = 0;
+    static constexpr auto QUERY_NEW_ENDPOINT = 0;
+    static auto endpoints = std::vector<vast::rest_endpoint>{
     {
-      .method = http_method::get,
-      .path = "/export",
+      .endpoint_id = QUERY_NEW_ENDPOINT,
+      .method = http_method::post,
+      .path = "/query",
       .params = vast::record_type{
         {"expression", vast::string_type{}},
-        {"limit", vast::count_type{}},
+        {"lifetime", vast::duration_type{}},
+      },
+      .version = api_version::v0,
+      .content_type = http_content_type::json,
+    },
+    {
+      .endpoint_id = QUERY_ENDPOINT,
+      .method = http_method::get,
+      .path = "/query/:id",
+      .params = vast::record_type{
+        {"n", vast::count_type{}},
       },
       .version = api_version::v0,
       .content_type = http_content_type::json,
@@ -232,10 +295,10 @@ class plugin final : public virtual rest_endpoint_plugin {
 
   system::rest_handler_actor
   handler(caf::actor_system& system, system::node_actor node) const override {
-    return system.spawn(export_multiplexer, node);
+    return system.spawn(request_multiplexer, node);
   }
 };
 
-} // namespace vast::plugins::rest_api::export_
+} // namespace vast::plugins::rest_api::query
 
-VAST_REGISTER_PLUGIN(vast::plugins::rest_api::export_::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::rest_api::query::plugin)

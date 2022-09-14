@@ -12,8 +12,8 @@ namespace vast::plugins::rest {
 
 static caf::expected<enum configuration::server_mode>
 to_server_mode(const std::string& str) {
-  if (str == "debug")
-    return configuration::server_mode::debug;
+  if (str == "dev")
+    return configuration::server_mode::dev;
   else if (str == "upstream")
     return configuration::server_mode::upstream;
   else if (str == "server")
@@ -29,7 +29,7 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   if (!mode)
     return mode.error();
   switch (*mode) {
-    case configuration::server_mode::debug:
+    case configuration::server_mode::dev:
       result.require_tls = false;
       result.require_clientcerts = false;
       result.require_authentication = false;

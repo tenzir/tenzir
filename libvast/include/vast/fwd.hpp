@@ -139,7 +139,7 @@ class type;
 class uuid;
 class value_index;
 
-struct api_endpoint;
+struct rest_endpoint;
 struct attribute;
 struct augmented_partition_synopsis;
 struct count_query_context;
@@ -186,17 +186,17 @@ struct legacy_time_type;
 struct type_extractor;
 struct type_set;
 
+enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
 enum class bool_operator : uint8_t;
 enum class ec : uint8_t;
+enum class http_content_type : uint16_t;
+enum class http_method : uint8_t;
+enum class http_status_code : uint16_t;
 enum class port_type : uint8_t;
 enum class query_options : uint32_t;
 enum class relational_operator : uint8_t;
 enum class table_slice_encoding : uint8_t;
-enum class http_method : uint8_t;
-enum class http_content_type : uint16_t;
-enum class http_status_code : uint16_t;
-enum class api_version : uint8_t;
 
 template <class>
 class arrow_table_slice;
@@ -380,7 +380,7 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((vast::address))
-  VAST_ADD_TYPE_ID((vast::api_endpoint))
+  VAST_ADD_TYPE_ID((vast::rest_endpoint))
   VAST_ADD_TYPE_ID((vast::meta_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
   VAST_ADD_TYPE_ID((vast::chunk_ptr))
