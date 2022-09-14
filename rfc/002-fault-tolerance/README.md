@@ -247,14 +247,7 @@ transport channel is out of scope.
 
 The final commit of the data takes place in the metastore. This is the action
 that requires an ACK, which needs to travel all the way back to the source of
-the input stream so that the event stream can be advanced. While there could be
-more fine-grained forms of ACK'ing, such as at the source or already at the
-loader, these are out of scope for this proposal because VAST partitions can be
-made arbitrarily small in theory. Specifically, VAST considers a partition as
-complete when either a maximum number of events have accumulated or when a
-timeout fires. The implication is that the source may have to keep track of the
-table slice sent to the partition builder, and acknowledge those upstream to the
-loader recursively.
+the input stream so that the event stream can be advanced.
 
 TODO: describe how we can do this with CAF as of today.
 
