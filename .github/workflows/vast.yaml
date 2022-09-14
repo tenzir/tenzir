@@ -876,12 +876,11 @@ jobs:
     env:
       DOCKER_BUILDKIT: 1
     steps:
-    steps:
       - name: Install Compose
         uses: ndeloof/install-docker-compose
         with:
-          version: latest # defaults to 'latest'
-          legacy: true    # will also install in PATH as `docker-compose`
+          version: latest
+          legacy: true
       - name: Checkout
         uses: actions/checkout@v3
       - name: Download Docker Image
