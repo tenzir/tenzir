@@ -6,16 +6,16 @@ sidebar_position: 1
 
 Our [docker-compose file](../../../../docker-compose.yml) provides an easy way to deploy VAST.
 
-Default behaviour of docker-compose file is to build the image.
-
-## Build and run VAST
+## Run without building
 ```bash
-git clone --recursive https://github.com/tenzir/vast
-cd vast
 docker-compose up -d
 ```
 
-## Run without building
+## Build image and run VAST
 ```bash
-docker compose up --no-build -d
+git clone --recursive https://github.com/tenzir/vast
+cd vast
+docker build -t tenzir/vast .
+docker-compose up -d
 ```
+

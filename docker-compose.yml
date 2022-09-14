@@ -3,9 +3,6 @@ services:
   vast:
     container_name: tenzir-vast
     image: tenzir/vast:${VAST_VERSION:-latest}
-    pull_policy: build
-    build:
-      context: .
     environment:
       - VAST_ENDPOINT=vast:42000
     ports:
