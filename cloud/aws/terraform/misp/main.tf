@@ -113,11 +113,38 @@ resource "aws_security_group" "service" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    protocol        = "tcp"
+    from_port       = 8080
+    to_port         = 8080
+    security_groups = [var.http_app_client_security_group_id]
+  }
+
   egress {
     protocol    = "-1"
     from_port   = 0
     to_port     = 0
     cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_service_discovery_service" "fargate_svc" {
+  name = local.name
+
+  dns_config {
+    namespace_id = var.service_discov_namespace_id
+
+    dns_records {
+      ttl  = 5
+      type = "A"
+    }
+
+    routing_policy = "WEIGHTED"
+  }
+
+  # This health state is updated by ECS using container level health checks
+  health_check_custom_config {
+    failure_threshold = 1
   }
 }
 
@@ -140,5 +167,10 @@ resource "aws_ecs_service" "fargate_service" {
 
   lifecycle {
     ignore_changes = [desired_count]
+  }
+
+  service_registries {
+    registry_arn   = aws_service_discovery_service.fargate_svc.arn
+    container_name = local.misp_proxy_container_name
   }
 }

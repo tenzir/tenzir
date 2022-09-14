@@ -240,3 +240,25 @@ preconfigured instance:
   - Default login: demo@tenzir.com / demo
   - Default API KEY: demodemodemodemodemodemodemodemodemodemo
 - you can also subscribe to MISP's ZeroMQ feed on `localhost:50000`
+
+### Expose services publicly
+
+We offer the capability to expose services publicly yet securely using
+Cloudflare Zero Trust. You need a Cloudflare account with a [zone
+configured](https://developers.cloudflare.com/dns/zone-setups/full-setup/setup/)
+to use this plugin.
+- add `cloudflare` to the list of plugins in `VAST_CLOUD_PLUGINS`
+- configure the environment:
+  - `VAST_CLOUDFLARE_ACCOUNT_ID`: the account ID is provided in the overview
+    page of you zone
+  - `VAST_CLOUDFLARE_ZONE`: the domain of you zone, e.g example.com
+  - `VAST_CLOUDFLARE_API_TOKEN`: an API token with `Cloudflare Tunnel:Edit` and
+    `DNS:Edit` permissions
+- deploy (or re-deploy) the VAST stack including the Cloudflare proxy with
+  `./vast-cloud deploy`
+- start the Cloudflare tunnel with `./vast-cloud cloudflare.start`
+- configure the tunnel routes to the deployed apps by running `./vast-cloud
+  cloudflare.setup`
+- in the Cloudflare Zero Trust pannel,
+  [configure](https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-apps/)
+  the applications to protect the exposed endpoints

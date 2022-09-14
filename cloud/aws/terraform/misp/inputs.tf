@@ -6,6 +6,9 @@ variable "fargate_cluster_name" {}
 variable "fargate_task_execution_role_arn" {}
 variable "vast_vpc_id" {}
 variable "public_subnet_id" {}
+variable "http_app_client_security_group_id" {}
+variable "service_discov_namespace_id" {}
+variable "service_discov_domain" {}
 variable "efs_client_security_group_id" {}
 variable "efs_id" {
   description = "Leave fields empty if you don't want to attache EFS."

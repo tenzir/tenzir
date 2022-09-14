@@ -34,6 +34,18 @@ output "efs_client_security_group_id" {
   value = aws_security_group.client_efs.id
 }
 
+output "http_app_client_security_group_id" {
+  value = aws_security_group.http_app_client.id
+}
+
+output "service_discov_namespace_id" {
+  value = aws_service_discovery_private_dns_namespace.main.id
+}
+
+output "service_discov_domain" {
+  value = local.service_discov_domain
+}
+
 output "vast_lambda_name" {
   value = module.vast_client.lambda_name
 }
