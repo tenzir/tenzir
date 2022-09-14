@@ -10,18 +10,17 @@ services:
     command:
       - start
     volumes:
-      - vast-data:/var/lib/vast/
-      - vast-log:/var/log/vast/
+      - vast-database:/var/lib/vast/
+      - vast-logs:/var/log/vast/
     networks:
       - vast-network
 
 volumes:
-  vast-data:
+  vast-database:
     driver: local
-  vast-log:
+  vast-logs:
     driver: local
 
 networks:
   vast-network:
     driver: bridge
-
