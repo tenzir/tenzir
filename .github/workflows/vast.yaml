@@ -808,12 +808,6 @@ jobs:
             VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
-      - name: Download existing images
-        if: github.event_name == 'pull_request'
-        run: |
-          docker pull tenzir/vast:$(git merge-base origin/master HEAD)
-          docker pull tenzir/vast-deps:$(git merge-base origin/master HEAD)
-          docker pull tenzir/vast-dev:$(git merge-base origin/master HEAD)
       - name: Build Dependencies Docker Image
         run: |
           docker build . -t tenzir/vast-deps:latest --target dependencies \
@@ -904,8 +898,7 @@ jobs:
           docker exec -t tenzir-vast vast import -r "/var/lib/vast/eve.json" suricata
       - name: Query ingested Suricata data set
         run: |
-          result=$(docker run --network vast_vast-network tenzir/vast --endpoint=tenzir-vast:42000 export json '147.32.84.165')
-          echo -E $result | jq -s '. | length'
+          result=$(docker-compose run --interactive=false --rm vast export json '147.32.84.165' | jq -s '. | length')
           [[ $(echo -E $result | jq -s '. | length')  == 6 ]]
       - name: Check Container Status
         run: |
