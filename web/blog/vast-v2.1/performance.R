@@ -1,6 +1,8 @@
-library(tidyverse)
-library(scales)
+library(dplyr)
+library(ggplot2)
 library(ggdark)
+library(scales)
+library(tidyr)
 
 data <-
   tribble(
