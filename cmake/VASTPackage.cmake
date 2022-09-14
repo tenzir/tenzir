@@ -59,11 +59,12 @@ endif ()
 # and development Debian packages.
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 
-# Enable the component-based packages for the Debian and the Archive CPack
-# generators. Sadly, this has to be done 1-by-1, and there does not appear to be
-# an exhaustive list of generators that support this, so we only opt-in for the
-# two common cases.
-set(CPACK_DEBIAN_COMPONENT_INSTALL ON)
+# Enable the component-based packages for specified Generators.
+# We only opt-in for the `DEB` and `ARCHIVE` Generators because those are the
+# ones we support, and the list of available Generators can change with future
+# releases of CMake.
+# https://cmake.org/cmake/help/latest/module/CPackComponent.html#variable:CPACK_%3CGENNAME%3E_COMPONENT_INSTALL
+set(CPACK_DEB_COMPONENT_INSTALL ON)
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 
 # Set up CPack as configured above. Note that the calls to cpack_add_component
