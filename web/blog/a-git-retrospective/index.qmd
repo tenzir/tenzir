@@ -1,9 +1,8 @@
 ---
 title: A Git Retrospective
 authors: mavam
-draft: true
 date: 2022-09-15
-tags: [git, r, quarto, engineering]
+tags: [git, r, quarto, notebooks, engineering]
 ---
 
 The VAST project is roughly a decade old. But what happened over the last 10
