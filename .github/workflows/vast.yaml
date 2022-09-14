@@ -876,6 +876,12 @@ jobs:
     env:
       DOCKER_BUILDKIT: 1
     steps:
+    steps:
+      - name: Install Compose
+        uses: ndeloof/install-docker-compose
+        with:
+          version: latest # defaults to 'latest'
+          legacy: true    # will also install in PATH as `docker-compose`
       - name: Checkout
         uses: actions/checkout@v3
       - name: Download Docker Image
@@ -889,9 +895,9 @@ jobs:
         run: |
           docker-compose -f docker-compose.yml \
                          up --no-build --detach
-      - name: TEST - Vast-Only Suricata Json Import
+      - name: Run Integration Tests
         run: |
-          bash ${GITHUB_WORKSPACE}/.github/workflows/tests/vast-only.sh
+          find . -path "./docker/*/tests.sh" -exec {} \;
       - name: Check Container Status
         run: |
           docker-compose ps

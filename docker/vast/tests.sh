@@ -1,5 +1,7 @@
 #!/bin/bash
-set -e
+set -eux -o pipefail
+
+pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)"
 
 # Simple status check
 docker-compose run vast status
@@ -8,6 +10,6 @@ docker-compose run vast status
 docker-compose run --rm --no-TTY vast import suricata < vast/integration/data/suricata/eve.json
 
 # Query Ingested Test Data
-result=$(docker-compose run --rm --no-TTY vast export json '147.32.84.165' | jq -s '. | length')
+docker compose run --rm --interactive=false vast export json '147.32.84.165' | jq -es '. | length == 6'
 
-[ $result -eq 6 ]
+popd
