@@ -88,12 +88,13 @@ RUN cmake -B build -G Ninja \
       ${VAST_BUILD_OPTIONS} \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
-      -D VAST_ENABLE_UNIT_TESTS:BOOL="ON" \
+      -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
     cmake --build build --parallel && \
-    cmake --install build
+    cmake --install build --strip && \
+    rm -rf build
 
 RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
 ENV VAST_DB_DIRECTORY="/var/lib/vast" \
