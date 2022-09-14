@@ -18,4 +18,3 @@ cd vast
 docker build -t tenzir/vast .
 docker-compose up -d
 ```
-
