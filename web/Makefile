@@ -13,8 +13,9 @@ NOTEBOOK_OUTPUTS := $(addprefix $(NOTEBOOK_OUTPUT_DIR)/, $(notdir $(NOTEBOOK_INP
 NOTEBOOK_DOCS_INPUT := $(NOTEBOOK_INPUT_DIR)/README.md
 NOTEBOOK_DOCS_OUTPUT := $(CONTRIBUTING_DIR)/notebooks.md
 
-QUARTO_INPUTS := $(shell ../scripts/quarto-inputs.sh)
-QUARTO_OUTPUTS := $(shell ../scripts/quarto-outputs.sh)
+QUARTO_INPUTS := $(shell find docs blog -name '*.qmd')
+QUARTO_MD_OUTPUTS := $(patsubst %.qmd, %.md, $(QUARTO_INPUTS))
+QUARTO_FILES_OUTPUTS := $(patsubst %.qmd, %_files, $(QUARTO_INPUTS))
 
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
@@ -67,12 +68,12 @@ $(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
 	@$(MAKE) -C $(NOTEBOOK_INPUT_DIR)
 	cp -r $(NOTEBOOK_INPUT_DIR)/output/md/* $(NOTEBOOK_OUTPUT_DIR)
 
-$(QUARTO_OUTPUTS): $(QUARTO_INPUTS)
+$(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS): $(QUARTO_INPUTS)
 	@Rscript -e 'if("pak" %in% rownames(installed.packages()) == FALSE) { install.packages("pak", repos = "http://cran.us.r-project.org") }'
 	@Rscript -e 'require(pak); pak::local_install_dev_deps(upgrade = FALSE)'
 	@quarto render
 
-quarto: $(QUARTO_OUTPUTS)
+quarto: $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
 
 clean:
 	rm -f $(CHANGELOG_OUTPUT)
@@ -84,4 +85,4 @@ clean:
 	rm -f $(CONTRIBUTING_DIR)/coding-style.md
 	rm -f $(CONTRIBUTING_DIR)/security.md
 	rm -f $(CONTRIBUTING_DIR)/workflow.md
-	rm -f $(QUARTO_OUTPUTS)
+	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
