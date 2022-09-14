@@ -877,7 +877,7 @@ jobs:
       DOCKER_BUILDKIT: 1
     steps:
       - name: Install Compose
-        uses: ndeloof/install-docker-compose
+        uses: ndeloof/install-docker-compose@v0
         with:
           version: latest
           legacy: true
