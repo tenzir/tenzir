@@ -80,6 +80,13 @@ your use case.
 Our official [Dockerfile](https://github.com/tenzir/vast/blob/master/Dockerfile)
 offers two starting points: a *development* and *production* layer.
 
+Before building the image, make sure to fetch all submodules:
+
+```bash
+git clone --recursive https://github.com/tenzir/vast
+cd vast
+```
+
 ### Build the production image
 
 The production image is optimized for size and security. This is the official
