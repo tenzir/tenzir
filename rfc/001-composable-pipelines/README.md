@@ -142,7 +142,7 @@ proposal:
 In essence, we keep `import` and `export` and incrementally enhance the
 expressiveness, by making it possible to append a pipeline after an expression.
 That is, valid input has the form `EXPR | OPERATOR | OPERATOR | ...`. Note that
-this is *not* valid pipeline, because `EXPR` is not an operator.
+this is *not* a valid pipeline, because `EXPR` is not an operator.
 
 Additionally, we add a new command `exec` that accepts a "pure" pipeline, i.e.,
 just a composition of operators. Execution takes place locally, without any
@@ -200,7 +200,7 @@ assume that input and output are dynamically typed. Operators must then define
 their input and output types, e.g., `from<In, Out>` takes as input `In` and
 produces instances of `Out`.
 
-An pipeline *executor* orchestrates the execution of a pipeline, connecting
+A pipeline *executor* orchestrates the execution of a pipeline, connecting
 inputs and outputs from operators into a dataflow.
 
 ### Case Study: Matcher
