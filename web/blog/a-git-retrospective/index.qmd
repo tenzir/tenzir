@@ -17,6 +17,8 @@ others dozens. The distribution is not uniform. As of
 13,067 commits, with 2,335 being merges (17.9%). We'll take a deeper look at the
 merge commits.
 
+<!--truncate-->
+
 ```{bash}
 #| output: false
 cd /tmp
