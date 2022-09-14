@@ -889,17 +889,9 @@ jobs:
         run: |
           docker-compose -f docker-compose.yml \
                          up --no-build --detach
-      - name: Simple Test
+      - name: TEST - Vast-Only Suricata Json Import
         run: |
-          docker-compose run vast status
-      - name: Ingest Test Data
-        run: |
-          docker cp "vast/integration/data/suricata/eve.json" tenzir-vast:/var/lib/vast
-          docker exec -t tenzir-vast vast import -r "/var/lib/vast/eve.json" suricata
-      - name: Query ingested Suricata data set
-        run: |
-          result=$(docker-compose run --interactive=false --rm vast export json '147.32.84.165' | jq -s '. | length')
-          [[ $(echo -E $result | jq -s '. | length')  == 6 ]]
+          bash ${GITHUB_WORKSPACE}/.github/workflows/tests/vast-only.sh
       - name: Check Container Status
         run: |
           docker-compose ps
