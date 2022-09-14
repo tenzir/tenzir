@@ -111,9 +111,8 @@ Reshape operators have input and output type `Arrow`.
 | Operator    | Non-Blocking | Description
 | ----------- |:------------:| ------------------------------------------
 | `put`       | ✅           | Select a set of columns (projection)
+| `with`      | ✅           | Adds new fields with derived values
 | `drop`      | ✅           | Remove a set of columns (projection)
-| `replace`   | ✅           | Replaces field described by extractors with values
-| `extend`    | ✅           | Adds new fields with (initially fixed) values
 | `rename`    | ✅           | Renames schema meta data (type & fields)
 | `summarize` | ❌/✅[^1]    | Aggregate group and compute a summary function
 
