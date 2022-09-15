@@ -117,10 +117,10 @@ TEST(status endpoint) {
   run();
   CHECK_EQUAL(response->error_, caf::error{});
   CHECK(!response->body_.empty());
-  simdjson::ondemand::parser parser;
-  simdjson::ondemand::document doc;
   auto padded_string = simdjson::padded_string{response->body_};
-  auto error = parser.iterate(padded_string).get(doc);
+  simdjson::dom::parser parser;
+  simdjson::dom::element doc;
+  auto error = parser.parse(padded_string).get(doc);
   CHECK(!error);
 }
 
@@ -145,10 +145,10 @@ TEST(export endpoint) {
   run();
   CHECK_EQUAL(response->error_, caf::error{});
   CHECK(!response->body_.empty());
-  simdjson::ondemand::parser parser;
-  simdjson::ondemand::document doc;
   auto padded_string = simdjson::padded_string{response->body_};
-  auto error = parser.iterate(padded_string).get(doc);
+  simdjson::dom::parser parser;
+  simdjson::dom::element doc;
+  auto error = parser.parse(padded_string).get(doc);
   CHECK(!error);
 }
 
