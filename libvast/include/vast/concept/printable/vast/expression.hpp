@@ -28,7 +28,7 @@ struct expression_printer : printer_base<expression_printer> {
 
   template <class Iterator>
   struct visitor {
-    visitor(Iterator& out) : out_{out} {
+    explicit visitor(Iterator& out) : out_{out} {
     }
 
     bool operator()(caf::none_t) const {

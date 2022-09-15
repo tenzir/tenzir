@@ -331,7 +331,8 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
         = taxonomies{std::move(concepts), std::move(models)};
       return atom::ok_v;
     },
-    [self](atom::resolve, const expression& e) {
+    [self](atom::resolve,
+           const expression& e) -> caf::result<vast::expression> {
       return resolve(self->state.taxonomies, e, self->state.data);
     },
     [self](atom::set, accountant_actor accountant) {

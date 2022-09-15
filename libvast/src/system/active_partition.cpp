@@ -619,8 +619,8 @@ active_partition_actor::behavior_type active_partition(
                        });
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
-            auto* count = caf::get_if<query_context::count>(&query_context.cmd);
-            if (count && count->mode == query_context::count::estimate) {
+            auto* count = caf::get_if<count_query_context>(&query_context.cmd);
+            if (count && count->mode == count_query_context::estimate) {
               self->send(count->sink, rank(hits));
               rp.deliver(rank(hits));
             } else {

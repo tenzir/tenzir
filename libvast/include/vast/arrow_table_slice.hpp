@@ -15,7 +15,6 @@
 
 #include <arrow/array.h>
 #include <arrow/type_fwd.h>
-#include <caf/meta/type_name.hpp>
 
 #include <memory>
 

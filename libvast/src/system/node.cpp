@@ -781,7 +781,7 @@ node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
       } else if (msg->empty()) {
         VAST_VERBOSE("{} encountered empty invocation response", *self);
       } else {
-        msg->apply({
+        auto f = caf::message_handler{
           [&](caf::error& x) {
             result = std::move(x);
           },
@@ -795,7 +795,8 @@ node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
                                      "invalid spawn invocation response",
                                      std::move(x));
           },
-        });
+        };
+        f(*msg);
       }
       return result;
     },

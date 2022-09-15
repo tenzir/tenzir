@@ -132,8 +132,8 @@ handle_lookup(Actor& self, const vast::query_context& query_context,
     }
   }
   auto handle_query = detail::overload{
-    [&](const query_context::count& count) {
-      if (count.mode == query_context::count::estimate)
+    [&](const count_query_context& count) {
+      if (count.mode == count_query_context::estimate)
         die("logic error detected");
       for (size_t i = 0; i < slices.size(); ++i) {
         const auto& slice = slices.at(i);
@@ -143,7 +143,7 @@ handle_lookup(Actor& self, const vast::query_context& query_context,
         self->send(count.sink, result);
       }
     },
-    [&](const query_context::extract& extract) {
+    [&](const extract_query_context& extract) {
       VAST_ASSERT(slices.size() == checkers.size());
       for (size_t i = 0; i < slices.size(); ++i) {
         const auto& slice = slices[i];

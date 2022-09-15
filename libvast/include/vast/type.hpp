@@ -26,7 +26,6 @@
 #include <caf/detail/apply_args.hpp>
 #include <caf/detail/int_list.hpp>
 #include <caf/detail/type_list.hpp>
-#include <caf/meta/omittable_if_none.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/sum_type.hpp>
 #include <fmt/format.h>
