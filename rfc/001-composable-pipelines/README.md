@@ -331,7 +331,7 @@ We considered the following ideas that we do not want to pursue further.
 
 We may consider pipelines only in the context of executing queries at the
 server. After all, this is where we are going to implement them first. However,
-this limits us unnecessarily, given that pipeline can already be deployed a
+this limits us unnecessarily, given that pipeline can already be deployed at
 various points in VAST today. We must consider them as general building block
 that is easy to instantiate in various contexts.
 
