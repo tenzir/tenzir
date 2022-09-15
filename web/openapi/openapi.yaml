@@ -19,14 +19,14 @@ paths:
   /export:
     get:
       summary: Export data
-      description: Export data from VAST according to a query. The query must be a valid expression in the (VAST Query Language)[https://vast.io/docs/understand-vast/query-language].
+      description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand-vast/query-language)
       parameters:
         - in: query
-          name: query
+          name: expression
           schema:
             type: string
           required: true
-          description: The query to execute.
+          description: The query expression to execute.
           example: :ip in 10.42.0.0/16
         - in: query
           name: limit
@@ -66,6 +66,14 @@ paths:
     get:
       summary: Return current status
       description: Returns the current status of the whole node.
+      parameters:
+        - in: query
+          name: component
+          schema:
+            type: string
+          required: false
+          description: If specified, return the status for that component only.
+          example: index
       responses:
         200:
           description: OK.
