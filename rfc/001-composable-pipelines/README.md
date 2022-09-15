@@ -55,6 +55,52 @@ The core of this proposal introduces pipeline operators as function with input
 and output types. The following overview introduces the pipeline building
 blocks used throughout this proposal.
 
+A pipeline operator has an input and output type, e.g., `from<In, Out>` takes as
+input `In` and produces instances of `Out`. We consider the following valid
+types:
+
+1. `Void`: no input or output, to represent a side effect
+2. `Bytes`: blocks of raw byte sequences
+3. `Arrow`: table slices (i.e., record batches)
+
+The majority of computation happens in (3), as this is the representation of
+structured data that the user primarily wants to interact with. The other types
+help in building a composable system to onboard and offboard data from the Arrow
+data plane.
+
+The central pipeline invariant is that composed operators must have a valid
+combination of types. For example, this is a valid pipeline:
+
+```
+from<Void, Bytes> |
+read<Bytes, Arrow> |
+where<Arrow, Arrow>
+```
+
+The dataflow edges (`|`) in the middle produce valid type pairs:
+
+- `<*, Void>`
+- `<Bytes, Bytes>`
+- `<Arrow, *>`
+
+The `*` character signals the open end of the pipeline. By collapsing the types
+in the middle, the type pipeline of the pipeline becomes `<Void, Arrow>`. Since
+`Void` does not require input to run, this pipeline could be "kicked off".
+However, there is consumer at the other end, as the pipeline ends in `Arrow`.
+Adding another operator would make it complete, e.g.:
+
+```
+from<Void, Bytes> |
+read<Bytes, Arrow> |
+where<Arrow, Arrow> |
+parquet<Arrow, Void>
+```
+
+This results in a `<Void, Void>` pipeline that does not "leak".
+
+With this typing concept in mind, we can now take a closer look at the various
+operators we propose.
+
 #### I/O
 
 Input:
@@ -191,18 +237,6 @@ vast exec 'read zeek | write json'
 vast exec 'convert zeek json'
 ```
 
-## Implementation
-
-We could implement the entire pipeline with Arrow IPC streams in the "interior"
-operators, with only `from` and `to` taking raw input as byte stream. This
-may be too restrictive, preventing a wide array of flexible operators. Let's
-assume that input and output are dynamically typed. Operators must then define
-their input and output types, e.g., `from<In, Out>` takes as input `In` and
-produces instances of `Out`.
-
-A pipeline *executor* orchestrates the execution of a pipeline, connecting
-inputs and outputs from operators into a dataflow.
-
 ### Case Study: Matcher
 
 The `matcher` plugin is an analyzer plugin that operates on the input stream by
@@ -241,12 +275,53 @@ can make sense of it.
 A successful "match" wraps the corresponding event into a sighting envelope
 record.
 
+## Implementation
+
+The following aspects require attention during the implementation:
+
+- **Asynchronous Execution**: pipelines fundamentally support asynchronous
+  execution by sequentializing dataflow within an operator, and parallelizing it
+  across operators. This maps well to the actor model architecture of VAST.
+  Operators naturally map to actors.
+
+  As an optimization, an executor may place multiple operators in the same
+  sequential execution to avoid asynchronous context switches.
+
+- **Strong Typing**: pipelines are strongly typed with respect to their input
+  and output types. This enables static type checking when instantiating a
+  pipeline, e.g., an output type of `Arrow` with a downstream operator that has
+  `Bytes` as input type describes an invalid pipeline.
+
+  At the data plane, within Arrow, a "type" consists of a specific schema of a
+  record batch. We should consider a mechanism to perform cross-operator type
+  checking to simplify the implementation of individual operators.
+
+- **Push vs. Pull**: implementation of a dataflow system can follow push-based
+  execution where a passive pipeline only does work when some component feeds it
+  with data, which then triggers a cascade of executions from the opt. The
+  alternative is pull-based, where consumers request data at the sink. This
+  request triggers request for additional results upstream, interleaved with
+  computation to produce them. [Combining both models][shaikhha18] has shown
+  promising results.
+
+  Ideally we can find an API that allows for both execution modes so that we can
+  optimize execution incrementally, without locking ourselves into one corner.
+
+[shaikhha18]: https://doi.org/10.1017/s0956796818000102
+
 ## Alternatives
 
-We already agreed that we want to broaden VASTQL to include a pipeline syntax.
-The alternative would be doing just and make pipelines only applicable to
-queries. As this limits us unnecessarily, we consider pipelines as general
-building block that is deployable in various contexts.
+We considered the following ideas that we do not want to pursue further.
+
+### Pipelines are only a query language construct
+
+We may consider pipelines only in the context of executing queries at the
+server. After all, this is where we are going to implement them first. However,
+this limits us unnecessarily, given that pipeline can already be deployed a
+various points in VAST today. We must consider them as general building block
+that is easy to instantiate in various contexts.
+
+### Commands are pipeline operators
 
 To illustrate the composability of pipelines, we could make every VAST command
 an operator:
@@ -261,3 +336,10 @@ vast from s3://aws |
 
 As there is no clear underlying use case outside of testing and debugging, we
 are not going to discuss this idea in more depth.
+
+### Statically typed pipelines
+
+We could implement the entire pipeline with Arrow IPC streams in the "interior"
+operators, with only `from` and `to` taking raw input as byte stream. Such
+static typing may be too restrictive, preventing a wide array of operators.
+We therefore assume that input and output are dynamically typed.
