@@ -141,7 +141,7 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
               writer.write(slice);
             else
               writer.write(truncate(slice, remaining));
-            self->state.events_ += std::min(slice.rows(), remaining);
+            self->state.events_ += std::min<size_t>(slice.rows(), remaining);
             // FIXME: avoid copy and preserve newlines
             auto raw_string
               = static_cast<std::stringstream&>(writer.out()).str();

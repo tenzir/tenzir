@@ -37,7 +37,7 @@
 
 // Needed to forward incoming requests to the request_dispatcher
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
-  std::shared_ptr<vast::plugins::web::restinio_response>);
+  std::shared_ptr<vast::plugins::web::restinio_response>)
 
 namespace vast::plugins::web {
 
@@ -223,7 +223,6 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       ec::invalid_configuration,
       fmt::format("invalid server configuration: {}", server_config.error())));
   }
-  VAST_INFO("valid config"); // FIXME: remove
   // Create necessary actors.
   auto node_opt = vast::system::spawn_or_connect_to_node(
     self, inv.options, content(system.config()));
