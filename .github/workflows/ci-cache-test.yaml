@@ -90,6 +90,8 @@ jobs:
             VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
       # TODO: include dockerhub login here
       # - name: Login to DockerHub
       - name: Build and Push Dependencies Docker Image
