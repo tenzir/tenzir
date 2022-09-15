@@ -139,7 +139,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 } // namespace
 
-FIXTURE_SCOPE(filesystem_tests, fixture)
+FIXTURE_SCOPE(feather_tests, fixture)
 
 TEST(feather store roundtrip) {
   auto xs = std::vector<vast::table_slice>{suricata_dns_log[0]};
