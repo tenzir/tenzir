@@ -75,6 +75,7 @@ jobs:
             git \
             gnupg2 \
             jq \
+            libasio-dev \
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \
@@ -248,6 +249,7 @@ jobs:
             git \
             gnupg2 gnupg-agent \
             jq \
+            libasio-dev \
             libcaf-dev \
             libflatbuffers-dev \
             libfmt-dev \
@@ -566,7 +568,7 @@ jobs:
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
-            -DVAST_PLUGINS:STRING="plugins/*" \
+            -DVAST_PLUGINS:STRING="plugins/broker;plugins/sigma;plugins/parquet;plugins/pcap" \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 
