@@ -336,10 +336,3 @@ vast from s3://aws |
 
 As there is no clear underlying use case outside of testing and debugging, we
 are not going to discuss this idea in more depth.
-
-### Statically typed pipelines
-
-We could implement the entire pipeline with Arrow IPC streams in the "interior"
-operators, with only `from` and `to` taking raw input as byte stream. Such
-static typing may be too restrictive, preventing a wide array of operators.
-We therefore assume that input and output are dynamically typed.
