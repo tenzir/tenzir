@@ -1,0 +1,157 @@
+name: ci-cache-test
+on:
+  workflow_dispatch:
+    inputs:
+      arguments:
+        description: "Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`"
+        required: false
+        default: ""
+  push:
+    branches:
+      - master
+      - v*
+  pull_request:
+    types:
+      - opened
+      - synchronize
+  release:
+    types:
+      - published
+
+# This section defines how the VAST action is enqueued.
+concurrency:
+  # Wait for in-progress runs of this action for the same branch to finish
+  # before starting, ensuring that a branch is only built once at a time. This
+  # has a double-purpose: It ensures that caches are always able to pick up work
+  # from previous builds of the same branch, and it rate-limits the CI to ensure
+  # it's running smoothly for all users.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel all in-progress runs of this action for the same pull request.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CCACHE_MAXSIZE: "5G"
+
+jobs:
+  determine-version:
+    name: Determine Version
+    runs-on: ubuntu-20.04
+    outputs:
+      build-version: ${{ steps.determine-version.outputs.build-version }}
+      build-version-short: ${{ steps.determine-version.outputs.build-version-short }}
+      release-version: ${{ steps.determine-version.outputs.release-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Fetch Tags
+        run: git fetch origin +refs/tags/*:refs/tags/*
+      - name: Determine Version
+        id: determine-version
+        run: |
+          build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
+          build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
+          release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
+          echo "::set-output name=build-version::${build_version}"
+          echo "::set-output name=build-version-short::${build_version_short}"
+          echo "::set-output name=release-version::${release_version}"
+
+  build-docker:
+    needs:
+      - determine-version
+    if: github.event_name != 'workflow_dispatch'
+    name: Docker
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+      # We explicitly disable SSE instructions here: The CI runners support it,
+      # but we want to support our prebuilt Docker images on older machines as
+      # well.
+      VAST_BUILD_OPTIONS: >-
+        -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
+        -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # This will fetch all tags and all history for all branches
+          fetch-depth: 0
+          # Existing checkout step can be utilized for submodules
+          submodules: 'recursive'
+      - name: Set VAST and Plugin Versions
+        run: |
+          # Since the Docker build does not have the Git context, we set
+          # version fallbacks manually here.
+          vast_tag="${{ needs.determine-version.outputs.build-version }}"
+          VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -DVAST_VERSION_TAG:STRING=${vast_tag}"
+          for plugin in $(ls plugins); do
+            var="VAST_PLUGIN_${plugin^^}_REVISION"
+            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "plugins/${plugin}")"
+            VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
+          done
+          echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
+      # TODO: include dockerhub login here
+      # - name: Login to DockerHub
+      - name: Build and Push Dependencies Docker Image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          # TODO: enable push functionality based on github.event
+          # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+          tags:
+            - tenzir/vast-dev:latest
+            # TODO: To be only included on "$GITHUB_EVENT_NAME" == "release"
+            - ${{ needs.determine-version.outputs.release-version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+          target: dependencies
+      - name: Build and Push Development Docker Image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          # TODO: enable push functionality based on github.event
+          # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+          tags:
+            - tenzir/vast-dev:latest
+            # TODO: To be only included on "$GITHUB_EVENT_NAME" == "release"
+            - ${{ needs.determine-version.outputs.release-version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+          target: development
+      - name: Build and Push Production Docker Image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          # TODO: enable push functionality based on github.event
+          # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+          tags:
+            - tenzir/vast-dev:latest
+            # TODO: To be only included on "$GITHUB_EVENT_NAME" == "release"
+            - ${{ needs.determine-version.outputs.release-version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+          target: production
+          outputs: type=docker,dest=/tmp/vast-latest.tar
+      - name: Upload VAST Latest Image
+        uses: actions/upload-artifact@v3
+        with:
+          name: vast-latest.tar
+          path: /tmp/vast-latest.tar
+  use:
+    runs-on: ubuntu-20.04
+    needs: build-docker
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Download Latest Vast Image
+        uses: actions/download-artifact@v3
+        with:
+          name: vast-latest.tar
+          path: /tmp
+      - name: Load Latest VAST Image
+        run: |
+          docker load --input /tmp/vast-latest.tar
+          docker image ls -a
