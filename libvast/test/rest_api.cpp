@@ -10,7 +10,7 @@
 
 #include <vast/plugin.hpp>
 #include <vast/system/node.hpp>
-#include <vast/test/fixtures/actor_system_and_events.hpp>
+#include <vast/test/fixtures/node.hpp>
 #include <vast/test/test.hpp>
 
 #include <regex>
@@ -37,13 +37,12 @@ std::string method_to_string(const vast::http_method method) {
   return result;
 }
 
-struct fixture : public fixtures::deterministic_actor_system_and_events {
-  fixture()
-    : fixtures::deterministic_actor_system_and_events(
-      VAST_PP_STRINGIFY(SUITE)) {
+struct fixture : public fixtures::node {
+  fixture() : fixtures::node(VAST_PP_STRINGIFY(SUITE)) {
   }
 
-  vast::system::node_actor node;
+  ~fixture() override {
+  }
 };
 
 class test_response final : public vast::http_response {
@@ -90,7 +89,8 @@ TEST(OpenAPI specs) {
       CHECK_EQUAL(endpoint.version, version);
       REQUIRE(caf::holds_alternative<vast::record>(value));
       auto const& as_record = caf::get<vast::record>(value);
-      CHECK(as_record.contains(method_to_string(endpoint.method)));
+      auto method = method_to_string(endpoint.method);
+      CHECK(as_record.contains(method));
       // TODO: Implement a a more convenient accessor API into `vast::data`,
       // so we can also check things like number of parameters and content type.
     }
@@ -106,10 +106,10 @@ TEST(status endpoint) {
   auto endpoints = plugin->rest_endpoints();
   REQUIRE_EQUAL(endpoints.size(), 1ull);
   auto const& status_endpoint = endpoints[0];
-  auto handler = plugin->handler(self->system(), node);
+  auto handler = plugin->handler(self->system(), test_node);
   auto response = std::make_shared<test_response>();
   auto request = vast::http_request{
-    .params = {},
+    .params = {{"component", "system"}},
     .response = response,
   };
   self->send(handler, vast::atom::http_request_v, status_endpoint.endpoint_id,
@@ -124,14 +124,14 @@ TEST(status endpoint) {
   CHECK(!error);
 }
 
-TEST(export endoint) {
+TEST(export endpoint) {
   auto const* plugin
     = vast::plugins::find<vast::rest_endpoint_plugin>("api_export");
   REQUIRE(plugin);
   auto endpoints = plugin->rest_endpoints();
   REQUIRE_EQUAL(endpoints.size(), 1ull);
   auto const& export_endpoint = endpoints[0];
-  auto handler = plugin->handler(self->system(), node);
+  auto handler = plugin->handler(self->system(), test_node);
   auto response = std::make_shared<test_response>();
   auto request = vast::http_request{
     .params = {
