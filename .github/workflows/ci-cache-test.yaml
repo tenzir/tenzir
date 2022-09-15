@@ -128,7 +128,7 @@ jobs:
           # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
           # TODO: add ${{ needs.determine-version.outputs.release-version }} tag based on RELEASE
           tags: |
-            tenzir/vast-dev:latest
+            tenzir/vast:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: VAST_BUILD_OPTIONS=${{ env.VAST_BUILD_OPTIONS }}
