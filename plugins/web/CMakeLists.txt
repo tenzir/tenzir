@@ -24,9 +24,10 @@ VASTRegisterPlugin(
   INCLUDE_DIRECTORIES include)
 
 find_package(fmt REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 find_package(restinio REQUIRED)
-target_link_libraries(web PRIVATE restinio::restinio)
+target_link_libraries(web PRIVATE restinio::restinio OpenSSL::SSL OpenSSL::Crypto)
 
 # Compile the web FlatBuffers schemas.
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
