@@ -8,19 +8,19 @@
 
 #define SUITE rest_authentication
 
-#include "rest/authenticator.hpp"
+#include "web/authenticator.hpp"
 
 #include <vast/test/test.hpp>
 
 TEST(token validation) {
-  vast::plugins::rest::authenticator_state state;
+  vast::plugins::web::authenticator_state state;
   auto token = state.generate();
   REQUIRE_NOERROR(token);
   CHECK_EQUAL(state.authenticate(*token), true);
   CHECK_EQUAL(state.authenticate("Shub-Niggurath"), false);
   auto serialized_state = state.save();
   REQUIRE_NOERROR(serialized_state);
-  vast::plugins::rest::authenticator_state recovered_state;
+  vast::plugins::web::authenticator_state recovered_state;
   recovered_state.initialize_from(*serialized_state);
   CHECK_EQUAL(state.authenticate(*token), true);
   CHECK_EQUAL(state.authenticate("Yog-Sothoth"), false);

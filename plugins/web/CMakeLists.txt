@@ -1,40 +1,40 @@
 cmake_minimum_required(VERSION 3.18...3.24 FATAL_ERROR)
 
 project(
-  rest
+  web
   VERSION 1.0.0
   DESCRIPTION "REST plugin for VAST"
   LANGUAGES CXX)
 
 include(CTest)
 
-file(GLOB_RECURSE rest_sources CONFIGURE_DEPENDS
+file(GLOB_RECURSE web_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp")
+     "${CMAKE_CURRENT_SOURCE_DIR}/include/web/*.hpp")
 
-file(GLOB_RECURSE rest_tests CONFIGURE_DEPENDS
+file(GLOB_RECURSE web_tests CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
 
 find_package(VAST REQUIRED)
 VASTRegisterPlugin(
-  TARGET rest
+  TARGET web
   ENTRYPOINT src/plugin.cpp
-  SOURCES ${rest_sources}
-  TEST_SOURCES ${rest_tests}
+  SOURCES ${web_sources}
+  TEST_SOURCES ${web_tests}
   INCLUDE_DIRECTORIES include)
 
 find_package(fmt REQUIRED)
 
 find_package(restinio REQUIRED)
-target_link_libraries(rest PRIVATE restinio::restinio)
+target_link_libraries(web PRIVATE restinio::restinio)
 
-# Compile the rest FlatBuffers schemas.
+# Compile the web FlatBuffers schemas.
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/fbs/*.fbs")
 
 VASTCompileFlatBuffers(
-  TARGET rest-fbs
+  TARGET web-fbs
   SCHEMAS ${flatbuffers_schemas}
-  INCLUDE_DIRECTORY "rest/fbs")
+  INCLUDE_DIRECTORY "web/fbs")
 
-target_link_libraries(rest PUBLIC rest-fbs)
+target_link_libraries(web PUBLIC web-fbs)

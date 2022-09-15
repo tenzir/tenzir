@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "rest/server_command.hpp"
+#include "web/server_command.hpp"
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 auto specification_command(const vast::invocation&, caf::actor_system&)
   -> caf::message {
@@ -56,4 +56,4 @@ on the command-line using the `vast rest generate-token` command.)_"},
   return {};
 }
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

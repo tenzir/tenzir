@@ -12,7 +12,7 @@
 
 #include <string>
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 // The configuration that can be set by the user via
 // YAML or command-line options.
@@ -79,4 +79,4 @@ public:
 /// Validate that the user-provided configuration makes sense.
 caf::expected<server_config> convert_and_validate(configuration);
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <rest/configuration.hpp>
+#include <web/configuration.hpp>
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 static caf::expected<enum configuration::server_mode>
 to_server_mode(const std::string& str) {
@@ -78,4 +78,4 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   return result;
 }
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

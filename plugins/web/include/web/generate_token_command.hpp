@@ -11,11 +11,11 @@
 #include <vast/command.hpp>
 
 #include <caf/actor_system.hpp>
-#include <rest/fwd.hpp>
+#include <web/fwd.hpp>
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
-auto server_command(const vast::invocation&, caf::actor_system&)
+auto generate_token_command(const vast::invocation&, caf::actor_system&)
   -> caf::message;
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

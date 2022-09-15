@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "rest/authenticator.hpp"
+#include "web/authenticator.hpp"
 
 #include <vast/detail/base64.hpp>
 
@@ -16,7 +16,7 @@
 
 #include <array>
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 caf::error authenticator_state::initialize_from(chunk_ptr chunk) {
   // We always verify here since most fields are required, so we
@@ -115,7 +115,7 @@ caf::expected<authenticator_actor>
 get_authenticator(caf::scoped_actor& self, system::node_actor node,
                   caf::duration timeout) {
   auto maybe_authenticator = caf::expected<caf::actor>{caf::no_error};
-  self->request(node, timeout, atom::get_v, atom::type_v, "rest")
+  self->request(node, timeout, atom::get_v, atom::type_v, "web")
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {
@@ -123,7 +123,7 @@ get_authenticator(caf::scoped_actor& self, system::node_actor node,
             = caf::make_error(ec::logic_error,
                               "authenticator is not in component "
                               "registry; the server process may be "
-                              "running without the matcher plugin");
+                              "running without the web plugin");
         } else {
           // There should always only be one AUTHENTICATOR at a given time.
           VAST_ASSERT_CHEAP(actors.size() == 1);
@@ -143,7 +143,7 @@ get_authenticator(caf::scoped_actor& self, system::node_actor node,
 authenticator_actor::behavior_type
 authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
               system::filesystem_actor fs) {
-  self->state.path_ = std::filesystem::path{"plugins/rest/server_state.fb.svs"};
+  self->state.path_ = std::filesystem::path{"plugins/web/server_state.fb.svs"};
   self->state.filesystem_ = fs;
   self->request(fs, caf::infinite, atom::read_v, self->state.path_)
     .await(
@@ -180,4 +180,4 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
   };
 }
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

@@ -15,7 +15,7 @@
 #include <restinio/message_builders.hpp>
 #include <restinio/request_handler.hpp>
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 // Note: If desired, `restinio` provides users to embed arbitrary `extra_data`
 // into each request.
@@ -47,4 +47,4 @@ private:
   size_t body_size_ = {};
 };
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

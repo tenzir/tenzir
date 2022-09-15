@@ -8,7 +8,7 @@
 
 #define SUITE rest_configuration
 
-#include "rest/configuration.hpp"
+#include "web/configuration.hpp"
 
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/parseable/to.hpp>
@@ -33,13 +33,13 @@ vast::record extract_config(const std::string& config) {
 
 TEST(dev mode config validation) {
   auto record = extract_config(R"_(
-rest:
+web:
   bind: 127.0.0.1
   port: 8000
   mode: dev
   )_");
-  auto config = vast::plugins::rest::configuration{};
-  CHECK_EQUAL(validate(record, vast::plugins::rest::configuration::layout(),
+  auto config = vast::plugins::web::configuration{};
+  CHECK_EQUAL(validate(record, vast::plugins::web::configuration::layout(),
                        vast::validate::strict),
               caf::error{});
   REQUIRE_EQUAL(convert(record, config), caf::error{});
@@ -55,35 +55,35 @@ rest:
   CHECK_EQUAL(server_config->require_clientcerts, false);
   CHECK_EQUAL(server_config->require_authentication, false);
   auto invalid_data = extract_config(R"_(
-rest:
+web:
   # Attempting to bind to non-local IP
   bind: 0.0.0.0
   port: 8000
   mode: dev
   )_");
-  auto invalid_config = vast::plugins::rest::configuration{};
+  auto invalid_config = vast::plugins::web::configuration{};
   CHECK_ERROR(convert(invalid_data, invalid_config));
   auto invalid_data2 = extract_config(R"_(
-rest:
+web:
   # Invalid mode
   mode: depeche
   bind: 127.0.0.1
   port: 8000
   )_");
-  auto invalid_config2 = vast::plugins::rest::configuration{};
+  auto invalid_config2 = vast::plugins::web::configuration{};
   CHECK_ERROR(convert(invalid_data2, invalid_config2));
 }
 
 TEST(tls mode config validation) {
   auto data = extract_config(R"_(
-rest:
+web:
   bind: 0.0.0.0
   port: 443
   mode: server
   certfile: server.pem
   keyfile: server.key
   )_");
-  auto config = vast::plugins::rest::configuration{};
+  auto config = vast::plugins::web::configuration{};
   REQUIRE_EQUAL(convert(data, config), caf::error{});
   CHECK_EQUAL(config.bind_address, "0.0.0.0");
   CHECK_EQUAL(config.port, 443);
@@ -91,13 +91,13 @@ rest:
   // TODO: Create temporary files for `server.pem` and `server.key`
   // so we can check that `convert_and_validate()` works.
   auto invalid_data = extract_config(R"_(
-rest:
+web:
   bind: 0.0.0.0
   port: 443
   mode: server
   certfile: server.pem
   # Missing 'keyfile'
   )_");
-  auto invalid_config = vast::plugins::rest::configuration{};
+  auto invalid_config = vast::plugins::web::configuration{};
   CHECK_ERROR(convert(invalid_data, invalid_config));
 }

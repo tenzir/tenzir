@@ -4,7 +4,7 @@ fixtures:
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', '--commands="rest server --mode=dev --port=42025"'],
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', '--commands="web server --mode=dev --port=42025"'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file=self.config_file)
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
@@ -15,7 +15,7 @@ fixtures:
   AuthenticatedServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', '--commands="rest server --mode=upstream --port=42025"'],
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', '--commands="web server --mode=upstream --port=42025"'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file=self.config_file)
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
@@ -26,7 +26,7 @@ fixtures:
   TlsServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', f'--commands="rest server --mode=server --certfile={SET_DIR}/data/server.pem --keyfile={SET_DIR}/data/server.key --port=42025"'],
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', f'--commands="web server --mode=server --certfile={SET_DIR}/data/server.pem --keyfile={SET_DIR}/data/server.key --port=42025"'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file=self.config_file)
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
@@ -62,7 +62,7 @@ tests:
         input: data/conn.log.gz
       - command: curl http://127.0.0.1:42025/api/v0/status
         prepend_vast: false
-      - command: rest generate-token
+      - command: web generate-token
         transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
       - command: curl -H @token.txt http://127.0.0.1:42025/api/v0/status
         transformation: jq .catalog
@@ -80,7 +80,7 @@ tests:
       # Explicitly trust the self-signed server certificate with `--cacert`
       - command: curl --cacert @./data/client.pem https://127.0.0.1:42025/api/v0/status
         prepend_vast: false
-      - command: rest generate-token
+      - command: web generate-token
         transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
       - command: curl -H @token.txt --cacert @./data/client.pem https://127.0.0.1:42025/api/v0/status
         transformation: jq .catalog

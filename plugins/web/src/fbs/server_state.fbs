@@ -1,5 +1,5 @@
 
-namespace vast.plugins.rest.fbs.server_state;
+namespace vast.plugins.web.fbs.server_state;
 
 table AuthenticationTokenDescription {
 	name: string (required);
@@ -16,7 +16,7 @@ union ServerState {
   v0,
 }
 
-namespace vast.plugins.rest.fbs;
+namespace vast.plugins.web.fbs;
 
 table ServerState {
   server_state: server_state.ServerState;

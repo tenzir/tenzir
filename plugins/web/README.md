@@ -43,7 +43,6 @@ This is suitable for developers who work on VAST and want to test the
 API on their local machines. In this mode, VAST accepts plain HTTP connections
 and ignores all authentication tokens.
 
-
 ### Server Mode
 
 This is suitable where VAST is bound to an external network interface.
@@ -51,7 +50,6 @@ It will accept only HTTPS connections and require valid authentication
 tokens for any authenticated endpoints.
 
 This is the default mode.
-
 
 ### TLS Upstream Mode
 

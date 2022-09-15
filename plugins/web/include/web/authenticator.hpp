@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "rest/fwd.hpp"
+#include "web/fwd.hpp"
 
-#include "rest/fbs/server_state.hpp"
+#include "web/fbs/server_state.hpp"
 
 #include <vast/flatbuffer.hpp>
 #include <vast/system/actors.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 struct token_description {
   std::string name;
@@ -62,4 +62,4 @@ authenticator_actor::behavior_type
 authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
               system::filesystem_actor fs);
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

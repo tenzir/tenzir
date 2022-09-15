@@ -336,7 +336,7 @@ jobs:
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
-            -DVAST_PLUGINS:STRING="plugins/pcap;plugins/rest" \
+            -DVAST_PLUGINS:STRING="plugins/pcap;plugins/web" \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 

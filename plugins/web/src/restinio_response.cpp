@@ -6,9 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "rest/restinio_response.hpp"
+#include "web/restinio_response.hpp"
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 static std::string content_type_to_string(vast::http_content_type type) {
   switch (type) {
@@ -53,4 +53,4 @@ auto restinio_response::request() const -> const request_handle_t& {
   return request_;
 }
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

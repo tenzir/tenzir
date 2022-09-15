@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "rest/server_command.hpp"
+#include "web/server_command.hpp"
 
-#include "rest/authenticator.hpp"
-#include "rest/configuration.hpp"
-#include "rest/restinio_response.hpp"
+#include "web/authenticator.hpp"
+#include "web/configuration.hpp"
+#include "web/restinio_response.hpp"
 
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/parseable/to.hpp>
@@ -37,9 +37,9 @@
 
 // Needed to forward incoming requests to the request_dispatcher
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
-  std::shared_ptr<vast::plugins::rest::restinio_response>);
+  std::shared_ptr<vast::plugins::web::restinio_response>);
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 using router_t = restinio::router::express_router_t<>;
 
@@ -65,7 +65,7 @@ restinio::http_method_id_t to_restinio_method(vast::http_method method) {
 struct request_dispatcher_state {
   request_dispatcher_state() = default;
 
-  rest::server_config server_config;
+  web::server_config server_config;
   authenticator_actor authenticator;
 };
 
@@ -193,7 +193,7 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
 auto server_command(const vast::invocation& inv, caf::actor_system& system)
   -> caf::message {
   auto self = caf::scoped_actor{system};
-  auto rest_options = caf::get_or(inv.options, "rest", caf::settings{});
+  auto web_options = caf::get_or(inv.options, "web", caf::settings{});
   auto data = vast::data{};
   // TODO: Implement a single `convert_and_validate()` function for going
   // from caf::settings -> record_type
@@ -201,17 +201,17 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     return caf::make_message(caf::make_error(
       ec::invalid_argument,
       fmt::format("unexpected positional args: {}", inv.arguments)));
-  bool success = convert(rest_options, data);
+  bool success = convert(web_options, data);
   if (!success)
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt parse options"));
   auto invalid
-    = vast::validate(data, vast::plugins::rest::configuration::layout(),
+    = vast::validate(data, vast::plugins::web::configuration::layout(),
                      vast::validate::permissive);
   if (invalid)
     return caf::make_message(caf::make_error(
       ec::invalid_argument, fmt::format("invalid options: {}", invalid)));
-  rest::configuration config;
+  web::configuration config;
   caf::error error = convert(data, config);
   if (error)
     return caf::make_message(
@@ -327,4 +327,4 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   return {};
 }
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web

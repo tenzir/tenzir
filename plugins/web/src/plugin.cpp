@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "rest/authenticator.hpp"
-#include "rest/configuration.hpp"
-#include "rest/generate_token_command.hpp"
-#include "rest/server_command.hpp"
-#include "rest/specification_command.hpp"
+#include "web/authenticator.hpp"
+#include "web/configuration.hpp"
+#include "web/generate_token_command.hpp"
+#include "web/server_command.hpp"
+#include "web/specification_command.hpp"
 
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -25,7 +25,7 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
-namespace vast::plugins::rest {
+namespace vast::plugins::web {
 
 /// The API plugin.
 class plugin final : public virtual command_plugin,
@@ -38,7 +38,7 @@ class plugin final : public virtual command_plugin,
 
   /// Returns the unique name of the plugin.
   [[nodiscard]] const char* name() const override {
-    return "rest";
+    return "web";
   }
 
   system::component_plugin_actor
@@ -51,10 +51,10 @@ class plugin final : public virtual command_plugin,
   [[nodiscard]] std::pair<std::unique_ptr<command>, command::factory>
   make_command() const override {
     auto rest_command = std::make_unique<command>(
-      "rest", "rest api", command::opts("?plugins.rest"));
+      "web", "http server", command::opts("?plugins.web"));
     rest_command->add_subcommand(
       "server", "start a web server",
-      command::opts("?rest")
+      command::opts("?web")
         .add<bool>("help,h?", "prints the help text")
         .add<std::string>("mode", "Server mode. One of "
                                   "dev,server,upstream,mtls.")
@@ -63,17 +63,17 @@ class plugin final : public virtual command_plugin,
         .add<std::string>("bind", "listen address of server")
         .add<uint16_t>("port", "listen port"));
     rest_command->add_subcommand("generate-token", "generate auth token",
-                                 command::opts("?rest.token"));
-    rest_command->add_subcommand("specification", "print openAPI spec",
-                                 command::opts("?rest.spec"));
+                                 command::opts("?web.token"));
+    rest_command->add_subcommand("openapi", "print openAPI spec",
+                                 command::opts("?web.spec"));
     auto factory = command::factory{};
-    factory["rest server"] = rest::server_command;
-    factory["rest generate-token"] = rest::generate_token_command;
-    factory["rest specification"] = rest::specification_command;
+    factory["web server"] = web::server_command;
+    factory["web generate-token"] = web::generate_token_command;
+    factory["web openapi"] = web::specification_command;
     return {std::move(rest_command), std::move(factory)};
   }
 };
 
-} // namespace vast::plugins::rest
+} // namespace vast::plugins::web
 
-VAST_REGISTER_PLUGIN(vast::plugins::rest::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::web::plugin)
