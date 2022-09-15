@@ -123,6 +123,9 @@ struct query_context {
   /// The query expression.
   expression expr = {};
 
+  /// The initial taste size.
+  std::optional<uint32_t> taste = std::nullopt;
+
   /// The event ids to restrict the query evaluation to, if set.
   vast::ids ids = {};
 

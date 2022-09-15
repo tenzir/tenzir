@@ -1543,8 +1543,10 @@ index(index_actor::stateful_pointer<index_state> self,
               return;
             }
             auto num_candidates = detail::narrow<uint32_t>(candidates.size());
-            auto scheduled
-              = std::min(num_candidates, self->state.taste_partitions);
+            auto taste_size = query_context.taste
+                                ? *query_context.taste
+                                : self->state.taste_partitions;
+            auto scheduled = std::min(num_candidates, taste_size);
             if (auto err = self->state.pending_queries.insert(
                   query_state{.query_context = query_context,
                               .client = client,
