@@ -99,7 +99,7 @@ jobs:
           # TODO: enable push functionality based on github.event
           # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
           tags:
-            - tenzir/vast-dev:latest
+            - tenzir/vast-deps:latest
             # TODO: To be only included on "$GITHUB_EVENT_NAME" == "release"
             - ${{ needs.determine-version.outputs.release-version }}
           cache-from: type=gha
