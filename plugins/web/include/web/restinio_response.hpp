@@ -41,11 +41,11 @@ public:
 
   void abort(uint16_t error_code, std::string message) override;
 
-  // Get a handle to the original request.
-  [[nodiscard]] const request_handle_t& request() const;
-
   // Add a custom response header.
   void add_header(std::string field, std::string value);
+
+  // Get a handle to the original request.
+  [[nodiscard]] const request_handle_t& request() const;
 
   // Get a handle to the original route parameters.
   [[nodiscard]] const route_params_t& route_params() const;
