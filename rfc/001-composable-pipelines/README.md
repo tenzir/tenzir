@@ -206,7 +206,8 @@ for `import`.)
 Additionally, we add a new command `exec` that accepts a "pure" pipeline, i.e.,
 just a composition of operators. Execution takes place locally, without any
 implicit remote communication. For the remainder of the discussion, we focus
-on `exec` only.
+on `exec` only. All pipelines executed by `exec` must have input and output type
+`Void`, because they represent a complete dataflow instance that must not leak.
 
 ### Local Execution
 
