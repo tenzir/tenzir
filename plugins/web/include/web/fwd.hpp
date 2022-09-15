@@ -9,7 +9,6 @@
 #pragma once
 
 #include <vast/fwd.hpp>
-// #include <vast/http_api.hpp>
 #include <vast/plugin.hpp>
 #include <vast/system/actors.hpp>
 
@@ -24,15 +23,15 @@ using token_t = std::string;
 
 } // namespace vast::plugins::web
 
-CAF_BEGIN_TYPE_ID_BLOCK(vast_rest_plugin_types, 1500)
-  CAF_ADD_TYPE_ID(vast_rest_plugin_types,
+CAF_BEGIN_TYPE_ID_BLOCK(vast_web_plugin_types, 1500)
+  CAF_ADD_TYPE_ID(vast_web_plugin_types,
                   (vast::plugins::web::restinio_response))
-  CAF_ADD_TYPE_ID(vast_rest_plugin_types,
+  CAF_ADD_TYPE_ID(vast_web_plugin_types,
                   (std::shared_ptr<vast::plugins::web::restinio_response>))
 
-  CAF_ADD_ATOM(vast_rest_plugin_types, vast::atom, generate, "generate")
-  CAF_ADD_ATOM(vast_rest_plugin_types, vast::atom, validate, "validate")
-CAF_END_TYPE_ID_BLOCK(vast_rest_plugin_types)
+  CAF_ADD_ATOM(vast_web_plugin_types, vast::atom, generate, "generate")
+  CAF_ADD_ATOM(vast_web_plugin_types, vast::atom, validate, "validate")
+CAF_END_TYPE_ID_BLOCK(vast_web_plugin_types)
 
 namespace vast::plugins::web {
 
@@ -44,9 +43,9 @@ using authenticator_actor = system::typed_actor_fwd<
 
 } // namespace vast::plugins::web
 
-CAF_BEGIN_TYPE_ID_BLOCK(vast_rest_plugin_actors, vast_rest_plugin_types::end)
-  CAF_ADD_TYPE_ID(vast_rest_plugin_actors,
+CAF_BEGIN_TYPE_ID_BLOCK(vast_web_plugin_actors, vast_web_plugin_types::end)
+  CAF_ADD_TYPE_ID(vast_web_plugin_actors,
                   (vast::plugins::web::authenticator_actor))
-CAF_END_TYPE_ID_BLOCK(vast_rest_plugin_actors)
+CAF_END_TYPE_ID_BLOCK(vast_web_plugin_actors)
 
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::plugins::web::restinio_response);
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::plugins::web::restinio_response)
