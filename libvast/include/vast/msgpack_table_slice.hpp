@@ -12,8 +12,6 @@
 
 #include "vast/table_slice.hpp"
 
-#include <caf/meta/type_name.hpp>
-
 namespace vast {
 
 /// Additional state needed for the implementation of MessagePack-encoded table

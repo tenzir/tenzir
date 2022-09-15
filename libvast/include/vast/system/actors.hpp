@@ -377,7 +377,7 @@ using partition_transformer_actor = typed_actor_fwd<
   caf::replies_to<atom::persist>::with<std::vector<augmented_partition_synopsis>>,
   // INTERNAL: Continuation handler for `atom::done`.
   caf::reacts_to<atom::internal, atom::resume, atom::done>>
-  // query_context::extract API
+  // extract_query_context API
   ::extend_with<receiver_actor<table_slice>>
   // Receive a completion signal for the input stream.
   ::extend_with<receiver_actor<atom::done>>::unwrap;

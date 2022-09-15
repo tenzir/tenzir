@@ -49,8 +49,8 @@ handle_query(const auto& self, const query_context& query_context) {
                                        *self, query_context.expr, schema));
   auto rp = self->template make_response_promise<uint64_t>();
   auto f = detail::overload{
-    [&](const query_context::count& count) -> void {
-      if (count.mode == query_context::count::estimate) {
+    [&](const count_query_context& count) -> void {
+      if (count.mode == count_query_context::estimate) {
         rp.deliver(caf::make_error(ec::logic_error, "estimate counts must "
                                                     "not evaluate "
                                                     "expressions"));
@@ -119,7 +119,7 @@ handle_query(const auto& self, const query_context& query_context) {
                                            *self, expr, std::move(err))));
           });
     },
-    [&](const query_context::extract& extract) -> void {
+    [&](const extract_query_context& extract) -> void {
       self->monitor(extract.sink);
       auto [state, inserted] = self->state.running_extractions.try_emplace(
         query_context.id, extract_query_state{});

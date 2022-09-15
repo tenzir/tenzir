@@ -18,9 +18,6 @@
 #include "vast/fbs/coder.hpp"
 #include "vast/operator.hpp"
 
-#include <caf/meta/load_callback.hpp>
-#include <caf/meta/save_callback.hpp>
-
 #include <algorithm>
 #include <array>
 #include <limits>

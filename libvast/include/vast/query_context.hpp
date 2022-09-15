@@ -18,42 +18,42 @@
 
 namespace vast {
 
+/// A count query to collect the number of hits for the expression.
+struct count_query_context {
+  enum mode { estimate, exact };
+  system::receiver_actor<uint64_t> sink;
+  enum mode mode = {};
+
+  friend bool
+  operator==(const count_query_context& lhs, const count_query_context& rhs) {
+    return lhs.sink == rhs.sink && lhs.mode == rhs.mode;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, count_query_context& x) {
+    return f(caf::meta::type_name("vast.query.count"), x.sink, x.mode);
+  }
+};
+
+/// An extract query to retrieve the events that match the expression.
+struct extract_query_context {
+  system::receiver_actor<table_slice> sink;
+
+  friend bool operator==(const extract_query_context& lhs,
+                         const extract_query_context& rhs) {
+    return lhs.sink == rhs.sink;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, extract_query_context& x) {
+    return f(caf::meta::type_name("vast.query.extract"), x.sink);
+  }
+};
+
 /// A wrapper for an expression related command.
 struct query_context {
-  // -- nested type definitions ------------------------------------------------
-
-  /// A count query to collect the number of hits for the expression.
-  struct count {
-    enum mode { estimate, exact };
-    system::receiver_actor<uint64_t> sink;
-    enum mode mode = {};
-
-    friend bool operator==(const count& lhs, const count& rhs) {
-      return lhs.sink == rhs.sink && lhs.mode == rhs.mode;
-    }
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, count& x) {
-      return f(caf::meta::type_name("vast.query.count"), x.sink, x.mode);
-    }
-  };
-
-  /// An extract query to retrieve the events that match the expression.
-  struct extract {
-    system::receiver_actor<table_slice> sink;
-
-    friend bool operator==(const extract& lhs, const extract& rhs) {
-      return lhs.sink == rhs.sink;
-    }
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, extract& x) {
-      return f(caf::meta::type_name("vast.query.extract"), x.sink);
-    }
-  };
-
   /// The query command type.
-  using command = caf::variant<count, extract>;
+  using command = caf::variant<count_query_context, extract_query_context>;
 
   // -- constructor & destructor -----------------------------------------------
 
@@ -73,11 +73,13 @@ struct query_context {
   // -- helper functions to make query creation less boiler-platey -------------
 
   template <class Actor>
-  static query_context make_count(std::string issuer, const Actor& sink,
-                                  enum count::mode m, expression expr) {
+  static query_context
+  make_count(std::string issuer, const Actor& sink,
+             enum count_query_context::mode m, expression expr) {
     return {
       std::move(issuer),
-      count{caf::actor_cast<system::receiver_actor<uint64_t>>(sink), m},
+      count_query_context{
+        caf::actor_cast<system::receiver_actor<uint64_t>>(sink), m},
       std::move(expr),
     };
   }
@@ -87,7 +89,8 @@ struct query_context {
   make_extract(std::string issuer, const Actor& sink, expression expr) {
     return {
       std::move(issuer),
-      extract{caf::actor_cast<system::receiver_actor<table_slice>>(sink)},
+      extract_query_context{
+        caf::actor_cast<system::receiver_actor<table_slice>>(sink)},
       std::move(expr),
     };
   }
@@ -152,18 +155,18 @@ struct formatter<vast::query_context> {
     -> decltype(ctx.out()) {
     auto out = ctx.out();
     auto f = vast::detail::overload{
-      [&](const vast::query_context::count& cmd) {
+      [&](const vast::count_query_context& cmd) {
         out = format_to(out, "count(");
         switch (cmd.mode) {
-          case vast::query_context::count::estimate:
+          case vast::count_query_context::estimate:
             out = format_to(out, "estimate, ");
             break;
-          case vast::query_context::count::exact:
+          case vast::count_query_context::exact:
             out = format_to(out, "exact, ");
             break;
         }
       },
-      [&](const vast::query_context::extract&) {
+      [&](const vast::extract_query_context&) {
         out = format_to(out, "extract(");
       },
     };

@@ -112,7 +112,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     uint64_t tally = 0;
     uint64_t rows = 0;
     auto query = query_context::make_count(
-      "test", self, query_context::count::mode::exact, expr);
+      "test", self, count_query_context::mode::exact, expr);
     query.ids = ids;
     self->send(actor, atom::query_v, query);
     run();

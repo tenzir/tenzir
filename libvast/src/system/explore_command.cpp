@@ -140,7 +140,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
         }
         if (msg.reason) {
           VAST_DEBUG("{} received error message: {}", inv.full_name,
-                     self->system().render(msg.reason));
+                     msg.reason);
           err = std::move(msg.reason);
         }
         stop = true;
