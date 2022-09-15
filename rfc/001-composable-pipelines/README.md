@@ -188,7 +188,20 @@ proposal:
 In essence, we keep `import` and `export` and incrementally enhance the
 expressiveness, by making it possible to append a pipeline after an expression.
 That is, valid input has the form `EXPR | OPERATOR | OPERATOR | ...`. Note that
-this is *not* a valid pipeline, because `EXPR` is not an operator.
+this is *not* a valid pipeline, because `EXPR` is not an operator. The output
+type of a pipeline passed to `export` must have type `Arrow`, because query
+execution today ends with a sink actor that receive `Arrow`. Likewise, a
+pipeline for `import` must end with `Arrow`, because a source actor sends data
+out via `Arrow`.
+
+Another to look at this is that `export FORMAT EXPR | op1 | op2` creates two
+pipelines:
+
+1. `where EXPR | op1 | op2`
+2. `write FORMAT | to -`
+
+Pipeline (1) runs at the server and pipeline (2) at the client. (The dual holds
+for `import`.)
 
 Additionally, we add a new command `exec` that accepts a "pure" pipeline, i.e.,
 just a composition of operators. Execution takes place locally, without any
