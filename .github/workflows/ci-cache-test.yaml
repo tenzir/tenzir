@@ -100,8 +100,7 @@ jobs:
           # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
           tags:
             - tenzir/vast-deps:latest
-            # TODO: To be only included on "$GITHUB_EVENT_NAME" == "release"
-            - ${{ needs.determine-version.outputs.release-version }}
+            # - ${{ needs.determine-version.outputs.release-version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
@@ -114,8 +113,7 @@ jobs:
           # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
           tags:
             - tenzir/vast-dev:latest
-            # TODO: To be only included on "$GITHUB_EVENT_NAME" == "release"
-            - ${{ needs.determine-version.outputs.release-version }}
+            # - ${{ needs.determine-version.outputs.release-version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
@@ -128,8 +126,7 @@ jobs:
           # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
           tags:
             - tenzir/vast-dev:latest
-            # TODO: To be only included on "$GITHUB_EVENT_NAME" == "release"
-            - ${{ needs.determine-version.outputs.release-version }}
+            # - ${{ needs.determine-version.outputs.release-version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
