@@ -26,6 +26,55 @@
 
 namespace vast::plugins::rest_api::export_ {
 
+static auto const* SPEC_V0 = R"_(
+/export:
+  get:
+    summary: Export data
+    description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand-vast/query-language)
+    parameters:
+      - in: query
+        name: expression
+        schema:
+          type: string
+        required: true
+        description: The query expression to execute.
+        example: ":ip in 10.42.0.0/16"
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        required: false
+        description: Maximum number of returned events
+        example: 3
+    responses:
+      200:
+        description: The result data.
+        content:
+          application/json:
+            schema:
+                type: object
+                properties:
+                  num_events:
+                    type: integer
+                  version:
+                    type: string
+                  events:
+                    type: array
+                    items: object
+                example:
+                  version: v2.3.0-169-ge42a9652e5-dirty
+                  events:
+                    - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
+                    - "{\"timestamp\": \"2011-08-12T13:00:36.378914\", \"flow_id\": 269421754201300, \"pcap_cnt\": 22569, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 1027, \"dest_ip\": \"74.125.232.202\", \"dest_port\": 80, \"proto\": \"TCP\", \"event_type\": \"http\", \"community_id\": null, \"http\": {\"hostname\": \"cr-tools.clients.google.com\", \"url\": \"/service/check2?appid=%7B430FD4D0-B729-4F61-AA34-91526481799D%7D&appversion=1.3.21.65&applang=&machine=0&version=1.3.21.65&osversion=5.1&servicepack=Service%20Pack%202\", \"http_port\": null, \"http_user_agent\": \"Google Update/1.3.21.65;winhttp\", \"http_content_type\": null, \"http_method\": \"GET\", \"http_refer\": null, \"protocol\": \"HTTP/1.1\", \"status\": null, \"redirect\": null, \"length\": 0}, \"tx_id\": 0}"
+                    - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
+                    - "null"
+                  num_events: 3
+      401:
+        description: Not authenticated.
+      422:
+        description: Invalid query string or invalid limit.
+    )_";
+
 // clang-format off
 
 /// An actor to help with handling a single query.
@@ -181,57 +230,9 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   [[nodiscard]] data openapi_specification(api_version version) const override {
-    auto const* spec_v0 = R"_(
-/export:
-  get:
-    summary: Export data
-    description: Export data from VAST according to a query. The query must be a valid expression in the (VAST Query Language)[https://vast.io/docs/understand-vast/query-language].
-    parameters:
-      - in: query
-        name: query
-        schema:
-          type: string
-        required: true
-        description: The query to execute.
-        example: ":ip in 10.42.0.0/16"
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        required: false
-        description: Maximum number of returned events
-        example: 3
-    responses:
-      200:
-        description: The result data.
-        content:
-          application/json:
-            schema:
-                type: object
-                properties:
-                  num_events:
-                    type: integer
-                  version:
-                    type: string
-                  events:
-                    type: array
-                    items: object
-                example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
-                  events:
-                    - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-                    - "{\"timestamp\": \"2011-08-12T13:00:36.378914\", \"flow_id\": 269421754201300, \"pcap_cnt\": 22569, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 1027, \"dest_ip\": \"74.125.232.202\", \"dest_port\": 80, \"proto\": \"TCP\", \"event_type\": \"http\", \"community_id\": null, \"http\": {\"hostname\": \"cr-tools.clients.google.com\", \"url\": \"/service/check2?appid=%7B430FD4D0-B729-4F61-AA34-91526481799D%7D&appversion=1.3.21.65&applang=&machine=0&version=1.3.21.65&osversion=5.1&servicepack=Service%20Pack%202\", \"http_port\": null, \"http_user_agent\": \"Google Update/1.3.21.65;winhttp\", \"http_content_type\": null, \"http_method\": \"GET\", \"http_refer\": null, \"protocol\": \"HTTP/1.1\", \"status\": null, \"redirect\": null, \"length\": 0}, \"tx_id\": 0}"
-                    - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-                    - "null"
-                  num_events: 3
-      401:
-        description: Not authenticated.
-      422:
-        description: Invalid query string or invalid limit.
-    )_";
     if (version != api_version::v0)
       return vast::record{};
-    auto result = from_yaml(spec_v0);
+    auto result = from_yaml(SPEC_V0);
     VAST_ASSERT(result);
     return *result;
   }
@@ -241,7 +242,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   rest_endpoints() const override {
     static auto endpoints = std::vector<vast::rest_endpoint>{
     {
-      .method = http_method::post,
+      .method = http_method::get,
       .path = "/export",
       .params = vast::record_type{
         {"expression", vast::string_type{}},

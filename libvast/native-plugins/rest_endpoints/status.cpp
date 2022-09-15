@@ -13,10 +13,41 @@
 
 namespace vast::plugins::rest_api::status {
 
+static auto const* SPEC_V0 = R"_(
+/status:
+  get:
+    summary: Return current status
+    description: Returns the current status of the whole node.
+    parameters:
+      - in: query
+        name: component
+        schema:
+          type: string
+        required: false
+        description: If specified, return the status for that component only.
+        example: "index"
+    responses:
+      200:
+        description: OK.
+        content:
+          application/json:
+            schema:
+              type: dict
+            example:
+              catalog:
+                num-partitions: 7092
+                memory-usage: 52781901584
+              version:
+                VAST: v2.3.0-rc3-32-g8529a6c43f
+      401:
+        description: Not authenticated.
+    )_";
+
 using status_handler_actor
   = system::typed_actor_fwd<>::extend_with<system::rest_handler_actor>::unwrap;
 
 struct status_handler_state {
+  static constexpr auto name = "status-handler";
   status_handler_state() = default;
   system::node_actor node_;
   std::vector<http_request> pending_;
@@ -33,10 +64,17 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
       self->state.pending_.emplace_back(std::move(rq));
       if (request_in_progress)
         return;
+      auto arguments = std::vector<std::string>{};
+      if (rq.params.contains("component")) {
+        auto& component = rq.params.at("component");
+        // The server should have already type-checked this.
+        VAST_ASSERT(caf::holds_alternative<std::string>(component));
+        arguments.push_back(caf::get<std::string>(component));
+      }
       auto inv = vast::invocation{
         .options = {},
         .full_name = "status",
-        .arguments = {},
+        .arguments = arguments,
       };
       self
         ->request(self->state.node_, caf::infinite, atom::run_v, std::move(inv))
@@ -50,6 +88,7 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
             // a `std::string`, which is not what its type signature says. This
             // will arrive as an "unexpected_response" error here.
             if (caf::sec{e.code()} != caf::sec::unexpected_response) {
+              VAST_ERROR("node error {}", e);
               for (auto& rq : std::exchange(self->state.pending_, {}))
                 rq.response->abort(500, "internal error");
               return;
@@ -79,30 +118,9 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   [[nodiscard]] data openapi_specification(api_version version) const override {
-    static auto const* spec_v0 = R"_(
-/status:
-  get:
-    summary: Return current status
-    description: Returns the current status of the whole node.
-    responses:
-      200:
-        description: OK.
-        content:
-          application/json:
-            schema:
-              type: dict
-            example:
-              catalog:
-                num-partitions: 7092
-                memory-usage: 52781901584
-              version:
-                VAST: v2.3.0-rc3-32-g8529a6c43f
-      401:
-        description: Not authenticated.
-    )_";
     if (version != api_version::v0)
       return vast::record{};
-    auto result = from_yaml(spec_v0);
+    auto result = from_yaml(SPEC_V0);
     VAST_ASSERT(result);
     return *result;
   }
@@ -114,7 +132,9 @@ class plugin final : public virtual rest_endpoint_plugin {
       {
         .method = http_method::get,
         .path = "/status",
-        .params = std::nullopt,
+        .params = record_type{
+          {"component", string_type{}},
+        },
         .version = api_version::v0,
         .content_type = http_content_type::json,
       },
