@@ -98,9 +98,9 @@ jobs:
           context: .
           # TODO: enable push functionality based on github.event
           # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-          tags:
-            - tenzir/vast-deps:latest
-            # - ${{ needs.determine-version.outputs.release-version }}
+          tags: |
+            tenzir/vast-deps:latest
+            # ${{ needs.determine-version.outputs.release-version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
@@ -111,9 +111,9 @@ jobs:
           context: .
           # TODO: enable push functionality based on github.event
           # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-          tags:
-            - tenzir/vast-dev:latest
-            # - ${{ needs.determine-version.outputs.release-version }}
+          tags: |
+            tenzir/vast-dev:latest
+            # ${{ needs.determine-version.outputs.release-version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
@@ -124,9 +124,9 @@ jobs:
           context: .
           # TODO: enable push functionality based on github.event
           # push: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-          tags:
-            - tenzir/vast-dev:latest
-            # - ${{ needs.determine-version.outputs.release-version }}
+          tags: |
+            tenzir/vast-dev:latest
+            # ${{ needs.determine-version.outputs.release-version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
