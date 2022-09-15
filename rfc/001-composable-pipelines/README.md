@@ -295,11 +295,12 @@ The following aspects require attention during the implementation:
 
 - **Asynchronous Execution**: pipelines fundamentally support asynchronous
   execution by sequentializing dataflow within an operator, and parallelizing it
-  across operators. This maps well to the actor model architecture of VAST.
-  Operators naturally map to actors.
+  across operators. Conceptually, this is very similar to the actor model
+  architecture VAST exhibits, with operators mapping to actors.
 
-  As an optimization, an executor may place multiple operators in the same
-  sequential execution to avoid asynchronous context switches.
+  In the implementation, we may want to consider actors part of the solution,
+  but will at first propose an independent architecture that consists of logical
+  and physical pipeline representation.
 
 - **Strong Typing**: pipelines are strongly typed with respect to their input
   and output types. This enables static type checking when instantiating a
