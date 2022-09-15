@@ -105,7 +105,7 @@ jobs:
             tenzir/vast-deps:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+          build-args: VAST_BUILD_OPTIONS=${{ VAST_BUILD_OPTIONS }}
           target: dependencies
       - name: Build and Push Development Docker Image
         uses: docker/build-push-action@v3
@@ -118,7 +118,7 @@ jobs:
             tenzir/vast-dev:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+          build-args: VAST_BUILD_OPTIONS=${{ VAST_BUILD_OPTIONS }}
           target: development
       - name: Build and Push Production Docker Image
         uses: docker/build-push-action@v3
@@ -131,7 +131,7 @@ jobs:
             tenzir/vast-dev:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+          build-args: VAST_BUILD_OPTIONS=${{ VAST_BUILD_OPTIONS }}
           target: production
           outputs: type=docker,dest=/tmp/vast-latest.tar
       - name: Upload VAST Latest Image
