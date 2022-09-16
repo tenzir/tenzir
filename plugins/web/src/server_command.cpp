@@ -218,7 +218,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       caf::make_error(ec::invalid_argument, "couldnt convert options"));
   auto server_config = convert_and_validate(config);
   if (!server_config) {
-    VAST_ERROR("{}", server_config.error());
+    VAST_ERROR("failed to start server: {}", server_config.error());
     return caf::make_message(caf::make_error(
       ec::invalid_configuration,
       fmt::format("invalid server configuration: {}", server_config.error())));
@@ -226,16 +226,20 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   // Create necessary actors.
   auto node_opt = vast::system::spawn_or_connect_to_node(
     self, inv.options, content(system.config()));
-  if (auto* err = std::get_if<caf::error>(&node_opt))
+  if (auto* err = std::get_if<caf::error>(&node_opt)) {
+    VAST_ERROR("failed to get node: {}", *err);
     return caf::make_message(std::move(*err));
+  }
   const auto& node
     = std::holds_alternative<system::node_actor>(node_opt)
         ? std::get<system::node_actor>(node_opt)
         : std::get<scope_linked<system::node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
   auto authenticator = get_authenticator(self, node, caf::infinite);
-  if (!authenticator)
+  if (!authenticator) {
+    VAST_ERROR("failed to get web component: {}", authenticator.error());
     return caf::make_message(std::move(authenticator.error()));
+  }
   auto dispatcher
     = self->spawn(request_dispatcher, *server_config, *authenticator);
   // Set up router.

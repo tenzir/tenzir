@@ -37,6 +37,7 @@ static auto const* SPEC_V0 = R"_(
         schema:
           type: string
         required: true
+        default: A query matching every event.
         description: The query expression to execute.
         example: ":ip in 10.42.0.0/16"
       - in: query
@@ -44,6 +45,7 @@ static auto const* SPEC_V0 = R"_(
         schema:
           type: integer
         required: false
+        default: 50
         description: Maximum number of returned events
         example: 3
     responses:
@@ -67,7 +69,6 @@ static auto const* SPEC_V0 = R"_(
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
                     - "{\"timestamp\": \"2011-08-12T13:00:36.378914\", \"flow_id\": 269421754201300, \"pcap_cnt\": 22569, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 1027, \"dest_ip\": \"74.125.232.202\", \"dest_port\": 80, \"proto\": \"TCP\", \"event_type\": \"http\", \"community_id\": null, \"http\": {\"hostname\": \"cr-tools.clients.google.com\", \"url\": \"/service/check2?appid=%7B430FD4D0-B729-4F61-AA34-91526481799D%7D&appversion=1.3.21.65&applang=&machine=0&version=1.3.21.65&osversion=5.1&servicepack=Service%20Pack%202\", \"http_port\": null, \"http_user_agent\": \"Google Update/1.3.21.65;winhttp\", \"http_content_type\": null, \"http_method\": \"GET\", \"http_refer\": null, \"protocol\": \"HTTP/1.1\", \"status\": null, \"redirect\": null, \"length\": 0}, \"tx_id\": 0}"
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-                    - "null"
                   num_events: 3
       401:
         description: Not authenticated.
@@ -99,6 +100,7 @@ struct export_helper_state {
   size_t events_ = 0;
   size_t limit_ = std::string::npos;
   std::optional<system::query_cursor> cursor_ = std::nullopt;
+  std::string stringified_events_;
   http_request request_;
 };
 
@@ -129,45 +131,43 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
         self->state.request_.response->abort(500, response);
         self->quit(e);
       });
-  return {// Index-facing API
-          [self](const vast::table_slice& slice) {
-            if (self->state.limit_ <= self->state.events_)
-              return;
-            auto remaining = self->state.limit_ - self->state.events_;
-            auto ostream = std::make_unique<std::stringstream>();
-            auto writer
-              = vast::format::json::writer{std::move(ostream), caf::settings{}};
-            if (slice.rows() < remaining)
-              writer.write(slice);
-            else
-              writer.write(truncate(slice, remaining));
-            self->state.events_ += std::min<size_t>(slice.rows(), remaining);
-            // FIXME: avoid copy and preserve newlines
-            auto raw_string
-              = static_cast<std::stringstream&>(writer.out()).str();
-            for (auto& c : raw_string)
-              if (c == '\n')
-                c = ',';
-            // TODO: Use chunked response so we can send each slice immediately.
-            self->state.request_.response->append(raw_string);
-          },
-          [self](atom::done) {
-            bool remaining_partitions
-              = self->state.cursor_->candidate_partitions
-                > self->state.cursor_->scheduled_partitions;
-            auto remaining_events = self->state.limit_ > self->state.events_;
-            if (remaining_partitions && remaining_events) {
-              auto next_batch_size = uint32_t{1};
-              self->state.cursor_->scheduled_partitions += next_batch_size;
-              self->send(self->state.index_, atom::query_v,
-                         self->state.cursor_->id, next_batch_size);
-            } else {
-              auto footer = fmt::format("\nnull],  \"num_events\": {}\n}}\n",
-                                        self->state.events_);
-              self->state.request_.response->append(footer);
-              self->state.request_.response.reset();
-            }
-          }};
+  return {
+    // Index-facing API
+    [self](const vast::table_slice& slice) {
+      if (self->state.limit_ <= self->state.events_)
+        return;
+      auto remaining = self->state.limit_ - self->state.events_;
+      auto ostream = std::make_unique<std::stringstream>();
+      auto writer
+        = vast::format::json::writer{std::move(ostream), caf::settings{}};
+      if (slice.rows() < remaining)
+        writer.write(slice);
+      else
+        writer.write(truncate(slice, remaining));
+      self->state.events_ += std::min<size_t>(slice.rows(), remaining);
+      self->state.stringified_events_
+        += static_cast<std::stringstream&>(writer.out()).str();
+    },
+    [self](atom::done) {
+      bool remaining_partitions = self->state.cursor_->candidate_partitions
+                                  > self->state.cursor_->scheduled_partitions;
+      auto remaining_events = self->state.limit_ > self->state.events_;
+      if (remaining_partitions && remaining_events) {
+        auto next_batch_size = uint32_t{1};
+        self->state.cursor_->scheduled_partitions += next_batch_size;
+        self->send(self->state.index_, atom::query_v, self->state.cursor_->id,
+                   next_batch_size);
+      } else {
+        auto& events_string = self->state.stringified_events_;
+        // Remove line breaks since the answer isn't LDJSON.
+        std::replace(events_string.begin(), events_string.end(), '\n', ',');
+        self->state.request_.response->append(std::move(events_string));
+        auto footer
+          = fmt::format("],\n  \"num_events\": {}\n}}\n", self->state.events_);
+        self->state.request_.response->append(footer);
+        self->state.request_.response.reset();
+      }
+    }};
 }
 
 export_multiplexer_actor::behavior_type export_multiplexer(
@@ -194,9 +194,6 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       if (auto* input = caf::get_if<std::string>(&query_param.get_data())) {
         query_string = *input;
       } else {
-        // TODO: For the REST API this default feels a bit more dangerous than
-        // for the CLI, since the user can not quickly notice the error and
-        // abort with CTRL-C.
         query_string = "#type != \"this_expression_matches_everything\"";
       }
       auto expr = to<vast::expression>(*query_string);
@@ -205,7 +202,8 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         return;
       }
       auto limit_param = rq.params.at("limit");
-      size_t limit = std::string::npos;
+      constexpr size_t DEFAULT_EXPORT_LIMIT = 50;
+      size_t limit = DEFAULT_EXPORT_LIMIT;
       if (auto* input = caf::get_if<count>(&limit_param.get_data())) {
         limit = *input;
       }

@@ -41,8 +41,7 @@ struct fixture : public fixtures::node {
   fixture() : fixtures::node(VAST_PP_STRINGIFY(SUITE)) {
   }
 
-  ~fixture() override {
-  }
+  ~fixture() override = default;
 };
 
 class test_response final : public vast::http_response {
