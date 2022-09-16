@@ -24,7 +24,7 @@ vast::record extract_config(const std::string& config) {
   auto data = vast::from_yaml(config);
   REQUIRE_NOERROR(data);
   REQUIRE(caf::holds_alternative<vast::record>(*data));
-  auto inner = caf::get<vast::record>(*data).at("rest");
+  auto inner = caf::get<vast::record>(*data).at("web");
   REQUIRE(caf::holds_alternative<vast::record>(inner));
   return caf::get<vast::record>(inner);
 }

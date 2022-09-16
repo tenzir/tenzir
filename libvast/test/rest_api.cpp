@@ -135,7 +135,7 @@ TEST(export endpoint) {
   auto request = vast::http_request{
     .params = {
       {"expression", "addr in 192.168.0.0/16"},
-      {"limit", "16"},
+      {"limit", vast::count{16}},
     },
     .response = response,
   };
