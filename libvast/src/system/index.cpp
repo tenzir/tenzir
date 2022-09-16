@@ -1468,40 +1468,45 @@ index(index_actor::stateful_pointer<index_state> self,
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
                   query_context)
-        .then([=, candidates = std::move(candidates)](
-                catalog_result& midx_result) mutable {
-          auto& midx_candidates = midx_result.partitions;
-          VAST_DEBUG("{} got initial candidates {} and from catalog {}", *self,
-                     candidates, midx_candidates);
-          for (const auto initial_candidates = candidates;
-               const auto& midx_candidate : midx_candidates)
-            if (std::find(initial_candidates.begin(), initial_candidates.end(),
-                          midx_candidate)
-                == initial_candidates.end())
-              candidates.push_back(midx_candidate.uuid);
-          // Allows the client to query further results after initial taste.
-          auto query_id = query_context.id;
-          auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
-          if (candidates.empty()) {
-            VAST_DEBUG("{} returns without result: no partitions qualify",
-                       *self);
-            rp.deliver(query_cursor{query_id, 0u, 0u});
-            self->send(client, atom::done_v);
-            return;
-          }
-          auto num_candidates = detail::narrow<uint32_t>(candidates.size());
-          auto scheduled
-            = std::min(num_candidates, self->state.taste_partitions);
-          if (auto err = self->state.pending_queries.insert(
-                query_state{.query_context = query_context,
-                            .client = client,
-                            .candidate_partitions = num_candidates,
-                            .requested_partitions = scheduled},
-                std::move(candidates)))
-            rp.deliver(err);
-          rp.deliver(query_cursor{query_id, num_candidates, scheduled});
-          self->state.schedule_lookups();
-        });
+        .then(
+          [=, candidates
+              = std::move(candidates)](catalog_result& midx_result) mutable {
+            auto& midx_candidates = midx_result.partitions;
+            VAST_DEBUG("{} got initial candidates {} and from catalog {}",
+                       *self, candidates, midx_candidates);
+            for (const auto initial_candidates = candidates;
+                 const auto& midx_candidate : midx_candidates)
+              if (std::find(initial_candidates.begin(),
+                            initial_candidates.end(), midx_candidate)
+                  == initial_candidates.end())
+                candidates.push_back(midx_candidate.uuid);
+            // Allows the client to query further results after initial taste.
+            auto query_id = query_context.id;
+            auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
+            if (candidates.empty()) {
+              VAST_DEBUG("{} returns without result: no partitions qualify",
+                         *self);
+              rp.deliver(query_cursor{query_id, 0u, 0u});
+              self->send(client, atom::done_v);
+              return;
+            }
+            auto num_candidates = detail::narrow<uint32_t>(candidates.size());
+            auto scheduled
+              = std::min(num_candidates, self->state.taste_partitions);
+            if (auto err = self->state.pending_queries.insert(
+                  query_state{.query_context = query_context,
+                              .client = client,
+                              .candidate_partitions = num_candidates,
+                              .requested_partitions = scheduled},
+                  std::move(candidates)))
+              rp.deliver(err);
+            rp.deliver(query_cursor{query_id, num_candidates, scheduled});
+            self->state.schedule_lookups();
+          },
+          [rp](const caf::error& e) mutable {
+            rp.deliver(caf::make_error(
+              ec::system_error, fmt::format("catalog lookup failed: {}", e)));
+          });
       return rp;
     },
     [self](atom::resolve,
