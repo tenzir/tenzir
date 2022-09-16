@@ -1,6 +1,6 @@
 # Changelog
 
-This changelog documents all notable changes to the PCAP plugin for VAST.
+This changelog documents all notable changes to the 'web' plugin for VAST.
 
 ## v1.0.0
 
