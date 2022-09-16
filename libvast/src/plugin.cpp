@@ -14,6 +14,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/env.hpp"
 #include "vast/detail/installdirs.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
@@ -48,8 +49,8 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
   // Since we do not read configuration files that were not explicitly
   // specified when in bare-mode, it is safe to just read the option
   // `vast.plugin-dirs` even with bare-mode enabled.
-  if (auto dirs = caf::get_if<std::vector<std::string>>( //
-        &cfg, "vast.plugin-dirs"))
+  if (auto dirs = detail::unpack_config_list_to_vector<std::string>( //
+        cfg, "vast.plugin-dirs"))
     result.insert(dirs->begin(), dirs->end());
   if (!bare_mode)
     if (auto home = detail::getenv("HOME"))
