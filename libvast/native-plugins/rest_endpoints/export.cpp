@@ -159,8 +159,11 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
                    next_batch_size);
       } else {
         auto& events_string = self->state.stringified_events_;
-        // Remove line breaks since the answer isn't LDJSON.
+        // Remove line breaks since the answer isn't LDJSON, except for the
+        // last since JSON doesn't support trailing commas.
         std::replace(events_string.begin(), events_string.end(), '\n', ',');
+        if (!events_string.empty())
+          events_string.back() = ' ';
         self->state.request_.response->append(std::move(events_string));
         auto footer
           = fmt::format("],\n  \"num_events\": {}\n}}\n", self->state.events_);
@@ -189,10 +192,12 @@ export_multiplexer_actor::behavior_type export_multiplexer(
   return {
     [self](atom::http_request, uint64_t, http_request rq) {
       VAST_VERBOSE("{} handles /export request", *self);
-      auto query_param = rq.params.at("expression");
       auto query_string = std::optional<std::string>{};
-      if (auto* input = caf::get_if<std::string>(&query_param.get_data())) {
-        query_string = *input;
+      if (rq.params.contains("expression")) {
+        auto& param = rq.params.at("expression");
+        // Should be type-checked by the server.
+        VAST_ASSERT(caf::holds_alternative<std::string>(param));
+        query_string = caf::get<std::string>(param);
       } else {
         query_string = "#type != \"this_expression_matches_everything\"";
       }
@@ -201,11 +206,13 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         rq.response->abort(400, "couldn't parse expression\n");
         return;
       }
-      auto limit_param = rq.params.at("limit");
       constexpr size_t DEFAULT_EXPORT_LIMIT = 50;
       size_t limit = DEFAULT_EXPORT_LIMIT;
-      if (auto* input = caf::get_if<count>(&limit_param.get_data())) {
-        limit = *input;
+      if (rq.params.contains("limit")) {
+        auto& param = rq.params.at("limit");
+        // Should be type-checked by the server.
+        VAST_ASSERT(caf::holds_alternative<count>(param));
+        limit = caf::get<count>(param);
       }
       // TODO: Abort the request after some time limit has passed.
       auto exporter = self->spawn(export_helper, self->state.index_, *expr,
