@@ -50,12 +50,20 @@ jobs:
       - name: Determine Version
         id: determine-version
         run: |
-          build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-          build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
-          release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
+          version_base_ref=
+          if ! [[ "$GITHUB_EVENT_NAME" == "release" ]] || ! [[ "$GITHUB_EVENT_NAME" == "push" ]] ; then
+            version_base_ref=$(git merge-base origin/master HEAD)
+          fi        
+          build_version="$(git describe --abbrev=10 --long --match='v[0-9]*' $version_base_ref)"
+          build_version_short="$(git describe --abbrev=10 --match='v[0-9]*' $version_base_ref)"
+          release_version="$(git describe --abbrev=0 --match='v[0-9]*' $version_base_ref)"
           echo "::set-output name=build-version::${build_version}"
           echo "::set-output name=build-version-short::${build_version_short}"
           echo "::set-output name=release-version::${release_version}"
+
+          echo "TEST"
+          echo $(git describe --abbrev=10 --long --match='v[0-9]*' $version_base_ref)
+          echo $(git describe --abbrev=10 --long --match='v[0-9]*')
 
   build-docker:
     needs:
