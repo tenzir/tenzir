@@ -61,10 +61,6 @@ jobs:
           echo "::set-output name=build-version-short::${build_version_short}"
           echo "::set-output name=release-version::${release_version}"
 
-          echo "TEST"
-          echo $(git describe --abbrev=10 --long --match='v[0-9]*' $version_base_ref)
-          echo $(git describe --abbrev=10 --long --match='v[0-9]*')
-
   build-docker:
     needs:
       - determine-version
