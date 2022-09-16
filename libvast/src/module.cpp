@@ -16,8 +16,8 @@
 #include "vast/detail/env.hpp"
 #include "vast/detail/filter_dir.hpp"
 #include "vast/detail/installdirs.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/load_contents.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
@@ -148,8 +148,8 @@ get_module_dirs(const caf::actor_system_config& cfg) {
       result.insert(std::filesystem::path{*home} / ".config" / "vast"
                     / "schema");
   }
-  if (auto dirs = caf::get_if<std::vector<std::string>>( //
-        &cfg, "vast.schema-dirs"))
+  if (auto dirs = detail::unpack_config_list_to_vector<std::string>( //
+        cfg, "vast.schema-dirs"))
     result.insert(dirs->begin(), dirs->end());
   return result;
 }
