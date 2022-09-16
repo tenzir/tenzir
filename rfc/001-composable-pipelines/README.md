@@ -51,7 +51,7 @@ await v.from("s3://aws")
 
 ### Synopsis
 
-The core of this proposal introduces pipeline operators as function with input
+The core of this proposal introduces pipeline operators as functions with input
 and output types. The following overview introduces the pipeline building
 blocks used throughout this proposal.
 
