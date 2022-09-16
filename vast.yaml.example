@@ -119,6 +119,9 @@ vast:
   # The directory to use for the partition synopses of the catalog.
   #catalog-dir: <dbdir>/index
 
+  # If set to true, run the `catalog` in a dedicated thread.
+  catalog-detached: true
+
   # The store backend to use. Can be 'segment-store', or the name of a
   # user-provided store plugin.
   store-backend: segment-store

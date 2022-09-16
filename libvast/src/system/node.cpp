@@ -660,7 +660,8 @@ node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
       VAST_ASSERT(component);
       // Terminate if a singleton dies.
       if (is_core_component(component->type)) {
-        VAST_ERROR("{} terminates after DOWN from {}", *self, component->type);
+        VAST_ERROR("{} terminates after DOWN from {} with reason {}", *self,
+                   component->type, msg.reason);
         self->send_exit(self, caf::exit_reason::user_shutdown);
       }
     }

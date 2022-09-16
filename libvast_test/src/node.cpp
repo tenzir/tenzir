@@ -25,13 +25,17 @@ node::node(std::string_view suite)
   run();
   spawn_component("type-registry");
   spawn_component("archive");
-  auto index_settings = caf::settings{};
+  auto settings = caf::settings{};
   auto vast_settings = caf::settings{};
   // Set the timeout to zero to prevent the index telemetry loop,
   // which will cause any call to `run()` to hang indefinitely.
   vast_settings["active-partition-timeout"] = caf::timespan{0};
-  index_settings["vast"] = vast_settings;
-  spawn_component("index", {}, index_settings);
+  // Don't run the catalog in a separate thread, otherwise it is
+  // invisible to the `test_coordinator`.
+  vast_settings["catalog-detached"] = false;
+  settings["vast"] = vast_settings;
+  spawn_component("catalog", {}, settings);
+  spawn_component("index", {}, settings);
   spawn_component("importer");
 }
 
