@@ -8,11 +8,14 @@ ENV CC="gcc-10" \
 
 WORKDIR /tmp/vast
 
-RUN apt-get update && \
+RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
+      > /etc/apt/sources.list.d/backports.list && \
+    apt-get update && \
     apt-get -y --no-install-recommends install \
       build-essential \
       ca-certificates \
-      cmake \
+      cmake/bullseye-backports \
+      cmake-data/bullseye-backports \
       flatbuffers-compiler-dev \
       g++-10 \
       gcc-10 \

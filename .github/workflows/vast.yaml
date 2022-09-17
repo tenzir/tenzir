@@ -65,10 +65,14 @@ jobs:
     steps:
       - name: Install Dependencies
         run: |
+          echo 'deb http://deb.debian.org/debian bullseye-backports main' \
+            > /etc/apt/sources.list.d/backports.list
           apt-get update
           apt-get -y install \
             build-essential \
             ca-certificates \
+            cmake/bullseye-backports \
+            cmake-data/bullseye-backports \
             flatbuffers-compiler-dev \
             g++-10 \
             gcc-10 \
@@ -91,8 +95,6 @@ jobs:
             python3-pip \
             python3-venv \
             wget
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --upgrade cmake
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -234,12 +236,16 @@ jobs:
     steps:
       - name: Install Dependencies
         run: |
+          echo 'deb http://deb.debian.org/debian bullseye-backports main' \
+            > /etc/apt/sources.list.d/backports.list
           apt-get update
           apt-get -y install \
             apt-transport-https \
             build-essential \
             ca-certificates \
             ccache \
+            cmake/bullseye-backports \
+            cmake-data/bullseye-backports \
             curl \
             flatbuffers-compiler-dev \
             g++-10 \
@@ -271,10 +277,7 @@ jobs:
           apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
           apt-get update
           apt-get -y install libarrow-dev libparquet-dev
-
-          # install CMake from pip -- we need at least 3.17 in CI for CCache
           python3 -m pip install --upgrade pip
-          python3 -m pip install --upgrade cmake
 
           cmake --version
 
@@ -686,12 +689,16 @@ jobs:
     steps:
       - name: Install Dependencies
         run: |
+          echo 'deb http://deb.debian.org/debian bullseye-backports main' \
+            > /etc/apt/sources.list.d/backports.list
           apt-get update
           apt-get -y install \
             ${{ join(matrix.plugin.dependencies, ' ') }} \
             apt-transport-https \
             build-essential \
             ca-certificates \
+            cmake/bullseye-backports \
+            cmake-data/bullseye-backports \
             curl \
             flatbuffers-compiler-dev \
             g++-10 \
@@ -721,9 +728,7 @@ jobs:
           apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
           apt-get update
           apt-get -y install libarrow-dev libparquet-dev
-          # Install CMake from pip
           python3 -m pip install --upgrade pip
-          python3 -m pip install --upgrade cmake
       - name: Checkout
         uses: actions/checkout@v3
         with:
