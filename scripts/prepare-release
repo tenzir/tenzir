@@ -31,10 +31,8 @@ build_dir=$(mktemp -d 2>/dev/null || mktemp -d -t "build-${new_version}")
 
 # Determine the last version including release candidates, the last version
 # excluding release candidates and the new version.
-# TODO: Starting with the 1.1 release, we can add --match='v[0-9]*' to further
-# restrict the git-describe usages here.
-last_rc_version="$(git -C "${source_dir}" describe --abbrev=0)"
-last_version="$(git -C "${source_dir}" describe --abbrev=0 --exclude='*-rc*')"
+last_rc_version="$(git -C "${source_dir}" describe --abbrev=0 --match='v[0-9]*')"
+last_version="$(git -C "${source_dir}" describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*')"
 new_version="$1"
 
 # Check that the new version does not exist already.
