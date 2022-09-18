@@ -634,7 +634,11 @@ tests:
       - command: flush
       - command: status --detailed catalog
         transformation: jq '.catalog.partitions | length'
+      - command: export arrow
+        transformation: python @./misc/scripts/print-arrow-batch-size.py
       - command: rebuild start --undersized
       - command: status --detailed catalog
         transformation: jq '.catalog.partitions | length'
       - command: export json
+      - command: export arrow
+        transformation: python @./misc/scripts/print-arrow-batch-size.py
