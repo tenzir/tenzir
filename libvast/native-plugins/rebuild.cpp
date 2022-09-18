@@ -126,9 +126,12 @@ private:
       // Ideally we'd assert here that the array length is at most offset +
       // length, but the array length may actually be less than that, because
       // Arrow silently shortens nested Arrays with nulls at the end.
-      const auto append_empty_values_status = builder.AppendEmptyValues(length);
-      VAST_ASSERT_CHEAP(append_empty_values_status.ok(),
-                        append_empty_values_status.ToString().c_str());
+      // TODO: There's actually a function for adding rows in bulk, but it takes
+      // an undocumented pointer parameter that I have yet to understand. -- DL
+      for (auto i = 0; i < length; ++i) {
+        const auto append_status = builder.Append();
+        VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
+      }
       for (auto field_index = 0; field_index < array.num_fields();
            ++field_index) {
         const auto field_type = schema.field(field_index).type;
