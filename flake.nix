@@ -25,11 +25,10 @@
     let
       overlay = import ./nix/overlay.nix { inherit inputs; };
       pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [ overlay ];
-      versionList = (builtins.split ''VAST_VERSION_FALLBACK "(v[0-9]+\.[0-9]+\.[0-9]+)'' 
-        (builtins.readFile ./cmake/VASTVersionFallback.cmake));
-      versionFallback = builtins.head (builtins.elemAt versionList 1);
-      shortrev = builtins.substring 0 10 self.rev;
-      versionString = "${versionFallback}-${builtins.toString self.revCount}-g${shortrev}";
+      versionFallback = builtins.fromJSON (builtins.readFile ./version.json).vast-version-fallback;
+      versionString = "${versionFallback}"
+        + pkgs.lib.optionalString (self ? rev)
+           "-9999-${builtins.substring 0 10 self.rev}";
     in
     rec {
       inherit pkgs;
@@ -48,7 +47,10 @@
           versionShortOverride = versionFallback;
           buildAsPackage = true;
         };
-        default = pkgs.vast;
+        default = pkgs.vast.override {
+          versionOverride = versionString;
+          versionShortOverride = versionFallback;
+        };
       };
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       apps.vast-static = flake-utils.lib.mkApp { drv = packages.vast-static; };
