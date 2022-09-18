@@ -125,13 +125,16 @@ private:
            int64_t length) noexcept -> void {
       // Ideally we'd assert here that the array length is at most offset +
       // length, but the array length may actually be less than that, because
+      //
       // Arrow silently shortens nested Arrays with nulls at the end.
-      // TODO: There's actually a function for adding rows in bulk, but it takes
-      // an undocumented pointer parameter that I have yet to understand. -- DL
-      for (auto i = 0; i < length; ++i) {
-        const auto append_status = builder.Append();
-        VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
-      }
+      // NTOE: Passing nullptr for the valid_bytes parameter has the undocumented
+      // special meaning of all appenbded entries being valid. The Arrow unit
+      // tests do the same thing in a few places; if this ever starts to cause
+      // issues, we can create a vector<uint8_t> with desired_batch_size entries
+      // of the value 1, call .data() on that and pass it in here instead.
+      const auto append_status
+        = builder.AppendValues(length, /*valid_bytes*/ nullptr);
+      VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
       for (auto field_index = 0; field_index < array.num_fields();
            ++field_index) {
         const auto field_type = schema.field(field_index).type;
