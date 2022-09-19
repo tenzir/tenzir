@@ -76,22 +76,18 @@ static auto const* SPEC_V0 = R"_(
         description: Invalid query string or invalid limit.
     )_";
 
-// clang-format off
-
-/// An actor to help with handling a single query.
+/// The EXPORT_HELPER handles a single query request.
 using export_helper_actor = system::typed_actor_fwd<
-    caf::reacts_to<atom::done>
-  >
-  ::extend_with<system::receiver_actor<table_slice>>
-  ::unwrap;
+  // Receives an `atom::done` from the index after each batch of table slices.
+  caf::reacts_to<atom::done>>
+  // Receives table slices from the index.
+  ::extend_with<system::receiver_actor<table_slice>>::unwrap;
 
-/// An actor to receive REST endpoint requests and spawn exporters
-/// as needed.
+/// The EXPORT_MULTIPLEXER receives requests against the rest api
+/// and spawns export helper actors as needed.
 using export_multiplexer_actor = system::typed_actor_fwd<>
-  ::extend_with<system::rest_handler_actor>
-  ::unwrap;
-
-// clang-format on
+  // Provide the REST HANDLER actor interface.
+  ::extend_with<system::rest_handler_actor>::unwrap;
 
 struct export_helper_state {
   export_helper_state() = default;
@@ -227,7 +223,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   [[nodiscard]] const char* name() const override {
-    return "api_export";
+    return "api-export";
   };
 
   [[nodiscard]] std::string prefix() const override {

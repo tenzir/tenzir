@@ -110,7 +110,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   [[nodiscard]] const char* name() const override {
-    return "api_status";
+    return "api-status";
   };
 
   [[nodiscard]] std::string prefix() const override {

@@ -61,7 +61,7 @@ const std::vector<plugin_ptr>& get() noexcept;
 
 /// Retrieves all plugins of a given plugin type.
 template <typename Plugin>
-vast::detail::generator<const Plugin*> get() noexcept;
+detail::generator<const Plugin*> get() noexcept;
 
 /// Retrieves the plugin of type `Plugin` with the given name, or nullptr
 /// if it doesn't exist.
@@ -484,7 +484,7 @@ const Plugin* find(const std::string& name) {
 }
 
 template <typename Plugin>
-vast::detail::generator<const Plugin*> get() noexcept {
+detail::generator<const Plugin*> get() noexcept {
   for (auto const& plugin : get())
     if (auto const* specific_plugin = plugin.as<Plugin>())
       co_yield specific_plugin;

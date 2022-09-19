@@ -276,8 +276,11 @@ inline constexpr std::chrono::seconds shutdown_kill_timeout
 /// The allowed false positive rate for a synopsis.
 inline constexpr double fp_rate = 0.01;
 
-/// Flag that enables creation of partition indexes in the database
+/// Flag that enables creation of partition indexes in the database.
 inline constexpr bool create_partition_index = true;
+
+/// Whether to spawn central components in separate threads.
+inline constexpr bool detach_components = true;
 
 } // namespace system
 

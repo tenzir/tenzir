@@ -15,7 +15,14 @@ file(GLOB_RECURSE web_sources CONFIGURE_DEPENDS
 file(GLOB_RECURSE web_tests CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
 
+# TODO: Remove this warning once we have vendored restinio.
+if (APPLE)
+  message(WARNING "The web plugin is not supported on macOS")
+  return()
+endif ()
+
 find_package(VAST REQUIRED)
+
 VASTRegisterPlugin(
   TARGET web
   ENTRYPOINT src/plugin.cpp
@@ -23,10 +30,12 @@ VASTRegisterPlugin(
   TEST_SOURCES ${web_tests}
   INCLUDE_DIRECTORIES include)
 
+# TODO: Vendor restinio and add a workaround to ensure that
+# restinio is using our own fmt.
 find_package(fmt REQUIRED)
 find_package(OpenSSL REQUIRED)
-
 find_package(restinio REQUIRED)
+
 target_link_libraries(web PRIVATE restinio::restinio OpenSSL::SSL
                                   OpenSSL::Crypto)
 

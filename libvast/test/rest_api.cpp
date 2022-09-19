@@ -100,7 +100,7 @@ FIXTURE_SCOPE(rest_api_tests, fixture)
 
 TEST(status endpoint) {
   auto const* plugin
-    = vast::plugins::find<vast::rest_endpoint_plugin>("api_status");
+    = vast::plugins::find<vast::rest_endpoint_plugin>("api-status");
   REQUIRE(plugin);
   auto endpoints = plugin->rest_endpoints();
   REQUIRE_EQUAL(endpoints.size(), 1ull);
@@ -125,7 +125,7 @@ TEST(status endpoint) {
 
 TEST(export endpoint) {
   auto const* plugin
-    = vast::plugins::find<vast::rest_endpoint_plugin>("api_export");
+    = vast::plugins::find<vast::rest_endpoint_plugin>("api-export");
   REQUIRE(plugin);
   auto endpoints = plugin->rest_endpoints();
   REQUIRE_EQUAL(endpoints.size(), 1ull);

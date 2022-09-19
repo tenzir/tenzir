@@ -61,8 +61,14 @@ struct rest_endpoint {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, rest_endpoint& e) {
+    auto params = e.params ? type{*e.params} : type{};
     return f(caf::meta::type_name("vast.rest_endpoint"), e.endpoint_id,
-             e.method, e.path, e.params, e.version, e.content_type);
+             e.method, e.path, params, e.version, e.content_type,
+             caf::meta::load_callback([&]() -> caf::error {
+               e.params = params ? caf::get<record_type>(params)
+                                 : std::optional<record_type>{};
+               return caf::none;
+             }));
   }
 };
 

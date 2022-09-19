@@ -338,7 +338,7 @@ jobs:
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
-            -DVAST_PLUGINS:STRING="plugins/pcap;plugins/web" \
+            -DVAST_PLUGINS:STRING="plugins/pcap" \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 
@@ -568,7 +568,7 @@ jobs:
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
             -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
-            -DVAST_PLUGINS:STRING="plugins/broker;plugins/sigma;plugins/parquet;plugins/pcap" \
+            -DVAST_PLUGINS:STRING="plugins/*" \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 

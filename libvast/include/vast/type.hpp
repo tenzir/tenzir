@@ -1383,50 +1383,6 @@ public:
 
   /// Returns a new, flattened record type.
   friend record_type flatten(const record_type& type) noexcept;
-
-  /// Enable integration with caf's type inspection system.
-  //  Since record_type is not semiregular, we only make the
-  //  `inspect()` overload available for `std::optional<record_type>`.
-
-  template <class Inspector>
-  typename std::enable_if<Inspector::reads_state,
-                          typename Inspector::result_type>::
-    type friend inspect(Inspector& f, std::optional<record_type>& x) {
-    return x ? f(true, x->table_) : f(false);
-  }
-
-  struct inspect_helper {
-    bool& enabled;
-    record_type& record;
-
-    // Accessor for `table_` since friendship isn't transitive.
-    chunk_ptr& table() {
-      return record.table_;
-    }
-
-    template <class Inspector>
-    friend typename Inspector::result_type
-    inspect(Inspector& f, inspect_helper& x) {
-      return x.enabled ? f(x.table()) : f();
-    }
-  };
-
-  friend struct inspect_helper;
-
-  template <class Inspector>
-  typename std::enable_if<Inspector::writes_state,
-                          typename Inspector::result_type>::
-    type friend inspect(Inspector& f, std::optional<record_type>& x) {
-    bool flag = false;
-    record_type tmp{};
-    inspect_helper helper{flag, tmp};
-    auto&& result = f(flag, helper);
-    if (flag)
-      x = std::move(tmp);
-    else
-      x = std::nullopt;
-    return std::move(result);
-  }
 };
 
 } // namespace vast

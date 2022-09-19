@@ -411,6 +411,8 @@ auto make_root_command(std::string_view path) {
                    "disable user and system configuration, schema and plugin "
                    "directories lookup and static and dynamic plugin "
                    "autoloading (this may only be used on the command line)")
+        .add<bool>("detach-components", "create dedicated threads for some "
+                                        "components")
         .add<std::string>("console-verbosity", "output verbosity level on the "
                                                "console")
         .add<std::string>("console-format", "format string for logging to the "
