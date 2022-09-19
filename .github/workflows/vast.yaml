@@ -277,7 +277,6 @@ jobs:
           apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
           apt-get update
           apt-get -y install libarrow-dev libparquet-dev
-          python3 -m pip install --upgrade pip
 
           cmake --version
 
