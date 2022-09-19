@@ -108,7 +108,8 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   return result;
 }
 
-bool verify_record_batch(const arrow::RecordBatch& record_batch) {
+[[maybe_unused]] bool
+verify_record_batch(const arrow::RecordBatch& record_batch) {
   auto check_col
     = [](auto&& check_col, const arrow::Array& column) noexcept -> void {
     auto f = detail::overload{
