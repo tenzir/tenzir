@@ -8,11 +8,14 @@ ENV CC="gcc-10" \
 
 WORKDIR /tmp/vast
 
-RUN apt-get update && \
+RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
+      > /etc/apt/sources.list.d/backports.list && \
+    apt-get update && \
     apt-get -y --no-install-recommends install \
       build-essential \
       ca-certificates \
-      cmake \
+      cmake/bullseye-backports \
+      cmake-data/bullseye-backports \
       flatbuffers-compiler-dev \
       g++-10 \
       gcc-10 \
@@ -57,7 +60,7 @@ COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
 COPY BANNER CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
-     vast.yaml.example ./
+     vast.yaml.example version.json ./
 
 # Resolve repository-internal symlinks.
 # TODO: We should try to get rid of these long-term, as Docker does not work

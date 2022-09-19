@@ -48,7 +48,8 @@ let
 
   src = vast-source;
 
-  version = if (versionOverride != null) then versionOverride else "v2.3.0";
+  versionFallback = (builtins.fromJSON (builtins.readFile ./../../version.json)).vast-version-fallback;
+  version = if (versionOverride != null) then versionOverride else versionFallback;
   versionShort = if (versionShortOverride != null) then versionShortOverride else version;
 in
 
@@ -85,7 +86,7 @@ stdenv.mkDerivation (rec {
   cmakeFlags = [
     "-DCMAKE_BUILD_TYPE:STRING=${buildType}"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
-    "-DVAST_VERSION_TAG=${version}"
+    "-DVAST_VERSION_TAG=v${version}"
     "-DVAST_VERSION_SHORT=${versionShort}"
     "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_ENABLE_BACKTRACE=ON"
