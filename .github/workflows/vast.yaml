@@ -39,6 +39,7 @@ jobs:
     outputs:
       build-version: ${{ steps.determine-version.outputs.build-version }}
       build-version-short: ${{ steps.determine-version.outputs.build-version-short }}
+      merge-base-version: ${{ steps.determine-version.outputs.merge-base-version }}
       release-version: ${{ steps.determine-version.outputs.release-version }}
     steps:
       - name: Checkout
@@ -52,9 +53,11 @@ jobs:
         run: |
           build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
           build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
+          merge_base_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "$(git merge-base origin/master HEAD)")"
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
           echo "::set-output name=build-version::${build_version}"
           echo "::set-output name=build-version-short::${build_version_short}"
+          echo "::set-output name=merge-base-version::${merge_base_version}"
           echo "::set-output name=release-version::${release_version}"
 
   changelog:
@@ -813,13 +816,17 @@ jobs:
           git fetch origin +refs/tags/*:refs/tags/*
       - name: Set VAST and Plugin Versions
         run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            vast_tag="${{ needs.determine-version.outputs.merge-base-version }}"
+          else
+            vast_tag="${{ needs.determine-version.outputs.build-version }}"
+          fi
           # Since the Docker build does not have the Git context, we set
           # version fallbacks manually here.
-          vast_tag="${{ needs.determine-version.outputs.build-version }}"
           VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -DVAST_VERSION_TAG:STRING=${vast_tag}"
           for plugin in $(ls plugins); do
             var="VAST_PLUGIN_${plugin^^}_REVISION"
-            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "plugins/${plugin}")"
+            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
             VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
