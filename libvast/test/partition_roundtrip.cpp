@@ -131,7 +131,7 @@ TEST(empty partition roundtrip) {
   // Create partition state.
   vast::system::active_partition_state state;
   state.data.id = vast::uuid::random();
-  state.data.store_id = "segment-store";
+  state.data.store_id = "feather";
   state.data.store_header = vast::chunk::make_empty();
   state.data.events = 23;
   state.data.synopsis = caf::make_copy_on_write<vast::partition_synopsis>();
@@ -178,7 +178,7 @@ TEST(empty partition roundtrip) {
   REQUIRE(partition_legacy);
   REQUIRE(partition_legacy->store());
   REQUIRE(partition_legacy->store()->id());
-  CHECK_EQUAL(partition_legacy->store()->id()->str(), "segment-store");
+  CHECK_EQUAL(partition_legacy->store()->id()->str(), "feather");
   CHECK_EQUAL(partition_legacy->events(), state.data.events);
   auto error = unpack(*partition_legacy, recovered_state);
   CHECK(!error);
@@ -231,7 +231,7 @@ TEST(full partition roundtrip) {
   auto fs = self->spawn(vast::system::posix_filesystem, directory,
                         vast::system::accountant_actor{});
   auto partition_uuid = vast::uuid::random();
-  auto store_id = std::string{"segment-store"};
+  auto store_id = std::string{"feather"};
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
