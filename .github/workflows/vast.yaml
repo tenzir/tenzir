@@ -39,7 +39,11 @@ jobs:
     outputs:
       build-version: ${{ steps.determine-version.outputs.build-version }}
       build-version-short: ${{ steps.determine-version.outputs.build-version-short }}
+      before-sha: ${{ steps.determine-version.outputs.before-sha }}
+      before-version: ${{ steps.determine-version.outputs.before-version }}
       release-version: ${{ steps.determine-version.outputs.release-version }}
+      head-ref-slug: ${{ steps.determine-version.outputs.head-ref-slug }}
+      base-ref-slug: ${{ steps.determine-version.outputs.base-ref-slug }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -47,15 +51,27 @@ jobs:
           fetch-depth: 0
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
+      - name: Inject Slug Variables
+        uses: rlespinasse/github-slug-action@v4
       - name: Determine Version
         id: determine-version
         run: |
           build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
           build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            before_sha="${{ github.before }}"
+          else
+            before_sha="$(git merge-base origin/master HEAD)"
+          fi
+          before_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "${before_sha}")"
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
           echo "::set-output name=build-version::${build_version}"
           echo "::set-output name=build-version-short::${build_version_short}"
+          echo "::set-output name=before-sha::${before_sha}"
+          echo "::set-output name=before-version::${before_version}"
           echo "::set-output name=release-version::${release_version}"
+          echo "::set-output name=head-ref-slug::${GITHUB_HEAD_REF_SLUG}"
+          echo "::set-output name=base-ref-slug::${GITHUB_BASE_REF_SLUG}"
 
   changelog:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
@@ -298,17 +314,14 @@ jobs:
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
           echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
 
-      - name: Inject slug variables
-        uses: rlespinasse/github-slug-action@v4
-
       - name: Fetch ccache Cache
         uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
+          key: ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.head-ref-slug }}-${{ github.sha }}
           restore-keys: |
-            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
-            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
+            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.head-ref-slug }}
+            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.base-ref-slug }}
             ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
             ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
 
@@ -534,17 +547,14 @@ jobs:
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
 
-      - name: Inject slug variables
-        uses: rlespinasse/github-slug-action@v4
-
       - name: Fetch ccache Cache
         uses: pat-s/always-upload-cache@v3.0.1
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
+          key: ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.head-ref-slug }}-${{ github.sha }}
           restore-keys: |
-            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
-            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
+            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.head-ref-slug }}
+            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.base-ref-slug }}
             ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
             ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
 
@@ -817,67 +827,88 @@ jobs:
           git fetch origin +refs/tags/*:refs/tags/*
       - name: Set VAST and Plugin Versions
         run: |
+          # For pull requests we make it possible to cache all layers by setting
+          # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
+          # accept the downaside that this means that Docker images created
+          # within pull request triggers of this job display the merge-base
+          # version.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            vast_tag="${{ needs.determine-version.outputs.before-version }}"
+          else
+            vast_tag="${{ needs.determine-version.outputs.build-version }}"
+          fi
           # Since the Docker build does not have the Git context, we set
           # version fallbacks manually here.
-          vast_tag="${{ needs.determine-version.outputs.build-version }}"
           VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -DVAST_VERSION_TAG:STRING=${vast_tag}"
           for plugin in $(ls plugins); do
             var="VAST_PLUGIN_${plugin^^}_REVISION"
-            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 HEAD -- "plugins/${plugin}")"
+            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
             VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
           done
           echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
-      - name: Build Dependencies Docker Image
-        run: |
-          docker build . -t tenzir/vast-deps:latest --target dependencies \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
-      - name: Build Development Docker Image
-        run: |
-          docker build . -t tenzir/vast-dev:latest --target development \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
-      - name: Build Production Docker Image
-        run: |
-          docker build . -t tenzir/vast:latest --target production \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      - name: Publish Dependencies Docker Image
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Docker Images
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            cache_to_ref="${{ needs.determine-version.outputs.head-ref-slug }}"
+          else
+            cache_to_ref="${{ github.sha }}"
+          fi
+          cache_from_ref="${{ needs.determine-version.outputs.before-sha }}"
+          # Build the Docker images using ghcr.io/tenzir/vast as a registry-type
+          # layer cache. We upload this cache for every merge but also for every
+          # pull request, using the head ref slug as an identifier within PRs.
+          # We specify cache-from multiple times in order because we want to
+          # prefer an existing cache for the current trigger over the cache that
+          # we attempt to restore from, which is the before sha for pushes and
+          # the merge-base for pull requests.
+          docker buildx build . -t tenzir/vast:latest --target production \
+            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
+            --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
+            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+          docker buildx build . -t tenzir/vast-dev:latest --target development \
+            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
+            --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+          docker buildx build . -t tenzir/vast-deps:latest --target dependencies \
+            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
+            --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+      - name: Publish Docker Images
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
-          docker push tenzir/vast-deps:latest
-          docker tag tenzir/vast-deps:latest "tenzir/vast-deps:${GITHUB_SHA}"
-          docker push "tenzir/vast-deps:${GITHUB_SHA}"
+          registries=('' 'ghcr.io/')
+          images=('tenzir/vast' 'tenzir/vast-dev' 'tenzir/vast-deps')
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            release_tag="${{ needs.determine-version.outputs.release-version }}"
-            docker tag tenzir/vast-deps:latest "tenzir/vast-deps:${release_tag}"
-            docker push "tenzir/vast-deps:${release_tag}"
+            tags=('stable' "${{ needs.determine-version.outputs.release-version }}")
+          else
+            tags=('latest' "${{ github.sha }}")
           fi
-      - name: Publish Development Docker Image
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          docker push tenzir/vast-dev:latest
-          docker tag tenzir/vast-dev:latest "tenzir/vast-dev:${GITHUB_SHA}"
-          docker push "tenzir/vast-dev:${GITHUB_SHA}"
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            release_tag="${{ needs.determine-version.outputs.release-version }}"
-            docker tag tenzir/vast-dev:latest "tenzir/vast-dev:${release_tag}"
-            docker push "tenzir/vast-dev:${release_tag}"
-          fi
-      - name: Publish Production Docker Image
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          docker push tenzir/vast:latest
-          docker tag tenzir/vast:latest "tenzir/vast:${GITHUB_SHA}"
-          docker push "tenzir/vast:${GITHUB_SHA}"
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            release_tag="${{ needs.determine-version.outputs.release-version }}"
-            docker tag tenzir/vast:latest "tenzir/vast:${release_tag}"
-            docker push "tenzir/vast:${release_tag}"
-          fi
+          for registry in "${registries[@]}"; do
+            for image in "${images[@]}"; do
+              for tag in "${tags[@]}"; do
+                docker tag "${image}:latest" "${registry}${image}:${tag}"
+                docker push "${registry}${image}:${tag}"
+              done
+            done
+          done
 
   build-nix:
     needs:
