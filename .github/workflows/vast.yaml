@@ -875,18 +875,18 @@ jobs:
           # prefer an existing cache for the current trigger over the cache that
           # we attempt to restore from, which is the before sha for pushes and
           # the merge-base for pull requests.
-          docker buildx build . -t tenzir/vast:latest --target production \
+          docker buildx build . -t tenzir/vast:latest --target production --load \
             --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
-          docker buildx build . -t tenzir/vast-dev:latest --target development \
+          docker buildx build . -t tenzir/vast-dev:latest --target development --load \
             --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
-          docker buildx build . -t tenzir/vast-deps:latest --target dependencies \
+          docker buildx build . -t tenzir/vast-deps:latest --target dependencies --load \
             --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
