@@ -2,7 +2,7 @@
 
 - **Status**: In-Review
 - **Created**: Aug 19, 2022
-- **ETA**: Sep 19, 2022
+- **ETA**: Sep 21, 2022
 - **Authors**:
   - [Matthias Vallentin](https://github.com/mavam)
 - **Contributors**:
@@ -32,8 +32,7 @@ experience, especially in the presence of custom plugins?
 Assume for a moment everything is a pipeline operator. Then we may write:
 
  ```bash
-vast 'from s3://aws |
-      read json |
+vast 'load s3://aws json |
       summarize count(dst) group-by src |
       store parquet /path/to/directory'
 ```
@@ -42,28 +41,24 @@ The UX would translate seamlessly to other languages, e.g., Python:
 
 ```python
 import vast as v
-await v.from("s3://aws")
-       .read_json()
+await v.load_json("s3://aws")
        .group_by("src") # could also be merged with summarize()
        .summarize(v.count("dst"))
        .store_parquet("/path/to/directory")
 ```
 
-### Synopsis
-
 The core of this proposal introduces pipeline operators as functions with input
 and output types. The following overview introduces the pipeline building
 blocks used throughout this proposal.
 
-A pipeline operator has an input and output type, e.g., `from<In, Out>` takes as
+A pipeline operator has an input and output type, e.g., `load<In, Out>` takes as
 input `In` and produces instances of `Out`. We consider the following valid
-types:
+types at the logical level:
 
 1. `Void`: no input or output, to represent a side effect
-2. `Bytes`: blocks of raw byte sequences
-3. `Arrow`: table slices (i.e., record batches)
+2. `Arrow`: table slices (i.e., record batches)
 
-The majority of computation happens in (3), as this is the representation of
+The majority of computation happens in `Arrow`, as this is the representation of
 structured data that the user primarily wants to interact with. The other types
 help in building a composable system to onboard and offboard data from the Arrow
 data plane.
@@ -72,15 +67,15 @@ The central pipeline invariant is that composed operators must have a valid
 combination of types. For example, this is a valid pipeline:
 
 ```
-from<Void, Bytes> |
-read<Bytes, Arrow> |
-where<Arrow, Arrow>
+load<Void, Arrow> |
+where<Arrow, Arrow> |
+summarize<Arrow, Arrow>
 ```
 
 The dataflow edges (`|`) in the middle produce valid type pairs:
 
 - `<*, Void>`
-- `<Bytes, Bytes>`
+- `<Arrow, Arrow>`
 - `<Arrow, *>`
 
 The `*` character signals the open end of the pipeline. By collapsing the types
@@ -90,47 +85,28 @@ However, there is consumer at the other end, as the pipeline ends in `Arrow`.
 Adding another operator would make it complete, e.g.:
 
 ```
-from<Void, Bytes> |
-read<Bytes, Arrow> |
+load<Void, Arrow> |
 where<Arrow, Arrow> |
-parquet<Arrow, Void>
+summarize<Arrow, Arrow> |
+store<Arrow, Void>
 ```
 
 This results in a `<Void, Void>` pipeline that does not "leak".
+
+### Operator Overview
 
 With this typing concept in mind, we can now take a closer look at the various
 operators we propose.
 
 #### I/O
 
-Input:
+The following operators exist for performing side effects that load and store
+data.
 
 | Operator | Input Type | Output Type | Description
 | -------- | ---------- | ----------- | ------------------------------------------
-| `from`   | `Void`     | `Bytes`     | Loads bytes from a source as a side effect
-| `read`   | `Bytes`    | `Arrow`     | Parses a specific format into Arrow
-| `load`   | `Void`     | `Arrow`     | Performs `from` and `read` in one step
-
-Output:
-
-| Operator | Input Type | Output Type | Description
-| -------- | ---------- | ----------- | ------------------------------------------
-| `to`     | `Bytes`    | `Void`      | Writes bytes to a sink as a side effect
-| `write`  | `Arrow`    | `Bytes`     | Prints input in a specific format
-| `store`  | `Arrow`    | `Void`      | Performs `write` and `to` in one step
-
-The reason where `load`/`store` exist, in addition to `from`/`to` and
-`read`/`write`, is that it's not always possible to encapsulate data acquisition
-in a two-step operation. For example, when using a C library that yields
-structured objects, the parsing step already took place and it wouldn't make
-sense to re-serialize them into `Bytes`. At this point, it makes more sense to
-continue working with the objects and convert them to `Arrow`.
-
-Zeek's Broker library is a good example for `load<Void, Arrow>`: it yields
-`broker::data` objects when subscribing to data from a remote machine. Likewise,
-Parquet is a good example for `store<Arrow, Void>`: since one Parquet file has a
-fixed scheme, but `Arrow` is a heterogeneous stream, the implementation is
-responsible for demultiplexing it and writing it to one file per schema.
+| `load`   | `Void`     | `Arrow`     | Read data from a provided location
+| `store`  | `Arrow`    | `Void`      | Write data into a provided location
 
 #### Compute
 
@@ -178,7 +154,7 @@ proposal:
 
 | Old Syntax                               | New Syntax
 | ---------------------------------------- | -------------------------------------------
-| `vast infer`                             | `vast exec 'read [FORMAT] | infer"`
+| `vast infer`                             | `vast exec 'load CARRIER [FORMAT] | infer"`
 | `vast import FORMAT EXPR`                | `vast import FORMAT 'EXPR | op1 .. | op2 ..'`
 | `vast export FORMAT EXPR`                | `vast export FORMAT 'EXPR | op1 .. | op2 ..'`
 | `vast count [args] EXPR`                 | `vast export FORMAT 'EXPR | count [args]'`
@@ -198,7 +174,7 @@ Another to look at this is that `export FORMAT EXPR | op1 | op2` creates two
 pipelines:
 
 1. `where EXPR | op1 | op2`
-2. `write FORMAT | to -`
+2. `store - FORMAT`
 
 Pipeline (1) runs at the server and pipeline (2) at the client. (The dual holds
 for `import`.)
@@ -215,41 +191,27 @@ Given the new `exec` command, we can start processing data in situ. For example,
 we can directly compute insights over telemetry:
 
 ```bash
-vast exec 'from - |
-           read zeek |
+vast exec 'load - zeek |
            summarize sum(orig_bytes), sum(resp_bytes) group-by id.orig_h, id.resp_h |
            sort |
            head -n 10 |
-           write json |
-           to -'
+           store - json'
 ```
 
 This pipeline answers the question "who are the top talkers in my network" by
 summing originator and responder bytes per host pair. The dataflow happens as
 follows:
 
-1. Load data via stdin (`from`)
-2. Push data into a parser (`read`)
-3. Aggregate data (`summarize`)
-4. Sort the aggregate (`sort`)
-5. Only consider the top 10 (`head`)
-6. Push data into a printer (`write`)
-7. Write data to stdout (`to`)
+1. Load Zeek data via stdin (`load`)
+2. Aggregate data (`summarize`)
+3. Sort the aggregate (`sort`)
+4. Only consider the top 10 (`head`)
+5. Write data as JSON to stdout (`store`)
 
 Local pipeline execution opens the door for a lot of new modes of operations,
 because a VAST server node is no longer required.
 
 **This makes VAST a swiss army knife for security data.**
-
-There are of course convenience defaults we can use, like assuming `from -` and
-`to -` being the default. VAST can then easily used as a conversion utility
-between different types of security data:
-
-```bash
-vast exec 'read zeek | write json'
-# Obviates the need for:
-vast exec 'convert zeek json'
-```
 
 ### Case Study: Matcher
 
@@ -267,8 +229,7 @@ Let's assume that the following new pipeline operators:
 Now consider the use case of constructing a matcher from CSV data:
 
 ```bash
-vast exec 'from file:///tmp/blacklist.csv |
-           read csv |
+vast exec 'load file:///tmp/blacklist csv |
            build --extract=net.src.ip' > matcher.flatbuf
 ```
 
@@ -276,8 +237,7 @@ After having constructed a matcher, we can now use it in a pipeline for
 matching:
 
 ```bash
-vast exec 'from kafka -t /zeek/conn |
-           read zeek |
+vast exec 'load kafka -t /zeek/conn zeek |
            match --state matcher.flatbuf --on id.orig_h,id.resp_h
 ```
 
@@ -324,6 +284,55 @@ The following aspects require attention during the implementation:
 
 [shaikhha18]: https://doi.org/10.1017/s0956796818000102
 
+### Logical vs. Physical Operators
+
+The logical operators are user-facing and should provide an easy UX. The
+physical operators are not exposed to the user and only relate to the
+implementation.
+
+To illustrate the logical-to-physical mapping, let's consider the example of
+`load` and `store`. These operators take two arguments:
+
+1. **Carrier**: an URL like `s3://aws` or `-` for stdin
+2. **Format**: `json`, `csv`, `feather`, `parquet`, etc.
+
+We do not want to end up with M x N implementations for M carriers and N
+formats, but rather M + N. To achieve this, we can separate the carrier and
+format into dedicated operators. The carrier produces/consumes bytes, and the
+format performs parsing/printing to interface with the `Arrow` type.
+
+To combine carrier and format, we may to introduce an intermediate type `Bytes`
+that bridges the physical operators. To implement `load`, we would use a
+combination of `from` and `read`. To implement `store`, we would use `write` and
+`to`.
+
+For example, the operator `from CARRIER FORMAT` would then map to the
+physical implementation `from CARRIER | read FORMAT`. Similarly, `store CARRIER
+FORMAT` would map to `write FORMAT | to CARRIER`.
+
+The table below summarizes the signatures of the physical operators:
+
+| Operator | Input Type | Output Type | Description
+| -------- | ---------- | ----------- | ------------------------------------------
+| `from`   | `Void`     | `Bytes`     | Loads bytes from a source as a side effect
+| `read`   | `Bytes`    | `Arrow`     | Parses a specific format into Arrow
+| `to`     | `Bytes`    | `Void`      | Writes bytes to a sink as a side effect
+| `write`  | `Arrow`    | `Bytes`     | Prints input in a specific format
+
+The implementation of `load` and `store` does not have to map to a combination
+of `from|read` or `write|to`. It's not always possible to encapsulate data
+acquisition in a two-step operation. For example, when using a C library that
+yields structured objects, the parsing step already took place and it wouldn't
+make sense to re-serialize them into `Bytes`. At this point, it makes more sense
+to continue working with the objects and directly convert them to `Arrow`. In
+other words, for some combinations of carrier and format, the logical operator
+may dispatch to custom implementation for that particular pair.
+
+Zeek's Broker library is a good example for a custom implementation of `load
+broker://host:port`. Broker yields `broker::data` objects when subscribing to
+data from a remote endpoint `host:port`. Note the absence of the format
+argument, as the implementation would convert `broker::data` to Arrow directly.
+
 ## Alternatives
 
 We considered the following ideas that we do not want to pursue further.
@@ -342,11 +351,9 @@ To illustrate the composability of pipelines, we could make every VAST command
 an operator:
 
 ```bash
-vast from s3://aws |
-  vast read json |
+vast load s3://aws json |
   vast 'summarize count(dst) group-by src' |
-  vast write feather |
-  vast to /path/to/file.feather
+  vast store /path/to/file feather
 ```
 
 As there is no clear underlying use case outside of testing and debugging, we
