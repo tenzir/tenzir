@@ -76,6 +76,7 @@ The dataflow edges (`|`) in the middle produce valid type pairs:
 
 - `<*, Void>`
 - `<Arrow, Arrow>`
+- `<Arrow, Arrow>`
 - `<Arrow, *>`
 
 The `*` character signals the open end of the pipeline. By collapsing the types
