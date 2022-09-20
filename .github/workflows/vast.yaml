@@ -59,7 +59,7 @@ jobs:
           build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
           build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            before_sha="${{ github.before }}"
+            before_sha="${{ github.event.before }}"
           else
             before_sha="$(git merge-base origin/master HEAD)"
           fi
