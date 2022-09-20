@@ -67,10 +67,15 @@ try_handle_deprecations(vast::system::default_configuration& cfg) {
   if (caf::holds_alternative<bool>(cfg, "vast.use-legacy-query-scheduler"))
     VAST_WARN("the 'vast.use-legacy-query-scheduler' option no longer exists "
               "and will be ignored.");
-  if (caf::get_or(cfg, "vast.store-backend", "segment-store") == "archive") {
+  if (caf::get_or(cfg, "vast.store-backend", "feather") == "archive") {
     VAST_WARN("the 'vast.store-backend' option 'archive' is deprecated; "
-              "automatically using 'segment-store' instead");
-    caf::put(cfg.content, "vast.store-backend", "segment-store");
+              "automatically using 'feather' instead");
+    caf::put(cfg.content, "vast.store-backend", "feather");
+  } else if (caf::get_or(cfg, "vast.store-backend", "feather")
+             == "segment-store") {
+    VAST_WARN("the 'vast.store-backend' option 'segment-store' is deprecated; "
+              "automatically using 'feather' instead");
+    caf::put(cfg.content, "vast.store-backend", "feather");
   }
   const auto transforms
     = caf::get_if<caf::config_value::dictionary>(&cfg, "vast.transforms");
