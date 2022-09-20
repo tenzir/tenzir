@@ -95,9 +95,11 @@ jobs:
             git \
             gnupg2 \
             jq \
+            libasio-dev \
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \
+            librestinio-dev \
             libsimdjson-dev \
             libspdlog-dev \
             libssl-dev \
@@ -269,10 +271,12 @@ jobs:
             git \
             gnupg2 gnupg-agent \
             jq \
+            libasio-dev \
             libcaf-dev \
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \
+            librestinio-dev \
             libsimdjson-dev \
             libspdlog-dev \
             libssl-dev \
@@ -684,6 +688,12 @@ jobs:
           - name: Parquet
             target: parquet
             path: plugins/parquet
+          - name: Web
+            target: web
+            path: plugins/web
+            dependencies:
+              - libasio-dev
+              - librestinio-dev
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"

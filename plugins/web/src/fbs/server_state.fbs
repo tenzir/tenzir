@@ -1,0 +1,26 @@
+
+namespace vast.plugins.web.fbs.server_state;
+
+table AuthenticationTokenDescription {
+	name: string (required);
+	issued_at: int64;
+	expires_at: int64;
+	token: string (required);
+}
+
+table v0 {
+	auth_tokens: [AuthenticationTokenDescription] (required);
+}
+
+union ServerState {
+  v0,
+}
+
+namespace vast.plugins.web.fbs;
+
+table ServerState {
+  server_state: server_state.ServerState;
+}
+
+root_type ServerState;
+file_identifier "vSVS";

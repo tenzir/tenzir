@@ -1,0 +1,89 @@
+config-file: vast.yaml
+
+fixtures:
+  ServerTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', '--commands="web server --mode=dev --port=42025"'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=self.config_file)
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
+  AuthenticatedServerTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', '--commands="web server --mode=upstream --port=42025"'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=self.config_file)
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
+  TlsServerTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start', f'--commands="web server --mode=server --certfile={SET_DIR}/data/server.pem --keyfile={SET_DIR}/data/server.key --port=42025"'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=self.config_file)
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
+tests:
+  Status Endpoint:
+    tags: [rest, status]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/conn.log.gz
+      - command: flush
+      - command: curl http://127.0.0.1:42025/api/v0/status
+        prepend_vast: false
+        transformation: jq .catalog
+  Export Endpoint:
+    tags: [rest, export]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/conn.log.gz
+      - command: flush
+      - command: curl http://127.0.0.1:42025/api/v0/export?limit=20
+        transformation: jq .events
+        prepend_vast: false
+  Authenticated Endpoints:
+    tags: [rest, authentication]
+    fixture: AuthenticatedServerTester
+    steps:
+      - command: import -b zeek
+        input: data/conn.log.gz
+      - command: flush
+      - command: curl http://127.0.0.1:42025/api/v0/status
+        prepend_vast: false
+      - command: web generate-token
+        transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
+      - command: curl -H @token.txt http://127.0.0.1:42025/api/v0/status
+        transformation: jq .catalog
+        prepend_vast: false
+  TLS Endpoints:
+    tags: [rest, tls]
+    fixture: TlsServerTester
+    steps:
+      - command: import -b zeek
+        input: data/conn.log.gz
+      - command: flush
+      - command: curl http://127.0.0.1:42025/api/v0/status
+        prepend_vast: false
+        expected_result: error
+      # Explicitly trust the self-signed server certificate with `--cacert`
+      - command: curl --cacert @./data/client.pem https://127.0.0.1:42025/api/v0/status
+        prepend_vast: false
+      - command: web generate-token
+        transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
+      - command: curl -H @token.txt --cacert @./data/client.pem https://127.0.0.1:42025/api/v0/status
+        transformation: jq .catalog
+        prepend_vast: false

@@ -22,11 +22,13 @@ RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
       git-core \
       gnupg2 \
       jq \
+      libasio-dev \
       libcaf-dev \
       libbroker-dev \
       libflatbuffers-dev \
       libfmt-dev \
       libpcap-dev tcpdump \
+      librestinio-dev \
       libsimdjson-dev \
       libspdlog-dev \
       libssl-dev \

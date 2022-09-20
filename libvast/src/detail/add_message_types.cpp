@@ -18,6 +18,7 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/die.hpp"
 #include "vast/expression.hpp"
+#include "vast/http_api.hpp"
 #include "vast/module.hpp"
 #include "vast/operator.hpp"
 #include "vast/partition_synopsis.hpp"

@@ -470,7 +470,6 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                    {"query", std::move(id_str)},
                    {"issuer", query_context.issuer},
                  });
-
       return result;
     },
     [=](atom::status, status_verbosity v) {

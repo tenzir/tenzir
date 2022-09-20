@@ -119,6 +119,11 @@ vast:
   # The directory to use for the partition synopses of the catalog.
   #catalog-dir: <dbdir>/index
 
+  # Whether to run some components in dedicated threads, in particular
+  # the filesystem and catalog actors. It is usually a good idea to
+  # enable this setting for significantly better performance.
+  detach-components: true
+
   # The store backend to use. Can be 'segment-store', or the name of a
   # user-provided store plugin.
   store-backend: segment-store

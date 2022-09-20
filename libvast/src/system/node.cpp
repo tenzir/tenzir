@@ -636,8 +636,9 @@ node_state::spawn_command(const invocation& inv,
   return spawn_actually(args);
 }
 
-node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
-                               std::string name, std::filesystem::path dir) {
+node_actor::behavior_type
+node(node_actor::stateful_pointer<node_state> self, std::string name,
+     std::filesystem::path dir, detach_components detach_filesystem) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
@@ -646,8 +647,10 @@ node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
   // Initialize the accountant.
   auto accountant = spawn_accountant(self);
   // Initialize the file system with the node directory as root.
-  auto fs = self->spawn<caf::detached>(posix_filesystem, self->state.dir,
-                                       std::move(accountant));
+  auto fs = detach_filesystem == detach_components::yes
+              ? self->spawn<caf::detached>(posix_filesystem, self->state.dir,
+                                           accountant)
+              : self->spawn(posix_filesystem, self->state.dir, accountant);
   auto err
     = register_component(self, caf::actor_cast<caf::actor>(fs), "filesystem");
   VAST_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
@@ -660,7 +663,8 @@ node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
       VAST_ASSERT(component);
       // Terminate if a singleton dies.
       if (is_core_component(component->type)) {
-        VAST_ERROR("{} terminates after DOWN from {}", *self, component->type);
+        VAST_ERROR("{} terminates after DOWN from {} with reason {}", *self,
+                   component->type, msg.reason);
         self->send_exit(self, caf::exit_reason::user_shutdown);
       }
     }

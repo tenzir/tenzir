@@ -26,14 +26,16 @@ struct node : deterministic_actor_system_and_events {
   ~node() override;
 
   template <class... Ts>
-  caf::actor spawn_component(std::string component, Ts&&... args) {
+  caf::actor
+  spawn_component(std::string component, std::vector<std::string> args = {},
+                  caf::settings opts = {}) {
     using namespace caf;
     using namespace std::string_literals;
     actor result;
     invocation inv;
     inv.full_name = "spawn "s + component;
-    inv.options = {};
-    inv.arguments = {std::forward<Ts>(args)...};
+    inv.options = std::move(opts);
+    inv.arguments = std::move(args);
     auto rh = self->request(test_node, infinite, atom::spawn_v, std::move(inv));
     run();
     rh.receive([&](const actor& a) { result = a; },

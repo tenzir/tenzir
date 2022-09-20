@@ -105,6 +105,7 @@ class data;
 class duration_type;
 class enumeration_type;
 class expression;
+class http_request;
 class integer_type;
 class legacy_abstract_type;
 class legacy_type;
@@ -138,6 +139,7 @@ class type;
 class uuid;
 class value_index;
 
+struct rest_endpoint;
 struct attribute;
 struct augmented_partition_synopsis;
 struct count_query_context;
@@ -184,9 +186,13 @@ struct legacy_time_type;
 struct type_extractor;
 struct type_set;
 
+enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
 enum class bool_operator : uint8_t;
 enum class ec : uint8_t;
+enum class http_content_type : uint16_t;
+enum class http_method : uint8_t;
+enum class http_status_code : uint16_t;
 enum class port_type : uint8_t;
 enum class query_options : uint32_t;
 enum class relational_operator : uint8_t;
@@ -374,6 +380,7 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((vast::address))
+  VAST_ADD_TYPE_ID((vast::rest_endpoint))
   VAST_ADD_TYPE_ID((vast::meta_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
   VAST_ADD_TYPE_ID((vast::chunk_ptr))
@@ -387,6 +394,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
+  VAST_ADD_TYPE_ID((vast::http_request))
   VAST_ADD_TYPE_ID((vast::integer))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
