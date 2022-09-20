@@ -410,8 +410,11 @@ public:
   /// Retrieve all of the store's slices.
   /// @returns The store's slices.
   [[nodiscard]] detail::generator<table_slice> slices() const override {
-    for (const auto& slice : slices_)
-      co_yield slice;
+    // We need to make a copy of the slices here because the slices_ vector may
+    // get invalidated while we iterate over it.
+    auto slices = slices_;
+    for (auto& slice : slices)
+      co_yield std::move(slice);
   }
 
   [[nodiscard]] uint64_t num_events() const override {
