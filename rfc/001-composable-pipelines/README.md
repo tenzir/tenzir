@@ -10,6 +10,7 @@
   - [Dominik Lohmann](https://github.com/dominiklohmann)
   - [Rémi Dettai](https://github.com/rdettai)
   - [Thomas Peiselt](https://github.com/dispanser)
+  - [Tobias Mayer](https://github.com/tobim)
 - **Discussion**: [PR #2511](https://github.com/tenzir/vast/pull/2511)
 
 ## Overview
@@ -19,13 +20,15 @@ that *everything is a pipeline* and build a composable UX around this concept.
 
 ## Problem Statement
 
-Pipelines currently are only deployable at [predefined
+Pipelines offer flexible data reshaping at [predefined customization
 points](https://vast.io/docs/use-vast/transform). For example, they can be
 triggered for specific events on import/export, or invoked by compaction.
+Howerver, it is impossible to run pipelines in an ad-hoc manner, for example as
+a post-processing step after a query or for an ad-hoc ingest of a data set.
 
-As we are bringing pipelines to the query language, we need to solve a UX
-challenge: how do we make the data flow explicit and provide a unified
-experience, especially in the presence of custom plugins?
+This RFC proposes dynamic pipelines that do not require static definition in
+configuration file, but rather allow users to specify them as an extension to
+expression language.
 
 ## Solution Proposal
 
