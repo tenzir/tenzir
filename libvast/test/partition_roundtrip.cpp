@@ -232,11 +232,15 @@ TEST(full partition roundtrip) {
                         vast::system::accountant_actor{});
   auto partition_uuid = vast::uuid::random();
   auto store_id = std::string{"feather"};
+  const auto* store_plugin
+    = vast::plugins::find<vast::store_actor_plugin>("feather");
+  REQUIRE(store_plugin);
+  auto [store_builder, store_header] = unbox(store_plugin->make_store_builder(
+    vast::system::accountant_actor{}, fs, partition_uuid));
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
-                vast::index_config{}, vast::system::store_actor{}, store_id,
-                vast::chunk::make_empty());
+                vast::index_config{}, store_builder, store_id, store_header);
   run();
   REQUIRE(partition);
   // Add data to the partition.
