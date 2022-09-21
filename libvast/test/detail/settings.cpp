@@ -15,18 +15,10 @@
 
 TEST(return error when passed config value is not a list type) {
   caf::config_value in{caf::config_value::integer{5}};
-  std::string_view error_msg{"some_err"};
   const auto out
     = vast::detail::unpack_config_list_to_vector<caf::config_value::integer>(
-      in, error_msg);
-  REQUIRE(!out);
-  auto context = out.error().context();
-  std::string context_value;
-  auto f = caf::message_handler{[&](std::string& str) {
-    context_value = str;
-  }};
-  REQUIRE(f(context));
-  CHECK_EQUAL(context_value, error_msg);
+      in);
+  CHECK(!out);
 }
 
 TEST(return error when passed config value list has different type than
@@ -37,7 +29,7 @@ TEST(return error when passed config value list has different type than
 
   const auto out
     = vast::detail::unpack_config_list_to_vector<caf::config_value::integer>(
-      in, "err");
+      in);
   CHECK(!out);
 }
 
@@ -48,7 +40,7 @@ TEST(unpack list properly) {
 
   const auto out
     = vast::detail::unpack_config_list_to_vector<caf::config_value::integer>(
-      in, "err");
+      in);
   REQUIRE(out);
   REQUIRE_EQUAL(out->size(), list_values.size());
   CHECK_EQUAL(out->front(), caf::config_value::integer{5});

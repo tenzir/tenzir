@@ -135,9 +135,11 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
       return caf::make_error(ec::invalid_configuration, "pipeline name must "
                                                         "be a string");
     auto events = detail::unpack_config_list_to_vector<std::string>(
-      (*pipeline)["events"], "pipeline event types must be a list of strings");
-    if (!events)
+      (*pipeline)["events"]);
+    if (!events) {
+      VAST_ERROR("Unable to extract events from pipeline config");
       return events.error();
+    }
     auto server_pipeline = *location == "server";
     if (server != server_pipeline)
       continue;

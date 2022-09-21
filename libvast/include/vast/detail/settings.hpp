@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "caf/detail/pretty_type_name.hpp"
 #include "vast/error.hpp"
 #include "vast/policy/merge_lists.hpp"
 
@@ -40,21 +41,24 @@ get_bytesize(caf::settings opts, std::string_view key, uint64_t defval);
 /// @return all list values extracted as Ts or error in 2 cases: the cfg_value
 /// is not of a list type, any value in the list is not of type T.
 template <class T>
-caf::expected<std::vector<T>> unpack_config_list_to_vector(
-  const caf::config_value& cfg_value,
-  std::string_view error_message_on_list_extraction_failure) {
+caf::expected<std::vector<T>>
+unpack_config_list_to_vector(const caf::config_value& cfg_value) {
   const auto* list = caf::get_if<caf::config_value::list>(&cfg_value);
   if (!list)
-    return caf::make_error(ec::invalid_configuration,
-                           error_message_on_list_extraction_failure.data());
+    return caf::make_error(ec::invalid_configuration, "Failed to extract "
+                                                      "config value as list");
 
   std::vector<T> ret;
   ret.reserve(list->size());
   for (const auto& e : *list) {
     const auto* val = caf::get_if<T>(&e);
     if (!val)
-      return caf::make_error(ec::invalid_configuration,
-                             "Unexpected type in unpack_config_list_to_vector");
+      return caf::make_error(
+        ec::invalid_configuration,
+        fmt::format("Type mismatch while unpacking config list: expected {}, "
+                    "got {}",
+                    caf::detail::pretty_type_name(typeid(T)),
+                    caf::detail::pretty_type_name(typeid(e))));
     ret.push_back(*val);
   }
 
@@ -79,10 +83,7 @@ unpack_config_list_to_vector(const caf::actor_system_config& cfg,
     return caf::make_error(
       ec::invalid_configuration,
       fmt::format("No key: {} found in actor system config", cfg_list_key));
-  return unpack_config_list_to_vector<T>(
-    it->second, fmt::format("actor system config value under {} key isn't a "
-                            "list type",
-                            cfg_list_key));
+  return unpack_config_list_to_vector<T>(it->second);
 }
 
 } // namespace vast::detail

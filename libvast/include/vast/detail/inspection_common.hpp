@@ -14,28 +14,24 @@
 namespace vast::detail {
 
 template <class Inspector, class AfterInspectionCallback>
-class inspection_object_with_after_inspection_callback {
-public:
-  inspection_object_with_after_inspection_callback(
-    Inspector& inspector, AfterInspectionCallback callback)
-    : inspector_{inspector}, callback_{std::move(callback)} {
-  }
+class inspection_object_with_after_inspection_callback;
 
-  template <class... Fields>
-  constexpr bool fields(Fields&&... fields) {
-    return (fields(inspector_) && ...) && callback_();
-  }
-
-  constexpr inspection_object_with_after_inspection_callback&
-  pretty_name(std::string_view) noexcept {
-    return *this;
-  }
-
-private:
-  Inspector& inspector_;
-  AfterInspectionCallback callback_;
-};
-
+/// Common class used by VAST inspectors as a return type for object method.
+/// The CAF inspector API requires an inspector to have object method.
+/// This method should return an object which guides the inspection procedure.
+/// Example of usage:
+/// bool inspect(Inspector& f, some_type& x)
+///{
+///   auto cb = []{};
+///   return f.object(x).
+///     on_load(cb).
+///     fields(f.field("name", x.name), f.field("value", x.value));
+///}
+/// Such code should result in inspection of x.name by the inspector. If the
+/// inspection succeeds then it should proceed to inspection of x.value. If all
+/// provided fields succeed then callback (cb variable) should be called. The
+/// provided string literals are optionally used by human readable CAF
+/// inspectors. Current VAST inspectors have no usage for them.
 template <class Inspector>
 class inspection_object {
 public:
@@ -67,6 +63,31 @@ public:
 
 private:
   Inspector& inspector_;
+};
+
+/// Enhanced inspection_object that is responsible for calling callback after
+/// inspection.
+template <class Inspector, class AfterInspectionCallback>
+class inspection_object_with_after_inspection_callback {
+public:
+  inspection_object_with_after_inspection_callback(
+    Inspector& inspector, AfterInspectionCallback callback)
+    : inspector_{inspector}, callback_{std::move(callback)} {
+  }
+
+  template <class... Fields>
+  constexpr bool fields(Fields&&... fields) {
+    return (fields(inspector_) && ...) && callback_();
+  }
+
+  constexpr inspection_object_with_after_inspection_callback&
+  pretty_name(std::string_view) noexcept {
+    return *this;
+  }
+
+private:
+  Inspector& inspector_;
+  AfterInspectionCallback callback_;
 };
 
 template <class T>
