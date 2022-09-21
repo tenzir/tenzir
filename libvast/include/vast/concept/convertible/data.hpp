@@ -92,9 +92,8 @@ template <class... Args>
 [[nodiscard]] caf::error
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
   if (in) {
-    auto f = fmt::format("{}{{}}", fstring);
     auto new_msg = in.context().apply({
-      [&](std::string& s) {
+      [&, f = fmt::format("{}{{}}", fstring)](std::string& s) {
         return caf::make_message(fmt::format(
           VAST_FMT_RUNTIME(f), std::forward<Args>(args)..., std::move(s)));
       },

@@ -1,4 +1,8 @@
-include("${CMAKE_CURRENT_LIST_DIR}/VASTVersionFallback.cmake")
+file(READ "${CMAKE_CURRENT_LIST_DIR}/../version.json" VAST_VERSION_JSON)
+string(JSON VAST_VERSION_FALLBACK GET "${VAST_VERSION_JSON}"
+       vast-version-fallback)
+string(JSON VAST_PARTITION_VERSION GET "${VAST_VERSION_JSON}"
+       vast-partition-version)
 
 find_package(Git QUIET)
 
@@ -49,11 +53,11 @@ if (NOT VAST_VERSION_SHORT)
 endif ()
 
 if (NOT VAST_VERSION_TAG)
-  set(VAST_VERSION_TAG "${VAST_VERSION_FALLBACK}")
+  set(VAST_VERSION_TAG "v${VAST_VERSION_FALLBACK}")
 endif ()
 
 if (NOT VAST_VERSION_SHORT)
-  set(VAST_VERSION_SHORT "${VAST_VERSION_FALLBACK}")
+  set(VAST_VERSION_SHORT "v${VAST_VERSION_FALLBACK}")
 endif ()
 
 # We accept:

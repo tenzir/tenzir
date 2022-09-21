@@ -176,7 +176,8 @@ struct randomizer {
   void operator()(const string_type&, std::string& str) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<size_t> unif_size{0, 256};
-    std::uniform_int_distribution<char> unif_char{32, 126}; // Printable ASCII
+    std::uniform_int_distribution<signed char> unif_char{
+      32, 126}; // Printable ASCII
     str.resize(unif_size(gen));
     for (auto& c : str)
       c = unif_char(gen);

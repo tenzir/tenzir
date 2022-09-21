@@ -100,8 +100,7 @@ render(output_iterator& out, ForwardIterator first, ForwardIterator last) {
 }
 
 caf::error render(output_iterator& out, const view<list>& xs) {
-  render(out, xs.begin(), xs.end());
-  return caf::none;
+  return render(out, xs.begin(), xs.end());
 }
 
 caf::error render(output_iterator&, const view<map>&) {

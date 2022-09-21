@@ -26,8 +26,8 @@ void counter_state::init(expression expr, index_actor index,
   auto query_context
     = vast::query_context::make_count("count", self_,
                                       skip_candidate_check
-                                        ? query_context::count::estimate
-                                        : query_context::count::exact,
+                                        ? count_query_context::estimate
+                                        : count_query_context::exact,
                                       std::move(expr));
   // Transition from idle state when receiving 'run' and client handle.
   behaviors_[idle].assign([=, this, query_context = std::move(query_context)](

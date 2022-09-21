@@ -150,7 +150,7 @@ private:
   }
 
   template <class T>
-    requires(std::is_integral_v<T> && !std::is_same_v<bool, T>)
+    requires(std::is_integral_v<T>)
   result_type apply(T& x) {
     using type
       = caf::detail::select_integer_type_t<sizeof(T), std::is_signed_v<T>>;
@@ -232,7 +232,6 @@ private:
   }
 
   template <class T>
-    requires(!caf::detail::is_byte_sequence<T>::value)
   result_type apply_sequence(T& xs) {
     size_t size = 0;
     if (!begin_sequence(size))

@@ -18,9 +18,13 @@
 namespace vast::system {
 
 caf::expected<caf::actor>
-spawn_catalog(node_actor::stateful_pointer<node_state> self, spawn_arguments&) {
+spawn_catalog(node_actor::stateful_pointer<node_state> self,
+              spawn_arguments& args) {
   auto [accountant] = self->state.registry.find<accountant_actor>();
-  auto handle = self->spawn<caf::detached>(catalog, accountant);
+  auto detached = caf::get_or(args.inv.options, "vast.detach-components",
+                              defaults::system::detach_components);
+  auto handle = detached ? self->spawn<caf::detached>(catalog, accountant)
+                         : self->spawn(catalog, accountant);
   return caf::actor_cast<caf::actor>(handle);
 }
 

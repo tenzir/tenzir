@@ -105,6 +105,7 @@ class data;
 class duration_type;
 class enumeration_type;
 class expression;
+class http_request;
 class integer_type;
 class legacy_abstract_type;
 class legacy_type;
@@ -138,8 +139,10 @@ class type;
 class uuid;
 class value_index;
 
+struct rest_endpoint;
 struct attribute;
 struct augmented_partition_synopsis;
+struct count_query_context;
 struct legacy_address_type;
 struct legacy_alias_type;
 struct meta_extractor;
@@ -150,6 +153,7 @@ struct legacy_count_type;
 struct curried_predicate;
 struct data_extractor;
 struct disjunction;
+struct extract_query_context;
 struct legacy_duration_type;
 struct legacy_enumeration_type;
 struct field_extractor;
@@ -182,9 +186,13 @@ struct legacy_time_type;
 struct type_extractor;
 struct type_set;
 
+enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
 enum class bool_operator : uint8_t;
 enum class ec : uint8_t;
+enum class http_content_type : uint16_t;
+enum class http_method : uint8_t;
+enum class http_status_code : uint16_t;
 enum class port_type : uint8_t;
 enum class query_options : uint32_t;
 enum class relational_operator : uint8_t;
@@ -358,7 +366,6 @@ struct report;
 struct spawn_arguments;
 
 enum class keep_original_partition : bool;
-enum class query_response : bool;
 enum class send_initial_dbstate : bool;
 enum class status_verbosity;
 
@@ -373,17 +380,21 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((vast::address))
+  VAST_ADD_TYPE_ID((vast::rest_endpoint))
   VAST_ADD_TYPE_ID((vast::meta_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
   VAST_ADD_TYPE_ID((vast::chunk_ptr))
   VAST_ADD_TYPE_ID((vast::conjunction))
+  VAST_ADD_TYPE_ID((vast::count_query_context))
   VAST_ADD_TYPE_ID((vast::curried_predicate))
   VAST_ADD_TYPE_ID((vast::data))
   VAST_ADD_TYPE_ID((vast::data_extractor))
   VAST_ADD_TYPE_ID((vast::disjunction))
   VAST_ADD_TYPE_ID((vast::ec))
   VAST_ADD_TYPE_ID((vast::expression))
+  VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
+  VAST_ADD_TYPE_ID((vast::http_request))
   VAST_ADD_TYPE_ID((vast::integer))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
@@ -414,7 +425,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::system::metrics_metadata))
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_cursor))
-  VAST_ADD_TYPE_ID((vast::system::query_response))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
   VAST_ADD_TYPE_ID((vast::system::keep_original_partition))

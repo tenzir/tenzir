@@ -476,8 +476,8 @@ tests:
         input: data/suricata/eve.json
       - command: -N export json '#import_time < 5 seconds ago'
         transformation: jq -ec '.'
-      - command: -N status
-        transformation: sleep 5
+      - command: sleep 5
+        prepend_vast: false
       - command: -N export json '#import_time < 5 seconds ago'
         transformation: jq -ec '.'
 

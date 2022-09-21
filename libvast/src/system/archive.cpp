@@ -95,10 +95,10 @@ archive_state::file_request(vast::query_context query_context) {
     // work.
     // TODO: Figure out a way to avoid this.
     caf::visit(detail::overload{
-                 [&](query_context::count& count) {
+                 [&](count_query_context& count) {
                    self->monitor(count.sink);
                  },
-                 [&](query_context::extract& extract) {
+                 [&](extract_query_context& extract) {
                    self->monitor(extract.sink);
                  },
                },
@@ -147,10 +147,10 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       self->state.requests.begin(), self->state.requests.end(),
       [&](const auto& request) {
         return caf::visit(detail::overload{
-                            [&](const query_context::count& count) {
+                            [&](const count_query_context& count) {
                               return count.sink == msg.source;
                             },
-                            [&](const query_context::extract& extract) {
+                            [&](const extract_query_context& extract) {
                               return extract.sink == msg.source;
                             },
                           },
@@ -198,14 +198,14 @@ archive(archive_actor::stateful_pointer<archive_state> self,
           checker = prune_meta_predicates(std::move(*c));
         }
         caf::visit(detail::overload{
-                     [&](const query_context::count& count) {
-                       if (count.mode == query_context::count::estimate)
+                     [&](const count_query_context& count) {
+                       if (count.mode == count_query_context::estimate)
                          die("logic error detected");
                        auto result = count_matching(*slice, checker,
                                                     self->state.session_ids);
                        self->send(count.sink, result);
                      },
-                     [&](const query_context::extract& extract) {
+                     [&](const extract_query_context& extract) {
                        auto final_slice
                          = filter(*slice, checker, self->state.session_ids);
                        if (final_slice) {

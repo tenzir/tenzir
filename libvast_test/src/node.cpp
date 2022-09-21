@@ -21,12 +21,21 @@ namespace fixtures {
 node::node(std::string_view suite)
   : fixtures::deterministic_actor_system_and_events(suite) {
   MESSAGE("spawning node");
-  test_node = self->spawn(system::node, "test", directory / "node");
+  test_node = self->spawn(system::node, "test", directory / "node",
+                          system::detach_components::no);
   run();
-  MESSAGE("spawning components");
   spawn_component("type-registry");
   spawn_component("archive");
-  spawn_component("index");
+  auto settings = caf::settings{};
+  auto vast_settings = caf::settings{};
+  // Don't run the catalog in a separate thread, otherwise it is
+  // invisible to the `test_coordinator`.
+  caf::put(settings, "vast.detach-components", false);
+  // Set the timeout to zero to prevent the index telemetry loop,
+  // which will cause any call to `run()` to hang indefinitely.
+  caf::put(settings, "vast.active-partition-timeout", caf::timespan{0});
+  spawn_component("catalog", {}, settings);
+  spawn_component("index", {}, settings);
   spawn_component("importer");
 }
 
@@ -41,8 +50,11 @@ void node::ingest(const std::string& type) {
   auto rh = self->request(test_node, caf::infinite, atom::get_v, atom::label_v,
                           "importer");
   run();
-  rh.receive([&](caf::actor actor) { importer = std::move(actor); },
-             error_handler());
+  rh.receive(
+    [&](caf::actor actor) {
+      importer = std::move(actor);
+    },
+    error_handler());
   MESSAGE("sending " << type << " logs");
   // Send previously parsed logs directly to the importer (as opposed to
   // going through a source).
@@ -63,7 +75,8 @@ void node::ingest(const std::string& type) {
 
 std::vector<table_slice> node::query(std::string expr) {
   MESSAGE("spawn an exporter and register ourselves as sink");
-  auto exp = spawn_component("exporter", std::move(expr));
+  auto exp
+    = spawn_component("exporter", std::vector<std::string>{std::move(expr)});
   self->monitor(exp);
   self->send(exp, atom::sink_v, self);
   self->send(exp, atom::run_v);
@@ -84,7 +97,10 @@ std::vector<table_slice> node::query(std::string expr) {
         FAIL("exporter terminated with exit reason: " << to_string(msg.reason));
     },
     // Do a one-pass can over the mailbox without waiting for messages.
-    caf::after(std::chrono::seconds(0)) >> [&] { running = false; });
+    caf::after(std::chrono::seconds(0)) >>
+      [&] {
+        running = false;
+      });
   MESSAGE("got " << result.size() << " table slices in total");
   return result;
 }

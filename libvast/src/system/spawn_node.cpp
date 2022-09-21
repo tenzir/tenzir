@@ -37,6 +37,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
   auto db_dir
     = get_or(opts, "vast.db-directory", defaults::system::db_directory);
+  auto detach_components = caf::get_or(opts, "vast.detach-components",
+                                       defaults::system::detach_components);
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   if (err)
@@ -79,7 +81,9 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Spawn the node.
   VAST_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to system::node.
-  auto actor = self->spawn(system::node, id, abs_dir);
+  auto detach_filesystem
+    = detach_components ? detach_components::yes : detach_components::no;
+  auto actor = self->spawn(system::node, id, abs_dir, detach_filesystem);
   actor->attach_functor([=, pid_file = std::move(pid_file)](
                           const caf::error&) -> caf::result<void> {
     VAST_DEBUG("node removes PID lock: {}", pid_file);
@@ -118,7 +122,9 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     ->request(node.get(), caf::infinite, atom::internal_v, atom::spawn_v,
               atom::plugin_v)
     .receive([]() { /* nop */ },
-             [&](caf::error& err) { error = std::move(err); });
+             [&](caf::error& err) {
+               error = std::move(err);
+             });
   if (error)
     return error;
   return node;

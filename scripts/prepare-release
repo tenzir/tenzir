@@ -12,7 +12,7 @@ if (( $# != 1 )) || [[ "$1" == "--help" ]]; then
 fi
 
 # Check if all required tools are available.
-for binary in 'cmake' 'gh' 'rsync' 'git' 'perl'; do
+for binary in 'cmake' 'gh' 'rsync' 'git' 'perl' 'jq'; do
   if ! command -v "${binary}" 2>&1 >/dev/null; then
     >&2 echo "Error: ${binary} not in PATH"
     exit 1
@@ -31,10 +31,8 @@ build_dir=$(mktemp -d 2>/dev/null || mktemp -d -t "build-${new_version}")
 
 # Determine the last version including release candidates, the last version
 # excluding release candidates and the new version.
-# TODO: Starting with the 1.1 release, we can add --match='v[0-9]*' to further
-# restrict the git-describe usages here.
-last_rc_version="$(git -C "${source_dir}" describe --abbrev=0)"
-last_version="$(git -C "${source_dir}" describe --abbrev=0 --exclude='*-rc*')"
+last_rc_version="$(git -C "${source_dir}" describe --abbrev=0 --match='v[0-9]*')"
+last_version="$(git -C "${source_dir}" describe --abbrev=0 --match='v[0-9]*' --exclude='*-rc*')"
 new_version="$1"
 
 # Check that the new version does not exist already.
@@ -47,10 +45,9 @@ fi
 git fetch origin master
 git switch -C "topic/release-${new_version}" origin/master
 
-# Change the fallback version.
-perl -i -pe "s/${last_rc_version}/${new_version}/g" \
-  "${source_dir}/cmake/VASTVersionFallback.cmake" \
-  "${source_dir}/nix/vast/default.nix"
+# Update the fallback version.
+version_json="$(jq --arg v "${new_version#v}" '."vast-version-fallback" = $v' version.json)"
+echo -E "${version_json}" > version.json)
 
 # If the new version is not a release candidate, change mentions of the version
 # in README.md and pyvast/setup.py as well.

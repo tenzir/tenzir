@@ -296,7 +296,7 @@ TEST(full partition roundtrip) {
         auto rp = self->request(
           readonly_partition, caf::infinite, vast::atom::query_v,
           vast::query_context::make_count(
-            "test", dummy, vast::query_context::count::mode::estimate,
+            "test", dummy, vast::count_query_context::mode::estimate,
             expression));
         run();
         rp.receive(

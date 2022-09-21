@@ -303,7 +303,7 @@ struct hash_inspector {
 
   static constexpr bool reads_state = true;
 
-  hash_inspector(HashAlgorithm& h) : h_{h} {
+  explicit hash_inspector(HashAlgorithm& h) : h_{h} {
   }
 
   result_type operator()() const noexcept {
@@ -325,7 +325,7 @@ struct hash_inspector {
   template <class T, class... Ts>
     requires(!caf::meta::is_annotation<T>::value)
   result_type operator()(T&& x, Ts&&... xs) const noexcept {
-    hash_append(h_, x);
+    hash_append(h_, std::forward<T>(x));
     (*this)(std::forward<Ts>(xs)...);
   }
 

@@ -401,7 +401,7 @@ TEST(catalog messages) {
   // Sending an expression should return candidate partition ids
   auto query_context
     = query_context::make_count("test", system::receiver_actor<uint64_t>{},
-                                query_context::count::estimate, expr);
+                                count_query_context::estimate, expr);
   auto expr_response
     = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
   run();

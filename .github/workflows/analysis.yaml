@@ -43,12 +43,14 @@ jobs:
             gnupg2 gnupg-agent \
             jq \
             lcov \
+            libasio-dev \
             libbroker-dev \
             libcaf-dev \
             libcaf-dev \
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \
+            librestinio-dev \
             libsimdjson-dev \
             libspdlog-dev \
             libssl-dev \

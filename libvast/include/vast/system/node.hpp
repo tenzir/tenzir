@@ -26,6 +26,11 @@
 
 namespace vast::system {
 
+enum class detach_components {
+  yes,
+  no,
+};
+
 /// State of the node actor.
 struct node_state {
   // -- remote command infrastructure ------------------------------------------
@@ -74,8 +79,12 @@ struct node_state {
 /// Spawns a node.
 /// @param self The actor handle
 /// @param name The unique name of the node.
+/// @param detach_components Whether to spawn some components (ie. the
+/// filesystem) in
+///        dedicated threads.
 /// @param dir The directory where to store persistent state.
-node_actor::behavior_type node(node_actor::stateful_pointer<node_state> self,
-                               std::string name, std::filesystem::path dir);
+node_actor::behavior_type
+node(node_actor::stateful_pointer<node_state> self, std::string name,
+     std::filesystem::path dir, detach_components);
 
 } // namespace vast::system

@@ -12,8 +12,11 @@
 
 #include "vast/command.hpp"
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/pp.hpp"
+#include "vast/http_api.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/type.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
@@ -55,6 +58,10 @@ std::vector<plugin_ptr>& get_mutable() noexcept;
 
 /// Retrieves the system-wide plugin singleton.
 const std::vector<plugin_ptr>& get() noexcept;
+
+/// Retrieves all plugins of a given plugin type.
+template <typename Plugin>
+detail::generator<const Plugin*> get() noexcept;
 
 /// Retrieves the plugin of type `Plugin` with the given name, or nullptr
 /// if it doesn't exist.
@@ -333,6 +340,38 @@ public:
   parse(std::string_view query) const = 0;
 };
 
+// -- rest endpoint plugin -----------------------------------------------------
+
+// A rest endpoint plugin declares a set of routes on which it can respond
+// to HTTP requests, together with a `handler` actor that is responsible
+// for doing that. A server (usually the `web` plugin) can then accept
+// incoming requests and dispatch them to the correct handler according to the
+// request path.
+class rest_endpoint_plugin : public virtual plugin {
+public:
+  /// A path prefix to prepend to all routes declared by this plugin.
+  /// Defaults to the plugin name.
+  [[nodiscard]] virtual std::string prefix() const {
+    return std::string{"/"} + this->name();
+  }
+
+  /// OpenAPI spec for the plugin endpoints.
+  /// @returns A `vast::data` object that is a record containing entries for
+  /// the `paths` element of an OpenAPI spec.
+  [[nodiscard]] virtual data
+  openapi_specification(api_version version = api_version::latest) const = 0;
+
+  /// List of API endpoints provided by this plugin.
+  [[nodiscard]] virtual const std::vector<rest_endpoint>&
+  rest_endpoints() const = 0;
+
+  /// Actor that will handle this endpoint.
+  //  TODO: This should get some integration with component_plugin so that
+  //  the component can be used to answer requests directly.
+  [[nodiscard]] virtual system::rest_handler_actor
+  handler(caf::actor_system& system, system::node_actor node) const = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
@@ -387,9 +426,9 @@ public:
   const plugin& operator*() const noexcept;
   plugin& operator&() noexcept;
 
-  /// Upcast a plugin to a more specific plugin type.
-  /// @tparam Plugin The specific plugin type to try to upcast to.
-  /// @returns A pointer to the upcasted plugin, or 'nullptr' on failure.
+  /// Downcast a plugin to a more specific plugin type.
+  /// @tparam Plugin The specific plugin type to try to downcast to.
+  /// @returns A pointer to the downcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
   [[nodiscard]] const Plugin* as() const {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
@@ -397,9 +436,9 @@ public:
     return dynamic_cast<const Plugin*>(instance_);
   }
 
-  /// Upcast a plugin to a more specific plugin type.
-  /// @tparam Plugin The specific plugin type to try to upcast to.
-  /// @returns A pointer to the upcasted plugin, or 'nullptr' on failure.
+  /// Downcast a plugin to a more specific plugin type.
+  /// @tparam Plugin The specific plugin type to try to downcast to.
+  /// @returns A pointer to the downcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
   Plugin* as() {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
@@ -442,6 +481,13 @@ const Plugin* find(const std::string& name) {
   if (it == plugins.end())
     return nullptr;
   return it->template as<Plugin>();
+}
+
+template <typename Plugin>
+detail::generator<const Plugin*> get() noexcept {
+  for (auto const& plugin : get())
+    if (auto const* specific_plugin = plugin.as<Plugin>())
+      co_yield specific_plugin;
 }
 
 } // namespace vast::plugins

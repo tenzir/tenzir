@@ -107,6 +107,7 @@ in
       ../BANNER
       ../README.md
       ../vast.yaml.example
+      ../version.json
     ];
   };
   vast = (final.callPackage ./vast { inherit stdenv; }).overrideAttrs (old: {

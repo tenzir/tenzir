@@ -1,0 +1,11 @@
+vast:
+  plugins:
+    - rest
+
+plugins:
+  rest:
+    bind: 127.0.0.1
+    port: 443
+    mode: server
+    
+
