@@ -59,12 +59,14 @@ later. The default value is 10 seconds.
 VAST arranges data in horizontal _partitions_ for sharding. The persistent
 representation of partition is a single file consists containing a set table
 slices all having the same schema. The `store` plugin defines the on-disk
-format. VAST currently ships with two implementations:
+format. VAST currently ships with three implementations:
 
-1. **Segment**: writes Apache Arrow IPC with a thin wrapper
-2. **Apache Parquet**: writes [Parquet](https://parquet.apache.org/) files
+1. **Feather**: writes Apache Feather V2 files
+2. **Parquet**: writes [Apache Parquet](https://parquet.apache.org/) files
+3. **Segment**: writes Apache Arrow IPC with a thin wrapper (deprecated,
+   read-only)
 
-VAST defaults to the Segment store. Enable the Parquet store by loading the
+VAST defaults to the `feather` store. Enable the Parquet store by loading the
 plugin and adjusting `vast.store-backend`:
 
 ```yaml
@@ -74,17 +76,17 @@ vast:
   store-backend: parquet
 ```
 
-There's an inherent space-time tradeoff between the Segment and Parquet store
-that affects CPU, memory, and storage characteristics. Compared to the Segment
-store, Parquet differs as follows:
+There's an inherent space-time tradeoff between the stores that affects CPU,
+memory, and storage characteristics. Compared to the Feather and Segment stores,
+Parquet differs as follows:
 
 1. Parquet files occupy ~40% less space, which also reduces I/O pressure during
    querying.
 2. Parquet utilizes more CPU cycles during ingest (~10%) and querying.
 
-Parquet has the major advantage that it's the de-facto standard for
-encoding columnar data in modern data architectures. This allows other
-applications that support reading from Parquet *native* access to the data.
+Parquet has the major advantage that it's the de-facto standard for encoding
+columnar data in modern data architectures. This allows other applications that
+support reading from Parquet *native* access to the data.
 
 :::tip Recommendation
 
