@@ -1,8 +1,8 @@
 # Composable Pipelines
 
-- **Status**: In-Review
+- **Status**: Accepted
 - **Created**: Aug 19, 2022
-- **ETA**: Sep 21, 2022
+- **Accepted**: Sep 21, 2022
 - **Authors**:
   - [Matthias Vallentin](https://github.com/mavam)
 - **Contributors**:
