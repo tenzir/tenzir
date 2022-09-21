@@ -27,8 +27,8 @@ Howerver, it is impossible to run pipelines in an ad-hoc manner, for example as
 a post-processing step after a query or for an ad-hoc ingest of a data set.
 
 This RFC proposes dynamic pipelines that do not require static definition in
-configuration file, but rather allow users to specify them as an extension to
-expression language.
+a configuration file, but rather allow users to specify them as an extension to
+the expression language.
 
 ## Solution Proposal
 
@@ -85,7 +85,7 @@ The dataflow edges (`|`) in the middle produce valid type pairs:
 The `*` character signals the open end of the pipeline. By collapsing the types
 in the middle, the type pipeline of the pipeline becomes `<Void, Arrow>`. Since
 `Void` does not require input to run, this pipeline could be "kicked off".
-However, there is consumer at the other end, as the pipeline ends in `Arrow`.
+However, there is no consumer at the other end, as the pipeline ends in `Arrow`.
 Adding another operator would make it complete, e.g.:
 
 ```
@@ -96,6 +96,12 @@ store<Arrow, Void>
 ```
 
 This results in a `<Void, Void>` pipeline that does not "leak".
+
+Assuming that there won't be other types at the logical level besides `Void` and
+`Arrow`, we can simplify the typing discussion to a binary model: either data
+flows (= `Arrow`) or not (= `Void`). This would be desirable as it reduces
+complexity and obviates the need of thinking about typing at the logical level.
+The first implementation will reveal whether this is feasible.
 
 ### Operator Overview
 
@@ -305,10 +311,9 @@ formats, but rather M + N. To achieve this, we can separate the carrier and
 format into dedicated operators. The carrier produces/consumes bytes, and the
 format performs parsing/printing to interface with the `Arrow` type.
 
-To combine carrier and format, we may to introduce an intermediate type `Bytes`
-that bridges the physical operators. To implement `load`, we would use a
-combination of `from` and `read`. To implement `store`, we would use `write` and
-`to`.
+To combine carrier and format, we introduce an intermediate type `Bytes` that
+bridges the physical operators. To implement `load`, we would use a combination
+of `from` and `read`. To implement `store`, we would use `write` and `to`.
 
 For example, the operator `from CARRIER FORMAT` would then map to the
 physical implementation `from CARRIER | read FORMAT`. Similarly, `store CARRIER
