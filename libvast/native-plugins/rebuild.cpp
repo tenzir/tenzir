@@ -122,10 +122,10 @@ private:
       = [&](const auto& self, const record_type& schema,
             const type_to_arrow_array_t<record_type>& array,
             type_to_arrow_builder_t<record_type>& builder) noexcept -> void {
-      // Ideally we'd assert here that the array length is at most offset +
+      // Ideally we'd assert here that the array length is at least offset +
       // length, but the array length may actually be less than that, because
-      //
       // Arrow silently shortens nested Arrays with nulls at the end.
+      //
       // NTOE: Passing nullptr for the valid_bytes parameter has the undocumented
       // special meaning of all appenbded entries being valid. The Arrow unit
       // tests do the same thing in a few places; if this ever starts to cause
