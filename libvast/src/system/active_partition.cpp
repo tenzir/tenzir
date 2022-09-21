@@ -412,8 +412,8 @@ active_partition_actor::behavior_type active_partition(
           idx = self->spawn(active_indexer, qf.name(), std::move(value_index));
           auto slot = self->state.stage->add_outbound_path(idx);
           self->state.stage->out().set_filter(slot, qf);
-          VAST_DEBUG("{} spawned new active indexer for field {} at slot {}", *self,
-                     field.name, slot);
+          VAST_DEBUG("{} spawned new active indexer for field {} at slot {}",
+                     *self, field.name, slot);
         }
         out.push(table_slice_column{x, col++});
       }
