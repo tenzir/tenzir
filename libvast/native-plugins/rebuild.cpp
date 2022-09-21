@@ -119,10 +119,9 @@ private:
   void append_slice_to_builder(const std::shared_ptr<arrow::RecordBatch>& batch,
                                int64_t offset, int64_t length) noexcept {
     const auto append_columns
-      = [](const auto& self, const record_type& schema,
-           const type_to_arrow_array_t<record_type>& array,
-           type_to_arrow_builder_t<record_type>& builder, int64_t offset,
-           int64_t length) noexcept -> void {
+      = [&](const auto& self, const record_type& schema,
+            const type_to_arrow_array_t<record_type>& array,
+            type_to_arrow_builder_t<record_type>& builder) noexcept -> void {
       // Ideally we'd assert here that the array length is at most offset +
       // length, but the array length may actually be less than that, because
       //
@@ -147,7 +146,7 @@ private:
             auto& concrete_field_builder
               = caf::get<type_to_arrow_builder_t<record_type>>(field_builder);
             self(self, concrete_field_type, concrete_field_array,
-                 concrete_field_builder, offset, length);
+                 concrete_field_builder);
           },
           [&]<concrete_type Type>(
             [[maybe_unused]] const Type& concrete_field_type) noexcept {
@@ -208,8 +207,7 @@ private:
       }
     };
     append_columns(append_columns, caf::get<record_type>(schema_),
-                   *batch->ToStructArray().ValueOrDie(), *builder_, offset,
-                   length);
+                   *batch->ToStructArray().ValueOrDie(), *builder_);
   }
 
   /// Finishes the builder, storing the created optimally sized batch for later
