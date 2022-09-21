@@ -196,10 +196,9 @@ class FargateService:
         self.service_name = service_name
         self.task_family = task_family
 
-    def get_task_id(self, max_wait_time_sec=0):
+    def get_task_id(self, max_wait_time_sec=0, start_time=time.time()):
         """Get the task id for this service. If no server is running, it waits
         until max_wait_time_sec for a new server to be started."""
-        start_time = time.time()
         while True:
             task_res = aws("ecs").list_tasks(
                 family=self.task_family, cluster=self.cluster
@@ -262,33 +261,45 @@ class FargateService:
             desc = self._task_desc(task_res["taskArns"][0])
             return desc
 
-    def start_service(self):
+    def _wait_for_status(self, task_id, target_status, timeout, start_time=time.time()):
+        print(f"Waiting for task {task_id} to reach status {target_status}:")
+        previous_status = ""
+        while time.time() - start_time < timeout:
+            status = self._task_desc(task_id)["lastStatus"]
+            if previous_status != status:
+                print(f"-> {status}")
+                previous_status = status
+            if status == target_status:
+                return
+            time.sleep(0.5)
+        raise Exit("Timed out")
+
+    def start_service(self, timeout=300, start_time=time.time()):
         """Start the service. Noop if it is already running"""
+        print("Starting service...")
         aws("ecs").update_service(
             cluster=self.cluster, service=self.service_name, desiredCount=1
         )
-        task_id = self.get_task_id(max_wait_time_sec=120)
-        print(f"Started task {task_id}")
+        task_id = self.get_task_id(timeout, start_time)
+        self._wait_for_status(task_id, "RUNNING", timeout, start_time)
 
-    def stop_task(self):
+    def stop_task(self, timeout, start_time=time.time()):
         "Stop the current running task in this service."
         task_id = self.get_task_id()
+        print(f"Calling stop on task {task_id}...")
         aws("ecs").stop_task(task=task_id, cluster=self.cluster)
-        return task_id
+        self._wait_for_status(task_id, "DEPROVISIONING", timeout, start_time)
 
-    def stop_service(self):
+    def stop_service(self, timeout=200, start_time=time.time()):
         """Stop the service and its task"""
+        print("Stopping service...")
         aws("ecs").update_service(
             cluster=self.cluster, service=self.service_name, desiredCount=0
         )
-        task_id = self.stop_task()
-        print(f"Stopped task {task_id}")
+        self.stop_task(timeout, start_time)
 
-    def restart_service(self):
+    def restart_service(self, timeout=500, start_time=time.time()):
         """Stop the task within the service, the service starts a new one"""
-        task_id = self.stop_task()
-        print(f"Stopped task {task_id}")
-        # 120 seconds corresponding to the task stopTimeout grace period
-        # + 120 seconds for the new task to start
-        task_id = self.get_task_id(max_wait_time_sec=240)
-        print(f"Started task {task_id}")
+        self.stop_task(timeout, start_time)
+        task_id = self.get_task_id(timeout, start_time)
+        self._wait_for_status(task_id, "RUNNING", timeout, start_time)
