@@ -25,6 +25,7 @@ in
   prev.xxHash.overrideAttrs (old: {
     patches = [ ./xxHash/static.patch ];
   });
+  restinio = final.callPackage ./restinio { };
   caf =
     let
       source = builtins.fromJSON (builtins.readFile ./caf/source.json);
