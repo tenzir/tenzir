@@ -300,10 +300,7 @@ physical operators are not exposed to the user and only relate to the
 implementation.
 
 To illustrate the logical-to-physical mapping, let's consider the example of
-`load` and `store`. As a reminder, these operators take two arguments:
-
-1. **Carrier**: an URL like `s3://aws` or `-` for stdin
-2. **Format**: `json`, `csv`, `feather`, `parquet`, etc.
+`load` and `store`.
 
 We do not want to end up with M x N implementations for M carriers and N
 formats, but rather M + N. To achieve this, we can separate the carrier and
