@@ -23,7 +23,7 @@ that *everything is a pipeline* and build a composable UX around this concept.
 Pipelines offer flexible data reshaping at [predefined customization
 points](https://vast.io/docs/use-vast/transform). For example, they can be
 triggered for specific events on import/export, or invoked by compaction.
-Howerver, it is impossible to run pipelines in an ad-hoc manner, for example as
+However, it is impossible to run pipelines in an ad-hoc manner, for example as
 a post-processing step after a query or for an ad-hoc ingest of a data set.
 
 This RFC proposes dynamic pipelines that do not require static definition in
@@ -97,12 +97,6 @@ store<Arrow, Void>
 
 This results in a `<Void, Void>` pipeline that does not "leak".
 
-Assuming that there won't be other types at the logical level besides `Void` and
-`Arrow`, we can simplify the typing discussion to a binary model: either data
-flows (= `Arrow`) or not (= `Void`). This would be desirable as it reduces
-complexity and obviates the need of thinking about typing at the logical level.
-The first implementation will reveal whether this is feasible.
-
 ### Operator Overview
 
 With this typing concept in mind, we can now take a closer look at the various
@@ -117,6 +111,11 @@ data.
 | -------- | ---------- | ----------- | ------------------------------------------
 | `load`   | `Void`     | `Arrow`     | Read data from a provided location
 | `store`  | `Arrow`    | `Void`      | Write data into a provided location
+
+These operators take two arguments:
+
+1. **Carrier**: an URL like `s3://aws` or `-` for stdin
+2. **Format**: `json`, `csv`, `feather`, `parquet`, etc.
 
 #### Compute
 
@@ -301,10 +300,7 @@ physical operators are not exposed to the user and only relate to the
 implementation.
 
 To illustrate the logical-to-physical mapping, let's consider the example of
-`load` and `store`. These operators take two arguments:
-
-1. **Carrier**: an URL like `s3://aws` or `-` for stdin
-2. **Format**: `json`, `csv`, `feather`, `parquet`, etc.
+`load` and `store`.
 
 We do not want to end up with M x N implementations for M carriers and N
 formats, but rather M + N. To achieve this, we can separate the carrier and
