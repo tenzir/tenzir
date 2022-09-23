@@ -416,8 +416,8 @@ caf::error index_state::load_from_disk() {
                   VAST_DEBUG("index erased partition {} during startup", uuid);
                 },
                 [uuid](const caf::error& e) {
-                  VAST_WARN("index failed to erase partition {} during "
-                            "startup: "
+                  VAST_WARN("{} failed to erase partition {} during "
+                            "startup: ", *self,
                             "{}",
                             uuid, e);
                 });
@@ -454,7 +454,7 @@ caf::error index_state::load_from_disk() {
       return caf::none;
     }();
     if (error)
-      VAST_ERROR("{} failed to finish leftover transforms: {}", *self, error);
+      VAST_WARN("{} failed to finish leftover transforms: {}", *self, error);
   }
   auto dir_iter = std::filesystem::directory_iterator(dir, err);
   if (err)
