@@ -1,0 +1,41 @@
+#! /usr/bin/env bash
+set -eux -o pipefail
+
+pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)"
+
+# Bring up the Docker Compose stack.
+docker compose down --volumes
+docker compose up --no-build --detach
+
+# Wait for VAST to be reachable.
+while ! lsof -i :42000; do
+  sleep 1
+done
+
+# Run a basic status check; we don't particularly care about the output itself,
+# so essentially we're just checking for the exit code.
+docker compose run --rm vast status > /dev/null
+
+# Ingest some test data.
+gzcat vast/integration/data/zeek/*.log.gz \
+  | docker compose run --rm --no-TTY vast import --blocking zeek
+docker compose run --rm --no-TTY vast import --blocking suricata \
+  < vast/integration/data/suricata/eve.json
+
+# Check whether we imported the right amount of data.
+num_imported="$(docker compose run --rm --interactive=false vast count)"
+num_imported_expected="18493"
+[[ "${num_imported}" == "${num_imported_expected}" ]]
+
+# Print logs for easier debugging in case something went wrong.
+docker compose ps
+docker compose logs
+
+# Assert that all containers that exited have exited cleanly.
+exited_all="$(docker ps --all --filter 'name=tenzir-' --filter 'status=exited' -q | sort -u)"
+exited_cleanly="$(docker ps --all --filter 'name=tenzir-' --filter 'exited=0' -q | sort -u)"
+[[ "${exited_all}" == "${exited_cleanly}" ]]
+
+docker compose down --volumes
+
+popd
