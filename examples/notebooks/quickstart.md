@@ -20,7 +20,7 @@ This notebook showcases the key use cases of VAST in an interactive manner.
 :::caution Work in Progress
 This page is work in progress. It is the first example of a [notebook-based
 approach of writing user
-guides](/docs/develop/contributing/notebooks), but the content and
+guides](/docs/contribute/notebooks), but the content and
 CI-workflow is not fully fleshed out. Stay tuned.
 :::
 

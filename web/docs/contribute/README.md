@@ -1,4 +1,4 @@
-# Contributing
+# Contribute
 
 This section explains how to contribute to the VAST project. As an open-source
 project with the aim to build a community, we encourage contributions of any

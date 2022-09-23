@@ -11,7 +11,7 @@ roadmap][roadmap] along with an [RFC process][rfc] to actively participate in
 shaping upcoming topics. This blog post explains why and how we did it.
 
 [roadmap]: https://vast.io/roadmap
-[rfc]: /docs/develop/contributing/rfc
+[rfc]: /docs/contribute/rfc
 
 <!--truncate-->
 

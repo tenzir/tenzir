@@ -4,7 +4,7 @@
 CHANGELOG_INPUT := ../CHANGELOG.md
 CHANGELOG_OUTPUT := src/pages/changelog.md
 
-CONTRIBUTING_DIR := docs/develop/contributing
+CONTRIBUTING_DIR := docs/contribute
 
 NOTEBOOK_INPUT_DIR := ../examples/notebooks
 NOTEBOOK_OUTPUT_DIR := docs/try

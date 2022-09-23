@@ -47,6 +47,10 @@ const config = {
             to: '/docs/develop',
             from: '/docs/develop-vast',
           },
+          {
+            to: '/docs/contribute',
+            from: '/docs/develop-vast/contributing',
+          },
         ],
       },
     ],
