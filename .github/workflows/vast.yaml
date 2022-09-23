@@ -1074,7 +1074,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.9", "3.10"]
+        python-version: ["3.10"]
         os: [ubuntu-latest, macos-latest]
     env:
       DEBIAN_FRONTEND: noninteractive
