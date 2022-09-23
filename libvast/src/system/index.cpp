@@ -371,8 +371,8 @@ caf::error index_state::load_from_disk() {
         = std::filesystem::directory_iterator(markersdir, err);
       if (err)
         return caf::make_error(ec::filesystem_error,
-                               fmt::format("failed to list directory contents "
-                                           "of {}: {}",
+                               fmt::format("{} failed to list directory contents "
+                                           "of {}: {}", *self,
                                            dir, err.message()));
       for (auto const& entry : transforms_dir_iter) {
         if (entry.path().extension() != ".marker")
