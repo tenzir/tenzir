@@ -300,6 +300,12 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       if (it == self->state.running_extractions.end())
         return {};
       auto& [_, state] = *it;
+      if (state.result_iterator == state.generator.end()) {
+        VAST_DEBUG("{} ignores extract continuation request for query {} after "
+                   "query already finished",
+                   *self, query_id);
+        return {};
+      }
       auto slice = *state.result_iterator;
       state.num_hits += slice.rows();
       self->send(state.sink, std::move(slice));
@@ -317,6 +323,12 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
       if (it == self->state.running_counts.end())
         return {};
       auto& [_, state] = *it;
+      if (state.result_iterator == state.generator.end()) {
+        VAST_DEBUG("{} ignores count continuation request for query {} after "
+                   "query already finished",
+                   *self, query_id);
+        return {};
+      }
       state.num_hits += *state.result_iterator;
       if (++state.result_iterator == state.generator.end()) {
         return {};
@@ -432,6 +444,12 @@ system::default_active_store_actor::behavior_type default_active_store(
       if (it == self->state.running_extractions.end())
         return {};
       auto& [_, state] = *it;
+      if (state.result_iterator == state.generator.end()) {
+        VAST_DEBUG("{} ignores extract continuation request for query {} after "
+                   "query already finished",
+                   *self, query_id);
+        return {};
+      }
       auto slice = *state.result_iterator;
       state.num_hits += slice.rows();
       self->send(state.sink, std::move(slice));
@@ -449,6 +467,12 @@ system::default_active_store_actor::behavior_type default_active_store(
       if (it == self->state.running_counts.end())
         return {};
       auto& [_, state] = *it;
+      if (state.result_iterator == state.generator.end()) {
+        VAST_DEBUG("{} ignores count continuation request for query {} after "
+                   "query already finished",
+                   *self, query_id);
+        return {};
+      }
       state.num_hits += *state.result_iterator;
       if (++state.result_iterator == state.generator.end()) {
         return {};
