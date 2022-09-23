@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from vast import Backbone
+from vast.fabric import Backbone
 from typing import Any, Callable
 
 

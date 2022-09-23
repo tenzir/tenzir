@@ -5,8 +5,6 @@ import pytest
 import stix2
 
 import vast
-import vast.backbones
-import vast.utils.config
 
 
 @pytest.fixture
@@ -21,5 +19,5 @@ def sighting(request):
 @pytest.fixture
 def fabric():
     config = vast.utils.config.create()
-    backbone = vast.backbones.InMemory()
-    return vast.Fabric(config, backbone)
+    backbone = vast.fabric.backbones.InMemory()
+    return vast.fabric.Fabric(config, backbone)

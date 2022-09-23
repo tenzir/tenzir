@@ -3,8 +3,8 @@ from typing import Any, Callable
 from dynaconf import Dynaconf
 import stix2
 
-from vast import Backbone
-from vast.backbones.inmemory import InMemory
+from vast.fabric import Backbone
+from vast.fabric.backbones import InMemory
 
 
 class Fabric:
