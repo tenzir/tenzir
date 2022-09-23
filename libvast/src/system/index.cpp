@@ -366,86 +366,96 @@ caf::error index_state::load_from_disk() {
   }
   // Start by finishing up any in-progress transforms.
   if (std::filesystem::is_directory(markersdir, err)) {
-    auto transforms_dir_iter
-      = std::filesystem::directory_iterator(markersdir, err);
-    if (err)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to list directory contents of "
-                                         "{}: {}",
-                                         dir, err.message()));
-    for (auto const& entry : transforms_dir_iter) {
-      if (entry.path().extension() != ".marker")
-        continue;
-      auto chunk = vast::chunk::mmap(entry.path());
-      if (!chunk)
+    auto error = [&]() -> caf::error {
+      auto transforms_dir_iter
+        = std::filesystem::directory_iterator(markersdir, err);
+      if (err)
         return caf::make_error(ec::filesystem_error,
-                               "failed to mmap chunk at {}: {}", entry.path(),
-                               chunk.error());
-      auto maybe_flatbuffer
-        = vast::flatbuffer<vast::fbs::PartitionTransform>::make(
-          std::move(*chunk));
-      if (!maybe_flatbuffer)
-        return caf::make_error(ec::filesystem_error,
-                               fmt::format("failed to open transform {}: {}",
-                                           entry.path(), err.message()));
-      auto& transform_flatbuffer = *maybe_flatbuffer;
-      if (transform_flatbuffer->transform_type()
-          != vast::fbs::partition_transform::PartitionTransform::v0)
-        return caf::make_error(ec::filesystem_error,
-                               fmt::format("unknown transform version at {}",
-                                           entry.path()));
-      auto const* transform_v0 = transform_flatbuffer->transform_as_v0();
-      for (auto const* id : *transform_v0->input_partitions()) {
-        auto uuid = vast::uuid::from_flatbuffer(*id);
-        auto path = partition_path(uuid);
-        if (std::filesystem::exists(path), err) {
-          // TODO: In combination with inhomogeneous partitions, this may result
-          // in incorrect index statistics. This depends on whether the
-          // statistics where already updated on-disk before VAST crashed or
-          // not, which is hard to figure out here.
-          auto partition = self->spawn(passive_partition, uuid, accountant,
-                                       static_cast<store_actor>(global_store),
-                                       filesystem, path);
-          self->request(partition, caf::infinite, atom::erase_v)
-            .then(
-              [uuid](atom::done) {
-                VAST_DEBUG("index erased partition {} during startup", uuid);
-              },
-              [uuid](const caf::error& e) {
-                VAST_WARN("index failed to erase partition {} during startup: "
-                          "{}",
-                          uuid, e);
-              });
+                               fmt::format("{} failed to list directory "
+                                           "contents "
+                                           "of {}: {}",
+                                           *self, dir, err.message()));
+      for (auto const& entry : transforms_dir_iter) {
+        if (entry.path().extension() != ".marker")
+          continue;
+        auto chunk = vast::chunk::mmap(entry.path());
+        if (!chunk) {
+          VAST_WARN("{} failed to mmap chunk at {}: {}", *self, entry.path(),
+                    chunk.error());
+          continue;
+        }
+        auto maybe_flatbuffer
+          = vast::flatbuffer<vast::fbs::PartitionTransform>::make(
+            std::move(*chunk));
+        if (!maybe_flatbuffer) {
+          VAST_WARN("{} failed to open transform {}: {}", *self, entry.path(),
+                    err.message());
+          continue;
+        }
+        auto& transform_flatbuffer = *maybe_flatbuffer;
+        if (transform_flatbuffer->transform_type()
+            != vast::fbs::partition_transform::PartitionTransform::v0) {
+          VAST_WARN("{} detected unknown transform version at {}", *self,
+                    entry.path());
+          continue;
+        }
+        auto const* transform_v0 = transform_flatbuffer->transform_as_v0();
+        for (auto const* id : *transform_v0->input_partitions()) {
+          auto uuid = vast::uuid::from_flatbuffer(*id);
+          auto path = partition_path(uuid);
+          if (std::filesystem::exists(path), err) {
+            // TODO: In combination with inhomogeneous partitions, this may
+            // result in incorrect index statistics. This depends on whether the
+            // statistics where already updated on-disk before VAST crashed or
+            // not, which is hard to figure out here.
+            auto partition = self->spawn(passive_partition, uuid, accountant,
+                                         static_cast<store_actor>(global_store),
+                                         filesystem, path);
+            self->request(partition, caf::infinite, atom::erase_v)
+              .then(
+                [this, uuid](atom::done) {
+                  VAST_DEBUG("{} erased partition {} during startup", *self,
+                             uuid);
+                },
+                [this, uuid](const caf::error& e) {
+                  VAST_WARN("{} failed to erase partition {} during startup: "
+                            "{}",
+                            *self, uuid, e);
+                });
+          }
+        }
+        for (auto const* id : *transform_v0->output_partitions()) {
+          const auto uuid = vast::uuid::from_flatbuffer(*id);
+          const auto from_partition = fmt::format(
+            VAST_FMT_RUNTIME(transformer_partition_path_template()), uuid);
+          const auto to_partition = partition_path(uuid);
+          const auto from_partition_synopsis = fmt::format(
+            VAST_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
+            uuid);
+          const auto to_partition_synopsis = partition_synopsis_path(uuid);
+          auto ec = std::error_code{};
+          std::filesystem::rename(from_partition, to_partition, ec);
+          if (ec)
+            VAST_WARN("failed to rename '{}' to '{}': {}", from_partition,
+                      to_partition, ec.message());
+          ec.clear();
+          std::filesystem::rename(from_partition_synopsis,
+                                  to_partition_synopsis, ec);
+          if (ec)
+            VAST_WARN("failed to rename '{}' to '{}': {}",
+                      from_partition_synopsis, to_partition_synopsis,
+                      ec.message());
         }
       }
-      for (auto const* id : *transform_v0->output_partitions()) {
-        const auto uuid = vast::uuid::from_flatbuffer(*id);
-        const auto from_partition = fmt::format(
-          VAST_FMT_RUNTIME(transformer_partition_path_template()), uuid);
-        const auto to_partition = partition_path(uuid);
-        const auto from_partition_synopsis = fmt::format(
-          VAST_FMT_RUNTIME(transformer_partition_synopsis_path_template()),
-          uuid);
-        const auto to_partition_synopsis = partition_synopsis_path(uuid);
-        auto ec = std::error_code{};
-        std::filesystem::rename(from_partition, to_partition, ec);
-        if (ec)
-          VAST_WARN("failed to rename '{}' to '{}': {}", from_partition,
-                    to_partition, ec.message());
-        ec.clear();
-        std::filesystem::rename(from_partition_synopsis, to_partition_synopsis,
-                                ec);
-        if (ec)
-          VAST_WARN("failed to rename '{}' to '{}': {}",
-                    from_partition_synopsis, to_partition_synopsis,
-                    ec.message());
-      }
-    }
-    // TODO: This does not handle store files, which may already have been
-    // written. Since a store file may also be written before the partition
-    // itself, there does not currently seem to be a bulletproof way of handling
-    // this.
-    std::filesystem::remove_all(markersdir);
+      // TODO: This does not handle store files, which may already have been
+      // written. Since a store file may also be written before the partition
+      // itself, there does not currently seem to be a bulletproof way of
+      // handling this.
+      std::filesystem::remove_all(markersdir);
+      return caf::none;
+    }();
+    if (error)
+      VAST_WARN("{} failed to finish leftover transforms: {}", *self, error);
   }
   auto dir_iter = std::filesystem::directory_iterator(dir, err);
   if (err)
@@ -497,47 +507,52 @@ caf::error index_state::load_from_disk() {
   vast::index_statistics stats;
   for (size_t idx = 0; idx < partitions.size(); ++idx) {
     auto partition_uuid = partitions[idx];
-    auto part_path = partition_path(partition_uuid);
-    VAST_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid, idx,
-               partitions.size());
-    // Generate external partition synopsis file if it doesn't exist.
-    auto synopsis_path = partition_synopsis_path(partition_uuid);
-    if (!exists(synopsis_path)) {
-      if (auto error = extract_partition_synopsis(part_path, synopsis_path))
+    auto error = [&]() -> caf::error {
+      auto part_path = partition_path(partition_uuid);
+      VAST_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid, idx,
+                 partitions.size());
+      // Generate external partition synopsis file if it doesn't exist.
+      auto synopsis_path = partition_synopsis_path(partition_uuid);
+      if (!exists(synopsis_path)) {
+        if (auto error = extract_partition_synopsis(part_path, synopsis_path))
+          return error;
+      }
+    retry:
+      auto chunk = chunk::mmap(synopsis_path);
+      if (!chunk)
+        return chunk.error();
+      const auto* ps_flatbuffer
+        = fbs::GetPartitionSynopsis(chunk->get()->data());
+      partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
+      if (ps_flatbuffer->partition_synopsis_type()
+          != fbs::partition_synopsis::PartitionSynopsis::legacy)
+        return caf::make_error(ec::format_error, "invalid partition synopsis "
+                                                 "version");
+      const auto& synopsis_legacy
+        = *ps_flatbuffer->partition_synopsis_as_legacy();
+      // Re-write old partition synopses that were created before the offset and
+      // id were saved.
+      if (!synopsis_legacy.id_range()) {
+        VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
+                     partition_uuid);
+        if (auto error = extract_partition_synopsis(part_path, synopsis_path))
+          return error;
+        // TODO: There is probably a good way to rewrite this without the jump,
+        // but in the meantime I defer to Knuth:
+        //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-goto)
+        goto retry;
+      }
+      if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
-    }
-  retry:
-    auto chunk = chunk::mmap(synopsis_path);
-    if (!chunk) {
-      VAST_WARN("{} could not mmap partition at {}", *self, part_path);
-      continue;
-    }
-    const auto* ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->get()->data());
-    partition_synopsis_ptr ps = caf::make_copy_on_write<partition_synopsis>();
-    if (ps_flatbuffer->partition_synopsis_type()
-        != fbs::partition_synopsis::PartitionSynopsis::legacy)
-      return caf::make_error(ec::format_error, "invalid partition synopsis "
-                                               "version");
-    const auto& synopsis_legacy
-      = *ps_flatbuffer->partition_synopsis_as_legacy();
-    // Re-write old partition synopses that were created before the offset and
-    // id were saved.
-    if (!synopsis_legacy.id_range()) {
-      VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
-                   partition_uuid);
-      if (auto error = extract_partition_synopsis(part_path, synopsis_path))
-        return error;
-      // TODO: There is probably a good way to rewrite this without the jump,
-      // but in the meantime I defer to Knuth:
-      //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
-      // NOLINTNEXTLINE(cppcoreguidelines-avoid-goto)
-      goto retry;
-    }
-    if (auto error = unpack(synopsis_legacy, ps.unshared()))
-      return error;
-    persisted_partitions.insert(partition_uuid);
-    stats.layouts[std::string{ps->schema.name()}].count += ps->events;
-    synopses->emplace(partition_uuid, std::move(ps));
+      persisted_partitions.insert(partition_uuid);
+      stats.layouts[std::string{ps->schema.name()}].count += ps->events;
+      synopses->emplace(partition_uuid, std::move(ps));
+      return caf::none;
+    }();
+    if (error)
+      VAST_ERROR("{} failed to load partition {}: {}", *self, partition_uuid,
+                 error);
   }
   // Reimport oversized partitions to rescue the data.
   // We can either go through a regular import or a partition transformer here.
