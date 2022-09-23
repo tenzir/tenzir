@@ -27,7 +27,8 @@ class VAST:
         return self
 
     # TODO: agree on API.
-    async def live_query(self, expression: str, callback):
+    @staticmethod
+    async def export_continuous(expression: str, callback):
         proc = await CLI().export(continuous=True).json(expression).exec()
         while True:
             if proc.stdout.at_eof():
@@ -73,3 +74,25 @@ class VAST:
             name = vast.utils.arrow.name(table.schema)
             result[name].append(table)
         return result
+
+    @staticmethod
+    async def status(**kwargs) -> str:
+        """
+        Executes the VAST status command and return the response string.
+        Examples: `status()`, `status(detailed=True)`.
+        """
+        proc = await CLI().status(**kwargs).exec()
+        stdout, stderr = await proc.communicate()
+        logger.debug(stderr.decode())
+        return stdout.decode("utf-8")
+
+    @staticmethod
+    async def count(*args, **kwargs) -> int:
+        """
+        Executes the VAST count command and return the response number.
+        Examples: `count()`, `count("#type ~ /suricata.alert/", estimate=True)`.
+        """
+        proc = await CLI().count(*args, **kwargs).exec()
+        stdout, stderr = await proc.communicate()
+        logger.debug(stderr.decode())
+        return int(stdout.decode("utf-8"))
