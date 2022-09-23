@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #define SUITE pipeline_executor
-
 #include "vast/fwd.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -16,13 +15,16 @@
 #include "vast/expression.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/test/fixtures/events.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
+#include <caf/attach_stream_sink.hpp>
+#include <caf/attach_stream_source.hpp>
+#include <caf/attach_stream_stage.hpp>
 #include <caf/test/dsl.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <queue>
 #include <variant>
 
 namespace vast {
@@ -45,19 +47,33 @@ using tl_unwrap_t = typename tl_unwrap<List>::type;
 // -- physical operators ------------------------------------------------------
 
 template <class Input, class Output>
-struct physical_operator final {
-  using type
-    = std::function<auto(detail::generator<Input>)->detail::generator<Output>>;
+struct physical_operator_fun final
+  : std::function<
+      auto(detail::generator<Input> /*pull*/)->detail::generator<Output>> {
+  using super = std::function<
+    auto(detail::generator<Input> /*pull*/)->detail::generator<Output>>;
+  using super::super;
 };
 
 template <class Input>
-struct physical_operator<Input, void> final {
-  using type = std::function<auto(detail::generator<Input>)->void>;
+struct physical_operator_fun<Input, void> final
+  : std::function<auto(detail::generator<Input> /*pull*/)
+                    ->detail::generator<caf::expected<void>>> {
+  using super = std::function<auto(detail::generator<Input> /*pull*/)
+                                ->detail::generator<caf::expected<void>>>;
+  using super::super;
 };
 
 template <class Output>
-struct physical_operator<void, Output> final {
-  using type = std::function<auto(void)->detail::generator<Output>>;
+struct physical_operator_fun<void, Output> final
+  : std::function<auto()->detail::generator<Output>> {
+  using super = std::function<auto()->detail::generator<Output>>;
+  using super::super;
+};
+
+template <class Input, class Output>
+struct physical_operator final {
+  using type = physical_operator_fun<Input, Output>;
 };
 
 // -- logical operators -------------------------------------------------------
@@ -78,7 +94,10 @@ struct logical_operator<void, void> {
       "Arrow",
     };
 
-  // Invert list by forbidding void -> void
+  using allowed_type_variant = caf::detail::tl_apply_t<
+    caf::detail::tl_filter_type_t<allowed_type_list, void>, std::variant>;
+
+  // FIXME: Invert list by forbidding void -> void
   using allowed_physical_operator_list
     = caf::detail::type_list<physical_operator<void, table_slice>,
                              physical_operator<table_slice, table_slice>,
@@ -107,6 +126,9 @@ struct logical_operator<void, void> {
 
 template <class Input, class Output>
 struct logical_operator : logical_operator<> {
+  using input_type = Input;
+  using output_type = Output;
+
   static_assert(caf::detail::tl_contains<allowed_type_list, Input>::value,
                 "Input is not a supported input type");
   static_assert(caf::detail::tl_contains<allowed_type_list, Output>::value,
@@ -152,6 +174,254 @@ struct logical_operator : logical_operator<> {
   };
 };
 
+// -- actor mapping -----------------------------------------------------------
+
+caf::behavior logical_operator_source(caf::event_based_actor* self,
+                                      std::unique_ptr<logical_operator<>> op) {
+  constexpr auto void_index
+    = caf::detail::tl_index_of<logical_operator<>::allowed_type_list,
+                               void>::value;
+  if (op->input_type_index() != void_index) {
+    self->quit(caf::make_error(ec::logic_error, "FIXME"));
+    return {};
+  }
+  return {
+    [self, op = std::move(op)](atom::run) mutable {
+      struct stream_state_t {
+        bool running = false;
+        logical_operator<>::allowed_physical_operator_variant fun = {};
+      };
+      auto state = stream_state_t{};
+      auto fun = op->make_erased({});
+      VAST_ASSERT_CHEAP(fun); // FIXME
+      state.fun = std::move(*fun);
+      return caf::attach_stream_source(
+        self,
+        // Initializer.
+        [x = std::move(state)](stream_state_t& state) mutable {
+          state = std::move(x);
+          state.running = true;
+        },
+        // Generator.
+        [](stream_state_t& state,
+           caf::downstream<logical_operator<>::allowed_type_variant>& out,
+           size_t num) {
+          auto f = [&]<class Input, class Output>(
+                     const physical_operator_fun<Input, Output>& fun) {
+            if constexpr (!std::is_void_v<Input>) {
+              die("unreachable");
+            } else {
+              for (auto output : fun()) {
+                MESSAGE("source produced");
+                if (!output) {
+                  MESSAGE("source interrupts because it idled");
+                  break;
+                }
+                MESSAGE("source pushes");
+                out.push(logical_operator<>::allowed_type_variant{
+                  std::move(output),
+                });
+                if (--num == 0) {
+                  MESSAGE("source interrupts because it exceeded num");
+                  break;
+                }
+              }
+              MESSAGE("source ends loop");
+            }
+          };
+          std::visit(f, state.fun);
+        },
+        // Predicate.
+        [](const stream_state_t& state) {
+          return state.running;
+        });
+    },
+  };
+}
+
+caf::behavior logical_operator_stage(caf::event_based_actor* self,
+                                     std::unique_ptr<logical_operator<>> op) {
+  constexpr auto void_index
+    = caf::detail::tl_index_of<logical_operator<>::allowed_type_list,
+                               void>::value;
+  if (op->input_type_index() == void_index
+      || op->output_type_index() == void_index) {
+    self->quit(caf::make_error(ec::logic_error, "FIXME"));
+    return {};
+  }
+  return {
+    [self, op = std::move(op)](
+      caf::stream<logical_operator<>::allowed_type_variant> in) mutable {
+      struct stream_state_t {
+        std::unique_ptr<logical_operator<>> op = {};
+        std::unordered_map<
+          type,
+          std::pair<std::queue<logical_operator<>::allowed_type_variant>,
+                    detail::generator<logical_operator<>::allowed_type_variant>>>
+          inputs_and_outputs = {};
+      };
+      return caf::attach_stream_stage(
+        self, in,
+        // Initializer.
+        [op = std::move(op)](stream_state_t& state) mutable {
+          state.op = std::move(op);
+        },
+        // Processor.
+        [](stream_state_t& state,
+           caf::downstream<logical_operator<>::allowed_type_variant>& out,
+           logical_operator<>::allowed_type_variant input_value) {
+          // 1. Determine the schema.
+          auto input_schema = type{};
+          if (const auto* slice = std::get_if<table_slice>(&input_value)) {
+            VAST_ASSERT_CHEAP(*slice);
+            input_schema = slice->layout();
+          }
+          MESSAGE("stage received schema: " << input_schema.name());
+          // 2. Create or cache our input and output state.
+          auto input_and_output_it
+            = state.inputs_and_outputs.find(input_schema);
+          if (input_and_output_it == state.inputs_and_outputs.end()) {
+            input_and_output_it
+              = state.inputs_and_outputs.emplace_hint(input_and_output_it);
+            auto fun = state.op->make_erased(input_schema);
+            VAST_ASSERT_CHEAP(fun); // FIXME: handle error
+            auto f = [&]<class Input, class Output>(
+                       const physical_operator_fun<Input, Output>& fun) {
+              if constexpr (std::is_void_v<Input> || std::is_void_v<Output>) {
+                die("unreachable");
+              } else {
+                auto* input_ptr = &input_and_output_it->second.first;
+                input_and_output_it->second.second
+                  = [input_ptr, fun = std::move(fun)]()
+                  -> detail::generator<logical_operator<>::allowed_type_variant> {
+                  // We're lifting the strongly typed phyiscal operator instance
+                  // into a type-erased generator here.
+                  auto lifted_input
+                    = [input_ptr]() -> detail::generator<Input> {
+                    while (true) {
+                      if (input_ptr->empty()) {
+                        co_yield Input{};
+                        continue;
+                      }
+                      auto* next = std::get_if<Input>(&input_ptr->front());
+                      VAST_ASSERT_CHEAP(next);
+                      co_yield std::move(*next);
+                      input_ptr->pop();
+                    }
+                  }();
+                  for (auto output_value : fun(std::move(lifted_input))) {
+                    if (!output_value)
+                      break;
+                    co_yield logical_operator<>::allowed_type_variant{
+                      std::move(output_value),
+                    };
+                  }
+                }();
+              }
+            };
+            std::visit(f, *fun);
+          }
+          auto& [input, output] = input_and_output_it->second;
+          // 3. Push value into input queue.
+          input.push(std::move(input_value));
+          for (auto output_value : output)
+            out.push(std::move(output_value));
+        },
+        // Finalizer.
+        [](stream_state_t& state, const caf::error& err) {
+          // FIXME: handle error
+        });
+    },
+  };
+}
+
+caf::behavior logical_operator_sink(caf::event_based_actor* self,
+                                    std::unique_ptr<logical_operator<>> op) {
+  constexpr auto void_index
+    = caf::detail::tl_index_of<logical_operator<>::allowed_type_list,
+                               void>::value;
+  if (op->output_type_index() != void_index) {
+    self->quit(caf::make_error(ec::logic_error, "FIXME"));
+    return {};
+  }
+  return {
+    [self, op = std::move(op)](
+      caf::stream<logical_operator<>::allowed_type_variant> in) mutable {
+      struct stream_state_t {
+        std::unique_ptr<logical_operator<>> op = {};
+        std::unordered_map<
+          type, std::pair<std::queue<logical_operator<>::allowed_type_variant>,
+                          detail::generator<caf::expected<void>>>>
+          inputs_and_outputs = {};
+      };
+      return caf::attach_stream_sink(
+        self, in,
+        // Initializer.
+        [op = std::move(op)](stream_state_t& state) mutable {
+          state.op = std::move(op);
+        },
+        // Processor.
+        [](stream_state_t& state,
+           logical_operator<>::allowed_type_variant input_value) {
+          // 1. Determine the schema.
+          auto input_schema = type{};
+          if (const auto* slice = std::get_if<table_slice>(&input_value)) {
+            if (!*slice)
+              return;
+            input_schema = slice->layout();
+          }
+          // 2. Create or cache our input and output state.
+          auto input_and_output_it
+            = state.inputs_and_outputs.find(input_schema);
+          if (input_and_output_it == state.inputs_and_outputs.end()) {
+            input_and_output_it
+              = state.inputs_and_outputs.emplace_hint(input_and_output_it);
+            auto fun = state.op->make_erased(input_schema);
+            VAST_ASSERT(fun); // FIXME: handle error
+            auto f = [&]<class Input, class Output>(
+                       const physical_operator_fun<Input, Output>& fun) {
+              if constexpr (!std::is_void_v<Output>) {
+                die("unreachable");
+              } else {
+                auto* input_ptr = &input_and_output_it->second.first;
+                input_and_output_it->second.second
+                  = [input_ptr, fun = std::move(fun)]()
+                  -> detail::generator<caf::expected<void>> {
+                  // We're lifting the strongly typed phyiscal operator instance
+                  // into a type-erased generator here.
+                  auto lifted_input
+                    = [input_ptr]() -> detail::generator<Input> {
+                    while (true) {
+                      if (input_ptr->empty()) {
+                        co_yield Input{};
+                        continue;
+                      }
+                      auto* next = std::get_if<Input>(&input_ptr->front());
+                      VAST_ASSERT_CHEAP(next);
+                      co_yield std::move(*next);
+                      input_ptr->pop();
+                    }
+                  }();
+                  return fun(std::move(lifted_input));
+                }();
+              }
+            };
+            std::visit(f, *fun);
+          }
+          auto& [input, output] = input_and_output_it->second;
+          // 3. Push value into input queue.
+          input.push(std::move(input_value));
+          for (auto output_value : output)
+            VAST_ASSERT_CHEAP(output_value); // FIXME
+        },
+        // Finalizer.
+        [](stream_state_t& state, const caf::error& err) {
+          // FIXME: handle error
+        });
+    },
+  };
+}
+
 // -- plan --------------------------------------------------------------------
 
 struct plan {
@@ -190,12 +460,19 @@ struct plan {
     return result;
   }
 
-  detail::generator<caf::expected<void>> run() {
-    auto physical_operators = std::vector<detail::stable_map<
-      type, logical_operator<>::allowed_physical_operator_variant>>{};
-    physical_operators.resize(operators_.size());
-    // FIXME: implement execution
-    co_return;
+  template <class Actor>
+  auto run_stream(const Actor& self) && {
+    auto it = operators_.rbegin();
+    auto pipeline = self->spawn(logical_operator_sink, std::move(*it++));
+    for (; it < std::prev(operators_.rend()); ++it)
+      pipeline = pipeline * self->spawn(logical_operator_stage, std::move(*it));
+    pipeline
+      = pipeline * self->spawn(logical_operator_source, std::move(*it++));
+    VAST_ASSERT_CHEAP(it == operators_.rend());
+    return self->request(pipeline, caf::infinite, atom::run_v);
+  }
+
+  auto run_local() && {
   }
 
 private:
@@ -272,26 +549,43 @@ struct sink_operator final : logical_operator<table_slice, void> {
 
   [[nodiscard]] caf::expected<result_type>
   make([[maybe_unused]] type input_schema) override {
-    return
-      [sink = sink_](detail::generator<table_slice> pull) noexcept -> void {
-        for (auto slice : pull)
-          sink(std::move(slice));
-      };
+    return [sink = sink_](detail::generator<table_slice> pull) noexcept
+           -> detail::generator<caf::expected<void>> {
+      for (auto slice : pull) {
+        sink(std::move(slice));
+        co_yield {};
+      }
+    };
   }
 
 private:
   sink_function sink_ = {};
 };
 
-struct fixture : fixtures::events {
-  fixture() = default;
+struct fixture : fixtures::deterministic_actor_system_and_events {
+  fixture()
+    : fixtures::deterministic_actor_system_and_events(
+      VAST_PP_STRINGIFY(SUITE)) {
+    // nop
+  }
 };
 
 } // namespace
 
+} // namespace vast
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::logical_operator<>::allowed_type_variant)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
+  std::vector<vast::logical_operator<>::allowed_type_variant>)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
+  caf::stream<vast::logical_operator<>::allowed_type_variant>)
+
+namespace vast {
+
 FIXTURE_SCOPE(pipeline_executor_fixture, fixture)
 
 TEST(where_operator) {
+  auto self = caf::scoped_actor{sys};
   auto result = std::vector<table_slice>{};
   auto operators = std::vector<std::unique_ptr<logical_operator<>>>{};
   operators.push_back(std::make_unique<source_operator>(zeek_conn_log_full));
@@ -302,11 +596,22 @@ TEST(where_operator) {
   }));
   auto put = unbox(plan::make(std::move(operators)));
   auto num_iterations = 0;
-  for (const auto& ok : put.run()) {
-    if (!ok)
-      FAIL("plan execution failed: " << ok.error());
-    ++num_iterations;
-  }
+  auto handle = std::move(put).run_stream(self);
+  run();
+  handle.receive(
+    [](const caf::message& msg) {
+      MESSAGE(msg);
+    },
+    [](const caf::error& err) {
+      FAIL(err);
+    });
+  std::this_thread::sleep_for(std::chrono::seconds{10});
+
+  /* for (const auto& ok : put.run()) { */
+  /*   if (!ok) */
+  /*     FAIL("plan execution failed: " << ok.error()); */
+  /*   ++num_iterations; */
+  /* } */
   CHECK_EQUAL(num_iterations, 40);
   CHECK_EQUAL(rows(result), 120u);
 }

@@ -122,6 +122,12 @@ public:
   friend bool
   operator!=(const table_slice& lhs, const table_slice& rhs) noexcept;
 
+  /// Checks whether a slice is invalid, i.e., in a moved-from or
+  /// default-constructed state.
+  explicit operator bool() const noexcept {
+    return encoding() != table_slice_encoding::none;
+  }
+
   // -- properties -------------------------------------------------------------
 
   /// @returns The encoding of the slice.
