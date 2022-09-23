@@ -4,10 +4,10 @@
 CHANGELOG_INPUT := ../CHANGELOG.md
 CHANGELOG_OUTPUT := src/pages/changelog.md
 
-CONTRIBUTING_DIR := docs/develop-vast/contributing
+CONTRIBUTING_DIR := docs/contribute
 
 NOTEBOOK_INPUT_DIR := ../examples/notebooks
-NOTEBOOK_OUTPUT_DIR := docs/try-vast
+NOTEBOOK_OUTPUT_DIR := docs/try
 NOTEBOOK_INPUTS := $(wildcard $(NOTEBOOK_INPUT_DIR)/*.md)
 NOTEBOOK_OUTPUTS := $(addprefix $(NOTEBOOK_OUTPUT_DIR)/, $(notdir $(NOTEBOOK_INPUTS)))
 NOTEBOOK_DOCS_INPUT := $(NOTEBOOK_INPUT_DIR)/README.md

@@ -6,7 +6,7 @@ guides that illustrate how to use VAST.
 Our repositories contains a few examples in the directory
 [`examples/notebooks`][notebooks]. These notebooks (will) run in CI and
 produce outputs as side effect, which we capture and include in the
-documentation under the section [Try VAST](/docs/try-vast).
+documentation under the section [Try VAST](/docs/try).
 
 [notebooks]: https://github.com/tenzir/vast/tree/master/examples/notebooks
 

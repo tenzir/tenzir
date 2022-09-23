@@ -18,10 +18,10 @@ Key files and directories of the `/web` directory include:
 ## Adding and Editing Content
 
 Please consult the section on [writing
-documentation](https://vast.io/docs/develop-vast/write-documentation) for
+documentation](https://vast.io/docs/develop/write-documentation) for
 instructions on how to change existing or add new content (which corresponds
 to the local file
-[`/docs/develop-vast/write-documentation.md`](/docs/develop-vast/write-documentation.md)).
+[`/docs/develop/write-documentation.md`](/docs/develop/write-documentation.md)).
 
 ## Build and View Locally
 

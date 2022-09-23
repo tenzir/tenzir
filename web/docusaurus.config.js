@@ -19,6 +19,41 @@ const config = {
 
   plugins: [
     'docusaurus-plugin-sass',
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        redirects: [
+          {
+            to: '/docs/about',
+            from: '/docs/about-vast',
+          },
+          {
+            to: '/docs/try',
+            from: '/docs/try-vast',
+          },
+          {
+            to: '/docs/setup',
+            from: '/docs/setup-vast',
+          },
+          {
+            to: '/docs/use',
+            from: '/docs/use-vast',
+          },
+          {
+            to: '/docs/understand',
+            from: '/docs/understand-vast',
+          },
+          {
+            to: '/docs/develop',
+            from: '/docs/develop-vast',
+          },
+          {
+            to: '/docs/contribute',
+            from: '/docs/develop-vast/contributing',
+          },
+        ],
+      },
+    ],
   ],
 
   presets: [
@@ -86,7 +121,7 @@ const config = {
         items: [
           {
             type: 'doc',
-            docId: 'about-vast/README',
+            docId: 'about/README',
             position: 'left',
             label: 'Docs',
           },
@@ -135,24 +170,28 @@ const config = {
             title: 'Docs',
             items: [
               {
-                label: 'About VAST',
-                to: '/docs/about-vast',
+                label: 'About',
+                to: '/docs/about',
               },
               {
-                label: 'Setup VAST',
-                to: '/docs/setup-vast',
+                label: 'Setup',
+                to: '/docs/setup',
               },
               {
-                label: 'Use VAST',
-                to: '/docs/use-vast',
+                label: 'Use',
+                to: '/docs/use',
               },
               {
-                label: 'Understand VAST',
-                to: '/docs/understand-vast',
+                label: 'Understand',
+                to: '/docs/understand',
               },
               {
-                label: 'Develop VAST',
-                to: '/docs/develop-vast',
+                label: 'Contribute',
+                to: '/docs/contribute',
+              },
+              {
+                label: 'Develop',
+                to: '/docs/develop',
               },
             ],
           },
