@@ -17,4 +17,4 @@ In the above example, VAST renders the result as JSON, but the choice of output
 format is independent of the query input format.
 
 For detailed usage instructions, please consult the [VAST
-documentation](https://vast.io/docs/understand-vast/query-language/frontends/sigma).
+documentation](https://vast.io/docs/understand/query-language/frontends/sigma).

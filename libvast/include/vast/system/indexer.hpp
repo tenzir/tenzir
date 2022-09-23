@@ -42,14 +42,23 @@ struct indexer_state {
 };
 
 /// Indexes a table slice column with a single value index.
+/// @param self A pointer to the spawned actor.
+/// @param name The name of the column.
+/// @param index The underlying value index.
+/// @pre !name.empty()
+/// @pre index
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
                const std::string& name, value_index_ptr index);
 
 /// An indexer that was recovered from on-disk state. It can only respond
 /// to queries, but not add eny more entries.
+/// @param self A pointer to the spawned actor.
+/// @param uuid The id of the partition this indexer belongs to.
+/// @param index The underlying value index.
+/// @pre index
 indexer_actor::behavior_type
 passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
-                uuid partition_id, value_index_ptr idx);
+                uuid partition_id, value_index_ptr index);
 
 } // namespace vast::system
