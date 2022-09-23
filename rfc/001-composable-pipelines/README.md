@@ -21,7 +21,7 @@ that *everything is a pipeline* and build a composable UX around this concept.
 ## Problem Statement
 
 Pipelines offer flexible data reshaping at [predefined customization
-points](https://vast.io/docs/use-vast/transform). For example, they can be
+points](https://vast.io/docs/use/transform). For example, they can be
 triggered for specific events on import/export, or invoked by compaction.
 However, it is impossible to run pipelines in an ad-hoc manner, for example as
 a post-processing step after a query or for an ad-hoc ingest of a data set.

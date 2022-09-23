@@ -63,7 +63,7 @@ vast export json '6.6.6.6 || (dst_port < 1024 && proto == "UDP")'
 
 ## Next steps
 
-To learn more about using VAST, continue over at https://vast.io/docs/use-vast.
+To learn more about using VAST, continue over at https://vast.io/docs/use.
 
 # ISSUES
 

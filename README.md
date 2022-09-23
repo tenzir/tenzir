@@ -162,7 +162,7 @@ proceedings][nsdi-proceedings].
 [cii-best-practices-badge]: https://bestpractices.coreinfrastructure.org/projects/6366/badge
 [cii-best-practices-url]: https://bestpractices.coreinfrastructure.org/projects/6366
 [latest-release]: https://github.com/tenzir/vast/releases/latest
-[installation-url]: https://vast.io/docs/setup-vast/install
+[installation-url]: https://vast.io/docs/setup/install
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
