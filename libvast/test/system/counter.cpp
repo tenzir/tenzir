@@ -99,7 +99,8 @@ FIXTURE_SCOPE(counter_tests, fixture)
 TEST(count IP point query with partition - local stores) {
   auto indexdir = directory / "index";
   auto index = self->spawn(system::index, system::accountant_actor{}, fs,
-                           archive, catalog, type_registry, indexdir, "feather",
+                           archive, catalog, type_registry, indexdir,
+                           defaults::system::store_backend,
                            defaults::import::table_slice_size, duration{}, 100,
                            3, 1, indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
@@ -127,7 +128,8 @@ TEST(count meta extractor import time 1) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index";
   auto index = self->spawn(system::index, system::accountant_actor{}, fs,
-                           archive, catalog, type_registry, indexdir, "feather",
+                           archive, catalog, type_registry, indexdir,
+                           defaults::system::store_backend,
                            defaults::import::table_slice_size, duration{}, 100,
                            3, 1, indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
@@ -163,7 +165,8 @@ TEST(count meta extractor import time 2) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index";
   auto index = self->spawn(system::index, system::accountant_actor{}, fs,
-                           archive, catalog, type_registry, indexdir, "feather",
+                           archive, catalog, type_registry, indexdir,
+                           defaults::system::store_backend,
                            defaults::import::table_slice_size, duration{}, 100,
                            3, 1, indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.

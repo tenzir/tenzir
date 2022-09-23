@@ -70,7 +70,7 @@ FIXTURE_SCOPE(partition_transformer_tests, fixture)
 
 TEST(identity pipeline / done before persist) {
   // Spawn partition transformer
-  auto store_id = "feather"s;
+  auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   auto pipeline = std::make_shared<vast::pipeline>(
@@ -152,7 +152,7 @@ TEST(identity pipeline / done before persist) {
 
 TEST(delete pipeline / persist before done) {
   // Spawn partition transformer
-  auto store_id = "feather"s;
+  auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   auto pipeline = std::make_shared<vast::pipeline>(
@@ -245,7 +245,7 @@ TEST(delete pipeline / persist before done) {
 
 TEST(partition with multiple types) {
   // Spawn partition transformer
-  auto store_id = "feather"s;
+  auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   auto pipeline = std::make_shared<vast::pipeline>("partition_transform"s,
@@ -615,7 +615,7 @@ TEST(select pipeline with an empty result set) {
 // for a single partition.
 TEST(exceeded partition size) {
   // Spawn partition transformer with a small max partition size.
-  auto store_id = "feather"s;
+  auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   index_opts["cardinality"] = 4;

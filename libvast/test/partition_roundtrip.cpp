@@ -131,7 +131,7 @@ TEST(empty partition roundtrip) {
   // Create partition state.
   vast::system::active_partition_state state;
   state.data.id = vast::uuid::random();
-  state.data.store_id = "feather";
+  state.data.store_id = vast::defaults::system::store_backend;
   state.data.store_header = vast::chunk::make_empty();
   state.data.events = 23;
   state.data.synopsis = caf::make_copy_on_write<vast::partition_synopsis>();
@@ -178,7 +178,8 @@ TEST(empty partition roundtrip) {
   REQUIRE(partition_legacy);
   REQUIRE(partition_legacy->store());
   REQUIRE(partition_legacy->store()->id());
-  CHECK_EQUAL(partition_legacy->store()->id()->str(), "feather");
+  CHECK_EQUAL(partition_legacy->store()->id()->str(),
+              vast::defaults::system::store_backend);
   CHECK_EQUAL(partition_legacy->events(), state.data.events);
   auto error = unpack(*partition_legacy, recovered_state);
   CHECK(!error);
@@ -231,9 +232,9 @@ TEST(full partition roundtrip) {
   auto fs = self->spawn(vast::system::posix_filesystem, directory,
                         vast::system::accountant_actor{});
   auto partition_uuid = vast::uuid::random();
-  auto store_id = std::string{"feather"};
+  auto store_id = std::string{vast::defaults::system::store_backend};
   const auto* store_plugin
-    = vast::plugins::find<vast::store_actor_plugin>("feather");
+    = vast::plugins::find<vast::store_actor_plugin>(store_id);
   REQUIRE(store_plugin);
   auto [store_builder, store_header] = unbox(store_plugin->make_store_builder(
     vast::system::accountant_actor{}, fs, partition_uuid));
