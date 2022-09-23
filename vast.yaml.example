@@ -124,9 +124,9 @@ vast:
   # enable this setting for significantly better performance.
   detach-components: true
 
-  # The store backend to use. Can be 'segment-store', or the name of a
-  # user-provided store plugin.
-  store-backend: segment-store
+  # The store backend to use. Can be 'feather', or the name of a user-provided
+  # store plugin.
+  store-backend: feather
 
   # Interval between two aging cycles.
   aging-frequency: 24h

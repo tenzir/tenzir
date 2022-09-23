@@ -77,8 +77,7 @@ fixtures:
                      '--disk-budget-check-binary=' + os.path.dirname(os.path.abspath(__file__)) + '/misc/scripts/count_partitions_plus1.sh',
                      '--disk-budget-high=1',
                      '--disk-budget-low=0'],
-                    work_dir, name='node', port=VAST_PORT,
-                    config_file='vast-local-stores.yaml')
+                    work_dir, name='node', port=VAST_PORT)
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
@@ -555,13 +554,6 @@ tests:
       - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.fileinfo"'
 
   # TODO Reinstate negative test cases from compaction after story 31232 is completed
-
-  Partition-local Stores:
-    tags: [server, import-export, suricata]
-    steps:
-      - command: -N --config=@./vast-local-stores.yaml import suricata
-        input: data/suricata/eve.json
-      - command: -N export json '#type ni ""'
 
   # A (small) stress test to see how the server handles queries that time out
   # before they're completed. We don't care about the output for these, we
