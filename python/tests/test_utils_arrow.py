@@ -1,3 +1,4 @@
+import ipaddress
 import pyarrow as pa
 import pytest
 
@@ -24,3 +25,8 @@ def test_schema_alias_extraction():
     assert names[1] == "bar"
     # The first name is the top-level type name.
     assert vua.name(schema) == "foo"
+
+
+def test_unpack_ip():
+    bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n" b"\x01\x15\xa5"
+    assert vua.unpack_ip(bytes) == ipaddress.IPv4Address("10.1.21.165")
