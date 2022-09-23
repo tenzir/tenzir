@@ -6,6 +6,7 @@ from dynaconf import Dynaconf
 
 import vast.utils.config
 
+
 def configure(config: Dynaconf, logger: logging.Logger):
     fmt = "%(asctime)s %(name)s %(levelname)-7s %(message)s"
     colored_formatter = coloredlogs.ColoredFormatter(fmt)
@@ -36,6 +37,7 @@ def configure(config: Dynaconf, logger: logging.Logger):
     sh = ShutdownHandler(level=50)
     sh.setFormatter(colored_formatter)
     logger.addHandler(sh)
+
 
 def get(name=None):
     # All VAST loggers have handlers. If not, the logger is not yet initialized
