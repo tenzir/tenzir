@@ -170,23 +170,27 @@ const config = {
             title: 'Docs',
             items: [
               {
-                label: 'About VAST',
+                label: 'About',
                 to: '/docs/about',
               },
               {
-                label: 'Setup VAST',
+                label: 'Setup',
                 to: '/docs/setup',
               },
               {
-                label: 'Use VAST',
+                label: 'Use',
                 to: '/docs/use',
               },
               {
-                label: 'Understand VAST',
+                label: 'Understand',
                 to: '/docs/understand',
               },
               {
-                label: 'Develop VAST',
+                label: 'Contribute',
+                to: '/docs/contribute',
+              },
+              {
+                label: 'Develop',
                 to: '/docs/develop',
               },
             ],
