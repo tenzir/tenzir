@@ -5,6 +5,22 @@ import pytest
 import vast.utils.arrow as vua
 
 
+def test_unpack_ip():
+    bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\xa5"
+    assert vua.unpack_ip(bytes) == ipaddress.IPv4Address("10.1.21.165")
+
+
+def test_ip_address_extension_type():
+    ty = vua.IPAddressType()
+    bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\xa5"
+    storage = pa.array([bytes], pa.binary(16))
+    arr = pa.ExtensionArray.from_storage(ty, storage)
+    arr.validate()
+    assert arr.type is ty
+    assert arr.storage.equals(storage)
+    assert arr[0].as_py() == ipaddress.IPv4Address("10.1.21.165")
+
+
 def test_schema_name_extraction():
     # Since Arrow cannot attach names to schemas, we do this via metadata.
     schema = pa.schema(
@@ -25,8 +41,3 @@ def test_schema_alias_extraction():
     assert names[1] == "bar"
     # The first name is the top-level type name.
     assert vua.name(schema) == "foo"
-
-
-def test_unpack_ip():
-    bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n" b"\x01\x15\xa5"
-    assert vua.unpack_ip(bytes) == ipaddress.IPv4Address("10.1.21.165")
