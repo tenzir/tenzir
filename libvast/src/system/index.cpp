@@ -371,9 +371,10 @@ caf::error index_state::load_from_disk() {
         = std::filesystem::directory_iterator(markersdir, err);
       if (err)
         return caf::make_error(ec::filesystem_error,
-                               fmt::format("{} failed to list directory contents "
-                                           "of {}: {}", *self,
-                                           dir, err.message()));
+                               fmt::format("{} failed to list directory "
+                                           "contents "
+                                           "of {}: {}",
+                                           *self, dir, err.message()));
       for (auto const& entry : transforms_dir_iter) {
         if (entry.path().extension() != ".marker")
           continue;
@@ -412,14 +413,14 @@ caf::error index_state::load_from_disk() {
                                          filesystem, path);
             self->request(partition, caf::infinite, atom::erase_v)
               .then(
-                [uuid](atom::done) {
-                  VAST_DEBUG("index erased partition {} during startup", uuid);
+                [this, uuid](atom::done) {
+                  VAST_DEBUG("{} erased partition {} during startup", *self,
+                             uuid);
                 },
-                [uuid](const caf::error& e) {
-                  VAST_WARN("{} failed to erase partition {} during "
-                            "startup: ", *self,
+                [this, uuid](const caf::error& e) {
+                  VAST_WARN("{} failed to erase partition {} during startup: "
                             "{}",
-                            uuid, e);
+                            *self, uuid, e);
                 });
           }
         }
