@@ -103,7 +103,7 @@ worth pointing out:
    conversation boundary exists when data leaves the system, e.g., when a user
    wants a query result shown in JSON, CSV, or some custom format. Source and
    sink data formats are [exchangeable
-   plugins](/docs/understand-vast/architecture/plugins).
+   plugins](/docs/understand/architecture/plugins).
 
 2. **Read/Write Path Separation**: one design goal of VAST is a strict
    separation of read and write path, in order to scale them independently. The
@@ -154,5 +154,5 @@ use cases.
 [msgpack]: https://msgpack.org/index.html
 [duckdb]: https://duckdb.org/
 [sigma]: https://github.com/SigmaHQ/sigma
-[sigma-plugin]: /docs/understand-vast/query-language/frontends/sigma
+[sigma-plugin]: /docs/understand/query-language/frontends/sigma
 [zeek]: https://zeek.org

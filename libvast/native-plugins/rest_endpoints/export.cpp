@@ -30,7 +30,7 @@ static auto const* SPEC_V0 = R"_(
 /export:
   get:
     summary: Export data
-    description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand-vast/query-language)
+    description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
     parameters:
       - in: query
         name: expression

@@ -6,7 +6,7 @@ date: 2022-08-12
 tags: [sigma, regex, query-frontend]
 ---
 
-VAST's [Sigma frontend](/docs/understand-vast/query-language/frontends/sigma)
+VAST's [Sigma frontend](/docs/understand/query-language/frontends/sigma)
 now supports more modifiers. In the Sigma language, modifiers transform
 predicates in various ways, e.g., to apply a function over a value or to change
 the operator of a predicate. Modifiers are the customization point to enhance
@@ -144,8 +144,8 @@ three missing pieces for Sigma rule execution to become viable in VAST:
    generic Sigma rules using [concepts][concepts].
 
 [arrow-containment-tests]: https://arrow.apache.org/docs/cpp/compute.html#containment-tests
-[field-extractors]: https://vast.io/docs/understand-vast/query-language/expressions#field-extractor
-[concepts]: https://vast.io/docs/understand-vast/data-model/taxonomies#concepts
+[field-extractors]: https://vast.io/docs/understand/query-language/expressions#field-extractor
+[concepts]: https://vast.io/docs/understand/data-model/taxonomies#concepts
 
 Please don't hesitate to swing by our [Community Slack](http://slack.tenzir.com)
 and talk with us if you are passionate about Sigma and other topics around open

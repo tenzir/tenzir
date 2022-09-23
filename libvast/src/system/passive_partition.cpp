@@ -111,11 +111,10 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
     VAST_ASSERT(uncompressed_data);
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
-    if (!sink(state_ptr)) {
-      VAST_ERROR("{} failed to deserialize indexer at {}", *self, position);
+    if (!sink(state_ptr) || !state_ptr) {
+      VAST_ERROR("{} failed to deserialize value index at {}", *self, position);
       return {};
     }
-    VAST_ASSERT(state_ptr);
     indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
   }
   return indexer;
