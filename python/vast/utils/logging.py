@@ -2,27 +2,23 @@ import logging
 import sys
 
 import coloredlogs
-import dynaconf
+from dynaconf import Dynaconf
+
+import vast.utils.config
 
 
-def get(name=None):
-    logger = logging.getLogger(f"vast.{name}" if name else "vast")
-    return logger
-
-
-# Consider configuration via logging.config.dictConfig.
-def configure(config: dynaconf.Dynaconf, logger: logging.Logger = get()):
+def configure(config: Dynaconf, logger: logging.Logger):
     fmt = "%(asctime)s %(name)s %(levelname)-7s %(message)s"
     colored_formatter = coloredlogs.ColoredFormatter(fmt)
     plain_formatter = logging.Formatter(fmt)
-    if config.file:
+    if config.file_verbosity != "quiet":
         fh = logging.FileHandler(config.filename)
         fh_level = logging.getLevelName(config.file_verbosity.upper())
         logger.setLevel(fh_level)
         fh.setLevel(fh_level)
         fh.setFormatter(plain_formatter)
         logger.addHandler(fh)
-    if config.console:
+    if config.console_verbosity != "quiet":
         ch = logging.StreamHandler()
         ch_level = logging.getLevelName(config.console_verbosity.upper())
         ch.setLevel(ch_level)
@@ -41,3 +37,13 @@ def configure(config: dynaconf.Dynaconf, logger: logging.Logger = get()):
     sh = ShutdownHandler(level=50)
     sh.setFormatter(colored_formatter)
     logger.addHandler(sh)
+
+
+def get(name=None):
+    # All VAST loggers have handlers. If not, the logger is not yet initialized
+    # and we do it lazily at the first use here.
+    vast_logger = logging.getLogger("vast")
+    if not vast_logger.hasHandlers():
+        config = vast.utils.config.parse()
+        configure(config.fabric.logging, vast_logger)
+    return logging.getLogger(name)

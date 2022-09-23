@@ -1,0 +1,81 @@
+{
+    "type": "bundle",
+    "id": "bundle--726f2b36-a49f-4fa5-adeb-ff6761ce340c",
+    "objects": [
+        {
+            "type": "identity",
+            "spec_version": "2.1",
+            "id": "identity--9344c09f-45a0-48db-b890-3d3b49b358c2",
+            "created": "2022-08-14T04:15:29.015758Z",
+            "modified": "2022-08-14T04:15:29.015758Z",
+            "name": "VAST",
+            "identity_class": "system"
+        },
+        {
+            "type": "identity",
+            "spec_version": "2.1",
+            "id": "identity--56ff4ca9-4777-48f8-8384-5a570f99b356",
+            "created": "2022-08-14T04:15:29.015888Z",
+            "modified": "2022-08-14T04:15:29.015888Z",
+            "name": "Zeek",
+            "identity_class": "system"
+        },
+        {
+            "type": "sighting",
+            "spec_version": "2.1",
+            "id": "sighting--ed25acf4-b90e-49c4-b1cd-a2e7d5fc5de4",
+            "created_by_ref": "identity--56ff4ca9-4777-48f8-8384-5a570f99b356",
+            "created": "2022-08-14T04:15:29.954986Z",
+            "modified": "2022-08-14T04:15:29.954986Z",
+            "sighting_of_ref": "indicator--1dddc5c8-1e5e-4555-af75-9c6116a661d0",
+            "observed_data_refs": [
+                "observed-data--96febb7f-5a37-4610-9101-ac9be4c99f98"
+            ]
+        },
+        {
+            "type": "observed-data",
+            "spec_version": "2.1",
+            "id": "observed-data--96febb7f-5a37-4610-9101-ac9be4c99f98",
+            "created": "2022-08-14T04:15:29.954818Z",
+            "modified": "2022-08-14T04:15:29.954818Z",
+            "first_observed": "2021-11-18T14:46:10.300889Z",
+            "last_observed": "2021-11-18T14:48:10.838809Z",
+            "number_observed": 1,
+            "object_refs": [
+                "network-traffic--f6a985a0-eb08-581a-a8e5-c9a845cc2429"
+            ]
+        },
+        {
+            "type": "network-traffic",
+            "spec_version": "2.1",
+            "id": "network-traffic--f6a985a0-eb08-581a-a8e5-c9a845cc2429",
+            "start": "2021-11-18T14:46:10.300889Z",
+            "end": "2021-11-18T14:48:10.838809Z",
+            "is_active": false,
+            "src_ref": "ipv4-addr--9e62fb0a-4e75-5c70-90f8-b9db0919be36",
+            "dst_ref": "ipv4-addr--ce0c791e-b87e-51c8-885e-fcc4d4bdc778",
+            "src_port": 50508,
+            "dst_port": 80,
+            "protocols": [
+                "tcp",
+                "http"
+            ],
+            "src_byte_count": 663,
+            "dst_byte_count": 407,
+            "src_packets": 6,
+            "dst_packets": 5
+        },
+        {
+            "type": "ipv4-addr",
+            "spec_version": "2.1",
+            "id": "ipv4-addr--9e62fb0a-4e75-5c70-90f8-b9db0919be36",
+            "value": "10.9.29.134"
+        },
+        {
+            "type": "ipv4-addr",
+            "spec_version": "2.1",
+            "id": "ipv4-addr--ce0c791e-b87e-51c8-885e-fcc4d4bdc778",
+            "value": "194.147.115.132"
+        }
+    ]
+}

@@ -1,15 +1,22 @@
 import argparse
-import dynaconf
+from dynaconf import Dynaconf, Validator
 
 CONFIG_FILES = ["config.yaml", "config.yml"]
 
 
 def create(config_files=CONFIG_FILES):
-    return dynaconf.Dynaconf(
+    settings = Dynaconf(
         settings_files=config_files,
         load_dotenv=True,
         envvar_prefix="VAST",
     )
+    settings.validators.register(
+        Validator("fabric.logging.console_verbosity", default="debug"),
+        Validator("fabric.logging.file_verbosity", default="quiet"),
+        Validator("fabric.logging.filename", default="vast.log"),
+    )
+    settings.validators.validate_all()
+    return settings
 
 
 def parse():
