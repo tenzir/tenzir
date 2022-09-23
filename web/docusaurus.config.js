@@ -19,6 +19,37 @@ const config = {
 
   plugins: [
     'docusaurus-plugin-sass',
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        redirects: [
+          {
+            to: '/docs/about',
+            from: '/docs/about-vast',
+          },
+          {
+            to: '/docs/try',
+            from: '/docs/try-vast',
+          },
+          {
+            to: '/docs/setup',
+            from: '/docs/setup-vast',
+          },
+          {
+            to: '/docs/use',
+            from: '/docs/use-vast',
+          },
+          {
+            to: '/docs/understand',
+            from: '/docs/understand-vast',
+          },
+          {
+            to: '/docs/develop',
+            from: '/docs/develop-vast',
+          },
+        ],
+      },
+    ],
   ],
 
   presets: [
