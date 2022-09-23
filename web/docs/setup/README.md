@@ -1,4 +1,4 @@
-# Setup VAST
+# Setup
 
 This section describes VAST from an **operator perspective**. We cover the
 different stages of the setup process that ultimately yield a running VAST

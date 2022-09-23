@@ -1,4 +1,4 @@
-# Understand VAST
+# Understand
 
 This section describes VAST from a **systems engineering perspective**. We cover
 the following topics:

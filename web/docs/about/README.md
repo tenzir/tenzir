@@ -1,4 +1,4 @@
-# About VAST
+# About
 
 :::tip Get Help
 Welcome to the VAST documentation! If you have any questions, do not hesitate to

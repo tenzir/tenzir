@@ -1,4 +1,4 @@
-# Develop VAST
+# Develop
 
 This section describes VAST from a **developer perspective**. We cover the
 following topics:
