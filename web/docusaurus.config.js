@@ -86,7 +86,7 @@ const config = {
         items: [
           {
             type: 'doc',
-            docId: 'about-vast/README',
+            docId: 'about/README',
             position: 'left',
             label: 'Docs',
           },
@@ -136,23 +136,23 @@ const config = {
             items: [
               {
                 label: 'About VAST',
-                to: '/docs/about-vast',
+                to: '/docs/about',
               },
               {
                 label: 'Setup VAST',
-                to: '/docs/setup-vast',
+                to: '/docs/setup',
               },
               {
                 label: 'Use VAST',
-                to: '/docs/use-vast',
+                to: '/docs/use',
               },
               {
                 label: 'Understand VAST',
-                to: '/docs/understand-vast',
+                to: '/docs/understand',
               },
               {
                 label: 'Develop VAST',
-                to: '/docs/develop-vast',
+                to: '/docs/develop',
               },
             ],
           },

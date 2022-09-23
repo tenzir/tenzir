@@ -20,14 +20,14 @@ This notebook showcases the key use cases of VAST in an interactive manner.
 :::caution Work in Progress
 This page is work in progress. It is the first example of a [notebook-based
 approach of writing user
-guides](/docs/develop-vast/contributing/notebooks), but the content and
+guides](/docs/develop/contributing/notebooks), but the content and
 CI-workflow is not fully fleshed out. Stay tuned.
 :::
 
 ## Install VAST
 
 First, let's get a VAST binary to play with. The easiest way to [setup
-VAST](/docs/setup-vast) is downloading a static binary on Linux.
+VAST](/docs/setup) is downloading a static binary on Linux.
 
 :::note Coming soon: the VAST installer
 The easiest way to obain VAST is through our installer script:
