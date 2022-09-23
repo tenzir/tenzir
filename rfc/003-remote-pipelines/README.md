@@ -5,24 +5,95 @@
 - **ETA**: Oct 14, 2022
 - **Authors**:
   - [Matthias Vallentin](https://github.com/mavam)
+- **Contributors**:
+  - [Dominik Lohmann](https://github.com/dominiklohmann)
+  - [Rémi Dettai](https://github.com/rdettai)
+  - [Tobias Mayer](https://github.com/tobim)
 - **Discussion**: [PR #2577](https://github.com/tenzir/vast/pull/2577)
 
 ## Overview
 
-This proposal enhances the local pipeline execution with a remote component,
-making it possible to connect pipeline across process boundaries.
+This proposal enhances [local pipeline execution][rfc-001] with a remote
+component, making it possible to connect pipeline across process boundaries.
+
+[rfc-001]: https://github.com/tenzir/vast/pull/2511
 
 ## Problem Statement
 
-As of RFC-001, VAST pipelines can execute locally. But a one-shot pipeline
-execution is not sufficient. After this building block, natural questions arise:
+As of [RFC-001][rfc-001], VAST pipelines can execute locally. This offers
+control over the execution at the location of a specific VAST instance. The
+pipeline executes in situ, with the `load` and `store` operators offering
+customization points for data source and sink.
 
-- How can I connect a local and remote pipeline?
-- How can I manage (add/update/remove) a set of continuously running pipelines?
+While local pipelines work for ad-hoc data crunching or investigative queries,
+they do not support composition of continuously running pipelines. Consider the
+example of a live pipeline that connects to a data source (e.g., Suricata,
+Zeek), enriches alerts, and then normalizes and clusters them. How can we make
+this computation accessible for other systems, potentially far away? When we add
+a new data source to the system, we would like it to submit its alerts to this
+pipeline as well. Moreover, we'd like to attach consumers at the end of the
+pipeline. Let's say there's a ticketing system (e.g., TheHive, JIRA, ServiceNow)
+that should create ticket for every triaged alert. This requires a subscription
+mechanism to the output of the pipeline.
+
+This problem becomes more complicated when we also consider persistent storage
+as part of the mix, at VAST servers or elsewhere. Pipelines are fundamentally a
+piece of real-time computation. But endpoints of a pipeline are data. It doesn't
+matter where the data comes from or goes to, from perspective of the pipeline.
+It's the user who would like to stuff data into the front of a pipeline, from
+various storage locations, and arrange pipelines into continuous system of
+processing that provides value at the other end.
+
+To enhance the above example, the diagram below illustrates how persistent
+storage comes into play.
+
+```
+┌────────────┐                                                                 
+│            │                                                                 
+│  Endpoint  │───┐                                                             
+│            │   │   ┏━━━━━━━━━━━━━━━━━┓                                       
+└────────────┘   │   ┃ Alerts Pipeline ┃                                       
+┌────────────┐   │   ┗━━━━━━━━━━━━━━━━━┛───────┐    ┌────────────┐             
+│            │   │   │ ┌─────────┐    ┌──────┐ │    │            │             
+│  Network   │───┼──▶│ │normalize│───▶│enrich│ │───▶│ Ticketing  │◀─── Analyst 
+│            │   │   │ └─────────┘    └──────┘ │    │            │             
+└────────────┘   │   └─────────────────────────┘    └────────────┘             
+┌────────────┐   │                │                        │                   
+│            │   │                │                        │                   
+│   Cloud    │───┘                ▼                        │                   
+│            │             ┌─────────────┐                 │                   
+└────────────┘             │             │                 │                   
+                           │    Alert    │                 │                   
+                           │   Storage   │◀────────────────┘                   
+                           │             │   mark alerts as processed          
+                           └─────────────┘                                    
+```
+
+The pipeline `normalize | enrich` should write its output into a storage location. If
+this was the only function of the pipeline, we could use a `store` operator
+at the end. But there is also another recipient, the ticketing system. This
+means the pipeline must be "open" (i.e., must not end with an operator of output
+type `Void`). The same applies to the other end of the pipeline: the analyst may
+want to bulk-load some alerts from a third-party location and run them through
+the pipeline. If the pipeline started with a `load` operation, it would already
+describe a single location to read from. The problem we have here is that we
+have a pipeline as pure computation, and a surrounding environment that wants to
+reach it from multiple locations, and relay the output from it to multiple
+locations. The environment is dynamic and may change, whereas the computation
+described the pipeline is static.
+
+In summary, the current pipeline execution model only supports intra-pipeline
+composition through operators, but not inter-pipeline composition into a larger
+dataflow system. This spawns numerous questions:
+
+- How can I manage (add/update/remove) pipelines?
+- What's the model of making pipelines accessible from anywhere?
+- How do I make a pipeline run continuously?
 - How do pipelines interact with VAST server nodes? Specifically, how can I send
   data into a VAST node, and how can I query data from a VAST node?
 
-This proposal seeks an answer to these questions.
+The scope of this proposal is answering these questing by clearly defining the
+additional layer that interconnect pipelines.
 
 ## Solution Proposal
 
