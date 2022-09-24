@@ -23,13 +23,21 @@ def test_ip_address_extension_type():
 
 def test_subnet_extension_type():
     ty = vua.SubnetType()
-    bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\x00\x18"
-    storage = pa.array([bytes], pa.binary(17))
+    bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\x00"
+    storage = pa.StructArray.from_arrays(
+        [
+            # pa.array([bytes, bytes], type=vua.AddressType()),
+            pa.array([bytes, bytes], type=pa.binary(16)),
+            pa.array([24, 25], type=pa.uint8()),
+        ],
+        names=["address", "length"],
+    )
     arr = pa.ExtensionArray.from_storage(ty, storage)
     arr.validate()
     assert arr.type is ty
     assert arr.storage.equals(storage)
     assert arr[0].as_py() == ipaddress.IPv4Network("10.1.21.0/24")
+    assert arr[1].as_py() == ipaddress.IPv4Network("10.1.21.0/25")
 
 
 def test_enum_extension_type():
