@@ -24,8 +24,6 @@ class IPAddressType(pa.ExtensionType):
         pa.ExtensionType.__init__(self, pa.binary(16), "vast.address")
 
     def __arrow_ext_serialize__(self):
-        # since we don't have a parameterized type, we don't need extra
-        # metadata to be deserialized
         return b""
 
     @classmethod
@@ -39,8 +37,35 @@ class IPAddressType(pa.ExtensionType):
         return IPAddressScalar
 
 
+class SubnetScalar(pa.ExtensionScalar):
+    def as_py(self) -> ip.IPv4Network | ip.IPv6Network:
+        buffer = self.value.as_py()
+        network = unpack_ip(buffer[0:16])
+        length = buffer[16]
+        return ip.ip_network((network, length), strict=False)
+
+
+class SubnetType(pa.ExtensionType):
+    def __init__(self):
+        pa.ExtensionType.__init__(self, pa.binary(17), "vast.subnet")
+
+    def __arrow_ext_serialize__(self):
+        return b""
+
+    @classmethod
+    def __arrow_ext_deserialize__(self, storage_type, serialized):
+        return SubnetType()
+
+    def __reduce__(self):
+        return SubnetScalar, ()
+
+    def __arrow_ext_scalar_class__(self):
+        return SubnetScalar
+
+
 # TODO: move to appropriate location
 pa.register_extension_type(IPAddressType())
+pa.register_extension_type(SubnetType())
 
 
 def names(schema: pa.Schema):
