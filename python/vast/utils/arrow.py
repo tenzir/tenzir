@@ -21,15 +21,21 @@ class AddressScalar(pa.ExtensionScalar):
 
 
 class AddressType(pa.ExtensionType):
+    ext_name = "vast.address"
+    ext_type = pa.binary(16)
+
     def __init__(self):
-        pa.ExtensionType.__init__(self, pa.binary(16), "vast.address")
+        pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
 
     def __arrow_ext_serialize__(self) -> bytes:
-        return b""
+        return self.ext_name.encode()
 
     @classmethod
     def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
-        return AddressType()
+        if serialized.decode() != self.ext_name:
+            raise TypeError("type identifier does not match")
+        if storage_type != self.ext_type:
+            raise TypeError("storage type does not match")
 
     def __reduce__(self):
         return AddressScalar, ()
@@ -46,18 +52,24 @@ class SubnetScalar(pa.ExtensionScalar):
 
 
 class SubnetType(pa.ExtensionType):
+    ext_name = "vast.subnet"
+    # This gives us a pyarrow.lib.ArrowNotImplementedError :-/
+    # ext_type = pa.struct([("address", AddressType()),
+    #                       ("length", pa.uint8())])
+    ext_type = pa.struct([("address", pa.binary(16)), ("length", pa.uint8())])
+
     def __init__(self):
-        # This gives us a pyarrow.lib.ArrowNotImplementedError :-/
-        # arrow_type = pa.struct([("address", AddressType()),
-        #                       ("length", pa.uint8())])
-        arrow_type = pa.struct([("address", pa.binary(16)), ("length", pa.uint8())])
-        pa.ExtensionType.__init__(self, arrow_type, "vast.subnet")
+        pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
 
     def __arrow_ext_serialize__(self) -> bytes:
-        return b""
+        return self.ext_name.encode()
 
     @classmethod
     def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
+        if serialized.decode() != self.ext_name:
+            raise TypeError("type identifier does not match")
+        if storage_type != self.ext_type:
+            raise TypeError("storage type does not match")
         return SubnetType()
 
     def __reduce__(self):
@@ -73,9 +85,12 @@ class EnumScalar(pa.ExtensionScalar):
 
 
 class EnumType(pa.ExtensionType):
+    ext_name = "vast.enum"
+    ext_type = pa.uint32()
+
     def __init__(self, fields: dict[int, str]):
         self._fields = fields
-        pa.ExtensionType.__init__(self, pa.uint32(), "vast.enum")
+        pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
 
     @property
     def fields(self):
@@ -90,6 +105,8 @@ class EnumType(pa.ExtensionType):
     @classmethod
     def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
         fields = json.loads(serialized.decode())
+        if storage_type != self.ext_type:
+            raise TypeError("storage type does not match")
         return EnumType(fields)
 
     def __reduce__(self):
