@@ -11,7 +11,7 @@ def test_unpack_ip():
 
 
 def test_ip_address_extension_type():
-    ty = vua.IPAddressType()
+    ty = vua.AddressType()
     bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\xa5"
     storage = pa.array([bytes], pa.binary(16))
     arr = pa.ExtensionArray.from_storage(ty, storage)

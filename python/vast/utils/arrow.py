@@ -15,12 +15,12 @@ def unpack_ip(buffer: SupportsBytes) -> ip.IPv4Address | ip.IPv6Address:
     return ip.ip_address(num)
 
 
-class IPAddressScalar(pa.ExtensionScalar):
+class AddressScalar(pa.ExtensionScalar):
     def as_py(self) -> ip.IPv4Address | ip.IPv6Address:
         return unpack_ip(self.value.as_py())
 
 
-class IPAddressType(pa.ExtensionType):
+class AddressType(pa.ExtensionType):
     def __init__(self):
         pa.ExtensionType.__init__(self, pa.binary(16), "vast.address")
 
@@ -29,13 +29,13 @@ class IPAddressType(pa.ExtensionType):
 
     @classmethod
     def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
-        return IPAddressType()
+        return AddressType()
 
     def __reduce__(self):
-        return IPAddressScalar, ()
+        return AddressScalar, ()
 
     def __arrow_ext_scalar_class__(self):
-        return IPAddressScalar
+        return AddressScalar
 
 
 class SubnetScalar(pa.ExtensionScalar):
@@ -97,7 +97,7 @@ class EnumType(pa.ExtensionType):
 
 
 # TODO: move to appropriate location
-pa.register_extension_type(IPAddressType())
+pa.register_extension_type(AddressType())
 pa.register_extension_type(SubnetType())
 
 
