@@ -1,3 +1,4 @@
+import json
 import ipaddress as ip
 from typing import SupportsBytes
 
@@ -23,11 +24,11 @@ class IPAddressType(pa.ExtensionType):
     def __init__(self):
         pa.ExtensionType.__init__(self, pa.binary(16), "vast.address")
 
-    def __arrow_ext_serialize__(self):
+    def __arrow_ext_serialize__(self) -> bytes:
         return b""
 
     @classmethod
-    def __arrow_ext_deserialize__(self, storage_type, serialized):
+    def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
         return IPAddressType()
 
     def __reduce__(self):
@@ -49,11 +50,11 @@ class SubnetType(pa.ExtensionType):
     def __init__(self):
         pa.ExtensionType.__init__(self, pa.binary(17), "vast.subnet")
 
-    def __arrow_ext_serialize__(self):
+    def __arrow_ext_serialize__(self) -> bytes:
         return b""
 
     @classmethod
-    def __arrow_ext_deserialize__(self, storage_type, serialized):
+    def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
         return SubnetType()
 
     def __reduce__(self):
@@ -61,6 +62,38 @@ class SubnetType(pa.ExtensionType):
 
     def __arrow_ext_scalar_class__(self):
         return SubnetScalar
+
+
+class EnumScalar(pa.ExtensionScalar):
+    def as_py(self) -> str:
+        return self.type.field(self.value.as_py())
+
+
+class EnumType(pa.ExtensionType):
+    def __init__(self, fields: dict[int, str]):
+        self._fields = fields
+        pa.ExtensionType.__init__(self, pa.uint32(), "vast.enum")
+
+    @property
+    def fields(self):
+        return self._fields
+
+    def field(self, key):
+        return self._fields[key]
+
+    def __arrow_ext_serialize__(self) -> bytes:
+        return json.dumps(self._fields).encode()
+
+    @classmethod
+    def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
+        fields = json.loads(serialized.decode())
+        return EnumType(fields)
+
+    def __reduce__(self):
+        return EnumScalar, ()
+
+    def __arrow_ext_scalar_class__(self):
+        return EnumScalar
 
 
 # TODO: move to appropriate location

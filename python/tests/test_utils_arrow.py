@@ -32,6 +32,22 @@ def test_subnet_extension_type():
     assert arr[0].as_py() == ipaddress.IPv4Network("10.1.21.0/24")
 
 
+def test_enum_extension_type():
+    fields = {
+        1: "foo",
+        2: "bar",
+        3: "baz",
+    }
+    ty = vua.EnumType(fields)
+    pa.register_extension_type(ty)
+    storage = pa.array([1, 2, 3, 2, 1], pa.uint32())
+    arr = pa.ExtensionArray.from_storage(ty, storage)
+    arr.validate()
+    assert arr.type is ty
+    assert arr.storage.equals(storage)
+    assert arr.to_pylist() == ["foo", "bar", "baz", "bar", "foo"]
+
+
 def test_schema_name_extraction():
     # Since Arrow cannot attach names to schemas, we do this via metadata.
     schema = pa.schema(
