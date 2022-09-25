@@ -67,17 +67,14 @@ class AddressType(pa.ExtensionType):
 
 class SubnetScalar(pa.ExtensionScalar):
     def as_py(self) -> ip.IPv4Network | ip.IPv6Network:
-        address = unpack_ip(self.value[0].as_py())
+        address = self.value[0].as_py()
         length = self.value[1].as_py()
         return ip.ip_network((address, length), strict=False)
 
 
 class SubnetType(pa.ExtensionType):
     ext_name = "vast.subnet"
-    # This gives us a pyarrow.lib.ArrowNotImplementedError :-/
-    # ext_type = pa.struct([("address", AddressType()),
-    #                       ("length", pa.uint8())])
-    ext_type = pa.struct([("address", pa.binary(16)), ("length", pa.uint8())])
+    ext_type = pa.struct([("address", AddressType()), ("length", pa.uint8())])
 
     def __init__(self):
         pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)

@@ -30,11 +30,12 @@ def test_ip_address_extension_type():
 def test_subnet_extension_type():
     ty = vua.SubnetType()
     bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\x00"
+    address_array = pa.array([bytes, bytes], pa.binary(16))
+    length_array = pa.array([24, 25], pa.uint8())
     storage = pa.StructArray.from_arrays(
         [
-            # pa.array([bytes, bytes], type=vua.AddressType()),
-            pa.array([bytes, bytes], type=pa.binary(16)),
-            pa.array([24, 25], type=pa.uint8()),
+            pa.ExtensionArray.from_storage(vua.AddressType(), address_array),
+            length_array,
         ],
         names=["address", "length"],
     )
@@ -81,7 +82,7 @@ def test_ipc():
     # Create sample patterns.
     patterns = ["/foo/", "/bar/"]
     pattern_type = vua.PatternType()
-    pattern_storage = pa.array(patterns, type=pa.string())
+    pattern_storage = pa.array(patterns, pa.string())
     pattern_array = pa.ExtensionArray.from_storage(pattern_type, pattern_storage)
     # Create sample IP addresses.
     addresses = [
@@ -89,17 +90,18 @@ def test_ipc():
         b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\xa6",
     ]
     address_type = vua.AddressType()
-    address_storage = pa.array(addresses, type=pa.binary(16))
+    address_storage = pa.array(addresses, pa.binary(16))
     address_array = pa.ExtensionArray.from_storage(address_type, address_storage)
     # Create sample subnets.
     network = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\x00"
     networks = [network, network]
-    prefixes = [24, 25]
+    address_array = pa.array(networks, pa.binary(16))
+    length_array = pa.array([24, 25], pa.uint8())
     subnet_type = vua.SubnetType()
     subnet_storage = pa.StructArray.from_arrays(
         [
-            pa.array(networks, type=pa.binary(16)),
-            pa.array(prefixes, type=pa.uint8()),
+            pa.ExtensionArray.from_storage(address_type, address_array),
+            length_array,
         ],
         names=["address", "length"],
     )
@@ -119,6 +121,14 @@ def test_ipc():
     schema = pa.schema(
         [("p", pattern_type), ("a", address_type), ("s", subnet_type), ("e", enum_type)]
     )
+    # FIXME: unit tests fail currently here with this:
+    #
+    # pyarrow.lib.ArrowNotImplementedError: Unsupported cast to
+    #    extension<vast.address<AddressType>> from fixed_size_binary[16]
+    #
+    # It may be easier to fix the casting rather than change VAST's underlying
+    # representation. The folks at Huggingface have shown that this is possible
+    # in https://github.com/huggingface/datasets/pull/3575.
     batch = pa.record_batch(
         [pattern_array, address_array, subnet_array, enum_array], schema=schema
     )
