@@ -40,7 +40,7 @@ class AddressScalar(pa.ExtensionScalar):
 
 
 class AddressType(pa.ExtensionType):
-    ext_name = "vast.address_type"
+    ext_name = "vast.address"
     ext_type = pa.binary(16)
 
     def __init__(self):
@@ -71,7 +71,7 @@ class SubnetScalar(pa.ExtensionScalar):
 
 
 class SubnetType(pa.ExtensionType):
-    ext_name = "vast.subnet_type"
+    ext_name = "vast.subnet"
     # This gives us a pyarrow.lib.ArrowNotImplementedError :-/
     # ext_type = pa.struct([("address", AddressType()),
     #                       ("length", pa.uint8())])
@@ -104,7 +104,7 @@ class EnumScalar(pa.ExtensionScalar):
 
 
 class EnumType(pa.ExtensionType):
-    ext_name = "vast.enumeration_type"
+    ext_name = "vast.enumeration"
     ext_type = pa.uint32()
 
     def __init__(self, fields: dict[int, str]):
