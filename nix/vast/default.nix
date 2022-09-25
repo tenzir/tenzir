@@ -25,6 +25,7 @@
 , tcpdump
 , utillinux
 , dpkg
+, restinio
 , versionOverride ? null
 , versionShortOverride ? null
 , withPlugins ? []
@@ -75,6 +76,7 @@ stdenv.mkDerivation (rec {
     simdjson
     spdlog
     zeek-broker
+    restinio
   ];
   propagatedBuildInputs = [
     arrow-cpp

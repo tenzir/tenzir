@@ -25,6 +25,36 @@ in
   prev.xxHash.overrideAttrs (old: {
     patches = [ ./xxHash/static.patch ];
   });
+  http-parser = if !isStatic then prev.http-parser else
+    prev.http-parser.overrideAttrs (_ : {
+      postPatch = let
+        cMakeLists = prev.writeTextFile {
+          name = "http-parser-cmake";
+          text = ''
+            cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+            project(http_parser)
+            include(GNUInstallDirs)
+            add_library(http_parser http_parser.c)
+            target_compile_options(http_parser PRIVATE -Wall -Wextra)
+            target_include_directories(http_parser PUBLIC .)
+            set_target_properties(http_parser PROPERTIES PUBLIC_HEADER http_parser.h)
+            install(
+              TARGETS http_parser
+              ARCHIVE DESTINATION "''${CMAKE_INSTALL_LIBDIR}"
+              LIBRARY DESTINATION "''${CMAKE_INSTALL_LIBDIR}"
+              RUNTIME DESTINATION "''${CMAKE_INSTALL_BINDIR}"
+              PUBLIC_HEADER DESTINATION "''${CMAKE_INSTALL_INCLUDEDIR}")
+          '';
+        };
+      in ''
+        cp ${cMakeLists} CMakeLists.txt
+      '';
+      nativeBuildInputs = [ prev.buildPackages.cmake ];
+      makeFlags = [];
+      buildFlags = [];
+      doCheck = false;
+  });
+  restinio = final.callPackage ./restinio { };
   caf =
     let
       source = builtins.fromJSON (builtins.readFile ./caf/source.json);
