@@ -5,6 +5,35 @@ from typing import SupportsBytes
 import pyarrow as pa
 
 
+class PatternScalar(pa.ExtensionScalar):
+    def as_py(self) -> str:
+        return self.value.as_py()
+
+
+class PatternType(pa.ExtensionType):
+    ext_name = "vast.pattern"
+    ext_type = pa.string()
+
+    def __init__(self):
+        pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
+
+    def __arrow_ext_serialize__(self) -> bytes:
+        return self.ext_name.encode()
+
+    @classmethod
+    def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
+        if serialized.decode() != self.ext_name:
+            raise TypeError("type identifier does not match")
+        if storage_type != self.ext_type:
+            raise TypeError("storage type does not match")
+
+    def __reduce__(self):
+        return PatternScalar, ()
+
+    def __arrow_ext_scalar_class__(self):
+        return PatternScalar
+
+
 class AddressScalar(pa.ExtensionScalar):
     def as_py(self) -> ip.IPv4Address | ip.IPv6Address:
         return unpack_ip(self.value.as_py())
@@ -127,6 +156,7 @@ def unpack_ip(buffer: SupportsBytes) -> ip.IPv4Address | ip.IPv6Address:
     return ip.ip_address(num)
 
 
-# TODO: move to appropriate location
+# Modules are intialized exactly once, so we can perform the registration here.
+pa.register_extension_type(PatternType())
 pa.register_extension_type(AddressType())
 pa.register_extension_type(SubnetType())
