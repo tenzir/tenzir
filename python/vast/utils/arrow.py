@@ -26,6 +26,7 @@ class PatternType(pa.ExtensionType):
             raise TypeError("type identifier does not match")
         if storage_type != self.ext_type:
             raise TypeError("storage type does not match")
+        return PatternType()
 
     def __reduce__(self):
         return PatternScalar, ()
@@ -55,6 +56,7 @@ class AddressType(pa.ExtensionType):
             raise TypeError("type identifier does not match")
         if storage_type != self.ext_type:
             raise TypeError("storage type does not match")
+        return AddressType()
 
     def __reduce__(self):
         return AddressScalar, ()
