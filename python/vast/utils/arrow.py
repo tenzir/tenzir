@@ -107,8 +107,10 @@ class EnumType(pa.ExtensionType):
     ext_name = "vast.enumeration"
     ext_type = pa.uint32()
 
-    def __init__(self, fields: dict[int, str]):
-        self._fields = fields
+    def __init__(self, fields: dict[str, int]):
+        # We're optimizing for use cases that involve reading from VAST, so we
+        # keep the key-name mappings in the inverse order in memory.
+        self._fields = {v: k for k, v in fields.items()}
         pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
 
     @property
@@ -119,11 +121,15 @@ class EnumType(pa.ExtensionType):
         return self._fields[key]
 
     def __arrow_ext_serialize__(self) -> bytes:
-        return json.dumps(self._fields).encode()
+        inverse = {v: k for k, v in self._fields.items()}
+        return json.dumps(inverse).encode()
+        # We're optimizing for reading from VAST, so we keep the key-name
+        # mappings in the inverse order.
 
     @classmethod
     def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
-        fields = json.loads(serialized.decode())
+        inverse = json.loads(serialized.decode())
+        fields = {v: k for k, v in inverse.items()}
         if storage_type != self.ext_type:
             raise TypeError("storage type does not match")
         return EnumType(fields)
