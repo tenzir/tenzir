@@ -3,12 +3,13 @@
 , fetchFromGitHub
 , cmake
 , http-parser
-, fmt
+, fmt_8
+, asio
 }:
 
 let
   pname = "restinio";
-  version = "v.0.6.14";
+  version = "v.0.6.17";
 in
 stdenv.mkDerivation {
   inherit pname version;
@@ -32,9 +33,10 @@ stdenv.mkDerivation {
     "-DRESTINIO_USE_EXTERNAL_HTTP_PARSER=ON"
     "-DRESTINIO_ALLOW_SOBJECTIZER=OFF"
   ];
-  buildInputs = [
+  propagatedBuildInputs = [
     http-parser
-    fmt
+    fmt_8
+    asio
   ];
 
   meta = with lib; {

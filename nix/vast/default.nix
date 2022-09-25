@@ -25,8 +25,6 @@
 , tcpdump
 , utillinux
 , dpkg
-, http-parser
-, asio
 , restinio
 , versionOverride ? null
 , versionShortOverride ? null
@@ -78,8 +76,6 @@ stdenv.mkDerivation (rec {
     simdjson
     spdlog
     zeek-broker
-    http-parser
-    asio
     restinio
   ];
   propagatedBuildInputs = [
