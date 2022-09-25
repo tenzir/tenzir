@@ -55,7 +55,7 @@ def test_enum_extension_type():
     ty = vua.EnumType(fields)
     assert ty.__arrow_ext_serialize__().decode() == json.dumps(fields)
     pa.register_extension_type(ty)
-    storage = pa.array([1, 2, 3, 2, 1], pa.uint32())
+    storage = pa.array([1, 2, 3, 2, 1], pa.uint8())
     arr = pa.ExtensionArray.from_storage(ty, storage)
     arr.validate()
     assert arr.type is ty

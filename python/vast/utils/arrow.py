@@ -105,7 +105,10 @@ class EnumScalar(pa.ExtensionScalar):
 
 class EnumType(pa.ExtensionType):
     ext_name = "vast.enumeration"
-    ext_type = pa.uint32()
+    # VAST's flatbuffer type representation uses a 32-bit unsigned integer. We
+    # use an 8-bit type here only for backwards compatibility to the legacy
+    # type. Eventually this will be a 32-bit type as well.
+    ext_type = pa.uint8()
 
     def __init__(self, fields: dict[str, int]):
         # We're optimizing for use cases that involve reading from VAST, so we
