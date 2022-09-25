@@ -133,8 +133,7 @@ class EnumType(pa.ExtensionType):
 
     @classmethod
     def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
-        inverse = json.loads(serialized.decode())
-        fields = {v: k for k, v in inverse.items()}
+        fields = json.loads(serialized.decode())
         if storage_type != self.ext_type:
             raise TypeError("storage type does not match")
         return EnumType(fields)

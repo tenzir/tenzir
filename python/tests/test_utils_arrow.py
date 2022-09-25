@@ -131,11 +131,15 @@ def test_ipc():
     assert isinstance(p, pa.ExtensionArray)
     assert p.type == pattern_type
     assert p.storage.to_pylist() == patterns
+    assert p.to_pylist() == patterns
     # Validate addresses.
     a = batch.column("a")
     assert isinstance(a, pa.ExtensionArray)
     assert a.type == address_type
     assert a.storage.to_pylist() == addresses
+    assert a.to_pylist() == [
+        ipaddress.IPv4Address(x) for x in ["10.1.21.165", "10.1.21.166"]
+    ]
     # Validate subnets.
     s = batch.column("s")
     assert isinstance(s, pa.ExtensionArray)
@@ -147,6 +151,7 @@ def test_ipc():
     assert isinstance(e, pa.ExtensionArray)
     assert e.type == enum_type
     assert e.storage.equals(enum_storage)
+    assert e.to_pylist() == ["bar", "foo"]
 
 
 def test_schema_name_extraction():
