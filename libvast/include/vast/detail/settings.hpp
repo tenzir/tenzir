@@ -45,7 +45,7 @@ caf::expected<std::vector<T>>
 unpack_config_list_to_vector(const caf::config_value& cfg_value) {
   const auto* list = caf::get_if<caf::config_value::list>(&cfg_value);
   if (!list)
-    return caf::make_error(ec::invalid_configuration, "Failed to extract "
+    return caf::make_error(ec::invalid_configuration, "failed to extract "
                                                       "config value as list");
 
   std::vector<T> ret;
@@ -55,7 +55,7 @@ unpack_config_list_to_vector(const caf::config_value& cfg_value) {
     if (!val)
       return caf::make_error(
         ec::invalid_configuration,
-        fmt::format("Type mismatch while unpacking config list: expected {}, "
+        fmt::format("type mismatch while unpacking config list: expected {}, "
                     "got {}",
                     caf::detail::pretty_type_name(typeid(T)),
                     caf::detail::pretty_type_name(typeid(e))));
@@ -82,7 +82,7 @@ unpack_config_list_to_vector(const caf::actor_system_config& cfg,
   if (it == content.cend())
     return caf::make_error(
       ec::invalid_configuration,
-      fmt::format("No key: {} found in actor system config", cfg_list_key));
+      fmt::format("failed to find key '{}' in configuration", cfg_list_key));
   return unpack_config_list_to_vector<T>(it->second);
 }
 

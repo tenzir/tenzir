@@ -16,8 +16,8 @@ namespace vast::detail {
 template <class Inspector, class AfterInspectionCallback>
 class inspection_object_with_after_inspection_callback;
 
-/// Common class used by VAST inspectors as a return type for object method.
-/// The CAF inspector API requires an inspector to have object method.
+/// A Common class used by VAST inspectors as return type for the object method.
+/// The CAF inspector API requires inspectors to have an object method.
 /// This method should return an object which guides the inspection procedure.
 /// Example of usage:
 /// bool inspect(Inspector& f, some_type& x)
@@ -28,10 +28,8 @@ class inspection_object_with_after_inspection_callback;
 ///     fields(f.field("name", x.name), f.field("value", x.value));
 ///}
 /// Such code should result in inspection of x.name by the inspector. If the
-/// inspection succeeds then it should proceed to inspection of x.value. If all
-/// provided fields succeed then callback (cb variable) should be called. The
-/// provided string literals are optionally used by human readable CAF
-/// inspectors. Current VAST inspectors have no usage for them.
+/// inspection succeeds then it should proceed to inspect x.value. If all
+/// provided fields succeed then the callback `cb` should be called.
 template <class Inspector>
 class inspection_object {
 public:
@@ -49,16 +47,16 @@ public:
 
   template <class Callback>
     requires(Inspector::is_loading == true)
-  constexpr decltype(auto) on_load(Callback callback) {
+  constexpr auto on_load(Callback&& callback) {
     return inspection_object_with_after_inspection_callback{
-      inspector_, std::move(callback)};
+      inspector_, std::forward<Callback>(callback)};
   }
 
   template <class Callback>
     requires(Inspector::is_loading == false)
-  constexpr decltype(auto) on_save(Callback callback) {
+  constexpr auto on_save(Callback&& callback) {
     return inspection_object_with_after_inspection_callback{
-      inspector_, std::move(callback)};
+      inspector_, std::forward<Callback>(callback)};
   }
 
 private:
