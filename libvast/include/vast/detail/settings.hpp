@@ -78,12 +78,12 @@ caf::expected<std::vector<T>>
 unpack_config_list_to_vector(const caf::actor_system_config& cfg,
                              std::string_view cfg_list_key) {
   const auto& content = caf::content(cfg);
-  const auto it = content.find(cfg_list_key);
-  if (it == content.cend())
+  const auto* cfg_value = caf::get_if(&content, cfg_list_key);
+  if (!cfg_value)
     return caf::make_error(
       ec::invalid_configuration,
       fmt::format("failed to find key '{}' in configuration", cfg_list_key));
-  return unpack_config_list_to_vector<T>(it->second);
+  return unpack_config_list_to_vector<T>(*cfg_value);
 }
 
 } // namespace vast::detail

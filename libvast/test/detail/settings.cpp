@@ -46,3 +46,17 @@ TEST(unpack list properly) {
   CHECK_EQUAL(out->front(), caf::config_value::integer{5});
   CHECK_EQUAL(out->back(), caf::config_value::integer{15});
 }
+
+TEST(unpack nested settings properly) {
+  caf::settings settings;
+  caf::config_value::list list{caf::config_value{20}};
+  caf::put(settings, "outer.inner", list);
+  caf::actor_system_config in;
+  in.content = settings;
+  const auto out
+    = vast::detail::unpack_config_list_to_vector<caf::config_value::integer>(
+      in, "outer.inner");
+  REQUIRE(out);
+  REQUIRE(out->size(), 1);
+  CHECK_EQUAL(out->front(), 20);
+}
