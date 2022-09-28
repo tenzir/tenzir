@@ -43,16 +43,16 @@ posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
   return atom::done_v;
 }
 
-filesystem_actor::behavior_type
-posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self,
-                 std::filesystem::path root, accountant_actor accountant) {
+filesystem_actor::behavior_type posix_filesystem(
+  filesystem_actor::stateful_pointer<posix_filesystem_state> self,
+  std::filesystem::path root, const accountant_actor& accountant) {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("vast.posix-filesystem");
   self->state.root = std::move(root);
-  self->state.accountant = std::move(accountant);
-  if (self->state.accountant)
-    self->delayed_send(self, defaults::system::telemetry_rate,
-                       atom::telemetry_v);
+  if (accountant) {
+    self->state.accountant = accountant;
+    self->send(self, atom::telemetry_v);
+  }
   return {
     [self](atom::write, const std::filesystem::path& filename,
            const chunk_ptr& chk) -> caf::result<atom::ok> {
@@ -178,7 +178,8 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
       return result;
     },
     [self](atom::telemetry) {
-      if (!self->state.accountant)
+      auto accountant = self->state.accountant.lock();
+      if (!accountant)
         return;
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
@@ -203,7 +204,7 @@ posix_filesystem(filesystem_actor::stateful_pointer<posix_filesystem_state> self
         },
         .metadata = {},
       };
-      self->send(self->state.accountant, atom::metrics_v, std::move(msg));
+      self->send(accountant, atom::metrics_v, std::move(msg));
     },
   };
 }
