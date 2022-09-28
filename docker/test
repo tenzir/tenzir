@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 set -eux -o pipefail
 
-pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)"
+pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/vast"
 
 # Bring up the Docker Compose stack.
 docker compose down --volumes
@@ -23,10 +23,10 @@ sleep 3
 docker compose run --rm vast status > /dev/null
 
 # Ingest some test data.
-gzcat vast/integration/data/zeek/*.log.gz \
+gunzip -c ../../vast/integration/data/zeek/*.log.gz \
   | docker compose run --rm --no-TTY vast import --blocking zeek
 docker compose run --rm --no-TTY vast import --blocking suricata \
-  < vast/integration/data/suricata/eve.json
+  < ../../vast/integration/data/suricata/eve.json
 
 # Check whether we imported the right amount of data.
 num_imported="$(docker compose run --rm --interactive=false vast count)"

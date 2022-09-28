@@ -9,18 +9,9 @@ services:
       - ${VAST_PORT:-42000}:42000
     command:
       - start
-    volumes:
-      - vast-database:/var/lib/vast/
-      - vast-logs:/var/log/vast/
     networks:
-      - vast-network
-
-volumes:
-  vast-database:
-    driver: local
-  vast-logs:
-    driver: local
+      - vast
 
 networks:
-  vast-network:
+  vast:
     driver: bridge
