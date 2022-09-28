@@ -8,9 +8,15 @@ docker compose down --volumes
 docker compose up --no-build --detach
 
 # Wait for VAST to be reachable.
-while ! lsof -i :42000; do
-  sleep 1
-done
+# FIXME: The below would be ideal in the absence of VAST's client commands
+# waiting for the VAST server to be reachable, but it doesn't work when
+# executing this script in GitHub Actions for yet undetermined reasons. We're
+# just using a sleep instead as a workaround for now.
+# quicker
+# while ! lsof -i :42000; do
+#   sleep 1
+# done
+sleep 3
 
 # Run a basic status check; we don't particularly care about the output itself,
 # so essentially we're just checking for the exit code.
