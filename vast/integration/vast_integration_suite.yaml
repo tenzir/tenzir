@@ -50,6 +50,18 @@ fixtures:
     exit: | # python
       node.stop()
 
+  ServerTesterMetricsEnabled:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node',
+                    '--enable-metrics', 'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=self.config_file)
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
   AgingTester:
     enter: | # python
       node = Server(self.cmd,
@@ -167,6 +179,15 @@ tests:
         transformation: jq -ec '.'
       - command: -N export json --omit-nulls 'resp_h == 192.168.1.104'
         transformation: jq -ec '.'
+  Shutdown with Metrics:
+    tags: [metrics, shutdown]
+    fixture: ServerTesterMetricsEnabled
+    steps:
+      - command: status
+        # We just care about the exit code; the steps list cannot be empty, so
+        # it's like a dummy check that confirms whether the server can be
+        # connected to.
+        transformation: jq -ec 'empty'
   Malformed Query:
     tags: [export]
     fixture: ServerTester
