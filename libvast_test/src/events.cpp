@@ -107,7 +107,7 @@ inhale<format::json::reader>(const char* filename,
   caf::put(settings, "vast.import.json.selector", "event_type:suricata");
   auto input = std::make_unique<std::ifstream>(filename);
   format::json::reader reader{settings, std::move(input)};
-  reader.module(events::suricata_module);
+  CHECK(!reader.module(events::suricata_module));
   return extract(reader, slice_size);
 }
 

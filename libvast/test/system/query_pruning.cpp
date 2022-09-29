@@ -153,7 +153,7 @@ TEST(query pruning with index config) {
   // catalog state.
   auto& state
     = deref<
-        vast::system::catalog_actor::stateful_base<vast::system::catalog_state>>(
+        vast::system::catalog_actor::stateful_impl<vast::system::catalog_state>>(
         catalog)
         .state;
   auto& unprunable_fields = state.unprunable_fields;

@@ -179,16 +179,11 @@ public:
   }
 
   inline result_type apply(std::string& x) {
-    VAST_WARN("apply string legacy des");
     size_t str_size = 0;
-    if (!begin_sequence(str_size)) {
-      VAST_WARN("false begin sequence");
+    if (!begin_sequence(str_size))
       return false;
-    }
-    if (str_size > bytes_.size()) {
-      VAST_WARN("false jakis size");
+    if (str_size > bytes_.size())
       return false;
-    }
     x.assign(reinterpret_cast<const char*>(bytes_.data()), str_size);
     bytes_ = bytes_.subspan(str_size);
     return true;

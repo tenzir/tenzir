@@ -57,7 +57,7 @@ TEST(render) {
                                      "messages")),
               "!! syntax_error: test with multiple messages");
   CHECK_EQUAL(render(caf::make_error(caf::pec::type_mismatch, "ttt")),
-              "!! type_mismatch: {\"argument\" = \"ttt\"}");
+              "!! caf::pec::type_mismatch: ttt");
   CHECK_EQUAL(render(caf::make_error(caf::sec::unexpected_message, "msg")),
-              "!! unexpected_message: msg");
+              "!! caf::sec::unexpected_message: msg");
 }

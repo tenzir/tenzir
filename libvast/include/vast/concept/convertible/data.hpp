@@ -504,9 +504,6 @@ public:
         } else if constexpr (IS_UNTYPED_CONVERTIBLE(d, dst)) {
           return convert(d, dst);
         } else {
-          VAST_WARN(detail::pretty_type_name(d));
-          VAST_WARN(detail::pretty_type_name(dst));
-          VAST_WARN(detail::pretty_type_name(t));
           return caf::make_error(ec::convert_error,
                                  fmt::format("failed to find conversion "
                                              "operation for value {} of "

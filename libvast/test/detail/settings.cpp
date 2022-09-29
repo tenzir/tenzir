@@ -57,6 +57,6 @@ TEST(unpack nested settings properly) {
     = vast::detail::unpack_config_list_to_vector<caf::config_value::integer>(
       in, "outer.inner");
   REQUIRE(out);
-  REQUIRE(out->size(), 1);
+  REQUIRE_EQUAL(out->size(), std::size_t{1});
   CHECK_EQUAL(out->front(), 20);
 }

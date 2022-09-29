@@ -51,8 +51,10 @@ TEST(arrow batch) {
   }
   writer.out(stream);
   // Write conn log slices (as record batches) to the stream.
-  for (auto& slice : zeek_conn_log)
-    writer.write(slice);
+  for (auto& slice : zeek_conn_log) {
+    auto err = writer.write(slice);
+    CHECK(!err);
+  }
 
   // closing the stream so we can start reading back the data.
   REQUIRE_OK(stream->Close());

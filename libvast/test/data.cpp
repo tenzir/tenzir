@@ -283,14 +283,14 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == list{42u, 4.2, caf::none});
+  CHECK((d == list{42u, 4.2, caf::none}));
   MESSAGE("map");
   str = "{T->1,F->0}"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == map{{true, 1u}, {false, 0u}});
+  CHECK((d == map{{true, 1u}, {false, 0u}}));
 }
 
 TEST(convert - caf::config_value) {

@@ -13,7 +13,9 @@
 #endif
 
 #include "vast/span.hpp"
+#include "vast/test/type_ids.hpp"
 
+#include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/inspector_access.hpp>
 #include <caf/test/unit_test.hpp>
@@ -32,10 +34,13 @@ namespace caf {
 template <>
 struct inspector_access<std::string_view> {
   static auto apply(detail::stringification_inspector& f, std::string_view& x) {
-    // auto result = f.apply(str);
-    // return result;
     auto str = std::string{x};
     return f.apply(str);
+  }
+
+  static bool
+  save_field(detail::stringification_inspector&, string_view, auto&, auto&) {
+    return true;
   }
 };
 
@@ -127,7 +132,12 @@ struct less_equal_compare {
 #define FAIL CAF_FAIL
 // Checks that continue with the current test on failure
 #define CHECK CAF_CHECK
-#define CHECK_EQUAL(x, y) CAF_CHECK_EQUAL((x), (y))
+#define CHECK_EQUAL(x, y)                                                      \
+  do {                                                                         \
+    using namespace vast;                                                      \
+    CAF_CHECK_EQUAL((x), (y));                                                 \
+  } while (false)
+// CAF_CHECK_EQUAL((x), (y))
 #define CHECK_NOT_EQUAL(x, y) CAF_CHECK_NOT_EQUAL((x), (y))
 #define CHECK_LESS(x, y) CAF_CHECK_LESS((x), (y))
 #define CHECK_LESS_EQUAL(x, y) CAF_CHECK_LESS_OR_EQUAL((x), (y))
@@ -136,12 +146,10 @@ struct less_equal_compare {
 #define CHECK_ERROR(x) CHECK_EQUAL(!(x), true)
 #define CHECK_SUCCESS(x) CHECK_EQUAL((x), caf::none)
 #define CHECK_FAILURE(x) CHECK_NOT_EQUAL((x), caf::none)
-#define CHECK_FAIL CAF_CHECK_FAIL
 // Checks that automagically handle caf::variant types.
 #define CHECK_VARIANT_EQUAL(x, y)                                              \
   do {                                                                         \
     auto v1 = x;                                                               \
-    auto v2 = y;                                                               \
     decltype(v1) y_as_variant = y;                                             \
     CHECK_EQUAL(v1, y_as_variant);                                             \
   } while (false)

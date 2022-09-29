@@ -12,7 +12,6 @@
 
 #include <caf/binary_serializer.hpp>
 #include <caf/error.hpp>
-#include <caf/json_writer.hpp>
 
 #include <vector>
 
@@ -27,13 +26,6 @@ template <class... Ts>
 auto serialize(caf::byte_buffer& buffer, Ts&&... xs) {
   caf::binary_serializer serializer{nullptr, buffer};
   return apply_all(serializer, std::forward<Ts>(xs)...);
-}
-
-template <class T>
-auto json_serialize(T& x) {
-  caf::json_writer serializer;
-  return serializer.apply(x);
-  // return stdserializer.str();
 }
 
 } // namespace vast::detail

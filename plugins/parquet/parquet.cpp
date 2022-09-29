@@ -34,7 +34,7 @@ struct configuration {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.row_group_size, x.zstd_compression_level);
+    return f.apply(x.row_group_size) && f.apply(x.zstd_compression_level);
   }
 
   static const record_type& layout() noexcept {

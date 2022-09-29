@@ -76,9 +76,9 @@ size_t receive_result(fixtures::deterministic_actor_system& fixture,
         [&](atom::done) {
           done = true;
         },
-        caf::others >> [](caf::message_view& msg) -> caf::result<caf::message> {
-          FAIL("unexpected message: " << msg.content());
-          return caf::none;
+        caf::others >> [](caf::message& msg) -> caf::skippable_result {
+          FAIL("unexpected message: " << to_string(msg));
+          return {};
         },
         after(0s) >>
           [&] {
@@ -86,7 +86,7 @@ size_t receive_result(fixtures::deterministic_actor_system& fixture,
           });
     if (!self->mailbox().empty())
       FAIL("mailbox not empty after receiving the 'done' for a batch: "
-           << to_string(*self->mailbox().peek()));
+           << deep_to_string(*self->mailbox().peek()));
     collected += batch;
   };
   fetch(scheduled);

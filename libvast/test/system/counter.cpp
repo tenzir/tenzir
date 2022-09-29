@@ -65,7 +65,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
     // Spawn INDEX and ARCHIVE, and a mock client.
-    MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
+    MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition each ");
     fs = self->spawn(vast::system::posix_filesystem, directory,
                      vast::system::accountant_actor{});
     auto indexdir = directory / "index";

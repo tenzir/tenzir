@@ -282,7 +282,7 @@ TEST(project column flat index) {
   auto sut = truncate(zeek_conn_log[0], 3);
   auto proj = project(sut, time_type{}, 0, string_type{}, 6);
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -296,7 +296,7 @@ TEST(project column full name) {
   auto proj = project(sut, time_type{}, "zeek.conn.ts", string_type{},
                       "zeek.conn.proto");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -309,7 +309,7 @@ TEST(project column name) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, time_type{}, "ts", string_type{}, "proto");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -322,7 +322,7 @@ TEST(project column mixed access) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, time_type{}, 0, string_type{}, "proto");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -335,7 +335,7 @@ TEST(project column order independence) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, string_type{}, "proto", time_type{}, "ts");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [proto, ts] : proj) {
     REQUIRE(proto);
     CHECK_EQUAL(*proto, "udp");
@@ -348,28 +348,28 @@ TEST(project column detect type mismatches) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, bool_type{}, "proto", time_type{}, "ts");
   CHECK(!proj);
-  CHECK_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() == proj.end());
 }
 
 TEST(project column detect wrong field names) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, string_type{}, "porto", time_type{}, "ts");
   CHECK(!proj);
-  CHECK_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() == proj.end());
 }
 
 TEST(project column detect wrong flat indices) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, string_type{}, 123, time_type{}, "ts");
   CHECK(!proj);
-  CHECK_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() == proj.end());
 }
 
 TEST(project column unspecified types) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, type{}, "proto", time_type{}, "ts");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [proto, ts] : proj) {
     REQUIRE(caf::holds_alternative<view<std::string>>(proto));
     CHECK_EQUAL(caf::get<vast::view<std::string>>(proto), "udp");
@@ -382,7 +382,7 @@ TEST(project column lists) {
   auto sut = zeek_dns_log[0];
   auto proj = project(sut, list_type{string_type{}}, "answers");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   CHECK_EQUAL(proj.size(), sut.rows());
   size_t answers = 0;
   for (auto&& [answer] : proj) {

@@ -89,7 +89,7 @@ TEST(zeek source) {
   MESSAGE("get slices");
   const auto& slices
     = deref<stream_sink_actor<table_slice,
-                              std::string>::stateful_base<test_sink_state>>(snk)
+                              std::string>::stateful_impl<test_sink_state>>(snk)
         .state.slices;
   MESSAGE("compare slices to auto-generates ones");
   REQUIRE_EQUAL(slices.size(), zeek_conn_log.size());

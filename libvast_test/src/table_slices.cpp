@@ -45,7 +45,7 @@ make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
   caf::put(opts, "vast.import.test.seed", seed);
   caf::put(opts, "vast.import.max-events", std::numeric_limits<size_t>::max());
   format::test::reader src{std::move(opts), nullptr};
-  src.module(std::move(mo));
+  CHECK(!src.module(std::move(mo)));
   std::vector<table_slice> result;
   auto add_slice = [&](table_slice slice) {
     slice.offset(offset);
@@ -232,7 +232,7 @@ void table_slices::test_manual_serialization() {
   table_slice slice2;
   MESSAGE("save content of the first slice into the buffer");
   auto sink = make_sink();
-  CHECK_EQUAL(inspect(sink, slice1), caf::none);
+  CHECK(inspect(sink, slice1));
   MESSAGE("load content for the second slice from the buffer");
   CHECK_EQUAL(vast::detail::legacy_deserialize(buf, slice2), true);
   MESSAGE("check result of serialization roundtrip");
@@ -247,7 +247,7 @@ void table_slices::test_smart_pointer_serialization() {
   table_slice slice2;
   MESSAGE("save content of the first slice into the buffer");
   auto sink = make_sink();
-  CHECK_EQUAL(sink(slice1), caf::none);
+  CHECK(sink.apply(slice1));
   MESSAGE("load content for the second slice from the buffer");
   CHECK_EQUAL(vast::detail::legacy_deserialize(buf, slice2), true);
   MESSAGE("check result of serialization roundtrip");

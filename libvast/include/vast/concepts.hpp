@@ -103,12 +103,6 @@ concept inspectable = requires(example_inspector& i, T& x) {
   { inspect(i, x) } -> std::same_as<bool>;
 };
 
-// /// Inspectables
-// template <class T, class Inspector>
-// concept inspectable = requires(Inspector& i, T& x) {
-//   { inspect(i, x) } -> std::same_as<bool>;
-// };
-
 template <class C>
 concept insertable = requires(C& xs, typename C::value_type x) {
   xs.insert(x);

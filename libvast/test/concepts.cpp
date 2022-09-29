@@ -65,20 +65,13 @@ struct inspect_free {
 
 template <class I>
 auto inspect(I& i, inspect_free& x) {
-  return i(x);
+  return i.apply(x);
 }
 
-struct dummy_inspector {
-  bool operator()(auto&) {
-    return true;
-  }
-};
-
 TEST(inspectable) {
-  static_assert(vast::concepts::inspectable<inspect_friend, dummy_inspector>);
-  static_assert(vast::concepts::inspectable<inspect_free, dummy_inspector>);
-  static_assert(
-    !vast::concepts::inspectable<std::array<bool, 2>, dummy_inspector>);
+  static_assert(vast::concepts::inspectable<inspect_friend>);
+  static_assert(vast::concepts::inspectable<inspect_free>);
+  static_assert(!vast::concepts::inspectable<std::array<bool, 2>>);
 }
 
 // -- monoid -------------------------------------------------------------------

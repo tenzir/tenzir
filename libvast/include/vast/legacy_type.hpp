@@ -371,6 +371,7 @@ public:
     }
     VAST_ASSERT(!name.empty());
     auto tid = type_id<Derived>();
+    // VAST_WARN("inspekt legacy konkret type {}", name);
     return f.object(x).pretty_name(name).fields(
       f.field("type-id", tid), f.field("name", x.name_),
       f.field("attributes", x.attributes_));
@@ -714,6 +715,15 @@ namespace caf {
 
 template <class Result, class Dispatcher, class T>
 auto make_dispatch_fun() {
+  using fun = Result (*)(Dispatcher*, vast::legacy_abstract_type&);
+  auto lambda = [](Dispatcher* d, vast::legacy_abstract_type& ref) {
+    return d->invoke(static_cast<T&>(ref));
+  };
+  return static_cast<fun>(lambda);
+}
+
+template <class Result, class Dispatcher, class T>
+auto make_const_dispatch_fun() {
   using fun = Result (*)(Dispatcher*, const vast::legacy_abstract_type&);
   auto lambda = [](Dispatcher* d, const vast::legacy_abstract_type& ref) {
     return d->invoke(static_cast<const T&>(ref));
@@ -747,18 +757,26 @@ struct sum_type_access<vast::legacy_type> {
 
   template <class Result, class Visitor, class... Ts>
   struct dispatcher {
+    using reference = vast::legacy_abstract_type&;
     using const_reference = const vast::legacy_abstract_type&;
     template <class... Us>
-    Result dispatch(const_reference x, caf::detail::type_list<Us...>) {
-      using fun = Result (*)(dispatcher*, const_reference);
+    Result dispatch(reference x, caf::detail::type_list<Us...>) {
+      using fun = Result (*)(dispatcher*, reference);
       static fun tbl[] = {make_dispatch_fun<Result, dispatcher, Us>()...};
       return tbl[x.index()](this, x);
     }
 
+    template <class... Us>
+    Result dispatch(const_reference x, caf::detail::type_list<Us...>) {
+      using fun = Result (*)(dispatcher*, const_reference);
+      static fun tbl[] = {make_const_dispatch_fun<Result, dispatcher, Us>()...};
+      return tbl[x.index()](this, x);
+    }
+
     template <class T>
-    Result invoke(const T& x) {
+    Result invoke(T&& x) {
       auto is = caf::detail::get_indices(xs_);
-      return caf::detail::apply_args_suffxied(v, is, xs_, x);
+      return caf::detail::apply_args_suffxied(v, is, xs_, std::forward<T>(x));
     }
 
     Visitor& v;
@@ -771,6 +789,14 @@ struct sum_type_access<vast::legacy_type> {
       v, std::forward_as_tuple(xs...)};
     types token;
     return d.dispatch(*x, token);
+  }
+
+  template <class Result, class Visitor, class... Ts>
+  static Result apply(vast::legacy_type& x, Visitor&& v, Ts&&... xs) {
+    dispatcher<Result, decltype(v), decltype(xs)...> d{
+      v, std::forward_as_tuple(xs...)};
+    types token;
+    return d.dispatch(x.ptr().unshared(), token);
   }
 };
 

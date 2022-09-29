@@ -22,7 +22,7 @@ namespace fixtures {
 /// testing.
 test_configuration::test_configuration() {
   std::filesystem::path log_file = "vast-unit-test.log";
-  set("logger.file-name", log_file.string());
+  set("caf.logger.file.path", log_file.string());
   // Always begin with an empy log file.
   if (std::filesystem::exists(log_file))
     std::filesystem::remove_all(log_file);
@@ -31,7 +31,7 @@ test_configuration::test_configuration() {
 caf::error test_configuration::parse(int argc, char** argv) {
   auto err = super::parse(argc, argv);
   if (!err)
-    set("logger.file-verbosity", caf::atom("trace"));
+    set("caf.logger.file.verbosity", "trace");
   return err;
 }
 

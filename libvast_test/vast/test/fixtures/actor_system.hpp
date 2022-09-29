@@ -74,7 +74,7 @@ struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
   }
 
   template <class... Ts>
-  void deserialize(const std::vector<char>& buf, Ts&... xs) {
+  void deserialize(const caf::byte_buffer& buf, Ts&... xs) {
     if (!(vast::detail::legacy_deserialize(buf, xs) && ...))
       FAIL("error during deserialization");
   }
