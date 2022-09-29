@@ -152,6 +152,17 @@ def name(schema: pa.Schema):
     return xs[0] if xs[0] else ""
 
 
+def pack_ip(address: str | ip.IPv4Address | ip.IPv6Address) -> bytes:
+    match address:
+        case str():
+            return pack_ip(ip.ip_address(address))
+        case ip.IPv4Address():
+            prefix = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff"
+            return prefix + address.packed
+        case ip.IPv6Address():
+            return address.packed
+
+
 # Accepts a 128-bit buffer holding an IPv6 address and returns an IPv4 or IPv6
 # address.
 def unpack_ip(buffer: SupportsBytes) -> ip.IPv4Address | ip.IPv6Address:
