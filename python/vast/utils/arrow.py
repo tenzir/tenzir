@@ -167,3 +167,4 @@ def unpack_ip(buffer: SupportsBytes) -> ip.IPv4Address | ip.IPv6Address:
 pa.register_extension_type(PatternType())
 pa.register_extension_type(AddressType())
 pa.register_extension_type(SubnetType())
+pa.register_extension_type(EnumType({"stub": 0}))
