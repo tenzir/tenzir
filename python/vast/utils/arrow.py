@@ -107,7 +107,7 @@ class EnumType(pa.ExtensionType):
     # VAST's flatbuffer type representation uses a 32-bit unsigned integer. We
     # use an 8-bit type here only for backwards compatibility to the legacy
     # type. Eventually this will be a 32-bit type as well.
-    ext_type = pa.uint8()
+    ext_type = pa.dictionary(pa.uint8(), pa.string())
 
     def __init__(self, fields: dict[str, int]):
         # We're optimizing for use cases that involve reading from VAST, so we
@@ -167,4 +167,3 @@ def unpack_ip(buffer: SupportsBytes) -> ip.IPv4Address | ip.IPv6Address:
 pa.register_extension_type(PatternType())
 pa.register_extension_type(AddressType())
 pa.register_extension_type(SubnetType())
-pa.register_extension_type(EnumType({"stub": 0}))

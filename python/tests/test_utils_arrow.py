@@ -48,6 +48,15 @@ def test_subnet_extension_type():
     assert arr[1].as_py() == ipaddress.IPv4Network("10.1.21.0/25")
 
 
+# Currently fails with:
+#
+# TypeError: Incompatible storage type
+#   dictionary<values=string, indices=int8, ordered=0> for extension type
+#   extension<vast.enumeration<EnumType>>
+#
+# The discussion in https://issues.apache.org/jira/browse/ARROW-17839 ideally
+# tells us exactly what we are doing wrong here. 
+@pytest.mark.xfail(reason="https://issues.apache.org/jira/browse/ARROW-17839")
 def test_enum_extension_type():
     fields = {
         "foo": 1,
@@ -56,12 +65,17 @@ def test_enum_extension_type():
     }
     ty = vua.EnumType(fields)
     assert ty.__arrow_ext_serialize__().decode() == json.dumps(fields)
-    storage = pa.array([1, 2, 3, 2, 1], pa.uint8())
+    dictionary_type = pa.dictionary(pa.uint8(), pa.string(), ordered=False)
+    assert vua.EnumType.ext_type == dictionary_type
+    values = ["foo", "bar", "baz", "bar", "foo"]
+    storage = pa.array(values, dictionary_type)
+    assert storage.dictionary.to_pylist() == ["foo", "bar", "baz"]
+    assert storage.indices.to_pylist() == [0, 1, 2, 1, 0]
     arr = pa.ExtensionArray.from_storage(ty, storage)
     arr.validate()
     assert arr.type is ty
     assert arr.storage.equals(storage)
-    assert arr.to_pylist() == ["foo", "bar", "baz", "bar", "foo"]
+    assert arr.to_pylist() == values
 
 
 # Directly lifted from Arrow's test_extension_type.py
@@ -79,7 +93,7 @@ def ipc_read_batch(buf):
     return reader.read_next_batch()
 
 
-@pytest.mark.skip(reason="blocked by https://github.com/apache/arrow/pull/14106")
+@pytest.mark.xfail(reason="https://github.com/apache/arrow/pull/14106")
 def test_ipc():
     # Create sample patterns.
     patterns = ["/foo/", "/bar/"]
