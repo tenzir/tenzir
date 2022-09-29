@@ -1,6 +1,7 @@
 import json
 import ipaddress
 import pyarrow as pa
+import pytest
 
 import vast.utils.arrow as vua
 
@@ -78,6 +79,7 @@ def ipc_read_batch(buf):
     return reader.read_next_batch()
 
 
+@pytest.mark.skip(reason="blocked by https://github.com/apache/arrow/pull/14106")
 def test_ipc():
     # Create sample patterns.
     patterns = ["/foo/", "/bar/"]
