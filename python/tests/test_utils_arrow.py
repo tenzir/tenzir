@@ -95,8 +95,9 @@ def test_ipc():
     # Create sample subnets.
     network = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\x00"
     networks = [network, network]
+    prefixes = [24, 25]
     address_array = pa.array(networks, pa.binary(16))
-    length_array = pa.array([24, 25], pa.uint8())
+    length_array = pa.array(prefixes, pa.uint8())
     subnet_type = vua.SubnetType()
     subnet_storage = pa.StructArray.from_arrays(
         [
