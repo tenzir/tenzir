@@ -55,13 +55,22 @@ $(RFC_OUTPUT): $(RFC_INPUT)
 	@printf -- "---\nsidebar_position: 9\n---\n" > $@
 	@cat $< >> $@
 
+define INSTALL_R_PACKAGES
+if ("pak" %in% rownames(installed.packages()) == FALSE)
+  install.packages("pak", repos = "http://cran.us.r-project.org")
+require(pak)
+pak::local_install_dev_deps(upgrade = FALSE)
+endef
+
+# Export the Make variable as shell variable so that Make doesn't try to
+# interpret it as a command sequence.
+export INSTALL_R_PACKAGES
+
 pak:
 ifndef RSCRIPT
 	$(error "Rscript not in $$PATH; please install system-wide")
 else
-	@Rscript -e 'if ("pak" %in% rownames(installed.packages()) == FALSE) \
-                 install.packages("pak", repos = "http://cran.us.r-project.org")'
-	@Rscript -e 'require(pak); pak::local_install_dev_deps(upgrade = FALSE)'
+	@Rscript -e "$$INSTALL_R_PACKAGES"
 endif
 
 poetry:
