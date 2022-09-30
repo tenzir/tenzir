@@ -1,0 +1,48 @@
+# We install the config file first, because the Debian Package
+# will restart the VAST node upon installation, and we want to
+# avoid another restart because the config file changed.
+- name: Ensure directory /opt/vast/etc/vast exists
+  ansible.builtin.file:
+    path: "/opt/vast/etc/vast"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+- name: Copy vast.yaml
+  ansible.builtin.copy:
+    src: "{{ config_file }}"
+    dest: /opt/vast/etc/vast/vast.yaml
+    mode: '0644'
+    owner: root
+    group: root
+  register: config
+- name: Ensure directory /etc/systemd/system/vast.service.d exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/vast.service.d
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+- name: Create vast-service-overrides.conf
+  template:
+    src: vast-service-overrides.conf.j2
+    dest: /etc/systemd/system/vast.service.d/vast-service-overrides.conf
+    mode: '0644'
+    owner: root
+    group: root
+  register: overrides
+- include_tasks: debian.yaml
+  when: ansible_pkg_manager == "apt"
+  register: package
+- include_tasks: static.yaml
+  when: ansible_pkg_manager != "apt"
+  register: package
+- name: Restart if config changed
+  # Handler notification can't express conjuncion or negation, so we use a task.
+  when: config.changed or overrides.changed and not package.changed # noqa no-handler
+  ansible.builtin.systemd:
+    name: vast
+    state: restarted
+- name: Propagate variables to the calling context
+  ansible.builtin.set_fact:
+    vast_package_status={{ package }}

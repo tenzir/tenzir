@@ -1,0 +1,14 @@
+- name: Info message
+  ansible.builtin.debug:
+    msg: "Using Debian install"
+- name: Copy Debian package to target host
+  ansible.builtin.copy:
+    src: "{{ vast_debian_package }}"
+    dest: /tmp/vast.deb
+    mode: '0640'
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
+- name: Install VAST Debian package
+  ansible.builtin.apt:
+    deb: /tmp/vast.deb
+    allow_downgrade: yes
