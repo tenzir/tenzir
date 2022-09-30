@@ -177,4 +177,9 @@ def unpack_ip(buffer: SupportsBytes) -> ip.IPv4Address | ip.IPv6Address:
 # Modules are intialized exactly once, so we can perform the registration here.
 pa.register_extension_type(PatternType())
 pa.register_extension_type(AddressType())
-pa.register_extension_type(SubnetType())
+
+# FIXME: uncomment once we can depend on a version that includes
+# https://github.com/apache/arrow/pull/14106. Until then, we cannot work with
+# subnets and enums as extension types.
+#pa.register_extension_type(SubnetType())
+#pa.register_extension_type(EnumType({"stub": 0}))

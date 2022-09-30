@@ -126,9 +126,6 @@ def test_ipc():
         "bar": 2,
     }
     enum_type = vua.EnumType(fields)
-    # Note: if we do not register the type prior to performing IPC, the
-    # roundtrip fails.
-    pa.register_extension_type(enum_type)
     enum_storage = pa.array([2, 1], pa.uint8())
     enum_array = pa.ExtensionArray.from_storage(enum_type, enum_storage)
     # Assemble a record batch.
