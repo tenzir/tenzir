@@ -39,10 +39,11 @@ add_dependencies(restinio patch-restinio)
 find_package(Asio REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(fmt REQUIRED)
-find_package(http-parser)
+find_package(http_parser REQUIRED)
 
 # Create an interface library for the modified restinio sources.
 target_include_directories(
   restinio INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio")
-target_link_libraries(restinio INTERFACE fmt::fmt Asio::Asio OpenSSL::SSL
-                                         OpenSSL::Crypto http_parser)
+target_link_libraries(
+  restinio INTERFACE fmt::fmt Asio::Asio OpenSSL::SSL OpenSSL::Crypto
+                     http_parser::http_parser)

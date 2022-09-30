@@ -27,7 +27,6 @@ VASTRegisterPlugin(
   INCLUDE_DIRECTORIES include)
 
 find_package(OpenSSL REQUIRED)
-target_link_libraries(web PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
 # Setup dependency code from submodules.
 add_subdirectory(aux)

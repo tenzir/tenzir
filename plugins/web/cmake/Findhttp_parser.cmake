@@ -1,4 +1,4 @@
-# - Try to find http-parser
+# - Try to find http_parser
 # Once done this will define the following variables:
 
 #  HTTP_PARSER_FOUND - System has http_parser
@@ -19,20 +19,19 @@ find_library(
   HINTS ${HTTP_PARSER_DIR}/lib ${HTTP_PARSER_DIR}/bin)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(http-parser DEFAULT_MSG HTTP_PARSER_LIBRARY
+find_package_handle_standard_args(http_parser DEFAULT_MSG HTTP_PARSER_LIBRARY
                                   HTTP_PARSER_INCLUDE_DIR)
 
 if (HTTP_PARSER_FOUND)
   set(HTTP_PARSER_LIBRARIES ${HTTP_PARSER_LIBRARY})
   set(HTTP_PARSER_INCLUDE_DIRS ${HTTP_PARSER_INCLUDE_DIR})
-  if (NOT TARGET http-parser::http-parser)
-    add_library(http-parser::http-parser UNKNOWN IMPORTED)
+  if (NOT TARGET http_parser::http_parser)
+    add_library(http_parser::http_parser UNKNOWN IMPORTED)
     set_target_properties(
-      http-parser::http-parser
-      PROPERTIES IMPORTED_LOCATION "${HTTP_PARSER_LIBRARY}"
+      http_parser::http_parser
+      PROPERTIES IMPORTED_LOCATION "${HTTP_PARSER_LIBRARIES}"
                  INTERFACE_INCLUDE_DIRECTORIES "${HTTP_PARSER_INCLUDE_DIRS}"
-                 INTERFACE_LINK_LIBRARIES "${HTTP_PARSER_LIBRARY}")
-
+                 INTERFACE_LINK_LIBRARIES "${HTTP_PARSER_LIBRARIES}")
   endif ()
 endif ()
 
