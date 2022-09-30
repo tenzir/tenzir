@@ -2,8 +2,8 @@
 # Once done this will define the following variables:
 
 #  XXHASH_FOUND - System has libxxhash
-#  XXHASH_INCLUDE_DIRS - The libsystemd include directories
-#  XXHASH_LIBRARIES - The libraries needed to use libsystemd
+#  XXHASH_INCLUDE_DIRS - The libxxhash include directories
+#  XXHASH_LIBRARIES - The libraries needed to use libxxhash
 
 find_package(PkgConfig)
 

@@ -4,3 +4,6 @@
 [submodule "libvast/aux/fast_float"]
 	path = libvast/aux/fast_float
 	url = https://github.com/fastfloat/fast_float
+[submodule "plugins/web/aux/restinio"]
+	path = plugins/web/aux/restinio
+	url = https://github.com/Stiffstream/restinio
