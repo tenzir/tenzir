@@ -1,17 +1,14 @@
 # This Makefile does the necessary pre-processing and conversion of files such
 # that they can be added to the website.
 
+POETRY := $(shell command -v poetry 2> /dev/null)
+RSCRIPT := $(shell command -v Rscript 2> /dev/null)
+QUARTO := $(shell command -v quarto 2> /dev/null)
+
 CHANGELOG_INPUT := ../CHANGELOG.md
 CHANGELOG_OUTPUT := src/pages/changelog.md
 
 CONTRIBUTING_DIR := docs/contribute
-
-NOTEBOOK_INPUT_DIR := ../examples/notebooks
-NOTEBOOK_OUTPUT_DIR := docs/try
-NOTEBOOK_INPUTS := $(wildcard $(NOTEBOOK_INPUT_DIR)/*.md)
-NOTEBOOK_OUTPUTS := $(addprefix $(NOTEBOOK_OUTPUT_DIR)/, $(notdir $(NOTEBOOK_INPUTS)))
-NOTEBOOK_DOCS_INPUT := $(NOTEBOOK_INPUT_DIR)/README.md
-NOTEBOOK_DOCS_OUTPUT := $(CONTRIBUTING_DIR)/notebooks.md
 
 QUARTO_INPUTS := $(shell find docs blog -name '*.qmd')
 QUARTO_MD_OUTPUTS := $(patsubst %.qmd, %.md, $(QUARTO_INPUTS))
@@ -20,7 +17,7 @@ QUARTO_FILES_OUTPUTS := $(patsubst %.qmd, %_files, $(QUARTO_INPUTS))
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
 
-all: changelog notebooks dot-github rfc quarto
+all: changelog dot-github rfc quarto
 
 changelog: $(CHANGELOG_OUTPUT)
 
@@ -58,27 +55,36 @@ $(RFC_OUTPUT): $(RFC_INPUT)
 	@printf -- "---\nsidebar_position: 9\n---\n" > $@
 	@cat $< >> $@
 
-notebooks: $(NOTEBOOK_DOCS_OUTPUT) $(NOTEBOOK_OUTPUTS)
-
-$(NOTEBOOK_DOCS_OUTPUT): $(NOTEBOOK_DOCS_INPUT)
-	@printf -- "---\nsidebar_position: 6\n---\n" > $@
-	@cat $< >> $@
-
-$(NOTEBOOK_OUTPUTS): $(NOTEBOOK_INPUTS)
-	@$(MAKE) -C $(NOTEBOOK_INPUT_DIR)
-	cp -r $(NOTEBOOK_INPUT_DIR)/output/md/* $(NOTEBOOK_OUTPUT_DIR)
-
-$(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS): $(QUARTO_INPUTS)
-	@Rscript -e 'if("pak" %in% rownames(installed.packages()) == FALSE) { install.packages("pak", repos = "http://cran.us.r-project.org") }'
+pak:
+ifndef RSCRIPT
+	$(error "Rscript not in $$PATH; please install system-wide")
+else
+	@Rscript -e 'if ("pak" %in% rownames(installed.packages()) == FALSE) \
+                 install.packages("pak", repos = "http://cran.us.r-project.org")'
 	@Rscript -e 'require(pak); pak::local_install_dev_deps(upgrade = FALSE)'
-	@quarto render
+endif
 
-quarto: $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
+poetry:
+ifndef POETRY
+	$(error "poetry not in $$PATH; please install system-wide")
+else
+	@poetry install --no-root
+	#@poetry	run python -m bash_kernel.install
+endif
+
+%.md: %.qmd
+ifndef QUARTO
+	$(error "quarto not in $$PATH; please install system-wide")
+else
+	poetry run quarto render $<
+endif
+
+quarto-render: $(QUARTO_MD_OUTPUTS)
+
+quarto: pak quarto-render
 
 clean:
 	rm -f $(CHANGELOG_OUTPUT)
-	$(MAKE) -C $(NOTEBOOK_INPUT_DIR) clean
-	git clean -f -d -x $(NOTEBOOK_OUTPUT_DIR)
 	rm -rf .github
 	rm -f $(RFC_OUTPUT)
 	rm -f $(CONTRIBUTING_DIR)/code-of-conduct.md
