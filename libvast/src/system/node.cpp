@@ -86,8 +86,9 @@ auto make_error_msg(ec code, std::string msg) {
 
 /// A list of components that are essential for importing and exporting data
 /// from the node.
-std::set<const char*> core_components
-  = {"archive", "filesystem", "importer", "catalog", "index"};
+std::set<const char*> core_components = {
+  "accountant", "archive", "catalog", "filesystem", "importer", "index",
+};
 
 bool is_core_component(std::string_view type) {
   auto pred = [&](const char* x) {
@@ -693,7 +694,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     // buffered data. The index uses the archive for querying. The filesystem
     // is needed by all others for the persisting logic.
     auto shutdown_sequence = std::initializer_list<const char*>{
-      "importer", "index", "archive", "catalog", "filesystem"};
+      "importer", "index", "archive", "catalog", "accountant", "filesystem",
+    };
     // Make sure that these remain in sync.
     VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
     for (const char* name : shutdown_sequence) {
