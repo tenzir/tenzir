@@ -599,6 +599,15 @@ struct rebuilder_state {
         detail::narrow_cast<int64_t>(desired_batch_size)));
     }
     emit_telemetry();
+    // Newer partitions are more likely to contain undersized batches, so in the
+    // interest of letting rebatching for the rebuild of the current set of
+    // partitions not have to rebatch anything for as long as possible we sort
+    // the partitions for the current run by time ascending before sending them
+    // off.
+    std::sort(current_run_partitions.begin(), current_run_partitions.end(),
+              [](const partition_info& lhs, const partition_info& rhs) {
+                return lhs.max_import_time < rhs.max_import_time;
+              });
     auto current_run_partition_ids = std::vector<uuid>{};
     current_run_partition_ids.reserve(current_run_partitions.size());
     for (const auto& partition : current_run_partitions)
