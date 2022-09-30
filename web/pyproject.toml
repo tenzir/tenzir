@@ -10,6 +10,7 @@ python = "^3.10"
 nbconvert = "^6.5.3"
 ipykernel = "^6.15.1"
 bash_kernel = "^0.7.2"
+jupyter = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 
