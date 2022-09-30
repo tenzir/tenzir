@@ -6,7 +6,7 @@ logger = vast.utils.logging.get(__name__)
 
 
 class CLI:
-    """A commmand-line wrapper for the VAST executable."""
+    """A command-line wrapper for the VAST executable."""
 
     @staticmethod
     def arguments(**kwargs):
