@@ -1,0 +1,29 @@
+diff --git a/restinio/string_view.hpp b/restinio/string_view.hpp
+--- a/restinio/string_view.hpp
++++ b/restinio/string_view.hpp
+@@ -8,6 +8,18 @@
+ 
+ #pragma once
+ 
++#if __has_include(<string_view>)
++
++#include <string_view>
++
++namespace restinio
++{
++	using string_view_t = std::string_view;
++
++} /* namespace restinio */
++
++#else 
++
+ #if defined(RESTINIO_EXTERNAL_STRING_VIEW_LITE)
+ 	#include <nonstd/string_view.hpp>
+ #else
+@@ -19,3 +31,5 @@ namespace restinio
+ 	using string_view_t = nonstd::string_view;
+ 
+ } /* namespace restinio */
++
++#endif
+
