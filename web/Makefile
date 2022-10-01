@@ -78,7 +78,7 @@ ifndef POETRY
 	$(error "poetry not in $$PATH; please install system-wide")
 else
 	@poetry install --no-root
-	#@poetry	run python -m bash_kernel.install
+	@poetry	run python -m bash_kernel.install
 endif
 
 %.md: %.qmd
@@ -88,9 +88,7 @@ else
 	poetry run quarto render $<
 endif
 
-quarto-render: $(QUARTO_MD_OUTPUTS)
-
-quarto: pak quarto-render
+quarto: poetry pak $(QUARTO_MD_OUTPUTS)
 
 clean:
 	rm -f $(CHANGELOG_OUTPUT)
