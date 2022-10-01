@@ -99,7 +99,7 @@ class SubnetType(pa.ExtensionType):
 
 class EnumScalar(pa.ExtensionScalar):
     def as_py(self) -> str:
-        return self.type.field(self.value.as_py())
+        return self.value.as_py()
 
 
 class EnumType(pa.ExtensionType):
@@ -110,8 +110,9 @@ class EnumType(pa.ExtensionType):
     ext_type = pa.dictionary(pa.uint8(), pa.string())
 
     def __init__(self, fields: dict[str, int]):
-        # We're optimizing for use cases that involve reading from VAST, so we
-        # keep the key-name mappings in the inverse order in memory.
+        # We're optimizing for use cases that involve reading the integer
+        # representation of enums from VAST, so we keep the key-name mappings in
+        # the inverse order in memory.
         self._fields = {v: k for k, v in fields.items()}
         pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
 
@@ -177,9 +178,9 @@ def unpack_ip(buffer: SupportsBytes) -> ip.IPv4Address | ip.IPv6Address:
 # Modules are intialized exactly once, so we can perform the registration here.
 pa.register_extension_type(PatternType())
 pa.register_extension_type(AddressType())
+pa.register_extension_type(EnumType({"stub": 0}))
 
 # FIXME: uncomment once we can depend on a version that includes
 # https://github.com/apache/arrow/pull/14106. Until then, we cannot work with
-# subnets and enums as extension types.
-#pa.register_extension_type(SubnetType())
-#pa.register_extension_type(EnumType({"stub": 0}))
+# subnets extension types.
+# pa.register_extension_type(SubnetType())
