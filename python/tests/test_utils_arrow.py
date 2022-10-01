@@ -48,15 +48,6 @@ def test_subnet_extension_type():
     assert arr[1].as_py() == ipaddress.IPv4Network("10.1.21.0/25")
 
 
-# Currently fails with:
-#
-# TypeError: Incompatible storage type
-#   dictionary<values=string, indices=int8, ordered=0> for extension type
-#   extension<vast.enumeration<EnumType>>
-#
-# The discussion in https://issues.apache.org/jira/browse/ARROW-17839 ideally
-# tells us exactly what we are doing wrong here.
-@pytest.mark.xfail(reason="https://issues.apache.org/jira/browse/ARROW-17839")
 def test_enum_extension_type():
     fields = {
         "foo": 1,
@@ -67,15 +58,29 @@ def test_enum_extension_type():
     assert ty.__arrow_ext_serialize__().decode() == json.dumps(fields)
     dictionary_type = pa.dictionary(pa.uint8(), pa.string(), ordered=False)
     assert vua.EnumType.ext_type == dictionary_type
-    values = ["foo", "bar", "baz", "bar", "foo"]
-    storage = pa.array(values, dictionary_type)
+    indices = pa.array([0, 1, 2, 1, 0], pa.uint8())
+    dictionary = pa.array(fields.keys(), pa.string())
+    storage = pa.DictionaryArray.from_arrays(indices, dictionary)
     assert storage.dictionary.to_pylist() == ["foo", "bar", "baz"]
-    assert storage.indices.to_pylist() == [0, 1, 2, 1, 0]
+    assert storage.indices.to_pylist() == indices.to_pylist()
     arr = pa.ExtensionArray.from_storage(ty, storage)
     arr.validate()
     assert arr.type is ty
     assert arr.storage.equals(storage)
-    assert arr.to_pylist() == values
+    assert arr.to_pylist() == ["foo", "bar", "baz", "bar", "foo"]
+
+
+def test_enum_extension_type_fields():
+    fields = {
+        "foo": 1,
+        "bar": 2,
+        "baz": 3,
+    }
+    ty = vua.EnumType(fields)
+    assert ty.field(2) == "bar"
+    # Field mappings are stored in the inverse order.
+    assert list(ty.fields.keys()) == list(fields.values())
+    assert list(ty.fields.values()) == list(fields.keys())
 
 
 # Directly lifted from Arrow's test_extension_type.py
