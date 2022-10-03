@@ -42,9 +42,9 @@ poetry run pytest
 ## Packaging
 
 The following instructions concern maintainers who want to publish the Python
-package to PyPI.
+package to PyPI. CI performs the needed steps automatically.
 
-### Setup Test PyPI
+### Publish to Test PyPI
 
 1. Add a Test PyPi repository:
 
@@ -57,10 +57,16 @@ package to PyPI.
 3. Store the token:
 
   ```bash
-  poetry config pypi-token.test-pypi  pypi-YYYYYYYY
+  poetry config pypi-token.test-pypi pypi-XXXXXXXX
   ```
 
-### Setup Production PyPI
+4. Publish:
+  
+   ```bash
+   poetry publish --build -r test-pypi
+   ```
+
+### Publish to PyPI
 
 1. Get the token from <https://pypi.org/manage/account/token/>.
 
@@ -70,15 +76,7 @@ package to PyPI.
   poetry config pypi-token.pypi pypi-XXXXXXXX
   ```
 
-### Publish to PyPI
-
-1. Publish to Test PyPI:
-  
-   ```bash
-   poetry publish -r test-pypi
-   ```
-
-2. If everything went well, publish to PyPi:
+3. Publish
 
    ```bash
    poetry publish --build
