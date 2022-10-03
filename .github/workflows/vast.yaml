@@ -1096,3 +1096,9 @@ jobs:
       - name: Run unit tests
         working-directory: python
         run: poetry run pytest
+      - name: Package and publish to Test PyPI
+        working-directory: python
+        run: |
+          poetry config repositories.test-pypi https://test.pypi.org/legacy/
+          poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_TOKEN }}
+          poetry publish --build -r test-pypi
