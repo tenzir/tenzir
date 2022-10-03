@@ -41,6 +41,16 @@ fabric = ["misp-stix", "pyzmq"]
 
 [tool.poetry-dynamic-versioning]
 enable = true
+format-jinja = """
+    {%- if distance == 0 -%}
+        {{ serialize_pep440(base) }}
+    {%- elif revision is not none -%}
+        {{ serialize_pep440(bump_version(base, 1), stage="rc", revision=revision) }}
+    {%- else -%}
+        {{ serialize_pep440(bump_version(base, 1), stage="a", revision=distance) }}
+    {%- endif -%}
+"""
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
