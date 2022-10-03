@@ -41,8 +41,6 @@ fabric = ["misp-stix", "pyzmq"]
 
 [tool.poetry-dynamic-versioning]
 enable = true
-style = "semver"
-format = "{base}-{distance}+{commit}"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
