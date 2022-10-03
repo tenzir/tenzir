@@ -1092,7 +1092,9 @@ jobs:
           poetry-version: 1.2.1
       - name: Run poetry install
         working-directory: python
-        run: poetry install --all-extras
+        run: |
+          poetry self add "poetry-dynamic-versioning[plugin]"
+          poetry install --all-extras
       - name: Run unit tests
         working-directory: python
         run: poetry run pytest
@@ -1100,5 +1102,5 @@ jobs:
         working-directory: python
         run: |
           poetry config repositories.test-pypi https://test.pypi.org/legacy/
-          poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_TOKEN }}
+          poetry config pypi-token.test-pypi "${{ secrets.TEST_PYPI_TOKEN }}"
           poetry publish --build -r test-pypi
