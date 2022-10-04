@@ -49,9 +49,11 @@ let
 
   src = vast-source;
 
+  versionOverride' = lib.removePrefix "v" versionOverride; 
+  versionShortOverride' = lib.removePrefix "v" versionShortOverride; 
   versionFallback = (builtins.fromJSON (builtins.readFile ./../../version.json)).vast-version-fallback;
-  version = if (versionOverride != null) then versionOverride else versionFallback;
-  versionShort = if (versionShortOverride != null) then versionShortOverride else version;
+  version = if (versionOverride != null) then versionOverride' else versionFallback;
+  versionShort = if (versionShortOverride != null) then versionShortOverride' else version;
 in
 
 stdenv.mkDerivation (rec {
@@ -89,7 +91,7 @@ stdenv.mkDerivation (rec {
     "-DCMAKE_BUILD_TYPE:STRING=${buildType}"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DVAST_VERSION_TAG=v${version}"
-    "-DVAST_VERSION_SHORT=${versionShort}"
+    "-DVAST_VERSION_SHORT=v${versionShort}"
     "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_ENABLE_BACKTRACE=ON"
     "-DVAST_ENABLE_JEMALLOC=ON"
