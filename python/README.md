@@ -42,7 +42,21 @@ poetry run pytest
 ## Packaging
 
 The following instructions concern maintainers who want to publish the Python
-package to PyPI. CI performs the needed steps automatically.
+package to PyPI.
+
+> **Note**
+> Our releasing scripts and CI od these steps automatically. You do not need to
+> intervene anywhere. The instructions below merely document the steps taken.
+
+### Bump the version
+
+Prior to releasing a new version, bump the version, e.g.:
+
+```bash
+poetry version 2.3.1
+```
+
+This updates the `pyproject.toml` file.
 
 ### Publish to Test PyPI
 
