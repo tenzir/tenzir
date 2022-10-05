@@ -22,6 +22,7 @@
 #include <vast/system/status.hpp>
 #include <vast/table_slice.hpp>
 
+#include <arrow/record_batch.h>
 #include <caf/attach_stream_sink.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -335,6 +336,17 @@ system::store_actor::behavior_type passive_local_store(
   };
 }
 
+size_t array_size(const std::shared_ptr<arrow::ArrayData>& array_data) {
+  auto size = size_t{};
+  for (const auto& buffer : array_data->buffers)
+    if (buffer)
+      size += buffer->size();
+  for (const auto& child : array_data->child_data)
+    size += array_size(child);
+  size += array_data->dictionary ? array_size(array_data->dictionary) : 0;
+  return size;
+}
+
 local_store_actor::behavior_type
 active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
                    system::accountant_actor accountant,
@@ -434,13 +446,28 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
     },
     // internal handlers
     [self](atom::internal, atom::persist) {
+      const auto start = std::chrono::steady_clock::now();
       self->state.segment = self->state.builder->finish();
       VAST_DEBUG("{} persists segment {}", *self, self->state.segment->id());
       self
         ->request(self->state.fs, caf::infinite, atom::write_v,
                   self->state.path, self->state.segment->chunk())
         .then(
-          [self](atom::ok) {
+          [self, start](atom::ok) {
+            auto bytes_in_record_batches = size_t{};
+            for (auto slice_it = self->state.segment->begin();
+                 slice_it != self->state.segment->end(); ++slice_it) {
+              bytes_in_record_batches += array_size(to_record_batch(*slice_it)
+                                                      ->ToStructArray()
+                                                      .ValueOrDie()
+                                                      ->data());
+            }
+            const auto duration = std::chrono::steady_clock::now() - start;
+            fmt::print(stderr, "tp;{},{},{},{},{},{},{}\n", "segment", duration,
+                       bytes_in_record_batches,
+                       self->state.segment->chunk()->size(), self->state.events,
+                       self->state.segment->num_slices(),
+                       (*self->state.segment->begin()).layout());
             self->state.self = nullptr;
           },
           [self](caf::error& err) {
