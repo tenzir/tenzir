@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.18...3.24 FATAL_ERROR)
 
-list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-
 project(
   web
   VERSION 1.0.0
@@ -29,6 +27,7 @@ VASTRegisterPlugin(
 find_package(OpenSSL REQUIRED)
 
 # Setup dependency code from submodules.
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 add_subdirectory(aux)
 target_link_libraries(web PRIVATE restinio)
 
