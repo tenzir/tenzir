@@ -1104,7 +1104,7 @@ jobs:
     needs:
       - python
       - determine-version
-    #if: github.event_name == 'release'
+    if: github.event_name == 'release'
     name: Python Package
     runs-on: ubuntu-latest
     env:
@@ -1133,6 +1133,6 @@ jobs:
       - name: Publish ${{ needs.determine-version.outputs.release-version }} to Test PyPI
         working-directory: python
         run: poetry publish --build -r test-pypi
-      #- name: Publish to PyPI
-      #  working-directory: python
-      #  run: poetry publish --build
+      - name: Publish to PyPI
+        working-directory: python
+        run: poetry publish --build
