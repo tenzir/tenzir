@@ -98,8 +98,8 @@ jobs:
             libasio-dev \
             libflatbuffers-dev \
             libfmt-dev \
+            libhttp-parser-dev \
             libpcap-dev tcpdump \
-            librestinio-dev \
             libsimdjson-dev \
             libspdlog-dev \
             libssl-dev \
@@ -276,7 +276,7 @@ jobs:
             libflatbuffers-dev \
             libfmt-dev \
             libpcap-dev tcpdump \
-            librestinio-dev \
+            libhttp-parser-dev \
             libsimdjson-dev \
             libspdlog-dev \
             libssl-dev \
@@ -516,11 +516,13 @@ jobs:
         run: |
           brew --version
           brew install \
+            asio \
             apache-arrow \
             ccache \
             flatbuffers \
             fmt \
             gnu-sed \
+            http-parser \
             libpcap \
             libunwind-headers \
             llvm \
@@ -693,7 +695,7 @@ jobs:
             path: plugins/web
             dependencies:
               - libasio-dev
-              - librestinio-dev
+              - libhttp-parser-dev
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
