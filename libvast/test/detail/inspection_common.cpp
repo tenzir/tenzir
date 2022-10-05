@@ -12,10 +12,6 @@
 
 #include "vast/test/test.hpp"
 
-#include <fmt/format.h>
-
-#include <string>
-
 namespace {
 
 template <bool IsLoading>
@@ -40,8 +36,7 @@ TEST(callback is invoked and the fields invocation returns true when all
     REQUIRE(field2_invoked);
     return true;
   };
-  auto sut = vast::detail::inspection_object_with_after_inspection_callback{
-    inspector, callback};
+  auto sut = vast::detail::inspection_object{inspector}.on_save(callback);
   // create fields
   auto field1 = [&](auto&) {
     REQUIRE_EQUAL(callback_calls_count, 0u);
@@ -63,15 +58,14 @@ TEST(callback is invoked and the fields invocation returns true when all
 
 TEST(callback and second field arent invoked and the fields invocation
        returns false when first field returned false) {
-  dummy_saving_inspector inspector;
+  dummy_loading_inspector inspector;
   std::size_t callback_calls_count{0u};
   // create sut
   auto callback = [&] {
     ++callback_calls_count;
     return true;
   };
-  auto sut = vast::detail::inspection_object_with_after_inspection_callback{
-    inspector, callback};
+  auto sut = vast::detail::inspection_object{inspector}.on_load(callback);
   // create fields
   bool field1_invoked = false;
   bool field2_invoked = false;
@@ -98,8 +92,7 @@ TEST(fields invocation returns false when callback returns false) {
     ++callback_calls_count;
     return false;
   };
-  auto sut = vast::detail::inspection_object_with_after_inspection_callback{
-    inspector, callback};
+  auto sut = vast::detail::inspection_object{inspector}.on_save(callback);
   CHECK(!sut.fields([&](auto&) {
     return true;
   }));
