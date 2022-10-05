@@ -16,6 +16,7 @@
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
+#include <arrow/record_batch.h>
 #include <caf/attach_stream_sink.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -340,6 +341,17 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
   };
 }
 
+size_t array_size(const std::shared_ptr<arrow::ArrayData>& array_data) {
+  auto size = size_t{};
+  for (const auto& buffer : array_data->buffers)
+    if (buffer)
+      size += buffer->size();
+  for (const auto& child : array_data->child_data)
+    size += array_size(child);
+  size += array_data->dictionary ? array_size(array_data->dictionary) : 0;
+  return size;
+}
+
 system::default_active_store_actor::behavior_type default_active_store(
   system::default_active_store_actor::stateful_pointer<default_active_store_state>
     self,
@@ -408,6 +420,29 @@ system::default_active_store_actor::behavior_type default_active_store(
           // persist anything.
           if (self->state.erased)
             return;
+          // quick hack: -99 is a placeholder for "no compression"
+          auto compression_levels = std::vector{-99, -5, 1, 9, 19};
+          for (auto level : compression_levels) {
+            self->state.store->set_compression_level(level);
+            const auto start = std::chrono::steady_clock::now();
+            auto chunk = self->state.store->finish();
+            const auto duration = std::chrono::steady_clock::now() - start;
+            auto bytes_in_record_batches = size_t{};
+            for (const auto& slice : self->state.store->slices()) {
+              bytes_in_record_batches += array_size(
+                to_record_batch(slice)->ToStructArray().ValueOrDie()->data());
+            }
+            auto num_slices = size_t{};
+            for (const auto& _ : self->state.store->slices())
+              ++num_slices;
+            fmt::print(stderr, "tp;{},{},{},{},{},{},{},{}\n",
+                       self->state.store_type, duration.count(),
+                       bytes_in_record_batches, chunk->get()->size(),
+                       self->state.store->num_events(), num_slices,
+                       (*self->state.store->slices().begin()).layout(),
+                       level < -5 ? "" : fmt::format("{}", level));
+          }
+          self->state.store->set_compression_level(1);
           auto chunk = self->state.store->finish();
           if (!chunk) {
             self->quit(std::move(chunk.error()));

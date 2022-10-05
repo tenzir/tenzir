@@ -64,6 +64,8 @@ public:
 /// A base class for active stores used by the store plugin.
 class active_store : public base_store {
 public:
+  virtual void set_compression_level(int compression_level) = 0;
+
   /// Add a set of slices to the store.
   /// @returns An error on failure.
   [[nodiscard]] virtual caf::error add(std::vector<table_slice> slices) = 0;

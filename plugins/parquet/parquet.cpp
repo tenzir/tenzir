@@ -321,7 +321,9 @@ writer_properties(const configuration& config) {
   auto builder = ::parquet::WriterProperties::Builder{};
   builder.created_by("VAST")
     ->enable_dictionary()
-    ->compression(::parquet::Compression::ZSTD)
+    ->compression(config.zstd_compression_level < -5
+                    ? ::parquet::Compression::UNCOMPRESSED
+                    : ::parquet::Compression::ZSTD)
     ->compression_level(detail::narrow_cast<int>(config.zstd_compression_level))
     ->version(::parquet::ParquetVersion::PARQUET_2_6);
   return builder.build();
@@ -431,6 +433,10 @@ class active_parquet_store final : public active_store {
 public:
   explicit active_parquet_store(const configuration& config)
     : parquet_config_{config} {
+  }
+
+  void set_compression_level(int compression_level) override {
+    parquet_config_.zstd_compression_level = compression_level;
   }
 
   /// Add a set of slices to the store.
