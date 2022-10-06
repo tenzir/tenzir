@@ -180,3 +180,8 @@ SPDXID: SPDXRef-Package
 PackageName: fast_float
 PackageHomePage: https://github.com/FastFloat/fast_float
 PackageLicenseConcluded: Apache-2.0
+
+SPDXID: SPDXRef-Package
+PackageName: restinio
+PackageHomePage: https://github.com/Stiffstream/restinio
+PackageLicenseConcluded: BSD-3-Clause

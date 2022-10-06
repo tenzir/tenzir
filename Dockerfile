@@ -27,8 +27,8 @@ RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
       libbroker-dev \
       libflatbuffers-dev \
       libfmt-dev \
+      libhttp-parser-dev \
       libpcap-dev tcpdump \
-      librestinio-dev \
       libsimdjson-dev \
       libspdlog-dev \
       libssl-dev \
@@ -139,6 +139,7 @@ RUN apt-get update && \
       libc++abi1 \
       libflatbuffers1 \
       libfmt7 \
+      libhttp-parser2.9 \
       libpcap0.8 \
       libsimdjson5 \
       libspdlog1 \
