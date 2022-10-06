@@ -78,7 +78,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     return caf::make_error(
       ec::system_error,
       fmt::format("failed to connect to VAST node at {}:{}: {}",
-                  node_endpoint.host, to_string(node_endpoint.host),
+                  node_endpoint.host, node_endpoint.port->number(),
                   std::move(result.error())));
   VAST_DEBUG("client connected to VAST node at {}:{}", node_endpoint.host,
              to_string(*node_endpoint.port));
