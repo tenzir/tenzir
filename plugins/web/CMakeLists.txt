@@ -30,6 +30,7 @@ find_package(OpenSSL REQUIRED)
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 add_subdirectory(aux)
 target_link_libraries(web PRIVATE restinio)
+list(POP_FRONT CMAKE_MODULE_PATH)
 
 # Compile the web FlatBuffers schemas.
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
