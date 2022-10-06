@@ -18,7 +18,7 @@ stdenv.mkDerivation {
     owner = "stiffstream";
     repo = "restinio";
     rev = version;
-    sha256 = "sha256-KPWrSm/i63UnCNVmnawpT0xWaNYMDlQS4ZNLqumrhEg=";
+    sha256 = "sha256-dyia8KUarzAQzVL8Beesyecd1k/M4MDYXDBOqYVy+8o=";
   };
 
   nativeBuildInputs = [ cmake ];
