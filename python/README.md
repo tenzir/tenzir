@@ -45,7 +45,7 @@ The following instructions concern maintainers who want to publish the Python
 package to PyPI.
 
 > **Note**
-> Our releasing scripts and CI od these steps automatically. You do not need to
+> Our releasing scripts and CI run these steps automatically. You do not need to
 > intervene anywhere. The instructions below merely document the steps taken.
 
 ### Bump the version
