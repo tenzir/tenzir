@@ -1092,13 +1092,16 @@ jobs:
           poetry-version: 1.2.1
       - name: Run poetry install
         working-directory: python
-        run: poetry install --all-extras
+        run: |
+          poetry install --all-extras
       - name: Run unit tests
         working-directory: python
-        run: poetry run pytest
+        run: |
+          poetry run pytest
       - name: Build package
         working-directory: python
-        run: poetry build
+        run: |
+          poetry build
 
   python-package:
     needs:
@@ -1132,7 +1135,9 @@ jobs:
           poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
       - name: Publish ${{ needs.determine-version.outputs.release-version }} to Test PyPI
         working-directory: python
-        run: poetry publish --build -r test-pypi
+        run: |
+          poetry publish --build -r test-pypi
       - name: Publish to PyPI
         working-directory: python
-        run: poetry publish --build
+        run: |
+          poetry publish --build
