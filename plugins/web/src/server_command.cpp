@@ -84,7 +84,8 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         return;
       }
       // Ask the authenticator to validate the passed token.
-      auto token = response->request()->header().try_get_field("X-VAST-Token");
+      auto const* token
+        = response->request()->header().try_get_field("X-VAST-Token");
       if (!token) {
         response->abort(401, "missing header X-VAST-Token\n");
         return;
