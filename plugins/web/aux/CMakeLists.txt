@@ -28,7 +28,7 @@ add_custom_command(
     "${CMAKE_CURRENT_LIST_DIR}/restinio/dev/"
     "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio"
   # Apply a patch to the restinio library that makes some changes.
-  COMMAND "${PATCH_EXECUTABLE}" -p1 -i
+  COMMAND "${PATCH_EXECUTABLE}" -p2 -i
           "${CMAKE_CURRENT_LIST_DIR}/restinio.patch")
 
 add_custom_target(patch-restinio ALL DEPENDS ${restinio_sources_patched})
@@ -47,3 +47,5 @@ target_include_directories(
 target_link_libraries(
   restinio INTERFACE fmt::fmt Asio::Asio OpenSSL::SSL OpenSSL::Crypto
                      http_parser::http_parser)
+
+add_library(restinio::restinio ALIAS restinio)

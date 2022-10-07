@@ -1,6 +1,6 @@
-diff --git a/restinio/string_view.hpp b/restinio/string_view.hpp
---- a/restinio/string_view.hpp
-+++ b/restinio/string_view.hpp
+diff --git a/dev/restinio/string_view.hpp b/dev/restinio/string_view.hpp
+--- a/dev/restinio/string_view.hpp
++++ b/dev/restinio/string_view.hpp
 @@ -8,6 +8,18 @@
  
  #pragma once

@@ -26,11 +26,16 @@ VASTRegisterPlugin(
 
 find_package(OpenSSL REQUIRED)
 
-# Setup dependency code from submodules.
-list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-add_subdirectory(aux)
-target_link_libraries(web PRIVATE restinio)
-list(POP_FRONT CMAKE_MODULE_PATH)
+if (VAST_ENABLE_SYSTEM_RESTINIO)
+  find_package(fmt REQUIRED)
+  find_package(restinio REQUIRED)
+else ()
+  # Setup dependency code from submodules.
+  list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  add_subdirectory(aux)
+  list(POP_FRONT CMAKE_MODULE_PATH)
+endif ()
+target_link_libraries(web PRIVATE restinio::restinio)
 
 # Compile the web FlatBuffers schemas.
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
