@@ -1,0 +1,3 @@
+This directory holds the installed R packages.
+
+It must exist prior to launching R, which is why it is part of the repository.
