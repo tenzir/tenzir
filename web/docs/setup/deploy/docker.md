@@ -49,7 +49,7 @@ The `docker` arguments have the following meaning:
 - `-d` for detaching, i.e., running in background
 - `-t` for terminal output
 - `--name` to name the image
-- `--rm` to clear older volumes
+- `--rm` to remove the container after exiting
 - `-p` to expose the port to the outer world
 - `-v from:to` to mount the local path `from` into the container at `to`
 
