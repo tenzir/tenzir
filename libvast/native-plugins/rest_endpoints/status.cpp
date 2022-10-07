@@ -26,6 +26,15 @@ static auto const* SPEC_V0 = R"_(
         required: false
         description: If specified, return the status for that component only.
         example: "index"
+      - in: query
+        name: verbosity
+        schema:
+          type: string
+          enum: [info, detailed, debug]
+        default: info
+        required: false
+        description: The verbosity level of the status response.
+        example: detailed
     responses:
       200:
         description: OK.
@@ -50,7 +59,6 @@ struct status_handler_state {
   static constexpr auto name = "status-handler";
   status_handler_state() = default;
   system::node_actor node_;
-  std::vector<http_request> pending_;
 };
 
 status_handler_actor::behavior_type
@@ -60,10 +68,6 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
   return {
     [self](atom::http_request, uint64_t, http_request rq) {
       VAST_VERBOSE("{} handles /status request", *self);
-      auto request_in_progress = !self->state.pending_.empty();
-      self->state.pending_.emplace_back(std::move(rq));
-      if (request_in_progress)
-        return;
       auto arguments = std::vector<std::string>{};
       if (rq.params.contains("component")) {
         auto& component = rq.params.at("component");
@@ -71,34 +75,43 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
         VAST_ASSERT(caf::holds_alternative<std::string>(component));
         arguments.push_back(caf::get<std::string>(component));
       }
+      auto options = caf::settings{};
+      if (rq.params.contains("verbosity")) {
+        auto verbosity = caf::get<std::string>(rq.params.at("verbosity"));
+        if (verbosity == "info")
+          /* nop */;
+        else if (verbosity == "detailed")
+          caf::put(options, "vast.status.detailed", true);
+        else if (verbosity == "debug")
+          caf::put(options, "vast.status.debug", true);
+        else
+          return rq.response->abort(422, "invalid verbosity");
+      }
       auto inv = vast::invocation{
-        .options = {},
+        .options = options,
         .full_name = "status",
         .arguments = arguments,
       };
       self
         ->request(self->state.node_, caf::infinite, atom::run_v, std::move(inv))
         .then(
-          [self](const caf::message&) {
-            for (auto& rq : std::exchange(self->state.pending_, {}))
-              rq.response->abort(500, "unexpected response");
+          [rsp = rq.response](const caf::message&) {
+            rsp->abort(500, "unexpected response");
           },
-          [self](caf::error& e) {
+          [rsp = rq.response](caf::error& e) {
             // The NODE uses some black magic to respond to the request with
             // a `std::string`, which is not what its type signature says. This
             // will arrive as an "unexpected_response" error here.
             if (caf::sec{e.code()} != caf::sec::unexpected_response) {
               VAST_ERROR("node error {}", e);
-              for (auto& rq : std::exchange(self->state.pending_, {}))
-                rq.response->abort(500, "internal error");
+              rsp->abort(500, "internal error");
               return;
             }
             std::string result;
             caf::message_handler{[&](std::string& str) {
               result = std::move(str);
             }}(e.context());
-            for (auto& rq : std::exchange(self->state.pending_, {}))
-              rq.response->append(result);
+            rsp->append(result);
           });
     },
   };
@@ -134,6 +147,8 @@ class plugin final : public virtual rest_endpoint_plugin {
         .path = "/status",
         .params = record_type{
           {"component", string_type{}},
+          // TODO: Add direct support for `enumeration_type` to the server.
+          {"verbosity", string_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,
