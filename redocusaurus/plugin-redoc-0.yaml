@@ -33,6 +33,7 @@ paths:
           schema:
             type: string
           required: true
+          default: A query matching every event.
           description: The query expression to execute.
           example: ':ip in 10.42.0.0/16'
         - in: query
@@ -40,6 +41,7 @@ paths:
           schema:
             type: integer
           required: false
+          default: 50
           description: Maximum number of returned events
           example: 3
       responses:
@@ -94,7 +96,6 @@ paths:
                       "2011-08-12T12:53:47.928539", "end":
                       "2011-08-12T12:53:47.928552", "age": 0}, "app_proto":
                       "failed"}
-                    - 'null'
                   num_events: 3
         '401':
           description: Not authenticated.
@@ -112,6 +113,18 @@ paths:
           required: false
           description: If specified, return the status for that component only.
           example: index
+        - in: query
+          name: verbosity
+          schema:
+            type: string
+            enum:
+              - info
+              - detailed
+              - debug
+          default: info
+          required: false
+          description: The verbosity level of the status response.
+          example: detailed
       responses:
         '200':
           description: OK.
