@@ -26,10 +26,18 @@ VASTRegisterPlugin(
 
 find_package(OpenSSL REQUIRED)
 
-if (VAST_ENABLE_SYSTEM_RESTINIO)
+option(VAST_ENABLE_BUNDLED_RESTINIO "Always use the bundled restinio" ON)
+add_feature_info("VAST_ENABLE_BUNDLED_RESTINIO" VAST_ENABLE_BUNDLED_RESTINIO
+                 "always use the bundled restinio.")
+if (NOT VAST_ENABLE_BUNDLED_RESTINIO)
   find_package(fmt REQUIRED)
-  find_package(restinio REQUIRED)
-else ()
+  find_package(restinio)
+endif ()
+if (NOT restinio_FOUND)
+  if (NOT VAST_ENABLE_BUNDLED_RESTINIO)
+    message(
+      STATUS "Cannot find installed restinio; falling back to bundled version")
+  endif ()
   # Setup dependency code from submodules.
   list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
   add_subdirectory(aux)
