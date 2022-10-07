@@ -14,9 +14,9 @@ integrations with related services.
 
 ## Quick Start with Docker Compose
 
-To get up and running with VAST in Docker Compose, run simply run
-`docker compose up` from the repository root, which fetches the latest version
-of VAST from Docker Hub.
+To get up and running with VAST in Docker Compose, simply run `docker compose
+up` from the `docker/vast` directory, which fetches the latest version of VAST
+from Docker Hub.
 
 The `docker compose run` command makes interacting with VAST inside Docker
 Compose easy:
@@ -45,9 +45,20 @@ To opt into loading another service, specify its override file when starting
 Docker Compose:
 
 ```bash
-# Load both VAST and Suricata, and the import that sits between the two.
-docker compose -f docker/vast/docker-compose.vast.yaml \
-               -f docker/suricata/docker-compose.suricata.yaml \
-               -f docker/suricata/docker-compose.vast-import.yaml \
+# Load both VAST and Zeek, and the import that sits between the two.
+# NOTE: The override file for Zeek does not exist yet, but we plan to add it in
+# the near future.
+docker compose -f docker/vast/docker-compose.yaml \
+               -f docker/zeek/docker-compose.yaml \
+               -f docker/zeek/docker-compose.vast-import.yaml \
                up
 ```
+
+We currently have the following override files:
+
+|File|Description|
+|-|-|
+|docker/vast/docker-compose.yaml|The `vast` service that starts up a VAST server.|
+|docker/vast/docker-compose.volume.yaml|Add persistent storage to VAST.|
+|docker/vast/docker-compose.web.yaml|Expose the VAST web server.|
+|docker/vast/docker-compose.build.yaml|Force VAST to be built from source.|
