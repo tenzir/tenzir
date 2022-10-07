@@ -84,7 +84,10 @@ FROM dependencies AS development
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}" \
     CC="gcc-10" \
-    CXX="g++-10"
+    CXX="g++-10" \
+    VAST_DB_DIRECTORY="/var/lib/vast" \
+    VAST_LOG_FILE="/var/log/vast/server.log" \
+    VAST_PLUGINS="all"
 
 # Additional arguments to be passed to CMake.
 ARG VAST_BUILD_OPTIONS
@@ -102,9 +105,6 @@ RUN cmake -B build -G Ninja \
     rm -rf build
 
 RUN mkdir -p $PREFIX/etc/vast /var/log/vast /var/lib/vast
-ENV VAST_DB_DIRECTORY="/var/lib/vast" \
-    VAST_LOG_FILE="/var/log/vast/server.log" \
-    VAST_PLUGINS="all"
 
 EXPOSE 42000/tcp
 
@@ -119,7 +119,10 @@ CMD ["--help"]
 FROM debian:bullseye-slim AS production
 
 ENV PREFIX="/opt/tenzir/vast" \
-    PATH="/opt/tenzir/vast/bin:${PATH}"
+    PATH="/opt/tenzir/vast/bin:${PATH}" \
+    VAST_DB_DIRECTORY="/var/lib/vast" \
+    VAST_LOG_FILE="/var/log/vast/server.log" \
+    VAST_PLUGINS="all"
 
 RUN useradd --system --user-group vast
 COPY --from=development --chown=vast:vast $PREFIX/ $PREFIX/
