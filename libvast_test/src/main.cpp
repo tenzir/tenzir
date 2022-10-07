@@ -79,6 +79,8 @@ extern std::set<std::string> config;
 } // namespace vast::test
 
 namespace {
+
+// Retrieves arguments after the '--' delimiter.
 std::vector<std::string> get_test_args(int argc, const char* const* argv) {
   // Parse everything after after '--'.
   constexpr std::string_view delimiter = "--";
@@ -89,6 +91,7 @@ std::vector<std::string> get_test_args(int argc, const char* const* argv) {
     return {};
   return {args_start + 1, end};
 }
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -111,8 +114,10 @@ int main(int argc, char** argv) {
       std::cout << options.help_text() << std::endl;
       return 0;
     }
-    vast::test::config = {make_move_iterator(begin(test_args)),
-                          make_move_iterator(end(test_args))};
+    vast::test::config = {
+      std::make_move_iterator(std::begin(test_args)),
+      std::make_move_iterator(std::end(test_args)),
+    };
   }
   for (auto& plugin : vast::plugins::get_mutable()) {
     if (auto err = plugin->initialize({})) {
