@@ -194,7 +194,7 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
 auto server_command(const vast::invocation& inv, caf::actor_system& system)
   -> caf::message {
   auto self = caf::scoped_actor{system};
-  auto web_options = caf::get_or(inv.options, "web", caf::settings{});
+  auto web_options = caf::get_or(inv.options, "plugins.web", caf::settings{});
   auto data = vast::data{};
   // TODO: Implement a single `convert_and_validate()` function for going
   // from caf::settings -> record_type
