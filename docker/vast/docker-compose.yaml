@@ -1,7 +1,6 @@
 version: "3"
 services:
   vast:
-    container_name: tenzir-vast
     image: tenzir/vast:${VAST_VERSION:-latest}
     environment:
       - VAST_ENDPOINT=vast:42000
