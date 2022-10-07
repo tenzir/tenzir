@@ -33,7 +33,7 @@ caf::expected<server_config> convert_and_validate(configuration config) {
       result.require_tls = false;
       result.require_clientcerts = false;
       result.require_authentication = false;
-      result.require_localhost = true;
+      result.require_localhost = false;
       break;
     case configuration::server_mode::upstream:
       result.require_tls = false;
