@@ -901,6 +901,10 @@ jobs:
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            docker tag tenzir/vast:latest "ghcr.io/tenzir/vast:${cache_to_ref}"
+            docker push "ghcr.io/tenzir/vast:${cache_to_ref}"
+          fi
       - name: Publish Docker Images
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
@@ -948,20 +952,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Load VAST Docker Image
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            cache_to_ref="${{ needs.determine-version.outputs.head-ref-slug }}"
-          else
-            cache_to_ref="${{ github.sha }}"
-          fi
-          docker_build_args="${{ needs.determine-version.outputs.docker-build-args }}"
-          docker buildx build . -t tenzir/vast:latest --target production --load \
-            --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
-            --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}"
       - name: Run Integration Tests
         run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.head-ref-slug }}"
+          else
+            export VAST_CONTAINER_REF="${{ github.sha }}"
+          fi
+          export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
 
   build-nix:
