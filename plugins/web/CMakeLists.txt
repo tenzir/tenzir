@@ -6,6 +6,7 @@ project(
   DESCRIPTION "Web plugin for VAST"
   LANGUAGES CXX)
 
+include(FeatureSummary)
 include(CTest)
 
 file(GLOB_RECURSE web_sources CONFIGURE_DEPENDS
