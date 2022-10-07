@@ -15,14 +15,11 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
-#include <caf/behavior.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/response_promise.hpp>
-
 namespace vast::system {
 
 template <class Policy>
-caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
+terminator_actor::behavior_type
+terminator(terminator_actor::stateful_pointer<terminator_state> self) {
   VAST_TRACE_SCOPE("terminator {}", VAST_ARG(self->id()));
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
@@ -54,10 +51,10 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
     }
   });
   return {
-    [=](const std::vector<caf::actor>& xs) {
+    [self](atom::shutdown, const std::vector<caf::actor>& xs) {
       VAST_DEBUG("{} got request to terminate {} actors", *self, xs.size());
       VAST_ASSERT(!self->state.promise.pending());
-      self->state.promise = self->make_response_promise();
+      self->state.promise = self->make_response_promise<atom::done>();
       auto& remaining = self->state.remaining_actors;
       remaining.reserve(xs.size());
       for (auto i = xs.rbegin(); i != xs.rend(); ++i)
@@ -76,8 +73,8 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
                    "exited",
                    *self);
         self->state.promise.deliver(atom::done_v);
-        self->quit(caf::exit_reason::user_shutdown);
-        return;
+        self->send_exit(self, caf::exit_reason::user_shutdown);
+        return self->state.promise;
       }
       if constexpr (std::is_same_v<Policy, policy::sequential>) {
         // Track actors in reverse order because the user provides the actors in
@@ -102,14 +99,15 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
       } else {
         static_assert(detail::always_false_v<Policy>, "unsupported policy");
       }
+      return self->state.promise;
     },
   };
 }
 
-template caf::behavior
-terminator<policy::sequential>(caf::stateful_actor<terminator_state>*);
+template terminator_actor::behavior_type terminator<policy::sequential>(
+  terminator_actor::stateful_pointer<terminator_state>);
 
-template caf::behavior
-terminator<policy::parallel>(caf::stateful_actor<terminator_state>*);
+template terminator_actor::behavior_type terminator<policy::parallel>(
+  terminator_actor::stateful_pointer<terminator_state>);
 
 } // namespace vast::system

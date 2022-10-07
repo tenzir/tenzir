@@ -507,6 +507,9 @@ using node_actor = typed_actor_fwd<
   // TODO: Make this a signal_monitor_client_actor
   caf::reacts_to<atom::signal, int>>::unwrap;
 
+using terminator_actor = typed_actor_fwd<caf::replies_to<
+  atom::shutdown, std::vector<caf::actor>>::with<atom::done>>::unwrap;
+
 } // namespace vast::system
 
 // -- type announcements -------------------------------------------------------
