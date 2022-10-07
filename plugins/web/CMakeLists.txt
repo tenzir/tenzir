@@ -6,6 +6,7 @@ project(
   DESCRIPTION "Web plugin for VAST"
   LANGUAGES CXX)
 
+include(FeatureSummary)
 include(CTest)
 
 file(GLOB_RECURSE web_sources CONFIGURE_DEPENDS
@@ -26,11 +27,22 @@ VASTRegisterPlugin(
 
 find_package(OpenSSL REQUIRED)
 
-# Setup dependency code from submodules.
-list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-add_subdirectory(aux)
-target_link_libraries(web PRIVATE restinio)
-list(POP_FRONT CMAKE_MODULE_PATH)
+option(VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
+       "Always use the bundled and patched restinio" ON)
+add_feature_info(
+  "VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO"
+  VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO
+  "always use the bundled and patched restinio.")
+if (NOT VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO)
+  find_package(fmt REQUIRED)
+  find_package(restinio REQUIRED)
+else ()
+  # Setup dependency code from submodules.
+  list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  add_subdirectory(aux)
+  list(POP_FRONT CMAKE_MODULE_PATH)
+endif ()
+target_link_libraries(web PRIVATE restinio::restinio)
 
 # Compile the web FlatBuffers schemas.
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS

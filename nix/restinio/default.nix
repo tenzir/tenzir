@@ -21,6 +21,10 @@ stdenv.mkDerivation {
     sha256 = "sha256-dyia8KUarzAQzVL8Beesyecd1k/M4MDYXDBOqYVy+8o=";
   };
 
+  patches = [
+    ../../plugins/web/aux/restinio.patch
+  ];
+
   nativeBuildInputs = [ cmake ];
   cmakeDir = "../dev";
   cmakeFlags = [
@@ -30,6 +34,7 @@ stdenv.mkDerivation {
     "-DRESTINIO_BENCH=OFF"
     "-DRESTINIO_INSTALL_BENCHES=OFF"
     "-DRESTINIO_FIND_DEPS=ON"
+    "-DRESTINIO_FMT_HEADER_ONLY=OFF"
     "-DRESTINIO_USE_EXTERNAL_HTTP_PARSER=ON"
     "-DRESTINIO_ALLOW_SOBJECTIZER=OFF"
   ];
