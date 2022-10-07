@@ -4,7 +4,7 @@ project:
     - blog/**/*.qmd
   execute-dir: file
 execute:
-  #cache: true
+  cache: true
   warning: false
   error: false
 knitr:
