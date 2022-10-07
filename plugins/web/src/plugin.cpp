@@ -54,7 +54,7 @@ class plugin final : public virtual command_plugin,
       "web", "http server", command::opts("?plugins.web"));
     rest_command->add_subcommand(
       "server", "start a web server",
-      command::opts("?web")
+      command::opts("?plugins.web")
         .add<bool>("help,h?", "prints the help text")
         .add<std::string>("mode", "Server mode. One of "
                                   "dev,server,upstream,mtls.")
@@ -63,9 +63,9 @@ class plugin final : public virtual command_plugin,
         .add<std::string>("bind", "listen address of server")
         .add<uint16_t>("port", "listen port"));
     rest_command->add_subcommand("generate-token", "generate auth token",
-                                 command::opts("?web.token"));
+                                 command::opts("?plugins.web.token"));
     rest_command->add_subcommand("openapi", "print openAPI spec",
-                                 command::opts("?web.spec"));
+                                 command::opts("?plugins.web.spec"));
     auto factory = command::factory{};
     factory["web server"] = web::server_command;
     factory["web generate-token"] = web::generate_token_command;
