@@ -1,0 +1,266 @@
+---
+title: "Parquet & Feather 2/3: Security Telemetry Benchmark"
+authors:
+  - dispanser
+  - mavam
+date: 2022-10-15
+tags: [arrow, parquet, feather, quarto, r]
+---
+
+How does Apache [Parquet][parquet] compare to [Feather][feather] for storing
+structured security data? In this blog post, we answer this question.
+
+[parquet]: https://parquet.apache.org/
+[feather]: https://arrow.apache.org/docs/python/feather.html
+
+<!--truncate-->
+
+:::note Parquet & Feather: 2/3
+This is blog post is part of a 3-piece series on Parquet and Feather.
+
+1. Enabling Open Investigations
+2. Security Telemetry Benchmark
+3. TBD
+
+:::
+
+In the previous blog post, we explained why Parquet and Feather are great
+building blocks for modern investigations. We now want to take a closer look at
+how they actually perform with respect to the following metrics:
+
+- **Size**: how much space does typical security telemetry occupy?
+- **Write throughput**: how fast can we write out to a store?
+
+Parquet and Feather have different goals. While Parquet is an on-disk format
+that optimizes for size, Feather is just a thin layer around the native Arrow
+in-memory representation. This puts them at different points in the spectrum of
+throughput and latency. To better understand this spectrum for real-world data,
+we instrumented the write path of VAST, which consists roughly of the following
+steps:
+
+1. Parse the input
+2. Convert it into Arrow record batches
+3. Ship Arrow record batches to a VAST server
+4. Write Arrow out into a Parquet or Feather store
+
+Since steps (1–3) are the same for both stores, we ignore them in the following
+analysis and solely zoom in on (4). For our measurements, we collect the
+following data points:
+
+- **Store**: the type of store plugin used in the measurement, i.e., `parquet`
+  or `feather`.
+
+- **Construction time**: the time it takes to convert Arrow record batches into
+  Parquet or Feather. We fenced the corresponding code blocks and computed the
+  difference microseconds.
+
+- **Input size**: the number of bytes that the to-be-converted record batches
+  consume.
+
+- **Output size**: the number of bytes that the store file takes up.
+
+- **Number of events**: the total number of events in all input record batches
+
+- **Number of record batches**
+
+- **Schema**: the name of the schema; there exists one store file per schema
+
+## Dataset
+
+TODO: Describe that dataset
+
+```{r}
+#| code-fold: true
+#| label: prepare-data
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(scales)
+library(tidyr)
+
+theme_set(theme_minimal())
+
+data <- read.csv("data.csv") |>
+  mutate(duration = dnanoseconds(as.numeric(gsub("ns", "", duration))))
+
+sizes <- read.csv("sizes.csv") |>
+  mutate(store_type = "original")
+
+# Normalize store sizes by number of events/store.
+normalized <- data |>
+  mutate(duration_normalized = duration / num_events,
+         bytes_memory_normalized = bytes_memory / num_events,
+         bytes_storage_normalized = bytes_in_storage / num_events,
+         bytes_ratio = bytes_in_storage / bytes_memory)
+
+# Compute average over measurements.
+aggregated <- normalized |>
+  group_by(store_type, schema) |>
+  summarize(duration = mean(duration_normalized),
+            memory = mean(bytes_memory_normalized),
+            storage = mean(bytes_storage_normalized))
+
+# Treat in-memory measuremts as just another storage type.
+memory <- aggregated |>
+  filter(store_type == "feather") |>
+  mutate(store_type = "memory") |>
+  select(-storage) |>
+  rename(bytes = memory)
+
+# Unite with rest of data.
+unified <- aggregated |>
+  select(-memory) |>
+  rename(bytes = storage) |>
+  bind_rows(memory, sizes)
+```
+
+We have a total of `r length(unique(data$schema))` unique schemas:
+
+```{r}
+#| label: schemas
+unique(data$schema)
+```
+
+The schemas belong to three data types: Zeek, Suricata, and PCAP. These are all
+data sources VAST can ingest natively. Zeek and Suricata are ASCII, whereas PCAP
+is a binary format representing a stream of network packets.
+
+Our dataset has multiple different schemas, each of which has a different number
+of events.
+
+```{r}
+#| code-fold: true
+#| label: number-of-events
+schemas <- normalized |>
+  filter(store_type == "feather") |>
+  group_by(schema) |>
+  summarize(n = median(num_events))
+
+schemas |>
+  separate(schema, c("module", "type"), remove = FALSE) |>
+  ggplot(aes(x = reorder(schema, -n), y = n, fill = module)) +
+    geom_bar(stat = "identity") +
+    guides(fill = "none") +
+    scale_y_log10(labels = scales::label_comma()) +
+    labs(x = "Schema", y = "Number of Events", color = "Module") +
+    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+```
+
+Zeek connection logs lead the pack, followed by PCAP packets.
+
+## Size
+
+To better understand the difference between Parquet and Feather, we now take a
+look at them right next to each other. In addition to Feather and Parquet, we
+use three other types of "stores" for the analysis to faciliate comparison:
+
+1. **Original**: the size of the input prior it entered VAST, e.g., the raw JSON or
+   a PCAP file.
+
+2. **Segment**: our custom store prior to having switched to Feather. We omit
+   this reference point often, as it is nearly equivalent to Feather.
+
+3. **Memory**: the size of the data in memory, measured as the sum of Arrow
+   buffers that make up the table slice.
+
+Let's kick of the analysis by getting a better understanding at the distribution
+of size. 
+
+```{r}
+#| code-fold: true
+#| label: plot-schema-distribution
+unified |>
+  ggplot(aes(x = bytes, color = store_type)) +
+  geom_step(stat = "ecdf") +
+  scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
+  labs(x = "Bytes/Event", y = "ECDF", color = "Store")
+```
+
+```{r}
+#| code-fold: true
+#| label: plot-parquet-vs-feather-size
+library(ggrepel)
+
+# Plot: Scatterplot of Feather vs. Parquet for Feather events < 100 bytes
+unified |>
+  filter(store_type != "segment") |>
+  pivot_wider(names_from = store_type, values_from = bytes, id_cols = schema) |>
+  filter(feather < 100) |>
+  separate(schema, c("module", "type"), remove = FALSE) |>
+  ggplot(aes(x = parquet, y = feather, color = module, size = original)) +
+    geom_abline(intercept = 0, slope = 1, color = "grey") +
+    geom_point(alpha = 0.6) +
+    geom_text_repel(aes(label = schema),
+              color = "grey",
+              size = 2, # font size
+              box.padding = 0.5,
+              min.segment.length = 0, # draw all line segments
+              max.overlaps = Inf,
+              segment.color = "grey",
+              segment.alpha = 0.5) +
+    xlim(0, 100) +
+    ylim(0, 100) +
+    scale_size(range = c(0, 10)) +
+    guides(color = "none") +
+    labs(size = "Original size", x = "Bytes (Parquet)", y = "Bytes (Feather)")
+```
+
+Let's pick
+
+```{r}
+#| code-fold: true
+#| label: plot-zeek-suricata
+unified |>
+  filter(schema %in% c("zeek.conn", "suricata.snmp")) |>
+  ggplot(aes(x = reorder(store_type, -bytes), y = bytes, fill = store_type)) +
+    geom_bar(stat = "identity") +
+    guides(fill = "none") +
+    labs(x = "Store", y = "Median Bytes/Event") +
+    scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
+    facet_grid(~ schema)
+```
+
+## Write Throughput
+
+With write throughput, we mean the time it takes to transform Arrow Record
+Batches into Parquet and Feather format.
+
+
+```{r}
+#| code-fold: true
+#| label: compute-bytes-per-event
+#aggregated |>
+#  ggplot(aes(x = reorder(schema, -bytes), y = bytes, fill = store_type)) +
+#    geom_bar(stat = "identity", position = "dodge") +
+#    expand_limits(y = 1) +
+#    xlab("Schema") +
+#    ylab("Bytes") +
+#    scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
+#    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+```
+
+```{r}
+#| code-fold: true
+#| label: plot-parquet-vs-feather-duration
+aggregated |>
+  filter(store_type != "segment") |>
+  mutate(duration = dseconds(duration)) |>
+  pivot_wider(names_from = store_type, values_from = duration, id_cols = schema) |>
+  separate(schema, c("module", "type"), remove = FALSE) |>
+  ggplot(aes(x = parquet, y = feather, color = module)) +
+    geom_abline(intercept = 0, slope = 1, color = "grey") +
+    geom_point(size = 4, alpha = 0.6) +
+    geom_text_repel(aes(label = schema),
+              color = "grey",
+              size = 2, # font size
+              box.padding = 0.3,
+              min.segment.length = 0, # draw all line segments
+              max.overlaps = Inf,
+              segment.color = "grey",
+              segment.alpha = 0.5) +
+    xlim(0, dmicroseconds(50)) +
+    ylim(0, dmicroseconds(50)) +
+    scale_size(range = c(0, 10)) +
+    guides(color = "none") +
+    labs(x = "Bytes (Parquet)", y = "Bytes (Feather)")
+```
