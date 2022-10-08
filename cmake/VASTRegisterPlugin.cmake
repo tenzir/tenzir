@@ -652,11 +652,14 @@ function (VASTRegisterPlugin)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)
-    set_tests_properties(build-${PLUGIN_TARGET}-test
-                         PROPERTIES FIXTURES_SETUP vast_unit_test_fixture)
+    set_tests_properties(
+      build-${PLUGIN_TARGET}-test
+      PROPERTIES FIXTURES_SETUP vast_${PLUGIN_TARGET}_unit_test_fixture
+                 FIXTURES_REQUIRED vast_unit_test_fixture)
     add_test(NAME ${PLUGIN_TARGET} COMMAND ${PLUGIN_TARGET}-test -v 4 -r 60)
-    set_tests_properties(${PLUGIN_TARGET} PROPERTIES FIXTURES_REQUIRED
-                                                     vast_unit_test_fixture)
+    set_tests_properties(
+      ${PLUGIN_TARGET} PROPERTIES FIXTURES_REQUIRED
+                                  vast_${PLUGIN_TARGET}_unit_test_fixture)
   endif ()
 
   # Ensure that a target integration always exists, even if a plugin does not
