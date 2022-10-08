@@ -114,6 +114,50 @@ unified <- aggregated |>
   bind_rows(memory, sizes)
 ```
 
+### Batching
+
+When working with security event data, we see highly variable data shapes. Some
+event types completely cominate a dataset, and the long tail is large.
+
+On the inside, a store is just a concatenation of Arrow record batches. This
+means the "batching shape" of the store is defined by two factors: number of
+events per batch and total number of batches. Let's plot these against each
+other to get a feel of the data:
+
+```{r}
+#| code-fold: true
+#| label: events
+no_segment <- data |>
+  filter(store_type != "segment")
+
+no_segment |>
+  ggplot(aes(x = num_events, y = num_slices, size = bytes_in_storage, color = store_type)) +
+    geom_point(alpha = 0.3) +
+    scale_size(range = c(2, 10), labels = scales::label_bytes(units = "auto_si")) +
+    scale_x_log10(labels = scales::label_comma()) +
+    labs(color = "Store", size = "Size", x = "Events", y = "Batches")
+```
+
+Each point in the above plot represents one store file. The x-axis (log-scaled)
+represents the number of events in the store and the y-axis the number of
+batches. The point diameter represents the size of the store file on disk. The
+color denotes the type of store: Parquet or Feather. We omit our Segment store,
+as it's almost identical to Feather.
+
+```{r}
+#| echo: false
+top <- no_segment |> arrange(num_events) |> tail(1)
+bot <- no_segment |> arrange(num_events) |> head(1)
+```
+
+Our dataset has everything from a few dozons to millions of events per store.
+The event "`r top |> pull(schema)`" contains a total of
+`r top |> pull(num_events) |> label_comma()()` events, whereas the event
+"`r bot |> pull(schema)`" has only `r bot |> pull(num_events)`. Parquet files
+also have more batches compared to Feather. TODO: Thomas, why?
+
+### Schemas
+
 We have a total of `r length(unique(data$schema))` unique schemas:
 
 ```{r}
