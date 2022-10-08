@@ -67,7 +67,9 @@ following data points:
 
 ## Dataset
 
-TODO: Describe that dataset
+:::caution TODO
+Describe the dataset.
+:::
 
 ```{r}
 #| code-fold: true
@@ -154,7 +156,44 @@ Our dataset has everything from a few dozons to millions of events per store.
 The event "`r top |> pull(schema)`" contains a total of
 `r top |> pull(num_events) |> label_comma()()` events, whereas the event
 "`r bot |> pull(schema)`" has only `r bot |> pull(num_events)`. Parquet files
-also have more batches compared to Feather. TODO: Thomas, why?
+also have more batches compared to Feather.
+
+:::caution TODO
+Thomas, why? :-)
+:::
+
+This high variance in number of events per store is suboptimal, because every
+partition (that contains the store) has a unique entry and indexes in the
+catalog. This causes fragmentation. Ideally, we would like to create a uniform
+number of events per partition. Thankfully, VAST users do not have to worry
+about this churn. As of [v2.3](/blog/vast-v2.3), we have automatic rebuilding in
+place, which merges underfull partitions to reduce pressure on the central
+catalog.
+
+How does the number of events relates to their size?
+
+```{r}
+#| code-fold: true
+#| label: log-log-event-memory
+no_segment |>
+  ggplot(aes(x = num_events, y = bytes_memory, color = store_type)) +
+    geom_smooth(method = "lm", se = FALSE, size = 0.5) +
+    geom_point(alpha = 0.5) +
+    guides(color = "none") +
+    scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_x_log10(labels = scales::label_comma()) +
+    labs(color = "Store", x = "Events", y = "Bytes (in memory)") +
+    facet_grid(~ store_type)
+```
+
+The above [log-log plot](https://en.wikipedia.org/wiki/Log%E2%80%93log_plot)
+includes a fitted linear model. Except for the tails, we can see that the points
+align on a straight line. This means that there exists a power-function
+relationship between the number of events and the store size. The slope of the
+line is the exponent and precisely captures this relationship.
+
+For the remainder of the analysis, we look at the normalized event size, by
+dividing the store size by the number of contained events.
 
 ### Schemas
 
@@ -162,6 +201,7 @@ We have a total of `r length(unique(data$schema))` unique schemas:
 
 ```{r}
 #| label: schemas
+#| echo: false
 unique(data$schema)
 ```
 
@@ -170,15 +210,16 @@ data sources VAST can ingest natively. Zeek and Suricata are ASCII, whereas PCAP
 is a binary format representing a stream of network packets.
 
 Our dataset has multiple different schemas, each of which has a different number
-of events.
+of events:
 
 ```{r}
 #| code-fold: true
-#| label: number-of-events
+#| label: number-of-events-by-schema
 schemas <- normalized |>
   filter(store_type == "feather") |>
   group_by(schema) |>
-  summarize(n = median(num_events))
+  summarize(n = median(num_events),
+            bytes_memory = median(bytes_memory))
 
 schemas |>
   separate(schema, c("module", "type"), remove = FALSE) |>
@@ -190,7 +231,25 @@ schemas |>
     theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
 ```
 
-Zeek connection logs lead the pack, followed by PCAP packets.
+Zeek connection logs lead the pack, followed by PCAP packets. Some more
+voluminous events represent the long tail, e.g., `suricata.ikev2`. What this
+shows is basically that we have a diverse dataset. We already saw the
+relationship between the number of events and their (in-memory) size on the
+log-log plot earlier, but if we exchange number of events with their size, we
+can observe almost the same order:
+
+```{r}
+#| code-fold: true
+#| label: event-size-by-schema
+schemas |>
+  separate(schema, c("module", "type"), remove = FALSE) |>
+  ggplot(aes(x = reorder(schema, -n), y = bytes_memory, fill = module)) +
+    geom_bar(stat = "identity") +
+    guides(fill = "none") +
+    scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
+    labs(x = "Schema", y = "Bytes (in-memory)", color = "Module") +
+    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+```
 
 ## Size
 
@@ -208,7 +267,7 @@ use three other types of "stores" for the analysis to faciliate comparison:
    buffers that make up the table slice.
 
 Let's kick of the analysis by getting a better understanding at the distribution
-of size. 
+of size.
 
 ```{r}
 #| code-fold: true
@@ -220,49 +279,166 @@ unified |>
   labs(x = "Bytes/Event", y = "ECDF", color = "Store")
 ```
 
-```{r}
-#| code-fold: true
-#| label: plot-parquet-vs-feather-size
-library(ggrepel)
+In the above
+[ECDF](https://en.wikipedia.org/wiki/Empirical_distribution_function) plot, we
+can see that Parquet stores on the left (in blue) have the smallest size,
+followed by Feather (and Segment), and then their corresponding in-memory and
+original representation. A good way to read this plot is by locating the median,
+which is at y = 0.5, and then find the corresponding value on the x-axis. Here
+are the medians:
 
-# Plot: Scatterplot of Feather vs. Parquet for Feather events < 100 bytes
-unified |>
-  filter(store_type != "segment") |>
-  pivot_wider(names_from = store_type, values_from = bytes, id_cols = schema) |>
-  filter(feather < 100) |>
-  separate(schema, c("module", "type"), remove = FALSE) |>
-  ggplot(aes(x = parquet, y = feather, color = module, size = original)) +
-    geom_abline(intercept = 0, slope = 1, color = "grey") +
-    geom_point(alpha = 0.6) +
-    geom_text_repel(aes(label = schema),
-              color = "grey",
-              size = 2, # font size
-              box.padding = 0.5,
-              min.segment.length = 0, # draw all line segments
-              max.overlaps = Inf,
-              segment.color = "grey",
-              segment.alpha = 0.5) +
-    xlim(0, 100) +
-    ylim(0, 100) +
-    scale_size(range = c(0, 10)) +
-    guides(color = "none") +
-    labs(size = "Original size", x = "Bytes (Parquet)", y = "Bytes (Feather)")
+```{r}
+#| echo: false
+library(knitr)
+
+medians <- unified |>
+  group_by(store_type) |>
+  summarize(median = median(bytes)) |>
+  arrange(median)
+
+median_parquet <- medians |> filter(store_type == "parquet") |> pull(median)
+median_feather <- medians |> filter(store_type == "feather") |> pull(median)
+median_original <- medians |> filter(store_type == "original") |> pull(median)
+
+medians |> kable()
 ```
 
-Let's pick
+This makes it clear from a numbers perspective: there's a factor of
+`r round(median_feather / median_parquet)` difference between Parquet and
+Feather. Compared to the original data, we're at factors
+`r round(median_original / median_parquet)` and
+`r round(median_original / median_feather)` for Parquet and Feather,
+respectively.
+
+We have to remember that there Zstd compression at play. That said, both are
+enabled for Parquet and Feather.
+
+:::caution TODO
+TODO: elaborate
+:::
+
+If we just compare Parquet and Feather for a given schema, we see the difference
+between the two more clearly:
+
+```{r}
+#| code-fold: true
+#| label: plot-parquet-vs-feather-size-lt100
+library(ggrepel)
+
+parquet_vs_feather <- unified |>
+  filter(store_type != "segment") |>
+  pivot_wider(names_from = store_type, values_from = bytes, id_cols = schema)
+
+plot_parquet_vs_feather = function(data) {
+  data |>
+    separate(schema, c("module", "type"), remove = FALSE) |>
+    ggplot(aes(x = parquet, y = feather, color = module, size = original)) +
+      geom_abline(intercept = 0, slope = 1, color = "grey") +
+      geom_point(alpha = 0.6) +
+      geom_text_repel(aes(label = schema),
+                color = "grey",
+                size = 3, # font size
+                box.padding = 0.5,
+                min.segment.length = 0, # draw all line segments
+                max.overlaps = Inf,
+                segment.color = "grey",
+                segment.alpha = 0.5) +
+      scale_size(range = c(0, 10)) +
+      guides(color = "none", size = "none") +
+      labs(size = "Original size", x = "Bytes (Parquet)", y = "Bytes (Feather)")
+}
+
+parquet_vs_feather |>
+  filter(feather < 100) |>
+  plot_parquet_vs_feather() +
+    theme(aspect.ratio = 1)
+```
+
+```{r}
+#| code-fold: true
+#| label: plot-parquet-vs-feather-size-ge100
+parquet_vs_feather |>
+  filter(feather >= 100) |>
+  plot_parquet_vs_feather() +
+    coord_fixed(ratio = 2/5)
+```
+
+Every point in the above scatterplots represents a median size of a store for a
+given schema. The straight line represents the identity function. Points closer
+to the identity have less of a difference between the two formats, whereas
+points further away have a stark difference. The first plot has all schemas
+where the size per event is less than 100 bytes for the Feather store, and the
+second plot contains the remainder. (We used two separate plots, where the first
+one has a 1:1 aspect ratio and the second 2:5.)
+
+The region above the identity line is where Feather is larger than Parquet. All
+points fall in there. But there are some wide differences in the delta:
 
 ```{r}
 #| code-fold: true
 #| label: plot-zeek-suricata
+zeek_conn <- unified |>
+  filter(store_type %in% c("parquet", "feather") & schema == "zeek.conn") |>
+  pull(bytes)
+
+suricata_snmp <- unified |>
+  filter(store_type %in% c("parquet", "feather") & schema == "suricata.snmp") |>
+  pull(bytes)
+
+suricata_ikev2 <- unified |>
+  filter(store_type %in% c("parquet", "feather") & schema == "suricata.ikev2") |>
+  pull(bytes)
+
 unified |>
-  filter(schema %in% c("zeek.conn", "suricata.snmp")) |>
+  filter(schema %in% c("zeek.conn", "suricata.snmp", "suricata.ikev2")) |>
   ggplot(aes(x = reorder(store_type, -bytes), y = bytes, fill = store_type)) +
     geom_bar(stat = "identity") +
     guides(fill = "none") +
     labs(x = "Store", y = "Median Bytes/Event") +
     scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
-    facet_grid(~ schema)
+    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1)) +
+    facet_wrap(~ schema, scales = "free")
 ```
+
+For `zeek.conn`, the percentage that Parquet takes compared to Feather is
+`r scales::label_percent()(zeek_conn[2] / zeek_conn[1])`, whereas it is
+`r scales::label_percent()(suricata_snmp[2] / suricata_snmp[1])` for
+`suricata.snmp`.
+
+:::caution TODO
+Thomas, we need to look at suricata.ikev2. It's really weird to see the
+blow-up.
+:::
+
+We finally look at the fraction of space Parquet takes compared to Feather on a
+per schema basis:
+
+```{r}
+#| code-fold: true
+#| label: plot-parquet-divided-by-feather
+library(tibble)
+
+perc <- parquet_vs_feather |>
+  transmute(schema,
+            perc = scales::label_percent(accuracy = 1)(parquet / feather)) |>
+  column_to_rownames("schema")
+
+parquet_vs_feather |>
+  ggplot(aes(x = reorder(schema, -parquet / feather),
+             y = parquet / feather,
+             fill = memory)) +
+    geom_bar(stat = "identity") +
+    labs(x = "Schema", y = "Parquet / Feather (%)", fill = "Bytes\nin Memory") +
+    scale_y_continuous(labels = scales::label_percent()) +
+    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+```
+
+Overall, we see that `pcap.packet` has almost no improvement with
+`r perc["pcap.packet",]`. Most likely because the bulk volume of the packet is
+not the structured header, and therefore compresses equally well via Zstd.
+Conversely, `zeek.ssl` boils down to `r perc["zeek.ssl",]` of its Feather
+equivalent. TODO: figure out why.
+
 
 ## Write Throughput
 
@@ -302,9 +478,17 @@ aggregated |>
               max.overlaps = Inf,
               segment.color = "grey",
               segment.alpha = 0.5) +
-    xlim(0, dmicroseconds(50)) +
-    ylim(0, dmicroseconds(50)) +
     scale_size(range = c(0, 10)) +
+    scale_x_continuous(limits = c(0, dmicroseconds(50)),
+                       labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    scale_y_continuous(limits = c(0, dmicroseconds(50)),
+                       labels = scales::label_number(scale = 1e6, suffix = "us")) +
     guides(color = "none") +
-    labs(x = "Bytes (Parquet)", y = "Bytes (Feather)")
+    labs(x = "Duration (Parquet)", y = "Duration (Feather)")
 ```
+
+:::caution TODO
+These experiments need to be redone. It looks like the runtime is completely
+dominated by Zstd compression. The expectation would be that all the points are
+very far away from the identity line in the bottom right region
+:::
