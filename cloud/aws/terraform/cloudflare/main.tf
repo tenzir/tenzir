@@ -114,10 +114,15 @@ resource "cloudflare_access_group" "main" {
   include {
     email = var.cloudflare_authorized_emails
   }
+
+  # Policies seem to be created by default by the app when non exist. This can
+  # put this access group into group_in_use mode, which prevents it from being
+  # deleted.
+  depends_on = [
+    cloudflare_access_application.applications
+  ]
 }
 
-# Note that policies seem to be created by default when non exist (for instance
-# upon creation-recreation of this one). This can trigger unexpected errors.
 resource "cloudflare_access_policy" "default" {
   count          = var.cloudflare_target_count
   application_id = cloudflare_access_application.applications[count.index].id

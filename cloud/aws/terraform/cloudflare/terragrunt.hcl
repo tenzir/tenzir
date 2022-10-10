@@ -30,11 +30,9 @@ inputs = {
   cloudflare_zone                   = local.cloudflare_zone
   cloudflare_target_count           = local.cloudflare_target_count
   cloudflare_authorized_emails      = local.cloudflare_authorized_emails
-  misp_proxy_image                  = "dummy_overriden_by_before_hook"
   http_app_client_security_group_id = dependency.core_2.outputs.http_app_client_security_group_id
   fargate_task_execution_role_arn   = dependency.core_2.outputs.fargate_task_execution_role_arn
   fargate_cluster_name              = dependency.core_2.outputs.fargate_cluster_name
   vast_vpc_id                       = dependency.core_2.outputs.vast_vpc_id
   subnet_id                         = dependency.core_2.outputs.vast_subnet_id
-  efs_id                            = dependency.core_2.outputs.efs_id
 }

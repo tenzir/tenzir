@@ -1,8 +1,5 @@
 """Expose HTTP service with Cloudflare Access"""
-import enum
-import json
 import os
-from re import M
 import sys
 from trace import Trace
 import requests
@@ -31,6 +28,8 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
 
 
 class CloudflareClient:
+    """A lightweight Cloudflare API client implementing the few needed endpoints"""
+
     def __init__(self):
         self.token = os.environ["VAST_CLOUDFLARE_API_TOKEN"]
         self.account_id = os.environ["VAST_CLOUDFLARE_ACCOUNT_ID"]
@@ -51,11 +50,8 @@ class CloudflareClient:
         )
         resp.raise_for_status()
 
-    def get_tunnel_config(
-        self,
-        tunnel_id,
-    ):
-        """Get the tunnel config for the provided id(following the syntax rules of config.yaml)"""
+    def get_tunnel_config(self, tunnel_id):
+        """Get the tunnel config for the provided id (following the syntax rules of config.yaml)"""
         resp = requests.get(
             f"{self.base_url}/accounts/{self.account_id}/cfd_tunnel/{tunnel_id}/configurations",
             headers=self._headers(),
@@ -81,12 +77,14 @@ def list_exposed_urls(c):
 def display_rules(rules):
     print("Exposing apps:")
     for rule in rules:
+        # Don't display the default rule
         if "hostname" in rule:
             print(f"{rule['service']} -> https://{rule['hostname']}")
 
 
 @task
 def config(c):
+    """Update the route configurations of the Cloudflare tunnel"""
     tunnel_id = terraform_output(c, "cloudflare", "cloudflare_tunnel_id")
     hostnames = terraform_output(c, "cloudflare", "cloudflare_hostnames").split(",")
     rules = [
@@ -106,10 +104,9 @@ def config(c):
 
 @task
 def list(c):
+    """List the route configurations of the Cloudflare tunnel"""
     tunnel_id = terraform_output(c, "cloudflare", "cloudflare_tunnel_id")
-    config = CloudflareClient().get_tunnel_config(
-        tunnel_id,
-    )
+    config = CloudflareClient().get_tunnel_config(tunnel_id)
     display_rules(config["ingress"])
 
 
