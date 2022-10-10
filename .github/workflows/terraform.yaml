@@ -86,9 +86,6 @@ jobs:
     needs:
       - determine-version
     name: VAST on AWS
-    env:
-      # Run on the latest release to avoid glitches from unstable versions
-      VAST_VERSION: ${{ needs.determine-version.outputs.release-version }}
     runs-on: ubuntu-20.04
     defaults:
       run:
@@ -96,6 +93,8 @@ jobs:
     env:
       TF_STATE_BACKEND: "cloud"
       VAST_CLOUD_PLUGINS: "workbucket,tests,tfcloud,misp"
+      # Run on the latest release to avoid glitches from unstable versions
+      VAST_VERSION: ${{ needs.determine-version.outputs.release-version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
