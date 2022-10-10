@@ -349,16 +349,23 @@ class MISP(unittest.TestCase):
         This is similar to the retry that would have been performed by the browser"""
         if time.time() - start_time > 300:
             raise Exit("Timeout: Could not reach MISP")
-        resp = requests.get("http://localhost:8080")
-        if resp.status_code == 502:
-            self.assertIn("Waiting for MISP to start...", resp.text)
-            time.sleep(5)
-            return self.wait_for_misp(start_time)
-        elif resp.status_code == 200:
+        try:
+            resp = requests.get("http://localhost:8080")
+            resp.raise_for_status()
             print("Got response from MISP!")
             return resp.text
-        else:
-            raise Exit(f"Unexpected status code {resp.status_code}: {resp.text}")
+        except requests.exceptions.HTTPError as e:
+            if resp.status_code == 502:
+                self.assertIn("Waiting for MISP to start...", resp.text)
+                time.sleep(5)
+                return self.wait_for_misp(start_time)
+            else:
+                raise e
+        except requests.exceptions.TooManyRedirects:
+            print("Got Too Many Redirects error, got to retry...")
+            # TODO find a solution to avoid this transient error state
+            time.sleep(5)
+            return self.wait_for_misp(start_time)
 
     def test(self):
         """Test that we can get the MISP login page"""
