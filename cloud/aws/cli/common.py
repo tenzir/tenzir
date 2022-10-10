@@ -261,7 +261,9 @@ class FargateService:
             desc = self._task_desc(task_res["taskArns"][0])
             return desc
 
-    def _wait_for_status(self, task_id, target_status, timeout, start_time=time.time()):
+    def _wait_for_status(
+        self, task_id, target_status: str | List[str], timeout, start_time=time.time()
+    ):
         print(f"Waiting for task {task_id} to reach status {target_status}:")
         previous_status = ""
         while time.time() - start_time < timeout:
@@ -269,7 +271,7 @@ class FargateService:
             if previous_status != status:
                 print(f"-> {status}")
                 previous_status = status
-            if status == target_status:
+            if status in target_status:
                 return
             time.sleep(0.5)
         raise Exit("Timed out")
@@ -288,7 +290,9 @@ class FargateService:
         task_id = self.get_task_id()
         print(f"Calling stop on task {task_id}...")
         aws("ecs").stop_task(task=task_id, cluster=self.cluster)
-        self._wait_for_status(task_id, "DEPROVISIONING", timeout, start_time)
+        self._wait_for_status(
+            task_id, ["DEPROVISIONING", "STOPPED"], timeout, start_time
+        )
 
     def stop_service(self, timeout=200, start_time=time.time()):
         """Stop the service and its task"""
