@@ -216,7 +216,7 @@ modules such as the Cloudtrail datasource. If you want to destroy the Cloudtrail
 datasource resources only, use:
 
 ```bash
-./vast-cloud destroy-step --step cloudtrail
+./vast-cloud destroy --step cloudtrail
 ```
 
 :::warning Caveats

@@ -104,7 +104,7 @@ jobs:
         run: ./vast-cloud init --clean
 
       - name: Deploy step (noop)
-        run: ./vast-cloud deploy-step --step=workbucket --auto-approve
+        run: ./vast-cloud deploy --step=workbucket --auto-approve
 
       - name: Run test playbook after init
         run: |
