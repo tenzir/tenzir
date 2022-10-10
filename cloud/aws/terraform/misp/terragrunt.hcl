@@ -6,20 +6,22 @@ include "root" {
 dependency "core_1" {
   config_path = "../core-1"
 }
+
 dependency "core_2" {
   config_path = "../core-2"
 
   mock_outputs = {
     fargate_task_execution_role_arn = "arn:aws:iam:::role/temporary-dummy-arn"
     fargate_cluster_name            = "dummy_name"
-    vast_server_hostname            = "dummy.local"
-    vast_subnet_id                  = "dummy_id"
-    vast_client_security_group_id   = "dummy_id"
+    vast_vpc_id                     = "dummy_id"
+    public_subnet_id                = "dummy_id"
+    efs_client_security_group_id    = "dummy_id"
   }
 }
 
 locals {
-  region_name = get_env("VAST_AWS_REGION")
+  region_name  = get_env("VAST_AWS_REGION")
+  misp_version = get_env("VAST_MISP_VERSION", "dummy-version")
 }
 
 terraform {
@@ -27,9 +29,9 @@ terraform {
     commands = ["apply"]
     execute = ["/bin/bash", "-c", <<EOT
 ../../vast-cloud docker-login \
-                 build-images --step=matcher \
-                 push-images --step=matcher && \
-../../vast-cloud print-image-vars --step=matcher > images.generated.tfvars
+                 build-images --step=misp \
+                 push-images --step=misp && \
+../../vast-cloud print-image-vars --step=misp > images.generated.tfvars
 EOT
     ]
   }
@@ -43,10 +45,13 @@ EOT
 
 inputs = {
   region_name                     = local.region_name
-  matcher_client_image            = "dummy_overriden_by_before_hook"
+  misp_version                    = local.misp_version
+  misp_image                      = "dummy_overriden_by_before_hook"
+  misp_proxy_image                = "dummy_overriden_by_before_hook"
+  efs_client_security_group_id    = dependency.core_2.outputs.efs_client_security_group_id
   fargate_task_execution_role_arn = dependency.core_2.outputs.fargate_task_execution_role_arn
-  vast_server_hostname            = dependency.core_2.outputs.vast_server_hostname
   fargate_cluster_name            = dependency.core_2.outputs.fargate_cluster_name
-  vast_subnet_id                  = dependency.core_2.outputs.vast_subnet_id
-  vast_client_security_group_id   = dependency.core_2.outputs.vast_client_security_group_id
+  vast_vpc_id                     = dependency.core_2.outputs.vast_vpc_id
+  public_subnet_id                = dependency.core_2.outputs.public_subnet_id
+  efs_id                          = dependency.core_2.outputs.efs_id
 }

@@ -27,3 +27,10 @@ moderate amount of times within an account.
 ```
 id = substr(md5(local.id_raw), 0, 6)
 ```
+
+## Assigning default values
+
+Dependent module outputs and `get_env` calls in the Terragrunt module files
+(`terragrunt.hcl`) should always have default values to avoid errors when
+the stack is called without these modules. This is mostly due to some bugs in
+how Terragrunt initializes modules.

@@ -48,6 +48,7 @@ run () {
     --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
     --mount type=bind,source=/,target=/host \
     --mount source=vastcloud-cli-persistant-configs,target=/etc/persistant-configs \
+    --net=host \
     -e AWS_PROFILE \
     $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "-e AWS_SHARED_CREDENTIALS_FILE=/host$HOST_CREDENTIALS_FILE") \
     -e AWS_ACCESS_KEY_ID \
@@ -59,7 +60,7 @@ run () {
     --env-file <(env | grep HOST_) \
     --rm \
     --workdir /host$HOST_DIRNAME \
-    tenzir/vast-cloud-cli python ./cli/main.py "${@:2}"
+    tenzir/vast-cloud-cli python -u ./cli/main.py "${@:2}"
 }
 
 # Use the VASTCLOUD_CHECK_PTY to execute the command in a dry run mode that

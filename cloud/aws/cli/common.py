@@ -1,6 +1,8 @@
 from functools import cache
+import sys
 from typing import Dict, List, Set
-from vast_invoke import Context, Exit
+from flags import TRACE
+from vast_invoke import Context, Exit, Failure
 import dynaconf
 import json
 import re
@@ -58,8 +60,11 @@ def auto_app_fmt(val: bool) -> str:
 
 def list_modules(c: Context) -> List[str]:
     """List available Terragrunt modules"""
-    deps = c.run("""terragrunt graph-dependencies""", hide="out").stdout
-    return re.findall('terraform/(.*)" ;', deps)
+    return [
+        mod
+        for mod in os.listdir(TFDIR)
+        if os.path.isfile(f"{TFDIR}/{mod}/terragrunt.hcl")
+    ]
 
 
 def active_plugins() -> Set[str]:
@@ -84,15 +89,27 @@ def tf_version(c: Context):
 
 
 def terraform_output(c: Context, step, key) -> str:
-    output = c.run(
-        f"terraform -chdir={TFDIR}/{step} output --raw {key}",
-        hide="out",
-        # avoid unintentionally capturing stdin
-        in_stream=False,
-    ).stdout
-    if "No outputs found" in output:
+    cmd = f"terraform -chdir={TFDIR}/{step} output --raw {key}"
+    try:
+        output = c.run(
+            cmd,
+            hide=True,
+            # avoid unintentionally capturing stdin
+            in_stream=False,
+        ).stdout
+        # `terraform output` sometimes raises errors, sometimes only prints
+        # warnings, according to the actual output state. Here, we streamline
+        # both cases into a single exit message.
+        if "No outputs found" in output:
+            raise Exit(output)
+    except Failure as e:
+        _, err = e.streams_for_display()
+        if TRACE:
+            print(cmd, file=sys.stderr)
+            print(err.strip(), file=sys.stderr)
         raise Exit(
-            f"The step '{step}' was not deployed or is improperly initialized (No outputs found)",
+            f"The step '{step}' was not deployed, is not up to date, "
+            + f"or is improperly initialized (Terraform output '{key}' not found)",
             code=1,
         )
     return output
@@ -192,28 +209,58 @@ class FargateService:
                 task_id = task_res["taskArns"][0].split("/")[-1]
                 return task_id
             if nb_vast_tasks > 1:
-                raise Exit(f"{nb_vast_tasks} {self.task_family} tasks running", 1)
+                raise Exit(f"{nb_vast_tasks} tasks running", 1)
             if max_wait_time_sec == 0:
-                raise Exit(
-                    f"No {self.task_family} task running", EXIT_CODE_TASK_NOT_RUNNING
-                )
+                raise Exit(f"No task running", EXIT_CODE_TASK_NOT_RUNNING)
             if time.time() - start_time > max_wait_time_sec:
-                raise Exit(f"{self.task_family} task timed out", 1)
+                raise Exit(f"Task timed out", 1)
             time.sleep(1)
 
-    def get_task_status(self):
-        """Get the status of the task for this service"""
+    def _task_desc(self, task_arn):
+        return aws("ecs").describe_tasks(cluster=self.cluster, tasks=[task_arn])[
+            "tasks"
+        ][0]
+
+    def service_status(self):
+        """Get the status of the service and the associated task"""
+        # describe task
+        task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
+        nb_vast_tasks = len(task_res["taskArns"])
+        if nb_vast_tasks == 1:
+            task_status = self._task_desc(task_res["taskArns"][0])["lastStatus"]
+        # describe service
+        srv_res = aws("ecs").describe_services(
+            cluster=self.cluster, services=[self.service_name]
+        )
+        desired_tasks = srv_res["services"][0]["desiredCount"]
+
+        # state machine
+        if nb_vast_tasks > 1:
+            return f"Unexpected number of tasks: {nb_vast_tasks}"
+        if desired_tasks == 1 and nb_vast_tasks == 1 and task_status == "RUNNING":
+            return "Service running"
+        if desired_tasks == 1:
+            if nb_vast_tasks == 0:
+                task_status = "no task running"
+            else:
+                task_status = f"task status: {task_status}"
+            return f"Service starting... ({task_status})"
+        if desired_tasks == 0 and nb_vast_tasks == 1:
+            return f"Service stopping... (task status: {task_status})"
+        if desired_tasks == 0:
+            return "Service stopped"
+
+    def describe_task(self):
+        """Describe the running tasks, erroring out if there is not exactly one task"""
         task_res = aws("ecs").list_tasks(family=self.task_family, cluster=self.cluster)
         nb_vast_tasks = len(task_res["taskArns"])
         if nb_vast_tasks == 0:
-            return "No task"
+            raise Exit("No task running")
         if nb_vast_tasks > 1:
-            return f"{nb_vast_tasks} tasks running"
+            raise Exit("{nb_vast_tasks} tasks running")
         else:
-            desc = aws("ecs").describe_tasks(
-                cluster=self.cluster, tasks=task_res["taskArns"]
-            )["tasks"][0]
-            return f"Desired status {desc['desiredStatus']} and current status {desc['lastStatus']}"
+            desc = self._task_desc(task_res["taskArns"][0])
+            return desc
 
     def start_service(self):
         """Start the service. Noop if it is already running"""

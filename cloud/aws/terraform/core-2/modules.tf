@@ -22,12 +22,12 @@ module "efs" {
 module "vast_server" {
   source = "./fargate"
 
-  name        = "vast-server"
+  name        = local.vast_server_name
   region_name = var.region_name
 
   vpc_id                      = module.network.new_vpc_id
   subnet_id                   = module.network.private_subnet_id
-  security_group_id           = aws_security_group.vast_server.id
+  security_group_ids          = [aws_security_group.vast_server.id, aws_security_group.client_efs.id]
   ecs_cluster_id              = aws_ecs_cluster.fargate_cluster.id
   ecs_cluster_name            = aws_ecs_cluster.fargate_cluster.name
   ecs_task_execution_role_arn = aws_iam_role.fargate_task_execution_role.arn
@@ -67,7 +67,7 @@ module "vast_client" {
 
   additional_policies = []
   environment = {
-    VAST_ENDPOINT = local.vast_server_domain_name
+    VAST_ENDPOINT = local.vast_server_hostname
   }
 
 }

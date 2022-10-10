@@ -10,6 +10,7 @@ import json
 import os
 import io
 import common
+import requests
 
 
 # A common prefix for all test files to help cleanup
@@ -317,6 +318,31 @@ class Common(unittest.TestCase):
     def test_parse_env(self):
         res = common.parse_env(["var1=val1", "var2=val2"])
         self.assertEqual(res, {"var1": "val1", "var2": "val2"})
+
+
+class MISP(unittest.TestCase):
+    def setUp(self):
+        print("Start MISP Server")
+        self.c.run("./vast-cloud misp.start")
+        print("The task needs a bit of time to boot, sleeping for a while...")
+        time.sleep(300)
+
+    def test(self):
+        """Test that we can get the MISP login page"""
+        self.c.run("nohup ./vast-cloud misp.tunnel > /dev/null 2>&1 &")
+        time.sleep(30)
+        try:
+            resp = requests.get("http://localhost:8080")
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("<title>Users - MISP</title>", resp.text)
+        finally:
+            self.c.run(
+                "docker stop $(docker ps --no-trunc | grep misp.tunnel | cut -d ' ' -f 1)"
+            )
+
+    def tearDown(self):
+        print("Stop MISP Server")
+        self.c.run("./vast-cloud misp.stop")
 
 
 @task(

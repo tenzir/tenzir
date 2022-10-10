@@ -1,0 +1,32 @@
+# Rewrite "continue" header to point to the right hostname
+map $upstream_http_location $new_location {
+    ~(.*)${NGINX_PLACEHOLDER_HOSTNAME}(.*)   $1$http_host$2;
+    ~(.*)   $1;
+}
+
+server {
+    listen ${NGINX_PORT};
+
+    client_max_body_size 50M;
+
+    # Disable access logs
+    access_log off;
+    log_not_found off;
+    error_log  off;
+
+    error_page 502 /502.html;
+    location /502.html {
+        root /var/www/html;
+    }
+    
+    location / {
+        proxy_set_header Accept-Encoding "";
+        proxy_pass ${NGINX_PROXY_PASS};
+        proxy_set_header Host $http_host;
+        sub_filter '${NGINX_PLACEHOLDER_HOSTNAME}'  '$http_host';
+        sub_filter '${NGINX_PLACEHOLDER_HOSTNAME}'  '$http_host';
+        sub_filter_once off;
+        proxy_hide_header Location;
+        add_header Location "$new_location" always;
+    }
+}

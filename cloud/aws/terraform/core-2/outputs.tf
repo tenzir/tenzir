@@ -14,12 +14,24 @@ output "fargate_task_execution_role_arn" {
   value = aws_iam_role.fargate_task_execution_role.arn
 }
 
+output "vast_vpc_id" {
+  value = module.network.new_vpc_id
+}
+
 output "vast_subnet_id" {
   value = module.network.private_subnet_id
 }
 
+output "public_subnet_id" {
+  value = module.network.public_subnet_id
+}
+
 output "vast_client_security_group_id" {
   value = aws_security_group.vast_client.id
+}
+
+output "efs_client_security_group_id" {
+  value = aws_security_group.client_efs.id
 }
 
 output "vast_lambda_name" {
@@ -34,6 +46,10 @@ output "vast_lambda_role_name" {
   value = module.vast_client.lambda_role_name
 }
 
-output "vast_server_domain_name" {
-  value = local.vast_server_domain_name
+output "vast_server_hostname" {
+  value = local.vast_server_hostname
+}
+
+output "efs_id" {
+  value = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
 }

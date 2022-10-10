@@ -15,7 +15,7 @@ resource "aws_efs_access_point" "access_point" {
   file_system_id = aws_efs_file_system.efs_volume.id
 
   root_directory {
-    path = "/storage"
+    path = "/vast"
     creation_info {
       owner_gid   = 1000
       owner_uid   = 1000
