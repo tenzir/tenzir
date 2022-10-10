@@ -599,6 +599,14 @@ struct rebuilder_state {
         detail::narrow_cast<int64_t>(desired_batch_size)));
     }
     emit_telemetry();
+    // We sort the selected partitions from old to new so the rebuild transform
+    // sees the batches (and events) in the order they arrived. This prevents
+    // the rebatching from shuffling events, and rebatching of already correctly
+    // sized batches just for the right alignment.
+    std::sort(current_run_partitions.begin(), current_run_partitions.end(),
+              [](const partition_info& lhs, const partition_info& rhs) {
+                return lhs.max_import_time < rhs.max_import_time;
+              });
     auto current_run_partition_ids = std::vector<uuid>{};
     current_run_partition_ids.reserve(current_run_partitions.size());
     for (const auto& partition : current_run_partitions)
