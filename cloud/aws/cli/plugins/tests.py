@@ -340,8 +340,6 @@ class MISP(unittest.TestCase):
     def setUp(self):
         print("Start MISP Server")
         self.c.run("./vast-cloud misp.start")
-        # wait a sec to be sure NGINX and SSH are running
-        time.sleep(1)
 
     def wait_for_misp(self, start_time) -> str:
         """Return the body if 200, retry if 502
