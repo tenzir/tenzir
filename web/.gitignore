@@ -1,5 +1,5 @@
 # Quarto
 **/*_cache/
 **/*_files/
-.quarto/
+/.quarto/
 .rlib
