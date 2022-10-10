@@ -79,11 +79,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build CLI
+      - name: Build CLI image
         run: ./vast-cloud 
-      - name: Build CLI
+      - name: Push CLI image to cache
         run: |
-          docker tag tenzir/vast-cloud-cli:latest "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)
+          docker tag tenzir/vast-cloud-cli:latest "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
           docker push "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
 
 
