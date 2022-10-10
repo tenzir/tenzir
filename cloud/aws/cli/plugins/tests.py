@@ -81,7 +81,7 @@ class VastStartRestart(unittest.TestCase):
         self.c.run("./vast-cloud vast.start-server")
 
         print("Get running vast server")
-        self.c.run("./vast-cloud vast-server-status")
+        self.c.run("./vast-cloud vast.server-status")
 
         print("Run vast.start-server again")
         self.c.run("./vast-cloud vast.start-server")
@@ -90,7 +90,7 @@ class VastStartRestart(unittest.TestCase):
         self.c.run("./vast-cloud vast.restart-server")
 
         print("Get running vast server")
-        self.c.run("./vast-cloud vast-server-status")
+        self.c.run("./vast-cloud vast.server-status")
 
 
 class LambdaOutput(unittest.TestCase):

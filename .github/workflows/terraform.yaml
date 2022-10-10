@@ -44,6 +44,24 @@ env:
 concurrency: vast_aws_integration_tests
 
 jobs:
+  determine-version:
+    name: Determine Version
+    runs-on: ubuntu-20.04
+    outputs:
+      release-version: ${{ steps.determine-version.outputs.release-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Fetch Tags
+        run: git fetch origin +refs/tags/*:refs/tags/*
+      - name: Determine Version
+        id: determine-version
+        run: |
+          release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
+          echo "::set-output name=release-version::${release_version}"
+
   vast_init:
     name: VAST Terraform init with local backend
     runs-on: ubuntu-20.04
@@ -65,7 +83,12 @@ jobs:
         run: ./vast-cloud init --clean
 
   vast_on_aws:
+    needs:
+      - determine-version
     name: VAST on AWS
+    env:
+      # Run on the latest release to avoid glitches from unstable versions
+      VAST_VERSION: ${{ needs.determine-version.outputs.release-version }}
     runs-on: ubuntu-20.04
     defaults:
       run:
@@ -78,6 +101,12 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      
+      - name: Determine Version
+        id: determine-version
+        run: |
+          release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
+          echo "::set-output name=release-version::${release_version}"
 
       - name: Secret hashes
         run: |
