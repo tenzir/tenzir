@@ -11,7 +11,6 @@ integrations with related services.
 
 [docker-compose-v2-cli]: https://docs.docker.com/compose/#compose-v2-and-the-new-docker-compose-command
 
-
 ## Quick Start with Docker Compose
 
 To get up and running with VAST in Docker Compose, simply run `docker compose
