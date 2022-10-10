@@ -15,18 +15,21 @@ dependency "core_2" {
 }
 
 locals {
-  region_name           = get_env("VAST_AWS_REGION")
-  cloudflare_account_id = get_env("VAST_CLOUDFLARE_ACCOUNT_ID", "dummy_id")
-  cloudflare_api_token  = get_env("VAST_CLOUDFLARE_API_TOKEN", "dummy_token")
-  cloudflare_zone       = get_env("VAST_CLOUDFLARE_ZONE", "dummy.zone")
+  region_name                  = get_env("VAST_AWS_REGION")
+  cloudflare_account_id        = get_env("VAST_CLOUDFLARE_ACCOUNT_ID", "dummy_id")
+  cloudflare_api_token         = get_env("VAST_CLOUDFLARE_API_TOKEN", "dummy_token")
+  cloudflare_zone              = get_env("VAST_CLOUDFLARE_ZONE", "dummy.zone")
+  cloudflare_target_count      = length(split(",", get_env("VAST_CLOUDFLARE_EXPOSE", "dummy.url")))
+  cloudflare_authorized_emails = split(",", get_env("VAST_CLOUDFLARE_AUTHORIZED_EMAILS", "dummy@dummy.dummy"))
 }
-
 
 inputs = {
   region_name                       = local.region_name
   cloudflare_account_id             = local.cloudflare_account_id
   cloudflare_api_token              = local.cloudflare_api_token
   cloudflare_zone                   = local.cloudflare_zone
+  cloudflare_target_count           = local.cloudflare_target_count
+  cloudflare_authorized_emails      = local.cloudflare_authorized_emails
   misp_proxy_image                  = "dummy_overriden_by_before_hook"
   http_app_client_security_group_id = dependency.core_2.outputs.http_app_client_security_group_id
   fargate_task_execution_role_arn   = dependency.core_2.outputs.fargate_task_execution_role_arn

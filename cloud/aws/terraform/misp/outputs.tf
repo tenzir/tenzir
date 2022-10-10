@@ -11,6 +11,6 @@ output "ssh_tunneling_private_key" {
   sensitive = true
 }
 
-output "exposed_services" {
+output "ui_url" {
   value = "http://${local.name}.${var.service_discov_domain}:8080"
 }

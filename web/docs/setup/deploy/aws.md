@@ -243,8 +243,8 @@ preconfigured instance:
 
 ### Expose services publicly
 
-We offer the capability to expose services publicly yet securely using
-Cloudflare Zero Trust. You need a Cloudflare account with a [zone
+We offer the capability to expose services securely using
+Cloudflare Access. You need a Cloudflare account with a [zone
 configured](https://developers.cloudflare.com/dns/zone-setups/full-setup/setup/)
 to use this plugin.
 - add `cloudflare` to the list of plugins in `VAST_CLOUD_PLUGINS`
@@ -252,8 +252,15 @@ to use this plugin.
   - `VAST_CLOUDFLARE_ACCOUNT_ID`: the account ID is provided in the overview
     page of you zone
   - `VAST_CLOUDFLARE_ZONE`: the domain of you zone, e.g example.com
-  - `VAST_CLOUDFLARE_API_TOKEN`: an API token with `Cloudflare Tunnel:Edit` and
-    `DNS:Edit` permissions
+  - `VAST_CLOUDFLARE_API_TOKEN`: an API token with
+    - account permissions: `Cloudflare Tunnel:Edit`, `Access: Organizations,
+      Identity Providers, and Groups:Edit`, `Access: Apps and Policies:Edit`
+    - zone permissions:  `Access: Apps and Policies:Edit`, `DNS:Edit`
+  - `VAST_CLOUDFLARE_EXPOSE`: comma separated list of output variables containing
+    the local service URLs. Currently only `misp.ui_url` is supported
+  - `VAST_CLOUDFLARE_AUTHORIZED_EMAILS`: comma seprated list of email addresses
+    we want to authorize on the demo apps. Users will get access using [1 time
+    PIN login](https://developers.cloudflare.com/cloudflare-one/identity/one-time-pin/).
 - deploy (or re-deploy) the VAST stack including the Cloudflare proxy with
   `./vast-cloud deploy`
 - start the Cloudflare tunnel with `./vast-cloud cloudflare.start`

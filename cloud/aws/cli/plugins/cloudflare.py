@@ -1,9 +1,13 @@
 """Expose HTTP service with Cloudflare Access"""
+import enum
 import json
 import os
+from re import M
+import sys
+from trace import Trace
 import requests
 import dynaconf
-from vast_invoke import Context, task
+from vast_invoke import Context, Exit, task
 from typing import Tuple
 from common import (
     FargateService,
@@ -14,6 +18,8 @@ VALIDATORS = [
     dynaconf.Validator("VAST_CLOUDFLARE_ACCOUNT_ID", must_exist=True, ne=""),
     dynaconf.Validator("VAST_CLOUDFLARE_ZONE", must_exist=True, ne=""),
     dynaconf.Validator("VAST_CLOUDFLARE_API_TOKEN", must_exist=True, ne=""),
+    dynaconf.Validator("VAST_CLOUDFLARE_EXPOSE", must_exist=True, ne=""),
+    dynaconf.Validator("VAST_CLOUDFLARE_AUTHORIZED_EMAILS", must_exist=True, ne=""),
 ]
 
 
@@ -22,30 +28,6 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
     family = terraform_output(c, "cloudflare", "cloudflare_task_family")
     service_name = terraform_output(c, "cloudflare", "cloudflare_service_name")
     return (cluster, service_name, family)
-
-
-@task
-def status(c):
-    """Get the status of the cloudflare service"""
-    print(FargateService(*service_outputs(c)).service_status())
-
-
-@task
-def start(c):
-    """Start the cloudflare as an AWS Fargate task. Noop if it is already running"""
-    FargateService(*service_outputs(c)).start_service()
-
-
-@task
-def stop(c):
-    """Stop the cloudflare instance and service"""
-    FargateService(*service_outputs(c)).stop_service()
-
-
-@task
-def restart(c):
-    """Stop the running MISP task, the service starts a new one"""
-    FargateService(*service_outputs(c)).restart_service()
 
 
 class CloudflareClient:
@@ -69,24 +51,88 @@ class CloudflareClient:
         )
         resp.raise_for_status()
 
+    def get_tunnel_config(
+        self,
+        tunnel_id,
+    ):
+        """Get the tunnel config for the provided id(following the syntax rules of config.yaml)"""
+        resp = requests.get(
+            f"{self.base_url}/accounts/{self.account_id}/cfd_tunnel/{tunnel_id}/configurations",
+            headers=self._headers(),
+        )
+        resp.raise_for_status()
+        return resp.json()["result"]["config"]
+
+
+def list_exposed_urls(c):
+    cf_expose = os.environ["VAST_CLOUDFLARE_EXPOSE"]
+    try:
+        for exp in cf_expose.split(","):
+            mod, var = exp.split(".")
+            yield terraform_output(c, mod, var)
+    except Exception as e:
+        if Trace:
+            print(e, file=sys.stderr)
+        raise Exit(
+            f"Could not get urls for VAST_CLOUDFLARE_EXPOSE={os.environ['VAST_CLOUDFLARE_EXPOSE']}"
+        )
+
+
+def display_rules(rules):
+    print("Exposing apps:")
+    for rule in rules:
+        if "hostname" in rule:
+            print(f"{rule['service']} -> https://{rule['hostname']}")
+
 
 @task
-def setup(c):
+def config(c):
     tunnel_id = terraform_output(c, "cloudflare", "cloudflare_tunnel_id")
     hostnames = terraform_output(c, "cloudflare", "cloudflare_hostnames").split(",")
-    # TODO dynamically load exposed services from all module
-    misp_url = terraform_output(c, "misp", "exposed_services")
-    misp_rule = {
-        "hostname": hostnames[0],
-        "service": misp_url,
-    }
-    default_rule = {"service": "http_status:404"}
+    rules = [
+        {
+            "hostname": m[0],
+            "service": m[1],
+        }
+        for m in zip(hostnames, list_exposed_urls(c))
+    ]
+    rules = [*rules, {"service": "http_status:404"}]
     CloudflareClient().update_tunnel_config(
         tunnel_id,
-        {"config": {"ingress": [misp_rule, default_rule]}},
+        {"config": {"ingress": rules}},
     )
-    print(
-        f"""Exposing apps:
-    {"MISP":<10} https://{hostnames[0]}
-    """
+    display_rules(rules)
+
+
+@task
+def list(c):
+    tunnel_id = terraform_output(c, "cloudflare", "cloudflare_tunnel_id")
+    config = CloudflareClient().get_tunnel_config(
+        tunnel_id,
     )
+    display_rules(config["ingress"])
+
+
+@task
+def status(c):
+    """Get the status of the cloudflare service"""
+    print(FargateService(*service_outputs(c)).service_status())
+
+
+@task
+def start(c):
+    """Configure and start cloudflared as an AWS Fargate task. Noop if it is already running"""
+    config(c)
+    FargateService(*service_outputs(c)).start_service()
+
+
+@task
+def stop(c):
+    """Stop the cloudflared instance and service"""
+    FargateService(*service_outputs(c)).stop_service()
+
+
+@task
+def restart(c):
+    """Stop the running cloudflared task, the service starts a new one"""
+    FargateService(*service_outputs(c)).restart_service()

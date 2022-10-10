@@ -82,14 +82,51 @@ resource "cloudflare_argo_tunnel" "main" {
 }
 
 resource "random_pet" "dns_pool_names" {
-  count = local.dns_records
+  count = var.cloudflare_target_count
 }
 
 resource "cloudflare_record" "dns_pool" {
-  count   = local.dns_records
+  count   = var.cloudflare_target_count
   zone_id = data.cloudflare_zone.main.id
   name    = random_pet.dns_pool_names[count.index].id
   value   = cloudflare_argo_tunnel.main.cname
   type    = "CNAME"
   proxied = true
+}
+
+# By not specifying allowed_idps, the default One-Time Password provider is
+# applied. Note that we actually had trouble receiving emails when explicitely
+# setting up the One-Time password provider :-\
+resource "cloudflare_access_application" "applications" {
+  count                     = var.cloudflare_target_count
+  zone_id                   = data.cloudflare_zone.main.id
+  name                      = random_pet.dns_pool_names[count.index].id
+  domain                    = cloudflare_record.dns_pool[count.index].hostname
+  type                      = "self_hosted"
+  session_duration          = "24h"
+  auto_redirect_to_identity = true
+}
+
+resource "cloudflare_access_group" "main" {
+  account_id = var.cloudflare_account_id
+  name       = "${module.env.module_name}-${module.env.stage}"
+
+  include {
+    email = var.cloudflare_authorized_emails
+  }
+}
+
+# Note that policies seem to be created by default when non exist (for instance
+# upon creation-recreation of this one). This can trigger unexpected errors.
+resource "cloudflare_access_policy" "default" {
+  count          = var.cloudflare_target_count
+  application_id = cloudflare_access_application.applications[count.index].id
+  zone_id        = data.cloudflare_zone.main.id
+  name           = "${random_pet.dns_pool_names[count.index].id}-default"
+  precedence     = "2"
+  decision       = "allow"
+
+  include {
+    group = [cloudflare_access_group.main.id]
+  }
 }

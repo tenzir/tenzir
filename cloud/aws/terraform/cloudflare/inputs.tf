@@ -2,6 +2,10 @@ variable "region_name" {}
 variable "cloudflare_account_id" {}
 variable "cloudflare_api_token" {}
 variable "cloudflare_zone" {}
+variable "cloudflare_target_count" {}
+variable "cloudflare_authorized_emails" {
+  type = list(string)
+}
 variable "fargate_cluster_name" {}
 variable "fargate_task_execution_role_arn" {}
 variable "http_app_client_security_group_id" {}
@@ -14,7 +18,6 @@ module "env" {
 
 locals {
   name        = "cloudflare"
-  dns_records = 3
   task_cpu    = 512
   task_memory = 1024
 }
