@@ -108,7 +108,7 @@ size, given that it must fit in memory in its entirety. In the future, we plan
 to make this freshness trade-off explicit, making it possible to write out
 larger-than-memory stores incrementally.
 
-## Imbueing Domain Semantics
+## Imbuing Domain Semantics
 
 In a [past blog][blog-arrow] we described how VAST uses Arrow's extensible
 type system to add richer semantics to the data. This is how the value of VAST
