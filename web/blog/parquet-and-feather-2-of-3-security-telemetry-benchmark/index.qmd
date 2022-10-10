@@ -1,10 +1,10 @@
 ---
-title: "Parquet & Feather 2/3: Security Telemetry Benchmark"
+title: "Parquet & Feather: Security Telemetry Benchmark"
 authors:
   - dispanser
   - mavam
 date: 2022-10-15
-tags: [arrow, parquet, feather, quarto, r]
+tags: [benchmark, arrow, parquet, feather, quarto, r]
 ---
 
 How does Apache [Parquet][parquet] compare to [Feather][feather] for storing
@@ -18,15 +18,17 @@ structured security data? In this blog post, we answer this question.
 :::note Parquet & Feather: 2/3
 This is blog post is part of a 3-piece series on Parquet and Feather.
 
-1. Enabling Open Investigations
+1. [Enabling Open Investigations][parquet-and-feather-1]
 2. Security Telemetry Benchmark
 3. TBD
 
+[parquet-and-feather-1]: /blog/parquet-and-feather-enabling-open-investigations/
 :::
 
-In the previous blog post, we explained why Parquet and Feather are great
-building blocks for modern investigations. We now want to take a closer look at
-how they actually perform with respect to the following metrics:
+In the [previous blog post][parquet-and-feather-1], we explained why Parquet and
+Feather are great building blocks for modern investigations. We now want to take
+a closer look at how they actually perform with respect to the following
+metrics:
 
 - **Size**: how much space does typical security telemetry occupy?
 - **Write throughput**: how fast can we write out to a store?
@@ -49,20 +51,14 @@ following data points:
 
 - **Store**: the type of store plugin used in the measurement, i.e., `parquet`
   or `feather`.
-
 - **Construction time**: the time it takes to convert Arrow record batches into
   Parquet or Feather. We fenced the corresponding code blocks and computed the
   difference microseconds.
-
 - **Input size**: the number of bytes that the to-be-converted record batches
   consume.
-
 - **Output size**: the number of bytes that the store file takes up.
-
 - **Number of events**: the total number of events in all input record batches
-
 - **Number of record batches**
-
 - **Schema**: the name of the schema; there exists one store file per schema
 
 ## Dataset
