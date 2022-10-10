@@ -8,8 +8,11 @@
 
 #pragma once
 
+#include "vast/system/actors.hpp"
+
 #include <caf/fwd.hpp>
 #include <caf/response_promise.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
 #include <vector>
@@ -25,13 +28,14 @@ namespace vast::system {
 
 struct terminator_state {
   std::vector<caf::actor> remaining_actors;
-  caf::response_promise promise;
+  caf::typed_response_promise<atom::done> promise;
   static inline const char* name = "terminator";
 };
 
 /// Performs a parallel shutdown of a list of actors.
 /// @param self The terminator actor.
 template <class Policy>
-caf::behavior terminator(caf::stateful_actor<terminator_state>* self);
+terminator_actor::behavior_type
+terminator(terminator_actor::stateful_pointer<terminator_state> self);
 
 } // namespace vast::system

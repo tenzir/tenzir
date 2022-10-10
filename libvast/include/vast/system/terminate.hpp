@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/terminator.hpp"
@@ -31,6 +32,45 @@ struct parallel;
 
 namespace vast::system {
 
+/// Wrapper which extends terminator's lifetime to the response handlers.
+template <class ResponseHandle>
+class terminate_result {
+public:
+  terminate_result(terminator_actor terminator, ResponseHandle response)
+    : terminator_{std::move(terminator)}, response_{std::move(response)} {
+  }
+
+  template <class ResponseHandler, class ErrorHandler>
+  decltype(auto)
+  then(ResponseHandler responseHandler, ErrorHandler errorHandler) {
+    return response_.then(
+      [f = std::move(responseHandler), t = terminator_](atom::done) mutable {
+        std::move(f)(atom::done_v);
+      },
+      [f = std::move(errorHandler),
+       t = terminator_](const caf::error& e) mutable {
+        f(e);
+      });
+  }
+
+  template <class ResponseHandler, class ErrorHandler>
+  decltype(auto)
+  receive(ResponseHandler responseHandler, ErrorHandler errorHandler) {
+    return response_.receive(
+      [f = std::move(responseHandler), t = terminator_](atom::done) mutable {
+        f(atom::done_v);
+      },
+      [f = std::move(errorHandler),
+       t = terminator_](const caf::error& e) mutable {
+        f(e);
+      });
+  }
+
+private:
+  terminator_actor terminator_;
+  ResponseHandle response_;
+};
+
 /// Performs an asynchronous shutdown of a set of actors by sending an EXIT
 /// message, configurable either in sequential or parallel mode of operation.
 /// As soon as all actors have terminated, the returned promise gets fulfilled.
@@ -45,7 +85,8 @@ namespace vast::system {
 template <class Policy, class Actor>
 [[nodiscard]] auto terminate(Actor&& self, std::vector<caf::actor> xs) {
   auto t = self->spawn(terminator<Policy>);
-  return self->request(std::move(t), caf::infinite, std::move(xs));
+  return terminate_result{t, self->request(t, caf::infinite, atom::shutdown_v,
+                                           std::move(xs))};
 }
 
 template <class Policy, class Actor>
