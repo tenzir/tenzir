@@ -1,43 +1,28 @@
-# This Makefile runs notebooks and converts them into a different output format.
-# The notebook execution is a two-step process:
-#
-# 1. Run then notebook and capture outputs in an *.ipynb file.
-# 2. Translate the *.ipynb file to Markdown
-#
-# Ideally, we would go directly to the Markdown output, but jupytext only
-# captures outputs when converting to *.ipynb. So we use nbconvert afterwards to
-# translate the *.ipynb files to Markdown.
-
 POETRY := $(shell command -v poetry 2> /dev/null)
-BUILD := output
-NOTEBOOKS = $(filter-out README.md, $(wildcard *.md))
-MD = $(addprefix $(BUILD)/md/, $(NOTEBOOKS))
-IPYNB = $(addprefix $(BUILD)/ipynb/, $(NOTEBOOKS:.md=.ipynb))
+QUARTO := $(shell command -v quarto 2> /dev/null)
 
-all: poetry poetry-install md
+QUARTO_INPUTS := $(shell find . -name '*.qmd')
+QUARTO_MD_OUTPUTS := $(patsubst %.qmd, %.md, $(QUARTO_INPUTS))
+QUARTO_FILES_OUTPUTS := $(patsubst %.qmd, %_files, $(QUARTO_INPUTS))
 
-ipynb: $(IPYNB)
-
-md: $(MD)
+all: poetry quarto
 
 poetry:
 ifndef POETRY
 	$(error "poetry not in $$PATH; please install system-wide")
+else
+	@poetry install --no-root
+	#@poetry	run python -m bash_kernel.install
 endif
 
-poetry-install:
-	@poetry install --no-root
-	@poetry	run python -m bash_kernel.install
+%.md: %.qmd
+ifndef QUARTO
+	$(error "quarto not in $$PATH; please install system-wide")
+else
+	poetry run quarto render $<
+endif
 
-$(BUILD)/ipynb/%.ipynb: %.md
-	@echo "==> $@"
-	@mkdir -p $(BUILD)/ipynb
-	@poetry run jupytext --to notebook --execute -o $@ $<
-
-$(BUILD)/md/%.md: $(BUILD)/ipynb/%.ipynb
-	@echo "==> $@"
-	@mkdir -p $(BUILD)/md
-	@poetry run jupyter nbconvert --to markdown --output-dir $(BUILD)/md $<
+quarto: $(QUARTO_MD_OUTPUTS)
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)

@@ -1,16 +1,5 @@
 ---
-jupyter:
-  jupytext:
-    cell_metadata_filter: -all
-    text_representation:
-      extension: .md
-      format_name: markdown
-      format_version: '1.3'
-      jupytext_version: 1.14.0
-  kernelspec:
-    display_name: Bash
-    language: bash
-    name: bash
+sidebar_position: 1
 ---
 
 # Quickstart
@@ -29,21 +18,11 @@ CI-workflow is not fully fleshed out. Stay tuned.
 First, let's get a VAST binary to play with. The easiest way to [setup
 VAST](/docs/setup) is downloading a static binary on Linux.
 
-:::note Coming soon: the VAST installer
-The easiest way to obain VAST is through our installer script:
-
-```bash .noeval
-/bin/bash -c "$(curl -fsSL https://vast.io/install.sh)"
-```
-
-On Linux, the script downloads a static build. On macOS, the script clones the
-repo and creates a release build.
-:::
-
 Following the instructions to add `/opt/vast/bin` to your `PATH`, test
 whether you are ready to use VAST:
 
-```bash .noeval
+```{bash}
+#| eval: false
 vast version
 ```
 
@@ -51,7 +30,8 @@ vast version
 
 Begin with starting a VAST node:
 
-```bash .noeval
+```{bash}
+#| eval: false
 vast start
 ```
 ```
@@ -63,8 +43,8 @@ interact with client commands from other terminals.
 
 Test the connection with a new command:
 
-```bash .noeval
-vast status | jq .system
+```{bash}
+#| eval: false
 ```
 ```
 {
@@ -86,7 +66,8 @@ the background noise.
 
 [m57-with-malware]: https://drive.google.com/drive/folders/1mPJYVGKTk86P2JU3KD-WFz8tUkTLK095?usp=sharing
 
-```bash .noeval
+```{bash}
+#| eval: false
 cd /tmp
 curl -OL TODO
 vast import pcap < dataset/PCAP/*.pcap

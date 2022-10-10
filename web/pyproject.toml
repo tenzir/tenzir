@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "vast-notebooks"
+name = "vast-website"
 version = "0.1.0"
-description = "Example VAST notebooks"
+description = "VAST website"
 authors = ["Tenzir <engineering@tenzir.com>"]
 license = "BSD-3-Clause"
 
@@ -10,6 +10,7 @@ python = "^3.10"
 nbconvert = "^6.5.3"
 ipykernel = "^6.15.1"
 bash_kernel = "^0.7.2"
+jupyter = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 

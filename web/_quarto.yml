@@ -1,7 +1,7 @@
 project:
   render:
+    - docs/**/*.qmd
     - blog/**/*.qmd
-    - web/**/*.qmd
   execute-dir: file
 execute:
   #cache: true

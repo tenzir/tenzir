@@ -1,0 +1,17 @@
+project:
+  render:
+    - ./**/*.qmd
+  execute-dir: file
+execute:
+  cache: true
+  warning: false
+  error: false
+knitr:
+  opts_chunk:
+    dev: "svglite"
+    dev.args: transparent
+format:
+  gfm:
+    keep-yaml: true
+    fig-format: svg
+    wrap: preserve

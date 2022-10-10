@@ -37,6 +37,7 @@ jobs:
           # Note: black fails when it doesn't have to do anything.
           git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
             grep -v '\(\.json\|\.csv\|\.ipynb\|\.hpp\.in\|\.ref\|\.example\|\.txt\|\.lock\|\.js\)$' |
+            grep -v '\(\.Renviron\)' |
             2>/dev/null xargs black || true
           git diff --exit-code
 
