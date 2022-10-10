@@ -93,8 +93,8 @@ class VastStartRestart(unittest.TestCase):
         self.assertNotIn("-> ACTIVATING", start_out)
         self.assertIn("-> RUNNING", start_out)
 
-        restart_out = print("Run vast.restart-server", hide="out").stdout
-        self.c.run("./vast-cloud vast.restart-server")
+        print("Run vast.restart-server")
+        restart_out = self.c.run("./vast-cloud vast.restart-server", hide="out").stdout
         self.assertIn("-> DEACTIVATING", restart_out)
         self.assertIn("-> STOPPING", restart_out)
         self.assertIn("-> DEPROVISIONING", restart_out)
