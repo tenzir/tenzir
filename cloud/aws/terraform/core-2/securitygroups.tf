@@ -50,3 +50,9 @@ resource "aws_security_group" "server_efs" {
     security_groups = [aws_security_group.client_efs.id]
   }
 }
+
+resource "aws_security_group" "http_app_client" {
+  name        = "${module.env.module_name}-http_app_client-${module.env.stage}"
+  description = "Give network access to all apps"
+  vpc_id      = module.network.new_vpc_id
+}

@@ -10,3 +10,7 @@ output "ssh_tunneling_private_key" {
   value     = tls_private_key.tunneling_key.private_key_openssh
   sensitive = true
 }
+
+output "ui_url" {
+  value = "http://${local.name}.${var.service_discov_domain}:8080"
+}

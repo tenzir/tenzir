@@ -8,7 +8,8 @@ locals {
       awslogs-stream-prefix = "ecs"
     }
   }
-  misp_container_name = "misp"
+  misp_container_name       = "misp"
+  misp_proxy_container_name = "misp-proxy"
   container_definition = [
     {
       image     = var.misp_image
@@ -147,7 +148,7 @@ locals {
     },
     {
       image     = var.misp_proxy_image
-      name      = "misp-proxy"
+      name      = local.misp_proxy_container_name
       essential = true
       portMappings = [{
         containerPort = local.misp_proxy_port

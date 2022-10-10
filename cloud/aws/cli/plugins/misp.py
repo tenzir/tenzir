@@ -82,6 +82,7 @@ def tunnel(c, ui_port="8080", zmq_port="50000"):
     c.run(
         "sudo ssh "
         + '-o "StrictHostKeyChecking=no" '
+        + "-o LogLevel=ERROR "
         + "-i ~/.ssh/tunneling "
         + "-N "
         + "-p 2222 "
