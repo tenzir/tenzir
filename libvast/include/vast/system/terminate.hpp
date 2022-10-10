@@ -34,9 +34,9 @@ namespace vast::system {
 
 /// Wrapper which extends terminator's lifetime to the response handlers.
 template <class ResponseHandle>
-class termination_result {
+class terminate_result {
 public:
-  termination_result(terminator_actor terminator, ResponseHandle response)
+  terminate_result(terminator_actor terminator, ResponseHandle response)
     : terminator_{std::move(terminator)}, response_{std::move(response)} {
   }
 
@@ -45,7 +45,7 @@ public:
   then(ResponseHandler responseHandler, ErrorHandler errorHandler) {
     return response_.then(
       [f = std::move(responseHandler), t = terminator_](atom::done) mutable {
-        f(atom::done_v);
+        std::move(f)(atom::done_v);
       },
       [f = std::move(errorHandler),
        t = terminator_](const caf::error& e) mutable {
@@ -85,8 +85,8 @@ private:
 template <class Policy, class Actor>
 [[nodiscard]] auto terminate(Actor&& self, std::vector<caf::actor> xs) {
   auto t = self->spawn(terminator<Policy>);
-  return termination_result{t, self->request(t, caf::infinite, atom::shutdown_v,
-                                             std::move(xs))};
+  return terminate_result{t, self->request(t, caf::infinite, atom::shutdown_v,
+                                           std::move(xs))};
 }
 
 template <class Policy, class Actor>
