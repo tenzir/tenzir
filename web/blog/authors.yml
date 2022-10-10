@@ -18,3 +18,10 @@ lava:
   url: https://github.com/lava
   image_url: https://github.com/lava.png
   email: benno@tenzir.com
+
+dispanser:
+  name: Thomas Peiselt
+  title: Data Engineer
+  url: https://github.com/dispanser
+  image_url: https://github.com/dispanser.png
+  email: thomas@tenzir.com
