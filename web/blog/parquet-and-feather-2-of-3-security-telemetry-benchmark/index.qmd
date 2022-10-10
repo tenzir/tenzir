@@ -206,7 +206,7 @@ unique(data$schema)
 ```
 
 The schemas belong to three data types: Zeek, Suricata, and PCAP. These are all
-data sources VAST can ingest natively. Zeek and Suricata are ASCII, whereas PCAP
+data sources VAST can ingest natively. Zeek and Suricata are text, whereas PCAP
 is a binary format representing a stream of network packets.
 
 Our dataset has multiple different schemas, each of which has a different number
