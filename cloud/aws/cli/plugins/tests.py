@@ -51,8 +51,8 @@ def start_vast(c):
     """Start the server, noop if already running"""
     print("Start VAST Server")
     c.run("./vast-cloud vast.start-server")
-    print("The task needs a bit of time to boot, sleeping for a while...")
-    time.sleep(100)
+    # wait a sec to be sure the vast server is running
+    time.sleep(1)
 
 
 class VastCloudTestLoader(unittest.TestLoader):
@@ -78,19 +78,34 @@ class VastStartRestart(unittest.TestCase):
     def test(self):
         """Validate VAST server start and restart commands"""
         print("Run vast.start-server")
-        self.c.run("./vast-cloud vast.start-server")
+        start_out = self.c.run("./vast-cloud vast.start-server", hide="out").stdout
+        # We don't assert intermediate statuses, the server might be already running
+        self.assertIn("-> RUNNING", start_out)
 
-        print("Get running vast server")
-        self.c.run("./vast-cloud vast.server-status")
+        print("VAST server status")
+        status_out = self.c.run("./vast-cloud vast.server-status", hide="out").stdout
+        self.assertEqual("Service running", status_out.strip())
 
         print("Run vast.start-server again")
-        self.c.run("./vast-cloud vast.start-server")
+        start_out = self.c.run("./vast-cloud vast.start-server", hide="out").stdout
+        self.assertNotIn("-> PROVISIONING", start_out)
+        self.assertNotIn("-> PENDING", start_out)
+        self.assertNotIn("-> ACTIVATING", start_out)
+        self.assertIn("-> RUNNING", start_out)
 
         print("Run vast.restart-server")
-        self.c.run("./vast-cloud vast.restart-server")
+        restart_out = self.c.run("./vast-cloud vast.restart-server", hide="out").stdout
+        self.assertIn("-> DEACTIVATING", restart_out)
+        self.assertIn("-> STOPPING", restart_out)
+        self.assertIn("-> DEPROVISIONING", restart_out)
+        self.assertIn("-> PROVISIONING", restart_out)
+        self.assertIn("-> PENDING", restart_out)
+        self.assertIn("-> ACTIVATING", restart_out)
+        self.assertIn("-> RUNNING", restart_out)
 
-        print("Get running vast server")
-        self.c.run("./vast-cloud vast.server-status")
+        print("VAST server status")
+        status_out = self.c.run("./vast-cloud vast.server-status", hide="out").stdout
+        self.assertEqual("Service running", status_out.strip())
 
 
 class LambdaOutput(unittest.TestCase):
@@ -325,17 +340,41 @@ class MISP(unittest.TestCase):
     def setUp(self):
         print("Start MISP Server")
         self.c.run("./vast-cloud misp.start")
-        print("The task needs a bit of time to boot, sleeping for a while...")
-        time.sleep(300)
+
+    def wait_for_misp(self, start_time) -> str:
+        """Return the body if 200, retry if 502
+
+        This is similar to the retry that would have been performed by the browser"""
+        if time.time() - start_time > 300:
+            raise Exit("Timeout: Could not reach MISP")
+        try:
+            resp = requests.get("http://localhost:8080")
+            resp.raise_for_status()
+            print("Got response from MISP!")
+            return resp.text
+        except requests.exceptions.HTTPError as e:
+            if resp.status_code == 502:
+                self.assertIn("Waiting for MISP to start...", resp.text)
+                time.sleep(5)
+                return self.wait_for_misp(start_time)
+            else:
+                raise e
+        except requests.exceptions.TooManyRedirects:
+            print("Got Too Many Redirects error, got to retry...")
+            # TODO find a solution to avoid this transient error state
+            time.sleep(5)
+            return self.wait_for_misp(start_time)
 
     def test(self):
         """Test that we can get the MISP login page"""
+        status_out = self.c.run("./vast-cloud misp.status", hide="out").stdout
+        self.assertEqual("Service running", status_out.strip())
+
         self.c.run("nohup ./vast-cloud misp.tunnel > /dev/null 2>&1 &")
         time.sleep(30)
         try:
-            resp = requests.get("http://localhost:8080")
-            self.assertEqual(resp.status_code, 200)
-            self.assertIn("<title>Users - MISP</title>", resp.text)
+            body = self.wait_for_misp(time.time())
+            self.assertIn("<title>Users - MISP</title>", body)
         finally:
             self.c.run(
                 "docker stop $(docker ps --no-trunc | grep misp.tunnel | cut -d ' ' -f 1)"
