@@ -84,7 +84,7 @@ class VastStartRestart(unittest.TestCase):
 
         print("VAST server status")
         status_out = self.c.run("./vast-cloud vast.server-status", hide="out").stdout
-        self.assertEqual("Service running", status_out)
+        self.assertEqual("Service running", status_out.strip())
 
         print("Run vast.start-server again")
         start_out = self.c.run("./vast-cloud vast.start-server", hide="out").stdout
@@ -105,7 +105,7 @@ class VastStartRestart(unittest.TestCase):
 
         print("VAST server status")
         status_out = self.c.run("./vast-cloud vast.server-status", hide="out").stdout
-        self.assertEqual("Service running", status_out)
+        self.assertEqual("Service running", status_out.strip())
 
 
 class LambdaOutput(unittest.TestCase):
@@ -346,7 +346,7 @@ class MISP(unittest.TestCase):
     def test(self):
         """Test that we can get the MISP login page"""
         status_out = self.c.run("./vast-cloud misp.status", hide="out").stdout
-        self.assertEqual("Service running", status_out)
+        self.assertEqual("Service running", status_out.strip())
 
         self.c.run("nohup ./vast-cloud misp.tunnel > /dev/null 2>&1 &")
         time.sleep(30)
