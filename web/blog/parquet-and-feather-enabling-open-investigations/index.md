@@ -14,7 +14,7 @@ platform? In this blog post series we share our opinionated view on this
 question. In the next three blog posts, we
 
 1. describe how VAST uses Parquet and its little brother [Feather][feather]
-2. benchmark the two foramts against each other for typical workloads
+2. benchmark the two formats against each other for typical workloads
 3. share our experience with all the engineering gotchas we encountered along
    the way
 
@@ -66,7 +66,7 @@ space-efficiency, think of it this way:
 Before Feather existed, VAST had its own storage format that was 95% like
 Feather, minus a thin framing. (We called it the *segment store*.)
 
-Wait, but Feather is an in-memory format an Parquet an on-disk format. You
+Wait, but Feather is an in-memory format and Parquet an on-disk format. You
 cannot compare them! Fair point, but don't forget transparent Zstd compression.
 For some schemas, we barely notice a difference (e.g., PCAP), whereas for others
 schemas, Parquet stores have less than 10% the size of Feather despite.
@@ -91,9 +91,9 @@ batches to disk. The diagram below illustrates the architecture:
 [arrow-record-batch]: https://arrow.apache.org/docs/python/data.html#record-batches
 [store-plugin]: /docs/understand/architecture/plugins#store
 
-This architecture makes it easy to point analytics application directly to the
-store files, without the need for ETLing it into a dedicated warehouse, such as
-Spark or Hadoop.
+This architecture makes it easy to point an analytics application directly to
+the store files, without the need for ETLing it into a dedicated warehouse, such
+as Spark or Hadoop.
 
 The event data thrown at VAST has quite some variety of schemas. During
 ingestion, VAST first demultiplexes the heterogeneous stream of events into
