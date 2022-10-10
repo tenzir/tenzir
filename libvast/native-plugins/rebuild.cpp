@@ -599,11 +599,10 @@ struct rebuilder_state {
         detail::narrow_cast<int64_t>(desired_batch_size)));
     }
     emit_telemetry();
-    // Newer partitions are more likely to contain undersized batches, so in the
-    // interest of letting rebatching for the rebuild of the current set of
-    // partitions not have to rebatch anything for as long as possible we sort
-    // the partitions for the current run by time ascending before sending them
-    // off.
+    // We sort the selected partitions from old to new so the rebuild transform
+    // sees the batches (and events) in the order they arrived. This prevents
+    // the rebatching from shuffling events, and rebatching of already correctly
+    // sized batches just for the right alignment.
     std::sort(current_run_partitions.begin(), current_run_partitions.end(),
               [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time < rhs.max_import_time;
