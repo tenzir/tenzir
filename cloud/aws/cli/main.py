@@ -1,6 +1,7 @@
 from invoke import Program, Collection
 import sys
 import core
+import vast
 import common
 import plugins
 import pkgutil
@@ -47,6 +48,7 @@ if __name__ == "__main__":
     sys.excepthook = unhandled_exception
 
     namespace = Collection.from_module(core)
+    namespace.add_collection(Collection.from_module(vast))
     namespace.configure({"run": {"env": common.conf(core.VALIDATORS)}})
 
     plugin_set = common.active_plugins()

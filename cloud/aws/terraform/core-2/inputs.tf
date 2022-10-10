@@ -14,15 +14,15 @@ variable "vast_version" {
   description = "A VAST release version (vX.Y.Z), or 'latest' for the most recent commit on the main branch"
 }
 
-variable "vast_server_storage_type" {
+variable "vast_storage_type" {
   description = <<EOF
-The storage type that should be used for the VAST server task:
+The storage type that should be used for tasks that might need persistence:
 - ATTACHED will usually have better performances, but will be lost when the task is stopped
 - EFS has a higher latency and a limited bandwidth, but persists accross task executions
   EOF
 
   validation {
-    condition     = contains(["EFS", "ATTACHED"], var.vast_server_storage_type)
+    condition     = contains(["EFS", "ATTACHED"], var.vast_storage_type)
     error_message = "Allowed values for vast_server_storage are \"EFS\" or \"ATTACHED\"."
   }
 }

@@ -32,7 +32,7 @@ def vast_import_suricata(c: Context):
     """Import Suricata data from the provided URL"""
     url = "https://raw.githubusercontent.com/tenzir/vast/v1.0.0/vast/integration/data/suricata/eve.json"
     c.run(
-        f"./vast-cloud execute-command -c 'wget -O - -o /dev/null {url} | vast import suricata'"
+        f"./vast-cloud vast.server-execute -c 'wget -O - -o /dev/null {url} | vast import suricata'"
     )
 
 
@@ -50,7 +50,7 @@ def clean(c):
 def start_vast(c):
     """Start the server, noop if already running"""
     print("Start VAST Server")
-    c.run("./vast-cloud start-vast-server")
+    c.run("./vast-cloud vast.start-server")
     print("The task needs a bit of time to boot, sleeping for a while...")
     time.sleep(100)
 
@@ -77,17 +77,17 @@ class VastCloudTestLoader(unittest.TestLoader):
 class VastStartRestart(unittest.TestCase):
     def test(self):
         """Validate VAST server start and restart commands"""
-        print("Run start-vast-server")
-        self.c.run("./vast-cloud start-vast-server")
+        print("Run vast.start-server")
+        self.c.run("./vast-cloud vast.start-server")
 
         print("Get running vast server")
         self.c.run("./vast-cloud vast-server-status")
 
-        print("Run start-vast-server again")
-        self.c.run("./vast-cloud start-vast-server")
+        print("Run vast.start-server again")
+        self.c.run("./vast-cloud vast.start-server")
 
-        print("Run restart-vast-server")
-        self.c.run("./vast-cloud restart-vast-server")
+        print("Run vast.restart-server")
+        self.c.run("./vast-cloud vast.restart-server")
 
         print("Get running vast server")
         self.c.run("./vast-cloud vast-server-status")
@@ -98,7 +98,7 @@ class LambdaOutput(unittest.TestCase):
         """Validate VAST server start and restart commands"""
         print("Running successful command")
         success = self.c.run(
-            "./vast-cloud run-lambda -c 'echo hello' -e VAR1=val1", hide="out"
+            "./vast-cloud vast.lambda-client -c 'echo hello' -e VAR1=val1", hide="out"
         ).stdout
         self.assertEqual(
             success,
@@ -121,7 +121,7 @@ RETURN CODE:
 
         print("Running erroring command")
         error = self.c.run(
-            "./vast-cloud run-lambda -c 'echo hello >&2 && false' -e VAR1=val1",
+            "./vast-cloud vast.lambda-client -c 'echo hello >&2 && false' -e VAR1=val1",
             hide="out",
             warn=True,
         ).stdout
@@ -152,7 +152,8 @@ class VastDataImport(unittest.TestCase):
     def vast_count(self):
         """Run `vast count` and parse the result"""
         res_raw = self.c.run(
-            './vast-cloud run-lambda -c "vast count" --json-output', hide="stdout"
+            './vast-cloud vast.lambda-client -c "vast count" --json-output',
+            hide="stdout",
         )
         res_obj = json.loads(res_raw.stdout)
         self.assertEqual(
@@ -255,14 +256,14 @@ class ScriptedLambda(unittest.TestCase):
 
         print("Run lambda with local script")
         res = self.c.run(
-            f"./vast-cloud run-lambda -c file://{script_file} -e VAR2=world --json-output",
+            f"./vast-cloud vast.lambda-client -c file://{script_file} -e VAR2=world --json-output",
             hide="out",
         ).stdout
         self.assertEqual(json.loads(res)["stdout"], "hello world")
 
         print("Run lambda with piped script")
         res = self.c.run(
-            f"cat {common.container_path(script_file)} | ./vast-cloud run-lambda -c file:///dev/stdin -e VAR2=world --json-output",
+            f"cat {common.container_path(script_file)} | ./vast-cloud vast.lambda-client -c file:///dev/stdin -e VAR2=world --json-output",
             hide="out",
         ).stdout
         self.assertEqual(json.loads(res)["stdout"], "hello world")
@@ -286,7 +287,7 @@ class ScriptedExecuteCommand(unittest.TestCase):
         print("Run execute command with piped script")
         # we can pipe into execute command here because we are in a no pty context
         res = self.c.run(
-            f"cat {common.container_path(script_file)} | ./vast-cloud execute-command -c file:///dev/stdin -e VAR2=world",
+            f"cat {common.container_path(script_file)} | ./vast-cloud vast.server-execute -c file:///dev/stdin -e VAR2=world",
             hide="out",
         ).stdout
         self.assertIn("hello world", res)
@@ -299,7 +300,7 @@ class ScriptedExecuteCommand(unittest.TestCase):
             "./vast-cloud workbucket.name", hide="out"
         ).stdout.rstrip()
         res = self.c.run(
-            f"./vast-cloud execute-command -c s3://{bucket_name}/{script_key} -e VAR2=world",
+            f"./vast-cloud vast.server-execute -c s3://{bucket_name}/{script_key} -e VAR2=world",
             hide="out",
         ).stdout
         self.assertIn("hello world", res)
@@ -396,4 +397,7 @@ def import_data(c, dataset):
     print(f"Test data uploaded to workbucket as {ds_key}")
     bucket_name = c.run("./vast-cloud workbucket.name", hide="out").stdout.rstrip()
     cmd = f"""aws s3 cp s3://{bucket_name}/{ds_key} - | {ds_opts["pipe"]} | {ds_opts["import_cmd"]}"""
-    c.run("./vast-cloud run-lambda -c file:///dev/stdin", in_stream=io.StringIO(cmd))
+    c.run(
+        "./vast-cloud vast.lambda-client -c file:///dev/stdin",
+        in_stream=io.StringIO(cmd),
+    )

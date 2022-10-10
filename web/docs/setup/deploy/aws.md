@@ -52,8 +52,8 @@ Optionally, you can also define the following variables:
   Dockerhub as long as it is more recent than `v1.1.0`. You can also build from
   source using `build`.
 
-- `VAST_SERVER_STORAGE_TYPE`: the type of volume to use for the VAST server. Can
-  be set to either
+- `VAST_STORAGE_TYPE`: the type of volume to use for the VAST server and other
+  tasks where persistence is useful. Can be set to either
   - `EFS` (default): persistent accross task execution, infinitely scalable, but
     higher latency.
   - `ATTACHED`: the local storage that comes by default with Fargate tasks, lost
@@ -123,7 +123,7 @@ Now that the AWS infrastructure is in place, you start the containers. To start
 a VAST server as Fargate task, run:
 
 ```bash
-./vast-cloud start-vast-server
+./vast-cloud vast.start-server
 ```
 
 By default, this launches the official `tenzir/vast` Docker image and executes
@@ -132,12 +132,12 @@ Pro](/docs/setup/deploy/aws-pro) documentation.
 
 Check the status of the running server with:
 ```bash
-./vast-cloud vast-server-status
+./vast-cloud vast.server-status
 ```
 
 You can replace the running server with a new Fargate task:
 ```bash
-./vast-cloud restart-vast-server
+./vast-cloud vast.restart-server
 ```
 
 Finally, to avoid paying for the Fargate resource when you are not using VAST, you can shut down the server:
@@ -153,11 +153,11 @@ Finally, to avoid paying for the Fargate resource when you are not using VAST, y
 ### Run a VAST client on Fargate
 
 After your VAST server is up and running, you can start spawning clients.
-The `execute-command` target lifts VAST command into an ECS Exec operation. For
+The `vast.server-execute` target lifts VAST command into an ECS Exec operation. For
 example, to execute `vast status`, run:
 
 ```bash
-./vast-cloud execute-command --cmd "vast status"
+./vast-cloud vast.server-execute --cmd "vast status"
 ```
 
 If you do not specify the `cmd` option, it will start an interactive bash shell.
@@ -171,10 +171,10 @@ seconds for the ECS Exec agent to start.
 
 ### Run a VAST client on Lambda
 
-To run a VAST client from Lambda, use the `run-lambda` target:
+To run a VAST client from Lambda, use the `vast.lambda-client` target:
 
 ```bash
-./vast-cloud run-lambda --cmd "vast status"
+./vast-cloud vast.lambda-client --cmd "vast status"
 ```
 
 The Lambda image also contains extra tooling, such as the AWS CLI, which is
@@ -208,7 +208,7 @@ Then run:
 You should see new events flowing into VAST within a few minutes:
 
 ```bash
-./vast-cloud run-lambda -c "vast count '#type==\"aws.cloudtrail\"'"
+./vast-cloud vast.lambda-client -c "vast count '#type==\"aws.cloudtrail\"'"
 ```
 
 Running the global `./vast-cloud destroy` command will also destroy optional
