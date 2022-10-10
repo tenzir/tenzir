@@ -1,5 +1,28 @@
-#! /usr/bin/env bash
+#! /usr/bin/env zsh
 set -eux -o pipefail
+
+local -a build help
+zparseopts -build=build h=help -help=help
+
+if [[ -n $help ]]; then
+  >&2 echo "Execute tests for VAST's Docker Compose files."
+  >&2 echo "NOTE: By default, attempts to pull images rather than building."
+  >&2 echo ""
+  >&2 echo "USAGE: ${0} [--build] [-h|--help]"
+  exit 0
+fi
+
+compose_files=('-f' 'docker-compose.yaml' '-f' 'docker-compose.web.yaml')
+if [[ -n $build ]]; then
+  export VAST_CONTAINER_REGISTRY='docker.io'
+  export VAST_CONTAINER_REF='latest'
+  compose_files+=('-f' 'docker-compose.build.yaml')
+  build_policy=('--pull=never')
+else
+  export VAST_CONTAINER_REGISTRY='ghcr.io'
+  export VAST_CONTAINER_REF="$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')"
+  build_policy=('--pull=always')
+fi
 
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/vast"
 
@@ -10,8 +33,8 @@ pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/
 export COMPOSE_PROJECT_NAME="vast-test-${RANDOM}"
 
 # Bring up the Docker Compose stack.
-docker compose down --volumes
-docker compose up --no-build --detach
+docker compose ${compose_files} down --volumes
+docker compose ${compose_files} up ${build_policy} --detach
 
 # Wait for VAST to be reachable.
 # FIXME: The below would be ideal in the absence of VAST's client commands
@@ -25,28 +48,28 @@ sleep 3
 
 # Run a basic status check; we don't particularly care about the output itself,
 # so essentially we're just checking for the exit code.
-docker compose run vast status > /dev/null
+docker compose ${compose_files} run vast status > /dev/null
 
 # Ingest some test data.
 gunzip -c ../../vast/integration/data/zeek/*.log.gz \
-  | docker compose run --no-TTY vast import --blocking zeek
-docker compose run --no-TTY vast import --blocking suricata \
+  | docker compose ${compose_files} run --no-TTY vast import --blocking zeek
+docker compose ${compose_files} run --no-TTY vast import --blocking suricata \
   < ../../vast/integration/data/suricata/eve.json
 
 # Check whether we imported the right amount of data.
-num_imported="$(docker compose run --interactive=false vast count)"
+num_imported="$(docker compose ${compose_files} run --interactive=false vast count)"
 num_imported_expected="18493"
 [[ "${num_imported}" == "${num_imported_expected}" ]]
 
 # Print logs for easier debugging in case something went wrong.
-docker compose ps
-docker compose logs
+docker compose ${compose_files} ps
+docker compose ${compose_files} logs
 
 # Assert that all containers that exited have exited cleanly.
 exited_all="$(docker ps --all --filter "name=${COMPOSE_PROJECT_NAME}" --filter 'status=exited' -q | sort -u)"
 exited_cleanly="$(docker ps --all --filter "name=${COMPOSE_PROJECT_NAME}" --filter 'exited=0' -q | sort -u)"
 [[ "${exited_all}" == "${exited_cleanly}" ]]
 
-docker compose down --volumes
+docker compose ${compose_files} down --volumes
 
 popd
