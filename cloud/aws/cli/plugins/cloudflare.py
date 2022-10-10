@@ -1,6 +1,6 @@
 """Expose HTTP service with Cloudflare Access"""
 import os
-import sys
+import time
 from trace import Trace
 import requests
 import dynaconf
@@ -119,8 +119,11 @@ def status(c):
 @task
 def start(c):
     """Configure and start cloudflared as an AWS Fargate task. Noop if it is already running"""
-    config(c)
     FargateService(*service_outputs(c)).start_service()
+    # Surprisingly, cloudflared needs to be started when the tunnel is configured,
+    # otherwise the configuration is not loaded by the daemon :-\
+    time.sleep(5)
+    config(c)
 
 
 @task
