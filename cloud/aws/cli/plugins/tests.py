@@ -93,15 +93,15 @@ class VastStartRestart(unittest.TestCase):
         self.assertNotIn("-> ACTIVATING", start_out)
         self.assertIn("-> RUNNING", start_out)
 
-        print("Run vast.restart-server")
+        restart_out = print("Run vast.restart-server", hide="out").stdout
         self.c.run("./vast-cloud vast.restart-server")
-        self.assertIn("-> DEACTIVATING", start_out)
-        self.assertIn("-> STOPPING", start_out)
-        self.assertIn("-> DEPROVISIONING", start_out)
-        self.assertIn("-> PROVISIONING", start_out)
-        self.assertIn("-> PENDING", start_out)
-        self.assertIn("-> ACTIVATING", start_out)
-        self.assertIn("-> RUNNING", start_out)
+        self.assertIn("-> DEACTIVATING", restart_out)
+        self.assertIn("-> STOPPING", restart_out)
+        self.assertIn("-> DEPROVISIONING", restart_out)
+        self.assertIn("-> PROVISIONING", restart_out)
+        self.assertIn("-> PENDING", restart_out)
+        self.assertIn("-> ACTIVATING", restart_out)
+        self.assertIn("-> RUNNING", restart_out)
 
         print("VAST server status")
         status_out = self.c.run("./vast-cloud vast.server-status", hide="out").stdout
@@ -340,8 +340,25 @@ class MISP(unittest.TestCase):
     def setUp(self):
         print("Start MISP Server")
         self.c.run("./vast-cloud misp.start")
-        print("Wait a few seconds to let MISP finish booting")
-        time.sleep(30)
+        # wait a sec to be sure NGINX and SSH are running
+        time.sleep(1)
+
+    def wait_for_misp(self, start_time=time.time()) -> str:
+        """Return the body if 200, retry if 502
+
+        This is similar to the retry that would have been performed by the browser"""
+        if time.time() - start_time > 300:
+            raise Exit("Timeout: Could not reach MISP")
+        resp = requests.get("http://localhost:8080")
+        if resp.status_code == 502:
+            self.assertIn("Waiting for MISP to start...", resp.text)
+            time.sleep(5)
+            return self.wait_for_misp(start_time)
+        elif resp.status_code == 200:
+            print("Got response from MISP!")
+            return resp.text
+        else:
+            raise Exit(f"Unexpected status code {resp.status_code}: {resp.text}")
 
     def test(self):
         """Test that we can get the MISP login page"""
@@ -351,9 +368,8 @@ class MISP(unittest.TestCase):
         self.c.run("nohup ./vast-cloud misp.tunnel > /dev/null 2>&1 &")
         time.sleep(30)
         try:
-            resp = requests.get("http://localhost:8080")
-            self.assertEqual(resp.status_code, 200)
-            self.assertIn("<title>Users - MISP</title>", resp.text)
+            body = self.wait_for_misp()
+            self.assertIn("<title>Users - MISP</title>", body)
         finally:
             self.c.run(
                 "docker stop $(docker ps --no-trunc | grep misp.tunnel | cut -d ' ' -f 1)"
