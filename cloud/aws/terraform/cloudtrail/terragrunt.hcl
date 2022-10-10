@@ -22,7 +22,7 @@ locals {
 terraform {
   after_hook "enable_eventbridge_notifications" {
     commands = ["apply"]
-    execute  = ["../resources/scripts/bucket-notif.sh", local.source_bucket_region, local.source_bucket_name]
+    execute  = ["../../resources/scripts/bucket-notif.sh", local.source_bucket_region, local.source_bucket_name]
   }
 }
 

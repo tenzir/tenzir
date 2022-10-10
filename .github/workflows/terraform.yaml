@@ -62,7 +62,7 @@ jobs:
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
           echo "::set-output name=release-version::${release_version}"
 
-  vast_init:
+  vast-init:
     name: VAST Terraform init with local backend
     runs-on: ubuntu-20.04
     defaults:
@@ -82,17 +82,17 @@ jobs:
       - name: Init clean
         run: ./vast-cloud init --clean
 
-  vast_on_aws:
+  cloudvast-deploy:
     needs:
       - determine-version
-    name: VAST on AWS
+    name: Deplay VAST on AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,tests,tfcloud,misp"
+      VAST_CLOUD_PLUGINS: "workbucket,tfcloud,misp"
       # Run on the latest release to avoid glitches from unstable versions
       VAST_VERSION: ${{ needs.determine-version.outputs.release-version }}
     steps:
@@ -119,6 +119,18 @@ jobs:
       - name: Deploy
         run: ./vast-cloud deploy --auto-approve
 
+  cloudvast-playbook:
+    needs:
+      - cloudvast-deploy
+    name: Run VAST test playbook on AWS
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    env:
+      TF_STATE_BACKEND: "cloud"
+      VAST_CLOUD_PLUGINS: "workbucket,tests,misp"
+    steps:
       - name: Run test playbook
         run: |
           ./vast-cloud tests.run
@@ -133,10 +145,68 @@ jobs:
         run: |
           ./vast-cloud tests.run
 
+
+  cloudvast-flowlogs:
+    needs:
+      - cloudvast-deploy
+    name: Add flowlogs datasource
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    env:
+      TF_STATE_BACKEND: "cloud"
+      VAST_CLOUD_PLUGINS: "workbucket,flowlogs"
+      VAST_FLOWLOGS_BUCKET_REGION: $VAST_AWS_REGION
+    steps:
+      - name: Set bucket env
+        run: echo "VAST_FLOWLOGS_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
+      - name: Deploy flowlogs
+        run: ./vast-cloud deploy -a -s flowlogs
+      - name: Destroy flowlogs
+        if: always()
+        run: ./vast-cloud destroy -a -s flowlogs
+
+  cloudvast-cloudtrail:
+    needs:
+      - cloudvast-deploy
+    name: Add cloudtrail datasources
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    env:
+      TF_STATE_BACKEND: "cloud"
+      VAST_CLOUD_PLUGINS: "workbucket,cloudtrail"
+      VAST_CLOUDTRAIL_BUCKET_REGION: $VAST_AWS_REGION
+    steps:
+      - name: Set bucket env
+        run: echo "VAST_CLOUDTRAIL_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
+      - name: Deploy cloudtrail
+        run: ./vast-cloud deploy -a -s cloudtrail
+      - name: Destroy cloudtrail
+        if: always()
+        run: ./vast-cloud destroy -a -s cloudtrail
+
+  cloudvast-destroy:
+    needs:
+      - cloudvast-playbook
+      - cloudvast-flowlogs
+      - cloudvast-cloudtrail
+    if: ${{ always() }}
+    name: Destroy VAST stack form AWS
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    env:
+      TF_STATE_BACKEND: "cloud"
+      VAST_CLOUD_PLUGINS: "workbucket,misp"
+
+    steps:
       - name: Destroy
         continue-on-error: true
         id: destroy
-        if: always()
         run: ./vast-cloud destroy --auto-approve
 
       - name: Retry destroy
