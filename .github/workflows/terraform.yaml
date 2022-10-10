@@ -82,8 +82,9 @@ jobs:
       - name: Build CLI
         run: ./vast-cloud 
       - name: Build CLI
-        # it is OK to use latest because concurency is set to 1
-        run: docker push "ghcr.io/tenzir/vast-cloud-cli:latest"
+        run: |
+          docker tag tenzir/vast-cloud-cli:latest "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)
+          docker push "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
 
 
   vastcloud-local-init:
@@ -102,7 +103,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:latest"
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Init on empty state
         run: ./vast-cloud init
       - name: Init clean
@@ -139,7 +140,7 @@ jobs:
           echo -n $AWS_ACCESS_KEY_ID | md5sum
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:latest"
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
       - name: Deploy
@@ -162,7 +163,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:latest"
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Init
         run: ./vast-cloud init
       - name: Run test playbook
@@ -194,7 +195,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:latest"
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Init
         run: ./vast-cloud init
       - name: Set bucket env
@@ -226,7 +227,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:latest"
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Init
         run: ./vast-cloud init
       - name: Set bucket env
@@ -260,7 +261,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:latest"
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Destroy
         continue-on-error: true
         id: destroy
