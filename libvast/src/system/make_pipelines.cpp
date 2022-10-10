@@ -9,6 +9,7 @@
 #include "vast/system/make_pipelines.hpp"
 
 #include "vast/concept/convertible/to.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -133,10 +134,12 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
     if (!name)
       return caf::make_error(ec::invalid_configuration, "pipeline name must "
                                                         "be a string");
-    auto events = caf::get_if<std::vector<std::string>>(&(*pipeline)["events"]);
-    if (!events)
-      return caf::make_error(ec::invalid_configuration,
-                             "pipeline event types must be a list of strings");
+    auto events = detail::unpack_config_list_to_vector<std::string>(
+      (*pipeline)["events"]);
+    if (!events) {
+      VAST_ERROR("Events extraction from pipeline config failed");
+      return events.error();
+    }
     auto server_pipeline = *location == "server";
     if (server != server_pipeline)
       continue;
