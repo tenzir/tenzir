@@ -62,7 +62,26 @@ jobs:
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
           echo "::set-output name=release-version::${release_version}"
 
-  vast-init:
+  vastcloud-cli:
+    name: Build and cache CLI
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        working-directory: ./cloud/aws
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Build CLI
+        run: ./vast-cloud 
+      - name: Build CLI
+        run: docker push "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
+
+
+  vastcloud-local-init:
+    needs:
+      - vastcloud-cli
     name: VAST Terraform init with local backend
     runs-on: ubuntu-20.04
     defaults:
@@ -75,16 +94,17 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
+      - name: Pull cached CLI image
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Init on empty state
         run: ./vast-cloud init
-
       - name: Init clean
         run: ./vast-cloud init --clean
 
   cloudvast-deploy:
     needs:
       - determine-version
+      - vastcloud-cli
     name: Deploy VAST on AWS
     runs-on: ubuntu-20.04
     defaults:
@@ -100,7 +120,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
       - name: Secret hashes
         run: |
           echo -n $VAST_VERSION
@@ -112,10 +131,10 @@ jobs:
           echo -n $TF_API_TOKEN | md5sum
           echo -n $AWS_ACCESS_KEY_ID | md5sum
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
-
+      - name: Pull cached CLI image
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
-
       - name: Deploy
         run: ./vast-cloud deploy --auto-approve
 
@@ -135,19 +154,16 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
+      - name: Pull cached CLI image
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Init
         run: ./vast-cloud init
-
       - name: Run test playbook
         run: ./vast-cloud tests.run
-
       - name: Init clean
         run: ./vast-cloud init --clean
-
       - name: Deploy step (noop)
         run: ./vast-cloud deploy --step=workbucket --auto-approve
-
       - name: Run test playbook after init
         run: ./vast-cloud tests.run
 
@@ -170,6 +186,8 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: Pull cached CLI image
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Init
         run: ./vast-cloud init
       - name: Set bucket env
@@ -200,6 +218,8 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: Pull cached CLI image
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Init
         run: ./vast-cloud init
       - name: Set bucket env
@@ -232,15 +252,12 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      - name: Init
-        run: ./vast-cloud init
-
+      - name: Pull cached CLI image
+        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
       - name: Destroy
         continue-on-error: true
         id: destroy
         run: ./vast-cloud destroy --auto-approve
-
       - name: Retry destroy
         if: steps.destroy.outcome=='failure'
         run: |
