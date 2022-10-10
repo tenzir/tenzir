@@ -1,5 +1,5 @@
 ---
-title: "Parquet & Feather 1/3: Enabling Open Investigations"
+title: "Parquet & Feather: Enabling Open Investigations"
 authors: 
   - mavam
   - dispanser
@@ -8,10 +8,15 @@ tags: [arrow, parquet, feather]
 ---
 
 [Apache Parquet][parquet] is the common denominator for structured data at rest.
-In this 3-tiered blog post series we (1) describe how we use Parquet (and its
-swift little brother [Feather][feather]) in VAST, (2) evaluate the the
-performance of Parquet and Feather, and (3) share our engineering experience
-with all the unexpected gotchas that we encountered along the way.
+The data science ecosystem has long appreciated this. But infosec? Why should
+you care about Parquet when building a threat detection and investigation
+platform? In this blog post series we share our opinionated view on this
+question. In the next three blog posts, we
+
+1. describe how VAST uses Parquet and its little brother [Feather][feather]
+2. benchmark the two foramts against each other for typical workloads
+3. share our experience with all the engineering gotchas we encountered along
+   the way
 
 [parquet]: https://parquet.apache.org/
 [feather]: https://arrow.apache.org/docs/python/feather.html
@@ -105,7 +110,7 @@ larger-than-memory stores incrementally.
 
 ## Imbueing Domain Semantics
 
-In a [past blog][blog-arrow] we described how VAST uses Arrows' extensible
+In a [past blog][blog-arrow] we described how VAST uses Arrow's extensible
 type system to add richer semantics to the data. This is how the value of VAST
 transcends through the analytics stack. For example, VAST has native IP address
 types that you can show up in Python as [ipaddress][ipaddress] instance. This
@@ -116,16 +121,33 @@ for the analysis.
 [blog-arrow]: /blog/apache-arrow-as-platform-for-security-data-engineering
 [ipaddress]: https://docs.python.org/3/library/ipaddress.html
 
-Both Parquet and Feather support support fully nested structures with [extension
-types][arrow-extension-types]. In theory. Our third blog post in this series
-desribes the hurdles we had to overcome to make it work in practice. In the next
-blog post, we perform a quantitive analysis of the two formats: how well do they
-compress the original data? How much space do they take up in memory? How much
-CPU time do I pay for how much space savings?
+Here's how [VAST's type system](/docs/understand/data-model/type-system) looks
+like:
+
+![Type System](/img/type-system-vast.light.png#gh-light-mode-only)
+![Type System](/img/type-system-vast.dark.png#gh-dark-mode-only)
+
+There exist two major classes of types: *basic*, stateless types with a static
+structure and a-priori known representation, and *complex*, stateful types that
+carry additional runtime information. We map this type system without
+information loss to Arrow:
+
+![Type System](/img/type-system-arrow.light.png#gh-light-mode-only)
+![Type System](/img/type-system-arrow.dark.png#gh-dark-mode-only)
+
+VAST converts enum, adress, and subnet types to
+[extension-types][arrow-extension-types]. All types are self-describing and part
+of the record batch meta data. Conversion is bi-directional. Both Parquet and
+Feather support fully nested structures in this type system. In theory. Our
+third blog post in this series desribes the hurdles we had to overcome to make
+it work in practice.
 
 [arrow-extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
 
-In the meantime, if you want to learn more about Parquet, take a look at the
-[blog post series][arrow-parquet-blog] from the official The Arrow team.
+In the next blog post, we perform a quantitive analysis of the two formats: how
+well do they compress the original data? How much space do they take up in
+memory? How much CPU time do I pay for how much space savings? In the meantime,
+if you want to learn more about Parquet, take a look at the [blog post
+series][arrow-parquet-blog] from the Arrow team.
 
 [arrow-parquet-blog]: https://arrow.apache.org/blog/2022/10/05/arrow-parquet-encoding-part-1/
