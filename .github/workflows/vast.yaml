@@ -886,17 +886,20 @@ jobs:
           # we attempt to restore from, which is the before sha for pushes and
           # the merge-base for pull requests.
           docker buildx build . -t tenzir/vast:latest --target production --load \
+            --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
           docker buildx build . -t tenzir/vast-dev:latest --target development --load \
+            --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
           docker buildx build . -t tenzir/vast-deps:latest --target dependencies --load \
+            --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
