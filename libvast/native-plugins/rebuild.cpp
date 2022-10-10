@@ -454,10 +454,15 @@ struct rebuilder_state {
             [finish](caf::error error) mutable {
               finish(std::move(error));
             });
-          VAST_INFO(
-            "{} triggered {} for {} candidate partitions with {} threads",
-            *self, run->options.automatic ? "an automatic run" : "a run",
-            run->statistics.num_total, run->options.parallel);
+          if (run->options.automatic)
+            VAST_VERBOSE("{} triggered an automatic run for {} candidate "
+                         "partitions with {} threads",
+                         *self, run->statistics.num_total,
+                         run->options.parallel);
+          else
+            VAST_INFO("{} triggered a run for {} candidate partitions with {} "
+                      "threads",
+                      *self, run->statistics.num_total, run->options.parallel);
           for (size_t i = 0; i < run->options.parallel; ++i) {
             self
               ->request(static_cast<rebuilder_actor>(self), caf::infinite,
