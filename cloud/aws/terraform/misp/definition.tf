@@ -8,7 +8,7 @@ locals {
       awslogs-stream-prefix = "ecs"
     }
   }
-  misp_container_name = "misp"
+  misp_container_name       = "misp"
   misp_proxy_container_name = "misp-proxy"
   container_definition = [
     {
