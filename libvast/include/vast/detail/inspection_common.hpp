@@ -14,12 +14,6 @@
 
 namespace vast::detail {
 
-struct NoOpCallback {
-  constexpr bool operator()() noexcept {
-    return true;
-  }
-};
-
 /// A Common class used by VAST inspectors as return type for the object method.
 /// The CAF inspector API requires inspectors to have an object method.
 /// This method should return an object which guides the inspection procedure.
@@ -34,7 +28,9 @@ struct NoOpCallback {
 /// Such code should result in inspection of x.name by the inspector. If the
 /// inspection succeeds then it should proceed to inspect x.value. If all
 /// provided fields succeed then the callback `cb` should be called.
-template <class Inspector, class AfterInspectionCallback = NoOpCallback>
+template <class Inspector, class AfterInspectionCallback = decltype([] {
+                             return true;
+                           })>
 class inspection_object {
 public:
   explicit inspection_object(Inspector& inspector) : inspector_{inspector} {
