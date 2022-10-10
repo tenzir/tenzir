@@ -1,6 +1,5 @@
 ---
 title: "Parquet & Feather 1/3: Enabling Open Investigations"
-description: Open Source needs Open Governance
 authors: 
   - mavam
   - dispanser
