@@ -12,7 +12,7 @@ module "network" {
 
 module "efs" {
   source            = "./efs"
-  count             = var.vast_server_storage_type == "EFS" ? 1 : 0
+  count             = var.vast_storage_type == "EFS" ? 1 : 0
   name              = "vast-server"
   vpc_id            = module.network.new_vpc_id
   subnet_id         = module.network.private_subnet_id
@@ -38,8 +38,8 @@ module "vast_server" {
 
   docker_image = var.vast_server_image
   efs = {
-    access_point_id = var.vast_server_storage_type == "EFS" ? module.efs[0].access_point_id : ""
-    file_system_id  = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
+    access_point_id = var.vast_storage_type == "EFS" ? module.efs[0].access_point_id : ""
+    file_system_id  = var.vast_storage_type == "EFS" ? module.efs[0].file_system_id : ""
   }
   storage_mount_point = "/var/lib/vast"
 

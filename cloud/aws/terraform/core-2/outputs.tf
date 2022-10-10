@@ -63,5 +63,5 @@ output "vast_server_hostname" {
 }
 
 output "efs_id" {
-  value = var.vast_server_storage_type == "EFS" ? module.efs[0].file_system_id : ""
+  value = var.vast_storage_type == "EFS" ? module.efs[0].file_system_id : ""
 }

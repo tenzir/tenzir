@@ -48,16 +48,16 @@ You can then create [VAST
 matchers](https://vast.io/docs/use/detect/match-threat-intel#start-matchers)
 through the Lambda client:
 ```bash
-./vast-cloud run-lambda -c "vast matcher start --mode=exact --match-types=addr feodo"
+./vast-cloud vast.lambda-client -c "vast matcher start --mode=exact --match-types=addr feodo"
 ```
 Similarly, you can load indicators into the created matchers.
 
 We provide scripts that create and load matchers from external feeds such as the
 [Feodo Tracker](https://feodotracker.abuse.ch/):
 ```bash
-./vast-cloud run-lambda -c file://$(pwd)/resources/scripts/matcher/feodo.sh
+./vast-cloud vast.lambda-client -c file://$(pwd)/resources/scripts/matcher/feodo.sh
 ```
-Note: `run-lambda` requires an absolute path when running a script from file.
+Note: `vast.lambda-client` requires an absolute path when running a script from file.
 
 Once the matchers are created, start the matcher client that will publish all
 matches to the managed queue:

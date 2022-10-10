@@ -6,8 +6,6 @@ import base64
 import json
 import io
 from common import (
-    AWS_REGION,
-    FargateService,
     active_modules,
     clean_modules,
     conf,
@@ -16,8 +14,6 @@ from common import (
     REPOROOT,
     DOCKERDIR,
     AWS_REGION_VALIDATOR,
-    load_cmd,
-    parse_env,
     terraform_output,
     aws,
 )
@@ -42,19 +38,8 @@ VALIDATORS = [
     dynaconf.Validator("VAST_PEERED_VPC_ID", must_exist=True, ne=""),
     dynaconf.Validator("VAST_IMAGE", default="tenzir/vast"),
     dynaconf.Validator("VAST_VERSION", default="latest"),
-    dynaconf.Validator(
-        "VAST_SERVER_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]
-    ),
+    dynaconf.Validator("VAST_STORAGE_TYPE", default="EFS", is_in=["EFS", "ATTACHED"]),
 ]
-
-CMD_HELP = {
-    "cmd": "Bash commands to be executed. Can be either a plain command\
- (we recommend wrapping it with single quotes to avoid unexpected\
- interpolations), a local absolute file path (e.g file:///etc/mycommands)\
- or an s3 location (e.g s3://mybucket/key)",
-    "env": "List of environment variables to be passed to the execution context,\
- name and values are separated by = (e.g --env BUCKET=mybucketname)",
-}
 
 
 def active_include_dirs(c: Context) -> str:
@@ -95,7 +80,6 @@ def docker_login(c):
     )
 
 
-@task
 def init_step(c, step):
     """Manually run terraform init on a specific step"""
     mods = active_modules(c)
@@ -107,16 +91,18 @@ def init_step(c, step):
 
 
 @task(help={"clean": clean_modules.__doc__})
-def init(c, clean=False):
-    """Manually run terraform init on all steps"""
+def init(c, step="", clean=False):
+    """Manually run terraform init on a specific step or all of them"""
     if clean:
         clean_modules()
-    c.run(
-        f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
-    )
+    if step == "":
+        c.run(
+            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+        )
+    else:
+        init_step(c, step)
 
 
-@pty_task
 def deploy_step(c, step, auto_approve=False):
     """Deploy only one step of the stack"""
     init_step(c, step)
@@ -126,11 +112,14 @@ def deploy_step(c, step, auto_approve=False):
 
 
 @pty_task
-def deploy(c, auto_approve=False):
+def deploy(c, step="", auto_approve=False):
     """One liner build and deploy of the stack to AWS with all the modules associated with active plugins"""
-    c.run(
-        f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
-    )
+    if step == "":
+        c.run(
+            f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+        )
+    else:
+        deploy_step(c, step, auto_approve)
 
 
 @task(
@@ -227,102 +216,6 @@ def service_outputs(c: Context) -> Tuple[str, str, str]:
     return (cluster, service_name, family)
 
 
-@task
-def vast_server_status(c):
-    """Get the status of the VAST server"""
-    print(FargateService(*service_outputs(c)).service_status())
-
-
-@task
-def start_vast_server(c):
-    """Start the VAST server instance as an AWS Fargate task. Noop if a VAST server is already running"""
-    FargateService(*service_outputs(c)).start_service()
-
-
-@task
-def stop_vast_server(c):
-    """Stop the VAST server instance"""
-    FargateService(*service_outputs(c)).stop_service()
-
-
-@task
-def restart_vast_server(c):
-    """Stop the running VAST server Fargate task, the service starts a new one"""
-    FargateService(*service_outputs(c)).restart_service()
-
-
-def print_lambda_output(json_response: str, json_output: bool):
-    if json_output:
-        print(json_response)
-    else:
-        response = json.loads(json_response)
-        print("PARSED COMMAND:")
-        print(response["parsed_cmd"])
-        print("\nENV:")
-        print(response["env"])
-        print("\nSTDOUT:")
-        print(response["stdout"])
-        print("\nSTDERR:")
-        print(response["stderr"])
-        print("\nRETURN CODE:")
-        print(response["returncode"])
-
-
-@task(help=CMD_HELP, iterable=["env"])
-def run_lambda(c, cmd, env=[], json_output=False):
-    """Run ad-hoc VAST client commands from AWS Lambda
-
-    Prints the inputs (command / environment) and outputs (stdout, stderr, exit
-    code) of the executed function to stdout."""
-    lambda_name = terraform_output(c, "core-2", "vast_lambda_name")
-    cmd_b64 = base64.b64encode(load_cmd(cmd)).decode()
-    lambda_res = aws("lambda").invoke(
-        FunctionName=lambda_name,
-        Payload=json.dumps({"cmd": cmd_b64, "env": parse_env(env)}).encode(),
-        InvocationType="RequestResponse",
-    )
-    resp_payload = lambda_res["Payload"].read().decode()
-    if "FunctionError" in lambda_res:
-        # For command errors (the most likely ones), display the same object as
-        # for successful results. Otherwise display the raw error payload.
-        mess = resp_payload
-        try:
-            json_payload = json.loads(resp_payload)
-            if json_payload["errorType"] == "CommandException":
-                # CommandException is JSON encoded
-                print_lambda_output(json_payload["errorMessage"], json_output)
-                mess = ""
-        except Exception:
-            pass
-        raise Exit(message=mess, code=1)
-    print_lambda_output(resp_payload, json_output)
-
-
-@pty_task(help=CMD_HELP, iterable=["env"])
-def execute_command(c, cmd="/bin/bash", env=[]):
-    """Run ad-hoc or interactive commands from the VAST server Fargate task"""
-    task_id = FargateService(*service_outputs(c)).get_task_id()
-    cluster = terraform_output(c, "core-2", "fargate_cluster_name")
-    # if we are not running the default interactive shell, encode the command to avoid escaping issues
-    buf = ""
-    if cmd != "/bin/bash":
-        cmd_bytes = load_cmd(cmd)
-        parse_env(env)  # validate format of env list items
-        cmd = f"/bin/bash -c 'echo {base64.b64encode(cmd_bytes).decode()} | base64 -d | {' '.join(env)} /bin/bash'"
-        buf = "unbuffer"
-    # we use the CLI here because boto does not know how to use the session-manager-plugin
-    # unbuffer (expect package) helps ensuring a clean session closing when there is no PTY
-    c.run(
-        f"""{buf} aws ecs execute-command \
-		--cluster {cluster} \
-		--task {task_id} \
-		--interactive \
-		--command "{cmd}" \
-        --region {AWS_REGION()} """,
-    )
-
-
-@pty_task
 def destroy_step(c, step, auto_approve=False):
     """Destroy resources of the specified step. Resources depending on it should be cleaned up first."""
     init_step(c, step)
@@ -331,12 +224,7 @@ def destroy_step(c, step, auto_approve=False):
     )
 
 
-@pty_task
-def destroy(c, auto_approve=False):
-    """Tear down the entire terraform stack with all the active plugins
-
-    Note that if a module was deployed and the associated plugin was removed
-    from the config afterwards, it will not be destroyed"""
+def stop_all_services(c):
     try:
         cluster = terraform_output(c, "core-2", "fargate_cluster_name")
         serviceArns = aws("ecs").list_services(cluster=cluster, maxResults=100)[
@@ -349,6 +237,18 @@ def destroy(c, auto_approve=False):
     except Exception as e:
         print(e)
         print("Could not stop services, continuing with destroy...")
-    c.run(
-        f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
-    )
+
+
+@pty_task
+def destroy(c, step="", auto_approve=False):
+    """Tear down the entire terraform stack with all the active plugins
+
+    Note that if a module was deployed and the associated plugin was removed
+    from the config afterwards, it will not be destroyed"""
+    if step == "":
+        stop_all_services(c)
+        c.run(
+            f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+        )
+    else:
+        destroy_step(c, step, auto_approve)
