@@ -136,9 +136,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Init
+        run: ./vast-cloud init
+
       - name: Run test playbook
-        run: |
-          ./vast-cloud tests.run
+        run: ./vast-cloud tests.run
 
       - name: Init clean
         run: ./vast-cloud init --clean
@@ -147,8 +149,7 @@ jobs:
         run: ./vast-cloud deploy --step=workbucket --auto-approve
 
       - name: Run test playbook after init
-        run: |
-          ./vast-cloud tests.run
+        run: ./vast-cloud tests.run
 
 
   cloudvast-flowlogs:
@@ -168,7 +169,8 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
+      - name: Init
+        run: ./vast-cloud init
       - name: Set bucket env
         run: echo "VAST_FLOWLOGS_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
@@ -196,6 +198,8 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: Init
+        run: ./vast-cloud init
       - name: Set bucket env
         run: echo "VAST_CLOUDTRAIL_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
@@ -226,6 +230,9 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Init
+        run: ./vast-cloud init
 
       - name: Destroy
         continue-on-error: true
