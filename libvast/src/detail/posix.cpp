@@ -88,6 +88,11 @@ uds_datagram_sender::make(const std::string& path) {
     return caf::make_error(
       ec::system_error,
       "failed to obtain an AF_UNIX DGRAM socket: ", ::strerror(errno));
+  if (fcntl(result.src_fd, F_SETFL, O_NONBLOCK) < 0)
+    return caf::make_error(ec::system_error,
+                           "failed to set an AF_UNIX DGRAM socket to non "
+                           "blocking: ",
+                           ::strerror(errno));
   // Create a unique temporary directory for a place to bind the sending side
   // to. There is no mktemp variant for sockets, so that is unfortunately
   // necessary.
@@ -98,8 +103,8 @@ uds_datagram_sender::make(const std::string& path) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed in mkdtemp({}): {}",
                                        mkd_template, ::strerror(errno)));
-  // Replace the fist null terminator with a directory separator to get the full
-  // path.
+  // Replace the first null terminator with a directory separator to get the
+  // full path.
   src_name[16] = '/';
   ::sockaddr_un src = {};
   std::memset(&src, 0, sizeof(src));
@@ -134,9 +139,13 @@ uds_datagram_sender::make(const std::string& path) {
 caf::error uds_datagram_sender::send(std::span<char> data) {
   if (::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
-      < 0)
-    return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
-  return caf::none;
+      == 0)
+    return caf::none;
+  // Error cases.
+  if (errno == EAGAIN || errno == EWOULDBLOCK)
+    // Ignore and drop instead of blocking.
+    return caf::none;
+  return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
 }
 
 int uds_connect(const std::string& path, socket_type type) {
