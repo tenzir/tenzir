@@ -36,10 +36,10 @@ the goal is developing realtime threat detection and response systems.
 Security is a data problem. But how should we represent that data? This is where
 Parquet enters the picture. As a vendor-agnostic storage format for structured
 and nested data, it decouples storage from analytics. This is where SIEM
-monoliths fail: they offer a single black box that tight couple data acquision
-and processing capabilities. Providing a thin "open" API is not really open, as
-it prevents high-bandwidth data access that is need for advanced analytics
-workloads.
+monoliths fail: they offer a single black box that tightly couples data
+acquision and processing capabilities. Providing a thin "open" API is not really
+open, as it prevents high-bandwidth data access that is needed for advanced
+analytics workloads.
 
 Open storage prevents vendor-lock-in. When any tool can work with the data, you
 build a sustainable foundation for implementing future use cases. For example,
@@ -92,11 +92,11 @@ store files, without the need for ETLing it into a dedicated warehouse, such as
 Spark or Hadoop.
 
 The event data thrown at VAST has quite some variety of schemas. During
-ingestion, VAST first demultiplexes the heterogeneous stream of events into a
-homogenous stream, each of which has a unique schema. VAST buffers events until
-the partition hits a pre-configured event limit (e.g., 1M) or until a timeout
-occurs (e.g., 60m). Thereafter, VAST writes the partition in one shot and
-persists it.
+ingestion, VAST first demultiplexes the heterogeneous stream of events into
+multiple homogenous streams, each of which has a unique schema. VAST buffers
+events until the partition hits a pre-configured event limit (e.g., 1M) or until
+a timeout occurs (e.g., 60m). Thereafter, VAST writes the partition in one shot
+and persists it.
 
 The buffering provides optimal freshness of the data, as it enables queries run
 on not-yet-persisted data. But it also sets an upper bound on the partition
