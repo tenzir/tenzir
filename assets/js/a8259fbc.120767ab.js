@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[6959],{48350:e=>{e.exports=JSON.parse('{"permalink":"/blog/tags/arrow","page":1,"postsPerPage":20,"totalPages":1,"totalCount":2,"blogDescription":"News from the VAST community","blogTitle":"Blog"}')}}]);
