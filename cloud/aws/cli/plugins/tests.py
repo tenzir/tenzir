@@ -343,7 +343,7 @@ class MISP(unittest.TestCase):
         # wait a sec to be sure NGINX and SSH are running
         time.sleep(1)
 
-    def wait_for_misp(self, start_time=time.time()) -> str:
+    def wait_for_misp(self, start_time) -> str:
         """Return the body if 200, retry if 502
 
         This is similar to the retry that would have been performed by the browser"""
@@ -368,7 +368,7 @@ class MISP(unittest.TestCase):
         self.c.run("nohup ./vast-cloud misp.tunnel > /dev/null 2>&1 &")
         time.sleep(30)
         try:
-            body = self.wait_for_misp()
+            body = self.wait_for_misp(time.time())
             self.assertIn("<title>Users - MISP</title>", body)
         finally:
             self.c.run(
