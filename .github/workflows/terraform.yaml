@@ -85,7 +85,7 @@ jobs:
   cloudvast-deploy:
     needs:
       - determine-version
-    name: Deplay VAST on AWS
+    name: Deploy VAST on AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
@@ -131,6 +131,11 @@ jobs:
       TF_STATE_BACKEND: "cloud"
       VAST_CLOUD_PLUGINS: "workbucket,tests,misp"
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Run test playbook
         run: |
           ./vast-cloud tests.run
@@ -149,18 +154,25 @@ jobs:
   cloudvast-flowlogs:
     needs:
       - cloudvast-deploy
-    name: Add flowlogs datasource
+    name: Deploy Flowlogs datasource
     runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,flowlogs"
+      VAST_CLOUD_PLUGINS: "tfcloud,workbucket,flowlogs"
       VAST_FLOWLOGS_BUCKET_REGION: $VAST_AWS_REGION
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Set bucket env
         run: echo "VAST_FLOWLOGS_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
+      - name: Configure Terraform Cloud
+        run: ./vast-cloud tfcloud.config --auto
       - name: Deploy flowlogs
         run: ./vast-cloud deploy -a -s flowlogs
       - name: Destroy flowlogs
@@ -170,18 +182,24 @@ jobs:
   cloudvast-cloudtrail:
     needs:
       - cloudvast-deploy
-    name: Add cloudtrail datasources
+    name: Deploy Cloudtrail datasource
     runs-on: ubuntu-20.04
     defaults:
       run:
         working-directory: ./cloud/aws
     env:
       TF_STATE_BACKEND: "cloud"
-      VAST_CLOUD_PLUGINS: "workbucket,cloudtrail"
+      VAST_CLOUD_PLUGINS: "tfcloud,workbucket,cloudtrail"
       VAST_CLOUDTRAIL_BUCKET_REGION: $VAST_AWS_REGION
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Set bucket env
         run: echo "VAST_CLOUDTRAIL_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
+      - name: Configure Terraform Cloud
+        run: ./vast-cloud tfcloud.config --auto
       - name: Deploy cloudtrail
         run: ./vast-cloud deploy -a -s cloudtrail
       - name: Destroy cloudtrail
@@ -194,7 +212,7 @@ jobs:
       - cloudvast-flowlogs
       - cloudvast-cloudtrail
     if: ${{ always() }}
-    name: Destroy VAST stack form AWS
+    name: Destroy VAST stack from AWS
     runs-on: ubuntu-20.04
     defaults:
       run:
@@ -204,6 +222,11 @@ jobs:
       VAST_CLOUD_PLUGINS: "workbucket,misp"
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
       - name: Destroy
         continue-on-error: true
         id: destroy
