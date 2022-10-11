@@ -65,6 +65,8 @@ jobs:
   vastcloud-cli:
     name: Build and cache CLI
     runs-on: ubuntu-20.04
+    outputs:
+      cached-img: ${{ steps.push-cli-img.outputs.cached-img }}
     defaults:
       run:
         working-directory: ./cloud/aws
@@ -82,6 +84,7 @@ jobs:
       - name: Build CLI image
         run: ./vast-cloud
       - name: Push CLI image to cache
+        id: push-cli-img
         run: |
           CLI_IMAGE="ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
           docker tag tenzir/vast-cloud-cli:latest "$CLI_IMAGE"
@@ -278,7 +281,6 @@ jobs:
     env:
       TF_STATE_BACKEND: "cloud"
       VAST_CLOUD_PLUGINS: "workbucket,misp"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v3
