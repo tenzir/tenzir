@@ -83,7 +83,7 @@ jobs:
         run: ./vast-cloud
       - name: Push CLI image to cache
         run: |
-          CLI_IMAGE="ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)""
+          CLI_IMAGE="ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
           docker tag tenzir/vast-cloud-cli:latest "$CLI_IMAGE"
           docker push "$CLI_IMAGE"
           echo "::set-output name=cached-img::${CLI_IMAGE}"
