@@ -1,27 +1,37 @@
-#! /usr/bin/env zsh
+#! /usr/bin/env bash
 set -eux -o pipefail
 
-local -a build help
-zparseopts -build=build h=help -help=help
+build=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      >&2 echo "Execute tests for VAST's Docker Compose files."
+      >&2 echo "NOTE: By default, attempts to pull images rather than building."
+      >&2 echo ""
+      >&2 echo "USAGE: ${0} [--build] [-h|--help]"
+      exit 0
+      ;;
+    --build)
+      build=1
+      shift 1
+      ;;
+    *)
+      >&2 echo "unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+done
 
-if [[ -n $help ]]; then
-  >&2 echo "Execute tests for VAST's Docker Compose files."
-  >&2 echo "NOTE: By default, attempts to pull images rather than building."
-  >&2 echo ""
-  >&2 echo "USAGE: ${0} [--build] [-h|--help]"
-  exit 0
-fi
-
-compose_files=('-f' 'docker-compose.yaml' '-f' 'docker-compose.web.yaml')
-if [[ -n $build ]]; then
+compose_files='-f docker-compose.yaml -f docker-compose.web.yaml'
+if (( "${build}" == 1 )); then
   export VAST_CONTAINER_REGISTRY='docker.io'
   export VAST_CONTAINER_REF='latest'
-  compose_files+=('-f' 'docker-compose.build.yaml')
-  build_policy=('--pull=never')
+  compose_files="${compose_files} -f docker-compose.build.yaml"
+  build_policy='--pull=never'
 else
   export VAST_CONTAINER_REGISTRY='ghcr.io'
   export VAST_CONTAINER_REF="$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')"
-  build_policy=('--pull=always')
+  build_policy='--pull=always'
 fi
 
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/vast"
@@ -51,8 +61,8 @@ sleep 3
 docker compose ${compose_files} run vast status > /dev/null
 
 # Ingest some test data.
-gunzip -c ../../vast/integration/data/zeek/*.log.gz \
-  | docker compose ${compose_files} run --no-TTY vast import --blocking zeek
+gunzip -c ../../vast/integration/data/zeek/*.log.gz |
+  docker compose ${compose_files} run --no-TTY vast import --blocking zeek
 docker compose ${compose_files} run --no-TTY vast import --blocking suricata \
   < ../../vast/integration/data/suricata/eve.json
 
