@@ -187,8 +187,6 @@ jobs:
     env:
       TF_STATE_BACKEND: "cloud"
       VAST_CLOUD_PLUGINS: "tfcloud,workbucket,flowlogs"
-      VAST_FLOWLOGS_BUCKET_REGION: "${{ env.VAST_AWS_REGION }}"
-      VAST_FLOWLOGS_BUCKET_NAME: "dummy"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -199,7 +197,11 @@ jobs:
       - name: Init
         run: ./vast-cloud init
       - name: Set bucket env
-        run: echo "VAST_FLOWLOGS_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
+        run: | 
+          export VAST_FLOWLOGS_BUCKET_NAME=dummy
+          export VAST_FLOWLOGS_BUCKET_REGION=$VAST_AWS_REGION
+          echo "VAST_FLOWLOGS_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
+          echo "VAST_FLOWLOGS_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
       - name: Deploy flowlogs
@@ -219,8 +221,6 @@ jobs:
     env:
       TF_STATE_BACKEND: "cloud"
       VAST_CLOUD_PLUGINS: "tfcloud,workbucket,cloudtrail"
-      VAST_CLOUDTRAIL_BUCKET_REGION: "${{ env.VAST_AWS_REGION }}"
-      VAST_CLOUDTRAIL_BUCKET_NAME: "dummy"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -231,7 +231,11 @@ jobs:
       - name: Init
         run: ./vast-cloud init
       - name: Set bucket env
-        run: echo "VAST_CLOUDTRAIL_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
+        run: | 
+          export VAST_CLOUDTRAIL_BUCKET_NAME=dummy
+          export VAST_CLOUDTRAIL_BUCKET_REGION=$VAST_AWS_REGION
+          echo "VAST_CLOUDTRAIL_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
+          echo "VAST_CLOUDTRAIL_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
       - name: Deploy cloudtrail
