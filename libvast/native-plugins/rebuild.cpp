@@ -383,8 +383,13 @@ struct rebuilder_state {
     auto rp = self->make_response_promise<void>();
     auto finish = [this, rp](caf::error err, bool silent = false) mutable {
       if (!silent) {
+        // Only print to INFO when work was actually done, or when the run
+        // was manually requested.
         if (run->statistics.num_completed == 0)
-          VAST_VERBOSE("{} had nothing to do", *self);
+          if (run->options.automatic)
+            VAST_VERBOSE("{} had nothing to do", *self);
+          else
+            VAST_INFO("{} had nothing to do", *self);
         else
           VAST_INFO("{} rebuilt {} into {} partitions", *self,
                     run->statistics.num_completed, run->statistics.num_results);
