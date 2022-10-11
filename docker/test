@@ -29,8 +29,8 @@ if (( "${build}" == 1 )); then
   compose_files="${compose_files} -f docker-compose.build.yaml"
   build_policy='--pull=never'
 else
-  export VAST_CONTAINER_REGISTRY='ghcr.io'
-  export VAST_CONTAINER_REF="$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')"
+  export VAST_CONTAINER_REGISTRY="${VAST_CONTAINER_REGISTRY:-ghcr.io}"
+  export VAST_CONTAINER_REF="${VAST_CONTAINER_REF:-$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')}"
   build_policy='--pull=always'
 fi
 
