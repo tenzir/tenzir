@@ -175,7 +175,7 @@ int main(int argc, char** argv) {
     VAST_INFO("loaded configuration file: {}", file);
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : *loaded_plugin_paths)
-    VAST_VERBOSE("loaded plugin: {}", file);
+    VAST_INFO("loaded plugin: {}", file);
   // Initialize successfully loaded plugins.
   if (auto err = plugins::initialize(cfg)) {
     VAST_ERROR("failed to initialize plugins: {}", err);
