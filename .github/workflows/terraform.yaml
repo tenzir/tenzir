@@ -187,7 +187,7 @@ jobs:
     env:
       TF_STATE_BACKEND: "cloud"
       VAST_CLOUD_PLUGINS: "tfcloud,workbucket,flowlogs"
-      VAST_FLOWLOGS_BUCKET_REGION: "$VAST_AWS_REGION"
+      VAST_FLOWLOGS_BUCKET_REGION: "${{ env.VAST_AWS_REGION }}"
       VAST_FLOWLOGS_BUCKET_NAME: "dummy"
     steps:
       - name: Checkout
@@ -219,7 +219,7 @@ jobs:
     env:
       TF_STATE_BACKEND: "cloud"
       VAST_CLOUD_PLUGINS: "tfcloud,workbucket,cloudtrail"
-      VAST_CLOUDTRAIL_BUCKET_REGION: "$VAST_AWS_REGION"
+      VAST_CLOUDTRAIL_BUCKET_REGION: "${{ env.VAST_AWS_REGION }}"
       VAST_CLOUDTRAIL_BUCKET_NAME: "dummy"
     steps:
       - name: Checkout
