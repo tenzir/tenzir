@@ -80,7 +80,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build CLI image
-        run: ./vast-cloud 
+        run: ./vast-cloud
       - name: Push CLI image to cache
         run: |
           CLI_IMAGE="ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)""
@@ -105,7 +105,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: | 
+        run: |
           docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
           docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Init on empty state
@@ -144,7 +144,7 @@ jobs:
           echo -n $AWS_ACCESS_KEY_ID | md5sum
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
       - name: Pull cached CLI image
-        run: | 
+        run: |
           docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
           docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Configure Terraform Cloud
@@ -170,7 +170,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: | 
+        run: |
           docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
           docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Init
@@ -203,17 +203,17 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: | 
+        run: |
           docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
           docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Preset source bucket env
-        run: | 
+        run: |
           echo "VAST_FLOWLOGS_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
           echo "VAST_FLOWLOGS_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
       - name: Init
         run: ./vast-cloud init
       - name: Replace actual source bucket name env
-        run: | 
+        run: |
           ACTUAL_BUCKET=$(./vast-cloud workbucket.name)
           echo "VAST_FLOWLOGS_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
@@ -242,11 +242,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: | 
+        run: |
           docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
           docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Preset source bucket env
-        run: | 
+        run: |
           echo "VAST_CLOUDTRAIL_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
           echo "VAST_CLOUDTRAIL_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
       - name: Init
@@ -285,7 +285,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: | 
+        run: |
           docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
           docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Destroy
