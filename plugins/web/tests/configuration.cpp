@@ -51,7 +51,7 @@ web:
   CHECK_EQUAL(server_config->bind_address, "127.0.0.1");
   CHECK_EQUAL(server_config->port, 8000);
   CHECK_EQUAL(server_config->require_tls, false);
-  CHECK_EQUAL(server_config->require_localhost, true);
+  CHECK_EQUAL(server_config->require_localhost, false);
   CHECK_EQUAL(server_config->require_clientcerts, false);
   CHECK_EQUAL(server_config->require_authentication, false);
   auto invalid_data = extract_config(R"_(
