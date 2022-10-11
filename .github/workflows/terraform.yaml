@@ -83,8 +83,10 @@ jobs:
         run: ./vast-cloud 
       - name: Push CLI image to cache
         run: |
-          docker tag tenzir/vast-cloud-cli:latest "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
-          docker push "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
+          CLI_IMAGE="ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)""
+          docker tag tenzir/vast-cloud-cli:latest "$CLI_IMAGE"
+          docker push "$CLI_IMAGE"
+          echo "::set-output name=cached-img::${CLI_IMAGE}"
 
 
   vastcloud-local-init:
@@ -103,7 +105,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
+        run: | 
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Init on empty state
         run: ./vast-cloud init
       - name: Init clean
@@ -140,7 +144,9 @@ jobs:
           echo -n $AWS_ACCESS_KEY_ID | md5sum
           echo -n $AWS_SECRET_ACCESS_KEY | md5sum
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
+        run: | 
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
       - name: Deploy
@@ -148,6 +154,7 @@ jobs:
 
   cloudvast-playbook:
     needs:
+      - vastcloud-cli
       - cloudvast-deploy
     name: Run VAST test playbook on AWS
     runs-on: ubuntu-20.04
@@ -163,7 +170,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
+        run: | 
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Init
         run: ./vast-cloud init
       - name: Run test playbook
@@ -178,6 +187,7 @@ jobs:
 
   cloudvast-flowlogs:
     needs:
+      - vastcloud-cli
       - cloudvast-deploy
     name: Deploy Flowlogs datasource
     runs-on: ubuntu-20.04
@@ -193,15 +203,19 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
+        run: | 
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
+      - name: Preset source bucket env
+        run: | 
+          echo "VAST_FLOWLOGS_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
+          echo "VAST_FLOWLOGS_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
       - name: Init
         run: ./vast-cloud init
-      - name: Set bucket env
+      - name: Replace actual source bucket name env
         run: | 
-          export VAST_FLOWLOGS_BUCKET_NAME=dummy
-          export VAST_FLOWLOGS_BUCKET_REGION=$VAST_AWS_REGION
-          echo "VAST_FLOWLOGS_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
-          echo "VAST_FLOWLOGS_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
+          ACTUAL_BUCKET=$(./vast-cloud workbucket.name)
+          echo "VAST_FLOWLOGS_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
       - name: Deploy flowlogs
@@ -212,6 +226,7 @@ jobs:
 
   cloudvast-cloudtrail:
     needs:
+      - vastcloud-cli
       - cloudvast-deploy
     name: Deploy Cloudtrail datasource
     runs-on: ubuntu-20.04
@@ -227,15 +242,19 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
+        run: | 
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
+      - name: Preset source bucket env
+        run: | 
+          echo "VAST_CLOUDTRAIL_BUCKET_NAME=dummybucket" >> $GITHUB_ENV
+          echo "VAST_CLOUDTRAIL_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
       - name: Init
         run: ./vast-cloud init
-      - name: Set bucket env
-        run: | 
-          export VAST_CLOUDTRAIL_BUCKET_NAME=dummy
-          export VAST_CLOUDTRAIL_BUCKET_REGION=$VAST_AWS_REGION
-          echo "VAST_CLOUDTRAIL_BUCKET_NAME=$(./vast-cloud workbucket.name)" >> $GITHUB_ENV
-          echo "VAST_CLOUDTRAIL_BUCKET_REGION=$VAST_AWS_REGION" >> $GITHUB_ENV
+      - name: Replace actual source bucket name env
+        run: |
+          ACTUAL_BUCKET=$(./vast-cloud workbucket.name)
+          echo "VAST_CLOUDTRAIL_BUCKET_NAME=$ACTUAL_BUCKET" >> $GITHUB_ENV
       - name: Configure Terraform Cloud
         run: ./vast-cloud tfcloud.config --auto
       - name: Deploy cloudtrail
@@ -246,6 +265,7 @@ jobs:
 
   cloudvast-destroy:
     needs:
+      - vastcloud-cli
       - cloudvast-playbook
       - cloudvast-flowlogs
       - cloudvast-cloudtrail
@@ -265,7 +285,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Pull cached CLI image
-        run: docker pull "ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
+        run: | 
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" tenzir/vast-cloud-cli:latest
       - name: Destroy
         continue-on-error: true
         id: destroy
