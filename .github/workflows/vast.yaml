@@ -872,11 +872,10 @@ jobs:
       - name: Build Docker Images
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            cache_to_ref="${{ needs.determine-version.outputs.head-ref-slug }}"
+            ref_tag="${{ needs.determine-version.outputs.head-ref-slug }}"
           else
-            cache_to_ref="${{ github.sha }}"
+            ref_tag="${{ github.sha }}"
           fi
-          cache_from_ref="${{ needs.determine-version.outputs.before-sha }}"
           docker_build_args="${{ needs.determine-version.outputs.docker-build-args }}"
           # Build the Docker images using ghcr.io/tenzir/vast as a registry-type
           # layer cache. We upload this cache for every merge but also for every
@@ -889,24 +888,21 @@ jobs:
             --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:build-cache" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
           docker buildx build . -t tenzir/vast-dev:latest --target development --load \
             --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
           docker buildx build . -t tenzir/vast-deps:latest --target dependencies --load \
             --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            docker tag tenzir/vast:latest "ghcr.io/tenzir/vast:${cache_to_ref}"
-            docker push "ghcr.io/tenzir/vast:${cache_to_ref}"
+            docker tag tenzir/vast:latest "ghcr.io/tenzir/vast:${ref_tag}"
+            docker push "ghcr.io/tenzir/vast:${ref_tag}"
           fi
       - name: Publish Docker Images
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
