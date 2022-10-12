@@ -484,7 +484,7 @@ caf::error index_state::load_from_disk() {
         if (std::filesystem::exists(store_path, err))
           oversized_partitions.push_back(partition_uuid);
         else
-          VAST_WARN("{} didn't not find a store file for the oversized "
+          VAST_WARN("{} did not find a store file for the oversized "
                     "partition {} and won't attempt to recover the data",
                     *self, partition_uuid);
       } else
