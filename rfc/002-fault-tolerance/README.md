@@ -367,7 +367,8 @@ Here are some incomplete notes of taking a first look:
   have a comparison, a list of writes on success and a list of writes on failure
 
 - Watches are possible on single keys and prefixes in the key-space, which would
-  allow us to model our use-case naturally.
+  allow us to model our use-case naturally. Importantly, key updates are streamed to the client,
+  allowing a gap-free observation of changes in the key-space.
 
 - Etcd comes with a gRPC API, making it easy to embed for us. We're already
   depending on gRPC transitively via Apache Arrow (cf. Flight).
@@ -406,6 +407,9 @@ time. There are some [open questions on composability of log and state
 machine](https://groups.google.com/g/raft-dev/c/O80OSWrQieo) that we should
 revisit.
 
+#### Recommendation
+
+As of our current understanding etcd and the home grown Raft implementation match the requirements most closely. Of those two etc is the mature product which has been hardened and improved over many years of heavy use. For that reason **we recommend etcd for the backend** of the fault tolerant catalog.
 ## Alternatives
 
 ### Autonomous Neighbors
