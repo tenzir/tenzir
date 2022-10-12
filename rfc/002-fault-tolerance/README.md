@@ -245,9 +245,11 @@ acquisition mechanism is available, we may consider a local disk buffer to
 emulate a reliable medium. For this proposal, working around an unreliable data
 transport channel is out of scope.
 
-The final commit of the data takes place in the metastore. This is the action
-that requires an ACK, which needs to travel all the way back to the source of
-the input stream so that the event stream can be advanced.
+A transaction that writes one or more partitions needs to store additional
+metadata, containing the offsets this partition is based on. This atomic commit
+of both the transaction and its (kafka) source metadata allows the source to
+pick up exactly at the point of failure, without risk of re-ingesting twice or
+missing any events. It thus provides exactly-once semantics for our write path.
 
 TODO: describe how we can do this with CAF as of today.
 
@@ -355,8 +357,6 @@ FDB primitives. We found the following:
   increment for every transaction), and from there we could work around the
   problem by requesting all recent transactions whenever this key is modified.
 
-We need to read further on how to XXX.
-
 ##### etcd
 
 Etcd is a distributed key-value store that uses Raft for quorum-based consensus. From a CAP Theorem perspective, this brings us into the CP realm, because a master must be elected to perform writes. Stale reads may be supported, though, which we can tolerate.
@@ -372,9 +372,20 @@ Here are some incomplete notes of taking a first look:
 - Etcd comes with a gRPC API, making it easy to embed for us. We're already
   depending on gRPC transitively via Apache Arrow (cf. Flight).
 
+- An official C++ client library exists:https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.
 ##### Consul
 
-TBD
+Consul is a service discovery and distributed configuration system that contains a distributed key-value store (consul KV). Apart from the bare key-value store it also provides service mesh, traffic management, and service to service encryption. For the use case at hand we identified the following relevant properties:
+
+- The only way to interact with a Consul service is through an HTTP API, meaning there would be some overhead for each transaction. This also means that we would have to use HTTP long polling to observe changes on a specific key.
+
+- Transactions are supported with a dedicated API endpoint (https://developer.hashicorp.com/consul/api-docs/txn). Failure conditions have to be modeled into a key-specific `index` variable, which is less flexible compared to the predicate interface of FoundationDB.
+
+- A `get-tree` operation is available and would allow efficient joining of a new node to an existing cluster.
+
+- A seemingly maintained third party client library with the relevant features exists: https://github.com/oliora/ppconsul. The relevant transaction API is supported.
+
+- While it is possible to add run a blocking query to a single key or a prefix, such a query has to be re-registered after every return. If multiple changes have been applied before the new query is registered the client misses updates. We can not observe changes in the key space directly, only the current values. That means modeling a change feed as desired requires a custom protocol.
 
 ##### Native Raft
 
@@ -397,7 +408,13 @@ revisit.
 
 ## Alternatives
 
-TBD
+### Autonomous Neighbors
+
+The Catalog component could be extended with a bespoke replication mechanism to track the state update of all other Catalogs in the same cluster. A recovering node would receive a delta of the updates that it missed during downtime to synchronize with its peers.
+
+The advantage of doing this in the application layer is that it could naturally extend from the metadata to the data plane, freeing VAST from the dependency on a distributed storage layer.
+
+This idea has two major drawbacks: It would complicate the API surface of the catalog component and require far-reaching refactorings in many client components. Additionally, the difficulty in designing and implementing a correct resynchronization protocol is not to be underestimated.
 
 ## Annex
 
