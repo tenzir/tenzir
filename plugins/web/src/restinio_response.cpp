@@ -49,6 +49,10 @@ void restinio_response::abort(uint16_t error_code, std::string message) {
   // it from being called multiple times.
 }
 
+void restinio_response::add_header(std::string field, std::string value) {
+  response_.append_header(std::move(field), std::move(value));
+}
+
 auto restinio_response::request() const -> const request_handle_t& {
   return request_;
 }

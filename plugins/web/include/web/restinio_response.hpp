@@ -41,6 +41,9 @@ public:
   // Get a handle to the original request.
   [[nodiscard]] const request_handle_t& request() const;
 
+  // Add a custom response header.
+  void add_header(std::string field, std::string value);
+
 private:
   request_handle_t request_;
   response_t response_;

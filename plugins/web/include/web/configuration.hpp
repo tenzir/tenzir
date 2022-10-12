@@ -74,6 +74,10 @@ public:
 
   /// The path to the TLS private key.
   std::filesystem::path keyfile = {};
+
+  /// Additional header to be inserted into every server response.
+  //  (eg. 'Server: VAST', 'Access-Control-Allow-Origin: *', ...)
+  std::unordered_map<std::string, std::string> response_headers;
 };
 
 /// Validate that the user-provided configuration makes sense.
