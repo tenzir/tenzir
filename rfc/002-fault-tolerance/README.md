@@ -273,7 +273,11 @@ above.
 
 ### Metastore
 
-The metastore primarily stores the state of partition data. We restrict our analysis to this use case. From the perspective of the catalog, the metastore API should expose itself as an actor that encapsulates the implementation details. This actor can rely on VAST's plugin architecture to implement the metastore-specific integration.
+The metastore primarily stores the state of partition data. We restrict our
+analysis to this use case. From the perspective of the catalog, the metastore
+API should expose itself as an actor that encapsulates the implementation
+details. This actor can rely on VAST's plugin architecture to implement the
+metastore-specific integration.
 
 #### Request-Response API
 
@@ -359,7 +363,10 @@ FDB primitives. We found the following:
 
 ##### etcd
 
-Etcd is a distributed key-value store that uses Raft for quorum-based consensus. From a CAP Theorem perspective, this brings us into the CP realm, because a master must be elected to perform writes. Stale reads may be supported, though, which we can tolerate.
+Etcd is a distributed key-value store that uses Raft for quorum-based consensus.
+From a CAP Theorem perspective, this brings us into the CP realm, because a
+master must be elected to perform writes. Stale reads may be supported, though,
+which we can tolerate.
 
 Here are some incomplete notes of taking a first look:
 
@@ -367,26 +374,45 @@ Here are some incomplete notes of taking a first look:
   have a comparison, a list of writes on success and a list of writes on failure
 
 - Watches are possible on single keys and prefixes in the key-space, which would
-  allow us to model our use-case naturally. Importantly, key updates are streamed to the client,
-  allowing a gap-free observation of changes in the key-space.
+  allow us to model our use-case naturally. Importantly, key updates are
+  streamed to the client, allowing a gap-free observation of changes in the
+  key-space.
 
 - Etcd comes with a gRPC API, making it easy to embed for us. We're already
   depending on gRPC transitively via Apache Arrow (cf. Flight).
 
-- An official C++ client library exists:https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.
+- An official C++ client library
+- exists:https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.
 ##### Consul
 
-Consul is a service discovery and distributed configuration system that contains a distributed key-value store (consul KV). Apart from the bare key-value store it also provides service mesh, traffic management, and service to service encryption. For the use case at hand we identified the following relevant properties:
+Consul is a service discovery and distributed configuration system that contains
+a distributed key-value store (consul KV). Apart from the bare key-value store
+it also provides service mesh, traffic management, and service to service
+encryption. For the use case at hand we identified the following relevant
+properties:
 
-- The only way to interact with a Consul service is through an HTTP API, meaning there would be some overhead for each transaction. This also means that we would have to use HTTP long polling to observe changes on a specific key.
+- The only way to interact with a Consul service is through an HTTP API, meaning
+- there would be some overhead for each transaction. This also means that we
+- would have to use HTTP long polling to observe changes on a specific key.
 
-- Transactions are supported with a dedicated API endpoint (https://developer.hashicorp.com/consul/api-docs/txn). Failure conditions have to be modeled into a key-specific `index` variable, which is less flexible compared to the predicate interface of FoundationDB.
+- Transactions are supported with a dedicated API endpoint
+- (https://developer.hashicorp.com/consul/api-docs/txn). Failure conditions have
+- to be modeled into a key-specific `index` variable, which is less flexible
+- compared to the predicate interface of FoundationDB.
 
-- A `get-tree` operation is available and would allow efficient joining of a new node to an existing cluster.
+- A `get-tree` operation is available and would allow efficient joining of a new
+- node to an existing cluster.
 
-- A seemingly maintained third party client library with the relevant features exists: https://github.com/oliora/ppconsul. The relevant transaction API is supported.
+- A seemingly maintained third party client library with the relevant features
+- exists: https://github.com/oliora/ppconsul. The relevant transaction API is
+- supported.
 
-- While it is possible to add run a blocking query to a single key or a prefix, such a query has to be re-registered after every return. If multiple changes have been applied before the new query is registered the client misses updates. We can not observe changes in the key space directly, only the current values. That means modeling a change feed as desired requires a custom protocol.
+- While it is possible to add run a blocking query to a single key or a prefix,
+- such a query has to be re-registered after every return. If multiple changes
+- have been applied before the new query is registered the client misses
+- updates. We can not observe changes in the key space directly, only the
+- current values. That means modeling a change feed as desired requires a custom
+- protocol.
 
 ##### Native Raft
 
@@ -409,16 +435,28 @@ revisit.
 
 #### Recommendation
 
-As of our current understanding etcd and the home grown Raft implementation match the requirements most closely. Of those two etc is the mature product which has been hardened and improved over many years of heavy use. For that reason **we recommend etcd for the backend** of the fault tolerant catalog.
+As of our current understanding etcd and the home grown Raft implementation
+match the requirements most closely. Of those two etc is the mature product
+which has been hardened and improved over many years of heavy use. For that
+reason **we recommend etcd for the backend** of the fault tolerant catalog.
+
 ## Alternatives
 
 ### Autonomous Neighbors
 
-The Catalog component could be extended with a bespoke replication mechanism to track the state update of all other Catalogs in the same cluster. A recovering node would receive a delta of the updates that it missed during downtime to synchronize with its peers.
+The Catalog component could be extended with a bespoke replication mechanism to
+track the state update of all other Catalogs in the same cluster. A recovering
+node would receive a delta of the updates that it missed during downtime to
+synchronize with its peers.
 
-The advantage of doing this in the application layer is that it could naturally extend from the metadata to the data plane, freeing VAST from the dependency on a distributed storage layer.
+The advantage of doing this in the application layer is that it could naturally
+extend from the metadata to the data plane, freeing VAST from the dependency on
+a distributed storage layer.
 
-This idea has two major drawbacks: It would complicate the API surface of the catalog component and require far-reaching refactorings in many client components. Additionally, the difficulty in designing and implementing a correct resynchronization protocol is not to be underestimated.
+This idea has two major drawbacks: It would complicate the API surface of the
+catalog component and require far-reaching refactorings in many client
+components. Additionally, the difficulty in designing and implementing a correct
+resynchronization protocol is not to be underestimated.
 
 ## Annex
 
