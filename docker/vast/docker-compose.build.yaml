@@ -1,0 +1,6 @@
+version: "3"
+services:
+  vast:
+    pull_policy: build
+    build:
+      context: ../..

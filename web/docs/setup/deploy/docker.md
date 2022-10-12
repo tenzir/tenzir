@@ -2,6 +2,13 @@
 sidebar_position: 0
 ---
 
+:::note Docker Compose
+We offer a range of Docker Compose files for quickly getting up and running with
+VAST. For more information, see the [`docker`][vast-repo-docker] directory.
+:::
+
+[vast-repo-docker]: https://github.com/tenzir/vast/tree/master/docker
+
 # Docker
 
 Our Docker image contains a dynamic of VAST build with plugins as shared
@@ -49,7 +56,7 @@ The `docker` arguments have the following meaning:
 - `-d` for detaching, i.e., running in background
 - `-t` for terminal output
 - `--name` to name the image
-- `--rm` to clear older volumes
+- `--rm` to remove the container after exiting
 - `-p` to expose the port to the outer world
 - `-v from:to` to mount the local path `from` into the container at `to`
 
@@ -79,6 +86,13 @@ your use case.
 
 Our official [Dockerfile](https://github.com/tenzir/vast/blob/master/Dockerfile)
 offers two starting points: a *development* and *production* layer.
+
+Before building the image, make sure to fetch all submodules:
+
+```bash
+git clone --recursive https://github.com/tenzir/vast
+cd vast
+```
 
 ### Build the production image
 

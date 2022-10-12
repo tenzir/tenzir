@@ -1,9 +1,9 @@
 vast:
   plugins:
-    - rest
+    - web
 
 plugins:
-  rest:
+  web:
     bind: 127.0.0.1
     port: 443
     mode: server

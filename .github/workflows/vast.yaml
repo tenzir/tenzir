@@ -44,6 +44,7 @@ jobs:
       release-version: ${{ steps.determine-version.outputs.release-version }}
       head-ref-slug: ${{ steps.determine-version.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.determine-version.outputs.base-ref-slug }}
+      docker-build-args: ${{ steps.determine-version.outputs.docker-build-args }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -56,6 +57,8 @@ jobs:
       - name: Determine Version
         id: determine-version
         run: |
+          # Set a bunch of version numbers depending on how we triggered the PR
+          # so they're consistent between jobs.
           build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
           build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
@@ -70,8 +73,30 @@ jobs:
           echo "::set-output name=before-sha::${before_sha}"
           echo "::set-output name=before-version::${before_version}"
           echo "::set-output name=release-version::${release_version}"
+          # Inject the branch slugs for cache names.
           echo "::set-output name=head-ref-slug::${GITHUB_HEAD_REF_SLUG}"
           echo "::set-output name=base-ref-slug::${GITHUB_BASE_REF_SLUG}"
+          # For pull requests we make it possible to cache all layers by setting
+          # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
+          # accept the downaside that this means that Docker images created
+          # within pull request triggers of this job display the merge-base
+          # version.
+          docker_build_args="-D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
+          docker_build_args="${docker_build_args} -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
+          # Since the Docker build does not have the Git context, we set
+          # version fallbacks manually here.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            vast_tag="${before_version}"
+          else
+            vast_tag="${build_version}"
+          fi
+          docker_build_args="${docker_build_args} -DVAST_VERSION_TAG:STRING=${vast_tag}"
+          for plugin in $(ls plugins); do
+            var="VAST_PLUGIN_${plugin^^}_REVISION"
+            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
+            docker_build_args="${docker_build_args} -D${var}:STRING=${value}"
+          done
+          echo "::set-output name=docker-build-args::${docker_build_args}"
 
   changelog:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
@@ -824,45 +849,12 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     name: Docker
     runs-on: ubuntu-20.04
-    env:
-      DOCKER_BUILDKIT: 1
-      # We explicitly disable SSE instructions here: The CI runners support it,
-      # but we want to support our prebuilt Docker images on older machines as
-      # well.
-      VAST_BUILD_OPTIONS: >-
-        -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
-        -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-      - name: Set VAST and Plugin Versions
-        run: |
-          # For pull requests we make it possible to cache all layers by setting
-          # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
-          # accept the downaside that this means that Docker images created
-          # within pull request triggers of this job display the merge-base
-          # version.
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            vast_tag="${{ needs.determine-version.outputs.before-version }}"
-          else
-            vast_tag="${{ needs.determine-version.outputs.build-version }}"
-          fi
-          # Since the Docker build does not have the Git context, we set
-          # version fallbacks manually here.
-          VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -DVAST_VERSION_TAG:STRING=${vast_tag}"
-          for plugin in $(ls plugins); do
-            var="VAST_PLUGIN_${plugin^^}_REVISION"
-            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
-            VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS} -D${var}:STRING=${value}"
-          done
-          echo "VAST_BUILD_OPTIONS=${VAST_BUILD_OPTIONS}" >> $GITHUB_ENV
+          submodules: recursive
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -880,11 +872,11 @@ jobs:
       - name: Build Docker Images
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            cache_to_ref="${{ needs.determine-version.outputs.head-ref-slug }}"
+            ref_tag="${{ needs.determine-version.outputs.head-ref-slug }}"
           else
-            cache_to_ref="${{ github.sha }}"
+            ref_tag="${{ github.sha }}"
           fi
-          cache_from_ref="${{ needs.determine-version.outputs.before-sha }}"
+          docker_build_args="${{ needs.determine-version.outputs.docker-build-args }}"
           # Build the Docker images using ghcr.io/tenzir/vast as a registry-type
           # layer cache. We upload this cache for every merge but also for every
           # pull request, using the head ref slug as an identifier within PRs.
@@ -893,21 +885,25 @@ jobs:
           # we attempt to restore from, which is the before sha for pushes and
           # the merge-base for pull requests.
           docker buildx build . -t tenzir/vast:latest --target production --load \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
+            --platform linux/amd64 \
+            --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:build-cache" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
           docker buildx build . -t tenzir/vast-dev:latest --target development --load \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
+            --platform linux/amd64 \
+            --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
           docker buildx build . -t tenzir/vast-deps:latest --target dependencies --load \
-            --build-arg VAST_BUILD_OPTIONS="${VAST_BUILD_OPTIONS}" \
+            --platform linux/amd64 \
+            --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_to_ref}" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:${cache_from_ref}"
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            docker tag tenzir/vast:latest "ghcr.io/tenzir/vast:${ref_tag}"
+            docker push "ghcr.io/tenzir/vast:${ref_tag}"
+          fi
       - name: Publish Docker Images
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
@@ -926,6 +922,44 @@ jobs:
               done
             done
           done
+
+  docker-compose:
+    needs:
+      - build-docker
+      - determine-version
+    if: github.event_name != 'workflow_dispatch'
+    name: Docker Compose
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Install Docker Compose v2 CLI
+        uses: ndeloof/install-compose-action@v0.0.1
+        with:
+          version: latest
+          legacy: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Integration Tests
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.head-ref-slug }}"
+          else
+            export VAST_CONTAINER_REF="${{ github.sha }}"
+          fi
+          export VAST_CONTAINER_REGISTRY=ghcr.io
+          docker/test
 
   build-nix:
     needs:

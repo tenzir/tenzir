@@ -1,0 +1,10 @@
+version: "3"
+services:
+  vast:
+    volumes:
+      - vast:/var/lib/vast/
+      - vast:/var/log/vast/
+
+volumes:
+  vast:
+    driver: local
