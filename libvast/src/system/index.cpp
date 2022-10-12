@@ -1638,6 +1638,10 @@ index(index_actor::stateful_pointer<index_state> self,
                             VAST_WARN("{} failed to erase store {} at {}: {}",
                                       *self, partition_id, store_path, err);
                         });
+                    rp.deliver(caf::make_error(ec::filesystem_error,
+                                               "aborting erasure due to "
+                                               "encountering an legacy "
+                                               "oversized partition"));
                   } else {
                     if (adjust_stats) {
                       auto stats = partition_chunk::get_statistics(chunk);
