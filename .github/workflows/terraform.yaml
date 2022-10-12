@@ -60,7 +60,7 @@ jobs:
         id: determine-version
         run: |
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
-          echo "::set-output name=release-version::${release_version}"
+          echo "release-version=${release_version}" >> $GITHUB_OUTPUT
 
   vastcloud-cli:
     name: Build and cache CLI
@@ -89,7 +89,7 @@ jobs:
           CLI_IMAGE="ghcr.io/tenzir/vast-cloud-cli:$(git rev-parse --short HEAD)"
           docker tag tenzir/vast-cloud-cli:latest "$CLI_IMAGE"
           docker push "$CLI_IMAGE"
-          echo "::set-output name=cached-img::${CLI_IMAGE}"
+          echo "cached-img=${CLI_IMAGE}" >> $GITHUB_OUTPUT
 
 
   vastcloud-local-init:
