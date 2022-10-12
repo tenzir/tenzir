@@ -247,17 +247,19 @@ transport channel is out of scope.
 
 A transaction that writes one or more partitions needs to store additional
 metadata, containing the offsets this partition is based on. This atomic commit
-of both the transaction and its (kafka) source metadata allows the source to
-pick up exactly at the point of failure, without risk of re-ingesting twice or
-missing any events. It thus provides exactly-once semantics for our write path.
-
-TODO: describe how we can do this with CAF as of today.
+of both the transaction and its source position allows the source to pick up
+exactly at the point of failure, without risk of re-ingesting twice or missing
+any events. It thus provides exactly-once semantics for our write path.
 
 In technical terms, we can extend the CAF Streaming message type to include a
-handle to the source that requires ACK'ing, and then trigger an ACK once the
-data has been persisted. VAST already implements a similar mechanism today that
-acknowledges when events arrived at an active partition, which (almost)
+handle to the source and source specific position, and then trigger an ACK once
+the data has been persisted. VAST already implements a similar mechanism today
+that acknowledges when events arrived at an active partition, which (almost)
 guarantees that they are queryable.
+
+When an exising source reconnects to an index component after a fault, it
+needs to request the most recently acknowlegded source position from the
+catalog and advance to the returned position to prevent double ingestion.
 
 ### Read Path
 
