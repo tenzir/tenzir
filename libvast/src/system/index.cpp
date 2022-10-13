@@ -556,11 +556,12 @@ caf::error index_state::load_from_disk() {
                  error);
   }
   // Reimport oversized partitions to rescue the data.
-  // This block is an attempt to recover from a critical issue that
-  // lead the creation of corrupted partition files with VAST versions
+  // This loop is an attempt to recover from a critical issue that would
+  // lead to the creation of corrupted partition files with VAST versions
   // before 2.3 if too many events were inserted into a single partition.
   // (although it was unlikely to happen with default settings).
-  if (!oversized_partitions.empty()) {
+  for (const auto& id : oversized_partitions) {
+    VAST_INFO("{} recovers corrupted partition {}", index, id);
     auto pipeline
       = std::make_shared<vast::pipeline>("recover", std::vector<std::string>{});
     auto identity_operator = make_pipeline_operator("identity", {});
@@ -570,41 +571,38 @@ caf::error index_state::load_from_disk() {
     auto store_id = std::string{store_actor_plugin->name()};
     // For this recovery we don't use the 'markers' mechanism
     // and store the output directly in the index directory.
-    auto store_path = dir.string() + "/{:l}";
-    auto synopsis_path = dir.string() + "/{:l}.mdx";
+    auto direct_store_path = dir.string() + "/{:l}";
+    auto direct_synopsis_path = dir.string() + "/{:l}.mdx";
     auto transformer
       = self->spawn(partition_transformer, store_id, synopsis_opts, index_opts,
-                    accountant, type_registry, filesystem, pipeline, store_path,
-                    synopsis_path);
+                    accountant, type_registry, filesystem, pipeline,
+                    direct_store_path, direct_synopsis_path);
     auto index = static_cast<index_actor>(self);
-    for (const auto& id : oversized_partitions) {
-      VAST_INFO("{} recovers corrupted partition {}", index, id);
-      auto store_path = dir / ".." / store_path_for_partition(id);
-      auto part_path = dir / to_string(id);
-      auto chk = chunk::mmap(store_path);
-      if (!chk) {
-        VAST_WARN("{} failed to recover data from {}: {}\n"
-                  "You can try to manually recover the data with\n"
-                  "$ lsvast {} | vast import json",
-                  index, store_path, store_path, chk.error());
-        continue;
-      }
-      auto seg = segment::make(std::move(*chk));
-      if (!seg) {
-        VAST_WARN("{} failed to construct a segment from  {}: {}", index,
-                  store_path, seg.error());
-        continue;
-      }
-      std::error_code err{};
-      if (!std::filesystem::remove(store_path, err))
-        VAST_WARN("{} failed to remove store file {} after recovery: {}", index,
-                  store_path, err);
-      if (!std::filesystem::remove(part_path, err))
-        VAST_WARN("{} failed to remove partition file {} after recovery: {}",
-                  index, part_path, err);
-      for (auto slice : *seg)
-        self->send(transformer, std::move(slice));
+    auto store_path = dir / ".." / store_path_for_partition(id);
+    auto part_path = dir / to_string(id);
+    auto chk = chunk::mmap(store_path);
+    if (!chk) {
+      VAST_WARN("{} failed to recover data from {}: {}\n"
+                "You can try to manually recover the data with\n"
+                "$ lsvast {} | vast import json",
+                index, store_path, store_path, chk.error());
+      continue;
     }
+    auto seg = segment::make(std::move(*chk));
+    if (!seg) {
+      VAST_WARN("{} failed to construct a segment from  {}: {}", index,
+                store_path, seg.error());
+      continue;
+    }
+    std::error_code err{};
+    if (!std::filesystem::remove(store_path, err))
+      VAST_WARN("{} failed to remove store file {} after recovery: {}", index,
+                store_path, err);
+    if (!std::filesystem::remove(part_path, err))
+      VAST_WARN("{} failed to remove partition file {} after recovery: {}",
+                index, part_path, err);
+    for (auto slice : *seg)
+      self->send(transformer, std::move(slice));
     self->send(transformer, atom::done_v);
     caf::scoped_actor blocking{self->system()};
     blocking->request(transformer, caf::infinite, atom::persist_v)
