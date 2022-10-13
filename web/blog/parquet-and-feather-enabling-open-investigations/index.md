@@ -23,6 +23,16 @@ question. In the next three blog posts, we
 
 <!--truncate-->
 
+:::info Parquet & Feather: 1/3
+This is blog post is part of a 3-piece series on Parquet and Feather.
+
+1. Enabling Open Investigations (this blog post)
+2. [Security Telemetry Benchmark][parquet-and-feather-2]
+3. TBD
+
+[parquet-and-feather-2]: /blog/parquet-and-feather-security-telemetry-benchmark/
+:::
+
 ## Why Parquet and Feather?
 
 Parquet is the de-facto standard for storing structured data in a format
