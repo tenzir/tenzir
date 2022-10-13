@@ -46,8 +46,122 @@ steps:
 4. Write Arrow out into a Parquet or Feather store
 
 Since steps (1–3) are the same for both stores, we ignore them in the following
-analysis and solely zoom in on (4). For our measurements, we collect the
-following data points:
+analysis and solely zoom in on (4).
+
+## Dataset
+
+For our evaluation, we use a dataset that models a "normal day in a corporate
+network" fused with data from for real-world attacks. While this approach might
+not be ideal for detection engineering, it provides enough diversity to analyze
+storage and processing behavior.
+
+Specifically, we rely on a 3.77 GB PCAP trace of the [M57 case study][m57]. We
+also injected real-world attacks from
+[malware-traffic-analysis.net][malware-traffic-analysis] into the PCAP trace. To
+make the timestamps look somewhat realistic, we shifted the timestamps of the
+PCAPs to pretend that the corresponding activity happens on the same day. For
+this we used  [`editcap`][editcap] and then merged the resulting PCAPs into one
+big file using [`mergecap`][mergecap].
+
+We then ran [Zeek](https://zeek.org) and [Suricata](https://suricata.io) over
+the trace to produce structured logs. For full reproducibility, we host this
+custom data set in a [Google Drive folder][m57-drive].
+
+[m57]: https://www.sciencedirect.com/science/article/pii/S1742287612000370
+[m57-drive]: https://drive.google.com/drive/folders/1mPJYVGKTk86P2JU3KD-WFz8tUkTLK095?usp=sharing
+[malware-traffic-analysis]: https://www.malware-traffic-analysis.net/index.html
+[editcap]: https://www.wireshark.org/docs/wsug_html_chunked/AppToolseditcap.html
+[mergecap]: https://www.wireshark.org/docs/wsug_html_chunked/AppToolsmergecap.html
+
+VAST can ingest PCAP, Zeek, and Suricata natively. All three data sources are
+highly valuable for detection and investigation, which is why we use them in
+this analysis. They represent a good mix of nested and structured data (Zeek &
+Suricata) vs. simple-but-bulky data (PCAP). To give you a flavor, here's an
+example Zeek log:
+
+```
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	http
+#open	2022-04-20-09-56-45
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	trans_depth	method	host	uri	referrer	version	user_agent	origin	request_body_len	response_body_len	status_code	status_msg	info_code	info_msg	tags	username	password	proxied	orig_fuids	orig_filenames	orig_mime_types	resp_fuids	resp_filenames	resp_mime_types
+#types	time	string	addr	port	addr	port	count	string	string	string	string	string	string	string	count	count	count	string	count	string	set[enum]	string	string	set[string]	vector[string]	vector[string]	vector[string]	vector[string]	vector[string]	vector[string]
+1637155963.249475	CrkwBA3xeEV9dzj1n	128.14.134.170	57468	198.71.247.91	80	1	GET	198.71.247.91	/	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36 	-	0	51	200	OK	-	-	(empty)	-	-	-	-	-	-	FhEFqzHx1hVpkhWci	-	text/html
+1637157241.722674	Csf8Re1mi6gYI3JC6f	87.251.64.137	64078	198.71.247.91	80	1	-	-	-	-	1.1	-	-	0	18	400	Bad Request	-	-	(empty)	-	-	-	-	-	-	FpKcQG2BmJjEU9FXwh	-	text/html
+1637157318.182504	C1q1Lz1gxAAyf4Wrzk	139.162.242.152	57268	198.71.247.91	80	1	GET	198.71.247.91	/	-	1.1	Mozilla/5.0 (Windows NT 6.1; WOW64; rv:8.0) Gecko/20100101 Firefox/8.0	-	0	51	200	OK	-	-	(empty)	-	-	-	-	-	-	FyTOLL1rVGzjXoNAb	-	text/html
+1637157331.507633	C9FzNf12ebDETzvDLk	172.70.135.112	37220	198.71.247.91	80	1	GET	lifeisnetwork.com	/	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	-	0	51	200	OK	-	-	(empty)	-	-	X-FORWARDED-FOR -> 137.135.117.126	-	-	-	Fnmp6k1xVFoqqIO5Ub	-	text/html
+1637157331.750342	C9FzNf12ebDETzvDLk	172.70.135.112	37220	198.71.247.91	80	2	GET	lifeisnetwork.com	/	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	-	0	51	200	OK	-	-	(empty)	-	-	X-FORWARDED-FOR -> 137.135.117.126	-	-	-	F1uLr1giTpXx81dP4	-	text/html
+1637157331.915255	C9FzNf12ebDETzvDLk	172.70.135.112	37220	198.71.247.91	80	3	GET	lifeisnetwork.com	/wp-includes/wlwmanifest.xml	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	-	0	279	404	Not Found	-	-	(empty)	-	-	X-FORWARDED-FOR -> 137.135.117.126	-	-	-	F9dg5w2y748yNX9ZCc	-	text/html
+1637157331.987527	C9FzNf12ebDETzvDLk	172.70.135.112	37220	198.71.247.91	80	4	GET	lifeisnetwork.com	/xmlrpc.php?rsd	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	-	0	279	404	Not Found	-	-	(empty)	-	-	X-FORWARDED-FOR -> 137.135.117.126	-	-	-	FxzLxklm7xyuzTF8h	-	text/html
+```
+
+Here's a snippet of a Suricata log:
+
+```json
+{"timestamp":"2021-11-17T14:32:43.262184+0100","flow_id":1129058930499898,"pcap_cnt":7,"event_type":"http","src_ip":"128.14.134.170","src_port":57468,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":0,"community_id":"1:YXWfTYEyYLKVv5Ge4WqijUnKTrM=","http":{"hostname":"198.71.247.91","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:32:43.237882+0100","flow_id":675134617085815,"event_type":"flow","src_ip":"54.176.143.72","dest_ip":"198.71.247.91","proto":"ICMP","icmp_type":8,"icmp_code":0,"response_icmp_type":0,"response_icmp_code":0,"flow":{"pkts_toserver":1,"pkts_toclient":1,"bytes_toserver":50,"bytes_toclient":50,"start":"2021-11-17T14:43:34.649079+0100","end":"2021-11-17T14:43:34.649210+0100","age":0,"state":"established","reason":"timeout","alerted":false},"community_id":"1:WHH+8OuOygRPi50vrH45p9WwgA4="}
+{"timestamp":"2021-11-17T14:32:48.254950+0100","flow_id":1129058930499898,"pcap_cnt":10,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"128.14.134.170","dest_port":57468,"proto":"TCP","http":{"hostname":"198.71.247.91","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":0}}
+{"timestamp":"2021-11-17T14:55:18.327585+0100","flow_id":652708491465446,"pcap_cnt":206,"event_type":"http","src_ip":"139.162.242.152","src_port":57268,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":0,"community_id":"1:gEyyy4v7MJSsjLvl+3D17G/rOIY=","http":{"hostname":"198.71.247.91","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64; rv:8.0) Gecko/20100101 Firefox/8.0","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:55:18.329669+0100","flow_id":652708491465446,"pcap_cnt":208,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"139.162.242.152","dest_port":57268,"proto":"TCP","http":{"hostname":"198.71.247.91","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64; rv:8.0) Gecko/20100101 Firefox/8.0","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":0}}
+{"timestamp":"2021-11-17T14:55:31.569634+0100","flow_id":987097466129838,"pcap_cnt":224,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":0,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:55:31.750383+0100","flow_id":987097466129838,"pcap_cnt":226,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":0}}
+{"timestamp":"2021-11-17T14:55:31.812254+0100","flow_id":987097466129838,"pcap_cnt":228,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":1,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:55:31.915298+0100","flow_id":987097466129838,"pcap_cnt":230,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":1}}
+{"timestamp":"2021-11-17T14:55:31.977269+0100","flow_id":987097466129838,"pcap_cnt":232,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":2,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/wp-includes/wlwmanifest.xml","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":404,"length":279}}
+{"timestamp":"2021-11-17T14:55:31.987556+0100","flow_id":987097466129838,"pcap_cnt":234,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/wp-includes/wlwmanifest.xml","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":404,"length":279},"app_proto":"http","fileinfo":{"filename":"/wp-includes/wlwmanifest.xml","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":279,"tx_id":2}}
+{"timestamp":"2021-11-17T14:55:32.049539+0100","flow_id":987097466129838,"pcap_cnt":236,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":3,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/xmlrpc.php?rsd","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":404,"length":279}}
+{"timestamp":"2021-11-17T14:55:32.057985+0100","flow_id":987097466129838,"pcap_cnt":238,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/xmlrpc.php?rsd","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":404,"length":279},"app_proto":"http","fileinfo":{"filename":"/xmlrpc.php","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":279,"tx_id":3}}
+{"timestamp":"2021-11-17T14:55:32.119589+0100","flow_id":987097466129838,"pcap_cnt":239,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":4,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:55:32.127935+0100","flow_id":987097466129838,"pcap_cnt":241,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":4}}
+```
+
+Note that Zeek's tab-separated value (TSV) format is already a structured table,
+whereas Suricata data needs to be demultiplexed first through the `event_type`
+field.
+
+The PCAP packet type is currently hardcoded in VAST's PCAP plugin:
+
+```cpp
+type make_packet_type() {
+  const auto port_type = type{"port", count_type{}};
+  const auto timestamp_type = type{"timestamp", time_type{}};
+  return type{
+    "pcap.packet",
+    record_type{
+      {"time", timestamp_type},
+      {"src", address_type{}},
+      {"dst", address_type{}},
+      {"sport", port_type},
+      {"dport", port_type},
+      {"vlan",
+       record_type{
+         {"outer", count_type{}},
+         {"inner", count_type{}},
+       }},
+      {"community_id", type{string_type{}, {{"index", "hash"}}}},
+      {"payload", type{string_type{}, {{"skip"}}}},
+    },
+  };
+}
+```
+
+Now that we've looked at the structure of the dataset, let's take a look at our
+measurement methodology.
+
+### Measurement
+
+Our objective is understanding the storage and runtime characteristics of
+Parquet and Feather on the provided input data. To this end, we instrumented
+VAST to produce us with a measurement trace file that we then analyze with R for
+gaining insights. The [corresponding patch]() is not meant for further
+production, so we kept it separate. But we did find an opportunity to improve
+VAST and [made the Zstd compression level configurable][pr-2623].
+
+[pr-2623]: https://github.com/tenzir/vast/pull/2623
+
+Our instrumentation produced a [CSV file](data.csv) with the following features:
 
 - **Store**: the type of store plugin used in the measurement, i.e., `parquet`
   or `feather`.
@@ -60,88 +174,9 @@ following data points:
 - **Number of events**: the total number of events in all input record batches
 - **Number of record batches**
 - **Schema**: the name of the schema; there exists one store file per schema
-- **Zstd compression level**: the applied Zstd compression level 
+- **Zstd compression level**: the applied Zstd compression level
 
-## Dataset
-
-The dataset used in our experimental setup is a cross between a "normal day in
-a corporate network" and a set of malware attacks, found on
-[malware-traffic-analysis.net][malware-traffic-analysis].
-
-TODO: I wasn't able to find a reference to M57 online, which would be nice.
-
-The idea is to create a large body of innocent-looking, regular network
-traffic, playing the role of background noise, for a set of common and
-well-known attack scenarios.
-
-To make this look somewhat realistic, the individual datasets' time stamps have
-been shifted to pretend them happening all on the same day using
-[`wireshark`][wireshark], in particular [`editcap`][editcap]. The resulting
-pcap files are merged into one big file using [`mergecap`][mergecap].
-
-The resulting pcap files were additionally processed using [zeek][zeek] and
-[suricata][suricata], providing three distinct data sources with 
-35 different output schemas for our ingestion experiments:
-
-+------------------+-------+
-|            schema| events|
-+------------------+-------+
-|       pcap.packet|6349174|
-|  suricata.anomaly|   4190|
-|      suricata.dns| 144560|
-|   suricata.dcerpc|  17116|
-|     suricata.dhcp|    324|
-|      suricata.dns| 144560|
-| suricata.fileinfo|  17982|
-|     suricata.flow| 564873|
-|      suricata.ftp|    544|
-|     suricata.http|  75367|
-|    suricata.ikev2|      1|
-|     suricata.krb5|   1689|
-|      suricata.sip|    468|
-|      suricata.smb|  32384|
-|     suricata.smtp|    405|
-|     suricata.snmp|    144|
-|     suricata.tftp|     31|
-|      suricata.tls|  41465|
-|         zeek.conn| 583838|
-|            zeek.d|  90013|
-|      zeek.dce_rpc|  19585|
-|         zeek.dhcp|    267|
-|          zeek.dns|  90013|
-|          zeek.dpd|    870|
-|        zeek.files|  21847|
-|          zeek.ftp|      4|
-|         zeek.http|  75290|
-|     zeek.kerberos|   2708|
-|         zeek.ntlm|    429|
-|          zeek.ntp|   1224|
-|         zeek.ocsp|   2874|
-|zeek.packet_filter|      1|
-|           zeek.pe|    315|
-|       zeek.radius|      1|
-|     zeek.reporter|      7|
-|          zeek.sip|    565|
-|    zeek.smb_files|   1059|
-|  zeek.smb_mapping|   1584|
-|         zeek.smtp|   1967|
-|         zeek.snmp|    132|
-|          zeek.ssl|  41372|
-|       zeek.tunnel|    606|
-|        zeek.weird|   4965|
-|         zeek.x509|   2575|
-+------------------+-------+
-
-TODO: this table was generated with spark via
-`data.groupBy('schema).agg(max('num_events).alias("events")).orderBy('schema).show`. 
-Should be embedded w/ R, maybe? - Or, not at all as it's quite long and not telling much?
-
-[malware-traffic-analysis]: https://www.malware-traffic-analysis.net/index.html
-[wireshark]: https://www.wireshark.org
-[editcap]: https://www.wireshark.org/docs/wsug_html_chunked/AppToolseditcap.html
-[mergecap]: https://www.wireshark.org/docs/wsug_html_chunked/AppToolsmergecap.html
-[zeek]: https://zeek.org/
-[suricata]: https://suricata.io/
+Let's take a look at the data.
 
 ```{r}
 #| code-fold: true
