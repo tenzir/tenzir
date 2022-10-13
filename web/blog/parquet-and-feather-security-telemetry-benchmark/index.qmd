@@ -15,11 +15,11 @@ structured security data? In this blog post, we answer this question.
 
 <!--truncate-->
 
-:::note Parquet & Feather: 2/3
+:::info Parquet & Feather: 2/3
 This is blog post is part of a 3-piece series on Parquet and Feather.
 
 1. [Enabling Open Investigations][parquet-and-feather-1]
-2. Security Telemetry Benchmark
+2. Security Telemetry Benchmark (this blog post)
 3. TBD
 
 [parquet-and-feather-1]: /blog/parquet-and-feather-enabling-open-investigations/
