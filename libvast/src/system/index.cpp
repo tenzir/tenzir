@@ -546,7 +546,7 @@ caf::error index_state::load_from_disk() {
   // before 2.3 if too many events were inserted into a single partition.
   // (although it was unlikely to happen with default settings).
   for (const auto& id : oversized_partitions) {
-    VAST_INFO("{} recovers corrupted partition {}", index, id);
+    VAST_INFO("{} recovers corrupted partition {}", *self, id);
     auto pipeline
       = std::make_shared<vast::pipeline>("recover", std::vector<std::string>{});
     auto identity_operator = make_pipeline_operator("identity", {});
@@ -570,22 +570,22 @@ caf::error index_state::load_from_disk() {
       VAST_WARN("{} failed to recover data from {}: {}\n"
                 "You can try to manually recover the data with\n"
                 "$ lsvast {} | vast import json",
-                index, store_path, store_path, chk.error());
+                *self, store_path, store_path, chk.error());
       continue;
     }
     auto seg = segment::make(std::move(*chk));
     if (!seg) {
-      VAST_WARN("{} failed to construct a segment from  {}: {}", index,
+      VAST_WARN("{} failed to construct a segment from  {}: {}", *self,
                 store_path, seg.error());
       continue;
     }
     std::error_code err{};
     if (!std::filesystem::remove(store_path, err))
-      VAST_WARN("{} failed to remove store file {} after recovery: {}", index,
+      VAST_WARN("{} failed to remove store file {} after recovery: {}", *self,
                 store_path, err);
     if (!std::filesystem::remove(part_path, err))
       VAST_WARN("{} failed to remove partition file {} after recovery: {}",
-                index, part_path, err);
+                *self, part_path, err);
     for (auto slice : *seg)
       self->send(transformer, std::move(slice));
     self->send(transformer, atom::done_v);
