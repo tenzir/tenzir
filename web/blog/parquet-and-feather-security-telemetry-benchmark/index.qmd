@@ -88,7 +88,7 @@ The resulting pcap files were additionally processed using [zeek][zeek] and
 +------------------+-------+
 |       pcap.packet|6349174|
 |  suricata.anomaly|   4190|
-|        suricata.d| 144560|
+|      suricata.dns| 144560|
 |   suricata.dcerpc|  17116|
 |     suricata.dhcp|    324|
 |      suricata.dns| 144560|
