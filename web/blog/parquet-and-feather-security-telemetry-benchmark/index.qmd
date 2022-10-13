@@ -53,19 +53,95 @@ following data points:
   or `feather`.
 - **Construction time**: the time it takes to convert Arrow record batches into
   Parquet or Feather. We fenced the corresponding code blocks and computed the
-  difference microseconds.
+  difference in nanoseconds.
 - **Input size**: the number of bytes that the to-be-converted record batches
   consume.
 - **Output size**: the number of bytes that the store file takes up.
 - **Number of events**: the total number of events in all input record batches
 - **Number of record batches**
 - **Schema**: the name of the schema; there exists one store file per schema
+- **Zstd compression level**: the applied Zstd compression level 
 
 ## Dataset
 
-:::caution TODO
-Describe the dataset.
-:::
+The dataset used in our experimental setup is a cross between a "normal day in
+a corporate network" and a set of malware attacks, found on
+[malware-traffic-analysis.net][malware-traffic-analysis].
+
+TODO: I wasn't able to find a reference to M57 online, which would be nice.
+
+The idea is to create a large body of innocent-looking, regular network
+traffic, playing the role of background noise, for a set of common and
+well-known attack scenarios.
+
+To make this look somewhat realistic, the individual datasets' time stamps have
+been shifted to pretend them happening all on the same day using
+[`wireshark`][wireshark], in particular [`editcap`][editcap]. The resulting
+pcap files are merged into one big file using [`mergecap`][mergecap].
+
+The resulting pcap files were additionally processed using [zeek][zeek] and
+[suricata][suricata], providing three distinct data sources with 
+35 different output schemas for our ingestion experiments:
+
++------------------+-------+
+|            schema| events|
++------------------+-------+
+|       pcap.packet|6349174|
+|  suricata.anomaly|   4190|
+|        suricata.d| 144560|
+|   suricata.dcerpc|  17116|
+|     suricata.dhcp|    324|
+|      suricata.dns| 144560|
+| suricata.fileinfo|  17982|
+|     suricata.flow| 564873|
+|      suricata.ftp|    544|
+|     suricata.http|  75367|
+|    suricata.ikev2|      1|
+|     suricata.krb5|   1689|
+|      suricata.sip|    468|
+|      suricata.smb|  32384|
+|     suricata.smtp|    405|
+|     suricata.snmp|    144|
+|     suricata.tftp|     31|
+|      suricata.tls|  41465|
+|         zeek.conn| 583838|
+|            zeek.d|  90013|
+|      zeek.dce_rpc|  19585|
+|         zeek.dhcp|    267|
+|          zeek.dns|  90013|
+|          zeek.dpd|    870|
+|        zeek.files|  21847|
+|          zeek.ftp|      4|
+|         zeek.http|  75290|
+|     zeek.kerberos|   2708|
+|         zeek.ntlm|    429|
+|          zeek.ntp|   1224|
+|         zeek.ocsp|   2874|
+|zeek.packet_filter|      1|
+|           zeek.pe|    315|
+|       zeek.radius|      1|
+|     zeek.reporter|      7|
+|          zeek.sip|    565|
+|    zeek.smb_files|   1059|
+|  zeek.smb_mapping|   1584|
+|         zeek.smtp|   1967|
+|         zeek.snmp|    132|
+|          zeek.ssl|  41372|
+|       zeek.tunnel|    606|
+|        zeek.weird|   4965|
+|         zeek.x509|   2575|
++------------------+-------+
+
+TODO: this table was generated with spark via
+`data.groupBy('schema).agg(max('num_events).alias("events")).orderBy('schema).show`. 
+Should be embedded w/ R, maybe? - Or, not at all as it's quite long and not telling much?
+
+[malware-traffic-analysis]: https://www.malware-traffic-analysis.net/index.html
+[wireshark]: https://www.wireshark.org
+[editcap]: https://www.wireshark.org/docs/wsug_html_chunked/AppToolseditcap.html
+[mergecap]: https://www.wireshark.org/docs/wsug_html_chunked/AppToolsmergecap.html
+[zeek]: https://zeek.org/
+[suricata]: https://suricata.io/
 
 ```{r}
 #| code-fold: true
@@ -158,6 +234,9 @@ also have more batches compared to Feather.
 
 :::caution TODO
 Thomas, why? :-)
+
+I don't think this is true anymore, I spot-checked a bunch of schemas and `num_slices`
+is consistent across those.
 :::
 
 This high variance in number of events per store is suboptimal, because every
