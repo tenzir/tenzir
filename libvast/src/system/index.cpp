@@ -1582,7 +1582,7 @@ index(index_actor::stateful_pointer<index_state> self,
                         });
                     rp.deliver(caf::make_error(ec::filesystem_error,
                                                "aborting erasure due to "
-                                               "encountering an legacy "
+                                               "encountering a legacy "
                                                "oversized partition"));
                   } else {
                     if (adjust_stats) {
