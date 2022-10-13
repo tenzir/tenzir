@@ -485,7 +485,7 @@ caf::error index_state::load_from_disk() {
         if (std::filesystem::exists(store_path, err))
           oversized_partitions.push_back(partition_uuid);
         else
-          VAST_WARN("{} didn't not find a store file for the oversized "
+          VAST_WARN("{} did not find a store file for the oversized "
                     "partition {} and won't attempt to recover the data",
                     *self, partition_uuid);
       } else
@@ -1665,6 +1665,10 @@ index(index_actor::stateful_pointer<index_state> self,
                             VAST_WARN("{} failed to erase store {} at {}: {}",
                                       *self, partition_id, store_path, err);
                         });
+                    rp.deliver(caf::make_error(ec::filesystem_error,
+                                               "aborting erasure due to "
+                                               "encountering a legacy "
+                                               "oversized partition"));
                   } else {
                     if (adjust_stats) {
                       auto stats = partition_chunk::get_statistics(chunk);
