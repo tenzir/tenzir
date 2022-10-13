@@ -121,7 +121,7 @@ Note that Zeek's tab-separated value (TSV) format is already a structured table,
 whereas Suricata data needs to be demultiplexed first through the `event_type`
 field.
 
-The PCAP packet type is currently hardcoded in VAST's PCAP plugin:
+The PCAP packet type is currently hard-coded in VAST's PCAP plugin:
 
 ```cpp
 type make_packet_type() {
@@ -155,11 +155,12 @@ measurement methodology.
 Our objective is understanding the storage and runtime characteristics of
 Parquet and Feather on the provided input data. To this end, we instrumented
 VAST to produce us with a measurement trace file that we then analyze with R for
-gaining insights. The [corresponding patch]() is not meant for further
+gaining insights. The [corresponding patch][patch] is not meant for further
 production, so we kept it separate. But we did find an opportunity to improve
 VAST and [made the Zstd compression level configurable][pr-2623].
 
 [pr-2623]: https://github.com/tenzir/vast/pull/2623
+[patch]: TBD
 
 Our instrumentation produced a [CSV file](data.csv) with the following features:
 
@@ -176,7 +177,8 @@ Our instrumentation produced a [CSV file](data.csv) with the following features:
 - **Schema**: the name of the schema; there exists one store file per schema
 - **Zstd compression level**: the applied Zstd compression level
 
-Let's take a look at the data.
+Every row corresponds to a single store file where we varied some of these
+parameters. Let's take a look at the data.
 
 ```{r}
 #| code-fold: true
@@ -211,7 +213,7 @@ aggregated <- normalized |>
             memory = mean(bytes_memory_normalized),
             storage = mean(bytes_storage_normalized))
 
-# Treat in-memory measuremts as just another storage type.
+# Treat in-memory measurements as just another storage type.
 memory <- aggregated |>
   filter(store == "feather" & zstd.level == 1) |>
   mutate(store = "memory", store_class = "memory") |>
@@ -224,89 +226,6 @@ unified <- aggregated |>
   unite("store", store_class, zstd.level, sep = "+", remove = FALSE)
 ```
 
-### Batching
-
-When working with security event data, we see highly variable data shapes. Some
-event types completely cominate a dataset, and the long tail is large.
-
-On the inside, a store is just a concatenation of Arrow record batches. This
-means the "batching shape" of the store is defined by two factors: number of
-events per batch and total number of batches. Let's plot these against each
-other to get a feel of the data:
-
-```{r}
-#| code-fold: true
-#| label: events
-no_segment <- data |>
-  filter(zstd.level == 1) |>
-  filter(store != "segment")
-
-no_segment |>
-  ggplot(aes(x = num_events, y = num_slices, size = bytes_in_storage, color = store)) +
-    geom_point(alpha = 0.1) +
-    scale_size(range = c(2, 10), labels = scales::label_bytes(units = "auto_si")) +
-    scale_x_log10(labels = scales::label_comma()) +
-    labs(color = "Store", size = "Size", x = "Events", y = "Batches")
-```
-
-Each point in the above plot represents one store file. The x-axis (log-scaled)
-represents the number of events in the store and the y-axis the number of
-batches. The point diameter represents the size of the store file on disk. The
-color denotes the type of store: Parquet or Feather. We omit our Segment store,
-as it's almost identical to Feather.
-
-```{r}
-#| echo: false
-top <- no_segment |> arrange(num_events) |> tail(1)
-bot <- no_segment |> arrange(num_events) |> head(1)
-```
-
-Our dataset has everything from a few dozons to millions of events per store.
-The event "`r top |> pull(schema)`" contains a total of
-`r top |> pull(num_events) |> label_comma()()` events, whereas the event
-"`r bot |> pull(schema)`" has only `r bot |> pull(num_events)`. Parquet files
-also have more batches compared to Feather.
-
-:::caution TODO
-Thomas, why? :-)
-
-I don't think this is true anymore, I spot-checked a bunch of schemas and `num_slices`
-is consistent across those.
-:::
-
-This high variance in number of events per store is suboptimal, because every
-partition (that contains the store) has a unique entry and indexes in the
-catalog. This causes fragmentation. Ideally, we would like to create a uniform
-number of events per partition. Thankfully, VAST users do not have to worry
-about this churn. As of [v2.3](/blog/vast-v2.3), we have automatic rebuilding in
-place, which merges underfull partitions to reduce pressure on the central
-catalog.
-
-How does the number of events relates to their size?
-
-```{r}
-#| code-fold: true
-#| label: log-log-event-memory
-no_segment |>
-  ggplot(aes(x = num_events, y = bytes_memory, color = store)) +
-    geom_smooth(method = "lm", se = FALSE, size = 0.5) +
-    geom_point(alpha = 0.5) +
-    guides(color = "none") +
-    scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
-    scale_x_log10(labels = scales::label_comma()) +
-    labs(color = "Store", x = "Events", y = "Bytes (in memory)") +
-    facet_grid(~ store)
-```
-
-The above [log-log plot](https://en.wikipedia.org/wiki/Log%E2%80%93log_plot)
-includes a fitted linear model. Except for the tails, we can see that the points
-align on a straight line. This means that there exists a power-function
-relationship between the number of events and the store size. The slope of the
-line is the exponent and precisely captures this relationship.
-
-For the remainder of the analysis, we look at the normalized event size, by
-dividing the store size by the number of contained events.
-
 ### Schemas
 
 We have a total of `r length(unique(data$schema))` unique schemas:
@@ -317,38 +236,36 @@ We have a total of `r length(unique(data$schema))` unique schemas:
 unique(data$schema)
 ```
 
-The schemas belong to three data types: Zeek, Suricata, and PCAP. These are all
-data sources VAST can ingest natively. Zeek and Suricata are text, whereas PCAP
-is a binary format representing a stream of network packets.
+The schemas belong to three data *modules*: Zeek, Suricata, and PCAP. A module
+is the prefix of a concrete type, e.g., for the schema `zeek.conn` the module is
+`zeek` and the type is `conn`. This is only a distinction in terminology,
+internally VAST stores the full-qualified type as schema name.
 
-Our dataset has multiple different schemas, each of which has a different number
-of events:
+How many events do we have per schema?
 
 ```{r}
 #| code-fold: true
 #| label: number-of-events-by-schema
 schemas <- normalized |>
-  filter(store == "feather") |>
+  # Pick one element from the run matrix.
+  filter(store == "feather" & zstd.level == 1) |>
   group_by(schema) |>
-  summarize(n = median(num_events),
-            bytes_memory = median(bytes_memory))
+  summarize(n = sum(num_events),
+            bytes_memory = sum(bytes_memory))
 
 schemas |>
   separate(schema, c("module", "type"), remove = FALSE) |>
   ggplot(aes(x = reorder(schema, -n), y = n, fill = module)) +
     geom_bar(stat = "identity") +
-    guides(fill = "none") +
     scale_y_log10(labels = scales::label_comma()) +
-    labs(x = "Schema", y = "Number of Events", color = "Module") +
+    labs(x = "Schema", y = "Number of Events", fill = "Module") +
     theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
 ```
 
-Zeek connection logs lead the pack, followed by PCAP packets. Some more
-voluminous events represent the long tail, e.g., `suricata.ikev2`. What this
-shows is basically that we have a diverse dataset. We already saw the
-relationship between the number of events and their (in-memory) size on the
-log-log plot earlier, but if we exchange number of events with their size, we
-can observe almost the same order:
+The above plot (log-scaled y-axis) shows how many events we have per type.
+Between 1 and 100M events, we almost see everything. If we keep the order of the
+schema from the above plot, but exchange number of event with event size in
+memory, we can observe an inverse relationship between size and frequency:
 
 ```{r}
 #| code-fold: true
@@ -362,6 +279,22 @@ schemas |>
     labs(x = "Schema", y = "Bytes (in-memory)", color = "Module") +
     theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
 ```
+
+### Batching
+
+On the inside, a store is just a concatenation of Arrow record batches. In
+Feather they are literally concatenated sequentially, whereas Parquet
+concatenates them column-wise. Most stores only consist of a few record
+batches. PCAP is the only difference.
+
+Small stores are suboptimal because the catalog keeps in-memory state that is
+a linear function of the number of stores. (We are aware of this limitation and
+are exploring workarounds, but this topic is out of scope for this post.) The
+issue here is catalog fragmentation.
+
+As of [v2.3](/blog/vast-v2.3), VAST has automatic rebuilding in place, which
+merges underfull partitions to reduce pressure on the catalog. This doesn't fix
+the problem of linear state, but it provides a lot more mileage.
 
 ## Size
 
