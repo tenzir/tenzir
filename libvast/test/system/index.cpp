@@ -27,6 +27,7 @@
 #include "vast/test/test.hpp"
 
 #include <filesystem>
+#include <unistd.h>
 
 using caf::after;
 
@@ -35,10 +36,70 @@ using namespace std::chrono;
 
 namespace {
 
+static constexpr uint32_t in_mem_partitions = 8;
+static constexpr uint32_t taste_count = 4;
+static constexpr size_t num_query_supervisors = 1;
+
+system::query_cursor query(fixtures::deterministic_actor_system& fixture,
+                           system::index_actor index, std::string_view expr) {
+  auto& self = fixture.self;
+  self->send(index, atom::evaluate_v,
+             vast::query_context::make_extract("test", self,
+                                               unbox(to<expression>(expr))));
+  fixture.run();
+  system::query_cursor result;
+  self->receive(
+    [&](const system::query_cursor& cursor) {
+      result = cursor;
+    },
+    after(0s) >>
+      [&] {
+        FAIL("INDEX did not respond to query");
+      });
+  return result;
+}
+
+size_t receive_result(fixtures::deterministic_actor_system& fixture,
+                      system::index_actor index, const uuid& query_id,
+                      uint32_t hits, uint32_t scheduled) {
+  auto& self = fixture.self;
+  size_t result = 0;
+  uint32_t collected = 0;
+  auto fetch = [&](size_t batch) {
+    auto done = false;
+    while (!done)
+      self->receive(
+        [&](table_slice& slice) {
+          // test
+          result += slice.rows();
+        },
+        [&](atom::done) {
+          done = true;
+        },
+        caf::others >> [](caf::message_view& msg) -> caf::result<caf::message> {
+          FAIL("unexpected message: " << msg.content());
+          return caf::none;
+        },
+        after(0s) >>
+          [&] {
+            FAIL("ran out of messages");
+          });
+    if (!self->mailbox().empty())
+      FAIL("mailbox not empty after receiving the 'done' for a batch: "
+           << to_string(*self->mailbox().peek()));
+    collected += batch;
+  };
+  fetch(scheduled);
+  while (collected < hits) {
+    auto batch = std::min(hits - collected, taste_count);
+    self->send(index, query_id, batch);
+    fixture.run();
+    fetch(batch);
+  }
+  return result;
+}
+
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  static constexpr uint32_t in_mem_partitions = 8;
-  static constexpr uint32_t taste_count = 4;
-  static constexpr size_t num_query_supervisors = 1;
 
   fixture()
     : fixtures::deterministic_actor_system_and_events(
@@ -63,59 +124,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   system::query_cursor query(std::string_view expr) {
-    self->send(index, atom::evaluate_v,
-               vast::query_context::make_extract("test", self,
-                                                 unbox(to<expression>(expr))));
-    run();
-    system::query_cursor result;
-    self->receive(
-      [&](const system::query_cursor& cursor) {
-        result = cursor;
-      },
-      after(0s) >>
-        [&] {
-          FAIL("INDEX did not respond to query");
-        });
-    return result;
+    return ::query(*this, index, expr);
   }
 
   size_t
   receive_result(const uuid& query_id, uint32_t hits, uint32_t scheduled) {
-    size_t result = 0;
-    uint32_t collected = 0;
-    auto fetch = [&](size_t batch) {
-      auto done = false;
-      while (!done)
-        self->receive(
-          [&](table_slice& slice) {
-            // test
-            result += slice.rows();
-          },
-          [&](atom::done) {
-            done = true;
-          },
-          caf::others >>
-            [](caf::message_view& msg) -> caf::result<caf::message> {
-            FAIL("unexpected message: " << msg.content());
-            return caf::none;
-          },
-          after(0s) >>
-            [&] {
-              FAIL("ran out of messages");
-            });
-      if (!self->mailbox().empty())
-        FAIL("mailbox not empty after receiving the 'done' for a batch: "
-             << to_string(*self->mailbox().peek()));
-      collected += batch;
-    };
-    fetch(scheduled);
-    while (collected < hits) {
-      auto batch = std::min(hits - collected, taste_count);
-      self->send(index, query_id, batch);
-      run();
-      fetch(batch);
-    }
-    return result;
+    return ::receive_result(*this, index, query_id, hits, scheduled);
   }
 
   template <class T>
@@ -212,6 +226,55 @@ TEST(iterable zeek conn log query result) {
     auto result = receive_result(query_id, hits, scheduled);
     CHECK_EQUAL(result, expected_result);
   }
+}
+
+FIXTURE_SCOPE_END()
+
+namespace {
+
+struct recovery_fixture : fixtures::deterministic_actor_system {
+  recovery_fixture()
+    : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
+  }
+
+  system::type_registry_actor type_registry = {};
+};
+
+} // namespace
+
+FIXTURE_SCOPE(recovery_tests, recovery_fixture)
+
+TEST(oversized partition recovery) {
+  std::error_code ec{};
+  auto root_dir = absolute(directory);
+  std::filesystem::copy(std::filesystem::path{VAST_TEST_PATH}
+                          / "artifacts/databases/suricata-flow",
+                        root_dir, std::filesystem::copy_options::recursive, ec);
+  MESSAGE(ec.message());
+  MESSAGE(root_dir);
+  auto index_dir = root_dir / "index";
+  // ftruncate the partition file
+  CHECK_EQUAL(
+    ::truncate((index_dir / "3e3ac6a7-7ddd-46d9-bf1b-0c95e2b40033").c_str(),
+               3ull * 1024 * 1024 * 1024),
+    0);
+  auto fs = self->spawn(system::posix_filesystem, root_dir);
+  auto catalog = self->spawn(system::catalog, system::accountant_actor{});
+  auto index
+    = self->spawn(system::index, system::accountant_actor{}, fs,
+                  system::archive_actor{}, catalog, type_registry, index_dir,
+                  defaults::system::store_backend, 1000u, vast::duration{},
+                  in_mem_partitions, taste_count, num_query_supervisors,
+                  index_dir, vast::index_config{});
+  run();
+  MESSAGE("query everything");
+  auto [query_id, hits, scheduled]
+    = query(*this, index, "#type == \"suricata.flow\"");
+  CHECK_EQUAL(hits, 1u);
+  CHECK_EQUAL(scheduled, 1u);
+  auto result = receive_result(*this, index, query_id, hits, scheduled);
+  CHECK_EQUAL(result, 1u);
+  anon_send_exit(index, caf::exit_reason::user_shutdown);
 }
 
 FIXTURE_SCOPE_END()
