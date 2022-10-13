@@ -867,8 +867,8 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: tenzir-bot
+          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
       - name: Build Docker Images
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
