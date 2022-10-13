@@ -27,7 +27,9 @@ namespace vast::plugins::feather {
 
 /// Configuration for the Feather plugin.
 struct configuration {
-  int64_t zstd_compression_level{9};
+  int64_t zstd_compression_level{
+    arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+      .ValueOrDie()};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
@@ -183,8 +185,6 @@ public:
     write_properties.compression = arrow::Compression::ZSTD;
     write_properties.compression_level
       = detail::narrow<int>(feather_config_.zstd_compression_level);
-    fmt::print(stderr, "tp;feather writing w/ zstd compression level {}\n",
-               feather_config_.zstd_compression_level);
     const auto write_status = ::arrow::ipc::feather::WriteTable(
       *table.ValueUnsafe(), output_stream.get(), write_properties);
     if (!write_status.ok())
@@ -196,8 +196,8 @@ public:
   }
 
   [[nodiscard]] detail::generator<table_slice> slices() const override {
-    // We need to make a copy of the slices here because the slices_ vector may
-    // get invalidated while we iterate over it.
+    // We need to make a copy of the slices here because the slices_ vector
+    // may get invalidated while we iterate over it.
     auto slices = slices_;
     for (auto& slice : slices)
       co_yield std::move(slice);
@@ -230,8 +230,12 @@ class plugin final : public virtual store_plugin {
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const override {
-    return std::make_unique<active_feather_store>(feather_config_);
+  make_active_store(const caf::settings& vast_config) const override {
+    const auto default_compression_level
+      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie();
+    return std::make_unique<active_feather_store>(configuration{caf::get_or(
+      vast_config, "zstd-compression-level", default_compression_level)});
   }
 
 private:

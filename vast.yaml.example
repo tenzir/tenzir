@@ -128,6 +128,9 @@ vast:
   # store plugin.
   store-backend: feather
 
+  # zstd compression level applied to both feather and parquet store backends.
+  zstd-compression-level: 1
+
   # Interval between two aging cycles.
   aging-frequency: 24h
 

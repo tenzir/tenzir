@@ -27,7 +27,9 @@ namespace vast::plugins::parquet {
 /// Configuration for the Parquet plugin.
 struct configuration {
   uint64_t row_group_size{defaults::import::table_slice_size};
-  int64_t zstd_compression_level{9};
+  int64_t zstd_compression_level{
+    arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+      .ValueOrDie()};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
@@ -495,8 +497,14 @@ class plugin final : public virtual store_plugin {
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const override {
-    return std::make_unique<active_parquet_store>(parquet_config_);
+  make_active_store(const caf::settings& vast_config) const override {
+    const auto default_compression_level
+      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie();
+    auto zstd_compression_level = caf::get_or(
+      vast_config, "zstd-compression-level", default_compression_level);
+    return std::make_unique<active_parquet_store>(
+      configuration{parquet_config_.row_group_size, zstd_compression_level});
   }
 
 private:

@@ -353,7 +353,9 @@ caf::expected<store_actor_plugin::builder_and_header>
 store_plugin::make_store_builder(system::accountant_actor accountant,
                                  system::filesystem_actor fs,
                                  const vast::uuid& id) const {
-  auto store = make_active_store();
+  const auto& vast_config = caf::get<caf::settings>(
+    content(fs->home_system().config()).find("vast")->second);
+  auto store = make_active_store(vast_config);
   if (!store)
     return store.error();
   auto path

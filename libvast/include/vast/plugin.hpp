@@ -313,7 +313,7 @@ public:
 
   /// Create a store for active partitions.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const = 0;
+  make_active_store(const caf::settings& vast_config) const = 0;
 
 private:
   [[nodiscard]] caf::expected<builder_and_header>

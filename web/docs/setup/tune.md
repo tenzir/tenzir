@@ -101,6 +101,23 @@ VAST supports [rebuilding the entire database](#rebuild-partitions) in case you
 want to switch to a different store format. However, VAST works perfectly fine
 with a mixed-storage configuration, so a full rebuild is not required.
 
+### Compression
+
+Partitions in feather and parquet format are compressed using zstd. To fine-tune
+the space-time trade-off, VAST allows you to control the compression level used:
+
+```yaml
+vast:
+  zstd-compression-level: 1
+```
+
+:::tip
+We have a [blog post][parquet-and-feather-2] that does an in-depth
+comparison of various compression levels and storage formats.
+:::
+
+[parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
+
 ## Memory usage and caching
 
 The amount of memory that a VAST server process is allowed to use can currently
