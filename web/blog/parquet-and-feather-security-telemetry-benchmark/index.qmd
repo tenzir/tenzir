@@ -79,10 +79,11 @@ library(tidyr)
 theme_set(theme_minimal())
 
 data <- read.csv("data.csv") |>
+  rename(store = store_type) |>
   mutate(duration = dnanoseconds(as.numeric(gsub("ns", "", duration))))
 
 sizes <- read.csv("sizes.csv") |>
-  mutate(store_type = "original")
+  mutate(store = "original")
 
 # Normalize store sizes by number of events/store.
 normalized <- data |>
@@ -93,15 +94,15 @@ normalized <- data |>
 
 # Compute average over measurements.
 aggregated <- normalized |>
-  group_by(store_type, schema) |>
+  group_by(store, schema, zstd.level) |>
   summarize(duration = mean(duration_normalized),
             memory = mean(bytes_memory_normalized),
             storage = mean(bytes_storage_normalized))
 
 # Treat in-memory measuremts as just another storage type.
 memory <- aggregated |>
-  filter(store_type == "feather") |>
-  mutate(store_type = "memory") |>
+  filter(store == "feather") |>
+  mutate(store = "memory") |>
   select(-storage) |>
   rename(bytes = memory)
 
@@ -126,10 +127,10 @@ other to get a feel of the data:
 #| code-fold: true
 #| label: events
 no_segment <- data |>
-  filter(store_type != "segment")
+  filter(store != "segment")
 
 no_segment |>
-  ggplot(aes(x = num_events, y = num_slices, size = bytes_in_storage, color = store_type)) +
+  ggplot(aes(x = num_events, y = num_slices, size = bytes_in_storage, color = store)) +
     geom_point(alpha = 0.3) +
     scale_size(range = c(2, 10), labels = scales::label_bytes(units = "auto_si")) +
     scale_x_log10(labels = scales::label_comma()) +
@@ -172,14 +173,14 @@ How does the number of events relates to their size?
 #| code-fold: true
 #| label: log-log-event-memory
 no_segment |>
-  ggplot(aes(x = num_events, y = bytes_memory, color = store_type)) +
+  ggplot(aes(x = num_events, y = bytes_memory, color = store)) +
     geom_smooth(method = "lm", se = FALSE, size = 0.5) +
     geom_point(alpha = 0.5) +
     guides(color = "none") +
     scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
     scale_x_log10(labels = scales::label_comma()) +
     labs(color = "Store", x = "Events", y = "Bytes (in memory)") +
-    facet_grid(~ store_type)
+    facet_grid(~ store)
 ```
 
 The above [log-log plot](https://en.wikipedia.org/wiki/Log%E2%80%93log_plot)
@@ -212,7 +213,7 @@ of events:
 #| code-fold: true
 #| label: number-of-events-by-schema
 schemas <- normalized |>
-  filter(store_type == "feather") |>
+  filter(store == "feather") |>
   group_by(schema) |>
   summarize(n = median(num_events),
             bytes_memory = median(bytes_memory))
@@ -269,7 +270,7 @@ of size.
 #| code-fold: true
 #| label: plot-schema-distribution
 unified |>
-  ggplot(aes(x = bytes, color = store_type)) +
+  ggplot(aes(x = bytes, color = store)) +
   geom_step(stat = "ecdf") +
   scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
   labs(x = "Bytes/Event", y = "ECDF", color = "Store")
@@ -288,13 +289,13 @@ are the medians:
 library(knitr)
 
 medians <- unified |>
-  group_by(store_type) |>
+  group_by(store) |>
   summarize(median = median(bytes)) |>
   arrange(median)
 
-median_parquet <- medians |> filter(store_type == "parquet") |> pull(median)
-median_feather <- medians |> filter(store_type == "feather") |> pull(median)
-median_original <- medians |> filter(store_type == "original") |> pull(median)
+median_parquet <- medians |> filter(store == "parquet") |> pull(median)
+median_feather <- medians |> filter(store == "feather") |> pull(median)
+median_original <- medians |> filter(store == "original") |> pull(median)
 
 medians |> kable()
 ```
@@ -322,8 +323,8 @@ between the two more clearly:
 library(ggrepel)
 
 parquet_vs_feather <- unified |>
-  filter(store_type != "segment") |>
-  pivot_wider(names_from = store_type, values_from = bytes, id_cols = schema)
+  filter(store != "segment") |>
+  pivot_wider(names_from = store, values_from = bytes, id_cols = schema)
 
 plot_parquet_vs_feather = function(data) {
   data |>
@@ -374,20 +375,20 @@ points fall in there. But there are some wide differences in the delta:
 #| code-fold: true
 #| label: plot-zeek-suricata
 zeek_conn <- unified |>
-  filter(store_type %in% c("parquet", "feather") & schema == "zeek.conn") |>
+  filter(store %in% c("parquet", "feather") & schema == "zeek.conn") |>
   pull(bytes)
 
 suricata_snmp <- unified |>
-  filter(store_type %in% c("parquet", "feather") & schema == "suricata.snmp") |>
+  filter(store %in% c("parquet", "feather") & schema == "suricata.snmp") |>
   pull(bytes)
 
 suricata_ikev2 <- unified |>
-  filter(store_type %in% c("parquet", "feather") & schema == "suricata.ikev2") |>
+  filter(store %in% c("parquet", "feather") & schema == "suricata.ikev2") |>
   pull(bytes)
 
 unified |>
   filter(schema %in% c("zeek.conn", "suricata.snmp", "suricata.ikev2")) |>
-  ggplot(aes(x = reorder(store_type, -bytes), y = bytes, fill = store_type)) +
+  ggplot(aes(x = reorder(store, -bytes), y = bytes, fill = store)) +
     geom_bar(stat = "identity") +
     guides(fill = "none") +
     labs(x = "Store", y = "Median Bytes/Event") +
@@ -446,7 +447,7 @@ Batches into Parquet and Feather format.
 #| code-fold: true
 #| label: compute-bytes-per-event
 #aggregated |>
-#  ggplot(aes(x = reorder(schema, -bytes), y = bytes, fill = store_type)) +
+#  ggplot(aes(x = reorder(schema, -bytes), y = bytes, fill = store)) +
 #    geom_bar(stat = "identity", position = "dodge") +
 #    expand_limits(y = 1) +
 #    xlab("Schema") +
@@ -459,9 +460,9 @@ Batches into Parquet and Feather format.
 #| code-fold: true
 #| label: plot-parquet-vs-feather-duration
 aggregated |>
-  filter(store_type != "segment") |>
+  filter(store != "segment") |>
   mutate(duration = dseconds(duration)) |>
-  pivot_wider(names_from = store_type, values_from = duration, id_cols = schema) |>
+  pivot_wider(names_from = store, values_from = duration, id_cols = schema) |>
   separate(schema, c("module", "type"), remove = FALSE) |>
   ggplot(aes(x = parquet, y = feather, color = module)) +
     geom_abline(intercept = 0, slope = 1, color = "grey") +
