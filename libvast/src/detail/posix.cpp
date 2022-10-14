@@ -87,11 +87,8 @@ uds_datagram_sender::make(const std::string& path) {
     return caf::make_error(
       ec::system_error,
       "failed to obtain an AF_UNIX DGRAM socket: ", ::strerror(errno));
-  if (fcntl(result.src_fd, F_SETFL, O_NONBLOCK) < 0)
-    return caf::make_error(ec::system_error,
-                           "failed to set an AF_UNIX DGRAM socket to non "
-                           "blocking: ",
-                           ::strerror(errno));
+  if (auto err = make_nonblocking(result.src_fd))
+    return err;
   // Create a unique temporary directory for a place to bind the sending side
   // to. There is no mktemp variant for sockets, so that is unfortunately
   // necessary.
@@ -135,15 +132,22 @@ uds_datagram_sender::make(const std::string& path) {
   return std::move(result);
 }
 
-caf::error uds_datagram_sender::send(std::span<char> data) {
+caf::expected<bool>
+uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
+  if (timeout_usec) {
+    auto ready = wpoll(src_fd, timeout_usec);
+    if (!ready)
+      return ready.error();
+    if (!*ready)
+      return false;
+  }
   if (::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
       == 0)
-    return caf::none;
+    return true;
   // Error cases.
   if (errno == EAGAIN || errno == EWOULDBLOCK)
-    // Ignore and drop instead of blocking.
-    return caf::none;
+    return false;
   return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
 }
 

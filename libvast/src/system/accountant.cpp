@@ -93,6 +93,9 @@ struct accountant_state_impl {
   /// Handle to the uds output channel.
   std::unique_ptr<detail::uds_datagram_sender> uds_datagram_sink = nullptr;
 
+  /// Handle to the uds output channel is currently dropping it's input.
+  bool uds_datagram_sink_dropping = false;
+
   /// The configuration.
   accountant_config cfg;
 
@@ -216,7 +219,20 @@ struct accountant_state_impl {
                           const metrics_metadata& meta2, time ts,
                           detail::uds_datagram_sender& dest) {
     auto buf = to_json_line(actor_id, ts, key, x, meta1, meta2);
-    dest.send(std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()});
+    // Only poll the socket for write readiness if it did not drop the previous
+    // line.
+    auto timeout_usec = uds_datagram_sink_dropping ? 0 : 1'000'000;
+    auto delivered = dest.send(
+      std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()},
+      timeout_usec);
+    if (!delivered) {
+      VAST_WARN("{} failed to write metrics to UDS sink: {}", *self,
+                delivered.error());
+      VAST_WARN("{} disables the UDS metrics sink", *self);
+      uds_datagram_sink.reset();
+      return;
+    }
+    uds_datagram_sink_dropping = !*delivered;
   }
 
   void record(const caf::actor_id actor_id, const std::string& key, real x,
