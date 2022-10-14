@@ -265,7 +265,7 @@ schemas |>
     geom_bar(stat = "identity") +
     scale_y_log10(labels = scales::label_comma()) +
     labs(x = "Schema", y = "Number of Events", fill = "Module") +
-    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
 ```
 
 The above plot (log-scaled y-axis) shows how many events we have per type.
@@ -283,7 +283,7 @@ schemas |>
     guides(fill = "none") +
     scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
     labs(x = "Schema", y = "Bytes (in-memory)", color = "Module") +
-    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
 ```
 
 ### Batching
@@ -328,7 +328,7 @@ unified |>
   geom_boxplot() +
   scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
   labs(x = "Store", y = "Bytes/Event", color = "Store") +
-  theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+  theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
 ```
 
 Every boxplot corresponds to one store, with `original` and `memory` being also
@@ -363,7 +363,7 @@ medians |>
   geom_bar(stat = "identity") +
   scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
   labs(x = "Store", y = "Bytes/Event", fill = "Store") +
-  theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+  theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
 ```
 
 To better understand the compression in numbers, we'll anchor the original size
@@ -499,7 +499,7 @@ unified |>
     guides(fill = "none") +
     labs(x = "Store", y = "Bytes/Event") +
     scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
-    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1)) +
+    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0)) +
     facet_wrap(~ schema, scales = "free")
 ```
 
@@ -521,7 +521,7 @@ parquet_vs_feather |>
     geom_bar(stat = "identity", position = "dodge") +
     labs(x = "Schema", y = "Parquet / Feather (%)", fill = "Zstd Level") +
     scale_y_continuous(breaks = 6:1 * 20 / 100, labels = scales::label_percent()) +
-    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
+    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
 ```
 
 The horizontal line is similar to the identiy line in the scatterplot,
@@ -553,6 +553,7 @@ unified |>
              y = duration, color = store_class)) +
   geom_boxplot() +
   scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+  theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0)) +
   labs(x = "Store", y = "Duration (us)", color = "Store")
 ```
 
@@ -567,6 +568,6 @@ unified |>
     guides(fill = "none") +
     labs(x = "Store", y = "Median Duration/Event") +
     scale_y_continuous(labels = scales::label_number(scale = 1e3, suffix = "ms")) +
-    theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1)) +
+    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0)) +
     facet_wrap(~ schema, scales = "free")
 ```
