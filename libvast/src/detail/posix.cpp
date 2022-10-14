@@ -331,15 +331,15 @@ caf::error make_blocking(int fd) {
 }
 
 caf::expected<bool> rpoll(int fd, int usec) {
-  fd_set rdset;
-  FD_ZERO(&rdset);
-  FD_SET(fd, &rdset);
+  fd_set read_set;
+  FD_ZERO(&read_set);
+  FD_SET(fd, &read_set);
   timeval timeout{0, usec};
-  auto rc = ::select(fd + 1, &rdset, nullptr, nullptr, &timeout);
+  auto rc = ::select(fd + 1, &read_set, nullptr, nullptr, &timeout);
   if (rc < 0)
     return caf::make_error(ec::filesystem_error,
                            "failed in select(2):", std::strerror(errno));
-  return !!FD_ISSET(fd, &rdset);
+  return !!FD_ISSET(fd, &read_set);
 }
 
 caf::expected<bool> wpoll(int fd, int usec) {

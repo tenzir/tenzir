@@ -38,6 +38,10 @@ struct uds_datagram_sender {
   static caf::expected<uds_datagram_sender> make(const std::string& path);
 
   /// Send the content of `data to `dst`.
+  /// @param data The data that should be written.
+  /// @param timeout_usec A duration to wait for readiness of the receiver.
+  /// @returns `true` if the data was sent or `false` if it was dropped because
+  ///          the timeout was reached
   caf::expected<bool> send(std::span<char> data, int timeout_usec = 0);
 
   /// The file descriptor for the "client" socket.
