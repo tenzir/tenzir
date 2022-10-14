@@ -216,14 +216,16 @@ else ()
     add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
     target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
     target_compile_options(
-      libcaf_core_${_linkage_suffix} PRIVATE -Wno-maybe-uninitialized
-                                             -Wno-unknown-warning-option)
+      libcaf_core_${_linkage_suffix}
+      PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option)
     VASTSystemizeTarget(libcaf_io_${_linkage_suffix})
     set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME
                                                                   io)
     target_compile_options(
-      libcaf_io_${_linkage_suffix} PRIVATE -Wno-maybe-uninitialized
-                                           -Wno-unknown-warning-option)
+      libcaf_io_${_linkage_suffix}
+      PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option)
     find_package(Threads REQUIRED)
     target_link_libraries(libcaf_io_${_linkage_suffix} Threads::Threads)
     add_library(CAF::io ALIAS libcaf_io_${_linkage_suffix})
