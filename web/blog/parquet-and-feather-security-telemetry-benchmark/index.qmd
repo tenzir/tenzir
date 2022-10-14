@@ -158,10 +158,11 @@ Parquet and Feather on the provided input data. To this end, we instrumented
 VAST to produce us with a measurement trace file that we then analyze with R for
 gaining insights. The [corresponding patch][patch] is not meant for further
 production, so we kept it separate. But we did find an opportunity to improve
-VAST and [made the Zstd compression level configurable][pr-2623].
+VAST and [made the Zstd compression level configurable][pr-2623]. Our [benchmark
+sript](benchmark.fish) is available for full reproducibility.
 
 [pr-2623]: https://github.com/tenzir/vast/pull/2623
-[patch]: TBD
+[patch]: feather-parquet-zstd-experiments.diff
 
 Our instrumentation produced a [CSV file](data.csv) with the following features:
 
@@ -179,7 +180,8 @@ Our instrumentation produced a [CSV file](data.csv) with the following features:
 - **Zstd compression level**: the applied Zstd compression level
 
 Every row corresponds to a single store file where we varied some of these
-parameters. Let's take a look at the data.
+parameters. We used [hyperfine](https://github.com/sharkdp/hyperfine) as
+benchmark driver tool, configured with 8 runs. Let's take a look at the data.
 
 ```{r}
 #| code-fold: true
@@ -225,6 +227,9 @@ unified <- aggregated |>
   select(-memory) |>
   rename(bytes = storage, store_class = store) |>
   unite("store", store_class, zstd.level, sep = "+", remove = FALSE)
+
+# Helper function to format numbers with SI unit suffixes.
+fmt_si <- function(x) scales::label_number_si(accuracy = 0.1)(x)
 ```
 
 ### Schemas
@@ -289,31 +294,29 @@ concatenates them column-wise. Most stores only consist of a few record
 batches. PCAP is the only difference.
 
 Small stores are suboptimal because the catalog keeps in-memory state that is
-a linear function of the number of stores. (We are aware of this limitation and
-are exploring workarounds, but this topic is out of scope for this post.) The
+a linear function of the number of stores. (We are aware of this concern and are
+exploring improvements, but this topic is out of scope for this post.) The
 issue here is catalog fragmentation.
 
 As of [v2.3](/blog/vast-v2.3), VAST has automatic rebuilding in place, which
 merges underfull partitions to reduce pressure on the catalog. This doesn't fix
-the problem of linear state, but it provides a lot more mileage.
+the problem of linear state, but gives us much sufficient reach for real-world
+deployments.
 
 ## Size
 
 To better understand the difference between Parquet and Feather, we now take a
 look at them right next to each other. In addition to Feather and Parquet, we
-use three other types of "stores" for the analysis to faciliate comparison:
+use two other types of "stores" for the analysis to facilitate comparison:
 
 1. **Original**: the size of the input prior it entered VAST, e.g., the raw JSON or
    a PCAP file.
 
-2. **Segment**: our custom store prior to having switched to Feather. We omit
-   this reference point often, as it is nearly equivalent to Feather.
-
 3. **Memory**: the size of the data in memory, measured as the sum of Arrow
    buffers that make up the table slice.
 
-Let's kick of the analysis by getting a better understanding at the distribution
-of size.
+Let's kick of the analysis by getting a better understanding at the size
+distribution.
 
 ```{r}
 #| code-fold: true
@@ -324,7 +327,8 @@ unified |>
              y = bytes, color = store_class)) +
   geom_boxplot() +
   scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
-  labs(x = "Store", y = "Bytes/Event", color = "Store")
+  labs(x = "Store", y = "Bytes/Event", color = "Store") +
+  theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
 ```
 
 Every boxplot corresponds to one store, with `original` and `memory` being also
@@ -334,11 +338,13 @@ purple) have the smallest size, followed by Feather (red), and then their
 corresponding in-memory (green) and original (turquoise) representation. The
 negative Zstd compression level -5 makes Parquet actually worse than Feather.
 
+:::tip Analysis
 What stands out is that disabling compression for Feather inflates the data
 larger than the original. This is not the case for Parquet. Why? Because Parquet
 has an orthogonal layer of compression using dictionaries. This absorbs
 inefficiencies in heavy-tailed distributions, which are pretty standard in
 machine-generated data.
+:::
 
 The y-axis of above plot is log-scaled, which makes it hard for relative
 comparison. Let's focus on the medians (the bars in the box) only and bring the
@@ -356,11 +362,12 @@ medians |>
   ggplot(aes(x = reorder(store, -bytes), y = bytes, fill = store_class)) +
   geom_bar(stat = "identity") +
   scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
-  labs(x = "Store", y = "Bytes/Event", fill = "Store")
+  labs(x = "Store", y = "Bytes/Event", fill = "Store") +
+  theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
 ```
 
 To better understand the compression in numbers, we'll anchor the original size
-at 100% and now show the relative gains:
+at 100% and now show the *relative* gains of Parquet and Feather:
 
 ```{r}
 #| echo: false
@@ -370,10 +377,23 @@ median_original <- medians |> filter(store == "original") |> pull(bytes)
 medians |>
   filter(store_class %in% c("feather", "parquet")) |>
   mutate(size = bytes / median_original * 100) |>
-  mutate(compression = median_original / size) |>
+  mutate(compression = median_original / bytes) |>
   arrange(size) |>
-  kable(digits = 1)
+  kable(digits = 1, col.names = c("Store", "Class", "Bytes/Event", "Size (%)",
+                                  "Compression Ratio"))
 ```
+
+:::tip Analysis
+Parquet dominates Feather with respect to space savings, but not by much for
+high Zstd compression levels. Zstd compression levels > 1 do not provide
+substantial space savings on averge, where observe a compression ratio of
+**~4x** over the base data. Parquet still provides a **2.6** compression ratio
+in the absence of compression because it applies dictionary encoding.
+
+Feather offers competite compression with **~3x** ratio for equal Zstd
+compression levels. However, without compression Feather expands beyond the
+original dataset size at a compression ratio of **~0.9**.
+:::
 
 The above analysis covered averages across schemas. If we juxtapose Parquet and
 Feather per schema, we see the difference between the two formats more clearly:
@@ -390,6 +410,9 @@ parquet_vs_feather <- unified |>
               values_from = bytes,
               id_cols = c(schema, zstd.level))
 
+schemas_gt10k <- schemas |> filter(n > 10e3) |> pull(schema)
+schemas_gt100k <- schemas |> filter(n > 100e3) |> pull(schema)
+
 plot_parquet_vs_feather <- function(data) {
   data |>
     mutate(zstd.level = str_replace_na(zstd.level)) |>
@@ -397,21 +420,23 @@ plot_parquet_vs_feather <- function(data) {
     ggplot(aes(x = parquet, y = feather,
                shape = zstd.level, color = zstd.level)) +
       geom_abline(intercept = 0, slope = 1, color = "grey") +
-      geom_point(alpha = 0.6) +
+      geom_point(alpha = 0.6, size = 3) +
       geom_text_repel(aes(label = schema),
                 color = "grey",
                 size = 1, # font size
                 box.padding = 0.2,
                 min.segment.length = 0, # draw all line segments
                 max.overlaps = Inf,
+                segment.size = 0.2,
                 segment.color = "grey",
                 segment.alpha = 0.3) +
       scale_size(range = c(0, 10)) +
       labs(x = "Bytes (Parquet)", y = "Bytes (Feather)",
-           shape = "Compression\nLevel", color = "Compression\nLevel")
+           shape = "Zstd Level", color = "Zstd Level")
 }
 
 parquet_vs_feather |>
+  filter(schema %in% schemas_gt100k) |>
   plot_parquet_vs_feather() +
     scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
     scale_y_log10(labels = scales::label_bytes(units = "auto_si"))
@@ -419,38 +444,47 @@ parquet_vs_feather |>
 
 In the above log-log scatterplot, the straight line is the identity function.
 Each point represents the median store size for a given schema. If a point is on
-the line, it means there is no difference between Feather and Parquet. The color
-and shape shows the different compression levels, with `NA` meaning no
+the line, it means there is no difference between Feather and Parquet. We only
+look at schemas with more than 100k events to ensure that the constant factor
+does not perturb the analysis. (Otherwise we end up with points *below* the
+identity line, which are completely dwarfed by the bulk in practice.) The color
+and shape shows the different Zstd compression levels, with `NA` meaning no
 compression. Points clouds closer to the origin mean that the corresponding
 store class takes up less space.
 
-As above, disabling compression hits Feather the hardest. The red circles
-(compression level -5) also stand out as a poor choice. Otherwise it's hard to
-see noticeable differences.
+:::tip Analysis
+We observe that **disabling compression hits Feather the hardest**.
+Unexpectedly, a negative Zstd level of -5 does not compress well. The remaining
+Zstd levels are difficult to take apart visually, but it appears that the point
+clouds form a parallel line, indicating stable compression gains. Notably,
+**compressing PCAP packets is nearly identical with Feather and Parquet**,
+presumably because of the low entropy and packet meta data where general-purpose
+compressors like Zstd shine.
+:::
 
-Points below the identity line would represent a counter-intuitive behavior
-where Feather is smaller than Parquet. This is an artifact of our dataset.
-Basically anything above the 1 kB region is also distorted, because we have
-sometimes just a single event. Normalizing the store size by the number of
-events fails here, as there is a constant-size overhead for the Parquet framing
-that is higher than Feather. We need a certain number of events for this to
-amortize.
-
-If we zoom in on the region <= 100 bytes and remove the log scaling, things
-become a bit more readable:
+Zooming in to the bottom left area with average event size of less than 100B,
+and removing the log scaling, we see the following:
 
 ```{r}
 #| code-fold: true
 #| label: plot-parquet-vs-feather-100
+
 parquet_vs_feather |>
-  filter(feather <= 100) |>
+  filter(feather <= 100 & schema %in% schemas_gt100k) |>
   plot_parquet_vs_feather() +
     scale_x_continuous(labels = scales::label_bytes(units = "auto_si")) +
-    scale_y_continuous(labels = scales::label_bytes(units = "auto_si"))
+    scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
+    coord_fixed()
 ```
 
-While interesting to see that some schemas compress better than others, the
-additional insight of this display is marginal.
+The respective point clouds form a parallel to the identity function, i.e., the
+compression ratio in this region pretty constant across schemas. There's also no
+noticeable difference between Zstd level 1, 9, and 19.
+
+If we take pick a single point, e.g., `zeek.conn` with
+`r schemas |> filter(schema == "zeek.conn") |> pull(n) |> fmt_si()` events, we
+can confirm that the relative performance matches the results of our analysis
+above:
 
 ```{r}
 #| code-fold: true
@@ -458,38 +492,19 @@ additional insight of this display is marginal.
 zeek_conn <- unified |>
   filter(store %in% c("parquet", "feather") & schema == "zeek.conn") |>
   pull(bytes)
-
-suricata_snmp <- unified |>
-  filter(store %in% c("parquet", "feather") & schema == "suricata.snmp") |>
-  pull(bytes)
-
-suricata_ikev2 <- unified |>
-  filter(store %in% c("parquet", "feather") & schema == "suricata.ikev2") |>
-  pull(bytes)
-
 unified |>
-  filter(schema %in% c("zeek.conn", "suricata.snmp", "suricata.ikev2")) |>
-  ggplot(aes(x = reorder(store, -bytes), y = bytes, fill = store)) +
+  filter(schema == "zeek.conn") |>
+  ggplot(aes(x = reorder(store, -bytes), y = bytes, fill = store_class)) +
     geom_bar(stat = "identity") +
     guides(fill = "none") +
-    labs(x = "Store", y = "Median Bytes/Event") +
+    labs(x = "Store", y = "Bytes/Event") +
     scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
     theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1)) +
     facet_wrap(~ schema, scales = "free")
 ```
 
-For `zeek.conn`, the percentage that Parquet takes compared to Feather is
-`r scales::label_percent()(zeek_conn[2] / zeek_conn[1])`, whereas it is
-`r scales::label_percent()(suricata_snmp[2] / suricata_snmp[1])` for
-`suricata.snmp`.
-
-:::caution TODO
-Thomas, we need to look at suricata.ikev2. It's really weird to see the
-blow-up.
-:::
-
-We finally look at the fraction of space Parquet takes compared to Feather on a
-per schema basis:
+Finally, we look at the fraction of space Parquet takes compared to Feather on a
+per schema basis, restricted to schemas with more than 10k events:
 
 ```{r}
 #| code-fold: true
@@ -497,22 +512,35 @@ per schema basis:
 library(tibble)
 
 parquet_vs_feather |>
-  filter(feather <= 100) |>
+  filter(feather <= 100 & schema %in% schemas_gt10k) |>
   mutate(zstd.level = str_replace_na(zstd.level)) |>
   ggplot(aes(x = reorder(schema, -parquet / feather),
              y = parquet / feather,
              fill = zstd.level)) +
     geom_hline(yintercept = 1) +
     geom_bar(stat = "identity", position = "dodge") +
-    labs(x = "Schema", y = "Parquet / Feather (%)", fill = "Compression\nLevel") +
+    labs(x = "Schema", y = "Parquet / Feather (%)", fill = "Zstd Level") +
     scale_y_continuous(breaks = 6:1 * 20 / 100, labels = scales::label_percent()) +
     theme(axis.text.x = element_text(angle = 90, size = 8, vjust = 0.5, hjust = 1))
 ```
 
-Overall, we see that that compression level 1 and 9 do not have big differene,
-but 19 brings Feather and Parquet closer together for half of the schemas.
+The horizontal line is similar to the identiy line in the scatterplot,
+indicating that Feather and Parquet compress equally well. The bars represent
+that ratio of Parquet divided by Feather. The shorter the bars, the smaller the
+size, so the higher the gain over Feather.
+
+:::tip Analysis
+We see that Zstd level 19 brings Parquet and Feather close together. Even at
+Zstd level 1, the median ratio of Parquet stores is **78%**, and the 3rd
+quartile **82%**. This shows that **Feather is remarkably competitive for typical
+security analytics workloads**.
+:::
 
 ## Write Throughput
+
+Now that we have looked at the spatial properties of Parquet and Feather, we
+take a look at the runtime. Our mental model is that Feather outperforms
+Parquet. But is that the case?
 
 With write throughput, we mean the time it takes to transform Arrow Record
 Batches into Parquet and Feather format.
@@ -533,7 +561,7 @@ similar to the size discussion above.
 
 ```{r}
 unified |>
-  filter(schema %in% c("zeek.conn", "suricata.snmp", "suricata.ikev2")) |>
+  filter(schema %in% c("zeek.conn", "suricata.ikev2")) |>
   ggplot(aes(x = reorder(store, -duration), y = duration, fill = store)) +
     geom_bar(stat = "identity") +
     guides(fill = "none") +
