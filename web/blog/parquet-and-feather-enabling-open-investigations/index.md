@@ -51,7 +51,7 @@ Security is a data problem. But how should we represent that data? This is where
 Parquet enters the picture. As a vendor-agnostic storage format for structured
 and nested data, it decouples storage from analytics. This is where SIEM
 monoliths fail: they offer a single black box that tightly couples data
-acquision and processing capabilities. Providing a thin "open" API is not really
+acquisition and processing capabilities. Providing a thin "open" API is not really
 open, as it prevents high-bandwidth data access that is needed for advanced
 analytics workloads.
 
@@ -78,12 +78,12 @@ Feather, minus a thin framing. (We called it the *segment store*.)
 
 Wait, but Feather is an in-memory format and Parquet an on-disk format. You
 cannot compare them! Fair point, but don't forget transparent Zstd compression.
-For some schemas, we barely notice a difference (e.g., PCAP), whereas for others
-schemas, Parquet stores have less than 10% the size of Feather despite.
+For some schemas, we barely notice a difference (e.g., PCAP), whereas for
+others, Parquet stores boil down to a fraction of their Feather equivalent.
 
-The next blog post goes into these details. For now, we want to stress that
-Feather is in fact a reasonable format for data at rest, even when looking at
-space utilization alone.
+The [next blog post][parquet-and-feather-2] goes into these details. For now, we
+want to stress that Feather is in fact a reasonable format for data at rest,
+even when looking at space utilization alone.
 
 ## Parquet and Feather in VAST
 
@@ -107,7 +107,7 @@ as Spark or Hadoop.
 
 The event data thrown at VAST has quite some variety of schemas. During
 ingestion, VAST first demultiplexes the heterogeneous stream of events into
-multiple homogenous streams, each of which has a unique schema. VAST buffers
+multiple homogeneous streams, each of which has a unique schema. VAST buffers
 events until the partition hits a pre-configured event limit (e.g., 1M) or until
 a timeout occurs (e.g., 60m). Thereafter, VAST writes the partition in one shot
 and persists it.
@@ -145,16 +145,16 @@ information loss to Arrow:
 ![Type System](/img/type-system-arrow.light.png#gh-light-mode-only)
 ![Type System](/img/type-system-arrow.dark.png#gh-dark-mode-only)
 
-VAST converts enum, adress, and subnet types to
+VAST converts enum, address, and subnet types to
 [extension-types][arrow-extension-types]. All types are self-describing and part
 of the record batch meta data. Conversion is bi-directional. Both Parquet and
 Feather support fully nested structures in this type system. In theory. Our
-third blog post in this series desribes the hurdles we had to overcome to make
+third blog post in this series describes the hurdles we had to overcome to make
 it work in practice.
 
 [arrow-extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
 
-In the next blog post, we perform a quantitive analysis of the two formats: how
+In the next blog post, we perform a quantitative analysis of the two formats: how
 well do they compress the original data? How much space do they take up in
 memory? How much CPU time do I pay for how much space savings? In the meantime,
 if you want to learn more about Parquet, take a look at the [blog post
