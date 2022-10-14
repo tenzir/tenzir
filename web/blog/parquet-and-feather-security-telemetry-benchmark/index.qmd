@@ -404,7 +404,7 @@ Feather per schema, we see the difference between the two formats more clearly:
 library(ggrepel)
 library(stringr)
 
-parquet_vs_feather <- unified |>
+parquet_vs_feather_size <- unified |>
   select(-store, -duration) |>
   pivot_wider(names_from = store_class,
               values_from = bytes,
@@ -435,7 +435,7 @@ plot_parquet_vs_feather <- function(data) {
            shape = "Zstd Level", color = "Zstd Level")
 }
 
-parquet_vs_feather |>
+parquet_vs_feather_size |>
   filter(schema %in% schemas_gt100k) |>
   plot_parquet_vs_feather() +
     scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
@@ -469,7 +469,7 @@ and removing the log scaling, we see the following:
 #| code-fold: true
 #| label: plot-parquet-vs-feather-100
 
-parquet_vs_feather |>
+parquet_vs_feather_size |>
   filter(feather <= 100 & schema %in% schemas_gt100k) |>
   plot_parquet_vs_feather() +
     scale_x_continuous(labels = scales::label_bytes(units = "auto_si")) +
@@ -511,7 +511,7 @@ per schema basis, restricted to schemas with more than 10k events:
 #| label: plot-parquet-divided-by-feather
 library(tibble)
 
-parquet_vs_feather |>
+parquet_vs_feather_size |>
   filter(feather <= 100 & schema %in% schemas_gt10k) |>
   mutate(zstd.level = str_replace_na(zstd.level)) |>
   ggplot(aes(x = reorder(schema, -parquet / feather),
@@ -542,13 +542,15 @@ Now that we have looked at the spatial properties of Parquet and Feather, we
 take a look at the runtime. Our mental model is that Feather outperforms
 Parquet. But is that the case?
 
-With write throughput, we mean the time it takes to transform Arrow Record
-Batches into Parquet and Feather format.
+With *write throughput*, we mean the time it takes to transform Arrow Record
+Batches into Parquet and Feather format. To avoid distortotion of small events,
+we also restrict to schemas with more than 100k events.
 
 ```{r}
 #| code-fold: true
-#| label: compute-bytes-per-event
+#| label: duration-distribution
 unified |>
+  filter(schema %in% schemas_gt100k) |>
   ggplot(aes(x = reorder(store, -duration, FUN = "median"),
              y = duration, color = store_class)) +
   geom_boxplot() +
@@ -560,14 +562,74 @@ unified |>
 The above boxplots have a log-scaled y-axis and are sorted by their median,
 similar to the size discussion above.
 
+:::tip Analysis
+Unexpectdly, we observe roughly an ordering according to Zstd level: more
+copmression means a shorter runtime.
+
+For the same Zstd level, **Parquet store creation was always faster**. Our
+unconfirmed hunch is that Feather compression operates on more and smaller
+column buffers, whereas Parquet compression only runs over the concatenated
+Arrow buffers, yielding bigger strides.
+:::
+
+We don't have an explanation for why disabling compression for Parquet is
+*slower* compared Zstd levels -5 and 1. In theory, strictly less cycles are
+spent by disabling the code path. Perhaps compression results in different
+memory layout that is more cache-efficient. Unfortunately, we did not have the
+time to dig deeper into the analysis to figure out why disabling Parquet
+compression is slower. Please don't hesitate to reach out, e.g., via our
+[Community Slack](http://slack.tenzir.com).
+
+Let's look at the runtime data per schema:
+
+```{r}
+#| code-fold: true
+#| label: pairwise-runtime-comparion
+parquet_vs_feather_duration <- unified |>
+  select(-store, -bytes) |>
+  pivot_wider(names_from = store_class,
+              values_from = duration,
+              id_cols = c(schema, zstd.level))
+
+parquet_vs_feather_duration |>
+  filter(schema %in% schemas_gt100k) |>
+  mutate(zstd.level = str_replace_na(zstd.level)) |>
+  separate(schema, c("module", "type"), remove = FALSE) |>
+  ggplot(aes(x = parquet, y = feather,
+             shape = zstd.level, color = zstd.level)) +
+    geom_abline(intercept = 0, slope = 1, color = "grey") +
+    geom_point(alpha = 0.6, size = 3) +
+    geom_text_repel(aes(label = schema),
+              color = "grey",
+              size = 1, # font size
+              box.padding = 0.2,
+              min.segment.length = 0, # draw all line segments
+              max.overlaps = Inf,
+              segment.size = 0.2,
+              segment.color = "grey",
+              segment.alpha = 0.3) +
+    scale_size(range = c(0, 10)) +
+    scale_x_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Duration (Parquet)", y = "Duration (Feather)",
+         shape = "Zstd Level", color = "Zstd Level")
+```
+
 ```{r}
 unified |>
-  filter(schema %in% c("zeek.conn", "suricata.ikev2")) |>
-  ggplot(aes(x = reorder(store, -duration), y = duration, fill = store)) +
-    geom_bar(stat = "identity") +
-    guides(fill = "none") +
-    labs(x = "Store", y = "Median Duration/Event") +
-    scale_y_continuous(labels = scales::label_number(scale = 1e3, suffix = "ms")) +
-    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0)) +
-    facet_wrap(~ schema, scales = "free")
+  filter(schema %in% schemas_gt100k) |>
+  mutate(zstd.level = str_replace_na(zstd.level)) |>
+  group_by(schema, store_class, zstd.level) |>
+  summarize(score = median(bytes / duration)) |>
+  pivot_wider(names_from = store_class,
+              values_from = score,
+              id_cols = c(schema, zstd.level)) |>
+  ggplot(aes(x = parquet, y = feather,
+             shape = zstd.level, color = zstd.level)) +
+    geom_point(size = 3) +
+    scale_x_log10(labels = scales::label_number(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(units = "auto_si")) +
+    labs(x = "Parquet", y = "Feather",
+         shape = "Zstd Level",
+         color = "Zstd Level")
 ```
