@@ -4,6 +4,7 @@ authors:
   - dispanser
   - mavam
 date: 2022-10-15
+image: image.jpg
 tags: [benchmark, arrow, parquet, feather, quarto, r]
 ---
 
