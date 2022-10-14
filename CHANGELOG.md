@@ -6,6 +6,16 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
+## [v2.3.1][v2.3.1]
+
+### Bug Fixes
+
+- Fixed an indefinite hang when applying a partition transform to a partition that is not a valid flatbuffer.
+  [#2624](https://github.com/tenzir/vast/pull/2624)
+
+- VAST will now properly regenerate any corrupted oversized partition files it encounters on startup, provided that the corresponding store files are available. These files could be produced by versions up to and including VAST 2.2, when using configurations with an increased maximum partition size.
+  [#2631](https://github.com/tenzir/vast/pull/2631)
+
 ## [v2.3.0][v2.3.0]
 
 ### Changes
@@ -1929,6 +1939,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
+[v2.3.1]: https://github.com/tenzir/vast/releases/tag/v2.3.1
 [v2.3.0]: https://github.com/tenzir/vast/releases/tag/v2.3.0
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
