@@ -134,8 +134,14 @@ struct [[nodiscard]] unix_domain_socket {
 /// Polls a file descriptor for ready read events via `select(2)`.
 /// @param fd The file descriptor to poll
 /// @param usec The number of microseconds to wait.
-/// @returns `caf::none` if *fd* has ready events for reading.
-[[nodiscard]] caf::error poll(int fd, int usec = 100000);
+/// @returns `true` if read operations on *fd* would not block.
+[[nodiscard]] caf::expected<bool> rpoll(int fd, int usec);
+
+/// Polls a file descriptor for write readiness via `select(2)`.
+/// @param fd The file descriptor to poll
+/// @param usec The number of microseconds to wait.
+/// @returns `true` if write operations on *fd* would not block.
+[[nodiscard]] caf::expected<bool> wpoll(int fd, int usec);
 
 /// Wraps `close(2)`.
 /// @param fd The file descriptor to close.

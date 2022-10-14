@@ -11,7 +11,6 @@
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/raise_error.hpp"
-#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
@@ -327,26 +326,28 @@ caf::error make_blocking(int fd) {
   return make_nonblocking(fd, false);
 }
 
-caf::error poll(int fd, int usec) {
+caf::expected<bool> rpoll(int fd, int usec) {
   fd_set rdset;
   FD_ZERO(&rdset);
   FD_SET(fd, &rdset);
   timeval timeout{0, usec};
   auto rc = ::select(fd + 1, &rdset, nullptr, nullptr, &timeout);
-  if (rc < 0) {
-    switch (rc) {
-      default:
-        vast::die("unhandled select(2) error");
-      case EINTR:
-      case ENOMEM:
-        return caf::make_error(ec::filesystem_error,
-                               "failed in select(2):", std::strerror(errno));
-    }
-  }
-  if (!FD_ISSET(fd, &rdset))
+  if (rc < 0)
     return caf::make_error(ec::filesystem_error,
-                           "failed in fd_isset(3):", std::strerror(errno));
-  return caf::none;
+                           "failed in select(2):", std::strerror(errno));
+  return !!FD_ISSET(fd, &rdset);
+}
+
+caf::expected<bool> wpoll(int fd, int usec) {
+  fd_set write_set;
+  FD_ZERO(&write_set);
+  FD_SET(fd, &write_set);
+  timeval timeout{0, usec};
+  auto rc = ::select(fd + 1, nullptr, &write_set, nullptr, &timeout);
+  if (rc < 0)
+    return caf::make_error(ec::filesystem_error,
+                           "failed in select(2):", std::strerror(errno));
+  return !!FD_ISSET(fd, &write_set);
 }
 
 caf::error close(int fd) {
