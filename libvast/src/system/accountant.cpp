@@ -93,7 +93,7 @@ struct accountant_state_impl {
   /// Handle to the uds output channel.
   std::unique_ptr<detail::uds_datagram_sender> uds_datagram_sink = nullptr;
 
-  /// Handle to the uds output channel is currently dropping it's input.
+  /// Handle to the UDS output channel is currently dropping its input.
   bool uds_datagram_sink_dropping = false;
 
   /// The configuration.
