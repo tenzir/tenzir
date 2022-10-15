@@ -32,7 +32,7 @@ a closer look at how they actually perform with respect to the following
 metrics:
 
 - **Size**: how much space does typical security telemetry occupy?
-- **Write throughput**: how fast can we write out to a store?
+- **Speed**: how fast can we write out to a store?
 
 Parquet and Feather have different goals. While Parquet is an on-disk format
 that optimizes for size, Feather is just a thin layer around the native Arrow
@@ -536,15 +536,15 @@ quartile **82%**. This shows that **Feather is remarkably competitive for typica
 security analytics workloads**.
 :::
 
-## Write Throughput
+## Speed
 
 Now that we have looked at the spatial properties of Parquet and Feather, we
 take a look at the runtime. Our mental model is that Feather outperforms
 Parquet. But is that the case?
 
-With *write throughput*, we mean the time it takes to transform Arrow Record
-Batches into Parquet and Feather format. To avoid distortotion of small events,
-we also restrict to schemas with more than 100k events.
+With *speed*, we mean the time it takes to transform Arrow Record Batches into
+Parquet and Feather format. To avoid distortotion of small events, we also
+restrict to schemas with more than 100k events.
 
 ```{r}
 #| code-fold: true
@@ -556,7 +556,7 @@ unified |>
   geom_boxplot() +
   scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
   theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0)) +
-  labs(x = "Store", y = "Duration (us)", color = "Store")
+  labs(x = "Store", y = "Speed (us)", color = "Store")
 ```
 
 The above boxplots have a log-scaled y-axis and are sorted by their median,
@@ -598,7 +598,7 @@ parquet_vs_feather_duration |>
   ggplot(aes(x = parquet, y = feather,
              shape = zstd.level, color = zstd.level)) +
     geom_abline(intercept = 0, slope = 1, color = "grey") +
-    geom_point(alpha = 0.6, size = 3) +
+    geom_point(alpha = 0.7, size = 3) +
     geom_text_repel(aes(label = schema),
               color = "grey",
               size = 1, # font size
@@ -611,25 +611,88 @@ parquet_vs_feather_duration |>
     scale_size(range = c(0, 10)) +
     scale_x_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
     scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
-    labs(x = "Duration (Parquet)", y = "Duration (Feather)",
+    labs(x = "Speed (Parquet)", y = "Speed (Feather)",
          shape = "Zstd Level", color = "Zstd Level")
 ```
 
+
+## Space-Time Tradeoff
+
 ```{r}
-unified |>
+#| code-fold: true
+#| label: points-by-level
+cleaned <- unified |>
   filter(schema %in% schemas_gt100k) |>
-  mutate(zstd.level = str_replace_na(zstd.level)) |>
+  mutate(zstd.level = factor(str_replace_na(zstd.level),
+                             c("NA", "-5", "1", "9", "19"))) |>
   group_by(schema, store_class, zstd.level) |>
-  summarize(score = median(bytes / duration)) |>
-  pivot_wider(names_from = store_class,
-              values_from = score,
-              id_cols = c(schema, zstd.level)) |>
-  ggplot(aes(x = parquet, y = feather,
+  summarize(bytes = median(bytes), duration = median(duration))
+
+cleaned |>
+  ggplot(aes(x = bytes, y = duration,
+             shape = store_class, color = zstd.level)) +
+    geom_point(size = 3, alpha = 0.7) +
+    scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Size", y = "Speed", shape = "Store", color = "Zstd Level")
+```
+
+```{r}
+#| code-fold: true
+#| label: convex-hull
+# Native convex hull does the job, no need to leverage ggforce.
+convex_hull <- cleaned |>
+  group_by(store_class, zstd.level) |>
+  slice(chull(x = bytes, y = duration))
+
+convex_hull |>
+  ggplot(aes(x = bytes, y = duration,
+             shape = store_class, color = zstd.level)) +
+    geom_point(size = 3) +
+    geom_polygon(aes(fill = zstd.level, color = zstd.level),
+                 alpha = 0.1,
+                 show.legend = FALSE) +
+    scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Size", y = "Speed", shape = "Store", color = "Zstd Level")
+```
+
+
+```{r}
+#| code-fold: true
+#| label: convex-hull-facet-by-level
+cleaned |>
+  group_by(store_class, zstd.level) |>
+  # Native convex hull does the job, no need to leverage ggforce.
+  slice(chull(x = bytes, y = duration)) |>
+  ggplot(aes(x = bytes, y = duration,
+             shape = store_class, color = store_class)) +
+    geom_point(size = 3) +
+    geom_polygon(aes(color = store_class, fill = store_class),
+                 alpha = 0.3,
+                 show.legend = FALSE) +
+    scale_x_log10(n.breaks = 4, labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Size", y = "Speed", shape = "Store", color = "Store") +
+    facet_grid(cols = vars(zstd.level)) +
+    theme_bw()
+```
+
+```{r}
+#| code-fold: true
+#| label: convex-hull-facet-by-store
+cleaned |>
+  group_by(store_class, zstd.level) |>
+  slice(chull(x = bytes, y = duration)) |>
+  ggplot(aes(x = bytes, y = duration,
              shape = zstd.level, color = zstd.level)) +
     geom_point(size = 3) +
-    scale_x_log10(labels = scales::label_number(units = "auto_si")) +
-    scale_y_log10(labels = scales::label_number(units = "auto_si")) +
-    labs(x = "Parquet", y = "Feather",
-         shape = "Zstd Level",
-         color = "Zstd Level")
+    geom_polygon(aes(color = zstd.level, fill = zstd.level),
+                 alpha = 0.3,
+                 show.legend = FALSE) +
+    scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Size", y = "Speed", shape = "Zstd Level", color = "Zstd Level") +
+    facet_grid(rows = vars(store_class)) +
+    theme_bw()
 ```
