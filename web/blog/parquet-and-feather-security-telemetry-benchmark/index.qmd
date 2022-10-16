@@ -26,10 +26,9 @@ This is blog post is part of a 3-piece series on Parquet and Feather.
 [parquet-and-feather-1]: /blog/parquet-and-feather-enabling-open-investigations/
 :::
 
-In the [previous blog post][parquet-and-feather-1], we explained why Parquet and
-Feather are great building blocks for modern investigations. We now want to take
-a closer look at how they actually perform with respect to the following
-metrics:
+In the [previous blog][parquet-and-feather-1], we explained why Parquet and
+Feather are great building blocks for modern investigations. In this blog, we take
+a look at how they actually perform on the write path in two dimensions:
 
 - **Size**: how much space does typical security telemetry occupy?
 - **Speed**: how fast can we write out to a store?
@@ -37,9 +36,10 @@ metrics:
 Parquet and Feather have different goals. While Parquet is an on-disk format
 that optimizes for size, Feather is just a thin layer around the native Arrow
 in-memory representation. This puts them at different points in the spectrum of
-throughput and latency. To better understand this spectrum for real-world data,
-we instrumented the write path of VAST, which consists roughly of the following
-steps:
+throughput and latency.
+
+To better understand this spectrum, we instrumented the
+write path of VAST, which consists roughly of the following steps:
 
 1. Parse the input
 2. Convert it into Arrow record batches
@@ -190,7 +190,17 @@ library(dplyr)
 library(ggplot2)
 library(lubridate)
 library(scales)
+library(stringr)
 library(tidyr)
+
+# For faceting, to show clearer boundaries.
+theme_bw_trans <- function(...) {
+  theme_bw(...) +
+  theme(panel.background = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.background = element_rect(fill = "transparent"))
+}
 
 theme_set(theme_minimal())
 
@@ -201,6 +211,14 @@ data <- read.csv("data.csv") |>
 original <- read.csv("sizes.csv") |>
   mutate(store = "original", store_class = "original") |>
   select(store, store_class, schema, bytes)
+
+# Global view on number of events per schema.
+schemas <- data |>
+  # Pick one element from the run matrix.
+  filter(store == "feather" & zstd.level == 1) |>
+  group_by(schema) |>
+  summarize(n = sum(num_events),
+            bytes_memory = sum(bytes_memory))
 
 # Normalize store sizes by number of events/store.
 normalized <- data |>
@@ -227,6 +245,15 @@ unified <- aggregated |>
   select(-memory) |>
   rename(bytes = storage, store_class = store) |>
   unite("store", store_class, zstd.level, sep = "+", remove = FALSE)
+
+schemas_gt10k <- schemas |> filter(n > 10e3) |> pull(schema)
+schemas_gt100k <- schemas |> filter(n > 100e3) |> pull(schema)
+
+# Only schemas with > 100k events.
+cleaned <- unified |>
+  filter(schema %in% schemas_gt100k) |>
+  mutate(zstd.level = factor(str_replace_na(zstd.level),
+                             levels = c("NA", "-5", "1", "9", "19")))
 
 # Helper function to format numbers with SI unit suffixes.
 fmt_si <- function(x) scales::label_number_si(accuracy = 0.1)(x)
@@ -265,26 +292,75 @@ schemas |>
     geom_bar(stat = "identity") +
     scale_y_log10(labels = scales::label_comma()) +
     labs(x = "Schema", y = "Number of Events", fill = "Module") +
-    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
+    theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
 ```
 
 The above plot (log-scaled y-axis) shows how many events we have per type.
-Between 1 and 100M events, we almost see everything. If we keep the order of the
-schema from the above plot, but exchange number of event with event size in
-memory, we can observe an inverse relationship between size and frequency:
+Between 1 and 100M events, we almost see everything.
+
+What's the typical event size?
 
 ```{r}
 #| code-fold: true
 #| label: event-size-by-schema
 schemas |>
   separate(schema, c("module", "type"), remove = FALSE) |>
-  ggplot(aes(x = reorder(schema, -n), y = bytes_memory, fill = module)) +
+  ggplot(aes(x = reorder(schema, -n), y = bytes_memory / n, fill = module)) +
     geom_bar(stat = "identity") +
     guides(fill = "none") +
-    scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
     labs(x = "Schema", y = "Bytes (in-memory)", color = "Module") +
-    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
+    theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
 ```
+
+The above plot keeps the x-axis from the previous plot, but exchanges the y-axis
+to show normalized event size, in memory after parsing. Most events
+take up a few 100 bytes, with packet data consuming a bit more, and one 5x
+outlier: `suricata.ftp`.
+
+Such distributions are normal, even with these outliers. Some telemetry events
+simply have more string data that's a function of user input. For `suricata.ftp`
+specifically, it can grow linearly with the data transmitted. Here's a stripped
+down example of an event that is greater than 5 kB in its raw JSON:
+
+```json
+{
+  "timestamp": "2021-11-19T05:08:50.885981+0100",
+  "flow_id": 1339403323589433,
+  "pcap_cnt": 5428538,
+  "event_type": "ftp",
+  "src_ip": "10.5.5.101",
+  "src_port": 50479,
+  "dest_ip": "62.24.128.228",
+  "dest_port": 110,
+  "proto": "TCP",
+  "tx_id": 12,
+  "community_id": "1:kUFeGEpYT1JO1VCwF8wZWUWn0J0=",
+  "ftp": {
+    "completion_code": [
+      "155",
+      ...
+      <stripped 330 lines>
+      ...
+      "188",
+      "188",
+      "188"
+    ],
+    "reply": [
+      " 41609",
+      ...
+      <stripped 330 lines>
+      ...
+      " 125448",
+      " 126158",
+      " 29639"
+    ],
+    "reply_received": "yes"
+  }
+}
+```
+
+This matches our mental model. A few hundred bytes per event with some outliers.
 
 ### Batching
 
@@ -328,7 +404,7 @@ unified |>
   geom_boxplot() +
   scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
   labs(x = "Store", y = "Bytes/Event", color = "Store") +
-  theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
+  theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
 ```
 
 Every boxplot corresponds to one store, with `original` and `memory` being also
@@ -363,7 +439,7 @@ medians |>
   geom_bar(stat = "identity") +
   scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
   labs(x = "Store", y = "Bytes/Event", fill = "Store") +
-  theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
+  theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
 ```
 
 To better understand the compression in numbers, we'll anchor the original size
@@ -402,16 +478,12 @@ Feather per schema, we see the difference between the two formats more clearly:
 #| code-fold: true
 #| label: plot-parquet-vs-feather
 library(ggrepel)
-library(stringr)
 
 parquet_vs_feather_size <- unified |>
   select(-store, -duration) |>
   pivot_wider(names_from = store_class,
               values_from = bytes,
               id_cols = c(schema, zstd.level))
-
-schemas_gt10k <- schemas |> filter(n > 10e3) |> pull(schema)
-schemas_gt100k <- schemas |> filter(n > 100e3) |> pull(schema)
 
 plot_parquet_vs_feather <- function(data) {
   data |>
@@ -489,9 +561,6 @@ above:
 ```{r}
 #| code-fold: true
 #| label: plot-zeek-suricata
-zeek_conn <- unified |>
-  filter(store %in% c("parquet", "feather") & schema == "zeek.conn") |>
-  pull(bytes)
 unified |>
   filter(schema == "zeek.conn") |>
   ggplot(aes(x = reorder(store, -bytes), y = bytes, fill = store_class)) +
@@ -499,7 +568,7 @@ unified |>
     guides(fill = "none") +
     labs(x = "Store", y = "Bytes/Event") +
     scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
-    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0)) +
+    theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0)) +
     facet_wrap(~ schema, scales = "free")
 ```
 
@@ -521,7 +590,7 @@ parquet_vs_feather_size |>
     geom_bar(stat = "identity", position = "dodge") +
     labs(x = "Schema", y = "Parquet / Feather (%)", fill = "Zstd Level") +
     scale_y_continuous(breaks = 6:1 * 20 / 100, labels = scales::label_percent()) +
-    theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0))
+    theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
 ```
 
 The horizontal line is similar to the identiy line in the scatterplot,
@@ -544,7 +613,7 @@ Parquet. But is that the case?
 
 With *speed*, we mean the time it takes to transform Arrow Record Batches into
 Parquet and Feather format. To avoid distortotion of small events, we also
-restrict to schemas with more than 100k events.
+restrict the analysis to schemas with more than 100k events.
 
 ```{r}
 #| code-fold: true
@@ -555,7 +624,7 @@ unified |>
              y = duration, color = store_class)) +
   geom_boxplot() +
   scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
-  theme(axis.text.x = element_text(angle = -90, size = 8, hjust = 0)) +
+  theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0)) +
   labs(x = "Store", y = "Speed (us)", color = "Store")
 ```
 
@@ -586,13 +655,13 @@ Let's look at the runtime data per schema:
 #| code-fold: true
 #| label: pairwise-runtime-comparion
 parquet_vs_feather_duration <- unified |>
+  filter(schema %in% schemas_gt100k) |>
   select(-store, -bytes) |>
   pivot_wider(names_from = store_class,
               values_from = duration,
               id_cols = c(schema, zstd.level))
 
 parquet_vs_feather_duration |>
-  filter(schema %in% schemas_gt100k) |>
   mutate(zstd.level = str_replace_na(zstd.level)) |>
   separate(schema, c("module", "type"), remove = FALSE) |>
   ggplot(aes(x = parquet, y = feather,
@@ -624,7 +693,7 @@ parquet_vs_feather_duration |>
 cleaned <- unified |>
   filter(schema %in% schemas_gt100k) |>
   mutate(zstd.level = factor(str_replace_na(zstd.level),
-                             c("NA", "-5", "1", "9", "19"))) |>
+                             levels = c("NA", "-5", "1", "9", "19"))) |>
   group_by(schema, store_class, zstd.level) |>
   summarize(bytes = median(bytes), duration = median(duration))
 
@@ -675,7 +744,7 @@ cleaned |>
     scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
     labs(x = "Size", y = "Speed", shape = "Store", color = "Store") +
     facet_grid(cols = vars(zstd.level)) +
-    theme_bw()
+    theme_bw_trans()
 ```
 
 ```{r}
@@ -694,5 +763,5 @@ cleaned |>
     scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
     labs(x = "Size", y = "Speed", shape = "Zstd Level", color = "Zstd Level") +
     facet_grid(rows = vars(store_class)) +
-    theme_bw()
+    theme_bw_trans()
 ```
