@@ -795,6 +795,36 @@ install(
   DESTINATION "${CMAKE_INSTALL_DOCDIR}"
   COMPONENT Runtime)
 
+# -- python bindings ----------------------------------------------------------
+
+find_program(POETRY_PATH poetry)
+if (NOT POETRY_PATH)
+  message(
+    WARNING
+      "Cannot find 'poetry' in PATH, which is required for installing VAST Python bindings"
+  )
+else ()
+  # Poetry has no support for specifying a working directory for the build
+  # command, so in order to make the installation not modify the source directory
+  # we need to copy the Python bindings in their entirety into the build directory
+  # first.
+  # FIXME: Check exit codes from execute_process calls.
+  install(
+    CODE "
+    file(REMOVE_RECURSE \"${CMAKE_CURRENT_BINARY_DIR}/python\")
+    file(
+      COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python\"
+      DESTINATION \"${CMAKE_CURRENT_BINARY_DIR}/\")
+    execute_process(
+      COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel
+      WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}/python\")
+    file(GLOB VAST_PYTHON_WHL \"${CMAKE_CURRENT_BINARY_DIR}/python/dist/*.whl\")
+    execute_process(
+      COMMAND \"${POETRY_PATH}\" run pip install --prefix
+        \"${CMAKE_INSTALL_PREFIX}\" \"\${VAST_PYTHON_WHL}\"
+      WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}/python\")")
+endif ()
+
 # -- packaging -----------------------------------------------------------------
 
 include(VASTPackage)
