@@ -221,12 +221,11 @@ struct accountant_state_impl {
     auto buf = to_json_line(actor_id, ts, key, x, meta1, meta2);
     // Only poll the socket for write readiness if it did not drop the previous
     // line. Not doing this could increase the average message processing time
-    // of the accountant by timeout value, and just as with any actor, receiving
-    // messages at a higher frequency that they can be processed will eventually
-    // consume all available memory.
-    // The initial timeout of 1 second is somewhat arbitrary. Long enough so
-    // any re-initialization of the listening side would not incur data loss
-    // without being excessive.
+    // of the accountant by the timeout value, and just as with any actor,
+    // receiving messages at a higher frequency that they can be processed will
+    // eventually consume all available memory. The initial timeout of 1 second
+    // is somewhat arbitrary. Long enough so any re-initialization of the
+    // listening side would not incur data loss without being excessive.
     auto timeout_usec = uds_datagram_sink_dropping ? 0 : 1'000'000;
     auto delivered = dest.send(
       std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()},
