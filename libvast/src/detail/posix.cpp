@@ -134,7 +134,7 @@ uds_datagram_sender::make(const std::string& path) {
 
 caf::expected<bool>
 uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
-  if (timeout_usec) {
+  if (timeout_usec > 0) {
     auto ready = wpoll(src_fd, timeout_usec);
     if (!ready)
       return ready.error();
