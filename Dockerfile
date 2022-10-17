@@ -8,6 +8,8 @@ ENV CC="gcc-10" \
 
 WORKDIR /tmp/vast
 
+# TODO: Once we upgrade the image to Debian Bookworm, install python3-poetry
+# instead of installing poetry from pip.
 RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
       > /etc/apt/sources.list.d/backports.list && \
     apt-get update && \
@@ -48,6 +50,7 @@ RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
     apt-get -y --no-install-recommends install libarrow-dev=9.0.0-1 libprotobuf-dev libparquet-dev=9.0.0-1 && \
+    python3 -m pip install --upgrade poetry && \
     rm -rf /var/lib/apt/lists/* *.deb
 
 # VAST
@@ -57,6 +60,7 @@ COPY examples ./examples
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
 COPY plugins ./plugins
+COPY python ./python
 COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
@@ -99,6 +103,7 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
+      -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
     cmake --build build --parallel && \
     cmake --install build --strip && \
