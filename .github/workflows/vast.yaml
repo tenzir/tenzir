@@ -793,6 +793,15 @@ jobs:
           git submodule sync --recursive
           git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
           git fetch origin +refs/tags/*:refs/tags/*
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          run_install: |
+            - cwd: $PWD/plugins/web/ui
       - name: Determine VAST Package Name
         id: configure
         run: |
