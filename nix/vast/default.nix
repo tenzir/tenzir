@@ -25,6 +25,8 @@
 , tcpdump
 , dpkg
 , restinio
+, nodejs
+, nodePackages
 , versionOverride ? null
 , versionShortOverride ? null
 , withPlugins ? []
@@ -65,7 +67,13 @@ stdenv.mkDerivation (rec {
       --replace nm "''${NM}"
   '';
 
-  nativeBuildInputs = [ cmake cmake-format dpkg ];
+  nativeBuildInputs = [
+    cmake
+    cmake-format
+    dpkg
+    nodejs
+    nodePackages.pnpm
+  ];
   propagatedNativeBuildInputs = [ pkg-config pandoc ];
   buildInputs = [
     fast_float
