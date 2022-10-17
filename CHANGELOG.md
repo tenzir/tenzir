@@ -6,6 +6,72 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
+## Unreleased
+
+### Changes
+
+- VAST now emits per-component memory usage metrics under the `memory-usage` key. As of now the index and catalog components calculate this value.
+  [#2471](https://github.com/tenzir/vast/pull/2471)
+
+- We changed the default VAST endpoint from 'localhost' to '127.0.0.1', to ensure the listen address is deterministic and eliminate a race where VAST fails to acquire the IPv6 address due to a lingering port reservation but then successfully listens on the IPv6 address.
+  [#2512](https://github.com/tenzir/vast/pull/2512)
+
+- Building VAST from source now requires CMake 3.19 or greater.
+  [#2582](https://github.com/tenzir/vast/pull/2582)
+
+- The default store-backend of VAST is now `feather`. Reading from VAST's custom `segment-store` backend is still transparently supported, but new partitions automatically write to the Apache Feather V2 backend instead.
+  [#2587](https://github.com/tenzir/vast/pull/2587)
+
+- Log messages concerning automatic rebuilds are not printed at INFO verbosity any more.
+  [#2619](https://github.com/tenzir/vast/pull/2619)
+
+### Features
+
+- VAST is now distributed as a Debian Package. It is attached to each [release on GitHub](https://github.com/tenzir/vast/releases). This package automatically installs a systemd service and creates a `vast` user for the database process, greatly simplifying the setup process. Refer to [the docs](https://vast.io/docs/setup/install/linux#debian) for detailed instructions.
+  [#2513](https://github.com/tenzir/vast/pull/2513)
+
+- VAST Cloud has now a MISP plugin that enables to add a MISP instance to the cloud stack.
+  [#2548](https://github.com/tenzir/vast/pull/2548)
+
+- VAST now emits metrics for filesystem access under the keys `posix-filesystem.{checks,writes,reads,mmaps,erases,moves}.{successful,failed,bytes}`.
+  [#2572](https://github.com/tenzir/vast/pull/2572)
+
+- VAST now ships a docker-compose file.
+  [#2574](https://github.com/tenzir/vast/pull/2574)
+  [@docker](https://github.com/docker)
+  [@compose](https://github.com/compose)
+
+- VAST Cloud can now expose HTTP services using Cloudflare Access.
+  [#2578](https://github.com/tenzir/vast/pull/2578)
+
+- Rebuilding parttitions now additionally rebatches the contained events to `vast.import.batch-size` events per batch, which makes queries against partitions that previously had undersized batches faster.
+  [#2583](https://github.com/tenzir/vast/pull/2583)
+
+### Bug Fixes
+
+- VAST now skips unreadable partitions while starting up, instead of aborting the initialization routine.
+  [#2515](https://github.com/tenzir/vast/pull/2515)
+
+- Rebuild of heterogeneous partition no longer hangs the whole rebuilder on rebuild pipeline failures.
+  [#2530](https://github.com/tenzir/vast/pull/2530)
+
+- VAST no longer attempts to hard-kill itself if the shutdown did not finish within the configured grace period. The option `vast.shutdown-grace-period` no longer exists. We recommend setting `TimeoutStopSec=180` in the VAST systemd service definition to restore the previous behavior.
+  [#2568](https://github.com/tenzir/vast/pull/2568)
+
+- The error message on connection failure now contains a correctly formatted target endpoint.
+  [#2609](https://github.com/tenzir/vast/pull/2609)
+
+## [v2.3.1][v2.3.1]
+
+### Bug Fixes
+
+- We fixed an indefinite hang that occurred when attempting to apply a pipeline to a partition that is not a valid flatbuffer.
+  [#2624](https://github.com/tenzir/vast/pull/2624)
+ 
+- VAST now properly regenerates any corrupted, oversized partitions it encounters during startup, provided that the corresponding store files are available. These files could be produced by versions up to and including VAST v2.2, when using configurations with an increased maximum partition size.
+  [#2631](https://github.com/tenzir/vast/pull/2631)
+
+
 ## [v2.3.0][v2.3.0]
 
 ### Changes
@@ -381,7 +447,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `msgpack` encoding option is now deprecated. VAST issues a warning on startup and automatically uses the `arrow` encoding instead. A future version of VAST will remove this option entirely.
   [#2087](https://github.com/tenzir/vast/pull/2087)
 
-- The experimental aging feature is now deprecated. The [compaction plugin](https://vast.io/docs/about-vast/use-cases/data-aging) offers a superset of the aging functionality.
+- The experimental aging feature is now deprecated. The [compaction plugin](https://vast.io/docs/about/use-cases/data-aging) offers a superset of the aging functionality.
   [#2087](https://github.com/tenzir/vast/pull/2087)
 
 - Actor names in log messages now have an `-ID` suffix to make it easier to tell multiple instances of the same actor apart, e.g., `exporter-42`.
@@ -402,7 +468,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The new built-in `rename` transform step allows for renaming event types during a transformation. This is useful when you want to ensure that a repeatedly triggered transformation does not affect already transformed events.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
-- The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://vast.io/docs/about-vast/use-cases/data-aging), e.g., for rolling up events into a more space-efficient representation after a certain amount of time.
+- The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://vast.io/docs/about/use-cases/data-aging), e.g., for rolling up events into a more space-efficient representation after a certain amount of time.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
 ### Bug Fixes
@@ -443,7 +509,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST has a new transform step: `select`, which keeps rows matching the configured expression and removes the rest from the input.
   [#2014](https://github.com/tenzir/vast/pull/2014)
 
-- The `#import_time` meta extractor allows for querying events based on the time they arrived at the VAST server process. It may only be used for comparisons with [time value literals](https://vast.io/docs/understand-vast/query-language/expressions#values), e.g., `vast export json '#import_time > 1 hour ago'` exports all events that were imported within the last hour as NDJSON.
+- The `#import_time` meta extractor allows for querying events based on the time they arrived at the VAST server process. It may only be used for comparisons with [time value literals](https://vast.io/docs/understand/query-language/expressions#values), e.g., `vast export json '#import_time > 1 hour ago'` exports all events that were imported within the last hour as NDJSON.
   [#2019](https://github.com/tenzir/vast/pull/2019)
 
 ### Bug Fixes
@@ -1273,7 +1339,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1135](https://github.com/tenzir/vast/pull/1135)
   [#1150](https://github.com/tenzir/vast/pull/1150)
 
-- The query language now supports models. Models combine a list of concepts into a semantic unit that can be fulfiled by an event. If the type of an event contains a field for every concept in a model. Turn to [the documentation](https://vast.io/docs/understand-vast/data-model/taxonomies#models) for more information.
+- The query language now supports models. Models combine a list of concepts into a semantic unit that can be fulfiled by an event. If the type of an event contains a field for every concept in a model. Turn to [the documentation](https://vast.io/docs/understand/data-model/taxonomies#models) for more information.
   [#1185](https://github.com/tenzir/vast/pull/1185)
   [#1228](https://github.com/tenzir/vast/pull/1228)
 
@@ -1929,6 +1995,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
+[v2.3.1]: https://github.com/tenzir/vast/releases/tag/v2.3.1
 [v2.3.0]: https://github.com/tenzir/vast/releases/tag/v2.3.0
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
