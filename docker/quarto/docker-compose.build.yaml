@@ -1,0 +1,11 @@
+version: "3"
+services:
+  quarto:
+    pull_policy: build
+    image: ${VAST_CONTAINER_REGISTRY:-docker.io}/tenzir/vast-quarto:${VAST_CONTAINER_REF:-latest}
+    build:
+      context: ../..
+      dockerfile: docker/quarto/Dockerfile
+      args:
+        - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
+        - QUARTO_VERSION=${QUARTO_VERSION:-1.1.251}
