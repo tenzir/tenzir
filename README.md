@@ -156,7 +156,7 @@ proceedings][nsdi-proceedings].
 [license-url]: https://raw.github.com/vast-io/vast/master/LICENSE
 [changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
 [changelog-url]: CHANGELOG.md
-[contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
+[contributing-url]: https://vast.io/docs/contribute
 [since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [since-release-url]: https://github.com/tenzir/vast/compare/2021.06.24...master
 [cii-best-practices-badge]: https://bestpractices.coreinfrastructure.org/projects/6366/badge
