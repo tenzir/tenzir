@@ -10,6 +10,7 @@
 
 #include "web/authenticator.hpp"
 #include "web/configuration.hpp"
+#include "web/mime.hpp"
 #include "web/restinio_response.hpp"
 
 #include <vast/concept/convertible/data.hpp>
@@ -279,7 +280,34 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       return request->create_response(restinio::status_temporary_redirect())
         .append_header(restinio::http_field::server, "VAST")
         .append_header_date_field()
-        .append_header(restinio::http_field::location, "/api/v0/status")
+        .append_header(restinio::http_field::location, "/status.html")
+        .done();
+    });
+  VAST_VERBOSE("using {} as ", server_config->webroot);
+  router->http_get(
+    "/:path(.*)", restinio::path2regex::options_t{}.strict(true),
+    [webroot = server_config->webroot](auto req, auto /*params*/) {
+      auto ec = std::error_code{};
+      auto http_path = req->header().path();
+      VAST_DEBUG("serving static file {}", http_path);
+      auto path = std::filesystem::path{std::string{http_path}};
+      auto normalized_path = canonical(webroot / path.relative_path(), ec);
+      if (ec)
+        return restinio::request_rejected();
+      if (!normalized_path.string().starts_with(webroot.string()))
+        return restinio::request_rejected();
+      if (!exists(normalized_path))
+        return req->create_response(restinio::status_not_found())
+          .set_body("404 not found")
+          .done();
+      auto extension = normalized_path.extension().string();
+      auto sf = restinio::sendfile(normalized_path);
+      auto const* mime_type = content_type_by_file_extension(extension);
+      return req->create_response()
+        .append_header(restinio::http_field::server, "VAST")
+        .append_header_date_field()
+        .append_header(restinio::http_field::content_type, mime_type)
+        .set_body(std::move(sf))
         .done();
     });
   // Run server.
@@ -287,7 +315,8 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     struct my_server_traits : public restinio::default_single_thread_traits_t {
       using request_handler_t = restinio::router::express_router_t<>;
     };
-    VAST_INFO("listening on http://{}:{}", config.bind_address, config.port);
+    VAST_INFO("web plugin listening on http://{}:{}", config.bind_address,
+              config.port);
     restinio::run(restinio::on_this_thread<my_server_traits>()
                     .port(config.port)
                     .address(config.bind_address)
@@ -316,7 +345,8 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     // the OpenSSL built-in defaults, but asio has not been updated to
     // expose this API so we need to use the raw context.
     SSL_CTX_set_dh_auto(tls_context.native_handle(), true);
-    VAST_INFO("listening on https://{}:{}", config.bind_address, config.port);
+    VAST_INFO("web plugin listening on https://{}:{}", config.bind_address,
+              config.port);
     using namespace std::literals::chrono_literals;
     restinio::run(restinio::on_this_thread<traits_t>()
                     .address(config.bind_address)
