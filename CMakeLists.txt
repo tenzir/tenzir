@@ -801,9 +801,12 @@ option(VAST_ENABLE_PYTHON_BINDINGS "Install Python bindings (requires poetry)"
        ON)
 add_feature_info("VAST_ENABLE_PYTHON_BINDINGS" VAST_ENABLE_PYTHON_BINDINGS
                  "install Python bindings (requires poetry).")
+# Currently, we install all dependencies for the Python bindings alongside the
+# Python bindings by default. We are not sure whether this is a good choice, or
+# whether it works well with the Nix sandbox, so this may change in the future.
 cmake_dependent_option(
   VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
-  "Install Python bindings with dependencies" OFF "VAST_ENABLE_PYTHON_BINDINGS"
+  "Install Python bindings with dependencies" ON "VAST_ENABLE_PYTHON_BINDINGS"
   OFF)
 add_feature_info(
   "VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES"
