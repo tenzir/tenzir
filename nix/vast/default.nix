@@ -4,6 +4,7 @@
 , nix-gitignore
 , cmake
 , cmake-format
+, poetry
 , pkgconfig
 , git
 , pandoc
@@ -66,7 +67,7 @@ stdenv.mkDerivation (rec {
       --replace nm "''${NM}"
   '';
 
-  nativeBuildInputs = [ cmake cmake-format dpkg ];
+  nativeBuildInputs = [ cmake cmake-format dpkg poetry ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [
     fast_float
