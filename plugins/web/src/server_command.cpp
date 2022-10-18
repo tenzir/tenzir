@@ -164,7 +164,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
 
 void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                  std::string_view prefix, request_dispatcher_actor dispatcher,
-                 vast::rest_endpoint endpoint,
+                 const server_config& config, vast::rest_endpoint endpoint,
                  system::rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
   auto path
@@ -180,6 +180,8 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
       -> restinio::request_handling_status_t {
       auto response
         = std::make_shared<restinio_response>(std::move(req), endpoint);
+      for (auto const& [field, value] : config.response_headers)
+        response->add_header(field, value);
       self->send(dispatcher, atom::request_v, std::move(response),
                  std::move(endpoint), handler);
       // TODO: Measure if always accepting introduces a noticeable
@@ -262,7 +264,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       }
       handlers.push_back(handler);
       setup_route(self, router, rest_plugin->prefix(), dispatcher,
-                  std::move(endpoint), handler);
+                  *server_config, std::move(endpoint), handler);
     }
   }
   // Set up non-API routes.
