@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/detail/installdirs.hpp>
+
 #include <web/configuration.hpp>
 
 namespace vast::plugins::web {
@@ -56,12 +58,21 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   }
   result.certfile = config.certfile;
   result.keyfile = config.keyfile;
+  if (!config.web_root.empty())
+    result.webroot = std::filesystem::canonical(config.web_root);
+  else
+    result.webroot = detail::install_datadir() / "plugin" / "web" / "www";
   // This doesn't help against TOCTOU errors, but at least it
   // catches obvious ones.
-  if (!result.certfile.empty() && !std::filesystem::exists(result.certfile))
+  if (!result.webroot.empty())
+    if (!exists(result.webroot) || !is_directory(result.webroot))
+      return caf::make_error(ec::invalid_argument, fmt::format("directory not "
+                                                               "found: {}",
+                                                               result.webroot));
+  if (!result.certfile.empty() && !exists(result.certfile))
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.certfile));
-  if (!result.keyfile.empty() && !std::filesystem::exists(result.keyfile))
+  if (!result.keyfile.empty() && !exists(result.keyfile))
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.keyfile));
   if (result.require_tls)
