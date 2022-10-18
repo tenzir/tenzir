@@ -986,6 +986,12 @@ void index_state::schedule_lookups() {
            pid = next->partition](const caf::error& err) {
             VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
                       *self, qid, pid, err);
+            // We don't know if this was a transient error or if the
+            // partition/store is corrupted. However, the partition actor has
+            // possibly already exited so at least we have to clear it from the
+            // cache so that subsequent queries get a chance to respawn it
+            // cleanly instead of trying to talk to the dead.
+            inmem_partitions.drop(pid);
             handle_completion();
           });
     }
