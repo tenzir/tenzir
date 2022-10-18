@@ -841,7 +841,8 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
         ${VAST_POETRY_EXTRA_INSTALL_ARGS}
         --prefix \"${CMAKE_INSTALL_PREFIX}\" \"\${VAST_PYTHON_WHL}\"
       WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}/python\"
-      COMMAND_ERROR_IS_FATAL ANY)")
+      COMMAND_ERROR_IS_FATAL ANY)"
+    COMPONENT Runtime)
 endif ()
 
 # -- packaging -----------------------------------------------------------------
