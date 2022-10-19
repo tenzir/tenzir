@@ -1,0 +1,110 @@
+name: VAST
+
+# This section defines how the VAST action is triggered.
+on:
+  # TODO:
+  # - workflow_dispatch for manual trigger
+  # - push for merges
+  # - release for releases
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+# This section defines how the VAST action is enqueued.
+concurrency:
+  # Wait for in-progress runs of this action for the same branch to finish
+  # before starting, ensuring that a branch is only built once at a time. This
+  # has a double-purpose: It ensures that caches are always able to pick up work
+  # from previous builds of the same branch, and it rate-limits the CI to ensure
+  # it's running smoothly for all users.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel all in-progress runs of this action for the same pull request.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+
+  configure:
+    name: Configure
+    runs-on: ubuntu-20.04
+    outputs: 
+      build-version: ${{ steps.configure.outputs.build-version }}
+      build-version-short: ${{ steps.configure.outputs.build-version-short }}
+      before-sha: ${{ steps.configure.outputs.before-sha }}
+      before-version: ${{ steps.configure.outputs.before-version }}
+      release-version: ${{ steps.configure.outputs.release-version }}
+      head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
+      base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
+      docker-build-args: ${{ steps.configure.outputs.docker-build-args }}
+      run-changelog: ${{ steps.configure.outputs.run-changelog }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Fetch Tags
+        run: |
+          git fetch origin +refs/tags/*:refs/tags/*
+      - name: Inject Slug Variables
+        uses: rlespinasse/github-slug-action@v4
+      - name: Configure
+        id: configure
+        run: |
+          # Set a bunch of version numbers depending on how we triggered the PR
+          # so they're consistent between jobs.
+          build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
+          build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            before_sha="${{ github.event.before }}"
+          else
+            before_sha="$(git merge-base origin/master HEAD)"
+          fi
+          before_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "${before_sha}")"
+          release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
+          echo "build-version=${build_version}" >> $GITHUB_OUTPUT
+          echo "build-version-short=${build_version_short}" >> $GITHUB_OUTPUT
+          echo "before-sha=${before_sha}" >> $GITHUB_OUTPUT
+          echo "before-version=${before_version}" >> $GITHUB_OUTPUT
+          echo "release-version=${release_version}" >> $GITHUB_OUTPUT
+          # Inject the branch slugs for cache names.
+          echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
+          echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
+          # For pull requests we make it possible to cache all layers by setting
+          # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
+          # accept the downaside that this means that Docker images created
+          # within pull request triggers of this job display the merge-base
+          # version.
+          docker_build_args="-D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
+          docker_build_args="${docker_build_args} -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
+          # Since the Docker build does not have the Git context, we set
+          # version fallbacks manually here.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            vast_tag="${before_version}"
+          else
+            vast_tag="${build_version}"
+          fi
+          docker_build_args="${docker_build_args} -DVAST_VERSION_TAG:STRING=${vast_tag}"
+          for plugin in $(ls plugins); do
+            var="VAST_PLUGIN_${plugin^^}_REVISION"
+            value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
+            docker_build_args="${docker_build_args} -D${var}:STRING=${value}"
+          done
+          echo "docker-build-args=${docker_build_args}" >> $GITHUB_OUTPUT
+          # Which jobs do we need to run? FIXME
+          # changelog:
+          #   - did we touch changelog/ or CHANGELOG.md?
+          #   - did we touch the changelog generation?
+          #   - are we not in a pull request?
+          #   - did we update the website?
+          echo "run-changelog=true" >> $GITHUB_OUTPUT
+
+  changelog:
+    name: Changelog
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-changelog }}
+    runs-on: ubuntu-20.04
+    container: debian:bullseye-slim
+    steps:
+      - run: |
+          echo "XXX"
