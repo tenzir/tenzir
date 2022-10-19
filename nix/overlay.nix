@@ -125,12 +125,6 @@ in
       "-DSIMDJSON_BUILD_STATIC=ON"
     ];
   });
-  spdlog = prev.spdlog.overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
-      "-DSPDLOG_BUILD_STATIC=ON"
-      "-DSPDLOG_BUILD_SHARED=OFF"
-    ];
-  });
   libunwind = prev.libunwind.overrideAttrs (old: {
     postPatch = if isStatic then ''
          substituteInPlace configure.ac --replace "-lgcc_s" ""
