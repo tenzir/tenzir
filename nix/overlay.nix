@@ -21,10 +21,6 @@ in
       "-DARROW_SIMD_LEVEL=NONE"
     ];
   });
-  xxHash = if !isStatic then prev.xxHash else
-  prev.xxHash.overrideAttrs (old: {
-    patches = [ ./xxHash/static.patch ];
-  });
   libevent = if !isStatic then prev.libevent else
   prev.libevent.overrideAttrs (old: {
     outputs = [ "out" ];
