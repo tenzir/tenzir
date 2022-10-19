@@ -25,6 +25,18 @@ in
   prev.xxHash.overrideAttrs (old: {
     patches = [ ./xxHash/static.patch ];
   });
+  libevent = if !isStatic then prev.libevent else
+  prev.libevent.overrideAttrs (old: {
+    outputs = [ "out" ];
+    outputBin = null;
+    propagatedBuildOutputs = [ "out" ];
+    nativeBuildInputs = old.nativeBuildInputs ++ lib.optionals isStatic [
+      prev.buildPackages.cmake ];
+    cmakeFlags = [
+      "-DEVENT__LIBRARY_TYPE=STATIC"
+    ];
+    postInstall = null;
+  });
   http-parser = if !isStatic then prev.http-parser else
     prev.http-parser.overrideAttrs (_ : {
       postPatch = let
