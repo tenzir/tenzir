@@ -60,7 +60,7 @@ class plugin final : public virtual command_plugin,
                                   "dev,server,upstream,mtls.")
         .add<std::string>("certfile", "path to TLS server certificate")
         .add<std::string>("keyfile", "path to TLS private key")
-        .add<std::string>("web-root", "path to serve static html from")
+        .add<std::string>("root", "document root of the server")
         .add<std::string>("bind", "listen address of server")
         .add<uint16_t>("port", "listen port"));
     rest_command->add_subcommand("generate-token", "generate auth token",
