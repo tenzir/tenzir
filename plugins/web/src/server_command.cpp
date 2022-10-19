@@ -280,22 +280,26 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       return request->create_response(restinio::status_temporary_redirect())
         .append_header(restinio::http_field::server, "VAST")
         .append_header_date_field()
-        .append_header(restinio::http_field::location, "/status.html")
+        .append_header(restinio::http_field::location, "/index")
         .done();
     });
-  VAST_VERBOSE("using {} as ", server_config->webroot);
+  VAST_VERBOSE("using {} as document root", server_config->webroot);
   router->http_get(
     "/:path(.*)", restinio::path2regex::options_t{}.strict(true),
     [webroot = server_config->webroot](auto req, auto /*params*/) {
       auto ec = std::error_code{};
       auto http_path = req->header().path();
-      VAST_DEBUG("serving static file {}", http_path);
       auto path = std::filesystem::path{std::string{http_path}};
-      auto normalized_path = canonical(webroot / path.relative_path(), ec);
+      VAST_DEBUG("serving static file {}", http_path);
+      auto normalized_path
+        = (webroot / path.relative_path()).lexically_normal();
       if (ec)
         return restinio::request_rejected();
       if (!normalized_path.string().starts_with(webroot.string()))
         return restinio::request_rejected();
+      // Map e.g. /status -> /status.html on disk.
+      if (!exists(normalized_path) && !normalized_path.has_extension())
+        normalized_path.replace_extension("html");
       if (!exists(normalized_path))
         return req->create_response(restinio::status_not_found())
           .set_body("404 not found")
