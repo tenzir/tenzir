@@ -2,19 +2,36 @@
 final: prev:
 let
   inherit (final) lib;
+  inherit (final.stdenv.hostPlatform) isMusl;
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if final.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
 in
 {
   arrow-cpp = (prev.arrow-cpp.override { 
     enableShared = !isStatic;
-    enableFlight = !isStatic;
     enableS3 = !isStatic;
     enableGcs = !isStatic;
   }).overrideAttrs (old: {
+    patches = old.patches ++ lib.optionals isMusl [
+      (prev.fetchpatch {
+        name = "arrow-cpp-9-fix-musl.patch";
+        url = "https://github.com/apache/arrow/commit/7d8e1fbc96a0b527475b736e82580894363fc7cf.patch";
+        hash = "sha256-HvQEYCZ5tYiXS1qukNryR1qTQ1CVI99LueCxY63dAtc=";
+        stripLen = 1;
+      })
+    ];
     cmakeFlags = old.cmakeFlags ++ [
       "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"
+    ] ++ lib.optionals isStatic [
+      # Needed for correct dependency resolution, should be the default...
+      "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
+      # Backtrace doesn't build in static mode, need to investigate.
+      "-DARROW_WITH_BACKTRACE=OFF"
+      # Plasma is deprecated for 10.0.0 so we don't bother fixing any issues.
+      "-DARROW_PLASMA=OFF"
     ];
+    doCheck = false;
+    doInstallCheck = !isStatic;
   });
   arrow-cpp-no-simd = final.arrow-cpp.overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ [
