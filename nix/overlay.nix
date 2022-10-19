@@ -20,9 +20,7 @@ in
         stripLen = 1;
       })
     ];
-    cmakeFlags = old.cmakeFlags ++ [
-      "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"
-    ] ++ lib.optionals isStatic [
+    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
       # Needed for correct dependency resolution, should be the default...
       "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
       # Backtrace doesn't build in static mode, need to investigate.
