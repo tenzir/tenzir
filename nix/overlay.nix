@@ -95,6 +95,7 @@ in
   jemalloc = prev.jemalloc.overrideAttrs (old: {
     EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
     configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
+    doCheck = !isStatic;
   });
   simdjson = prev.simdjson.overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
