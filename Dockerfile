@@ -1,6 +1,6 @@
 # -- dependencies --------------------------------------------------------------
 
-FROM debian:bullseye-slim AS dependencies
+FROM python:3.10-slim-bullseye AS dependencies
 LABEL maintainer="engineering@tenzir.com"
 
 ENV CC="gcc-10" \
@@ -38,9 +38,6 @@ RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
       lsb-release \
       ninja-build \
       pkg-config \
-      python3-dev \
-      python3-pip \
-      python3-venv \
       robin-map-dev \
       wget && \
     wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
@@ -116,7 +113,7 @@ CMD ["--help"]
 
 # -- production ----------------------------------------------------------------
 
-FROM debian:bullseye-slim AS production
+FROM python:3.10-slim-bullseye AS production
 
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}" \
