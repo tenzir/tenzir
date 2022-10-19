@@ -1126,6 +1126,24 @@ public:
       // nop
     }
 
+    template <type_or_concrete_type Type>
+    basic_field(String n, const Type& t,
+                const std::vector<type::attribute_view>& attrs) noexcept
+      : name{std::move(n)}, type(t, attrs) {
+      // nop
+    }
+
+    template <type_or_concrete_type Type>
+    basic_field(String n, const Type& t,
+                const std::vector<std::string>& attrs) noexcept
+      : name{std::move(n)} {
+      std::vector<type::attribute_view> transformed;
+      transformed.reserve(attrs.size());
+      for (auto const& attr : attrs)
+        transformed.push_back(type::attribute_view{attr});
+      type = vast::type(t, std::move(transformed));
+    }
+
     String name = {};
     class type type = {};
   };

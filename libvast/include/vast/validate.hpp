@@ -15,18 +15,21 @@
 namespace vast {
 
 enum class validate {
-  // No data must have an incompatible schema entry.
+  // No data must have an incompatible schema entry
+  // and all required fields exist.
   // Ensures forward compatibility by skipping over unknown fields.
   permissive,
-  // All data must have a compatible schema entry.
+  // All data must have a compatible schema entry and all required
+  // fields exist.
   strict,
-  // The data must correspond exactly to the schema, ie. no fields
-  // can be left out to get a default value. Mostly useful for tests.
+  // All fields are treated as required. Mostly useful for tests.
   exhaustive,
 };
 
 /// Check that all keys in `data` are found in `configuration::schema` with
 /// the correct type.
+/// The `validate` behavior can be adjusted using type attributes:
+///    - required: This field must always be present.
 caf::error validate(const vast::data&, const vast::record_type& schema,
                     enum validate mode);
 
