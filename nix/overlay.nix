@@ -7,6 +7,7 @@ let
   stdenv = if final.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
 in
 {
+  abseil-cpp = if !isStatic then prev.abseil-cpp else prev.abseil-cpp_202111;
   arrow-cpp = (prev.arrow-cpp.override { 
     enableShared = !isStatic;
     enableS3 = !isStatic;
@@ -20,6 +21,7 @@ in
         stripLen = 1;
       })
     ];
+    buildInputs = old.buildInputs ++ lib.optionals isStatic [ final.sqlite ];
     cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
       # Needed for correct dependency resolution, should be the default...
       "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
@@ -35,6 +37,17 @@ in
     cmakeFlags = old.cmakeFlags ++ [
       "-DARROW_SIMD_LEVEL=NONE"
     ];
+  });
+  google-cloud-cpp = if !isStatic then prev.google-cloud-cpp else
+  prev.google-cloud-cpp.override {
+    abseil-cpp = final.abseil-cpp_202111;
+  };
+  grpc = if !isStatic then prev.grpc else
+  prev.grpc.overrideAttrs (old: {
+    cmakeFlags = old.cmakeFlags ++ [
+      "-DCMAKE_CXX_STANDARD=17"
+    ];
+    abseil-cpp = final.abseil-cpp_202111;
   });
   libevent = if !isStatic then prev.libevent else
   prev.libevent.overrideAttrs (old: {
