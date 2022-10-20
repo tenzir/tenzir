@@ -38,6 +38,16 @@ in
       "-DARROW_SIMD_LEVEL=NONE"
     ];
   });
+  flatbuffers = if !isStatic then prev.flatbuffers else
+  prev.flatbuffers.overrideAttrs(_: rec {
+    version = "22.9.29";
+    src = prev.fetchFromGitHub {
+      owner = "google";
+      repo = "flatbuffers";
+      rev = "v${version}";
+      sha256 = "sha256-Wc+DLihAN0EvaGkyuCreoRvzsNS3tIN7e2qIZhGldkw=";
+    };
+  });
   google-cloud-cpp = if !isStatic then prev.google-cloud-cpp else
   prev.google-cloud-cpp.override {
     abseil-cpp = final.abseil-cpp_202111;
