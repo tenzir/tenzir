@@ -6,6 +6,16 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
+## [v2.3.1][v2.3.1]
+
+### Bug Fixes
+
+- We fixed an indefinite hang that occurred when attempting to apply a pipeline to a partition that is not a valid flatbuffer.
+  [#2624](https://github.com/tenzir/vast/pull/2624)
+
+- VAST now properly regenerates any corrupted, oversized partitions it encounters during startup, provided that the corresponding store files are available. These files could be produced by versions up to and including VAST v2.2, when using configurations with an increased maximum partition size.
+  [#2631](https://github.com/tenzir/vast/pull/2631)
+
 ## [v2.3.0][v2.3.0]
 
 ### Changes
@@ -381,7 +391,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The `msgpack` encoding option is now deprecated. VAST issues a warning on startup and automatically uses the `arrow` encoding instead. A future version of VAST will remove this option entirely.
   [#2087](https://github.com/tenzir/vast/pull/2087)
 
-- The experimental aging feature is now deprecated. The [compaction plugin](https://vast.io/docs/about-vast/use-cases/data-aging) offers a superset of the aging functionality.
+- The experimental aging feature is now deprecated. The [compaction plugin](https://vast.io/docs/about/use-cases/data-aging) offers a superset of the aging functionality.
   [#2087](https://github.com/tenzir/vast/pull/2087)
 
 - Actor names in log messages now have an `-ID` suffix to make it easier to tell multiple instances of the same actor apart, e.g., `exporter-42`.
@@ -402,7 +412,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - The new built-in `rename` transform step allows for renaming event types during a transformation. This is useful when you want to ensure that a repeatedly triggered transformation does not affect already transformed events.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
-- The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://vast.io/docs/about-vast/use-cases/data-aging), e.g., for rolling up events into a more space-efficient representation after a certain amount of time.
+- The new `aggregate` transform plugin allows for flexibly grouping and aggregating events. We recommend using it alongside the [`compaction` plugin](https://vast.io/docs/about/use-cases/data-aging), e.g., for rolling up events into a more space-efficient representation after a certain amount of time.
   [#2076](https://github.com/tenzir/vast/pull/2076)
 
 ### Bug Fixes
@@ -443,7 +453,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST has a new transform step: `select`, which keeps rows matching the configured expression and removes the rest from the input.
   [#2014](https://github.com/tenzir/vast/pull/2014)
 
-- The `#import_time` meta extractor allows for querying events based on the time they arrived at the VAST server process. It may only be used for comparisons with [time value literals](https://vast.io/docs/understand-vast/query-language/expressions#values), e.g., `vast export json '#import_time > 1 hour ago'` exports all events that were imported within the last hour as NDJSON.
+- The `#import_time` meta extractor allows for querying events based on the time they arrived at the VAST server process. It may only be used for comparisons with [time value literals](https://vast.io/docs/understand/query-language/expressions#values), e.g., `vast export json '#import_time > 1 hour ago'` exports all events that were imported within the last hour as NDJSON.
   [#2019](https://github.com/tenzir/vast/pull/2019)
 
 ### Bug Fixes
@@ -1273,7 +1283,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
   [#1135](https://github.com/tenzir/vast/pull/1135)
   [#1150](https://github.com/tenzir/vast/pull/1150)
 
-- The query language now supports models. Models combine a list of concepts into a semantic unit that can be fulfiled by an event. If the type of an event contains a field for every concept in a model. Turn to [the documentation](https://vast.io/docs/understand-vast/data-model/taxonomies#models) for more information.
+- The query language now supports models. Models combine a list of concepts into a semantic unit that can be fulfiled by an event. If the type of an event contains a field for every concept in a model. Turn to [the documentation](https://vast.io/docs/understand/data-model/taxonomies#models) for more information.
   [#1185](https://github.com/tenzir/vast/pull/1185)
   [#1228](https://github.com/tenzir/vast/pull/1228)
 
@@ -1929,6 +1939,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
+[v2.3.1]: https://github.com/tenzir/vast/releases/tag/v2.3.1
 [v2.3.0]: https://github.com/tenzir/vast/releases/tag/v2.3.0
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
 [v2.1.0]: https://github.com/tenzir/vast/releases/tag/v2.1.0
