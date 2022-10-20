@@ -34,12 +34,12 @@ a look at how they actually perform on the write path in two dimensions:
 - **Speed**: how fast can we write out to a store?
 
 Parquet and Feather have different goals. While Parquet is an on-disk format
-that optimizes for size, Feather is just a thin layer around the native Arrow
+that optimizes for size. Feather is a thin layer around the native Arrow
 in-memory representation. This puts them at different points in the spectrum of
 throughput and latency.
 
-To better understand this spectrum, we instrumented the
-write path of VAST, which consists roughly of the following steps:
+To better understand this spectrum, we instrumented the write path of VAST,
+which consists roughly of the following steps:
 
 1. Parse the input
 2. Convert it into Arrow record batches
@@ -241,8 +241,11 @@ memory <- aggregated |>
   select(store, store_class, schema, bytes = memory)
 
 # Unite with rest of data.
-unified <- aggregated |>
+unified <-
+  aggregated |>
   select(-memory) |>
+  mutate(zstd.level = factor(str_replace_na(zstd.level),
+                             levels = c("NA", "-5", "1", "9", "19"))) |>
   rename(bytes = storage, store_class = store) |>
   unite("store", store_class, zstd.level, sep = "+", remove = FALSE)
 
@@ -251,9 +254,7 @@ schemas_gt100k <- schemas |> filter(n > 100e3) |> pull(schema)
 
 # Only schemas with > 100k events.
 cleaned <- unified |>
-  filter(schema %in% schemas_gt100k) |>
-  mutate(zstd.level = factor(str_replace_na(zstd.level),
-                             levels = c("NA", "-5", "1", "9", "19")))
+  filter(schema %in% schemas_gt100k)
 
 # Helper function to format numbers with SI unit suffixes.
 fmt_si <- function(x) scales::label_number_si(accuracy = 0.1)(x)
@@ -408,11 +409,11 @@ unified |>
 ```
 
 Every boxplot corresponds to one store, with `original` and `memory` being also
-treated like stores. The suffix `-Z` indicates Zstd compression level `Z`, with
-`NA` meaning "compression turned off" entirely.  Parquet stores on the right (in
-purple) have the smallest size, followed by Feather (red), and then their
-corresponding in-memory (green) and original (turquoise) representation. The
-negative Zstd compression level -5 makes Parquet actually worse than Feather.
+treated like stores. The suffix `-Z` indicates Zstd level `Z`, with `NA` meaning
+"compression turned off" entirely.  Parquet stores on the right (in purple) have
+the smallest size, followed by Feather (red), and then their corresponding
+in-memory (green) and original (turquoise) representation. The negative Zstd
+level -5 makes Parquet actually worse than Feather.
 
 :::tip Analysis
 What stands out is that disabling compression for Feather inflates the data
@@ -461,14 +462,14 @@ medians |>
 
 :::tip Analysis
 Parquet dominates Feather with respect to space savings, but not by much for
-high Zstd compression levels. Zstd compression levels > 1 do not provide
-substantial space savings on averge, where observe a compression ratio of
-**~4x** over the base data. Parquet still provides a **2.6** compression ratio
-in the absence of compression because it applies dictionary encoding.
+high Zstd levels. Zstd levels > 1 do not provide substantial space savings on
+average, where observe a compression ratio of **~4x** over the base data. Parquet
+still provides a **2.6** compression ratio in the absence of compression because
+it applies dictionary encoding.
 
-Feather offers competite compression with **~3x** ratio for equal Zstd
-compression levels. However, without compression Feather expands beyond the
-original dataset size at a compression ratio of **~0.9**.
+Feather offers competitive compression with **~3x** ratio for equal Zstd levels.
+However, without compression Feather expands beyond the original dataset size at
+a compression ratio of **~0.9**.
 :::
 
 The above analysis covered averages across schemas. If we juxtapose Parquet and
@@ -520,9 +521,9 @@ the line, it means there is no difference between Feather and Parquet. We only
 look at schemas with more than 100k events to ensure that the constant factor
 does not perturb the analysis. (Otherwise we end up with points *below* the
 identity line, which are completely dwarfed by the bulk in practice.) The color
-and shape shows the different Zstd compression levels, with `NA` meaning no
-compression. Points clouds closer to the origin mean that the corresponding
-store class takes up less space.
+and shape shows the different Zstd levels, with `NA` meaning no compression.
+Points clouds closer to the origin mean that the corresponding store class takes
+up less space.
 
 :::tip Analysis
 We observe that **disabling compression hits Feather the hardest**.
@@ -593,7 +594,7 @@ parquet_vs_feather_size |>
     theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
 ```
 
-The horizontal line is similar to the identiy line in the scatterplot,
+The horizontal line is similar to the identity line in the scatterplot,
 indicating that Feather and Parquet compress equally well. The bars represent
 that ratio of Parquet divided by Feather. The shorter the bars, the smaller the
 size, so the higher the gain over Feather.
@@ -608,12 +609,14 @@ security analytics workloads**.
 ## Speed
 
 Now that we have looked at the spatial properties of Parquet and Feather, we
-take a look at the runtime. Our mental model is that Feather outperforms
-Parquet. But is that the case?
+take a look at the runtime. With *speed*, we mean the time it takes to transform
+Arrow Record Batches into Parquet and Feather format. This analysis only
+considers only CPU time; VAST writes the respective store in memory first and
+then flushes it one sequential write. Our mental model is that Feather is faster
+than Parquet. Is that the case when enabling compression for both?
 
-With *speed*, we mean the time it takes to transform Arrow Record Batches into
-Parquet and Feather format. To avoid distortotion of small events, we also
-restrict the analysis to schemas with more than 100k events.
+To avoid distortion of small events, we also restrict the analysis to schemas
+with more than 100k events.
 
 ```{r}
 #| code-fold: true
@@ -628,28 +631,30 @@ unified |>
   labs(x = "Store", y = "Speed (us)", color = "Store")
 ```
 
-The above boxplots have a log-scaled y-axis and are sorted by their median,
-similar to the size discussion above.
+The above boxplots show the time it takes to write a store for a given store and
+compression level combination. The log-scaled y-axis shows the normalized to number
+of microseconds per event, across the distribution of all schemas. The sort order
+is the median processing time, similar to the size discussion above.
 
 :::tip Analysis
-Unexpectdly, we observe roughly an ordering according to Zstd level: more
-copmression means a shorter runtime.
+As expected, we roughly observe an ordering according to Zstd level: more
+compression means a shorter runtime.
 
-For the same Zstd level, **Parquet store creation was always faster**. Our
-unconfirmed hunch is that Feather compression operates on more and smaller
-column buffers, whereas Parquet compression only runs over the concatenated
-Arrow buffers, yielding bigger strides.
+Unexpectedly, for the same Zstd level, **Parquet store creation was always
+faster**. Our unconfirmed hunch is that Feather compression operates on more and
+smaller column buffers, whereas Parquet compression only runs over the
+concatenated Arrow buffers, yielding bigger strides.
 :::
 
 We don't have an explanation for why disabling compression for Parquet is
 *slower* compared Zstd levels -5 and 1. In theory, strictly less cycles are
-spent by disabling the code path. Perhaps compression results in different
-memory layout that is more cache-efficient. Unfortunately, we did not have the
-time to dig deeper into the analysis to figure out why disabling Parquet
-compression is slower. Please don't hesitate to reach out, e.g., via our
+spent by disabling the compression code path. Perhaps compression results in
+different memory layout that is more cache-efficient. Unfortunately, we did not
+have the time to dig deeper into the analysis to figure out why disabling
+Parquet compression is slower. Please don't hesitate to reach out, e.g., via our
 [Community Slack](http://slack.tenzir.com).
 
-Let's look at the runtime data per schema:
+Let's compare Parquet and Feather by compression level, per schema:
 
 ```{r}
 #| code-fold: true
@@ -684,8 +689,28 @@ parquet_vs_feather_duration |>
          shape = "Zstd Level", color = "Zstd Level")
 ```
 
+The above scatterplot has an identity line. Points on this line indicates that
+there is no speed difference between Parquet and Feather. Feather is faster for
+points below the line, and Parquet is faster for points above the line.
 
-## Space-Time Tradeoff
+:::tip Analysis
+In addition to the above boxplot, this scatterplot makes it clearer to see the
+impact of the schemas.
+
+Interestingly, **there is no significant difference in Zstd levels -5 and 1,
+while levels 9 and 19 stand apart further**. Disabling compression for Feather
+has a stronger effect on speed than for Parquet.
+
+Overall, we were surprised that **Feather and Parquet are not far apart in terms
+of write performance once compression is enabled**. Only when compression is
+disabled, Parquet is substantially slower in our measurements.
+:::
+
+## Space-Time Trade-off
+
+Finally, we combine the size and speed analysis into a single benchmark. Our
+goal is to find an optimal parameterization, i.e., one that strictly dominates
+others. To this end, we now plot size against speed:
 
 ```{r}
 #| code-fold: true
@@ -701,10 +726,59 @@ cleaned |>
   ggplot(aes(x = bytes, y = duration,
              shape = store_class, color = zstd.level)) +
     geom_point(size = 3, alpha = 0.7) +
+    geom_text_repel(aes(label = schema),
+              color = "grey",
+              size = 1, # font size
+              box.padding = 0.2,
+              min.segment.length = 0, # draw all line segments
+              max.overlaps = Inf,
+              segment.size = 0.2,
+              segment.color = "grey",
+              segment.alpha = 0.3) +
     scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
     scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
     labs(x = "Size", y = "Speed", shape = "Store", color = "Zstd Level")
 ```
+
+Every point in the above log-log scatterplot represents a store with a fixed
+schema. Since we have multiple stores for a given schema, we took the median
+size and median speed. We then varied the run matrix by Zstd level (color) and
+store type (triangle/point shape). Points closer to the origin are "better" in
+both dimensions. So we're looking for the left-most and bottom-most ones.
+Disabling compression puts points into the bottom-right area, and maximum
+compression into the top-left area.
+
+The point closest to the origin has the schema `zeek.dce_rpc` for Zstd level 1,
+both for Feather and Parquet. Is there anything special about this log file?
+Here's a sample:
+
+```
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	dce_rpc
+#open	2022-04-20-09-56-46
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	rtt	named_pipe	endpoint	operation
+#types	time	string	addr	port	addr	port	interval	string	string	string
+1637222709.134638	Cypdo7cTBbiS4Asad	10.2.9.133	49768	10.2.9.9	135	0.000254	135	epmapper	ept_map
+1637222709.140898	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000239	49671	drsuapi	DRSBind
+1637222709.141520	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000311	49671	drsuapi	DRSCrackNames
+1637222709.142068	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000137	49671	drsuapi	DRSUnbind
+1637222709.143104	Cypdo7cTBbiS4Asad	10.2.9.133	49768	10.2.9.9	135	0.000228	135	epmapper	ept_map
+1637222709.143642	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000147	49671	drsuapi	DRSBind
+1637222709.144040	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000296	49671	drsuapi	DRSCrackNames
+```
+
+It appears to be rather normal: 10 columns, several different data types, unique
+IDs, and some short strings. By looking at the data alone, there is no obvious
+hint that explains the performance.
+
+With dozens to hundreds of different schemas per data source (sometimes even
+more), there it will be difficult to single out individual schemas. But a point
+cloud is unwieldy for relative comparison. To better represent the variance of
+schemas for a given configuration, we can strip the "inner" points and only look
+at their convex hull:
 
 ```{r}
 #| code-fold: true
@@ -726,6 +800,10 @@ convex_hull |>
     labs(x = "Size", y = "Speed", shape = "Store", color = "Zstd Level")
 ```
 
+Intuitively, the area of a given polygon captures its variance. A smaller area
+is "good" in that it offers more predictable behavior. The high amount of
+overlap makes it still difficult to perform clearer comparisons. If we facet by
+store type, it becomes easier to compare the areas:
 
 ```{r}
 #| code-fold: true
@@ -747,6 +825,10 @@ cleaned |>
     theme_bw_trans()
 ```
 
+Arranging the facets above row-wise makes it easier to compare the y-axis, i.e.,
+speed, where lower polygons are better. Arranging them column-wise makes it easier
+to compare the x-axis, i.e., size, where the left-most polygons are better:
+
 ```{r}
 #| code-fold: true
 #| label: convex-hull-facet-by-store
@@ -765,3 +847,22 @@ cleaned |>
     facet_grid(rows = vars(store_class)) +
     theme_bw_trans()
 ```
+
+:::tip Analysis
+Across both dimensions, **Zstd level 1 shows the best average space-time
+trade-off for both Parquet and Feather**. In the above plots, we also observe our
+findings from the speed analysis: Parquet still dominates when compression is
+enabled.
+:::
+
+## Conclusion
+
+In summary, we set out to better understand how Parquet and Feather behave on
+the write path of VAST, when acquiring security telemetry from high-volume data
+sources. Our findings show that columnar Zstd compression offers great space
+savings for both Parquet and Feather. For certain schemas, Feather and Parquet
+exhibit only a marginal differences. To our surprise, writing Parquet files is
+still faster than Feather for our workloads.
+
+The pressing next question is obviously: what about the read path, i.e., query
+latency? This is a topic for future, stay tuned.
