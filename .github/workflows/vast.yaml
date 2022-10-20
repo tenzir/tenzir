@@ -33,19 +33,31 @@ env:
   CCACHE_MAXSIZE: "5G"
 
 jobs:
-  determine-version:
-    name: Determine Version
+
+  configure:
+    name: Configure
     runs-on: ubuntu-20.04
     outputs:
-      build-version: ${{ steps.determine-version.outputs.build-version }}
-      build-version-short: ${{ steps.determine-version.outputs.build-version-short }}
-      before-sha: ${{ steps.determine-version.outputs.before-sha }}
-      before-version: ${{ steps.determine-version.outputs.before-version }}
-      release-version: ${{ steps.determine-version.outputs.release-version }}
-      head-ref-slug: ${{ steps.determine-version.outputs.head-ref-slug }}
-      base-ref-slug: ${{ steps.determine-version.outputs.base-ref-slug }}
-      docker-build-args: ${{ steps.determine-version.outputs.docker-build-args }}
-      vast-container-ref: ${{ steps.determine-version.outputs.vast-container-ref }}
+      build-version: ${{ steps.configure.outputs.build-version }}
+      build-version-short: ${{ steps.configure.outputs.build-version-short }}
+      before-sha: ${{ steps.configure.outputs.before-sha }}
+      before-version: ${{ steps.configure.outputs.before-version }}
+      release-version: ${{ steps.configure.outputs.release-version }}
+      head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
+      base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
+      cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
+      docker-build-args: ${{ steps.configure.outputs.docker-build-args }}
+      vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
+      run-changelog: ${{ steps.configure.outputs.run-changelog }}
+      run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
+      run-docker: ${{ steps.configure.outputs.run-docker }}
+      run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
+      run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
+      run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
+      run-vast: ${{ steps.configure.outputs.run-vast }}
+      run-vast-plugins: ${{ steps.configure.outputs.run-vast-plugins }}
+      run-python: ${{ steps.configure.outputs.run-python }}
+      run-python-package: ${{ steps.configure.outputs.run-python-package }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -55,8 +67,8 @@ jobs:
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
         uses: rlespinasse/github-slug-action@v4
-      - name: Determine Version
-        id: determine-version
+      - name: Configure
+        id: configure
         run: |
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
@@ -69,21 +81,19 @@ jobs:
           fi
           before_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "${before_sha}")"
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
-          echo "::set-output name=build-version::${build_version}"
-          echo "::set-output name=build-version-short::${build_version_short}"
-          echo "::set-output name=before-sha::${before_sha}"
-          echo "::set-output name=before-version::${before_version}"
-          echo "::set-output name=release-version::${release_version}"
+          echo "build-version=${build_version}" >> $GITHUB_OUTPUT
+          echo "build-version-short=${build_version_short}" >> $GITHUB_OUTPUT
+          echo "before-sha=${before_sha}" >> $GITHUB_OUTPUT
+          echo "before-version=${before_version}" >> $GITHUB_OUTPUT
+          echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
-          echo "::set-output name=head-ref-slug::${GITHUB_HEAD_REF_SLUG}"
-          echo "::set-output name=base-ref-slug::${GITHUB_BASE_REF_SLUG}"
+          echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
+          echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
           # For pull requests we make it possible to cache all layers by setting
           # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
           # accept the downaside that this means that Docker images created
           # within pull request triggers of this job display the merge-base
           # version.
-          docker_build_args="-D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
-          docker_build_args="${docker_build_args} -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
           # Since the Docker build does not have the Git context, we set
           # version fallbacks manually here.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
@@ -93,73 +103,114 @@ jobs:
             vast_tag="${build_version}"
             vast_container_ref="${{ github.sha }}"
           fi
-          docker_build_args="${docker_build_args} -DVAST_VERSION_TAG:STRING=${vast_tag}"
+          cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}"
           for plugin in $(ls plugins); do
             var="VAST_PLUGIN_${plugin^^}_REVISION"
             value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
-            docker_build_args="${docker_build_args} -D${var}:STRING=${value}"
+            cmake_version_args="${cmake_version_args} -D${var}:STRING=${value}"
           done
-          echo "::set-output name=docker-build-args::${docker_build_args}"
-          echo "::set-output name=vast-container-ref::${vast_container_ref}"
+          echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
+          docker_build_args="${cmake_version_args} -D VAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF"
+          docker_build_args="${docker_build_args} -D VAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF"
+          echo "docker-build-args=${docker_build_args}" >> $GITHUB_OUTPUT
+          echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
+          # Decide what jobs to run
+          echo "run-python=true" >> $GITHUB_OUTPUT
+          run_python_package=false
+          if [[ $GITHUB_EVENT_NAME == "release" ]]; then
+            run_python_package=true
+          fi
+          run_example_notebooks=true
+          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+            run_example_notebooks=false
+          fi
+          echo "run-example-notebooks=${run_example_notebooks}" >> $GITHUB_OUTPUT
+          echo "run-python-package=${run_python_package}" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "run-changelog=true" >> $GITHUB_OUTPUT
+            echo "run-vast-io=true" >> $GITHUB_OUTPUT
+            echo "run-docker=true" >> $GITHUB_OUTPUT
+            echo "run-docker-compose=true" >> $GITHUB_OUTPUT
+            echo "run-vast-nix=true" >> $GITHUB_OUTPUT
+            echo "run-vast=true" >> $GITHUB_OUTPUT
+            echo "run-vast-plugins=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          shopt -s expand_aliases
+          alias is_unchanged="git diff --exit-code ${before_sha} --"
+          run_vast_io=false
+          if ! is_unchanged web/; then
+            run_vast_io=true
+          fi
+          echo "run-vast-io=${run_vast_io}" >> $GITHUB_OUTPUT
+          run_changelog=${run_vast_io}
+          if ! is_unchanged CHANGELOG.md changelog/; then
+            run_changelog=true
+          fi
+          echo "run-changelog=${run_changelog}" >> $GITHUB_OUTPUT
+          run_vast=false
+          if ! is_unchanged cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json; then
+            run_vast=true
+          fi
+          echo "run-vast=${run_vast}" >> $GITHUB_OUTPUT
+          run_vast_plugins=${run_vast}
+          if ! is_unchanged plugins/; then
+            run_vast_plugins=true
+          fi
+          echo "run-vast-plugins=${run_vast_plugins}" >> $GITHUB_OUTPUT
+          run_docker_compose=${run_vast}
+          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+            run_docker_compose=false
+          elif ${run_vast_plugins} cmake/; then
+            run_docker_compose=true
+          elif ! is_unchanged docker/ Dockerfile; then
+            run_docker_compose=true
+          fi
+          echo "run-docker-compose=${run_docker_compose}" >> $GITHUB_OUTPUT
+          run_docker=${run_docker_compose}
+          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+            run_docker=false
+          elif ! is_unchanged .dockerignore; then
+            run_docker=true
+          elif ${run_vast_io}; then
+            run_docker=true
+          fi
+          echo "run-docker=${run_docker}" >> $GITHUB_OUTPUT
+          run_vast_nix=${run_vast}
+          if ${run_vast_plugins}; then
+            run_vast_nix=true
+          elif ! is_unchanged nix/ flake.lock *.nix; then
+            run_vast_nix=true
+          elif [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+            run_vast_nix=true
+          fi
+          echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
 
   changelog:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     name: Changelog
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-changelog == 'true' }}
     runs-on: ubuntu-20.04
     container: debian:bullseye-slim
     steps:
-      - name: Install Dependencies
+      - name: Install git
         run: |
-          echo 'deb http://deb.debian.org/debian bullseye-backports main' \
-            > /etc/apt/sources.list.d/backports.list
           apt-get update
-          apt-get -y install \
-            build-essential \
-            ca-certificates \
-            cmake/bullseye-backports \
-            cmake-data/bullseye-backports \
-            flatbuffers-compiler-dev \
-            g++-10 \
-            gcc-10 \
-            git \
-            gnupg2 \
-            jq \
-            libasio-dev \
-            libflatbuffers-dev \
-            libfmt-dev \
-            libhttp-parser-dev \
-            libpcap-dev tcpdump \
-            libsimdjson-dev \
-            libspdlog-dev \
-            libssl-dev \
-            libunwind-dev \
-            libyaml-cpp-dev \
-            libxxhash-dev \
-            lsb-release \
-            ninja-build \
-            pkg-config \
-            python3-dev \
-            python3-pip \
-            python3-venv \
-            wget
+          apt-get -y install git
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
+          submodules: true
+      - name: Install Dependencies
+        run: ./scripts/debian/install-dev-dependencies.sh
       - name: Configure Build
         env:
           CC: gcc-10
           CXX: g++-10
         run: |
-          cmake -B build \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
-            -DVAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
+          cmake -B build -DVAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
       - name: Generate CHANGELOG.md
         run: |
           cmake --build build --target changelog
@@ -172,7 +223,7 @@ jobs:
       - name: Check CHANGELOG.md
         if: github.event_name == 'pull_request'
         run: |
-          alias is_unchanged="git diff --exit-code $(git merge-base 'origin/${{ github.event.pull_request.base.ref }}' HEAD) --"
+          alias is_unchanged="git diff --exit-code ${{ needs.configure.outputs.before-sha }} --"
           if ! is_unchanged .github/workflows/changelog-override.md; then
             exit 0
           fi
@@ -188,613 +239,65 @@ jobs:
             git diff-index --exit-code HEAD -- CHANGELOG.md
           fi
 
-  build-debian:
+  vast-io:
     needs:
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
-    name: Debian ${{ matrix.configure.tag }} (${{ matrix.build.compiler }})
+      - configure
+      - changelog
+      - docker
+    if: ${{ needs.configure.outputs.run-vast-io == 'true' }}
+    name: vast.io
     runs-on: ubuntu-20.04
-    container: debian:bullseye-slim
-    strategy:
-      fail-fast: false
-      matrix:
-        build:
-          - extra-flags:
-            compiler: GCC
-            cc: gcc-10
-            cxx: g++-10
-        configure:
-          - tag: Release
-            flags: -DCMAKE_BUILD_TYPE:STRING=Release
-            ci-flags: -DCMAKE_BUILD_TYPE:STRING=CI
-    env:
-      BUILD_DIR: build
-      CC: ${{ matrix.build.cc }}
-      CXX: ${{ matrix.build.cxx }}
-      CCACHE_ABSSTDERR: true
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "${{ github.workspace }}/.ccache"
-      CCACHE_HASH_DIR: true
-      CCACHE_SLOPPINESS: "file_macro,time_macros"
-      CCACHE_UNIFY: true
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      DEBIAN_FRONTEND: noninteractive
-      DOCKER_BUILDKIT: 1
     steps:
-      - name: Install Dependencies
-        run: |
-          echo 'deb http://deb.debian.org/debian bullseye-backports main' \
-            > /etc/apt/sources.list.d/backports.list
-          apt-get update
-          apt-get -y install \
-            apt-transport-https \
-            build-essential \
-            ca-certificates \
-            ccache \
-            cmake/bullseye-backports \
-            cmake-data/bullseye-backports \
-            curl \
-            flatbuffers-compiler-dev \
-            g++-10 \
-            gcc-10 \
-            git \
-            gnupg2 gnupg-agent \
-            jq \
-            libasio-dev \
-            libcaf-dev \
-            libflatbuffers-dev \
-            libfmt-dev \
-            libpcap-dev tcpdump \
-            libhttp-parser-dev \
-            libsimdjson-dev \
-            libspdlog-dev \
-            libssl-dev \
-            libunwind-dev \
-            libyaml-cpp-dev \
-            libxxhash-dev \
-            lsb-release \
-            ninja-build \
-            pandoc \
-            pkg-config \
-            python3-dev \
-            python3-pip \
-            python3-venv \
-            software-properties-common \
-            wget
-          # Apache Arrow (c.f. https://arrow.apache.org/install/)
-          wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-          apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-          apt-get update
-          apt-get -y install libarrow-dev=10.0.0-1 libparquet-dev=10.0.0-1
-
-          cmake --version
-
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-
-      - name: Configure Environment
-        run: |
-          PACKAGE_NAME="$(echo "vast-${{ needs.determine-version.outputs.build-version }}-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-
-      - name: Fetch ccache Cache
-        uses: pat-s/always-upload-cache@v3.0.11
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.head-ref-slug }}-${{ github.sha }}
-          restore-keys: |
-            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.head-ref-slug }}
-            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.base-ref-slug }}
-            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
-            ${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
-
-      - name: Configure
-        run: |
-          python3 --version
-          python3 -m pip --version
-          "$CC" --version
-          "$CXX" --version
-          ccache --version
-          # Zero the cache statistics (but not the configuration options).
-          ccache --zero-stats
-          ccache --show-config
-          # Setting different values for CMAKE_INSTALL_PREFIX and
-          # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported and causes
-          # a warning. We accept this drawback because the package we generate
-          # here is built specifically as input for the plugin CI jobs and not
-          # suitable for general use.
-          cmake -B "$BUILD_DIR" \
-            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
-            -DCPACK_GENERATOR:STRING=TGZ \
-            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
-            -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF \
-            -DVAST_ENABLE_DSCAT:BOOL=ON \
-            -DVAST_ENABLE_LSVAST:BOOL=ON \
-            -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
-            -DVAST_PLUGINS:STRING="plugins/pcap" \
-            ${{ matrix.build.extra-flags }} \
-            ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
-
-      - name: Compile All Targets
-        run: |
-          cmake --build "$BUILD_DIR" --target all --parallel --verbose
-
-      - name: Show ccache Statistics
-        run: |
-          # Print statistics counter IDs and corresponding values.
-          ccache --show-stats
-          # Print statistics about cache compression.
-          ccache --show-compression
-
-      - name: Run Unit Tests
-        env:
-          CTEST_OUTPUT_ON_FAILURE: YES
-        # --test-dir is not yet supported in the ctest version we're using here.
-        working-directory: ${{ env.BUILD_DIR }}
-        run: |
-          ctest --parallel
-
-      - name: Install
-        run: |
-          cmake --install "$BUILD_DIR"
-
-      - name: Run Integration Tests
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
-
-      - name: Upload Integration Test Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: "vast-integration-test-debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}"
-          path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
-          if-no-files-found: error
-
-      - name: Package
-        env:
-          DESTDIR: $PWD
-        run: |
-          cmake --build "$BUILD_DIR" --target package
-
-      - name: Upload Artifact to GitHub
-        uses: actions/upload-artifact@v3
-        with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-          path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
-          if-no-files-found: error
-
-      - name: Configure GCS Credentials
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v0
-        with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
-
-      - name: Upload Artifact to GCS
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
-
-      # This step ensures that assets from previous runs are cleaned up to avoid
-      # failure of the next step (asset upload)
-      - name: Delete existing Release Assets
-        if: github.event_name == 'release'
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          # don't fail if no previous assets exist.
-          fail-if-no-assets: false
-          # only delete assets when `tag` refers to a release
-          fail-if-no-release: tru
-          assets: "${{ env.PUBLISH_NAME }}.tar.gz"
-
-      - name: Publish to GitHub Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
-          # The asset names are constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-gcc.tar.gz
-          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-clang.tar.gz
-          # for builds of the latest release.
-          asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
-          asset_content_type: application/gzip
-
-      - name: Publish VAST.spdx to GitHub Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "VAST.spdx"
-          asset_name: "VAST.spdx"
-          asset_content_type: text/plain
-
-  build-macos:
-    needs:
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
-    name: macOS ${{ matrix.configure.tag }} (${{ matrix.build.compiler }})
-    runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        build:
-          - extra-flags:
-            compiler: Clang
-            cc: clang
-            cxx: clang++
-        configure:
-          - tag: Release
-            flags: -DCMAKE_BUILD_TYPE=Release
-            ci-flags: -DCMAKE_BUILD_TYPE=CI
-    env:
-      BUILD_DIR: build
-      CC: ${{ matrix.build.cc }}
-      CXX: ${{ matrix.build.cxx }}
-      CCACHE_ABSSTDERR: true
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "${{ github.workspace }}/.ccache"
-      CCACHE_HASH_DIR: true
-      CCACHE_SLOPPINESS: "file_macro,time_macros"
-      CCACHE_UNIFY: true
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
-
-      - name: Install Dependencies
-        env:
-          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
-          HOMEBREW_NO_ANALYTICS: 1
-          HOMEBREW_NO_INSTALL_CLEANUP: 1
-          HOMEBREW_NO_AUTO_UPDATE: 1
-        run: |
-          brew --version
-          brew install \
-            asio \
-            apache-arrow \
-            ccache \
-            flatbuffers \
-            fmt \
-            gnu-sed \
-            http-parser \
-            libpcap \
-            libunwind-headers \
-            llvm \
-            ninja \
-            openssl \
-            pandoc \
-            pkg-config \
-            rsync \
-            simdjson \
-            spdlog \
-            tcpdump \
-            yaml-cpp \
-            xxhash
-
-      - name: Configure Environment
-        run: |
-          PACKAGE_NAME="$(echo "vast-${{ needs.determine-version.outputs.build-version }}-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.build.compiler }}" | awk '{ print tolower($0) }')"
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
-
-      - name: Setup Homebrew Clang
-        if: matrix.build.compiler == 'Clang'
-        run: |
-          llvm_root="$(brew --prefix llvm)"
-          echo "${llvm_root}/bin" >> $GITHUB_PATH
-          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
-          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
-          echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
-
-      - name: Fetch ccache Cache
-        uses: pat-s/always-upload-cache@v3.0.11
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.head-ref-slug }}-${{ github.sha }}
-          restore-keys: |
-            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.head-ref-slug }}
-            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ needs.determine-version.outputs.base-ref-slug }}
-            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
-            ${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}
-
-      - name: Configure
-        run: |
-          python --version
-          pip --version
-          "$CC" --version
-          "$CXX" --version
-          ccache --version
-          # Zero the cache statistics (but not the configuration options).
-          ccache --zero-stats
-          ccache --show-config
-          # Note that we disable address sanitizer because of a hit inside Arrow
-          # when roundtripping table slices that started occurring with the
-          # 9.0.0_3 release of Arrow on Homebrew. It's likely a false positive,
-          # but we haven't had the time to investigate it further yet.
-          cmake -B "$BUILD_DIR" \
-            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
-            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
-            -DCPACK_GENERATOR:STRING=TGZ \
-            -DVAST_ENABLE_ASAN:BOOL=OFF \
-            -DVAST_ENABLE_LSVAST:BOOL=ON \
-            -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
-            -DVAST_ENABLE_DSCAT:BOOL=ON \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
-            -DVAST_PLUGINS:STRING="plugins/*" \
-            ${{ matrix.build.extra-flags }} \
-            ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
-
-      - name: Compile All Targets
-        run: |
-          cmake --build "$BUILD_DIR" --target all --parallel --verbose
-
-      - name: Show ccache Statistics
-        run: |
-          # Print statistics counter IDs and corresponding values.
-          ccache --show-stats
-          # Print statistics about cache compression.
-          ccache --show-compression
-
-      - name: Run Unit Tests
-        env:
-          CTEST_OUTPUT_ON_FAILURE: YES
-        run: |
-          ctest --test-dir "$BUILD_DIR" --parallel
-
-      - name: Install
-        run: |
-          cmake --install "$BUILD_DIR"
-
-      - name: Run Integration Tests
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
-
-      - name: Upload Integration Test Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: "vast-integration-test-macos-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}"
-          path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
-          if-no-files-found: error
-
-      - name: Package
-        env:
-          DESTDIR: $PWD
-        run: |
-          cmake --build "$BUILD_DIR" --target package
-          rm -rf "$BUILD_DIR/package/_CPack_Packages"
-
-      - name: Upload Artifact to Github
-        uses: actions/upload-artifact@v3
-        with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-          path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
-          if-no-files-found: error
-
-      # This step ensures that assets from previous runs are cleaned up to avoid
-      # failure of the next step (asset upload)
-      - name: Delete existing Release Assets
-        if: github.event_name == 'release'
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref }}
-          # don't fail if no previous assets exist
-          fail-if-no-assets: false
-          # only delete assets when `tag` refers to a release
-          fail-if-no-release: true
-          assets: "${{ env.PUBLISH_NAME }}.tar.gz"
-
-      - name: Publish to GitHub Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
-          # https://github.com/tenzir/vast/releases/latest/download/vast-darwin-release-appleclang.tar.gz
-          # for builds of the latest release.
-          asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
-          asset_content_type: application/gzip
-
-  build-plugins:
-    needs:
-      - build-debian
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-20.04
-    container: debian:bullseye-slim
-    strategy:
-      fail-fast: false
-      matrix:
-        plugin:
-          - name: Example Analyzer
-            target: example-analyzer
-            path: examples/plugins/analyzer
-            dependencies:
-          - name: Example Pipeline Operator
-            target: example-pipeline-operator
-            path: examples/plugins/pipeline_operator
-            dependencies:
-          - name: Broker
-            target: broker
-            path: plugins/broker
-            dependencies:
-              - libbroker-dev
-          - name: Sigma
-            target: sigma
-            path: plugins/sigma
-          - name: Parquet
-            target: parquet
-            path: plugins/parquet
-          - name: Web
-            target: web
-            path: plugins/web
-            dependencies:
-              - libasio-dev
-              - libhttp-parser-dev
-    env:
-      INSTALL_DIR: "${{ github.workspace }}/_install"
-      BUILD_DIR: "${{ github.workspace }}/_build"
-      CC: "gcc"
-      CXX: "g++"
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      CTEST_OUTPUT_ON_FAILURE: YES
-      DEBIAN_FRONTEND: noninteractive
-      DESTDIR: "${{ github.workspace }}"
-    name: ${{ matrix.plugin.name }} Plugin
-    steps:
-      - name: Install Dependencies
-        run: |
-          echo 'deb http://deb.debian.org/debian bullseye-backports main' \
-            > /etc/apt/sources.list.d/backports.list
-          apt-get update
-          apt-get -y install \
-            ${{ join(matrix.plugin.dependencies, ' ') }} \
-            apt-transport-https \
-            build-essential \
-            ca-certificates \
-            cmake/bullseye-backports \
-            cmake-data/bullseye-backports \
-            curl \
-            flatbuffers-compiler-dev \
-            g++-10 \
-            gcc-10 \
-            git \
-            gnupg2 gnupg-agent \
-            jq \
-            libcaf-dev \
-            libflatbuffers-dev \
-            libfmt-dev \
-            libpcap-dev tcpdump \
-            libsimdjson-dev \
-            libspdlog-dev \
-            libssl-dev \
-            libunwind-dev \
-            libyaml-cpp-dev \
-            libxxhash-dev \
-            lsb-release \
-            ninja-build \
-            python3-dev \
-            python3-pip \
-            python3-venv \
-            software-properties-common \
-            wget
-          # Apache Arrow (c.f. https://arrow.apache.org/install/)
-          wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-          apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-          apt-get update
-          apt-get -y install libarrow-dev=10.0.0-1 libparquet-dev=10.0.0-1
-          python3 -m pip install --upgrade pip
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
-      - name: Fetch Submodules and Tags
-        run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
-      - name: Determine VAST Package Name
-        id: configure
-        run: |
-          PACKAGE_NAME="$(echo "vast-${{ needs.determine-version.outputs.build-version }}-$(uname -s)-release-gcc" | awk '{ print tolower($0) }')"
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
-      - name: Download VAST
+          submodules: recursive
+      - name: Install Docker Compose v2 CLI
+        uses: ndeloof/install-compose-action@v0.0.1
+        with:
+          version: latest
+          legacy: false
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Delete existing CHANGELOG.md
+        run:
+          rm CHANGELOG.md
+      - name: Download new CHANGELOG.md
         uses: actions/download-artifact@v3
         with:
-          name: "${{ env.PACKAGE_NAME }}.tar.gz"
-      - name: Install VAST
-        run: |
-          mkdir "${INSTALL_DIR}"
-          tar -C "${INSTALL_DIR}" -xzvf "${PACKAGE_NAME}.tar.gz"
-          echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
-      - name: Configure Build
-        env:
-          VAST_DIR: "${{ env.INSTALL_DIR }}"
-        run: |
-          python3 --version
-          python3 -m pip --version
-          cmake --version
-          cmake -S '${{ matrix.plugin.path }}' -B "$BUILD_DIR"
-      - name: Build
-        run: |
-          cmake --build "$BUILD_DIR" --target all --parallel
-      - name: Run Unit Tests
-        env:
-          CTEST_OUTPUT_ON_FAILURE: 1
-        # --test-dir is not yet supported in the ctest version we're using here.
-        working-directory: ${{ env.BUILD_DIR }}
-        run: |
-          ctest --parallel
-      - name: Run Integration Tests
-        id: integration_tests
-        # We intentionally run the plugin integration tests before
-        # installing, because that is a use-case we want to explicitly
-        # support for easier plugin development.
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
-      - name: Install
-        run: |
-          cmake --install "$BUILD_DIR"
-      - name: Upload Integration Test Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v3
+          name: CHANGELOG.md
+      - uses: actions/setup-node@v3
         with:
-          name: "vast-${{ matrix.plugin.target }}-integration-test"
-          path: "${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test"
-          if-no-files-found: error
-      - name: Install
+          node-version: 16.x
+          cache-dependency-path: web/yarn.lock
+          cache: yarn
+      - name: Install dependencies
+        working-directory: web
+        run: yarn install --frozen-lockfile
+      - name: Build website
+        working-directory: web
         run: |
-          cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
+          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export VAST_CONTAINER_REGISTRY=ghcr.io
+          yarn build
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: web/build
+          cname: vast.io
+          user_name: tenzir-bot
+          user_email: engineering@tenzir.com
 
-  build-docker:
+  docker:
     needs:
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
+      - configure
+    if: ${{ needs.configure.outputs.run-docker == 'true' }}
     name: Docker
     runs-on: ubuntu-20.04
     steps:
@@ -820,11 +323,11 @@ jobs:
       - name: Build Docker Images
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            ref_tag="${{ needs.determine-version.outputs.head-ref-slug }}"
+            ref_tag="${{ needs.configure.outputs.head-ref-slug }}"
           else
             ref_tag="${{ github.sha }}"
           fi
-          docker_build_args="${{ needs.determine-version.outputs.docker-build-args }}"
+          docker_build_args="${{ needs.configure.outputs.docker-build-args }}"
           # Build the Docker images using ghcr.io/tenzir/vast as a registry-type
           # layer cache. We upload this cache for every merge but also for every
           # pull request, using the head ref slug as an identifier within PRs.
@@ -858,7 +361,7 @@ jobs:
           registries=('' 'ghcr.io/')
           images=('tenzir/vast' 'tenzir/vast-dev' 'tenzir/vast-deps')
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ needs.determine-version.outputs.release-version }}")
+            tags=('stable' "${{ needs.configure.outputs.release-version }}")
           else
             tags=('latest' "${{ github.sha }}")
           fi
@@ -873,9 +376,9 @@ jobs:
 
   docker-compose:
     needs:
-      - build-docker
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
+      - docker
+      - configure
+    if: ${{ needs.configure.outputs.run-docker-compose == 'true' }}
     name: Docker Compose
     runs-on: ubuntu-20.04
     env:
@@ -901,16 +404,16 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run Integration Tests
         run: |
-          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
+          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
           docker/thehive/vast-cortex-neuron/tests/run service
 
   example-notebooks:
     needs:
-      - build-docker
-      - determine-version
-    if: github.event_name != 'workflow_dispatch'
+      - docker
+      - configure
+    if: ${{ needs.configure.outputs.run-example-notebooks == 'true' }}
     name: Build example notebooks
     runs-on: ubuntu-20.04
     steps:
@@ -930,16 +433,17 @@ jobs:
       - name: Build notebooks
         working-directory: examples/notebooks
         run: |
-          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
+          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           make docker
           # TODO: An assertion of the actual content of the output would be welcome
           make docker TARGET=clean
 
-  build-nix:
+  vast-nix:
     needs:
-      - determine-version
-    name: Nix Static (${{ matrix.nix.target }})
+      - configure
+    if: ${{ needs.configure.outputs.run-vast-nix == 'true' }}
+    name: VAST (Nix, ${{ matrix.nix.target }})
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
@@ -975,20 +479,20 @@ jobs:
         id: build_static_packages
         env:
           STATIC_BINARY_TARGET: ${{ matrix.nix.target }}
-          VAST_BUILD_VERSION: ${{ needs.determine-version.outputs.build-version }}
-          VAST_BUILD_VERSION_SHORT: ${{ needs.determine-version.outputs.build-version-short }}
+          VAST_BUILD_VERSION: ${{ needs.configure.outputs.build-version }}
+          VAST_BUILD_VERSION_SHORT: ${{ needs.configure.outputs.build-version-short }}
         run: |
           STORE_PATH=$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
             ${{ matrix.nix.build-options }})
-          echo "::set-output name=store_path::${STORE_PATH}"
+          echo "store_path=${STORE_PATH}" >> $GITHUB_OUTPUT
 
       - name: Get Artifact Names
         id: get_artifact_names
         run: |
           TAR_GZ=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.tar.gz")
           DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.deb")
-          echo "::set-output name=tar_gz::${TAR_GZ}"
-          echo "::set-output name=deb::${DEB}"
+          echo "tar_gz=${TAR_GZ}" >> $GITHUB_OUTPUT
+          echo "deb=${DEB}" >> $GITHUB_OUTPUT
 
       - name: Upload Tarball to Github
         uses: actions/upload-artifact@v3
@@ -1025,7 +529,7 @@ jobs:
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.outputs.deb }}"
           gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-static-latest.deb"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.out4puts.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-static-latest.deb"
 
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
@@ -1079,7 +583,406 @@ jobs:
           asset_name: "${{ matrix.nix.target }}-linux-static.deb"
           asset_content_type: application/vnd.debian.binary-package
 
+  vast:
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-vast == 'true' }}
+    name: VAST (${{ matrix.vast.name }})
+    runs-on: ${{ matrix.vast.os }}
+    container: ${{ matrix.vast.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        vast:
+          - os: ubuntu-20.04
+            container: debian:bullseye-slim
+            name: Debian
+            compiler: GCC
+            cc: gcc-10
+            cxx: g++-10
+            dependencies-script-path: scripts/debian/install-dev-dependencies.sh
+            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF
+          - os: macos-latest
+            container: null
+            name: macOS
+            compiler: Clang
+            cc: clang
+            cxx: clang++
+            dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
+            # Note that we disable address sanitizer because of a hit inside Arrow
+            # when roundtripping table slices that started occurring with the
+            # 9.0.0_3 release of Arrow on Homebrew. It's likely a false positive,
+            # but we haven't had the time to investigate it further yet.
+            cmake-extra-flags: -DVAST_ENABLE_ASAN:BOOL=OFF -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
+    env:
+      BUILD_DIR: build
+      CC: ${{ matrix.vast.cc }}
+      CXX: ${{ matrix.vast.cxx }}
+      CCACHE_ABSSTDERR: true
+      CCACHE_COMPRESS: true
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_DIR: "${{ github.workspace }}/.ccache"
+      CCACHE_HASH_DIR: true
+      CCACHE_SLOPPINESS: "file_macro,time_macros"
+      CCACHE_UNIFY: true
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      DEBIAN_FRONTEND: noninteractive
+      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - if: ${{ matrix.vast.name == 'Debian' }}
+        name: Install git
+        run: |
+          apt-get update
+          apt-get -y install git
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Dependencies
+        run: ./${{ matrix.vast.dependencies-script-path }}
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Configure Environment
+        run: |
+          PACKAGE_NAME="$(echo "vast-${{ needs.configure.outputs.build-version }}-$(uname -s)-Release-${{ matrix.vast.compiler }}" | awk '{ print tolower($0) }')"
+          PUBLISH_NAME="$(echo "vast-$(uname -s)-Release-${{ matrix.vast.compiler }}" | awk '{ print tolower($0) }')"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "PUBLISH_NAME=$PUBLISH_NAME" >> $GITHUB_ENV
+      - if: ${{ matrix.vast.name == 'macOS' }}
+        name: Setup Homebrew Clang
+        run: |
+          llvm_root="$(brew --prefix llvm)"
+          echo "${llvm_root}/bin" >> $GITHUB_PATH
+          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
+          echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
+      - name: Fetch ccache Cache
+        uses: pat-s/always-upload-cache@v3.0.11
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
+          restore-keys: |
+            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.head-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-master
+            ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}
+
+      - name: Configure
+        run: |
+          python3 --version
+          python3 -m pip --version
+          "$CC" --version
+          "$CXX" --version
+          ccache --version
+          # Zero the cache statistics (but not the configuration options).
+          ccache --zero-stats
+          ccache --show-config
+          # Setting different values for CMAKE_INSTALL_PREFIX and
+          # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported and causes
+          # a warning. We accept this drawback because the package we generate
+          # here is built specifically as input for the plugin CI jobs and not
+          # suitable for general use.
+          cmake -B "$BUILD_DIR" \
+            -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
+            -DCPACK_GENERATOR:STRING=TGZ \
+            -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
+            -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
+            -DVAST_ENABLE_DSCAT:BOOL=ON \
+            -DVAST_ENABLE_LSVAST:BOOL=ON \
+            -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
+            -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
+            ${{ needs.configure.outputs.cmake-version-args }} \
+            ${{ matrix.vast.cmake-extra-flags }}
+
+      - name: Compile All Targets
+        run: |
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
+
+      - name: Show ccache Statistics
+        run: |
+          # Print statistics counter IDs and corresponding values.
+          ccache --show-stats
+          # Print statistics about cache compression.
+          ccache --show-compression
+
+      - name: Run Unit Tests
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+
+      - name: Install
+        run: |
+          cmake --install "$BUILD_DIR"
+
+      - name: Run Integration Tests
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+
+      - name: Upload Integration Test Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: "vast-integration-test-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}"
+          path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
+          if-no-files-found: error
+
+      - name: Package
+        env:
+          DESTDIR: ${{ env.PWD }}
+        run: |
+          cmake --build "$BUILD_DIR" --target package
+
+      - name: Upload Artifact to GitHub
+        uses: actions/upload-artifact@v3
+        with:
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+          path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
+          if-no-files-found: error
+
+      - name: Configure GCS Credentials
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Upload Artifact to GCS
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        run: |
+          gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
+
+      # This step ensures that assets from previous runs are cleaned up to avoid
+      # failure of the next step (asset upload)
+      - name: Delete existing Release Assets
+        if: github.event_name == 'release'
+        uses: mknejp/delete-release-assets@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          # don't fail if no previous assets exist.
+          fail-if-no-assets: false
+          # only delete assets when `tag` refers to a release
+          fail-if-no-release: tru
+          assets: "${{ env.PUBLISH_NAME }}.tar.gz"
+
+      - name: Publish to GitHub Release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
+          # The asset names are constant so we can permanently link to
+          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-gcc.tar.gz
+          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-clang.tar.gz
+          # for builds of the latest release.
+          asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
+          asset_content_type: application/gzip
+
+      - name: Publish VAST.spdx to GitHub Release
+        if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: "VAST.spdx"
+          asset_name: "VAST.spdx"
+          asset_content_type: text/plain
+
+  vast-plugins:
+    needs:
+      - vast
+      - configure
+    if: ${{ always() && needs.configure.outputs.run-vast-plugins == 'true' }}
+    runs-on: ${{ matrix.setup.os }}
+    container: ${{ matrix.setup.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        setup:
+          - os: ubuntu-20.04
+            container: debian:bullseye-slim
+            cc: gcc-10
+            cxx: g++-10
+            package-suffix: Release-GCC
+          - os: macos-latest
+            cc: clang
+            cxx: clang++
+            package-suffix: Release-Clang
+        plugin:
+          - name: Example Analyzer
+            target: example-analyzer
+            path: examples/plugins/analyzer
+            debian-dependencies:
+          - name: Example Pipeline Operator
+            target: example-pipeline-operator
+            path: examples/plugins/pipeline_operator
+            debian-dependencies:
+          - name: Broker
+            target: broker
+            path: plugins/broker
+            debian-dependencies:
+              - libbroker-dev
+          - name: Sigma
+            target: sigma
+            path: plugins/sigma
+          - name: Parquet
+            target: parquet
+            path: plugins/parquet
+          - name: PCAP
+            target: pcap
+            path: plugins/pcap
+          - name: Web Debian
+            target: web
+            path: plugins/web
+            debian-dependencies:
+              - libasio-dev
+              - libhttp-parser-dev
+            mac-dependencies:
+              - asio
+              - http-parser
+        exclude:
+          - {setup: {os: macos-latest}, plugin: {name: Broker}}
+    env:
+      INSTALL_DIR: "${{ github.workspace }}/_install"
+      BUILD_DIR: "${{ github.workspace }}/_build"
+      PACKAGE_SUFFIX: ${{ matrix.setup.package-suffix }}
+      CC: ${{ matrix.setup.cc }}
+      CXX: ${{ matrix.setup.cxx }}
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      CTEST_OUTPUT_ON_FAILURE: YES
+      DEBIAN_FRONTEND: noninteractive
+      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      DESTDIR: "${{ github.workspace }}"
+    name: VAST Plugins (${{ matrix.plugin.name }}, ${{ matrix.setup.os }})
+    steps:
+      - name: Install Git (Debian)
+        if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
+        run: |
+          apt-get update
+          apt-get -y install git
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install Dependencies (macOS)
+        if: ${{ matrix.setup.os == 'macos-latest' }}
+        run: |
+          brew install \
+            ${{ join(matrix.setup.mac-dependencies, ' ') }} \
+            curl
+          ./scripts/macOS/install-dev-dependencies.sh
+          python3 -m pip install --upgrade pip
+      - name: Install Dependencies (Debian)
+        if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
+        run: |
+          apt-get -y install \
+            ${{ join(matrix.plugin.debian-dependencies, ' ') }} \
+            apt-transport-https \
+            curl
+          ./scripts/debian/install-dev-dependencies.sh
+          python3 -m pip install --upgrade pip
+      - name: Determine VAST Package Name
+        id: configure
+        run: |
+          build_version=${{ needs.configure.outputs.build-version }}
+          if ${{ needs.configure.outputs.run-vast == 'false' }}; then
+            build_version=${{ needs.configure.outputs.before-version }}
+          fi
+          PACKAGE_NAME="$(echo "vast-${build_version}-$(uname -s)-${PACKAGE_SUFFIX}" | awk '{ print tolower($0) }')"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+      - name: Download VAST artifact
+        if: ${{ needs.configure.outputs.run-vast == 'true' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: "${{ env.PACKAGE_NAME }}.tar.gz"
+      - name: Configure GCS Credentials
+        if: ${{ needs.configure.outputs.run-vast == 'false' }}
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+      - name: Download VAST
+        if: ${{ needs.configure.outputs.run-vast == 'false' }}
+        run: |
+          gsutil cp "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz" .
+      - name: Install VAST
+        run: |
+          mkdir "${INSTALL_DIR}"
+          tar -C "${INSTALL_DIR}" -xzvf "${PACKAGE_NAME}.tar.gz"
+          echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
+      - name: Setup Homebrew Clang
+        if: ${{ matrix.setup.os == 'macos-latest' }}
+        run: |
+          llvm_root="$(brew --prefix llvm)"
+          echo "${llvm_root}/bin" >> $GITHUB_PATH
+          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
+          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
+          echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
+      - name: Configure Build
+        env:
+          VAST_DIR: "${{ env.INSTALL_DIR }}"
+        run: |
+          python3 --version
+          python3 -m pip --version
+          cmake --version
+          cmake -S '${{ matrix.plugin.path }}' -B "$BUILD_DIR"
+      - name: Build
+        run: |
+          cmake --build "$BUILD_DIR" --target all --parallel
+      - name: Run Unit Tests
+        env:
+          CTEST_OUTPUT_ON_FAILURE: 1
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Run Integration Tests
+        id: integration_tests
+        # We intentionally run the plugin integration tests before
+        # installing, because that is a use-case we want to explicitly
+        # support for easier plugin development.
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Install
+        run: |
+          cmake --install "$BUILD_DIR"
+      - name: Upload Integration Test Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: "vast-${{ matrix.plugin.target }}-integration-test"
+          path: "${{ env.BUILD_DIR }}/vast-${{ matrix.plugin.target }}-integration-test"
+          if-no-files-found: error
+      - name: Install
+        run: |
+          cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
+
   python:
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-python == 'true' }}
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
@@ -1115,10 +1018,10 @@ jobs:
   python-package:
     needs:
       - python
-      - determine-version
-    if: github.event_name == 'release'
+      - configure
+    if: ${{ needs.configure.outputs.run-python-package == 'true' }}
     name: Python Package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -1140,7 +1043,7 @@ jobs:
         working-directory: python
         run: |
           poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
-      - name: Publish ${{ needs.determine-version.outputs.release-version }} to Test PyPI
+      - name: Publish ${{ needs.configure.outputs.release-version }} to Test PyPI
         working-directory: python
         run: |
           poetry publish --build -r test-pypi
@@ -1148,58 +1051,3 @@ jobs:
         working-directory: python
         run: |
           poetry publish --build
-
-  website:
-    needs:
-      - changelog
-      - build-docker
-      - determine-version
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
-    name: Website
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: recursive
-      - name: Install Docker Compose v2 CLI
-        uses: ndeloof/install-compose-action@v0.0.1
-        with:
-          version: latest
-          legacy: false
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Delete existing CHANGELOG.md
-        run:
-          rm CHANGELOG.md
-      - name: Download new CHANGELOG.md
-        uses: actions/download-artifact@v3
-        with:
-          name: CHANGELOG.md
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16.x
-          cache-dependency-path: web/yarn.lock
-          cache: yarn
-      - name: Install dependencies
-        working-directory: web
-        run: yarn install --frozen-lockfile
-      - name: Build website
-        working-directory: web
-        run: |
-          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
-          export VAST_CONTAINER_REGISTRY=ghcr.io
-          yarn build
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: web/build
-          cname: vast.io
-          user_name: tenzir-bot
-          user_email: engineering@tenzir.com
