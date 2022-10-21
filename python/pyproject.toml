@@ -23,7 +23,7 @@ documentation = "https://vast.io/docs"
 repository = "https://github.com/tenzir/vast"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 dynaconf = "^3.1"
 coloredlogs = "^15.0"
 pandas = "^1.4"
