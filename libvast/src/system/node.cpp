@@ -271,8 +271,8 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
                cfg.error());
     return {};
   }
-  auto accountant
-    = self->spawn(vast::system::accountant, std::move(*cfg), self->state.dir);
+  auto accountant = self->spawn<caf::detached>(
+    vast::system::accountant, std::move(*cfg), self->state.dir);
   auto err = register_component(self, caf::actor_cast<caf::actor>(accountant),
                                 "accountant");
   // Registration cannot fail; empty registry.
