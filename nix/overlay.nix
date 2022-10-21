@@ -38,8 +38,7 @@ in
       "-DARROW_SIMD_LEVEL=NONE"
     ];
   });
-  flatbuffers = if !isStatic then prev.flatbuffers else
-  prev.flatbuffers.overrideAttrs(_: rec {
+  flatbuffers = prev.flatbuffers.overrideAttrs(_: rec {
     version = "22.9.29";
     src = prev.fetchFromGitHub {
       owner = "google";
