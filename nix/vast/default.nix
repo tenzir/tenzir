@@ -98,6 +98,7 @@ stdenv.mkDerivation (rec {
     "-DVAST_ENABLE_JEMALLOC=ON"
     "-DVAST_ENABLE_LSVAST=ON"
     "-DVAST_ENABLE_VAST_REGENERATE=OFF"
+    "-DVAST_ENABLE_PYTHON_BINDINGS=OFF"
     "-DVAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
     "-DCAF_ROOT_DIR=${caf}"
   ] ++ lib.optionals (buildType == "CI") [
