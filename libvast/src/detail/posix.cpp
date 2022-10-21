@@ -132,22 +132,21 @@ uds_datagram_sender::make(const std::string& path) {
   return std::move(result);
 }
 
-caf::expected<bool>
-uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
+caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
   if (timeout_usec > 0) {
     auto ready = wpoll(src_fd, timeout_usec);
     if (!ready)
       return ready.error();
     if (!*ready)
-      return false;
+      return ec::timeout;
   }
   if (::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
       == 0)
-    return true;
+    return caf::none;
   // Error cases.
   if (errno == EAGAIN || errno == EWOULDBLOCK)
-    return false;
+    return ec::timeout;
   return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
 }
 

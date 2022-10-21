@@ -227,17 +227,22 @@ struct accountant_state_impl {
     // is somewhat arbitrary. Long enough so any re-initialization of the
     // listening side would not incur data loss without being excessive.
     auto timeout_usec = uds_datagram_sink_dropping ? 0 : 1'000'000;
-    auto delivered = dest.send(
-      std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()},
-      timeout_usec);
-    if (!delivered) {
-      VAST_WARN("{} failed to write metrics to UDS sink: {}", *self,
-                delivered.error());
-      VAST_WARN("{} disables the UDS metrics sink", *self);
-      uds_datagram_sink.reset();
-      return;
+    if (auto err = dest.send(
+          std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()},
+          timeout_usec)) {
+      switch (ec{err.code()}) {
+        case ec::timeout: {
+          uds_datagram_sink_dropping = true;
+          break;
+        }
+        default: {
+          VAST_WARN("{} failed to write metrics to UDS sink: {}", *self, err);
+          VAST_WARN("{} turns off metrics reporting via UDS", *self);
+          uds_datagram_sink.reset();
+          return;
+        }
+      }
     }
-    uds_datagram_sink_dropping = !*delivered;
   }
 
   void record(const caf::actor_id actor_id, const std::string& key, real x,
