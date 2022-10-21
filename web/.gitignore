@@ -3,3 +3,6 @@
 **/*_files/
 /.quarto/
 .rlib
+
+# Generated blog posts
+/blog/parquet-and-feather-writing-security-telemetry/index.md
