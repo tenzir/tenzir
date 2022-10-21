@@ -123,29 +123,22 @@ Note that Zeek's tab-separated value (TSV) format is already a structured table,
 whereas Suricata data needs to be demultiplexed first through the `event_type`
 field.
 
-The PCAP packet type is currently hard-coded in VAST's PCAP plugin:
+The PCAP packet type is currently hard-coded in VAST's PCAP plugin and looks
+like this:
 
-```cpp
-type make_packet_type() {
-  const auto port_type = type{"port", count_type{}};
-  const auto timestamp_type = type{"timestamp", time_type{}};
-  return type{
-    "pcap.packet",
-    record_type{
-      {"time", timestamp_type},
-      {"src", address_type{}},
-      {"dst", address_type{}},
-      {"sport", port_type},
-      {"dport", port_type},
-      {"vlan",
-       record_type{
-         {"outer", count_type{}},
-         {"inner", count_type{}},
-       }},
-      {"community_id", type{string_type{}, {{"index", "hash"}}}},
-      {"payload", type{string_type{}, {{"skip"}}}},
-    },
-  };
+```go
+type pcap.packet = record {
+  time: timestamp,
+  src: addr,
+  dst: addr,
+  sport: port,
+  dport: port,
+  vlan: record {
+    outer: count,
+    inner: count,
+  },
+  community_id: string #index=hash,
+  payload: string #skip,
 }
 ```
 
