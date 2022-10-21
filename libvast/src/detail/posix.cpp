@@ -133,21 +133,30 @@ uds_datagram_sender::make(const std::string& path) {
 }
 
 caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
-  if (timeout_usec > 0) {
-    auto ready = wpoll(src_fd, timeout_usec);
-    if (!ready)
-      return ready.error();
-    if (!*ready)
-      return ec::timeout;
-  }
+  // We try sending directly before polling to only use a single system call in
+  // the happy path.
   if (::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
       == 0)
     return caf::none;
-  // Error cases.
-  if (errno == EAGAIN || errno == EWOULDBLOCK)
+  if (errno != EAGAIN && errno != EWOULDBLOCK)
+    return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
+  if (timeout_usec == 0)
     return ec::timeout;
-  return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
+  auto ready = wpoll(src_fd, timeout_usec);
+  if (!ready)
+    return ready.error();
+  // We just attempt to send again instead of returning ec::timeout outright.
+  // This handles the case when the receiving socket was replaced on the file
+  // system, but the original one was kept alive with an open file descriptor.
+  // The next send would go to the correct destination in that case.
+  if (::sendto(src_fd, data.data(), data.size(), 0,
+               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
+      == 0)
+    return caf::none;
+  if (errno != EAGAIN && errno != EWOULDBLOCK)
+    return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
+  return ec::timeout;
 }
 
 int uds_connect(const std::string& path, socket_type type) {
