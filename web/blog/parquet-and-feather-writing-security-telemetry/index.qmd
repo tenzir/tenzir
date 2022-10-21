@@ -360,14 +360,28 @@ This matches our mental model. A few hundred bytes per event with some outliers.
 ### Batching
 
 On the inside, a store is a concatenation of homogeneous Arrow record batches,
-all having the same schema. In Feather they are literally concatenated
-sequentially, whereas Parquet concatenates them column-wise. Most stores only
-consist of a few record batches. PCAP is the only difference.
+all having the same schema.
 
-Small stores are suboptimal because the catalog keeps in-memory state that is
-a linear function of the number of stores. (We are aware of this concern and are
-exploring improvements, but this topic is out of scope for this post.) The
-issue here is catalog fragmentation.
+The Feather format is essentially the IPC wire format of record batches. Schemas
+and dictionaries are only included when they change. For our stores, this means
+just once in the beginning. In order to access a given row in a Feather file,
+you need to start at the beginning, iterate batch by batch until you arrive at
+the desired batch, and then materialize it before you can access the desired
+row via random access.
+
+Parquet has *row groups* that are much like a record batch, except that they are
+created at write time, so Parquet determines their size rather than the incoming
+data. Parquet offers random access over both the row groups and within an
+individual batch that is materialized from a row group. The on-disk layout of
+Parquet is still row-group by row-group, and in that column by column, so
+there's no big difference between Parquet and Feather in that regard. Parquet
+encodes columns using different encoding techniques than Arrow's IPC format.
+
+Most stores only consist of a few record batches. PCAP is the only difference.
+Small stores are suboptimal because the catalog keeps in-memory state that is a
+linear function of the number of stores. (We are aware of this concern and are
+exploring improvements, but this topic is out of scope for this post.) The issue
+here is catalog fragmentation.
 
 As of [v2.3](/blog/vast-v2.3), VAST has automatic rebuilding in place, which
 merges underfull partitions to reduce pressure on the catalog. This doesn't fix
