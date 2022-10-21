@@ -3,7 +3,7 @@ title: "Parquet & Feather: Writing Security Telemetry"
 authors:
   - dispanser
   - mavam
-date: 2022-10-22
+date: 2022-10-24
 image: image.jpg
 tags: [benchmark, arrow, parquet, feather, quarto, r]
 ---
