@@ -44,10 +44,11 @@ which consists roughly of the following steps:
 1. Parse the input
 2. Convert it into Arrow record batches
 3. Ship Arrow record batches to a VAST server
-4. Write Arrow out into a Parquet or Feather store
+4. Write Arrow record batches out into a Parquet or Feather store
+5. Create an index from Arrow record batches
 
-Since steps (1–3) are the same for both stores, we ignore them in the following
-analysis and solely zoom in on (4).
+Since steps (1–3) and (5) are the same for both stores, we ignore them in the
+following analysis and solely zoom in on (4).
 
 ## Dataset
 
@@ -175,7 +176,7 @@ Our instrumentation produced a [CSV file](data.csv) with the following features:
   consume.
 - **Output size**: the number of bytes that the store file takes up.
 - **Number of events**: the total number of events in all input record batches
-- **Number of record batches**
+- **Number of record batches**: the number Arrow record batches per store
 - **Schema**: the name of the schema; there exists one store file per schema
 - **Zstd compression level**: the applied Zstd compression level
 
@@ -365,10 +366,10 @@ This matches our mental model. A few hundred bytes per event with some outliers.
 
 ### Batching
 
-On the inside, a store is just a concatenation of Arrow record batches. In
-Feather they are literally concatenated sequentially, whereas Parquet
-concatenates them column-wise. Most stores only consist of a few record
-batches. PCAP is the only difference.
+On the inside, a store is a concatenation of homogeneous Arrow record batches,
+all having the same schema. In Feather they are literally concatenated
+sequentially, whereas Parquet concatenates them column-wise. Most stores only
+consist of a few record batches. PCAP is the only difference.
 
 Small stores are suboptimal because the catalog keeps in-memory state that is
 a linear function of the number of stores. (We are aware of this concern and are
