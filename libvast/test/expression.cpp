@@ -396,7 +396,8 @@ TEST(parse print roundtrip) {
 TEST(expression parser composability) {
   auto str = "x == 5 | :bool == T || #type ~ /bar/ | +3"s;
   std::vector<expression> result;
-  auto p = (parsers::expr % (*parsers::space >> '|' >> *parsers::space)) >> parsers::eoi;
+  auto p = (parsers::expr % (*parsers::space >> '|' >> *parsers::space))
+           >> parsers::eoi;
   REQUIRE(p(str, result));
   REQUIRE_EQUAL(result.size(), 3u);
   CHECK_EQUAL(result[0], to_expr("x == 5"));
