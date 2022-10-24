@@ -97,11 +97,20 @@ const char* to_string(ec x);
 /// @relates ec
 std::string render(caf::error err);
 
-template <class... T>
-caf::error make_error(ec code, fmt::format_string<T...> fmt, T&&... args) {
+/// An error factory that delegates message creation to fmt::format.
+/// @relates ec
+#if FMT_VERSION >= 80000
+template <class... Ts>
+caf::error make_error(ec code, fmt::format_string<Ts...> fmt, Ts&&... args) {
   return caf::make_error(code, fmt::format(std::move(fmt),
-                                           std::forward<T&&>(args)...));
+                                           std::forward<Ts&&>(args)...));
 }
+#else
+template <class S, class... Ts>
+caf::error make_error(ec code, const S& fmt, Ts&&... args) {
+  return caf::make_error(code, fmt::format(fmt, std::forward<Ts&&>(args)...));
+}
+#endif
 
 } // namespace vast
 
