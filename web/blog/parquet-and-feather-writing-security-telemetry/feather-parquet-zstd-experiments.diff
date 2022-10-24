@@ -1,0 +1,259 @@
+diff --git a/libvast/include/vast/store.hpp b/libvast/include/vast/store.hpp
+index da51e7e5f..a3cbd1af4 100644
+--- a/libvast/include/vast/store.hpp
++++ b/libvast/include/vast/store.hpp
+@@ -64,6 +64,8 @@ public:
+ /// A base class for active stores used by the store plugin.
+ class active_store : public base_store {
+ public:
++  virtual void set_compression_level(int compression_level) = 0;
++
+   /// Add a set of slices to the store.
+   /// @returns An error on failure.
+   [[nodiscard]] virtual caf::error add(std::vector<table_slice> slices) = 0;
+diff --git a/libvast/native-plugins/feather.cpp b/libvast/native-plugins/feather.cpp
+index 3e23f8c30..4ff35a80b 100644
+--- a/libvast/native-plugins/feather.cpp
++++ b/libvast/native-plugins/feather.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include <vast/arrow_table_slice.hpp>
+ #include <vast/chunk.hpp>
++#include <vast/concept/convertible/data.hpp>
+ #include <vast/data.hpp>
+ #include <vast/detail/narrow.hpp>
+ #include <vast/error.hpp>
+@@ -24,6 +25,25 @@
+ 
+ namespace vast::plugins::feather {
+ 
++/// Configuration for the Feather plugin.
++struct configuration {
++  int64_t zstd_compression_level{
++    arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
++      .ValueOrDie()};
++
++  template <class Inspector>
++  friend auto inspect(Inspector& f, configuration& x) {
++    return f(x.zstd_compression_level);
++  }
++
++  static const record_type& layout() noexcept {
++    static auto result = record_type{
++      {"zstd-compression-level", integer_type{}},
++    };
++    return result;
++  }
++};
++
+ namespace {
+ 
+ auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
+@@ -129,6 +149,15 @@ private:
+ };
+ 
+ class active_feather_store final : public active_store {
++public:
++  explicit active_feather_store(const configuration& config)
++    : feather_config_(config) {
++  }
++
++  void set_compression_level(int compression_level) override {
++    feather_config_.zstd_compression_level = compression_level;
++  }
++
+   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
+     slices_.reserve(new_slices.size() + slices_.size());
+     for (auto& slice : new_slices) {
+@@ -157,10 +186,11 @@ class active_feather_store final : public active_store {
+     auto output_stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
+     auto write_properties = arrow::ipc::feather::WriteProperties::Defaults();
+     // TODO: Set write_properties.chunksize to the expected batch size
+-    write_properties.compression = arrow::Compression::ZSTD;
++    write_properties.compression = feather_config_.zstd_compression_level < -5
++                                     ? arrow::Compression::UNCOMPRESSED
++                                     : arrow::Compression::ZSTD;
+     write_properties.compression_level
+-      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+-          .ValueOrDie();
++      = detail::narrow<int>(feather_config_.zstd_compression_level);
+     const auto write_status = ::arrow::ipc::feather::WriteTable(
+       *table.ValueUnsafe(), output_stream.get(), write_properties);
+     if (!write_status.ok())
+@@ -185,12 +215,15 @@ class active_feather_store final : public active_store {
+ 
+ private:
+   std::vector<table_slice> slices_ = {};
++  configuration feather_config_ = {};
+   size_t num_events_ = {};
+ };
+ 
+ class plugin final : public virtual store_plugin {
+-  [[nodiscard]] caf::error initialize([[maybe_unused]] data config) override {
+-    return {};
++  [[nodiscard]] caf::error initialize(data options) override {
++    if (caf::holds_alternative<caf::none_t>(options))
++      return caf::none;
++    return convert(options, feather_config_);
+   }
+ 
+   [[nodiscard]] const char* name() const override {
+@@ -204,8 +237,11 @@ class plugin final : public virtual store_plugin {
+ 
+   [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
+   make_active_store() const override {
+-    return std::make_unique<active_feather_store>();
++    return std::make_unique<active_feather_store>(feather_config_);
+   }
++
++private:
++  configuration feather_config_ = {};
+ };
+ 
+ } // namespace
+diff --git a/libvast/native-plugins/segment_store.cpp b/libvast/native-plugins/segment_store.cpp
+index 8a0ef87e8..d93ff7912 100644
+--- a/libvast/native-plugins/segment_store.cpp
++++ b/libvast/native-plugins/segment_store.cpp
+@@ -22,6 +22,7 @@
+ #include <vast/system/status.hpp>
+ #include <vast/table_slice.hpp>
+ 
++#include <arrow/record_batch.h>
+ #include <caf/attach_stream_sink.hpp>
+ #include <caf/settings.hpp>
+ #include <caf/typed_event_based_actor.hpp>
+@@ -335,6 +336,17 @@ system::store_actor::behavior_type passive_local_store(
+   };
+ }
+ 
++size_t array_size(const std::shared_ptr<arrow::ArrayData>& array_data) {
++  auto size = size_t{};
++  for (const auto& buffer : array_data->buffers)
++    if (buffer)
++      size += buffer->size();
++  for (const auto& child : array_data->child_data)
++    size += array_size(child);
++  size += array_data->dictionary ? array_size(array_data->dictionary) : 0;
++  return size;
++}
++
+ local_store_actor::behavior_type
+ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
+                    system::accountant_actor accountant,
+@@ -434,13 +446,28 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
+     },
+     // internal handlers
+     [self](atom::internal, atom::persist) {
++      const auto start = std::chrono::steady_clock::now();
+       self->state.segment = self->state.builder->finish();
+       VAST_DEBUG("{} persists segment {}", *self, self->state.segment->id());
+       self
+         ->request(self->state.fs, caf::infinite, atom::write_v,
+                   self->state.path, self->state.segment->chunk())
+         .then(
+-          [self](atom::ok) {
++          [self, start](atom::ok) {
++            auto bytes_in_record_batches = size_t{};
++            for (auto slice_it = self->state.segment->begin();
++                 slice_it != self->state.segment->end(); ++slice_it) {
++              bytes_in_record_batches += array_size(to_record_batch(*slice_it)
++                                                      ->ToStructArray()
++                                                      .ValueOrDie()
++                                                      ->data());
++            }
++            const auto duration = std::chrono::steady_clock::now() - start;
++            fmt::print(stderr, "tp;{},{},{},{},{},{},{}\n", "segment", duration,
++                       bytes_in_record_batches,
++                       self->state.segment->chunk()->size(), self->state.events,
++                       self->state.segment->num_slices(),
++                       (*self->state.segment->begin()).layout());
+             self->state.self = nullptr;
+           },
+           [self](caf::error& err) {
+diff --git a/libvast/src/store.cpp b/libvast/src/store.cpp
+index 9ec239056..0b3df399c 100644
+--- a/libvast/src/store.cpp
++++ b/libvast/src/store.cpp
+@@ -16,6 +16,7 @@
+ #include "vast/system/report.hpp"
+ #include "vast/table_slice.hpp"
+ 
++#include <arrow/record_batch.h>
+ #include <caf/attach_stream_sink.hpp>
+ #include <caf/typed_event_based_actor.hpp>
+ 
+@@ -340,6 +341,17 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
+   };
+ }
+ 
++size_t array_size(const std::shared_ptr<arrow::ArrayData>& array_data) {
++  auto size = size_t{};
++  for (const auto& buffer : array_data->buffers)
++    if (buffer)
++      size += buffer->size();
++  for (const auto& child : array_data->child_data)
++    size += array_size(child);
++  size += array_data->dictionary ? array_size(array_data->dictionary) : 0;
++  return size;
++}
++
+ system::default_active_store_actor::behavior_type default_active_store(
+   system::default_active_store_actor::stateful_pointer<default_active_store_state>
+     self,
+@@ -408,6 +420,29 @@ system::default_active_store_actor::behavior_type default_active_store(
+           // persist anything.
+           if (self->state.erased)
+             return;
++          // quick hack: -99 is a placeholder for "no compression"
++          auto compression_levels = std::vector{-99, -5, 1, 9, 19};
++          for (auto level : compression_levels) {
++            self->state.store->set_compression_level(level);
++            const auto start = std::chrono::steady_clock::now();
++            auto chunk = self->state.store->finish();
++            const auto duration = std::chrono::steady_clock::now() - start;
++            auto bytes_in_record_batches = size_t{};
++            for (const auto& slice : self->state.store->slices()) {
++              bytes_in_record_batches += array_size(
++                to_record_batch(slice)->ToStructArray().ValueOrDie()->data());
++            }
++            auto num_slices = size_t{};
++            for (const auto& _ : self->state.store->slices())
++              ++num_slices;
++            fmt::print(stderr, "tp;{},{},{},{},{},{},{},{}\n",
++                       self->state.store_type, duration.count(),
++                       bytes_in_record_batches, chunk->get()->size(),
++                       self->state.store->num_events(), num_slices,
++                       (*self->state.store->slices().begin()).layout(),
++                       level < -5 ? "" : fmt::format("{}", level));
++          }
++          self->state.store->set_compression_level(1);
+           auto chunk = self->state.store->finish();
+           if (!chunk) {
+             self->quit(std::move(chunk.error()));
+diff --git a/plugins/parquet/parquet.cpp b/plugins/parquet/parquet.cpp
+index 8b35f2e21..b57481611 100644
+--- a/plugins/parquet/parquet.cpp
++++ b/plugins/parquet/parquet.cpp
+@@ -321,7 +321,9 @@ writer_properties(const configuration& config) {
+   auto builder = ::parquet::WriterProperties::Builder{};
+   builder.created_by("VAST")
+     ->enable_dictionary()
+-    ->compression(::parquet::Compression::ZSTD)
++    ->compression(config.zstd_compression_level < -5
++                    ? ::parquet::Compression::UNCOMPRESSED
++                    : ::parquet::Compression::ZSTD)
+     ->compression_level(detail::narrow_cast<int>(config.zstd_compression_level))
+     ->version(::parquet::ParquetVersion::PARQUET_2_6);
+   return builder.build();
+@@ -433,6 +435,10 @@ public:
+     : parquet_config_{config} {
+   }
+ 
++  void set_compression_level(int compression_level) override {
++    parquet_config_.zstd_compression_level = compression_level;
++  }
++
+   /// Add a set of slices to the store.
+   /// @returns An error on failure.
+   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {

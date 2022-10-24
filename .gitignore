@@ -35,26 +35,3 @@ venv/
 # VAST example artifacts
 /examples/**/.ipynb_checkpoints/
 /examples/notebooks/output
-
-# Website
-/web/env
-/web/node_modules
-/web/build
-/web/.docusaurus
-/web/.cache-loader
-/web/.env.local
-/web/.env.development.local
-/web/.env.test.local
-/web/.env.production.local
-/web/.github
-/web/npm-debug.log*
-/web/yarn-debug.log*
-/web/yarn-error.log*
-/web/src/pages/changelog.md
-/web/docs/contribute/code-of-conduct.md
-/web/docs/contribute/coding-style.md
-/web/docs/contribute/rfc.md
-/web/docs/contribute/workflow.md
-/web/docs/contribute/security.md
-/web/docs/try/*.md
-/web/docs/try/*_files

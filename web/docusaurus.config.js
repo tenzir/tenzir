@@ -74,7 +74,7 @@ const config = {
         blog: {
           blogTitle: 'Blog',
           blogDescription: 'News from the VAST community',
-          blogSidebarCount: 10,
+          blogSidebarCount: 20,
           blogSidebarTitle: 'Blog Posts',
           postsPerPage: 20,
         },

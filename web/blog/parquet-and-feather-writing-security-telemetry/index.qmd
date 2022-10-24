@@ -1,0 +1,876 @@
+---
+title: "Parquet & Feather: Writing Security Telemetry"
+authors:
+  - dispanser
+  - mavam
+date: 2022-10-24
+image: image.jpg
+tags: [benchmark, arrow, parquet, feather, quarto, r]
+---
+
+How does Apache [Parquet][parquet] compare to [Feather][feather] for storing
+structured security data? In this blog post, we answer this question.
+
+[parquet]: https://parquet.apache.org/
+[feather]: https://arrow.apache.org/docs/python/feather.html
+
+<!--truncate-->
+
+:::info Parquet & Feather: 2/3
+This is blog post is part of a 3-piece series on Parquet and Feather.
+
+1. [Enabling Open Investigations][parquet-and-feather-1]
+2. Writing Security Telemetry (this blog post)
+3. TBD
+
+[parquet-and-feather-1]: /blog/parquet-and-feather-enabling-open-investigations/
+:::
+
+In the [previous blog][parquet-and-feather-1], we explained why Parquet and
+Feather are great building blocks for modern investigations. In this blog, we take
+a look at how they actually perform on the write path in two dimensions:
+
+- **Size**: how much space does typical security telemetry occupy?
+- **Speed**: how fast can we write out to a store?
+
+Parquet and Feather have different goals. While Parquet is an on-disk format
+that optimizes for size. Feather is a thin layer around the native Arrow
+in-memory representation. This puts them at different points in the spectrum of
+throughput and latency.
+
+To better understand this spectrum, we instrumented the write path of VAST,
+which consists roughly of the following steps:
+
+1. Parse the input
+2. Convert it into Arrow record batches
+3. Ship Arrow record batches to a VAST server
+4. Write Arrow record batches out into a Parquet or Feather store
+5. Create an index from Arrow record batches
+
+Since steps (1–3) and (5) are the same for both stores, we ignore them in the
+following analysis and solely zoom in on (4).
+
+## Dataset
+
+For our evaluation, we use a dataset that models a "normal day in a corporate
+network" fused with data from for real-world attacks. While this approach might
+not be ideal for detection engineering, it provides enough diversity to analyze
+storage and processing behavior.
+
+Specifically, we rely on a 3.77 GB PCAP trace of the [M57 case study][m57]. We
+also injected real-world attacks from
+[malware-traffic-analysis.net][malware-traffic-analysis] into the PCAP trace. To
+make the timestamps look somewhat realistic, we shifted the timestamps of the
+PCAPs to pretend that the corresponding activity happens on the same day. For
+this we used  [`editcap`][editcap] and then merged the resulting PCAPs into one
+big file using [`mergecap`][mergecap].
+
+We then ran [Zeek](https://zeek.org) and [Suricata](https://suricata.io) over
+the trace to produce structured logs. For full reproducibility, we host this
+custom data set in a [Google Drive folder][m57-drive].
+
+[m57]: https://www.sciencedirect.com/science/article/pii/S1742287612000370
+[m57-drive]: https://drive.google.com/drive/folders/1mPJYVGKTk86P2JU3KD-WFz8tUkTLK095?usp=sharing
+[malware-traffic-analysis]: https://www.malware-traffic-analysis.net/index.html
+[editcap]: https://www.wireshark.org/docs/wsug_html_chunked/AppToolseditcap.html
+[mergecap]: https://www.wireshark.org/docs/wsug_html_chunked/AppToolsmergecap.html
+
+VAST can ingest PCAP, Zeek, and Suricata natively. All three data sources are
+highly valuable for detection and investigation, which is why we use them in
+this analysis. They represent a good mix of nested and structured data (Zeek &
+Suricata) vs. simple-but-bulky data (PCAP). To give you a flavor, here's an
+example Zeek log:
+
+```
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	http
+#open	2022-04-20-09-56-45
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	trans_depth	method	host	uri	referrer	version	user_agent	origin	request_body_len	response_body_len	status_code	status_msg	info_code	info_msg	tags	username	password	proxied	orig_fuids	orig_filenames	orig_mime_types	resp_fuids	resp_filenames	resp_mime_types
+#types	time	string	addr	port	addr	port	count	string	string	string	string	string	string	string	count	count	count	string	count	string	set[enum]	string	string	set[string]	vector[string]	vector[string]	vector[string]	vector[string]	vector[string]	vector[string]
+1637155963.249475	CrkwBA3xeEV9dzj1n	128.14.134.170	57468	198.71.247.91	80	1	GET	198.71.247.91	/	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36 	-	0	51	200	OK	-	-	(empty)	-	-	-	-	-	-	FhEFqzHx1hVpkhWci	-	text/html
+1637157241.722674	Csf8Re1mi6gYI3JC6f	87.251.64.137	64078	198.71.247.91	80	1	-	-	-	-	1.1	-	-	0	18	400	Bad Request	-	-	(empty)	-	-	-	-	-	-	FpKcQG2BmJjEU9FXwh	-	text/html
+1637157318.182504	C1q1Lz1gxAAyf4Wrzk	139.162.242.152	57268	198.71.247.91	80	1	GET	198.71.247.91	/	-	1.1	Mozilla/5.0 (Windows NT 6.1; WOW64; rv:8.0) Gecko/20100101 Firefox/8.0	-	0	51	200	OK	-	-	(empty)	-	-	-	-	-	-	FyTOLL1rVGzjXoNAb	-	text/html
+1637157331.507633	C9FzNf12ebDETzvDLk	172.70.135.112	37220	198.71.247.91	80	1	GET	lifeisnetwork.com	/	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	-	0	51	200	OK	-	-	(empty)	-	-	X-FORWARDED-FOR -> 137.135.117.126	-	-	-	Fnmp6k1xVFoqqIO5Ub	-	text/html
+1637157331.750342	C9FzNf12ebDETzvDLk	172.70.135.112	37220	198.71.247.91	80	2	GET	lifeisnetwork.com	/	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	-	0	51	200	OK	-	-	(empty)	-	-	X-FORWARDED-FOR -> 137.135.117.126	-	-	-	F1uLr1giTpXx81dP4	-	text/html
+1637157331.915255	C9FzNf12ebDETzvDLk	172.70.135.112	37220	198.71.247.91	80	3	GET	lifeisnetwork.com	/wp-includes/wlwmanifest.xml	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	-	0	279	404	Not Found	-	-	(empty)	-	-	X-FORWARDED-FOR -> 137.135.117.126	-	-	-	F9dg5w2y748yNX9ZCc	-	text/html
+1637157331.987527	C9FzNf12ebDETzvDLk	172.70.135.112	37220	198.71.247.91	80	4	GET	lifeisnetwork.com	/xmlrpc.php?rsd	-	1.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	-	0	279	404	Not Found	-	-	(empty)	-	-	X-FORWARDED-FOR -> 137.135.117.126	-	-	-	FxzLxklm7xyuzTF8h	-	text/html
+```
+
+Here's a snippet of a Suricata log:
+
+```json
+{"timestamp":"2021-11-17T14:32:43.262184+0100","flow_id":1129058930499898,"pcap_cnt":7,"event_type":"http","src_ip":"128.14.134.170","src_port":57468,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":0,"community_id":"1:YXWfTYEyYLKVv5Ge4WqijUnKTrM=","http":{"hostname":"198.71.247.91","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:32:43.237882+0100","flow_id":675134617085815,"event_type":"flow","src_ip":"54.176.143.72","dest_ip":"198.71.247.91","proto":"ICMP","icmp_type":8,"icmp_code":0,"response_icmp_type":0,"response_icmp_code":0,"flow":{"pkts_toserver":1,"pkts_toclient":1,"bytes_toserver":50,"bytes_toclient":50,"start":"2021-11-17T14:43:34.649079+0100","end":"2021-11-17T14:43:34.649210+0100","age":0,"state":"established","reason":"timeout","alerted":false},"community_id":"1:WHH+8OuOygRPi50vrH45p9WwgA4="}
+{"timestamp":"2021-11-17T14:32:48.254950+0100","flow_id":1129058930499898,"pcap_cnt":10,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"128.14.134.170","dest_port":57468,"proto":"TCP","http":{"hostname":"198.71.247.91","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":0}}
+{"timestamp":"2021-11-17T14:55:18.327585+0100","flow_id":652708491465446,"pcap_cnt":206,"event_type":"http","src_ip":"139.162.242.152","src_port":57268,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":0,"community_id":"1:gEyyy4v7MJSsjLvl+3D17G/rOIY=","http":{"hostname":"198.71.247.91","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64; rv:8.0) Gecko/20100101 Firefox/8.0","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:55:18.329669+0100","flow_id":652708491465446,"pcap_cnt":208,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"139.162.242.152","dest_port":57268,"proto":"TCP","http":{"hostname":"198.71.247.91","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64; rv:8.0) Gecko/20100101 Firefox/8.0","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":0}}
+{"timestamp":"2021-11-17T14:55:31.569634+0100","flow_id":987097466129838,"pcap_cnt":224,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":0,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:55:31.750383+0100","flow_id":987097466129838,"pcap_cnt":226,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":0}}
+{"timestamp":"2021-11-17T14:55:31.812254+0100","flow_id":987097466129838,"pcap_cnt":228,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":1,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:55:31.915298+0100","flow_id":987097466129838,"pcap_cnt":230,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":1}}
+{"timestamp":"2021-11-17T14:55:31.977269+0100","flow_id":987097466129838,"pcap_cnt":232,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":2,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/wp-includes/wlwmanifest.xml","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":404,"length":279}}
+{"timestamp":"2021-11-17T14:55:31.987556+0100","flow_id":987097466129838,"pcap_cnt":234,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/wp-includes/wlwmanifest.xml","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":404,"length":279},"app_proto":"http","fileinfo":{"filename":"/wp-includes/wlwmanifest.xml","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":279,"tx_id":2}}
+{"timestamp":"2021-11-17T14:55:32.049539+0100","flow_id":987097466129838,"pcap_cnt":236,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":3,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/xmlrpc.php?rsd","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":404,"length":279}}
+{"timestamp":"2021-11-17T14:55:32.057985+0100","flow_id":987097466129838,"pcap_cnt":238,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/xmlrpc.php?rsd","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":404,"length":279},"app_proto":"http","fileinfo":{"filename":"/xmlrpc.php","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":279,"tx_id":3}}
+{"timestamp":"2021-11-17T14:55:32.119589+0100","flow_id":987097466129838,"pcap_cnt":239,"event_type":"http","src_ip":"172.70.135.112","src_port":37220,"dest_ip":"198.71.247.91","dest_port":80,"proto":"TCP","tx_id":4,"community_id":"1:7YaniZQ3kx5r62SiXkvH9P6TINQ=","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51}}
+{"timestamp":"2021-11-17T14:55:32.127935+0100","flow_id":987097466129838,"pcap_cnt":241,"event_type":"fileinfo","src_ip":"198.71.247.91","src_port":80,"dest_ip":"172.70.135.112","dest_port":37220,"proto":"TCP","http":{"hostname":"lifeisnetwork.com","url":"/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36","xff":"137.135.117.126","http_content_type":"text/html","http_method":"GET","protocol":"HTTP/1.1","status":200,"length":51},"app_proto":"http","fileinfo":{"filename":"/","sid":[],"gaps":false,"state":"CLOSED","stored":false,"size":51,"tx_id":4}}
+```
+
+Note that Zeek's tab-separated value (TSV) format is already a structured table,
+whereas Suricata data needs to be demultiplexed first through the `event_type`
+field.
+
+The PCAP packet type is currently hard-coded in VAST's PCAP plugin and looks
+like this:
+
+```go
+type pcap.packet = record {
+  time: timestamp,
+  src: addr,
+  dst: addr,
+  sport: port,
+  dport: port,
+  vlan: record {
+    outer: count,
+    inner: count,
+  },
+  community_id: string #index=hash,
+  payload: string #skip,
+}
+```
+
+Now that we've looked at the structure of the dataset, let's take a look at our
+measurement methodology.
+
+### Measurement
+
+Our objective is understanding the storage and runtime characteristics of
+Parquet and Feather on the provided input data. To this end, we instrumented
+VAST to produce us with a measurement trace file that we then analyze with R for
+gaining insights. The [corresponding patch][patch] is not meant for further
+production, so we kept it separate. But we did find an opportunity to improve
+VAST and [made the Zstd compression level configurable][pr-2623]. Our [benchmark
+sript](benchmark.fish) is available for full reproducibility.
+
+[pr-2623]: https://github.com/tenzir/vast/pull/2623
+[patch]: feather-parquet-zstd-experiments.diff
+
+Our instrumentation produced a [CSV file](data.csv) with the following features:
+
+- **Store**: the type of store plugin used in the measurement, i.e., `parquet`
+  or `feather`.
+- **Construction time**: the time it takes to convert Arrow record batches into
+  Parquet or Feather. We fenced the corresponding code blocks and computed the
+  difference in nanoseconds.
+- **Input size**: the number of bytes that the to-be-converted record batches
+  consume.
+- **Output size**: the number of bytes that the store file takes up.
+- **Number of events**: the total number of events in all input record batches
+- **Number of record batches**: the number Arrow record batches per store
+- **Schema**: the name of the schema; there exists one store file per schema
+- **Zstd compression level**: the applied Zstd compression level
+
+Every row corresponds to a single store file where we varied some of these
+parameters. We used [hyperfine](https://github.com/sharkdp/hyperfine) as
+benchmark driver tool, configured with 8 runs. Let's take a look at the data.
+
+```{r}
+#| code-fold: true
+#| label: prepare-data
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(scales)
+library(stringr)
+library(tidyr)
+
+# For faceting, to show clearer boundaries.
+theme_bw_trans <- function(...) {
+  theme_bw(...) +
+  theme(panel.background = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.background = element_rect(fill = "transparent"))
+}
+
+theme_set(theme_minimal())
+
+data <- read.csv("data.csv") |>
+  rename(store = store_type) |>
+  mutate(duration = dnanoseconds(duration))
+
+original <- read.csv("sizes.csv") |>
+  mutate(store = "original", store_class = "original") |>
+  select(store, store_class, schema, bytes)
+
+# Global view on number of events per schema.
+schemas <- data |>
+  # Pick one element from the run matrix.
+  filter(store == "feather" & zstd.level == 1) |>
+  group_by(schema) |>
+  summarize(n = sum(num_events),
+            bytes_memory = sum(bytes_memory))
+
+# Normalize store sizes by number of events/store.
+normalized <- data |>
+  mutate(duration_normalized = duration / num_events,
+         bytes_memory_normalized = bytes_memory / num_events,
+         bytes_storage_normalized = bytes_in_storage / num_events,
+         bytes_ratio = bytes_in_storage / bytes_memory)
+
+# Compute average over measurements.
+aggregated <- normalized |>
+  group_by(store, schema, zstd.level) |>
+  summarize(duration = mean(duration_normalized),
+            memory = mean(bytes_memory_normalized),
+            storage = mean(bytes_storage_normalized))
+
+# Treat in-memory measurements as just another storage type.
+memory <- aggregated |>
+  filter(store == "feather" & zstd.level == 1) |>
+  mutate(store = "memory", store_class = "memory") |>
+  select(store, store_class, schema, bytes = memory)
+
+# Unite with rest of data.
+unified <-
+  aggregated |>
+  select(-memory) |>
+  mutate(zstd.level = factor(str_replace_na(zstd.level),
+                             levels = c("NA", "-5", "1", "9", "19"))) |>
+  rename(bytes = storage, store_class = store) |>
+  unite("store", store_class, zstd.level, sep = "+", remove = FALSE)
+
+schemas_gt10k <- schemas |> filter(n > 10e3) |> pull(schema)
+schemas_gt100k <- schemas |> filter(n > 100e3) |> pull(schema)
+
+# Only schemas with > 100k events.
+cleaned <- unified |>
+  filter(schema %in% schemas_gt100k)
+
+# Helper function to format numbers with SI unit suffixes.
+fmt_si <- function(x) scales::label_number_si(accuracy = 0.1)(x)
+```
+
+### Schemas
+
+We have a total of `r length(unique(data$schema))` unique schemas:
+
+```{r}
+#| label: schemas
+#| echo: false
+unique(data$schema)
+```
+
+The schemas belong to three data *modules*: Zeek, Suricata, and PCAP. A module
+is the prefix of a concrete type, e.g., for the schema `zeek.conn` the module is
+`zeek` and the type is `conn`. This is only a distinction in terminology,
+internally VAST stores the full-qualified type as schema name.
+
+How many events do we have per schema?
+
+```{r}
+#| code-fold: true
+#| label: number-of-events-by-schema
+schemas <- normalized |>
+  # Pick one element from the run matrix.
+  filter(store == "feather" & zstd.level == 1) |>
+  group_by(schema) |>
+  summarize(n = sum(num_events),
+            bytes_memory = sum(bytes_memory))
+
+schemas |>
+  separate(schema, c("module", "type"), remove = FALSE) |>
+  ggplot(aes(x = reorder(schema, -n), y = n, fill = module)) +
+    geom_bar(stat = "identity") +
+    scale_y_log10(labels = scales::label_comma()) +
+    labs(x = "Schema", y = "Number of Events", fill = "Module") +
+    theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
+```
+
+The above plot (log-scaled y-axis) shows how many events we have per type.
+Between 1 and 100M events, we almost see everything.
+
+What's the typical event size?
+
+```{r}
+#| code-fold: true
+#| label: event-size-by-schema
+schemas |>
+  separate(schema, c("module", "type"), remove = FALSE) |>
+  ggplot(aes(x = reorder(schema, -n), y = bytes_memory / n, fill = module)) +
+    geom_bar(stat = "identity") +
+    guides(fill = "none") +
+    scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
+    labs(x = "Schema", y = "Bytes (in-memory)", color = "Module") +
+    theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
+```
+
+The above plot keeps the x-axis from the previous plot, but exchanges the y-axis
+to show normalized event size, in memory after parsing. Most events
+take up a few 100 bytes, with packet data consuming a bit more, and one 5x
+outlier: `suricata.ftp`.
+
+Such distributions are normal, even with these outliers. Some telemetry events
+simply have more string data that's a function of user input. For `suricata.ftp`
+specifically, it can grow linearly with the data transmitted. Here's a stripped
+down example of an event that is greater than 5 kB in its raw JSON:
+
+```json
+{
+  "timestamp": "2021-11-19T05:08:50.885981+0100",
+  "flow_id": 1339403323589433,
+  "pcap_cnt": 5428538,
+  "event_type": "ftp",
+  "src_ip": "10.5.5.101",
+  "src_port": 50479,
+  "dest_ip": "62.24.128.228",
+  "dest_port": 110,
+  "proto": "TCP",
+  "tx_id": 12,
+  "community_id": "1:kUFeGEpYT1JO1VCwF8wZWUWn0J0=",
+  "ftp": {
+    "completion_code": [
+      "155",
+      ...
+      <stripped 330 lines>
+      ...
+      "188",
+      "188",
+      "188"
+    ],
+    "reply": [
+      " 41609",
+      ...
+      <stripped 330 lines>
+      ...
+      " 125448",
+      " 126158",
+      " 29639"
+    ],
+    "reply_received": "yes"
+  }
+}
+```
+
+This matches our mental model. A few hundred bytes per event with some outliers.
+
+### Batching
+
+On the inside, a store is a concatenation of homogeneous Arrow record batches,
+all having the same schema.
+
+The Feather format is essentially the IPC wire format of record batches. Schemas
+and dictionaries are only included when they change. For our stores, this means
+just once in the beginning. In order to access a given row in a Feather file,
+you need to start at the beginning, iterate batch by batch until you arrive at
+the desired batch, and then materialize it before you can access the desired
+row via random access.
+
+Parquet has *row groups* that are much like a record batch, except that they are
+created at write time, so Parquet determines their size rather than the incoming
+data. Parquet offers random access over both the row groups and within an
+individual batch that is materialized from a row group. The on-disk layout of
+Parquet is still row-group by row-group, and in that column by column, so
+there's no big difference between Parquet and Feather in that regard. Parquet
+encodes columns using different encoding techniques than Arrow's IPC format.
+
+Most stores only consist of a few record batches. PCAP is the only difference.
+Small stores are suboptimal because the catalog keeps in-memory state that is a
+linear function of the number of stores. (We are aware of this concern and are
+exploring improvements, but this topic is out of scope for this post.) The issue
+here is catalog fragmentation.
+
+As of [v2.3](/blog/vast-v2.3), VAST has automatic rebuilding in place, which
+merges underfull partitions to reduce pressure on the catalog. This doesn't fix
+the problem of linear state, but gives us much sufficient reach for real-world
+deployments.
+
+## Size
+
+To better understand the difference between Parquet and Feather, we now take a
+look at them right next to each other. In addition to Feather and Parquet, we
+use two other types of "stores" for the analysis to facilitate comparison:
+
+1. **Original**: the size of the input prior it entered VAST, e.g., the raw JSON or
+   a PCAP file.
+
+3. **Memory**: the size of the data in memory, measured as the sum of Arrow
+   buffers that make up the table slice.
+
+Let's kick of the analysis by getting a better understanding at the size
+distribution.
+
+```{r}
+#| code-fold: true
+#| label: plot-schema-distribution-boxplot
+unified |>
+  bind_rows(original, memory) |>
+  ggplot(aes(x = reorder(store, -bytes, FUN = "median"),
+             y = bytes, color = store_class)) +
+  geom_boxplot() +
+  scale_y_log10(labels = scales::label_bytes(units = "auto_si")) +
+  labs(x = "Store", y = "Bytes/Event", color = "Store") +
+  theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
+```
+
+Every boxplot corresponds to one store, with `original` and `memory` being also
+treated like stores. The suffix `-Z` indicates Zstd level `Z`, with `NA` meaning
+"compression turned off" entirely.  Parquet stores on the right (in purple) have
+the smallest size, followed by Feather (red), and then their corresponding
+in-memory (green) and original (turquoise) representation. The negative Zstd
+level -5 makes Parquet actually worse than Feather.
+
+:::tip Analysis
+What stands out is that disabling compression for Feather inflates the data
+larger than the original. This is not the case for Parquet. Why? Because Parquet
+has an orthogonal layer of compression using dictionaries. This absorbs
+inefficiencies in heavy-tailed distributions, which are pretty standard in
+machine-generated data.
+:::
+
+The y-axis of above plot is log-scaled, which makes it hard for relative
+comparison. Let's focus on the medians (the bars in the box) only and bring the
+y-axis to a linear scale:
+
+```{r}
+#| code-fold: true
+#| label: plot-schema-distribution-medians
+medians <- unified |>
+  bind_rows(original, memory) |>
+  group_by(store, store_class) |>
+  summarize(bytes = median(bytes))
+
+medians |>
+  ggplot(aes(x = reorder(store, -bytes), y = bytes, fill = store_class)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
+  labs(x = "Store", y = "Bytes/Event", fill = "Store") +
+  theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
+```
+
+To better understand the compression in numbers, we'll anchor the original size
+at 100% and now show the *relative* gains of Parquet and Feather:
+
+```{r}
+#| echo: false
+library(knitr)
+
+median_original <- medians |> filter(store == "original") |> pull(bytes)
+medians |>
+  filter(store_class %in% c("feather", "parquet")) |>
+  mutate(size = bytes / median_original * 100) |>
+  mutate(compression = median_original / bytes) |>
+  arrange(size) |>
+  kable(digits = 1, col.names = c("Store", "Class", "Bytes/Event", "Size (%)",
+                                  "Compression Ratio"))
+```
+
+:::tip Analysis
+Parquet dominates Feather with respect to space savings, but not by much for
+high Zstd levels. Zstd levels > 1 do not provide substantial space savings on
+average, where observe a compression ratio of **~4x** over the base data. Parquet
+still provides a **2.6** compression ratio in the absence of compression because
+it applies dictionary encoding.
+
+Feather offers competitive compression with **~3x** ratio for equal Zstd levels.
+However, without compression Feather expands beyond the original dataset size at
+a compression ratio of **~0.9**.
+:::
+
+The above analysis covered averages across schemas. If we juxtapose Parquet and
+Feather per schema, we see the difference between the two formats more clearly:
+
+```{r}
+#| code-fold: true
+#| label: plot-parquet-vs-feather
+library(ggrepel)
+
+parquet_vs_feather_size <- unified |>
+  select(-store, -duration) |>
+  pivot_wider(names_from = store_class,
+              values_from = bytes,
+              id_cols = c(schema, zstd.level))
+
+plot_parquet_vs_feather <- function(data) {
+  data |>
+    mutate(zstd.level = str_replace_na(zstd.level)) |>
+    separate(schema, c("module", "type"), remove = FALSE) |>
+    ggplot(aes(x = parquet, y = feather,
+               shape = zstd.level, color = zstd.level)) +
+      geom_abline(intercept = 0, slope = 1, color = "grey") +
+      geom_point(alpha = 0.6, size = 3) +
+      geom_text_repel(aes(label = schema),
+                color = "grey",
+                size = 1, # font size
+                box.padding = 0.2,
+                min.segment.length = 0, # draw all line segments
+                max.overlaps = Inf,
+                segment.size = 0.2,
+                segment.color = "grey",
+                segment.alpha = 0.3) +
+      scale_size(range = c(0, 10)) +
+      labs(x = "Bytes (Parquet)", y = "Bytes (Feather)",
+           shape = "Zstd Level", color = "Zstd Level")
+}
+
+parquet_vs_feather_size |>
+  filter(schema %in% schemas_gt100k) |>
+  plot_parquet_vs_feather() +
+    scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_bytes(units = "auto_si"))
+```
+
+In the above log-log scatterplot, the straight line is the identity function.
+Each point represents the median store size for a given schema. If a point is on
+the line, it means there is no difference between Feather and Parquet. We only
+look at schemas with more than 100k events to ensure that the constant factor
+does not perturb the analysis. (Otherwise we end up with points *below* the
+identity line, which are completely dwarfed by the bulk in practice.) The color
+and shape shows the different Zstd levels, with `NA` meaning no compression.
+Points clouds closer to the origin mean that the corresponding store class takes
+up less space.
+
+:::tip Analysis
+We observe that **disabling compression hits Feather the hardest**.
+Unexpectedly, a negative Zstd level of -5 does not compress well. The remaining
+Zstd levels are difficult to take apart visually, but it appears that the point
+clouds form a parallel line, indicating stable compression gains. Notably,
+**compressing PCAP packets is nearly identical with Feather and Parquet**,
+presumably because of the low entropy and packet meta data where general-purpose
+compressors like Zstd shine.
+:::
+
+Zooming in to the bottom left area with average event size of less than 100B,
+and removing the log scaling, we see the following:
+
+```{r}
+#| code-fold: true
+#| label: plot-parquet-vs-feather-100
+
+parquet_vs_feather_size |>
+  filter(feather <= 100 & schema %in% schemas_gt100k) |>
+  plot_parquet_vs_feather() +
+    scale_x_continuous(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
+    coord_fixed()
+```
+
+The respective point clouds form a parallel to the identity function, i.e., the
+compression ratio in this region pretty constant across schemas. There's also no
+noticeable difference between Zstd level 1, 9, and 19.
+
+If we take pick a single point, e.g., `zeek.conn` with
+`r schemas |> filter(schema == "zeek.conn") |> pull(n) |> fmt_si()` events, we
+can confirm that the relative performance matches the results of our analysis
+above:
+
+```{r}
+#| code-fold: true
+#| label: plot-zeek-suricata
+unified |>
+  filter(schema == "zeek.conn") |>
+  ggplot(aes(x = reorder(store, -bytes), y = bytes, fill = store_class)) +
+    geom_bar(stat = "identity") +
+    guides(fill = "none") +
+    labs(x = "Store", y = "Bytes/Event") +
+    scale_y_continuous(labels = scales::label_bytes(units = "auto_si")) +
+    theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0)) +
+    facet_wrap(~ schema, scales = "free")
+```
+
+Finally, we look at the fraction of space Parquet takes compared to Feather on a
+per schema basis, restricted to schemas with more than 10k events:
+
+```{r}
+#| code-fold: true
+#| label: plot-parquet-divided-by-feather
+library(tibble)
+
+parquet_vs_feather_size |>
+  filter(feather <= 100 & schema %in% schemas_gt10k) |>
+  mutate(zstd.level = str_replace_na(zstd.level)) |>
+  ggplot(aes(x = reorder(schema, -parquet / feather),
+             y = parquet / feather,
+             fill = zstd.level)) +
+    geom_hline(yintercept = 1) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(x = "Schema", y = "Parquet / Feather (%)", fill = "Zstd Level") +
+    scale_y_continuous(breaks = 6:1 * 20 / 100, labels = scales::label_percent()) +
+    theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0))
+```
+
+The horizontal line is similar to the identity line in the scatterplot,
+indicating that Feather and Parquet compress equally well. The bars represent
+that ratio of Parquet divided by Feather. The shorter the bars, the smaller the
+size, so the higher the gain over Feather.
+
+:::tip Analysis
+We see that Zstd level 19 brings Parquet and Feather close together. Even at
+Zstd level 1, the median ratio of Parquet stores is **78%**, and the 3rd
+quartile **82%**. This shows that **Feather is remarkably competitive for typical
+security analytics workloads**.
+:::
+
+## Speed
+
+Now that we have looked at the spatial properties of Parquet and Feather, we
+take a look at the runtime. With *speed*, we mean the time it takes to transform
+Arrow Record Batches into Parquet and Feather format. This analysis only
+considers only CPU time; VAST writes the respective store in memory first and
+then flushes it one sequential write. Our mental model is that Feather is faster
+than Parquet. Is that the case when enabling compression for both?
+
+To avoid distortion of small events, we also restrict the analysis to schemas
+with more than 100k events.
+
+```{r}
+#| code-fold: true
+#| label: duration-distribution
+unified |>
+  filter(schema %in% schemas_gt100k) |>
+  ggplot(aes(x = reorder(store, -duration, FUN = "median"),
+             y = duration, color = store_class)) +
+  geom_boxplot() +
+  scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+  theme(axis.text.x = element_text(angle = -90, size = 8, vjust = 0.5, hjust = 0)) +
+  labs(x = "Store", y = "Speed (us)", color = "Store")
+```
+
+The above boxplots show the time it takes to write a store for a given store and
+compression level combination. The log-scaled y-axis shows the normalized to number
+of microseconds per event, across the distribution of all schemas. The sort order
+is the median processing time, similar to the size discussion above.
+
+:::tip Analysis
+As expected, we roughly observe an ordering according to Zstd level: more
+compression means a shorter runtime.
+
+Unexpectedly, for the same Zstd level, **Parquet store creation was always
+faster**. Our unconfirmed hunch is that Feather compression operates on more and
+smaller column buffers, whereas Parquet compression only runs over the
+concatenated Arrow buffers, yielding bigger strides.
+:::
+
+We don't have an explanation for why disabling compression for Parquet is
+*slower* compared Zstd levels -5 and 1. In theory, strictly less cycles are
+spent by disabling the compression code path. Perhaps compression results in
+different memory layout that is more cache-efficient. Unfortunately, we did not
+have the time to dig deeper into the analysis to figure out why disabling
+Parquet compression is slower. Please don't hesitate to reach out, e.g., via our
+[Community Slack](http://slack.tenzir.com).
+
+Let's compare Parquet and Feather by compression level, per schema:
+
+```{r}
+#| code-fold: true
+#| label: pairwise-runtime-comparion
+parquet_vs_feather_duration <- unified |>
+  filter(schema %in% schemas_gt100k) |>
+  select(-store, -bytes) |>
+  pivot_wider(names_from = store_class,
+              values_from = duration,
+              id_cols = c(schema, zstd.level))
+
+parquet_vs_feather_duration |>
+  mutate(zstd.level = str_replace_na(zstd.level)) |>
+  separate(schema, c("module", "type"), remove = FALSE) |>
+  ggplot(aes(x = parquet, y = feather,
+             shape = zstd.level, color = zstd.level)) +
+    geom_abline(intercept = 0, slope = 1, color = "grey") +
+    geom_point(alpha = 0.7, size = 3) +
+    geom_text_repel(aes(label = schema),
+              color = "grey",
+              size = 1, # font size
+              box.padding = 0.2,
+              min.segment.length = 0, # draw all line segments
+              max.overlaps = Inf,
+              segment.size = 0.2,
+              segment.color = "grey",
+              segment.alpha = 0.3) +
+    scale_size(range = c(0, 10)) +
+    scale_x_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Speed (Parquet)", y = "Speed (Feather)",
+         shape = "Zstd Level", color = "Zstd Level")
+```
+
+The above scatterplot has an identity line. Points on this line indicates that
+there is no speed difference between Parquet and Feather. Feather is faster for
+points below the line, and Parquet is faster for points above the line.
+
+:::tip Analysis
+In addition to the above boxplot, this scatterplot makes it clearer to see the
+impact of the schemas.
+
+Interestingly, **there is no significant difference in Zstd levels -5 and 1,
+while levels 9 and 19 stand apart further**. Disabling compression for Feather
+has a stronger effect on speed than for Parquet.
+
+Overall, we were surprised that **Feather and Parquet are not far apart in terms
+of write performance once compression is enabled**. Only when compression is
+disabled, Parquet is substantially slower in our measurements.
+:::
+
+## Space-Time Trade-off
+
+Finally, we combine the size and speed analysis into a single benchmark. Our
+goal is to find an optimal parameterization, i.e., one that strictly dominates
+others. To this end, we now plot size against speed:
+
+```{r}
+#| code-fold: true
+#| label: points-by-level
+cleaned <- unified |>
+  filter(schema %in% schemas_gt100k) |>
+  mutate(zstd.level = factor(str_replace_na(zstd.level),
+                             levels = c("NA", "-5", "1", "9", "19"))) |>
+  group_by(schema, store_class, zstd.level) |>
+  summarize(bytes = median(bytes), duration = median(duration))
+
+cleaned |>
+  ggplot(aes(x = bytes, y = duration,
+             shape = store_class, color = zstd.level)) +
+    geom_point(size = 3, alpha = 0.7) +
+    geom_text_repel(aes(label = schema),
+              color = "grey",
+              size = 1, # font size
+              box.padding = 0.2,
+              min.segment.length = 0, # draw all line segments
+              max.overlaps = Inf,
+              segment.size = 0.2,
+              segment.color = "grey",
+              segment.alpha = 0.3) +
+    scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Size", y = "Speed", shape = "Store", color = "Zstd Level")
+```
+
+Every point in the above log-log scatterplot represents a store with a fixed
+schema. Since we have multiple stores for a given schema, we took the median
+size and median speed. We then varied the run matrix by Zstd level (color) and
+store type (triangle/point shape). Points closer to the origin are "better" in
+both dimensions. So we're looking for the left-most and bottom-most ones.
+Disabling compression puts points into the bottom-right area, and maximum
+compression into the top-left area.
+
+The point closest to the origin has the schema `zeek.dce_rpc` for Zstd level 1,
+both for Feather and Parquet. Is there anything special about this log file?
+Here's a sample:
+
+```
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	dce_rpc
+#open	2022-04-20-09-56-46
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	rtt	named_pipe	endpoint	operation
+#types	time	string	addr	port	addr	port	interval	string	string	string
+1637222709.134638	Cypdo7cTBbiS4Asad	10.2.9.133	49768	10.2.9.9	135	0.000254	135	epmapper	ept_map
+1637222709.140898	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000239	49671	drsuapi	DRSBind
+1637222709.141520	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000311	49671	drsuapi	DRSCrackNames
+1637222709.142068	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000137	49671	drsuapi	DRSUnbind
+1637222709.143104	Cypdo7cTBbiS4Asad	10.2.9.133	49768	10.2.9.9	135	0.000228	135	epmapper	ept_map
+1637222709.143642	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000147	49671	drsuapi	DRSBind
+1637222709.144040	CTDU3j3iAXfRITNiah	10.2.9.133	49769	10.2.9.9	49671	0.000296	49671	drsuapi	DRSCrackNames
+```
+
+It appears to be rather normal: 10 columns, several different data types, unique
+IDs, and some short strings. By looking at the data alone, there is no obvious
+hint that explains the performance.
+
+With dozens to hundreds of different schemas per data source (sometimes even
+more), there it will be difficult to single out individual schemas. But a point
+cloud is unwieldy for relative comparison. To better represent the variance of
+schemas for a given configuration, we can strip the "inner" points and only look
+at their convex hull:
+
+```{r}
+#| code-fold: true
+#| label: convex-hull
+# Native convex hull does the job, no need to leverage ggforce.
+convex_hull <- cleaned |>
+  group_by(store_class, zstd.level) |>
+  slice(chull(x = bytes, y = duration))
+
+convex_hull |>
+  ggplot(aes(x = bytes, y = duration,
+             shape = store_class, color = zstd.level)) +
+    geom_point(size = 3) +
+    geom_polygon(aes(fill = zstd.level, color = zstd.level),
+                 alpha = 0.1,
+                 show.legend = FALSE) +
+    scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Size", y = "Speed", shape = "Store", color = "Zstd Level")
+```
+
+Intuitively, the area of a given polygon captures its variance. A smaller area
+is "good" in that it offers more predictable behavior. The high amount of
+overlap makes it still difficult to perform clearer comparisons. If we facet by
+store type, it becomes easier to compare the areas:
+
+```{r}
+#| code-fold: true
+#| label: convex-hull-facet-by-level
+cleaned |>
+  group_by(store_class, zstd.level) |>
+  # Native convex hull does the job, no need to leverage ggforce.
+  slice(chull(x = bytes, y = duration)) |>
+  ggplot(aes(x = bytes, y = duration,
+             shape = store_class, color = store_class)) +
+    geom_point(size = 3) +
+    geom_polygon(aes(color = store_class, fill = store_class),
+                 alpha = 0.3,
+                 show.legend = FALSE) +
+    scale_x_log10(n.breaks = 4, labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Size", y = "Speed", shape = "Store", color = "Store") +
+    facet_grid(cols = vars(zstd.level)) +
+    theme_bw_trans()
+```
+
+Arranging the facets above row-wise makes it easier to compare the y-axis, i.e.,
+speed, where lower polygons are better. Arranging them column-wise makes it easier
+to compare the x-axis, i.e., size, where the left-most polygons are better:
+
+```{r}
+#| code-fold: true
+#| label: convex-hull-facet-by-store
+cleaned |>
+  group_by(store_class, zstd.level) |>
+  slice(chull(x = bytes, y = duration)) |>
+  ggplot(aes(x = bytes, y = duration,
+             shape = zstd.level, color = zstd.level)) +
+    geom_point(size = 3) +
+    geom_polygon(aes(color = zstd.level, fill = zstd.level),
+                 alpha = 0.3,
+                 show.legend = FALSE) +
+    scale_x_log10(labels = scales::label_bytes(units = "auto_si")) +
+    scale_y_log10(labels = scales::label_number(scale = 1e6, suffix = "us")) +
+    labs(x = "Size", y = "Speed", shape = "Zstd Level", color = "Zstd Level") +
+    facet_grid(rows = vars(store_class)) +
+    theme_bw_trans()
+```
+
+:::tip Analysis
+Across both dimensions, **Zstd level 1 shows the best average space-time
+trade-off for both Parquet and Feather**. In the above plots, we also observe our
+findings from the speed analysis: Parquet still dominates when compression is
+enabled.
+:::
+
+## Conclusion
+
+In summary, we set out to better understand how Parquet and Feather behave on
+the write path of VAST, when acquiring security telemetry from high-volume data
+sources. Our findings show that columnar Zstd compression offers great space
+savings for both Parquet and Feather. For certain schemas, Feather and Parquet
+exhibit only a marginal differences. To our surprise, writing Parquet files is
+still faster than Feather for our workloads.
+
+The pressing next question is obviously: what about the read path, i.e., query
+latency? This is a topic for future, stay tuned.
