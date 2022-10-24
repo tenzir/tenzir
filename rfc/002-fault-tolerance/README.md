@@ -383,8 +383,8 @@ Here are some incomplete notes of taking a first look:
 - Etcd comes with a gRPC API, making it easy to embed for us. We're already
   depending on gRPC transitively via Apache Arrow (cf. Flight).
 
-- An official C++ client library
-- exists:https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.
+- An official C++ client library exists:
+  https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.
 
 ##### Consul
 
@@ -395,27 +395,27 @@ encryption. For the use case at hand we identified the following relevant
 properties:
 
 - The only way to interact with a Consul service is through an HTTP API, meaning
-- there would be some overhead for each transaction. This also means that we
-- would have to use HTTP long polling to observe changes on a specific key.
+  there would be some overhead for each transaction. This also means that we
+  would have to use HTTP long polling to observe changes on a specific key.
 
 - Transactions are supported with a dedicated API endpoint
-- (https://developer.hashicorp.com/consul/api-docs/txn). Failure conditions have
-- to be modeled into a key-specific `index` variable, which is less flexible
-- compared to the predicate interface of FoundationDB.
+  (https://developer.hashicorp.com/consul/api-docs/txn). Failure conditions have
+  to be modeled into a key-specific `index` variable, which is less flexible
+  compared to the predicate interface of FoundationDB.
 
 - A `get-tree` operation is available and would allow efficient joining of a new
-- node to an existing cluster.
+  node to an existing cluster.
 
 - A seemingly maintained third party client library with the relevant features
-- exists: https://github.com/oliora/ppconsul. The relevant transaction API is
-- supported.
+  exists: https://github.com/oliora/ppconsul. The relevant transaction API is
+  supported.
 
 - While it is possible to add run a blocking query to a single key or a prefix,
-- such a query has to be re-registered after every return. If multiple changes
-- have been applied before the new query is registered the client misses
-- updates. We can not observe changes in the key space directly, only the
-- current values. That means modeling a change feed as desired requires a custom
-- protocol.
+  such a query has to be re-registered after every return. If multiple changes
+  have been applied before the new query is registered the client misses
+  updates. We can not observe changes in the key space directly, only the
+  current values. That means modeling a change feed as desired requires a custom
+  protocol.
 
 ##### Native Raft
 
