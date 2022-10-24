@@ -36,6 +36,9 @@ add_feature_info(
 if (NOT VAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO)
   find_package(fmt REQUIRED)
   find_package(restinio REQUIRED)
+  # OpenSSL link is missing from restinio.
+  find_package(OpenSSL REQUIRED)
+  target_link_libraries(web PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 else ()
   # Setup dependency code from submodules.
   list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

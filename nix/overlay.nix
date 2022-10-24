@@ -2,28 +2,73 @@
 final: prev:
 let
   inherit (final) lib;
+  inherit (final.stdenv.hostPlatform) isMusl;
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if final.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
 in
 {
+  abseil-cpp = if !isStatic then prev.abseil-cpp else prev.abseil-cpp_202111;
   arrow-cpp = (prev.arrow-cpp.override { 
     enableShared = !isStatic;
-    enableFlight = !isStatic;
     enableS3 = !isStatic;
     enableGcs = !isStatic;
   }).overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ [
-      "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"
+    patches = old.patches ++ lib.optionals isMusl [
+      (prev.fetchpatch {
+        name = "arrow-cpp-9-fix-musl.patch";
+        url = "https://github.com/apache/arrow/commit/7d8e1fbc96a0b527475b736e82580894363fc7cf.patch";
+        hash = "sha256-HvQEYCZ5tYiXS1qukNryR1qTQ1CVI99LueCxY63dAtc=";
+        stripLen = 1;
+      })
     ];
+    buildInputs = old.buildInputs ++ lib.optionals isStatic [ final.sqlite ];
+    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
+      # Needed for correct dependency resolution, should be the default...
+      "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
+      # Backtrace doesn't build in static mode, need to investigate.
+      "-DARROW_WITH_BACKTRACE=OFF"
+      # Plasma is deprecated for 10.0.0 so we don't bother fixing any issues.
+      "-DARROW_PLASMA=OFF"
+    ];
+    doCheck = false;
+    doInstallCheck = !isStatic;
   });
   arrow-cpp-no-simd = final.arrow-cpp.overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ [
       "-DARROW_SIMD_LEVEL=NONE"
     ];
   });
-  xxHash = if !isStatic then prev.xxHash else
-  prev.xxHash.overrideAttrs (old: {
-    patches = [ ./xxHash/static.patch ];
+  flatbuffers = prev.flatbuffers.overrideAttrs(_: rec {
+    version = "22.9.29";
+    src = prev.fetchFromGitHub {
+      owner = "google";
+      repo = "flatbuffers";
+      rev = "v${version}";
+      sha256 = "sha256-Wc+DLihAN0EvaGkyuCreoRvzsNS3tIN7e2qIZhGldkw=";
+    };
+  });
+  google-cloud-cpp = if !isStatic then prev.google-cloud-cpp else
+  prev.google-cloud-cpp.override {
+    abseil-cpp = final.abseil-cpp_202111;
+  };
+  grpc = if !isStatic then prev.grpc else
+  prev.grpc.overrideAttrs (old: {
+    cmakeFlags = old.cmakeFlags ++ [
+      "-DCMAKE_CXX_STANDARD=17"
+    ];
+    abseil-cpp = final.abseil-cpp_202111;
+  });
+  libevent = if !isStatic then prev.libevent else
+  prev.libevent.overrideAttrs (old: {
+    outputs = [ "out" ];
+    outputBin = null;
+    propagatedBuildOutputs = [ "out" ];
+    nativeBuildInputs = old.nativeBuildInputs ++ lib.optionals isStatic [
+      prev.buildPackages.cmake ];
+    cmakeFlags = [
+      "-DEVENT__LIBRARY_TYPE=STATIC"
+    ];
+    postInstall = null;
   });
   http-parser = if !isStatic then prev.http-parser else
     prev.http-parser.overrideAttrs (_ : {
@@ -95,16 +140,11 @@ in
   jemalloc = prev.jemalloc.overrideAttrs (old: {
     EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
     configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
+    doCheck = !isStatic;
   });
   simdjson = prev.simdjson.overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
       "-DSIMDJSON_BUILD_STATIC=ON"
-    ];
-  });
-  spdlog = prev.spdlog.overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
-      "-DSPDLOG_BUILD_STATIC=ON"
-      "-DSPDLOG_BUILD_SHARED=OFF"
     ];
   });
   libunwind = prev.libunwind.overrideAttrs (old: {
