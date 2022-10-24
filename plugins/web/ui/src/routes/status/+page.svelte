@@ -14,8 +14,12 @@
 
 	const getStatus = async () => {
 		try {
-			const API_BASE = 'http://localhost:42001/api/v0';
+
+			// if we have a VAST_API_ENDPOINT .env variable available
+			// use that, otherwise construct from the current base url
+			const API_BASE = import.meta.env.VITE_VAST_API_ENDPOINT ?? `${import.meta.env.BASE_URL}api/v0`;
 			const url = `${API_BASE}/status?verbosity=detailed`;
+
 			const response = await fetch(url);
 
 			const data = await response.json();
