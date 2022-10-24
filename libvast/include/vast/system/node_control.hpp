@@ -63,10 +63,10 @@ get_node_components(caf::scoped_actor& self, const node_actor& node) {
             return caf::actor_cast<Out>(std::forward<decltype(in)>(in));
           });
       },
-      [&](caf::error& err) { //
-        result = caf::make_error(ec::lookup_error,
-                                 "failed to get components {} from node: {}",
-                                 labels, std::move(err));
+      [&](caf::error& err) {
+        result = vast::make_error(ec::lookup_error,
+                                  "failed to get components {} from node: {}",
+                                  labels, std::move(err));
       });
   return result;
 }

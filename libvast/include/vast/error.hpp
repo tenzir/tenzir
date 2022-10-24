@@ -12,6 +12,7 @@
 
 #include <caf/error.hpp>
 #include <caf/make_message.hpp>
+#include <fmt/core.h>
 
 namespace vast {
 
@@ -95,6 +96,12 @@ const char* to_string(ec x);
 /// A formatting function that converts an error into a human-readable string.
 /// @relates ec
 std::string render(caf::error err);
+
+template <class... T>
+caf::error make_error(ec code, fmt::format_string<T...> fmt, T&&... args) {
+  return caf::make_error(code, fmt::format(std::move(fmt),
+                                           std::forward<T&&>(args)...));
+}
 
 } // namespace vast
 

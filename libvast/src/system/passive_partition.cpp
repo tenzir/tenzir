@@ -303,8 +303,8 @@ partition_chunk::get_flatbuffer(vast::chunk_ptr chunk) {
       return caf::make_error(ec::format_error, "invalid flatbuffer container");
     return container.as_flatbuffer<fbs::Partition>(0);
   } else {
-    return caf::make_error(ec::format_error, "unknown identifier {}",
-                           flatbuffers::GetBufferIdentifier(chunk->data()));
+    return vast::make_error(ec::format_error, "unknown identifier {}",
+                            flatbuffers::GetBufferIdentifier(chunk->data()));
   }
 }
 
@@ -348,9 +348,9 @@ passive_partition_state::initialize_from_chunk(const vast::chunk_ptr& chunk) {
                     static_cast<uint8_t>(partition->partition_type())));
     this->flatbuffer = partition->partition_as_legacy();
   } else {
-    return caf::make_error(ec::format_error,
-                           "partition at contains unknown identifier {}",
-                           flatbuffers::GetBufferIdentifier(chunk->data()));
+    return vast::make_error(ec::format_error,
+                            "partition at contains unknown identifier {}",
+                            flatbuffers::GetBufferIdentifier(chunk->data()));
   }
   if (auto error = unpack(*flatbuffer, *this))
     return caf::make_error(

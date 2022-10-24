@@ -49,7 +49,6 @@ bool push_to(caf::broadcast_downstream_manager<T>& manager,
   return false;
 }
 
-
 void store_or_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
@@ -364,8 +363,9 @@ partition_transformer_actor::behavior_type partition_transformer(
         = plugins::find<vast::store_actor_plugin>(store_id);
       if (!store_actor_plugin) {
         self->state.stream_error
-          = caf::make_error(ec::invalid_argument,
-                            "could not find a store plugin named {}", store_id);
+          = vast::make_error(ec::invalid_argument,
+                             "could not find a store plugin named {}",
+                             store_id);
         store_or_fulfill(self, std::move(stream_data));
         return {};
       }
@@ -385,9 +385,9 @@ partition_transformer_actor::behavior_type partition_transformer(
           self->state.accountant, self->state.fs, partition_data.id);
         if (!builder_and_header) {
           self->state.stream_error
-            = caf::make_error(ec::invalid_argument,
-                              "could not create store builder for backend {}",
-                              store_id);
+            = vast::make_error(ec::invalid_argument,
+                               "could not create store builder for backend {}",
+                               store_id);
           store_or_fulfill(self, std::move(stream_data));
           return {};
         }

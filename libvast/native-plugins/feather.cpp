@@ -92,9 +92,9 @@ class passive_feather_store final : public passive_store {
     }
     schema_ = type::from_arrow(*arrow_field);
     if (!schema_)
-      return caf::make_error(ec::format_error,
-                             "Arrow schema incompatible with VAST type: {}",
-                             arrow_field->ToString(true));
+      return vast::make_error(ec::format_error,
+                              "Arrow schema incompatible with VAST type: {}",
+                              arrow_field->ToString(true));
     num_events_ = table_->num_rows();
     return {};
   }

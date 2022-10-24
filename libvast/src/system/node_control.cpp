@@ -45,9 +45,8 @@ spawn_at_node(caf::scoped_actor& self, const node_actor& node, invocation inv) {
         result = std::move(actor);
       },
       [&](caf::error& err) {
-        result
-          = caf::make_error(ec::unspecified, "failed to spawn '{}' at node: {}",
-                            inv.full_name, err);
+        result = vast::make_error(ec::unspecified, "failed to {} at node: {}",
+                                  inv.full_name, err);
       });
   return result;
 }
