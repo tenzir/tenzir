@@ -30,7 +30,7 @@ redundancy in the system.
 The scope of the problem becomes clearer when imposing three different views on
 the system:
 
-1. **Write Path**:Get data into the system
+1. **Write Path**: Get data into the system
 2. **Read Path**: Get data out of the system
 3. **System Core**: The data "service" that sits between (1) and (2)
 
@@ -51,7 +51,7 @@ for environments with stronger fault tolerance requirements.
 ## Requirements
 
 We can frame the requirements we are facing more generally in terms of the CAP
-Theorem. Given that availability is of utmost importance for processing security
+theorem. Given that availability is of utmost importance for processing security
 data, we cannot compromise on it. On the contrary, we can compromise on
 consistency, given that telemetry data is fundamentally incomplete. Security
 analysts are always working with a subset of descriptions of activity, and
@@ -196,7 +196,7 @@ when the performance requirements are met.
 When operators require higher degrees of reliability that goes beyond HA
 failover, or when scaling out for performance reasons becomes a necessity, we
 need to consider option (2) with a distributed operation of VAST. In this case,
-we treat the metastore of the catalog as a _shared_ _service_ between multiple
+we treat the metastore of the catalog as a _shared service_ between multiple
 VAST nodes.
 
 ![Distributed Deployment](distributed-deployment.png)
@@ -207,7 +207,7 @@ This architecture scales beyond two locations, with the metastore remaining the
 bottleneck. Therefore, finding a high-performance and scalable metastore is of
 essence.
 
-#### Example: Load-based scaling
+#### Example: Load-based Scaling
 
 When VAST is deployed on top of an auto scaling engine, like Kubernetes or
 Nomad, we naturally model the components that are concerned with read and write
@@ -366,13 +366,13 @@ FDB primitives. We found the following:
 ##### etcd
 
 Etcd is a distributed key-value store that uses Raft for quorum-based consensus.
-From a CAP Theorem perspective, this brings us into the CP realm, because a
+From a CAP theorem perspective, this brings us into the CP realm, because a
 master must be elected to perform writes. Stale reads may be supported, though,
 which we can tolerate.
 
 Here are some incomplete notes of taking a first look:
 
-- Multi write transactions are shaped like if-then-else statements, they always
+- Multi-write transactions are shaped like if-then-else statements, they always
   have a comparison, a list of writes on success and a list of writes on failure
 
 - Watches are possible on single keys and prefixes in the key-space, which would
@@ -385,6 +385,7 @@ Here are some incomplete notes of taking a first look:
 
 - An official C++ client library
 - exists:https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.
+
 ##### Consul
 
 Consul is a service discovery and distributed configuration system that contains
@@ -446,8 +447,8 @@ reason **we recommend etcd for the backend** of the fault tolerant catalog.
 
 ### Autonomous Neighbors
 
-The Catalog component could be extended with a bespoke replication mechanism to
-track the state update of all other Catalogs in the same cluster. A recovering
+The catalog component could be extended with a bespoke replication mechanism to
+track the state update of all other catalogs in the same cluster. A recovering
 node would receive a delta of the updates that it missed during downtime to
 synchronize with its peers.
 
@@ -462,7 +463,7 @@ resynchronization protocol is not to be underestimated.
 
 ## Annex
 
-### A1: Considerations regarding the persistence layer as a shared component
+### A1: Considerations Regarding the Persistence Layer as a Shared Component
 
 As partitions are identified by UUID we consider the write end mostly
 conflict-free. In case a name clash happens anyways the filesystem abstraction
