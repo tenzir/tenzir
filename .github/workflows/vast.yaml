@@ -883,7 +883,6 @@ jobs:
             curl
           ./scripts/debian/install-dev-dependencies.sh
           python3 -m pip install --upgrade pip
-          pip install gsutil
       - name: Determine VAST Package Name
         id: configure
         run: |
@@ -899,6 +898,12 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
+      - name: Configure GCS Credentials
+        if: ${{ needs.configure.outputs.run-vast == 'false' }}
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Download VAST
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
         run: |
