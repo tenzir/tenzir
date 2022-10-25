@@ -1,5 +1,6 @@
 # VAST Website
 
+
 This directory contains code and content of the official VAST website at
 https://vast.io. We use [Docusaurus](https://docusaurus.io/) as driving
 framework and an [enhanced flavor of
