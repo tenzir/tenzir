@@ -888,7 +888,7 @@ jobs:
         run: |
           suffix=${{ matrix.plugin.package-name-suffix }}
           build_version=${{ needs.configure.outputs.build-version }}
-          if [[ ${{ needs.configure.outputs.run-vast }} == "false" ]]; then
+          if ${{ needs.configure.outputs.run-vast == 'false' }}; then
             build_version=${{ needs.configure.outputs.before-version }}
           fi
           PACKAGE_NAME="$(echo "vast-${build_version}-$(uname -s)-${suffix}" | awk '{ print tolower($0) }')"
