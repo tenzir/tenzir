@@ -1,0 +1,54 @@
+version: "3.8"
+services:
+  thehive:
+    build:
+      context: ./vol/thehive
+    depends_on:
+      - cortex
+      - elasticsearch
+    ports:
+      - 9000:9000
+    environment:
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=1G
+      - CORTEX_HOST=http://cortex:9001
+    volumes:
+      - thehive-config:/opt/thp/thehive/conf
+      - thehive-db:/opt/thp/thehive/db
+      - thehive-index:/opt/thp/thehive/index
+      - thehive-data:/opt/thp/thehive/data
+
+  cortex:
+    image: thehiveproject/cortex:3.1.7-1-withdeps
+    depends_on:
+      - elasticsearch
+    command: --job-directory /opt/cortex/jobs
+    ports:
+      - 9001:9001
+    environment:
+      - JOB_DIRECTORY=/opt/cortex/jobs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./vol/cortex/application.conf:/etc/cortex/application.conf
+      - cortex-jobs:/opt/cortex/jobs
+      - cortex-index:/opt/cortex/index
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2
+    mem_limit: 1024m
+    ports:
+      - 9200:9200
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+
+volumes:
+  thehive-config:
+  thehive-db:
+  thehive-index:
+  thehive-data:
+  cortex-jobs:
+  cortex-index:
+  elasticsearch-data:
