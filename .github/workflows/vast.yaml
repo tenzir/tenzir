@@ -870,7 +870,7 @@ jobs:
       - name: Install git
         run: |
           apt-get update
-          apt-get -y install git gsutil
+          apt-get -y install git
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -883,6 +883,7 @@ jobs:
             curl
           ./scripts/debian/install-dev-dependencies.sh
           python3 -m pip install --upgrade pip
+          pip install gsutil
       - name: Determine VAST Package Name
         id: configure
         run: |
@@ -901,7 +902,7 @@ jobs:
       - name: Download VAST
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
         run: |
-          gsutil cp "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
+          gsutil cp "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz" .
       - name: Install VAST
         run: |
           mkdir "${INSTALL_DIR}"
