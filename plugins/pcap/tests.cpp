@@ -28,7 +28,7 @@ namespace vast::plugins::pcap {
 
 namespace {
 
-// Baseline computed via `./community-id.py nmap_vsn.pcap` from the
+// B aseline computed via `./community-id.py nmap_vsn.pcap` from the
 // repository https://github.com/corelight/community-id-spec.
 std::string_view community_ids[] = {
   "1:S2JPnyxVrN68D+w4ZMxKNeyQoNI=", "1:S2JPnyxVrN68D+w4ZMxKNeyQoNI=",
