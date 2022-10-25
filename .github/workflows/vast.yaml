@@ -901,7 +901,7 @@ jobs:
       - name: Download VAST
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
         run: |
-          gsutil cp "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz" "${{ env.PACKAGE_NAME }}.tar.gz"
+          gsutil cp "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Install VAST
         run: |
           mkdir "${INSTALL_DIR}"
