@@ -12,6 +12,7 @@ COPY scripts ./scripts
 
 RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 
+
 # VAST
 COPY changelog ./changelog
 COPY cmake ./cmake
