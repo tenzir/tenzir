@@ -72,7 +72,7 @@ jobs:
           # so they're consistent between jobs.
           build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
           build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
-          before_sha="08bbba8c86f371e8b167ca3cc10bf1619559952e"
+          before_sha="3783569dbe2a43affc01bcbf927361941f06d140"
           before_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "${before_sha}")"
           release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
@@ -789,7 +789,7 @@ jobs:
     needs:
       - vast
       - configure
-    if: ${{ needs.configure.outputs.run-vast-plugins == 'true' }}
+    if: ${{ always() && needs.configure.outputs.run-vast-plugins == 'true' }}
     runs-on: ${{ matrix.plugin.os }}
     container: ${{ matrix.plugin.container }}
     strategy:
@@ -870,7 +870,7 @@ jobs:
       - name: Install git
         run: |
           apt-get update
-          apt-get -y install git
+          apt-get -y install git gsutil
       - name: Checkout
         uses: actions/checkout@v3
         with:
