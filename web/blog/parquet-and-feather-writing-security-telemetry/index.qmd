@@ -34,7 +34,7 @@ a look at how they actually perform on the write path in two dimensions:
 - **Speed**: how fast can we write out to a store?
 
 Parquet and Feather have different goals. While Parquet is an on-disk format
-that optimizes for size. Feather is a thin layer around the native Arrow
+that optimizes for size, Feather is a thin layer around the native Arrow
 in-memory representation. This puts them at different points in the spectrum of
 throughput and latency.
 
@@ -153,7 +153,7 @@ VAST to produce us with a measurement trace file that we then analyze with R for
 gaining insights. The [corresponding patch][patch] is not meant for further
 production, so we kept it separate. But we did find an opportunity to improve
 VAST and [made the Zstd compression level configurable][pr-2623]. Our [benchmark
-sript](benchmark.fish) is available for full reproducibility.
+script](benchmark.fish) is available for full reproducibility.
 
 [pr-2623]: https://github.com/tenzir/vast/pull/2623
 [patch]: feather-parquet-zstd-experiments.diff
@@ -646,7 +646,7 @@ is the median processing time, similar to the size discussion above.
 
 :::tip Analysis
 As expected, we roughly observe an ordering according to Zstd level: more
-compression means a shorter runtime.
+compression means a longer runtime.
 
 Unexpectedly, for the same Zstd level, **Parquet store creation was always
 faster**. Our unconfirmed hunch is that Feather compression operates on more and
