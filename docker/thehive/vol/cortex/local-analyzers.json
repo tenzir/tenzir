@@ -1,0 +1,46 @@
+[
+    {
+        "name": "VAST-Search",
+        "version": "1.0",
+        "author": "Tenzir ",
+        "url": "https://github.com/tenzir/vast",
+        "license": "BSD-3-Clause",
+        "description": "Search hash, IP and domain in VAST.",
+        "dataTypeList": [
+            "hash",
+            "domain",
+            "ip",
+            "subnet"
+        ],
+        "command": "Vast/search.py",
+        "baseConfig": "Vast",
+        "config": {
+            "service": "get"
+        },
+        "configurationItems": [
+            {
+                "name": "endpoint",
+                "description": "VAST Server endpoint to connect to.",
+                "type": "string",
+                "multi": false,
+                "required": true
+            },
+            {
+                "name": "max_events",
+                "description": "Max number of results. Increasing this will affect the performance.",
+                "type": "number",
+                "multi": false,
+                "required": true
+            }
+        ],
+        "registration_required": false,
+        "subscription_required": false,
+        "free_subscription": true,
+        "service_homepage": "https://www.vast.io",
+        "service_logo": {
+            "path": "assets/vast-black.svg",
+            "caption": "VAST logo"
+        },
+        "dockerImage": "tenzir/vast-neuron"
+    }
+]
