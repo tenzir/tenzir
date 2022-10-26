@@ -5,11 +5,13 @@ db.janusgraph {
    storage.directory: /opt/thp/thehive/db
    berkeleyje.freeDisk: 200
 
-  index.search {
-    backend = elasticsearch
-    hostname = ["elasticsearch"]
-    index-name = thehive
-  }
+  index {
+    search {
+      # use local index instead of ES for simplicity reasons
+      backend: lucene
+      directory: /opt/thp/thehive/index
+    }
+  }  
 }
 
 play.modules.enabled += org.thp.thehive.connector.cortex.CortexModule
@@ -17,10 +19,10 @@ cortex {
   servers = [
     {
       name = local
-      url = __CORTEX_URL_PLACEHOLDER__
+      url = "__CORTEX_URL_PLACEHOLDER__"
       auth {
         type = "bearer"
-        key = __CORTEX_API_KEY_PLACEHOLDER__
+        key = "__CORTEX_API_KEY_PLACEHOLDER__"
       }
     }
   ]
