@@ -96,6 +96,11 @@ struct accountant_state_impl {
   /// Handle to the UDS output channel is currently dropping its input.
   bool uds_datagram_sink_dropping = false;
 
+  /// The error code of the last error that came out of the uds sink.
+  /// This variable is used to prevent repeating the same warning for
+  /// every metric in case the receiver is not present of misconfigured.
+  ec last_uds_error = ec::no_error;
+
   /// The configuration.
   accountant_config cfg;
 
@@ -230,18 +235,16 @@ struct accountant_state_impl {
     if (auto err = dest.send(
           std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()},
           timeout_usec)) {
-      switch (ec{err.code()}) {
-        case ec::timeout: {
-          uds_datagram_sink_dropping = true;
-          break;
-        }
-        default: {
-          VAST_WARN("{} failed to write metrics to UDS sink: {}", *self, err);
-          VAST_WARN("{} turns off metrics reporting via UDS", *self);
-          uds_datagram_sink.reset();
-          return;
-        }
+      const auto code = ec{err.code()};
+      if (code == ec::timeout)
+        uds_datagram_sink_dropping = true;
+      if (code != last_uds_error) {
+        last_uds_error = code;
+        VAST_WARN("{} failed to write metrics to UDS sink: {}", *self, err);
       }
+      return;
+    } else {
+      last_uds_error = ec::no_error;
     }
   }
 
