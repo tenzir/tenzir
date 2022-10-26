@@ -10,6 +10,7 @@ import subprocess
 logging.getLogger().setLevel(logging.INFO)
 
 CORTEX_URL = os.getenv("CORTEX_URL")
+THEHIVE_URL = "http://localhost:9000"
 
 CONFIG_LOCATION = "/opt/thp/thehive/conf/application.conf"
 
@@ -21,6 +22,14 @@ CORTEX_ADMIN_PWD = "secret"
 # It can also be used to connect to Cortex on the Cortex UI
 CORTEX_ORGADMIN_EMAIL = "orgadmin@thehive.local"
 CORTEX_ORGADMIN_PWD = "secret"
+
+# Admin email is the default and should not be changed!
+THEHIVE_ADMIN_EMAIL = "admin@thehive.local"
+THEHIVE_ADMIN_PWD = "secret"
+
+# Orgadmin is the user to interact with the cases/alerts
+THEHIVE_ORGADMIN_EMAIL = "orgadmin@thehive.local"
+THEHIVE_ORGADMIN_PWD = "secret"
 
 
 def retry_until_timeout(retried_function, action_name: str, timeout: int):
@@ -39,24 +48,40 @@ def retry_until_timeout(retried_function, action_name: str, timeout: int):
     logging.info(f"{action_name} reached!")
 
 
-def call_cortex(path: str, payload: Dict, credentials: Tuple[str, str] = None):
-    """Call the Cortex API (path should start with /)"""
+def call_api(
+    url: str,
+    path: str,
+    payload: Dict,
+    api_name: str,
+    credentials: Tuple[str, str] = None,
+):
+    """Call a JSON endpoint with optional basic auth"""
     session = requests.Session()
     if credentials is not None:
         session.auth = credentials
 
     resp = session.post(
-        f"{CORTEX_URL}{path}",
+        f"{url}{path}",
         json=payload,
         headers={"Content-Type": "application/json"},
     )
-    logging.debug(f"Resp to POST on Cortex API {path}: {resp.text}")
+    logging.debug(f"Resp to POST on {api_name} API {path}: {resp.text}")
     resp.raise_for_status()
-    logging.info(f"Call to Cortex API {path} successful!")
+    logging.info(f"Call to {api_name} API {path} successful!")
     return resp.text
 
 
-def init():
+def call_cortex(path: str, payload: Dict, credentials: Tuple[str, str] = None):
+    """Call the Cortex API (path should start with /)"""
+    return call_api(CORTEX_URL, path, payload, "Cortex", credentials)
+
+
+def call_thehive(path: str, payload: Dict, credentials: Tuple[str, str] = None):
+    """Call the TheHive API (path should start with /)"""
+    return call_api(THEHIVE_URL, path, payload, "TheHive", credentials)
+
+
+def init_cortex():
     """Configure Cortex and copy the obtained API key to TheHive config"""
 
     # The maintenance/migrate initializes the ES database
@@ -146,27 +171,58 @@ def init():
             config_file.write(template_str)
 
 
-# The init process fills the template and creates the config file
-if not path.isfile(CONFIG_LOCATION):
-    init()
+def init_thehive():
+    """Init the org/users in TheHive"""
 
-thehive_proc = subprocess.Popen(
-    [
-        "/opt/thehive/entrypoint",
-        "--no-config",
-        "--config-file",
-        CONFIG_LOCATION,
-    ],
-    stdout=sys.stdout,
-    stderr=sys.stderr,
-)
+    call_thehive(
+        "/api/v0/organisation",
+        {
+            "description": "Answer the toughest questions in cyber security",
+            "name": "Tenzir",
+        },
+        (THEHIVE_ADMIN_EMAIL, THEHIVE_ADMIN_PWD),
+    )
 
-retry_until_timeout(
-    lambda: requests.get(
-        f"http://localhost:9000/index.html", timeout=5
-    ).raise_for_status(),
-    "TheHive server",
-    120,
-)
+    call_thehive(
+        "/api/v1/user",
+        {
+            "login": THEHIVE_ORGADMIN_EMAIL,
+            "name": "Org Admin",
+            "organisation": "Tenzir",
+            "profile": "org-admin",
+            "email": THEHIVE_ORGADMIN_EMAIL,
+            "password": THEHIVE_ORGADMIN_PWD,
+        },
+        (THEHIVE_ADMIN_EMAIL, THEHIVE_ADMIN_PWD),
+    )
 
-exit(thehive_proc.wait())
+
+if __name__ == "__main__":
+    # The init process fills the template and creates the config file
+    # If the config file is not present, it means init wasn't executed yet
+    is_init = not path.isfile(CONFIG_LOCATION)
+
+    if is_init:
+        init_cortex()
+
+    thehive_proc = subprocess.Popen(
+        [
+            "/opt/thehive/entrypoint",
+            "--no-config",
+            "--config-file",
+            CONFIG_LOCATION,
+        ],
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+
+    retry_until_timeout(
+        lambda: requests.get(f"{THEHIVE_URL}/index.html", timeout=5).raise_for_status(),
+        "TheHive server",
+        120,
+    )
+
+    if is_init:
+        init_thehive()
+
+    exit(thehive_proc.wait())
