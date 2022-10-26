@@ -136,24 +136,24 @@ def init_cortex():
     )
 
     # TODO setup analyzer
-    # call_cortex(
-    #     "/api/organization/analyzer/VAST-Search_1_0",
-    #     {
-    #         "name": "VAST-Search_1_0",
-    #         "configuration": {
-    #             "endpoint": "localhost:42000",
-    #             "max_events": 40,
-    #             "auto_extract_artifacts": False,
-    #             "check_tlp": False,
-    #             "max_tlp": 2,
-    #             "check_pap": False,
-    #             "max_pap": 2,
-    #         },
-    #         "jobCache": 10,
-    #         "jobTimeout": 30,
-    #     },
-    #     (CORTEX_ORGADMIN_EMAIL,CORTEX_ORGADMIN_PWD)
-    # )
+    call_cortex(
+        "/api/organization/analyzer/VAST-Search_1_0",
+        {
+            "name": "VAST-Search_1_0",
+            "configuration": {
+                "endpoint": "localhost:42000",
+                "max_events": 40,
+                "auto_extract_artifacts": False,
+                "check_tlp": False,
+                "max_tlp": 2,
+                "check_pap": False,
+                "max_pap": 2,
+            },
+            "jobCache": 10,
+            "jobTimeout": 30,
+        },
+        (CORTEX_ORGADMIN_EMAIL,CORTEX_ORGADMIN_PWD)
+    )
 
     # The API key is how TheHive interacts with Cortex
     api_key = call_cortex(
