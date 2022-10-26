@@ -137,7 +137,7 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
   // the happy path.
   if (::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
-      == 0)
+      >= 0)
     return caf::none;
   if (errno != EAGAIN && errno != EWOULDBLOCK)
     return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
@@ -152,7 +152,7 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
   // The next send would go to the correct destination in that case.
   if (::sendto(src_fd, data.data(), data.size(), 0,
                reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
-      == 0)
+      >= 0)
     return caf::none;
   if (errno != EAGAIN && errno != EWOULDBLOCK)
     return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
