@@ -5,13 +5,12 @@ services:
       context: ./vol/thehive
     depends_on:
       - cortex
-      - elasticsearch
     ports:
       - 9000:9000
     environment:
       - MAX_HEAP_SIZE=1G
       - HEAP_NEWSIZE=1G
-      - CORTEX_HOST=http://cortex:9001
+      - CORTEX_URL=http://cortex:9001
     volumes:
       - thehive-config:/opt/thp/thehive/conf
       - thehive-db:/opt/thp/thehive/db

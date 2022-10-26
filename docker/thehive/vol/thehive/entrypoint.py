@@ -9,16 +9,22 @@ import subprocess
 
 logging.getLogger().setLevel(logging.INFO)
 
-CORTEX_HOST = os.getenv("CORTEX_HOST")
+CORTEX_URL = os.getenv("CORTEX_URL")
 
 CONFIG_LOCATION = "/opt/thp/thehive/conf/application.conf"
 
-# These email/pwd are the defaults and should not be changed!
+# Admin email is the default and should not be changed!
 CORTEX_ADMIN_EMAIL = "admin@thehive.local"
 CORTEX_ADMIN_PWD = "secret"
 
+# Orgadmin is the user used by TheHive through its API key
+# It can also be used to connect to Cortex on the Cortex UI
+CORTEX_ORGADMIN_EMAIL = "orgadmin@thehive.local"
+CORTEX_ORGADMIN_PWD = "secret"
+
 
 def retry_until_timeout(retried_function, action_name: str, timeout: int):
+    """Execute retried_function repeatedly until it doesn't raise an exception or the timeout expires"""
     start = time.time()
     logging.info(f"Waiting for {action_name}...")
     while True:
@@ -34,12 +40,13 @@ def retry_until_timeout(retried_function, action_name: str, timeout: int):
 
 
 def call_cortex(path: str, payload: Dict, credentials: Tuple[str, str] = None):
+    """Call the Cortex API (path should start with /)"""
     session = requests.Session()
     if credentials is not None:
         session.auth = credentials
 
     resp = session.post(
-        f"{CORTEX_HOST}{path}",
+        f"{CORTEX_URL}{path}",
         json=payload,
         headers={"Content-Type": "application/json"},
     )
@@ -50,6 +57,8 @@ def call_cortex(path: str, payload: Dict, credentials: Tuple[str, str] = None):
 
 
 def init():
+    """Configure Cortex and copy the obtained API key to TheHive config"""
+
     # The maintenance/migrate initializes the ES database
     # It will fail until ES is "sufficiently" ready, whatever that means
     retry_until_timeout(
@@ -72,7 +81,11 @@ def init():
 
     call_cortex(
         "/api/organization",
-        {"name": "Tenzir", "description": "tenzir", "status": "Active"},
+        {
+            "name": "Tenzir",
+            "description": "Answer the toughest questions in cyber security",
+            "status": "Active",
+        },
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
 
@@ -84,7 +97,7 @@ def init():
             "name": "Tenzir org Admin",
             "roles": ["read", "analyze", "orgadmin"],
             "organization": "Tenzir",
-            "login": "orgadmin@thehive.local",
+            "login": CORTEX_ORGADMIN_EMAIL,
         },
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
@@ -92,8 +105,8 @@ def init():
     # Setting a password is not strictly required but can come in handy to
     # interact with the Cortex UI
     call_cortex(
-        "/api/user/orgadmin@thehive.local/password/set",
-        {"password": "secret"},
+        f"/api/user/{CORTEX_ORGADMIN_EMAIL}/password/set",
+        {"password": CORTEX_ORGADMIN_PWD},
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
 
@@ -114,12 +127,12 @@ def init():
     #         "jobCache": 10,
     #         "jobTimeout": 30,
     #     },
-    #     ("orgadmin@thehive.local","secret")
+    #     (CORTEX_ORGADMIN_EMAIL,CORTEX_ORGADMIN_PWD)
     # )
 
     # The API key is how TheHive interacts with Cortex
     api_key = call_cortex(
-        "/api/user/orgadmin@thehive.local/key/renew",
+        f"/api/user/{CORTEX_ORGADMIN_EMAIL}/key/renew",
         {},
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
@@ -127,9 +140,9 @@ def init():
     # Use the template to create the actual TheHive config file
     with open("application.conf.template", "r") as config_template_file:
         template_str = config_template_file.read()
-        template_str.replace("__CORTEX_URL_PLACEHOLDER__", CORTEX_HOST)
-        template_str.replace("__CORTEX_API_KEY_PLACEHOLDER__", api_key)
-        with open("/opt/thp/thehive/conf/application.conf", "w") as config_file:
+        template_str = template_str.replace("__CORTEX_URL_PLACEHOLDER__", CORTEX_URL)
+        template_str = template_str.replace("__CORTEX_API_KEY_PLACEHOLDER__", api_key)
+        with open(CONFIG_LOCATION, "w") as config_file:
             config_file.write(template_str)
 
 
