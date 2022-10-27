@@ -45,6 +45,8 @@ enum class ec : uint8_t {
   timeout,
   /// An input didn't produce any data.
   stalled,
+  /// An operation did not run to completion.
+  incomplete,
   /// Encountered two incompatible versions.
   version_error,
   /// A command does not adhere to the expected syntax.
