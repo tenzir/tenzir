@@ -25,7 +25,7 @@
 , tcpdump
 , dpkg
 , restinio
-, versionOverride ? null
+, versionLongOverride ? null
 , versionShortOverride ? null
 , extraPlugins ? []
 , extraCmakeFlags ? []
@@ -46,11 +46,12 @@ let
 
   src = vast-source;
 
-  versionOverride' = lib.removePrefix "v" versionOverride; 
+  versionLongOverride' = lib.removePrefix "v" versionLongOverride; 
   versionShortOverride' = lib.removePrefix "v" versionShortOverride; 
   versionFallback = (builtins.fromJSON (builtins.readFile ./../../version.json)).vast-version-fallback;
-  version = if (versionOverride != null) then versionOverride' else versionFallback;
-  versionShort = if (versionShortOverride != null) then versionShortOverride' else version;
+  versionLong = if (versionLongOverride != null) then versionLongOverride' else versionFallback;
+  versionShort = if (versionShortOverride != null) then versionShortOverride'
+  else versionLong;
 
   plugins = [
     "plugins/cef"
@@ -61,8 +62,9 @@ let
   ] ++ extraPlugins;
 in
 
-stdenv.mkDerivation (rec {
-  inherit src version;
+stdenv.mkDerivation ({
+  inherit src;
+  version = versionLong;
   pname = "vast";
   outputs = [ "out" ] ++ lib.optionals isStatic [ "package" ];
 
@@ -100,7 +102,7 @@ stdenv.mkDerivation (rec {
   cmakeFlags = [
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DCAF_ROOT_DIR=${caf}"
-    "-DVAST_VERSION_TAG=v${version}"
+    "-DVAST_VERSION_TAG=v${versionLong}"
     "-DVAST_VERSION_SHORT=v${versionShort}"
     "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_ENABLE_BACKTRACE=ON"
