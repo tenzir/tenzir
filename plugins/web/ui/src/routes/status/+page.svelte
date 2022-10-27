@@ -14,12 +14,12 @@
 
 	const getStatus = async () => {
 		try {
-
 			// if we have a VAST_API_ENDPOINT .env variable available
 			// use that, otherwise construct from the current base url
-      // this assumes that the /api/v0 endpoint is available
-      // under the current BASE_URL of the frontend deployment
-			const API_BASE = import.meta.env.VITE_VAST_API_ENDPOINT ?? `${import.meta.env.BASE_URL}api/v0`;
+			// this assumes that the /api/v0 endpoint is available
+			// under the current BASE_URL of the frontend deployment
+			const API_BASE =
+				import.meta.env.VITE_VAST_API_ENDPOINT ?? `${import.meta.env.BASE_URL}api/v0`;
 			const url = `${API_BASE}/status?verbosity=detailed`;
 
 			const response = await fetch(url);
@@ -37,6 +37,10 @@
 		{ header: 'Version', accessor: 'version' }
 	];
 
+	interface Events {
+		[index: string]: { count: number; percentage: number };
+	}
+
 	const getPluginRows = (plugins) =>
 		Object.keys(plugins).map((key) => ({ name: key, version: plugins[key] }));
 
@@ -46,16 +50,21 @@
 		{ header: 'Percentage', accessor: 'percentage' }
 	];
 
-	const getEventsRows = (events) =>
-		Object.keys(events).map((key) => ({
+	const getEventsRows = (events: Events) => {
+		console.log(events);
+
+		return Object.keys(events).map((key) => ({
 			layout: key,
 			count: events[key].count,
 			percentage: new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(
-				parseFloat(events[key].percentage)
+				events[key].percentage
 			)
 		}));
+	};
 
 	const queryResult = useQuery('status', getStatus, { refetchInterval: 5000 });
+
+	$: console.log($queryResult);
 </script>
 
 <svelte:head>
@@ -71,7 +80,7 @@
 				{$queryResult.data ? '🟢 Running' : '🔴 Not Running'}
 			</div>
 			<div class="panel-contents" slot="popover">
-				Last chacked {(Date.now() - $queryResult.dataUpdatedAt) / 1000} seconds ago.
+				Last checked {(Date.now() - $queryResult.dataUpdatedAt) / 1000} seconds ago.
 			</div>
 		</Tooltip>
 	</div>
@@ -92,6 +101,8 @@
 			</div>
 		</div>
 
+
+    {#if $queryResult.data?.version.plugins}
 		<Expandable summary="Plugins">
 			<div class="py-6 text-left md:w-1/5">
 				<Table
@@ -100,12 +111,18 @@
 				/>
 			</div>
 		</Expandable>
+    {/if}
 
-		<div class="py-6 text-left md:w-1/4">
-			<Table
-				tableRows={$queryResult?.data && getEventsRows($queryResult.data?.index.statistics.layouts)}
-				columnDetails={eventColumns}
-			/>
-		</div>
+			<div class="py-6 text-left md:w-1/4">
+		{#if $queryResult.data?.index.statistics.layouts}
+				<Table
+					tableRows={getEventsRows($queryResult.data?.index.statistics.layouts)}
+					columnDetails={eventColumns}
+				/>
+    {:else}
+      Database is empty.
+		{/if}
+
+			</div>
 	{/if}
 </div>
