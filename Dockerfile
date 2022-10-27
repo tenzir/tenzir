@@ -39,6 +39,7 @@ RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
       ninja-build \
       pkg-config \
       robin-map-dev \
+      curl \
       wget && \
     wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
     apt-get -y --no-install-recommends install \
@@ -46,9 +47,9 @@ RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
     apt-get update && \
     apt-get -y --no-install-recommends install libarrow-dev=9.0.0-1 libprotobuf-dev libparquet-dev=9.0.0-1 && \
     rm -rf /var/lib/apt/lists/* *.deb && \
-    curl -fsSL https://deb.nodesource.com/setup_14.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs && \
-    curl -fsSL https://get.pnpm.io/install.sh | sh -
+    corepack enable
 
 # VAST
 COPY changelog ./changelog

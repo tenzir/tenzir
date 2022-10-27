@@ -796,12 +796,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 16
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2.2.4
-        with:
-          run_install: |
-            - cwd: $PWD/plugins/web/ui
+          node-version: 18
+      - run: |
+          corepack enable
+          cd plugins/web/ui
+          pnpm i
       - name: Determine VAST Package Name
         id: configure
         run: |

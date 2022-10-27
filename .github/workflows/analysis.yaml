@@ -75,10 +75,6 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install --upgrade cmake
           cmake --version
-      - name: Install Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -88,11 +84,15 @@ jobs:
           git submodule sync --recursive
           git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
           git fetch origin +refs/tags/*:refs/tags/*
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2.2.4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
         with:
-          run_install: |
-            - cwd: $PWD/plugins/web/ui
+          node-version: 18
+      - run: |
+          corepack enable
+          cd plugins/web/ui
+          pnpm i
       - name: Configure
         run: |
           python3 --version
