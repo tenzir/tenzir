@@ -797,7 +797,7 @@ jobs:
         with:
           node-version: 18
       - run: |
-          enable corepack
+          corepack enable
           cd plugins/web/ui
           pnpm i
       - name: Determine VAST Package Name
