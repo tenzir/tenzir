@@ -17,3 +17,15 @@ updates:
       interval: "weekly"
     labels:
       - maintenance
+  - package-ecosystem: "pip"
+    directory: "/python"
+    schedule:
+      interval: "weekly"
+    labels:
+      - maintenance
+  - package-ecosystem: "pip"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    labels:
+      - maintenance
