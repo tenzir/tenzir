@@ -5,27 +5,27 @@
 
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "daily"
+      interval: daily
     labels:
       - maintenance
-  - package-ecosystem: "npm"
-    directory: "/docs"
+  - package-ecosystem: npm
+    directory: /docs
     schedule:
-      interval: "weekly"
+      interval: weekly
     labels:
       - maintenance
-  - package-ecosystem: "pip"
-    directory: "/python"
+  - package-ecosystem: pip
+    directory: /python
     schedule:
-      interval: "weekly"
+      interval: weekly
     labels:
       - maintenance
-  - package-ecosystem: "pip"
-    directory: "/web"
+  - package-ecosystem: pip
+    directory: /web
     schedule:
-      interval: "weekly"
+      interval: weekly
     labels:
       - maintenance
