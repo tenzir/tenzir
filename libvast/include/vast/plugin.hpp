@@ -312,6 +312,7 @@ public:
   make_passive_store() const = 0;
 
   /// Create a store for active partitions.
+  /// @param vast_config The vast node configuration.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
   make_active_store(const caf::settings& vast_config) const = 0;
 

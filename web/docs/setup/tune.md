@@ -103,13 +103,17 @@ with a mixed-storage configuration, so a full rebuild is not required.
 
 ### Compression
 
-Partitions in feather and parquet format are compressed using zstd. To fine-tune
-the space-time trade-off, VAST allows you to control the compression level used:
+VAST compresses partitions using Zstd for partitions at rest. To fine-tune
+the space-time trade-off, VAST offers a setting, `vast.zstd-compression-level` 
+to allow fine-tuning the compression level:
 
 ```yaml
 vast:
   zstd-compression-level: 1
 ```
+
+Currently, the default value is taken from Apache Arrow itself, using 
+`arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)`
 
 :::tip
 We have a [blog post][parquet-and-feather-2] that does an in-depth
