@@ -33,7 +33,7 @@ misp-stix = {version = "^2.4", optional = true}
 pyzmq = {version = "^23.2", optional = true}
 
 [tool.poetry.dev-dependencies]
-pytest = "^7.1"
+pytest = "^7.2"
 pytest-asyncio = "^0.20.1"
 
 [tool.poetry.extras]
