@@ -63,7 +63,7 @@ python-versions = ">=3.5"
 dev = ["cloudpickle", "coverage[toml] (>=5.0.2)", "furo", "hypothesis", "mypy (>=0.900,!=0.940)", "pre-commit", "pympler", "pytest (>=4.3.0)", "pytest-mypy-plugins", "sphinx", "sphinx-notfound-page", "zope.interface"]
 docs = ["furo", "sphinx", "sphinx-notfound-page", "zope.interface"]
 tests = ["cloudpickle", "coverage[toml] (>=5.0.2)", "hypothesis", "mypy (>=0.900,!=0.940)", "pympler", "pytest (>=4.3.0)", "pytest-mypy-plugins", "zope.interface"]
-tests_no_zope = ["cloudpickle", "coverage[toml] (>=5.0.2)", "hypothesis", "mypy (>=0.900,!=0.940)", "pympler", "pytest (>=4.3.0)", "pytest-mypy-plugins"]
+tests-no-zope = ["cloudpickle", "coverage[toml] (>=5.0.2)", "hypothesis", "mypy (>=0.900,!=0.940)", "pympler", "pytest (>=4.3.0)", "pytest-mypy-plugins"]
 
 [[package]]
 name = "backcall"
@@ -74,14 +74,15 @@ optional = false
 python-versions = "*"
 
 [[package]]
-name = "bash_kernel"
-version = "0.7.2"
+name = "bash-kernel"
+version = "0.8.0"
 description = "A bash kernel for Jupyter"
 category = "main"
 optional = false
 python-versions = "*"
 
 [package.dependencies]
+ipykernel = "*"
 pexpect = ">=4.0"
 
 [[package]]
@@ -245,7 +246,7 @@ notebook = ["ipywidgets", "notebook"]
 parallel = ["ipyparallel"]
 qtconsole = ["qtconsole"]
 test = ["pytest (<7.1)", "pytest-asyncio", "testpath"]
-test_extra = ["curio", "matplotlib (!=3.2.0)", "nbformat", "numpy (>=1.19)", "pandas", "pytest (<7.1)", "pytest-asyncio", "testpath", "trio"]
+test-extra = ["curio", "matplotlib (!=3.2.0)", "nbformat", "numpy (>=1.19)", "pandas", "pytest (<7.1)", "pytest-asyncio", "testpath", "trio"]
 
 [[package]]
 name = "ipython_genutils"
@@ -897,7 +898,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "6042df8a1e36f1234b72d4e7095cc48634506cc729bfa0e4a56e8ddf476090f3"
+content-hash = "243f5e31f5a3d1973308319c4f8e62054cc202a1149fa6dc536fa9ef928de455"
 
 [metadata.files]
 appnope = [
@@ -943,9 +944,9 @@ backcall = [
     {file = "backcall-0.2.0-py2.py3-none-any.whl", hash = "sha256:fbbce6a29f263178a1f7915c1940bde0ec2b2a967566fe1c65c1dfb7422bd255"},
     {file = "backcall-0.2.0.tar.gz", hash = "sha256:5cbdbf27be5e7cfadb448baf0aa95508f91f2bbc6c6437cd9cd06e2a4c215e1e"},
 ]
-bash_kernel = [
-    {file = "bash_kernel-0.7.2-py2.py3-none-any.whl", hash = "sha256:4036f8c3bbd8a8570cb7b71a891e94b5cf5425c13467df879468a0e9b551b6b2"},
-    {file = "bash_kernel-0.7.2.tar.gz", hash = "sha256:a08c84eddd8179de5234105821fd5cc210015671a0bd3cd0bc4f631c475e1670"},
+bash-kernel = [
+    {file = "bash_kernel-0.8.0-py2.py3-none-any.whl", hash = "sha256:0830a6eca2442d6878ed06766f0dc7076fc5f6913d316d49e314e53bd8502750"},
+    {file = "bash_kernel-0.8.0.tar.gz", hash = "sha256:4e525bd1a858a9668c1e911be61c72b02825ce9c553b1975a86b17c13824f4ba"},
 ]
 beautifulsoup4 = [
     {file = "beautifulsoup4-4.11.1-py3-none-any.whl", hash = "sha256:58d5c3d29f5a36ffeb94f02f0d786cd53014cf9b3b3951d42e0080d8a9498d30"},
