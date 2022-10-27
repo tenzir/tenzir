@@ -39,13 +39,14 @@ in
     ];
   });
   flatbuffers = prev.flatbuffers.overrideAttrs(_: rec {
-    version = "22.9.29";
+    version = "1.12.0";
     src = prev.fetchFromGitHub {
       owner = "google";
       repo = "flatbuffers";
       rev = "v${version}";
-      sha256 = "sha256-Wc+DLihAN0EvaGkyuCreoRvzsNS3tIN7e2qIZhGldkw=";
+      hash = "sha256-L1B5Y/c897Jg9fGwT2J3+vaXsZ+lfXnskp8Gto1p/Tg=";
     };
+    NIX_CFLAGS_COMPILE = "-Wno-error=class-memaccess";
   });
   google-cloud-cpp = if !isStatic then prev.google-cloud-cpp else
   prev.google-cloud-cpp.override {
