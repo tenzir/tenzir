@@ -2,7 +2,7 @@
 	import { Render, Subscribe, createTable } from 'svelte-headless-table';
 	import { readable } from 'svelte/store';
 	interface TableRow {
-		[key: string]: string;
+		[key: string]: string | number;
 	}
 
 	type ColumnInfo = { header: string; accessor: string };
