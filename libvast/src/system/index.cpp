@@ -1534,7 +1534,18 @@ index(index_actor::stateful_pointer<index_state> self,
                 candidates.push_back(midx_candidate.uuid);
             // Allows the client to query further results after initial taste.
             auto query_id = query_context.id;
-            auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
+            auto client = caf::visit(
+              detail::overload{
+                [&](count_query_context& count) {
+                  return caf::actor_cast<receiver_actor<atom::done>>(
+                    count.sink);
+                },
+                [&](extract_query_context& extract) {
+                  return caf::actor_cast<receiver_actor<atom::done>>(
+                    extract.sink);
+                },
+              },
+              query_context.cmd);
             if (candidates.empty()) {
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          *self);
