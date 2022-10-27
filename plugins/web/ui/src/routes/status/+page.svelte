@@ -17,6 +17,8 @@
 
 			// if we have a VAST_API_ENDPOINT .env variable available
 			// use that, otherwise construct from the current base url
+      // this assumes that the /api/v0 endpoint is available
+      // under the current BASE_URL of the frontend deployment
 			const API_BASE = import.meta.env.VITE_VAST_API_ENDPOINT ?? `${import.meta.env.BASE_URL}api/v0`;
 			const url = `${API_BASE}/status?verbosity=detailed`;
 
