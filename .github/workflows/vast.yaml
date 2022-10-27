@@ -534,6 +534,15 @@ jobs:
         with:
           python-version: "3.9"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - run: |
+          corepack enable
+          cd plugins/web/ui
+          pnpm i
+
       - name: Install Dependencies
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
