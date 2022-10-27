@@ -4,7 +4,7 @@
 , nix-gitignore
 , cmake
 , cmake-format
-, pkg-config
+, pkgconfig
 , git
 , pandoc
 , caf
@@ -23,6 +23,7 @@
 , python3
 , jq
 , tcpdump
+, utillinux
 , dpkg
 , restinio
 , versionOverride ? null
@@ -66,7 +67,7 @@ stdenv.mkDerivation (rec {
   '';
 
   nativeBuildInputs = [ cmake cmake-format dpkg ];
-  propagatedNativeBuildInputs = [ pkg-config pandoc ];
+  propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [
     fast_float
     jemalloc

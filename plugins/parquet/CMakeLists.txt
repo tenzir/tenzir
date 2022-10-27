@@ -37,6 +37,7 @@ target_link_libraries(parquet PRIVATE "${PARQUET_LIBRARY}")
 if (VAST_ENABLE_STATIC_EXECUTABLE)
   # Work around missing dependency links in the Parquet target
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  find_package(Libevent)
   find_package(Thrift REQUIRED)
-  target_link_libraries(parquet PRIVATE thrift::thrift)
+  target_link_libraries(parquet PRIVATE thrift::thrift libevent::event)
 endif ()
