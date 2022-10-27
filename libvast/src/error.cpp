@@ -34,6 +34,7 @@ const char* descriptions[] = {
   "end_of_input",
   "timeout",
   "stalled",
+  "incomplete",
   "version_error",
   "syntax_error",
   "lookup_error",
