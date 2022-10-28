@@ -235,7 +235,7 @@ class plugin final : public virtual store_plugin {
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
           .ValueOrDie();
     return std::make_unique<active_feather_store>(configuration{caf::get_or(
-      vast_config, "zstd-compression-level", default_compression_level)});
+      vast_config, "vast.zstd-compression-level", default_compression_level)});
   }
 
 private:

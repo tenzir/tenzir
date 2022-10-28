@@ -502,7 +502,7 @@ class plugin final : public virtual store_plugin {
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
           .ValueOrDie();
     auto zstd_compression_level = caf::get_or(
-      vast_config, "zstd-compression-level", default_compression_level);
+      vast_config, "vast.zstd-compression-level", default_compression_level);
     return std::make_unique<active_parquet_store>(
       configuration{parquet_config_.row_group_size, zstd_compression_level});
   }
