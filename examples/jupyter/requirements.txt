@@ -1,8 +1,0 @@
-ipykernel >= 5.0
-jupyter >= 1.0
-matplotlib >= 3.2
-networkx >= 2.4
-numpy >= 1.18
-pandas >= 1.0
-pyarrow >= 0.17
-scipy >= 1.4.1
