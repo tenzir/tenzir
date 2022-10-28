@@ -91,8 +91,6 @@ jobs:
           node-version: 18
       - run: |
           corepack enable
-          cd plugins/web/ui
-          pnpm i
       - name: Configure
         run: |
           python3 --version
