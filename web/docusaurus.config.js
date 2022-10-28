@@ -166,7 +166,7 @@ const config = {
       },
       announcementBar: {
         content:
-        'Leave us us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">a GitHub star</a> ⭐️',
+        'Leave us <a target="_blank" rel="noopener noreferrer" href="https://github.com/tenzir/vast/stargazers">a GitHub star</a> ⭐️',
         backgroundColor: '#f1f2f2',
         isCloseable: true,
       },
