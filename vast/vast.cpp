@@ -64,9 +64,6 @@ try_handle_deprecations(vast::system::default_configuration& cfg) {
     caf::put(cfg.content, "vast.index.default-fp-rate",
              meta_index_fp_rate ? *meta_index_fp_rate : *catalog_fp_rate);
   }
-  if (caf::holds_alternative<bool>(cfg, "vast.use-legacy-query-scheduler"))
-    VAST_WARN("the 'vast.use-legacy-query-scheduler' option no longer exists "
-              "and will be ignored.");
   if (caf::get_or(cfg, "vast.store-backend", "feather") == "archive") {
     VAST_WARN("the 'vast.store-backend' option 'archive' is deprecated; "
               "automatically using 'feather' instead");
