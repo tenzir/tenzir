@@ -1,2 +1,0 @@
-pandas >= 1
-pyarrow >= 0.16
