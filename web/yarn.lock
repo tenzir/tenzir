@@ -1529,6 +1529,20 @@
     tslib "^2.4.0"
     utility-types "^3.10.0"
 
+"@docusaurus/theme-mermaid@^2.2.0":
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/@docusaurus/theme-mermaid/-/theme-mermaid-2.2.0.tgz#0dc9bb7013c0280726a0c7a26419b1f5e79755f3"
+  integrity sha512-rEhVvWyZ9j9eABTvJ8nhfB5NbyiThva3U9J7iu4RxKYymjImEh9MiqbEdOrZusq6AQevbkoHB7n+9VsfmS55kg==
+  dependencies:
+    "@docusaurus/core" "2.2.0"
+    "@docusaurus/module-type-aliases" "2.2.0"
+    "@docusaurus/theme-common" "2.2.0"
+    "@docusaurus/types" "2.2.0"
+    "@docusaurus/utils-validation" "2.2.0"
+    "@mdx-js/react" "^1.6.22"
+    mermaid "^9.1.1"
+    tslib "^2.4.0"
+
 "@docusaurus/theme-search-algolia@2.2.0":
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/@docusaurus/theme-search-algolia/-/theme-search-algolia-2.2.0.tgz#77fd9f7a600917e6024fe3ac7fb6cfdf2ce84737"
@@ -5813,11 +5827,6 @@ mdurl@^1.0.0:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/mdurl/-/mdurl-1.0.1.tgz#fe85b2ec75a59037f2adfec100fd6c601761152e"
   integrity sha512-/sKlQJCBYVY9Ers9hqzKou4H6V5UWc/M59TH2dvkt+84itfnq7uFOMLpOiOS4ujvHP4etln18fmIxA5R5fll0g==
-
-mdx-mermaid@^1.2.2:
-  version "1.3.2"
-  resolved "https://registry.yarnpkg.com/mdx-mermaid/-/mdx-mermaid-1.3.2.tgz#9a9d335368de88f0c771daf12dde855bc6b67d57"
-  integrity sha512-8kw0tg3isKKBFzFwoe2DhIaEgKYtVeJXQtxZCCrdTPO0CTpXHnTHT0atDqsp7YkXi5iUCp/zAZPZu1cmr68T3w==
 
 media-typer@0.3.0:
   version "0.3.0"
