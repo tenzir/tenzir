@@ -1200,7 +1200,7 @@
     "@docsearch/css" "3.3.0"
     algoliasearch "^4.0.0"
 
-"@docusaurus/core@2.2.0", "@docusaurus/core@^2.1.0":
+"@docusaurus/core@2.2.0", "@docusaurus/core@^2.2.0":
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/@docusaurus/core/-/core-2.2.0.tgz#64c9ee31502c23b93c869f8188f73afaf5fd4867"
   integrity sha512-Vd6XOluKQqzG12fEs9prJgDtyn6DPok9vmUWDR2E6/nV5Fl9SVkhEQOBxwObjk3kQh7OY7vguFaLh0jqdApWsA==
@@ -1318,7 +1318,7 @@
     url-loader "^4.1.1"
     webpack "^5.73.0"
 
-"@docusaurus/module-type-aliases@2.2.0", "@docusaurus/module-type-aliases@^2.1.0":
+"@docusaurus/module-type-aliases@2.2.0", "@docusaurus/module-type-aliases@^2.2.0":
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/@docusaurus/module-type-aliases/-/module-type-aliases-2.2.0.tgz#1e23e54a1bbb6fde1961e4fa395b1b69f4803ba5"
   integrity sha512-wDGW4IHKoOr9YuJgy7uYuKWrDrSpsUSDHLZnWQYM9fN7D5EpSmYHjFruUpKWVyxLpD/Wh0rW8hYZwdjJIQUQCQ==
@@ -1332,7 +1332,7 @@
     react-helmet-async "*"
     react-loadable "npm:@docusaurus/react-loadable@5.5.2"
 
-"@docusaurus/plugin-client-redirects@^2.1.0":
+"@docusaurus/plugin-client-redirects@^2.2.0":
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/@docusaurus/plugin-client-redirects/-/plugin-client-redirects-2.2.0.tgz#f6228e5b2852520e22e0f4b89f870431aa975a90"
   integrity sha512-psBoWi+cbc2I+VPkKJlcZ12tRN3xiv22tnZfNKyMo18iSY8gr4B6Q0G2KZXGPgNGJ/6gq7ATfgDK6p9h9XRxMQ==
@@ -1437,7 +1437,7 @@
     "@docusaurus/utils-validation" "2.2.0"
     tslib "^2.4.0"
 
-"@docusaurus/plugin-sitemap@2.2.0", "@docusaurus/plugin-sitemap@^2.1.0":
+"@docusaurus/plugin-sitemap@2.2.0", "@docusaurus/plugin-sitemap@^2.2.0":
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/@docusaurus/plugin-sitemap/-/plugin-sitemap-2.2.0.tgz#876da60937886032d63143253d420db6a4b34773"
   integrity sha512-0jAmyRDN/aI265CbWZNZuQpFqiZuo+5otk2MylU9iVrz/4J7gSc+ZJ9cy4EHrEsW7PV8s1w18hIEsmcA1YgkKg==
@@ -1452,7 +1452,7 @@
     sitemap "^7.1.1"
     tslib "^2.4.0"
 
-"@docusaurus/preset-classic@^2.1.0":
+"@docusaurus/preset-classic@^2.2.0":
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/@docusaurus/preset-classic/-/preset-classic-2.2.0.tgz#bece5a043eeb74430f7c6c7510000b9c43669eb7"
   integrity sha512-yKIWPGNx7BT8v2wjFIWvYrS+nvN04W+UameSFf8lEiJk6pss0kL6SG2MRvyULiI3BDxH+tj6qe02ncpSPGwumg==
