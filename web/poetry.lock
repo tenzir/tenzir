@@ -191,11 +191,11 @@ devel = ["colorama", "json-spec", "jsonschema", "pylint", "pytest", "pytest-benc
 
 [[package]]
 name = "ipykernel"
-version = "6.16.2"
+version = "6.17.0"
 description = "IPython Kernel for Jupyter"
 category = "main"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 
 [package.dependencies]
 appnope = {version = "*", markers = "platform_system == \"Darwin\""}
@@ -885,7 +885,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "7fa78bb592e181fefa190a8069109ff258d56c267e8ab495fbd86ea2f9ecd8a2"
+content-hash = "490cf4f44cad4c0a513e32ad0a7d0e2c3501b17eec9f80f8d5e218978c5856a5"
 
 [metadata.files]
 appnope = [
@@ -1054,8 +1054,8 @@ fastjsonschema = [
     {file = "fastjsonschema-2.16.2.tar.gz", hash = "sha256:01e366f25d9047816fe3d288cbfc3e10541daf0af2044763f3d0ade42476da18"},
 ]
 ipykernel = [
-    {file = "ipykernel-6.16.2-py3-none-any.whl", hash = "sha256:67daf93e5b52456cd8eea87a8b59405d2bb80ae411864a1ea206c3631d8179af"},
-    {file = "ipykernel-6.16.2.tar.gz", hash = "sha256:463f3d87a92e99969b1605cb7a5b4d7b36b7145a0e72d06e65918a6ddefbe630"},
+    {file = "ipykernel-6.17.0-py3-none-any.whl", hash = "sha256:301fdb487587c9bf277025001da97b53697aab73ae1268d9d1ba972a2c5fc801"},
+    {file = "ipykernel-6.17.0.tar.gz", hash = "sha256:e195cf6d8c3dd5d41f3cf8ad831d9891f95d7d18fa6d5fb4d30a713df99b26a4"},
 ]
 ipython = [
     {file = "ipython-8.5.0-py3-none-any.whl", hash = "sha256:6f090e29ab8ef8643e521763a4f1f39dc3914db643122b1e9d3328ff2e43ada2"},
