@@ -17,6 +17,11 @@ const config = {
   projectName: 'vast', // Usually your repo name.
   trailingSlash: false, // GitHub Pages already adds a slash
 
+  markdown: {
+    mermaid: true,
+  },
+  themes: ['@docusaurus/theme-mermaid'],
+
   plugins: [
     'docusaurus-plugin-sass',
     [
@@ -64,7 +69,6 @@ const config = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl: 'https://github.com/tenzir/vast/tree/master/web',
-          remarkPlugins: [require('mdx-mermaid')],
           // TODO: The last update author and time is always the person that
           // triggered the last deployment and the time of that deployment.
           // Ideally we'd show this information, but as-is it's unnecessary.
