@@ -901,7 +901,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run Integration Tests
         run: |
-          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast_container_ref }}"
+          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
 
@@ -1195,7 +1195,7 @@ jobs:
       - name: Build website
         working-directory: web
         run: |
-          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast_container_ref }}"
+          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           yarn build
       - name: Deploy to GitHub Pages
