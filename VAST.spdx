@@ -185,3 +185,2343 @@ SPDXID: SPDXRef-Package
 PackageName: restinio
 PackageHomePage: https://github.com/Stiffstream/restinio
 PackageLicenseConcluded: BSD-3-Clause
+
+## Frontend Dependencies
+
+PackageName: abbrev
+SPDXID: SPDXRef-Package-npm-abbrev-7a0eda935af4e326
+PackageVersion: 1.1.1
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/abbrev@1.1.1
+
+
+PackageName: acorn
+SPDXID: SPDXRef-Package-npm-acorn-1d5b3d832833c1ee
+PackageVersion: 8.8.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/acorn@8.8.0
+
+
+PackageName: acorn-jsx
+SPDXID: SPDXRef-Package-npm-acorn-jsx-446dcf72d03fef13
+PackageVersion: 5.3.2_acorn@8.8.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/acorn-jsx@5.3.2_acorn@8.8.0
+
+
+PackageName: adapter-auto
+SPDXID: SPDXRef-Package-npm-adapter-auto-f26221fb53b92bca
+PackageVersion: 1.0.0-next.83
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@sveltejs/adapter-auto@1.0.0-next.83
+
+
+PackageName: adapter-cloudflare
+SPDXID: SPDXRef-Package-npm-adapter-cloudflare-3b5f4150db6758eb
+PackageVersion: 1.0.0-next.39
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@sveltejs/adapter-cloudflare@1.0.0-next.39
+
+
+PackageName: adapter-netlify
+SPDXID: SPDXRef-Package-npm-adapter-netlify-ace8566bab1f7cd6
+PackageVersion: 1.0.0-next.81
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@sveltejs/adapter-netlify@1.0.0-next.81
+
+
+PackageName: adapter-static
+SPDXID: SPDXRef-Package-npm-adapter-static-f5312de9d5705559
+PackageVersion: 1.0.0-next.44
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@sveltejs/adapter-static@1.0.0-next.44
+
+
+PackageName: adapter-vercel
+SPDXID: SPDXRef-Package-npm-adapter-vercel-a0bab8717ac22cc4
+PackageVersion: 1.0.0-next.79
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@sveltejs/adapter-vercel@1.0.0-next.79
+
+
+PackageName: agent-base
+SPDXID: SPDXRef-Package-npm-agent-base-3c9835c8d289a857
+PackageVersion: 6.0.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/agent-base@6.0.2
+
+
+PackageName: ajv
+SPDXID: SPDXRef-Package-npm-ajv-442c24d70ba55783
+PackageVersion: 6.12.6
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/ajv@6.12.6
+
+
+PackageName: android-arm
+SPDXID: SPDXRef-Package-npm-android-arm-c5fa8ab226189017
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@esbuild/android-arm@0.15.10
+
+
+PackageName: ansi-regex
+SPDXID: SPDXRef-Package-npm-ansi-regex-cf03852b8484ff40
+PackageVersion: 5.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/ansi-regex@5.0.1
+
+
+PackageName: ansi-styles
+SPDXID: SPDXRef-Package-npm-ansi-styles-ffb6f949823a8177
+PackageVersion: 4.3.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/ansi-styles@4.3.0
+
+
+PackageName: anymatch
+SPDXID: SPDXRef-Package-npm-anymatch-52af2c887935c7cc
+PackageVersion: 3.1.2
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/anymatch@3.1.2
+
+
+PackageName: aproba
+SPDXID: SPDXRef-Package-npm-aproba-24d95010930df529
+PackageVersion: 2.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/aproba@2.0.0
+
+
+PackageName: are-we-there-yet
+SPDXID: SPDXRef-Package-npm-are-we-there-yet-fef9719349e22ded
+PackageVersion: 2.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/are-we-there-yet@2.0.0
+
+
+PackageName: argparse
+SPDXID: SPDXRef-Package-npm-argparse-f7b89b107e369788
+PackageVersion: 2.0.1
+PackageLicenseConcluded: Python-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/argparse@2.0.1
+
+
+PackageName: array-union
+SPDXID: SPDXRef-Package-npm-array-union-457773971472c78b
+PackageVersion: 2.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/array-union@2.1.0
+
+
+PackageName: astro
+SPDXID: SPDXRef-Package-npm-astro-f64afccf012bf5b3
+PackageVersion: 0.45.29_vite@3.1.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/astro@0.45.29_vite@3.1.7
+
+
+PackageName: async-sema
+SPDXID: SPDXRef-Package-npm-async-sema-5027592fb87e5cc0
+PackageVersion: 3.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/async-sema@3.1.1
+
+
+PackageName: balanced-match
+SPDXID: SPDXRef-Package-npm-balanced-match-c58e06e9252778f2
+PackageVersion: 1.0.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/balanced-match@1.0.2
+
+
+PackageName: binary-extensions
+SPDXID: SPDXRef-Package-npm-binary-extensions-99396dbcc6b1a904
+PackageVersion: 2.2.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/binary-extensions@2.2.0
+
+
+PackageName: bindings
+SPDXID: SPDXRef-Package-npm-bindings-5184fd824f855f79
+PackageVersion: 1.5.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/bindings@1.5.0
+
+
+PackageName: brace-expansion
+SPDXID: SPDXRef-Package-npm-brace-expansion-fc0d2076725a986c
+PackageVersion: 1.1.11
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/brace-expansion@1.1.11
+
+
+PackageName: braces
+SPDXID: SPDXRef-Package-npm-braces-7d0db26825a59b84
+PackageVersion: 3.0.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/braces@3.0.2
+
+
+PackageName: buffer-crc32
+SPDXID: SPDXRef-Package-npm-buffer-crc32-83ed70a5668c41ac
+PackageVersion: 0.2.13
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/buffer-crc32@0.2.13
+
+
+PackageName: busboy
+SPDXID: SPDXRef-Package-npm-busboy-fa294575070a6f2c
+PackageVersion: 1.6.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/busboy@1.6.0
+
+
+PackageName: cac
+SPDXID: SPDXRef-Package-npm-cac-e621aad01ee58de0
+PackageVersion: 6.7.14
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/cac@6.7.14
+
+
+PackageName: callsites
+SPDXID: SPDXRef-Package-npm-callsites-d2f41f4af008fc50
+PackageVersion: 3.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/callsites@3.1.0
+
+
+PackageName: chalk
+SPDXID: SPDXRef-Package-npm-chalk-aebf015628422abb
+PackageVersion: 4.1.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/chalk@4.1.2
+
+
+PackageName: chokidar
+SPDXID: SPDXRef-Package-npm-chokidar-4bc5c64f83f8d2b
+PackageVersion: 3.5.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/chokidar@3.5.3
+
+
+PackageName: chownr
+SPDXID: SPDXRef-Package-npm-chownr-53f267351cfa7ce1
+PackageVersion: 2.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/chownr@2.0.0
+
+
+PackageName: cli
+SPDXID: SPDXRef-Package-npm-cli-df4de7c5269f3dc6
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/cli@0.45.29
+
+
+PackageName: color-convert
+SPDXID: SPDXRef-Package-npm-color-convert-5bf0a64bab222309
+PackageVersion: 2.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/color-convert@2.0.1
+
+
+PackageName: color-name
+SPDXID: SPDXRef-Package-npm-color-name-bba4fc7d9db22dd5
+PackageVersion: 1.1.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/color-name@1.1.4
+
+
+PackageName: color-support
+SPDXID: SPDXRef-Package-npm-color-support-2b1294d6fded4f7e
+PackageVersion: 1.1.3
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/color-support@1.1.3
+
+
+PackageName: colorette
+SPDXID: SPDXRef-Package-npm-colorette-7104b6f854e90e5e
+PackageVersion: 2.0.19
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/colorette@2.0.19
+
+
+PackageName: concat-map
+SPDXID: SPDXRef-Package-npm-concat-map-bbf3842a3a224465
+PackageVersion: 0.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/concat-map@0.0.1
+
+
+PackageName: config-array
+SPDXID: SPDXRef-Package-npm-config-array-ae09807e19dda6b9
+PackageVersion: 0.10.7
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@humanwhocodes/config-array@0.10.7
+
+
+PackageName: config
+SPDXID: SPDXRef-Package-npm-config-dcb42e3068a0e8
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/config@0.45.29
+
+
+PackageName: consola
+SPDXID: SPDXRef-Package-npm-consola-a507a836b6d73859
+PackageVersion: 2.15.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/consola@2.15.3
+
+
+PackageName: console-control-strings
+SPDXID: SPDXRef-Package-npm-console-control-strings-99290029bc32bf53
+PackageVersion: 1.1.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/console-control-strings@1.1.0
+
+
+PackageName: cookie
+SPDXID: SPDXRef-Package-npm-cookie-132e26b63b660f35
+PackageVersion: 0.5.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/cookie@0.5.0
+
+
+PackageName: core
+SPDXID: SPDXRef-Package-npm-core-609a04ebdf3397ae
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/core@0.45.29
+
+
+PackageName: cross-spawn
+SPDXID: SPDXRef-Package-npm-cross-spawn-f12ed51ad55898de
+PackageVersion: 7.0.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/cross-spawn@7.0.3
+
+
+PackageName: css-tree
+SPDXID: SPDXRef-Package-npm-css-tree-edce4f3209e884ff
+PackageVersion: 2.2.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/css-tree@2.2.1
+
+
+PackageName: debug
+SPDXID: SPDXRef-Package-npm-debug-a4489a3277a0e192
+PackageVersion: 4.3.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/debug@4.3.4
+
+
+PackageName: deep-is
+SPDXID: SPDXRef-Package-npm-deep-is-7fb37f12eab8489b
+PackageVersion: 0.1.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/deep-is@0.1.4
+
+
+PackageName: deepmerge
+SPDXID: SPDXRef-Package-npm-deepmerge-119c1f877f5c4833
+PackageVersion: 4.2.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/deepmerge@4.2.2
+
+
+PackageName: defu
+SPDXID: SPDXRef-Package-npm-defu-7049fdf4c853203c
+PackageVersion: 6.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/defu@6.1.0
+
+
+PackageName: delegates
+SPDXID: SPDXRef-Package-npm-delegates-a2c4327ba364a0da
+PackageVersion: 1.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/delegates@1.0.0
+
+
+PackageName: destr
+SPDXID: SPDXRef-Package-npm-destr-2897cd200f97a145
+PackageVersion: 1.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/destr@1.1.1
+
+
+PackageName: detect-indent
+SPDXID: SPDXRef-Package-npm-detect-indent-6d32cd7db8a37575
+PackageVersion: 6.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/detect-indent@6.1.0
+
+
+PackageName: detect-libc
+SPDXID: SPDXRef-Package-npm-detect-libc-5c9e7204cba584ff
+PackageVersion: 2.0.1
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/detect-libc@2.0.1
+
+
+PackageName: devalue
+SPDXID: SPDXRef-Package-npm-devalue-7726361f3e830a03
+PackageVersion: 4.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/devalue@4.0.0
+
+
+PackageName: dir-glob
+SPDXID: SPDXRef-Package-npm-dir-glob-bc04e655bd8d72fe
+PackageVersion: 3.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/dir-glob@3.0.1
+
+
+PackageName: doctrine
+SPDXID: SPDXRef-Package-npm-doctrine-74f565f92e394eb8
+PackageVersion: 3.0.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/doctrine@3.0.0
+
+
+PackageName: duplexer
+SPDXID: SPDXRef-Package-npm-duplexer-94618e69fcc85057
+PackageVersion: 0.1.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/duplexer@0.1.2
+
+
+PackageName: emoji-regex
+SPDXID: SPDXRef-Package-npm-emoji-regex-95758aea070cb340
+PackageVersion: 8.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/emoji-regex@8.0.0
+
+
+PackageName: es6-promise
+SPDXID: SPDXRef-Package-npm-es6-promise-c5f043a87892c772
+PackageVersion: 3.3.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/es6-promise@3.3.1
+
+
+PackageName: esbuild
+SPDXID: SPDXRef-Package-npm-esbuild-704f71082d96a7d3
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild@0.15.10
+
+
+PackageName: esbuild-android-64
+SPDXID: SPDXRef-Package-npm-esbuild-android-64-30468f9b1daac33a
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-android-64@0.15.10
+
+
+PackageName: esbuild-android-arm64
+SPDXID: SPDXRef-Package-npm-esbuild-android-arm64-28aeeb75461686e4
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-android-arm64@0.15.10
+
+
+PackageName: esbuild-darwin-64
+SPDXID: SPDXRef-Package-npm-esbuild-darwin-64-d1b52ee0fb4c725
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-darwin-64@0.15.10
+
+
+PackageName: esbuild-darwin-arm64
+SPDXID: SPDXRef-Package-npm-esbuild-darwin-arm64-2a54a10089e25de1
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-darwin-arm64@0.15.10
+
+
+PackageName: esbuild-freebsd-64
+SPDXID: SPDXRef-Package-npm-esbuild-freebsd-64-3a078217ce2b8cec
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-freebsd-64@0.15.10
+
+
+PackageName: esbuild-freebsd-arm64
+SPDXID: SPDXRef-Package-npm-esbuild-freebsd-arm64-964ddf5c70623bb8
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-freebsd-arm64@0.15.10
+
+
+PackageName: esbuild-linux-32
+SPDXID: SPDXRef-Package-npm-esbuild-linux-32-72f8541a7c928a1e
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-linux-32@0.15.10
+
+
+PackageName: esbuild-linux-64
+SPDXID: SPDXRef-Package-npm-esbuild-linux-64-aa9efe8d94b81084
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-linux-64@0.15.10
+
+
+PackageName: esbuild-linux-arm
+SPDXID: SPDXRef-Package-npm-esbuild-linux-arm-9526595f75628a60
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-linux-arm@0.15.10
+
+
+PackageName: esbuild-linux-arm64
+SPDXID: SPDXRef-Package-npm-esbuild-linux-arm64-11a71a5728719fc5
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-linux-arm64@0.15.10
+
+
+PackageName: esbuild-linux-mips64le
+SPDXID: SPDXRef-Package-npm-esbuild-linux-mips64le-25a1c30d5dc9b879
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-linux-mips64le@0.15.10
+
+
+PackageName: esbuild-linux-ppc64le
+SPDXID: SPDXRef-Package-npm-esbuild-linux-ppc64le-e96bdddd6d7168f2
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-linux-ppc64le@0.15.10
+
+
+PackageName: esbuild-linux-riscv64
+SPDXID: SPDXRef-Package-npm-esbuild-linux-riscv64-7a42fb64914ddf21
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-linux-riscv64@0.15.10
+
+
+PackageName: esbuild-linux-s390x
+SPDXID: SPDXRef-Package-npm-esbuild-linux-s390x-8a6ea3dc234c546c
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-linux-s390x@0.15.10
+
+
+PackageName: esbuild-netbsd-64
+SPDXID: SPDXRef-Package-npm-esbuild-netbsd-64-dc711802a310849a
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-netbsd-64@0.15.10
+
+
+PackageName: esbuild-openbsd-64
+SPDXID: SPDXRef-Package-npm-esbuild-openbsd-64-51a3958c2853baa2
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-openbsd-64@0.15.10
+
+
+PackageName: esbuild-sunos-64
+SPDXID: SPDXRef-Package-npm-esbuild-sunos-64-a6ff5c5008b0c458
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-sunos-64@0.15.10
+
+
+PackageName: esbuild-windows-32
+SPDXID: SPDXRef-Package-npm-esbuild-windows-32-2f7970f4b649f7c7
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-windows-32@0.15.10
+
+
+PackageName: esbuild-windows-64
+SPDXID: SPDXRef-Package-npm-esbuild-windows-64-a11a52c7d138b576
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-windows-64@0.15.10
+
+
+PackageName: esbuild-windows-arm64
+SPDXID: SPDXRef-Package-npm-esbuild-windows-arm64-20d82c7b22b7cae2
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esbuild-windows-arm64@0.15.10
+
+
+PackageName: escape-string-regexp
+SPDXID: SPDXRef-Package-npm-escape-string-regexp-7a5d1a222d9f24a6
+PackageVersion: 4.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/escape-string-regexp@4.0.0
+
+
+PackageName: eslint
+SPDXID: SPDXRef-Package-npm-eslint-3a8dc3f61c3cb96
+PackageVersion: 8.25.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/eslint@8.25.0
+
+
+PackageName: eslint-config-prettier
+SPDXID: SPDXRef-Package-npm-eslint-config-prettier-3cada5a1e222d70a
+PackageVersion: 8.5.0_eslint@8.25.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/eslint-config-prettier@8.5.0_eslint@8.25.0
+
+
+PackageName: eslint-plugin
+SPDXID: SPDXRef-Package-npm-eslint-plugin-e0b41301a8357bfd
+PackageVersion: 5.40.0_25sstg4uu2sk4pm7xcyzuov7xq
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@typescript-eslint/eslint-plugin@5.40.0_25sstg4uu2sk4pm7xcyzuov7xq
+
+
+PackageName: eslint-plugin-svelte3
+SPDXID: SPDXRef-Package-npm-eslint-plugin-svelte3-87e2801d22fb0453
+PackageVersion: 4.0.0_pr36k4f4yzzzfpayao7l7fkqni
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/eslint-plugin-svelte3@4.0.0_pr36k4f4yzzzfpayao7l7fkqni
+
+
+PackageName: eslint-scope
+SPDXID: SPDXRef-Package-npm-eslint-scope-3663016005c12f91
+PackageVersion: 7.1.1
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/eslint-scope@7.1.1
+
+
+PackageName: eslint-scope
+SPDXID: SPDXRef-Package-npm-eslint-scope-792ad88d39b177d3
+PackageVersion: 5.1.1
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/eslint-scope@5.1.1
+
+
+PackageName: eslint-utils
+SPDXID: SPDXRef-Package-npm-eslint-utils-a5b2fdd1cf445824
+PackageVersion: 3.0.0_eslint@8.25.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/eslint-utils@3.0.0_eslint@8.25.0
+
+
+PackageName: eslint-visitor-keys
+SPDXID: SPDXRef-Package-npm-eslint-visitor-keys-294d69675ef621e3
+PackageVersion: 2.1.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/eslint-visitor-keys@2.1.0
+
+
+PackageName: eslint-visitor-keys
+SPDXID: SPDXRef-Package-npm-eslint-visitor-keys-5f0809f4ecc0ed49
+PackageVersion: 3.3.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/eslint-visitor-keys@3.3.0
+
+
+PackageName: eslintrc
+SPDXID: SPDXRef-Package-npm-eslintrc-f15e9e9f7a83c4f0
+PackageVersion: 1.3.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@eslint/eslintrc@1.3.3
+
+
+PackageName: espree
+SPDXID: SPDXRef-Package-npm-espree-e8448b79331f561b
+PackageVersion: 9.4.0
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/espree@9.4.0
+
+
+PackageName: esquery
+SPDXID: SPDXRef-Package-npm-esquery-6955ed0a5645ba3f
+PackageVersion: 1.4.0
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esquery@1.4.0
+
+
+PackageName: esrecurse
+SPDXID: SPDXRef-Package-npm-esrecurse-bfc4dfd3fbc806c
+PackageVersion: 4.3.0
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esrecurse@4.3.0
+
+
+PackageName: estraverse
+SPDXID: SPDXRef-Package-npm-estraverse-15480a352049a85f
+PackageVersion: 4.3.0
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/estraverse@4.3.0
+
+
+PackageName: estraverse
+SPDXID: SPDXRef-Package-npm-estraverse-b82a73c1c0912028
+PackageVersion: 5.3.0
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/estraverse@5.3.0
+
+
+PackageName: estree-walker
+SPDXID: SPDXRef-Package-npm-estree-walker-97778e56c3b8e99
+PackageVersion: 0.6.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/estree-walker@0.6.1
+
+
+PackageName: estree-walker
+SPDXID: SPDXRef-Package-npm-estree-walker-c446a2ad5fee6491
+PackageVersion: 2.0.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/estree-walker@2.0.2
+
+
+PackageName: esutils
+SPDXID: SPDXRef-Package-npm-esutils-9e03ffdde0c9345a
+PackageVersion: 2.0.3
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/esutils@2.0.3
+
+
+PackageName: execa
+SPDXID: SPDXRef-Package-npm-execa-98b92b8d22efe415
+PackageVersion: 5.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/execa@5.1.1
+
+
+PackageName: fast-deep-equal
+SPDXID: SPDXRef-Package-npm-fast-deep-equal-37341616f5f891ff
+PackageVersion: 3.1.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fast-deep-equal@3.1.3
+
+
+PackageName: fast-glob
+SPDXID: SPDXRef-Package-npm-fast-glob-ea8864b2419ea849
+PackageVersion: 3.2.12
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fast-glob@3.2.12
+
+
+PackageName: fast-json-stable-stringify
+SPDXID: SPDXRef-Package-npm-fast-json-stable-stringify-a4f0ab357f36e03a
+PackageVersion: 2.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fast-json-stable-stringify@2.1.0
+
+
+PackageName: fast-levenshtein
+SPDXID: SPDXRef-Package-npm-fast-levenshtein-3b1d89becb7de2fd
+PackageVersion: 2.0.6
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fast-levenshtein@2.0.6
+
+
+PackageName: fastq
+SPDXID: SPDXRef-Package-npm-fastq-5b4e0476e8d1ad74
+PackageVersion: 1.13.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fastq@1.13.0
+
+
+PackageName: file-entry-cache
+SPDXID: SPDXRef-Package-npm-file-entry-cache-64a01527c9796f0d
+PackageVersion: 6.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/file-entry-cache@6.0.1
+
+
+PackageName: file-uri-to-path
+SPDXID: SPDXRef-Package-npm-file-uri-to-path-a0b778372c8cb663
+PackageVersion: 1.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/file-uri-to-path@1.0.0
+
+
+PackageName: fill-range
+SPDXID: SPDXRef-Package-npm-fill-range-3b7b281de9fe8ef8
+PackageVersion: 7.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fill-range@7.0.1
+
+
+PackageName: find-up
+SPDXID: SPDXRef-Package-npm-find-up-6aba80c813562adb
+PackageVersion: 5.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/find-up@5.0.0
+
+
+PackageName: fira-mono
+SPDXID: SPDXRef-Package-npm-fira-mono-7dce37675ff309f7
+PackageVersion: 4.5.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@fontsource/fira-mono@4.5.10
+
+
+PackageName: flat-cache
+SPDXID: SPDXRef-Package-npm-flat-cache-f4d183ce15df2697
+PackageVersion: 3.0.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/flat-cache@3.0.4
+
+
+PackageName: flatted
+SPDXID: SPDXRef-Package-npm-flatted-2641c0feee9b5975
+PackageVersion: 3.2.7
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/flatted@3.2.7
+
+
+PackageName: fs-minipass
+SPDXID: SPDXRef-Package-npm-fs-minipass-75accbbbaf8a1ca0
+PackageVersion: 2.1.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fs-minipass@2.1.0
+
+
+PackageName: fs.realpath
+SPDXID: SPDXRef-Package-npm-fs.realpath-d3dfca8dc7985d75
+PackageVersion: 1.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fs.realpath@1.0.0
+
+
+PackageName: fs.scandir
+SPDXID: SPDXRef-Package-npm-fs.scandir-4a7e89f4c8e97596
+PackageVersion: 2.1.5
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@nodelib/fs.scandir@2.1.5
+
+
+PackageName: fs.stat
+SPDXID: SPDXRef-Package-npm-fs.stat-e12c65a0c1536d10
+PackageVersion: 2.0.5
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@nodelib/fs.stat@2.0.5
+
+
+PackageName: fs.walk
+SPDXID: SPDXRef-Package-npm-fs.walk-6f8e8b85710fe380
+PackageVersion: 1.2.8
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@nodelib/fs.walk@1.2.8
+
+
+PackageName: fsevents
+SPDXID: SPDXRef-Package-npm-fsevents-36b77660737a31ae
+PackageVersion: 2.3.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/fsevents@2.3.2
+
+
+PackageName: function-bind
+SPDXID: SPDXRef-Package-npm-function-bind-5b934730046cd911
+PackageVersion: 1.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/function-bind@1.1.1
+
+
+PackageName: gauge
+SPDXID: SPDXRef-Package-npm-gauge-17118e4349ef4650
+PackageVersion: 3.0.2
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/gauge@3.0.2
+
+
+PackageName: gen-mapping
+SPDXID: SPDXRef-Package-npm-gen-mapping-27551f538b8b7b29
+PackageVersion: 0.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@jridgewell/gen-mapping@0.1.1
+
+
+PackageName: get-stream
+SPDXID: SPDXRef-Package-npm-get-stream-d667546b116db9a7
+PackageVersion: 6.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/get-stream@6.0.1
+
+
+PackageName: glob
+SPDXID: SPDXRef-Package-npm-glob-dc310e08cc165982
+PackageVersion: 7.2.3
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/glob@7.2.3
+
+
+PackageName: glob-parent
+SPDXID: SPDXRef-Package-npm-glob-parent-3e37171b123d119b
+PackageVersion: 5.1.2
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/glob-parent@5.1.2
+
+
+PackageName: glob-parent
+SPDXID: SPDXRef-Package-npm-glob-parent-405a6c0268d3055b
+PackageVersion: 6.0.2
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/glob-parent@6.0.2
+
+
+PackageName: globals
+SPDXID: SPDXRef-Package-npm-globals-7ac4c2226fb3e2e1
+PackageVersion: 13.17.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/globals@13.17.0
+
+
+PackageName: globalyzer
+SPDXID: SPDXRef-Package-npm-globalyzer-bc6e8cbd8d4b5959
+PackageVersion: 0.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/globalyzer@0.1.0
+
+
+PackageName: globby
+SPDXID: SPDXRef-Package-npm-globby-a9788a2cb0fabc28
+PackageVersion: 11.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/globby@11.1.0
+
+
+PackageName: globrex
+SPDXID: SPDXRef-Package-npm-globrex-58a8962daf6c6f86
+PackageVersion: 0.1.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/globrex@0.1.2
+
+
+PackageName: graceful-fs
+SPDXID: SPDXRef-Package-npm-graceful-fs-be4bae989df0d3b2
+PackageVersion: 4.2.10
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/graceful-fs@4.2.10
+
+
+PackageName: grapheme-splitter
+SPDXID: SPDXRef-Package-npm-grapheme-splitter-289e92e98b2f2ec5
+PackageVersion: 1.0.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/grapheme-splitter@1.0.4
+
+
+PackageName: gzip-size
+SPDXID: SPDXRef-Package-npm-gzip-size-3e107d6d614bdcb2
+PackageVersion: 6.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/gzip-size@6.0.0
+
+
+PackageName: has
+SPDXID: SPDXRef-Package-npm-has-2b298429659dd682
+PackageVersion: 1.0.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/has@1.0.3
+
+
+PackageName: has-flag
+SPDXID: SPDXRef-Package-npm-has-flag-12b864ac66524f74
+PackageVersion: 4.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/has-flag@4.0.0
+
+
+PackageName: has-unicode
+SPDXID: SPDXRef-Package-npm-has-unicode-39a1616ccfaff3f0
+PackageVersion: 2.0.1
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/has-unicode@2.0.1
+
+
+PackageName: https-proxy-agent
+SPDXID: SPDXRef-Package-npm-https-proxy-agent-c00dcc3be221c9ba
+PackageVersion: 5.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/https-proxy-agent@5.0.1
+
+
+PackageName: human-signals
+SPDXID: SPDXRef-Package-npm-human-signals-a534d41c5cbe7f63
+PackageVersion: 2.1.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/human-signals@2.1.0
+
+
+PackageName: ignore
+SPDXID: SPDXRef-Package-npm-ignore-46162b0e1748ac8b
+PackageVersion: 5.2.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/ignore@5.2.0
+
+
+PackageName: import-fresh
+SPDXID: SPDXRef-Package-npm-import-fresh-24a530046a0f52e8
+PackageVersion: 3.3.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/import-fresh@3.3.0
+
+
+PackageName: imurmurhash
+SPDXID: SPDXRef-Package-npm-imurmurhash-6dce8e6c0aa446ab
+PackageVersion: 0.1.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/imurmurhash@0.1.4
+
+
+PackageName: inflight
+SPDXID: SPDXRef-Package-npm-inflight-d665288996e3890c
+PackageVersion: 1.0.6
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/inflight@1.0.6
+
+
+PackageName: inherits
+SPDXID: SPDXRef-Package-npm-inherits-2a33b469996f1fd9
+PackageVersion: 2.0.4
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/inherits@2.0.4
+
+
+PackageName: inspector
+SPDXID: SPDXRef-Package-npm-inspector-b975af500b40e2f1
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/inspector@0.45.29
+
+
+PackageName: install-pkg
+SPDXID: SPDXRef-Package-npm-install-pkg-7c7ee54713c990fb
+PackageVersion: 0.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@antfu/install-pkg@0.1.1
+
+
+PackageName: is-binary-path
+SPDXID: SPDXRef-Package-npm-is-binary-path-6d965f682460ce90
+PackageVersion: 2.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/is-binary-path@2.1.0
+
+
+PackageName: is-core-module
+SPDXID: SPDXRef-Package-npm-is-core-module-7121c91ef66cbf39
+PackageVersion: 2.10.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/is-core-module@2.10.0
+
+
+PackageName: is-extglob
+SPDXID: SPDXRef-Package-npm-is-extglob-e5d8a28838392e9f
+PackageVersion: 2.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/is-extglob@2.1.1
+
+
+PackageName: is-fullwidth-code-point
+SPDXID: SPDXRef-Package-npm-is-fullwidth-code-point-3212eaf8805aefe
+PackageVersion: 3.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/is-fullwidth-code-point@3.0.0
+
+
+PackageName: is-glob
+SPDXID: SPDXRef-Package-npm-is-glob-cb9951424a667d44
+PackageVersion: 4.0.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/is-glob@4.0.3
+
+
+PackageName: is-number
+SPDXID: SPDXRef-Package-npm-is-number-75d8a3ac110b6509
+PackageVersion: 7.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/is-number@7.0.0
+
+
+PackageName: is-stream
+SPDXID: SPDXRef-Package-npm-is-stream-ff31619eda9fad7e
+PackageVersion: 2.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/is-stream@2.0.1
+
+
+PackageName: isexe
+SPDXID: SPDXRef-Package-npm-isexe-faa63de8e573f21a
+PackageVersion: 2.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/isexe@2.0.0
+
+
+PackageName: jiti
+SPDXID: SPDXRef-Package-npm-jiti-8089ae2448ccb4ce
+PackageVersion: 1.16.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/jiti@1.16.0
+
+
+PackageName: js-sdsl
+SPDXID: SPDXRef-Package-npm-js-sdsl-754678c19f2d1f30
+PackageVersion: 4.1.5
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/js-sdsl@4.1.5
+
+
+PackageName: js-yaml
+SPDXID: SPDXRef-Package-npm-js-yaml-41a10a9608ac3a24
+PackageVersion: 4.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/js-yaml@4.1.0
+
+
+PackageName: json
+SPDXID: SPDXRef-Package-npm-json-409492c025593f35
+PackageVersion: 2.1.121
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@iconify/json@2.1.121
+
+
+PackageName: json-schema-traverse
+SPDXID: SPDXRef-Package-npm-json-schema-traverse-2c50e89937af7cbf
+PackageVersion: 0.4.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/json-schema-traverse@0.4.1
+
+
+PackageName: json-stable-stringify-without-jsonify
+SPDXID: SPDXRef-Package-npm-json-stable-stringify-without-jsonify-1417274184478e5a
+PackageVersion: 1.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/json-stable-stringify-without-jsonify@1.0.1
+
+
+PackageName: kit
+SPDXID: SPDXRef-Package-npm-kit-fe3d52efd5d8fd30
+PackageVersion: 1.0.0-next.516_svelte@3.51.0+vite@3.1.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@sveltejs/kit@1.0.0-next.516_svelte@3.51.0+vite@3.1.7
+
+
+PackageName: kleur
+SPDXID: SPDXRef-Package-npm-kleur-b5ecb4e5f255115e
+PackageVersion: 4.1.5
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/kleur@4.1.5
+
+
+PackageName: kolorist
+SPDXID: SPDXRef-Package-npm-kolorist-923354ad1097627f
+PackageVersion: 1.6.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/kolorist@1.6.0
+
+
+PackageName: levn
+SPDXID: SPDXRef-Package-npm-levn-5ada9ec1ec338fa3
+PackageVersion: 0.4.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/levn@0.4.1
+
+
+PackageName: linux-loong64
+SPDXID: SPDXRef-Package-npm-linux-loong64-aef2f7e7dc760770
+PackageVersion: 0.15.10
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@esbuild/linux-loong64@0.15.10
+
+
+PackageName: local-pkg
+SPDXID: SPDXRef-Package-npm-local-pkg-19819b243679a5d5
+PackageVersion: 0.4.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/local-pkg@0.4.2
+
+
+PackageName: locate-path
+SPDXID: SPDXRef-Package-npm-locate-path-1bcb3b9b31d3055c
+PackageVersion: 6.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/locate-path@6.0.0
+
+
+PackageName: lodash.merge
+SPDXID: SPDXRef-Package-npm-lodash.merge-9241f8875b66fabe
+PackageVersion: 4.6.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/lodash.merge@4.6.2
+
+
+PackageName: lru-cache
+SPDXID: SPDXRef-Package-npm-lru-cache-c5058eb5576edfa8
+PackageVersion: 6.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/lru-cache@6.0.0
+
+
+PackageName: magic-string
+SPDXID: SPDXRef-Package-npm-magic-string-512c91452a6773f9
+PackageVersion: 0.26.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/magic-string@0.26.7
+
+
+PackageName: magic-string
+SPDXID: SPDXRef-Package-npm-magic-string-540ba50198b2c4c1
+PackageVersion: 0.25.9
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/magic-string@0.25.9
+
+
+PackageName: make-dir
+SPDXID: SPDXRef-Package-npm-make-dir-3b1d29bbe2d5e8df
+PackageVersion: 3.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/make-dir@3.1.0
+
+
+PackageName: mdn-data
+SPDXID: SPDXRef-Package-npm-mdn-data-e3aaf486bc67bf12
+PackageVersion: 2.0.28
+PackageLicenseConcluded: CC0-1.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/mdn-data@2.0.28
+
+
+PackageName: merge-stream
+SPDXID: SPDXRef-Package-npm-merge-stream-f4bcc255df06d8ed
+PackageVersion: 2.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/merge-stream@2.0.0
+
+
+PackageName: merge2
+SPDXID: SPDXRef-Package-npm-merge2-236f9540ed6b8184
+PackageVersion: 1.4.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/merge2@1.4.1
+
+
+PackageName: micromatch
+SPDXID: SPDXRef-Package-npm-micromatch-eba652b31ca1b43e
+PackageVersion: 4.0.5
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/micromatch@4.0.5
+
+
+PackageName: mime
+SPDXID: SPDXRef-Package-npm-mime-91e5f4f5b82b3e06
+PackageVersion: 3.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/mime@3.0.0
+
+
+PackageName: mimic-fn
+SPDXID: SPDXRef-Package-npm-mimic-fn-b3ae6fc1bffe97e2
+PackageVersion: 2.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/mimic-fn@2.1.0
+
+
+PackageName: min-indent
+SPDXID: SPDXRef-Package-npm-min-indent-47c1afcb1252156
+PackageVersion: 1.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/min-indent@1.0.1
+
+
+PackageName: minimatch
+SPDXID: SPDXRef-Package-npm-minimatch-e5b282fe96860035
+PackageVersion: 3.1.2
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/minimatch@3.1.2
+
+
+PackageName: minimist
+SPDXID: SPDXRef-Package-npm-minimist-c95cce9b58689f8a
+PackageVersion: 1.2.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/minimist@1.2.7
+
+
+PackageName: minipass
+SPDXID: SPDXRef-Package-npm-minipass-52679397edbfd066
+PackageVersion: 3.3.4
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/minipass@3.3.4
+
+
+PackageName: minizlib
+SPDXID: SPDXRef-Package-npm-minizlib-fc92323cdb02dc04
+PackageVersion: 2.1.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/minizlib@2.1.2
+
+
+PackageName: mkdirp
+SPDXID: SPDXRef-Package-npm-mkdirp-51356830dc745cc3
+PackageVersion: 0.5.6
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/mkdirp@0.5.6
+
+
+PackageName: mkdirp
+SPDXID: SPDXRef-Package-npm-mkdirp-98f818172105b9e6
+PackageVersion: 1.0.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/mkdirp@1.0.4
+
+
+PackageName: module-importer
+SPDXID: SPDXRef-Package-npm-module-importer-589990225fb579b5
+PackageVersion: 1.0.1
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@humanwhocodes/module-importer@1.0.1
+
+
+PackageName: mri
+SPDXID: SPDXRef-Package-npm-mri-4bbb773e390e46de
+PackageVersion: 1.2.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/mri@1.2.0
+
+
+PackageName: mrmime
+SPDXID: SPDXRef-Package-npm-mrmime-5768e470248fe994
+PackageVersion: 1.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/mrmime@1.0.1
+
+
+PackageName: ms
+SPDXID: SPDXRef-Package-npm-ms-339bbfd01ae60424
+PackageVersion: 2.1.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/ms@2.1.2
+
+
+PackageName: nanoid
+SPDXID: SPDXRef-Package-npm-nanoid-e02c4790b53b0132
+PackageVersion: 3.3.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/nanoid@3.3.4
+
+
+PackageName: natural-compare
+SPDXID: SPDXRef-Package-npm-natural-compare-76fc08be4bc5f634
+PackageVersion: 1.4.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/natural-compare@1.4.0
+
+
+PackageName: nft
+SPDXID: SPDXRef-Package-npm-nft-47eb9db7e15bd0cd
+PackageVersion: 0.22.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@vercel/nft@0.22.1
+
+
+PackageName: node-fetch
+SPDXID: SPDXRef-Package-npm-node-fetch-45c448a499434382
+PackageVersion: 2.6.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/node-fetch@2.6.7
+
+
+PackageName: node-fetch-native
+SPDXID: SPDXRef-Package-npm-node-fetch-native-81b0dbad1dbf9f65
+PackageVersion: 0.1.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/node-fetch-native@0.1.7
+
+
+PackageName: node-gyp-build
+SPDXID: SPDXRef-Package-npm-node-gyp-build-54b33f732629224d
+PackageVersion: 4.5.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/node-gyp-build@4.5.0
+
+
+PackageName: node-pre-gyp
+SPDXID: SPDXRef-Package-npm-node-pre-gyp-17db8aebcce431c3
+PackageVersion: 1.0.10
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@mapbox/node-pre-gyp@1.0.10
+
+
+PackageName: nopt
+SPDXID: SPDXRef-Package-npm-nopt-1396e0e082888d3d
+PackageVersion: 5.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/nopt@5.0.0
+
+
+PackageName: normalize-path
+SPDXID: SPDXRef-Package-npm-normalize-path-29bfe311671742c0
+PackageVersion: 3.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/normalize-path@3.0.0
+
+
+PackageName: npm-run-path
+SPDXID: SPDXRef-Package-npm-npm-run-path-1a424d30f3c086c2
+PackageVersion: 4.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/npm-run-path@4.0.1
+
+
+PackageName: npmlog
+SPDXID: SPDXRef-Package-npm-npmlog-7d74bde8c15275d1
+PackageVersion: 5.0.1
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/npmlog@5.0.1
+
+
+PackageName: object-assign
+SPDXID: SPDXRef-Package-npm-object-assign-89e2d854feedf86d
+PackageVersion: 4.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/object-assign@4.1.1
+
+
+PackageName: object-schema
+SPDXID: SPDXRef-Package-npm-object-schema-b404b8e3b9ad40
+PackageVersion: 1.2.1
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@humanwhocodes/object-schema@1.2.1
+
+
+PackageName: ohmyfetch
+SPDXID: SPDXRef-Package-npm-ohmyfetch-e12c64f42d10864a
+PackageVersion: 0.4.19
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/ohmyfetch@0.4.19
+
+
+PackageName: once
+SPDXID: SPDXRef-Package-npm-once-e7422f5e2825adcb
+PackageVersion: 1.4.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/once@1.4.0
+
+
+PackageName: onetime
+SPDXID: SPDXRef-Package-npm-onetime-e06b198c1a9215d6
+PackageVersion: 5.1.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/onetime@5.1.2
+
+
+PackageName: optionator
+SPDXID: SPDXRef-Package-npm-optionator-7e1de1d1bd09a6db
+PackageVersion: 0.9.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/optionator@0.9.1
+
+
+PackageName: p-limit
+SPDXID: SPDXRef-Package-npm-p-limit-f4a837f9c4cbba94
+PackageVersion: 3.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/p-limit@3.1.0
+
+
+PackageName: p-locate
+SPDXID: SPDXRef-Package-npm-p-locate-604e66bf774323f1
+PackageVersion: 5.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/p-locate@5.0.0
+
+
+PackageName: parent-module
+SPDXID: SPDXRef-Package-npm-parent-module-501bc63c9e7c81f7
+PackageVersion: 1.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/parent-module@1.0.1
+
+
+PackageName: parser
+SPDXID: SPDXRef-Package-npm-parser-618f11bf4e4b6b0b
+PackageVersion: 5.40.0_z4bbprzjrhnsfa24uvmcbu7f5q
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@typescript-eslint/parser@5.40.0_z4bbprzjrhnsfa24uvmcbu7f5q
+
+
+PackageName: path-exists
+SPDXID: SPDXRef-Package-npm-path-exists-87d0dad5b6d6c3e3
+PackageVersion: 4.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/path-exists@4.0.0
+
+
+PackageName: path-is-absolute
+SPDXID: SPDXRef-Package-npm-path-is-absolute-194bf2efa036feab
+PackageVersion: 1.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/path-is-absolute@1.0.1
+
+
+PackageName: path-key
+SPDXID: SPDXRef-Package-npm-path-key-23a0b183f712ff7d
+PackageVersion: 3.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/path-key@3.1.1
+
+
+PackageName: path-parse
+SPDXID: SPDXRef-Package-npm-path-parse-7f80c34a7ed0b9fb
+PackageVersion: 1.0.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/path-parse@1.0.7
+
+
+PackageName: path-type
+SPDXID: SPDXRef-Package-npm-path-type-8ca7560f47fd5b9a
+PackageVersion: 4.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/path-type@4.0.0
+
+
+PackageName: pathe
+SPDXID: SPDXRef-Package-npm-pathe-4eb194fdfbe45957
+PackageVersion: 0.3.9
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/pathe@0.3.9
+
+
+PackageName: perfect-debounce
+SPDXID: SPDXRef-Package-npm-perfect-debounce-e371b9bae8e38432
+PackageVersion: 0.1.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/perfect-debounce@0.1.3
+
+
+PackageName: picocolors
+SPDXID: SPDXRef-Package-npm-picocolors-c8ee0738ab6e582b
+PackageVersion: 1.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/picocolors@1.0.0
+
+
+PackageName: picomatch
+SPDXID: SPDXRef-Package-npm-picomatch-60de43a87ec2ad7d
+PackageVersion: 2.3.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/picomatch@2.3.1
+
+
+PackageName: pluginutils
+SPDXID: SPDXRef-Package-npm-pluginutils-da9d461a2a561ebc
+PackageVersion: 4.2.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@rollup/pluginutils@4.2.1
+
+
+PackageName: postcss
+SPDXID: SPDXRef-Package-npm-postcss-24994cd7a349545
+PackageVersion: 8.4.17
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/postcss@8.4.17
+
+
+PackageName: prelude-ls
+SPDXID: SPDXRef-Package-npm-prelude-ls-3671d48c8c296dd0
+PackageVersion: 1.2.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/prelude-ls@1.2.1
+
+
+PackageName: preset-attributify
+SPDXID: SPDXRef-Package-npm-preset-attributify-bc74decb915a68a
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/preset-attributify@0.45.29
+
+
+PackageName: preset-icons
+SPDXID: SPDXRef-Package-npm-preset-icons-d221cc8ffb74e6fd
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/preset-icons@0.45.29
+
+
+PackageName: preset-mini
+SPDXID: SPDXRef-Package-npm-preset-mini-d16429678942009
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/preset-mini@0.45.29
+
+
+PackageName: preset-tagify
+SPDXID: SPDXRef-Package-npm-preset-tagify-3f6543e10a46d03f
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/preset-tagify@0.45.29
+
+
+PackageName: preset-typography
+SPDXID: SPDXRef-Package-npm-preset-typography-c9387d6ee10cce18
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/preset-typography@0.45.29
+
+
+PackageName: preset-uno
+SPDXID: SPDXRef-Package-npm-preset-uno-244631204d56ee91
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/preset-uno@0.45.29
+
+
+PackageName: preset-web-fonts
+SPDXID: SPDXRef-Package-npm-preset-web-fonts-346aca78c9bf36c4
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/preset-web-fonts@0.45.29
+
+
+PackageName: preset-wind
+SPDXID: SPDXRef-Package-npm-preset-wind-bc2e8e02b16a8ace
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/preset-wind@0.45.29
+
+
+PackageName: prettier
+SPDXID: SPDXRef-Package-npm-prettier-a8247cd57ecb9ec7
+PackageVersion: 2.7.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/prettier@2.7.1
+
+
+PackageName: prettier-plugin-svelte
+SPDXID: SPDXRef-Package-npm-prettier-plugin-svelte-829f38d1f70458e
+PackageVersion: 2.8.0_ibge6ami6vq2q2j5g4rcvk62hq
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/prettier-plugin-svelte@2.8.0_ibge6ami6vq2q2j5g4rcvk62hq
+
+
+PackageName: punycode
+SPDXID: SPDXRef-Package-npm-punycode-dc27b0f90b874797
+PackageVersion: 2.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/punycode@2.1.1
+
+
+PackageName: queue-microtask
+SPDXID: SPDXRef-Package-npm-queue-microtask-6ec5392db0ea9622
+PackageVersion: 1.2.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/queue-microtask@1.2.3
+
+
+PackageName: readable-stream
+SPDXID: SPDXRef-Package-npm-readable-stream-eec7d76b91bd0911
+PackageVersion: 3.6.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/readable-stream@3.6.0
+
+
+PackageName: readdirp
+SPDXID: SPDXRef-Package-npm-readdirp-9ad02efbff47187e
+PackageVersion: 3.6.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/readdirp@3.6.0
+
+
+PackageName: regexparam
+SPDXID: SPDXRef-Package-npm-regexparam-d47e9e8d178efccb
+PackageVersion: 2.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/regexparam@2.0.1
+
+
+PackageName: regexpp
+SPDXID: SPDXRef-Package-npm-regexpp-bc0d18e7542120da
+PackageVersion: 3.2.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/regexpp@3.2.0
+
+
+PackageName: remapping
+SPDXID: SPDXRef-Package-npm-remapping-493076a224ad7a36
+PackageVersion: 2.2.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@ampproject/remapping@2.2.0
+
+
+PackageName: reset
+SPDXID: SPDXRef-Package-npm-reset-1c561c141384dcc8
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/reset@0.45.29
+
+
+PackageName: resolve
+SPDXID: SPDXRef-Package-npm-resolve-72a4456700f4a1ac
+PackageVersion: 1.22.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/resolve@1.22.1
+
+
+PackageName: resolve-from
+SPDXID: SPDXRef-Package-npm-resolve-from-458f5352c43a2dad
+PackageVersion: 5.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/resolve-from@5.0.0
+
+
+PackageName: resolve-from
+SPDXID: SPDXRef-Package-npm-resolve-from-6eecb3ce0599c7e0
+PackageVersion: 4.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/resolve-from@4.0.0
+
+
+PackageName: resolve-uri
+SPDXID: SPDXRef-Package-npm-resolve-uri-2afe7006ddc6027c
+PackageVersion: 3.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@jridgewell/resolve-uri@3.1.0
+
+
+PackageName: reusify
+SPDXID: SPDXRef-Package-npm-reusify-1ce64ab873a797f1
+PackageVersion: 1.0.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/reusify@1.0.4
+
+
+PackageName: rimraf
+SPDXID: SPDXRef-Package-npm-rimraf-9bbe62518af7d463
+PackageVersion: 2.7.1
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/rimraf@2.7.1
+
+
+PackageName: rimraf
+SPDXID: SPDXRef-Package-npm-rimraf-ffb455e5131350e1
+PackageVersion: 3.0.2
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/rimraf@3.0.2
+
+
+PackageName: rollup
+SPDXID: SPDXRef-Package-npm-rollup-54132c29daab9828
+PackageVersion: 2.78.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/rollup@2.78.1
+
+
+PackageName: rollup-pluginutils
+SPDXID: SPDXRef-Package-npm-rollup-pluginutils-5cb74cafcc16fc17
+PackageVersion: 2.8.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/rollup-pluginutils@2.8.2
+
+
+PackageName: run-parallel
+SPDXID: SPDXRef-Package-npm-run-parallel-640e59feee212d35
+PackageVersion: 1.2.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/run-parallel@1.2.0
+
+
+PackageName: sade
+SPDXID: SPDXRef-Package-npm-sade-20d6187e5e23e4da
+PackageVersion: 1.8.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/sade@1.8.1
+
+
+PackageName: safe-buffer
+SPDXID: SPDXRef-Package-npm-safe-buffer-4193d187396569a9
+PackageVersion: 5.2.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/safe-buffer@5.2.1
+
+
+PackageName: sander
+SPDXID: SPDXRef-Package-npm-sander-1b16e0e208c14be5
+PackageVersion: 0.5.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/sander@0.5.1
+
+
+PackageName: scope
+SPDXID: SPDXRef-Package-npm-scope-d2cf74cbcecf7dd8
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/scope@0.45.29
+
+
+PackageName: scope-manager
+SPDXID: SPDXRef-Package-npm-scope-manager-a58f2c52ef6d007
+PackageVersion: 5.40.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@typescript-eslint/scope-manager@5.40.0
+
+
+PackageName: semver
+SPDXID: SPDXRef-Package-npm-semver-e366183be2cc90ac
+PackageVersion: 7.3.8
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/semver@7.3.8
+
+
+PackageName: semver
+SPDXID: SPDXRef-Package-npm-semver-f3a6c8c8e31fd8e8
+PackageVersion: 6.3.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/semver@6.3.0
+
+
+PackageName: set-array
+SPDXID: SPDXRef-Package-npm-set-array-b4b19227f3b1568e
+PackageVersion: 1.1.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@jridgewell/set-array@1.1.2
+
+
+PackageName: set-blocking
+SPDXID: SPDXRef-Package-npm-set-blocking-fca8daaf1626c7c6
+PackageVersion: 2.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/set-blocking@2.0.0
+
+
+PackageName: set-cookie-parser
+SPDXID: SPDXRef-Package-npm-set-cookie-parser-9f19db42b824f439
+PackageVersion: 2.5.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/set-cookie-parser@2.5.1
+
+
+PackageName: shebang-command
+SPDXID: SPDXRef-Package-npm-shebang-command-f41c3e12ce14284f
+PackageVersion: 2.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/shebang-command@2.0.0
+
+
+PackageName: shebang-regex
+SPDXID: SPDXRef-Package-npm-shebang-regex-72cc2e9d6416d211
+PackageVersion: 3.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/shebang-regex@3.0.0
+
+
+PackageName: signal-exit
+SPDXID: SPDXRef-Package-npm-signal-exit-2ceccc27d14ee9b5
+PackageVersion: 3.0.7
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/signal-exit@3.0.7
+
+
+PackageName: sirv
+SPDXID: SPDXRef-Package-npm-sirv-d9099f1436d6238a
+PackageVersion: 2.0.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/sirv@2.0.2
+
+
+PackageName: slash
+SPDXID: SPDXRef-Package-npm-slash-90619177ad19eacc
+PackageVersion: 3.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/slash@3.0.0
+
+
+PackageName: sorcery
+SPDXID: SPDXRef-Package-npm-sorcery-95a75147f6d0f9dc
+PackageVersion: 0.10.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/sorcery@0.10.0
+
+
+PackageName: source-map-js
+SPDXID: SPDXRef-Package-npm-source-map-js-340b22a909e09791
+PackageVersion: 1.0.2
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/source-map-js@1.0.2
+
+
+PackageName: sourcemap-codec
+SPDXID: SPDXRef-Package-npm-sourcemap-codec-487a3fd6276b18b
+PackageVersion: 1.4.14
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@jridgewell/sourcemap-codec@1.4.14
+
+
+PackageName: sourcemap-codec
+SPDXID: SPDXRef-Package-npm-sourcemap-codec-a4848f19bae678c5
+PackageVersion: 1.4.8
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/sourcemap-codec@1.4.8
+
+
+PackageName: streamsearch
+SPDXID: SPDXRef-Package-npm-streamsearch-dbb143d05919a227
+PackageVersion: 1.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/streamsearch@1.1.0
+
+
+PackageName: string_decoder
+SPDXID: SPDXRef-Package-npm-string-decoder-6aea41f2cb2b03dd
+PackageVersion: 1.3.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/string_decoder@1.3.0
+
+
+PackageName: string-width
+SPDXID: SPDXRef-Package-npm-string-width-db52aa30bbb27d10
+PackageVersion: 4.2.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/string-width@4.2.3
+
+
+PackageName: strip-ansi
+SPDXID: SPDXRef-Package-npm-strip-ansi-94802e63497200dc
+PackageVersion: 6.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/strip-ansi@6.0.1
+
+
+PackageName: strip-final-newline
+SPDXID: SPDXRef-Package-npm-strip-final-newline-7bfe6373c2a1c694
+PackageVersion: 2.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/strip-final-newline@2.0.0
+
+
+PackageName: strip-indent
+SPDXID: SPDXRef-Package-npm-strip-indent-9e6bc3a5a885300c
+PackageVersion: 3.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/strip-indent@3.0.0
+
+
+PackageName: strip-json-comments
+SPDXID: SPDXRef-Package-npm-strip-json-comments-755da0be5ff56e90
+PackageVersion: 3.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/strip-json-comments@3.1.1
+
+
+PackageName: supports-color
+SPDXID: SPDXRef-Package-npm-supports-color-159a305fef678c88
+PackageVersion: 7.2.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/supports-color@7.2.0
+
+
+PackageName: supports-preserve-symlinks-flag
+SPDXID: SPDXRef-Package-npm-supports-preserve-symlinks-flag-1f033d86677b411f
+PackageVersion: 1.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/supports-preserve-symlinks-flag@1.0.0
+
+
+PackageName: svelte
+SPDXID: SPDXRef-Package-npm-svelte-b01ecd45b5bb9b23
+PackageVersion: 3.51.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/svelte@3.51.0
+
+
+PackageName: svelte-check
+SPDXID: SPDXRef-Package-npm-svelte-check-dfdc7e8cf52852cf
+PackageVersion: 2.9.2_svelte@3.51.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/svelte-check@2.9.2_svelte@3.51.0
+
+
+PackageName: svelte
+SPDXID: SPDXRef-Package-npm-svelte-fe13699924944288
+PackageVersion: 1.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@neoconfetti/svelte@1.0.0
+
+
+PackageName: svelte-headless-table
+SPDXID: SPDXRef-Package-npm-svelte-headless-table-e11a1421aec3440
+PackageVersion: 0.15.1_svelte@3.51.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/svelte-headless-table@0.15.1_svelte@3.51.0
+
+
+PackageName: svelte-headlessui
+SPDXID: SPDXRef-Package-npm-svelte-headlessui-8c8f9a1223eda8d5
+PackageVersion: 1.0.2_svelte@3.51.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@rgossiaux/svelte-headlessui@1.0.2_svelte@3.51.0
+
+
+PackageName: svelte-hmr
+SPDXID: SPDXRef-Package-npm-svelte-hmr-d816f51de46f3de6
+PackageVersion: 0.15.0_svelte@3.51.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/svelte-hmr@0.15.0_svelte@3.51.0
+
+
+PackageName: svelte-keyed
+SPDXID: SPDXRef-Package-npm-svelte-keyed-fb5fa5cdfa1d75aa
+PackageVersion: 1.1.6_svelte@3.51.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/svelte-keyed@1.1.6_svelte@3.51.0
+
+
+PackageName: svelte-preprocess
+SPDXID: SPDXRef-Package-npm-svelte-preprocess-de9ef5f4e1068253
+PackageVersion: 4.10.7_c36sqhgzdfaw4kmxogryyrffx4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/svelte-preprocess@4.10.7_c36sqhgzdfaw4kmxogryyrffx4
+
+
+PackageName: svelte-query
+SPDXID: SPDXRef-Package-npm-svelte-query-1f38b2831f05aeba
+PackageVersion: 1.6.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@sveltestack/svelte-query@1.6.0
+
+
+PackageName: svelte-render
+SPDXID: SPDXRef-Package-npm-svelte-render-b7dc05a2b7273c0e
+PackageVersion: 1.5.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/svelte-render@1.5.0
+
+
+PackageName: svelte-subscribe
+SPDXID: SPDXRef-Package-npm-svelte-subscribe-1d54ba8788ee04d5
+PackageVersion: 1.0.5
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/svelte-subscribe@1.0.5
+
+
+PackageName: tar
+SPDXID: SPDXRef-Package-npm-tar-5403fe6313c4872b
+PackageVersion: 6.1.11
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/tar@6.1.11
+
+
+PackageName: text-table
+SPDXID: SPDXRef-Package-npm-text-table-1422156c7d2d920b
+PackageVersion: 0.2.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/text-table@0.2.0
+
+
+PackageName: tiny-glob
+SPDXID: SPDXRef-Package-npm-tiny-glob-e6842c06f82c24a9
+PackageVersion: 0.2.9
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/tiny-glob@0.2.9
+
+
+PackageName: to-regex-range
+SPDXID: SPDXRef-Package-npm-to-regex-range-b1f8975388a29971
+PackageVersion: 5.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/to-regex-range@5.0.1
+
+
+PackageName: toml
+SPDXID: SPDXRef-Package-npm-toml-3c80d98769a73fa5
+PackageVersion: 2.2.5
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@iarna/toml@2.2.5
+
+
+PackageName: totalist
+SPDXID: SPDXRef-Package-npm-totalist-1d1322f425e8f2ab
+PackageVersion: 3.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/totalist@3.0.0
+
+
+PackageName: tr46
+SPDXID: SPDXRef-Package-npm-tr46-79af48b8394a6586
+PackageVersion: 0.0.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/tr46@0.0.3
+
+
+PackageName: trace-mapping
+SPDXID: SPDXRef-Package-npm-trace-mapping-3265c6aa78cebfad
+PackageVersion: 0.3.16
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@jridgewell/trace-mapping@0.3.16
+
+
+PackageName: transformer-attributify-jsx
+SPDXID: SPDXRef-Package-npm-transformer-attributify-jsx-77b55cfc31110121
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/transformer-attributify-jsx@0.45.29
+
+
+PackageName: transformer-compile-class
+SPDXID: SPDXRef-Package-npm-transformer-compile-class-82478dc600ab156e
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/transformer-compile-class@0.45.29
+
+
+PackageName: transformer-directives
+SPDXID: SPDXRef-Package-npm-transformer-directives-222908e701a52ea1
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/transformer-directives@0.45.29
+
+
+PackageName: transformer-variant-group
+SPDXID: SPDXRef-Package-npm-transformer-variant-group-494aa01cfa12e2da
+PackageVersion: 0.45.29
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/transformer-variant-group@0.45.29
+
+
+PackageName: tslib
+SPDXID: SPDXRef-Package-npm-tslib-3f87e84d5718fb39
+PackageVersion: 1.14.1
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/tslib@1.14.1
+
+
+PackageName: tslib
+SPDXID: SPDXRef-Package-npm-tslib-67a9ab7d7bfe60b
+PackageVersion: 2.4.0
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/tslib@2.4.0
+
+
+PackageName: tsutils
+SPDXID: SPDXRef-Package-npm-tsutils-609466e9f7cd0e27
+PackageVersion: 3.21.0_typescript@4.8.4
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/tsutils@3.21.0_typescript@4.8.4
+
+
+PackageName: type-check
+SPDXID: SPDXRef-Package-npm-type-check-4eaaa5b0629793c7
+PackageVersion: 0.4.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/type-check@0.4.0
+
+
+PackageName: type-fest
+SPDXID: SPDXRef-Package-npm-type-fest-b096666107fc77aa
+PackageVersion: 0.20.2
+PackageLicenseConcluded: NOASSERTION
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/type-fest@0.20.2
+
+
+PackageName: type-utils
+SPDXID: SPDXRef-Package-npm-type-utils-c8b4f2056b0d96b9
+PackageVersion: 5.40.0_z4bbprzjrhnsfa24uvmcbu7f5q
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@typescript-eslint/type-utils@5.40.0_z4bbprzjrhnsfa24uvmcbu7f5q
+
+
+PackageName: types
+SPDXID: SPDXRef-Package-npm-types-2bf9c59a84ee387b
+PackageVersion: 5.40.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@typescript-eslint/types@5.40.0
+
+
+PackageName: types
+SPDXID: SPDXRef-Package-npm-types-e4d89e7c1f95dd84
+PackageVersion: 2.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@iconify/types@2.0.0
+
+
+PackageName: typescript
+SPDXID: SPDXRef-Package-npm-typescript-aebdacdddfc1dfde
+PackageVersion: 4.8.4
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/typescript@4.8.4
+
+
+PackageName: typescript-estree
+SPDXID: SPDXRef-Package-npm-typescript-estree-385d752e301c4050
+PackageVersion: 5.40.0_typescript@4.8.4
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@typescript-eslint/typescript-estree@5.40.0_typescript@4.8.4
+
+
+PackageName: ufo
+SPDXID: SPDXRef-Package-npm-ufo-cc4663c6d68428b4
+PackageVersion: 0.8.5
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/ufo@0.8.5
+
+
+PackageName: unconfig
+SPDXID: SPDXRef-Package-npm-unconfig-eece46ad87ef6a98
+PackageVersion: 0.3.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/unconfig@0.3.7
+
+
+PackageName: undici
+SPDXID: SPDXRef-Package-npm-undici-c3fea0a771e24d8d
+PackageVersion: 5.11.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/undici@5.11.0
+
+
+PackageName: unocss
+SPDXID: SPDXRef-Package-npm-unocss-9a6692e7d5c6b484
+PackageVersion: 0.45.29_vite@3.1.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/unocss@0.45.29_vite@3.1.7
+
+
+PackageName: uri-js
+SPDXID: SPDXRef-Package-npm-uri-js-52679927019b2ba
+PackageVersion: 4.4.1
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/uri-js@4.4.1
+
+
+PackageName: url
+SPDXID: SPDXRef-Package-npm-url-1dafa26a686c1a11
+PackageVersion: 1.0.0-next.21
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@polka/url@1.0.0-next.21
+
+
+PackageName: util-deprecate
+SPDXID: SPDXRef-Package-npm-util-deprecate-39f598da63807f95
+PackageVersion: 1.0.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/util-deprecate@1.0.2
+
+
+PackageName: utils
+SPDXID: SPDXRef-Package-npm-utils-33df1e9325cacade
+PackageVersion: 5.40.0_z4bbprzjrhnsfa24uvmcbu7f5q
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@typescript-eslint/utils@5.40.0_z4bbprzjrhnsfa24uvmcbu7f5q
+
+
+PackageName: utils
+SPDXID: SPDXRef-Package-npm-utils-6f446bec3c75ece3
+PackageVersion: 2.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@iconify/utils@2.0.1
+
+
+PackageName: utils
+SPDXID: SPDXRef-Package-npm-utils-7693affdadecaef8
+PackageVersion: 0.5.2
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@antfu/utils@0.5.2
+
+
+PackageName: visitor-keys
+SPDXID: SPDXRef-Package-npm-visitor-keys-ba9ba19962ffdd0
+PackageVersion: 5.40.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@typescript-eslint/visitor-keys@5.40.0
+
+
+PackageName: vite
+SPDXID: SPDXRef-Package-npm-vite-868b896e8dc847b
+PackageVersion: 0.45.29_vite@3.1.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@unocss/vite@0.45.29_vite@3.1.7
+
+
+PackageName: vite
+SPDXID: SPDXRef-Package-npm-vite-e9bea688cbb04ed9
+PackageVersion: 3.1.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/vite@3.1.7
+
+
+PackageName: vite-plugin-svelte
+SPDXID: SPDXRef-Package-npm-vite-plugin-svelte-9f0c19401209d5d6
+PackageVersion: 1.0.9_svelte@3.51.0+vite@3.1.7
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@sveltejs/vite-plugin-svelte@1.0.9_svelte@3.51.0+vite@3.1.7
+
+
+PackageName: webidl-conversions
+SPDXID: SPDXRef-Package-npm-webidl-conversions-1d807a88d8d0f4bb
+PackageVersion: 3.0.1
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/webidl-conversions@3.0.1
+
+
+PackageName: whatwg-url
+SPDXID: SPDXRef-Package-npm-whatwg-url-7aed3471b3709619
+PackageVersion: 5.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/whatwg-url@5.0.0
+
+
+PackageName: which
+SPDXID: SPDXRef-Package-npm-which-e9ba031010b39313
+PackageVersion: 2.0.2
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/which@2.0.2
+
+
+PackageName: wide-align
+SPDXID: SPDXRef-Package-npm-wide-align-7b9af2fcf852798c
+PackageVersion: 1.1.5
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/wide-align@1.1.5
+
+
+PackageName: word-wrap
+SPDXID: SPDXRef-Package-npm-word-wrap-50a1b375d9126836
+PackageVersion: 1.2.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/word-wrap@1.2.3
+
+
+PackageName: workers-types
+SPDXID: SPDXRef-Package-npm-workers-types-b479391bea445672
+PackageVersion: 3.16.0
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/@cloudflare/workers-types@3.16.0
+
+
+PackageName: worktop
+SPDXID: SPDXRef-Package-npm-worktop-9a9717a1c8454ac4
+PackageVersion: 0.8.0-next.14
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/worktop@0.8.0-next.14
+
+
+PackageName: wrappy
+SPDXID: SPDXRef-Package-npm-wrappy-53931e5f807709a
+PackageVersion: 1.0.2
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/wrappy@1.0.2
+
+
+PackageName: yallist
+SPDXID: SPDXRef-Package-npm-yallist-53711c84350df8d8
+PackageVersion: 4.0.0
+PackageLicenseConcluded: ISC
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/yallist@4.0.0
+
+
+PackageName: yocto-queue
+SPDXID: SPDXRef-Package-npm-yocto-queue-dc66df52dd693ee0
+PackageVersion: 0.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:npm/yocto-queue@0.1.0
+
