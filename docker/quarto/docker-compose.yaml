@@ -7,6 +7,6 @@ services:
       context: ../..
       dockerfile: docker/quarto/Dockerfile
       args:
-        - VAST_CONTAINER_REF=${VAST_CONTAINER_REF:-latest}
+        - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
         - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
         - QUARTO_VERSION=${QUARTO_VERSION:-1.1.251}
