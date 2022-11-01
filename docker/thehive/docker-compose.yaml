@@ -23,16 +23,17 @@ services:
     image: thehiveproject/cortex:3.1.7-1-withdeps
     depends_on:
       - elasticsearch
-    command: --job-directory /opt/cortex/jobs
+    command: 
+      --job-directory /tmp/cortex-jobs
     ports:
       - 9001:9001
     environment:
-      - JOB_DIRECTORY=/opt/cortex/jobs
+      - JOB_DIRECTORY=/tmp/cortex-jobs
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./vol/cortex/application.conf:/etc/cortex/application.conf
       - ./vol/cortex/local-analyzers.json:/opt/cortex/analyzers/local-analyzers.json
-      - /tmp/cortex-jobs:/opt/cortex/jobs
+      - /tmp/cortex-jobs:/tmp/cortex-jobs
       - cortex-index:/opt/cortex/index
 
   elasticsearch:
