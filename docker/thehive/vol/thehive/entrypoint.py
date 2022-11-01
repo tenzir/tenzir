@@ -152,7 +152,7 @@ def init_cortex():
             "jobCache": 10,
             "jobTimeout": 30,
         },
-        (CORTEX_ORGADMIN_EMAIL,CORTEX_ORGADMIN_PWD)
+        (CORTEX_ORGADMIN_EMAIL, CORTEX_ORGADMIN_PWD),
     )
 
     # The API key is how TheHive interacts with Cortex
