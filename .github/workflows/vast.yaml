@@ -916,9 +916,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          submodules: recursive
       - name: Install Docker Compose v2 CLI
         uses: ndeloof/install-compose-action@v0.0.1
         with:
@@ -938,7 +935,6 @@ jobs:
           make docker
           # TODO: An assertion of the actual content of the output would be welcome
           make docker TARGET=clean
-
 
   build-nix:
     needs:
