@@ -4,8 +4,7 @@ In this directory we define a dockerized environment to run Quarto. The image
 builds on top of the VAST image and adds R, Poetry, and Quarto. This creates a
 runtime suitable for calling the VAST binary from notebooks.
 
-We don't publish the Quarto Docker image, so users are required to build it
-locally.
+We don't publish the Quarto Docker image, so you need to build it locally.
 
 The `docker-compose.bind.yaml` overlay contains the configurations to bind mount
 the VAST repository. The provided commands are executed as the `vast:vast` user
