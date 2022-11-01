@@ -9,7 +9,7 @@ if (NOT PNPM_PATH)
 endif ()
 
 # The install dir of the UI root relative to the install prefix of VAST itself.
-set(ui_install_dir "${VAST_CMAKE_INSTALL_DATADIR}/vast/plugin/web/www")
+set(ui_install_dir "${CMAKE_INSTALL_DATADIR}/vast/plugin/web/www")
 
 # We reconfigure whenever any file in the current directory changes, but exclude
 # files that match the exclude pattern here. Ideally we'd want to use the
@@ -35,17 +35,20 @@ file(
     RELATIVE \"${CMAKE_CURRENT_BINARY_DIR}\"
     \"${CMAKE_CURRENT_BINARY_DIR}/*\")
   list(FILTER old_ui_sources EXCLUDE REGEX \"${sources_exclude_pattern}\")
-  set(ui_sources \"${ui_sources}\")
+  if (old_ui_sources)
+    file(REMOVE \${old_ui_sources})
+  endif ()
+  list(APPEND ui_sources ${ui_sources})
   foreach (ui_source IN LISTS ui_sources)
-    configure_file(\"${CMAKE_CURRENT_LIST_DIR}/\${ui_source}\"
-                   \"${CMAKE_CURRENT_BINARY_DIR}/\${ui_source}\"
-                   COPYONLY)
+    configure_file(
+      \"${CMAKE_CURRENT_LIST_DIR}/\${ui_source}\"
+      \"${CMAKE_CURRENT_BINARY_DIR}/\${ui_source}\"
+      COPYONLY)
   endforeach ()")
 
 add_custom_command(
-  OUTPUT "${CMAKE_BINARY_DIR}/${ui_install_dir}/ui.marker"
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ui.marker"
   BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/copy-ui.cmake"
-             "${CMAKE_CURRENT_BINARY_DIR}/ui.marker"
   COMMENT "Builind UI to ${CMAKE_BINARY_DIR}/${ui_install_dir}"
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/copy-ui.cmake"
@@ -60,8 +63,7 @@ add_custom_command(
   COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/ui.marker"
   DEPENDS ${ui_sources})
 
-add_custom_target(web-ui
-                  DEPENDS "${CMAKE_BINARY_DIR}/${ui_install_dir}/ui.marker")
+add_custom_target(web-ui DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ui.marker")
 
 install(
   DIRECTORY "${CMAKE_BINARY_DIR}/${ui_install_dir}"
