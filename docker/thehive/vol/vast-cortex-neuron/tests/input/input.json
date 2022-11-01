@@ -1,0 +1,23 @@
+{
+    "data": "10.12.14.101",
+    "dataType": "ip",
+    "tlp": 2,
+    "pap": 2,
+    "message": "",
+    "parameters": {},
+    "config": {
+        "proxy_https": null,
+        "cacerts": null,
+        "check_tlp": false,
+        "max_tlp": 2,
+        "auto_extract_artifacts": false,
+        "max_events": 30,
+        "jobCache": 10,
+        "check_pap": false,
+        "max_pap": 2,
+        "endpoint": "127.0.0.1:42000",
+        "jobTimeout": 30,
+        "service": "get",
+        "proxy_http": null
+    }
+}

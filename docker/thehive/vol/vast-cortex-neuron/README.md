@@ -37,33 +37,9 @@ The analyzer takes following input datatype:
   `docker.autoUpdate=false` in [Cortex Config](vol/cortex/application.conf) and
   build/pull the image into local image repository.
 
-## How to Debug
-- Create `input` and `output` directories where the analyzer script runs
-- Put a file named `input.json` into the `input` folder with example input:
-    ```
-    {
-        "data": "10.12.14.101",
-        "dataType": "ip",
-        "tlp": 2,
-        "pap": 2,
-        "message": "",
-        "parameters": {},
-        "config": {
-        "proxy_https": null,
-        "cacerts": null,
-        "check_tlp": false,
-        "max_tlp": 2,
-        "auto_extract_artifacts": false,
-        "max_events": 30,
-        "jobCache": 10,
-        "check_pap": false,
-        "max_pap": 2,
-        "endpoint": "127.0.0.1:42000",
-        "jobTimeout": 30,
-        "service": "get",
-        "proxy_http": null
-    }
-    ```
-- While running the script, provide the path of the directory where you have
-  created the `input` and `output` directories as second parameter
-  (`job-directory`)
+## How to test and debug
+
+To run this Neuron individually, in the `tests` directory you will find:
+- a `test` script with the actual docker command
+- an `input` directory with an example `input.json` file
+- an `output` directory where the resulting output is written
