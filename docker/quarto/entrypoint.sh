@@ -29,8 +29,7 @@ bindfs --force-user=$CONTAINER_USER --force-group=$CONTAINER_GROUP \
     --chown-ignore --chgrp-ignore \
     /mnt/host /host
 
-# using Dockerfile WORKDIR creates a sort of race with bindfs so we fall back to
-# the good old `cd`
+# Using Dockerfile WORKDIR creates a sort of race with bindfs so we use `cd` instead
 cd /host
 
 # Drop privileges and execute next container command, or 'bash' if not specified.

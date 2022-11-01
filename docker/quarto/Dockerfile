@@ -44,7 +44,7 @@ ENV POETRY_HOME=$PREFIX
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
 
-# extra layers to have clean write on host file system
+# Extra layers with configurations avoiding permission conflicts on host FS
 FROM quarto-base
 
 USER root

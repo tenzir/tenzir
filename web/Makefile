@@ -100,7 +100,7 @@ clean:
 	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
 
 
-# A straitforward target to enable `make docker TARGET=bash`
+# A straightforward target to enable `make docker TARGET=bash`
 bash: 
 	@bash
 

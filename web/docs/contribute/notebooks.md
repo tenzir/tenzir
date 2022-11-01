@@ -36,14 +36,20 @@ there to run `quarto render` to generate all contained notebooks.
 
 ## Run within Docker
 
-We also provide a Docker environment to enable a reproducible execution of
-Quarto commands (including its dependencies such as R). This images is built on
-top of the VAST image, and thus contains a working binary that can be used to
-demonstrate VAST features.
+We also provide a Docker container to enable a reproducible execution of
+notebooks. The container builds on top of the VAST container and adds Quarto,
+including all Python and R dependencies. This makes it easy to demonstrate VAST
+features within a Quarto notebook.
 
-Build commands, such as `yarn build`, use this containerized environment. You
-can also enter it to run some tests. Within the `web` or `examples/notebooks`
-directory, run:
+The website build harness uses this Docker Compose environment to run Quarto
+notebooks that represent more elaborate user guides or blog posts that. For
+example, running `yarn build` in `/web` compiles the website only after having
+executed all notebooks via the Docker Compose environment. Similarly, the
+`/examples/notebooks` directory contains example notebooks that leverage this
+environment.
+
+To get a shell in this Docker Compose environment, run the following in
+`/examples/notebooks` or `/web`:
 
 ```bash
 make docker TARGET=bash
