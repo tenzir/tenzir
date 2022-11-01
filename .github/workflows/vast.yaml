@@ -101,7 +101,6 @@ jobs:
           done
           echo "::set-output name=docker-build-args::${docker_build_args}"
           echo "::set-output name=vast-container-ref::${vast_container_ref}"
-          
 
   changelog:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
