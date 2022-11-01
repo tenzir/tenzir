@@ -1,9 +1,8 @@
 # Quarto runner
 
 In this directory we define a dockerized environment to run Quarto. The image
-build on top of the VAST image, adding an R installation, Poetry, and of course
-Quarto. This makes it possible to call the VAST binary from within the
-notebooks.
+builds on top of the VAST image and adds R, Poetry, and Quarto. This creates a
+runtime suitable for calling the VAST binary from notebooks.
 
 We don't publish the Quarto Docker image, so users are required to build it
 locally.
