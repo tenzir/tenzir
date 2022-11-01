@@ -187,18 +187,42 @@ int main(int argc, char** argv) {
   // Eagerly verify that the Arrow libraries we're using have Zstd support so
   // we can assert this works when serializing record batches.
   {
-    auto compression_level
+    const auto default_compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
-    if (!compression_level.ok()) {
+    if (!default_compression_level.ok()) {
       VAST_ERROR("failed to configure Zstd codec for Apache Arrow: {}",
-                 compression_level.status().ToString());
+                 default_compression_level.status().ToString());
       return EXIT_FAILURE;
     }
-    auto codec = arrow::util::Codec::Create(
-      arrow::Compression::ZSTD, compression_level.MoveValueUnsafe());
+    auto compression_level
+      = caf::get_or(cfg, "vast.zstd-compression-level",
+                    default_compression_level.ValueUnsafe());
+    auto min_level
+      = arrow::util::Codec::MinimumCompressionLevel(arrow::Compression::ZSTD);
+    auto max_level
+      = arrow::util::Codec::MaximumCompressionLevel(arrow::Compression::ZSTD);
+    if (!min_level.ok()) {
+      VAST_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
+                 min_level.status().ToString());
+      return EXIT_FAILURE;
+    }
+    if (!max_level.ok()) {
+      VAST_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
+                 max_level.status().ToString());
+      return EXIT_FAILURE;
+    }
+    if (compression_level < min_level.ValueUnsafe()
+        || compression_level > max_level.ValueUnsafe()) {
+      VAST_ERROR("zstd compression level '{}' outside of valid range [{}, {}]",
+                 compression_level, min_level.ValueUnsafe(),
+                 max_level.ValueUnsafe());
+      return EXIT_FAILURE;
+    }
+    auto codec
+      = arrow::util::Codec::Create(arrow::Compression::ZSTD, compression_level);
     if (!codec.ok()) {
       VAST_ERROR("failed to create Zstd codec for Apache Arrow: {}",
-                 compression_level.status().ToString());
+                 codec.status().ToString());
       return EXIT_FAILURE;
     }
   }
