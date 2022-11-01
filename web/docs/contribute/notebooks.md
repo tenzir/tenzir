@@ -41,6 +41,9 @@ notebooks. The container builds on top of the VAST container and adds Quarto,
 including all Python and R dependencies. This makes it easy to demonstrate VAST
 features within a Quarto notebook.
 
+Other services can be added to the context of the Quarto notebook execution by
+extending the Docker Compose setup with [extra overlays](docker/).
+
 The website build harness uses this Docker Compose environment to run Quarto
 notebooks that represent more elaborate user guides or blog posts that. For
 example, running `yarn build` in `/web` compiles the website only after having

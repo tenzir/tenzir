@@ -7,8 +7,8 @@ notebooks.
 
 We don't publish the Quarto Docker image, so you need to build it locally.
 
-The `docker-compose.bind.yaml` overlay contains the configurations to bind mount
-the VAST repository on the Quarto container and avoid file system permission
+The `docker-compose.bind.yaml` overlay contains the configurations to bind-mount
+the VAST repository on the Quarto container and avoid filesystem permission
 conflicts between the container and the host users. For instance, to run the
 Quarto build in the `web` directory, open a terminal in the directory containing
 this README and run the following:
