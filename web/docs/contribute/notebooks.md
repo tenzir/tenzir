@@ -34,6 +34,31 @@ Since the `web` directory is a Quarto
 [project](https://quarto.org/docs/projects/quarto-projects.html), it suffices
 there to run `quarto render` to generate all contained notebooks.
 
+## Run within Docker
+
+We also provide a Docker container to enable a reproducible execution of
+notebooks. The container builds on top of the VAST container and adds Quarto,
+including all Python and R dependencies. This makes it easy to demonstrate VAST
+features within a Quarto notebook.
+
+Other services can be added to the context of the Quarto notebook execution by
+extending the Docker Compose setup with [extra
+overlays](https://github.com/tenzir/vast/tree/master/docker/).
+
+The website build harness uses this Docker Compose environment to run Quarto
+notebooks that represent more elaborate user guides or blog posts that. For
+example, running `yarn build` in `/web` compiles the website only after having
+executed all notebooks via the Docker Compose environment. Similarly, the
+`/examples/notebooks` directory contains example notebooks that leverage this
+environment.
+
+To get a shell in this Docker Compose environment, run the following in
+`/examples/notebooks` or `/web`:
+
+```bash
+make docker TARGET=bash
+```
+
 ## Add a notebook
 
 The Quarto syntax is a combinatiohn of
@@ -83,10 +108,7 @@ Adding a new documentation page involves the following steps:
 4. Write your notebook add Python dependencies into `web/pyproject.toml`
    and R depdencies into `web/DESCRIPTION`.
 
-5. Run `make` in the `web` directory to compile your notebook into GitHub
-   Flavored Markdown (GFM), suitable for inclusion via Docusaurus.
-
-6. Run `yarn start` and inspect your page locally.
+5. Run `yarn start` and inspect your page locally.
 
 ### Create a blog post
 
@@ -116,7 +138,4 @@ Writing a new blog post involves the following steps:
 4. Write your blog post and add Python dependencies into `web/pyproject.toml`
    and R depdencies into `web/DESCRIPTION`.
 
-5. Run `make` in the `web` directory to compile your notebook into GitHub
-   Flavored Markdown (GFM), suitable for inclusion via Docusaurus.
-
-6. Run `yarn start` and inspect the blog post locally.
+5. Run `yarn start` and inspect the blog post locally.

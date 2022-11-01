@@ -45,6 +45,7 @@ jobs:
       head-ref-slug: ${{ steps.determine-version.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.determine-version.outputs.base-ref-slug }}
       docker-build-args: ${{ steps.determine-version.outputs.docker-build-args }}
+      vast-container-ref: ${{ steps.determine-version.outputs.vast-container-ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -87,8 +88,10 @@ jobs:
           # version fallbacks manually here.
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             vast_tag="${before_version}"
+            vast_container_ref="${GITHUB_HEAD_REF_SLUG}"
           else
             vast_tag="${build_version}"
+            vast_container_ref="${{ github.sha }}"
           fi
           docker_build_args="${docker_build_args} -DVAST_VERSION_TAG:STRING=${vast_tag}"
           for plugin in $(ls plugins); do
@@ -97,6 +100,7 @@ jobs:
             docker_build_args="${docker_build_args} -D${var}:STRING=${value}"
           done
           echo "::set-output name=docker-build-args::${docker_build_args}"
+          echo "::set-output name=vast-container-ref::${vast_container_ref}"
 
   changelog:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
@@ -183,65 +187,6 @@ jobs:
             cmake --build build --target update-changelog
             git diff-index --exit-code HEAD -- CHANGELOG.md
           fi
-
-  website:
-    needs: changelog
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
-    name: Website
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Delete existing CHANGELOG.md
-        run:
-          rm CHANGELOG.md
-      - name: Download new CHANGELOG.md
-        uses: actions/download-artifact@v3
-        with:
-          name: CHANGELOG.md
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16.x
-          cache-dependency-path: web/yarn.lock
-          cache: yarn
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.1.6
-        with:
-          poetry-version: 1.1.14
-      - name: Setup R
-        uses: r-lib/actions/setup-r@v2
-      - name: Setup R dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          working-directory: web
-          cache-version: 2
-      # The setup-r-dependencies action leaves lingering state in web/.github.
-      # Turns out we clone our tenzir/.github repo into there during the website
-      # build, so must clean up prior to doing so. The Right Fix is a one-line
-      # PR against r-lib/actions to remove the .github dir at action exit.
-      - name: Clean up after setup-r-dependencies
-        run: rm -rf web/.github
-      - name: Setup Quarto
-        uses: quarto-dev/quarto-actions/setup@v2
-      - name: Install dependencies
-        working-directory: web
-        run: yarn install --frozen-lockfile
-      - name: Build website
-        working-directory: web
-        run: yarn build
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: web/build
-          cname: vast.io
-          user_name: tenzir-bot
-          user_email: engineering@tenzir.com
 
   build-debian:
     needs:
@@ -956,13 +901,40 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run Integration Tests
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.head-ref-slug }}"
-          else
-            export VAST_CONTAINER_REF="${{ github.sha }}"
-          fi
+          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
+
+
+  example-notebooks:
+    needs:
+      - build-docker
+      - determine-version
+    if: github.event_name != 'workflow_dispatch'
+    name: Build example notebooks
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Docker Compose v2 CLI
+        uses: ndeloof/install-compose-action@v0.0.1
+        with:
+          version: latest
+          legacy: false
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build notebooks
+        working-directory: examples/notebooks
+        run: |
+          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast_container_ref }}"
+          export VAST_CONTAINER_REGISTRY=ghcr.io
+          make docker
+          # TODO: An assertion of the actual content of the output would be welcome
+          make docker TARGET=clean
 
   build-nix:
     needs:
@@ -1176,3 +1148,58 @@ jobs:
         working-directory: python
         run: |
           poetry publish --build
+
+  website:
+    needs:
+      - changelog
+      - build-docker
+      - determine-version
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    name: Website
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Docker Compose v2 CLI
+        uses: ndeloof/install-compose-action@v0.0.1
+        with:
+          version: latest
+          legacy: false
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Delete existing CHANGELOG.md
+        run:
+          rm CHANGELOG.md
+      - name: Download new CHANGELOG.md
+        uses: actions/download-artifact@v3
+        with:
+          name: CHANGELOG.md
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+          cache-dependency-path: web/yarn.lock
+          cache: yarn
+      - name: Install dependencies
+        working-directory: web
+        run: yarn install --frozen-lockfile
+      - name: Build website
+        working-directory: web
+        run: |
+          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
+          export VAST_CONTAINER_REGISTRY=ghcr.io
+          yarn build
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: web/build
+          cname: vast.io
+          user_name: tenzir-bot
+          user_email: engineering@tenzir.com

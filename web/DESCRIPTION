@@ -6,6 +6,7 @@ Imports:
     ggplot2,
     ggrepel,
     lubridate,
+    pkgdepends,
     readr,
     rmarkdown,
     svglite,

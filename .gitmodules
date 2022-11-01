@@ -7,3 +7,6 @@
 [submodule "plugins/web/aux/restinio"]
 	path = plugins/web/aux/restinio
 	url = https://github.com/Stiffstream/restinio
+[submodule "web/.github"]
+	path = web/.github
+	url = https://github.com/tenzir/.github.git
