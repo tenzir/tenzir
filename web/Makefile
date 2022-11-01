@@ -95,3 +95,14 @@ clean:
 	rm -f $(CONTRIBUTING_DIR)/security.md
 	rm -f $(CONTRIBUTING_DIR)/workflow.md
 	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
+
+
+bash: # enable `make docker TARGET=bash`
+	bash
+
+docker:
+	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \
+		-f ../docker/quarto/docker-compose.build.yaml \
+		-f ../docker/quarto/docker-compose.bind.yaml \
+		run quarto \
+		make -C web $(TARGET)

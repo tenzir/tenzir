@@ -1,0 +1,9 @@
+version: "3"
+services:
+  quarto:
+    environment:
+      - VAST_ENDPOINT=vast:42000
+    networks:
+      - vast
+    depends_on:
+      - vast

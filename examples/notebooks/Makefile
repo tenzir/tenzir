@@ -12,7 +12,7 @@ ifndef POETRY
 	$(error "poetry not in $$PATH; please install system-wide")
 else
 	@poetry install --no-root
-	#@poetry	run python -m bash_kernel.install
+	@poetry	run python -m bash_kernel.install
 endif
 
 %.md: %.qmd
@@ -26,3 +26,26 @@ quarto: $(QUARTO_MD_OUTPUTS)
 
 clean:
 	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
+
+define VAST_COMPOSE_OVERLAYS
+-f ../../docker/quarto/docker-compose.build.yaml
+-f ../../docker/quarto/docker-compose.bind.yaml
+-f ../../docker/quarto/docker-compose.vast.yaml
+-f ../../docker/vast/docker-compose.yaml
+endef
+
+bash: # enable `make docker TARGET=bash`
+	bash
+
+export VAST_COMPOSE_OVERLAYS
+docker: # run Quarto with a VAST server running in another service
+	docker compose \
+		$$VAST_COMPOSE_OVERLAYS \
+		up -d vast && \
+	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \
+		$$VAST_COMPOSE_OVERLAYS \
+		run quarto \
+		make -C examples/notebooks $(TARGET) ; \
+	docker compose \
+		$$VAST_COMPOSE_OVERLAYS \
+		down

@@ -34,6 +34,16 @@ Since the `web` directory is a Quarto
 [project](https://quarto.org/docs/projects/quarto-projects.html), it suffices
 there to run `quarto render` to generate all contained notebooks.
 
+## Run within Docker
+
+We also provide a docker environment to enable a reproduceable execution of
+Quarto commands. To enter this environment, within the `web` or
+`examples/notebooks` directory, simply run:
+
+```bash
+make docker TARGET=bash
+```
+
 ## Add a notebook
 
 The Quarto syntax is a combinatiohn of
@@ -83,10 +93,7 @@ Adding a new documentation page involves the following steps:
 4. Write your notebook add Python dependencies into `web/pyproject.toml`
    and R depdencies into `web/DESCRIPTION`.
 
-5. Run `make` in the `web` directory to compile your notebook into GitHub
-   Flavored Markdown (GFM), suitable for inclusion via Docusaurus.
-
-6. Run `yarn start` and inspect your page locally.
+5. Run `yarn start` and inspect your page locally.
 
 ### Create a blog post
 
@@ -116,7 +123,4 @@ Writing a new blog post involves the following steps:
 4. Write your blog post and add Python dependencies into `web/pyproject.toml`
    and R depdencies into `web/DESCRIPTION`.
 
-5. Run `make` in the `web` directory to compile your notebook into GitHub
-   Flavored Markdown (GFM), suitable for inclusion via Docusaurus.
-
-6. Run `yarn start` and inspect the blog post locally.
+5. Run `yarn start` and inspect the blog post locally.

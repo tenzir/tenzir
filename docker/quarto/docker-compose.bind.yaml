@@ -1,0 +1,16 @@
+version: "3"
+services:
+  quarto:
+    build:
+      target: quarto-bind-mount
+    volumes:
+      - ../..:/mnt/host
+      - quarto:/home/vast/.cache
+    environment:
+      - HOST_UID
+      - HOST_GID
+    privileged: true
+
+volumes:
+  quarto:
+    driver: local
