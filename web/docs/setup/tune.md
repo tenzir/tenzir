@@ -101,6 +101,27 @@ VAST supports [rebuilding the entire database](#rebuild-partitions) in case you
 want to switch to a different store format. However, VAST works perfectly fine
 with a mixed-storage configuration, so a full rebuild is not required.
 
+### Compression
+
+VAST compresses partitions using Zstd for partitions at rest. To fine-tune
+the space-time trade-off, VAST offers a setting, `vast.zstd-compression-level`
+to allow fine-tuning the compression level:
+
+```yaml
+vast:
+  zstd-compression-level: 1
+```
+
+Currently, the default value is taken from Apache Arrow itself, using
+`arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)`
+
+:::tip
+We have a [blog post][parquet-and-feather-2] that does an in-depth
+comparison of various compression levels and storage formats.
+:::
+
+[parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
+
 ## Memory usage and caching
 
 The amount of memory that a VAST server process is allowed to use can currently
