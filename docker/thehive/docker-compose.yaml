@@ -23,8 +23,7 @@ services:
     image: thehiveproject/cortex:3.1.7-1-withdeps
     depends_on:
       - elasticsearch
-    command: 
-      --job-directory /tmp/cortex-jobs
+    command: --job-directory /tmp/cortex-jobs
     ports:
       - 9001:9001
     environment:
@@ -35,6 +34,17 @@ services:
       - ./vol/cortex/local-analyzers.json:/opt/cortex/analyzers/local-analyzers.json
       - /tmp/cortex-jobs:/tmp/cortex-jobs
       - cortex-index:/opt/cortex/index
+
+  neuron:
+    image: tenzir/vast-neuron
+    pull_policy: build
+    build:
+      context: ./vol/vast-cortex-neuron/
+      args:
+        - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
+        - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
+    entrypoint:
+      - "true"
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2
