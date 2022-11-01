@@ -45,7 +45,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 
 
 # Extra layers with configurations avoiding permission conflicts on host FS
-FROM quarto-base
+FROM quarto-base as quarto-bind
 
 USER root
 
@@ -60,3 +60,8 @@ ENV CONTAINER_USER=vast
 ENV CONTAINER_GROUP=vast
 
 ENTRYPOINT [ "/entrypoint.sh" ]
+
+# Default to a simple image with a bash entrypoint
+FROM quarto-base
+
+ENTRYPOINT [ "/bin/bash" ]

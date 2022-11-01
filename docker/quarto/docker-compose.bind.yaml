@@ -8,6 +8,8 @@ services:
       - HOST_UID
       - HOST_GID
     privileged: true
+    build:
+      target: quarto-bind
 
 volumes:
   quarto:
