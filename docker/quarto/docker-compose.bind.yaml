@@ -1,8 +1,6 @@
 version: "3"
 services:
   quarto:
-    build:
-      target: quarto-bind-mount
     volumes:
       - ../..:/mnt/host
       - quarto:/home/vast/.cache

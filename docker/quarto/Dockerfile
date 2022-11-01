@@ -1,7 +1,8 @@
 ARG VAST_VERSION
 ARG QUARTO_VERSION
+ARG VAST_CONTAINER_REGISTRY
 
-FROM tenzir/vast:$VAST_VERSION AS quarto-base
+FROM $VAST_CONTAINER_REGISTRY/tenzir/vast:$VAST_VERSION AS quarto-base
 ARG QUARTO_VERSION
 
 USER root
@@ -44,7 +45,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 
 
 # extra layers to have clean write on host file system
-FROM quarto-base as quarto-bind-mount
+FROM quarto-base
 
 USER root
 
@@ -59,9 +60,3 @@ ENV CONTAINER_USER=vast
 ENV CONTAINER_GROUP=vast
 
 ENTRYPOINT [ "/entrypoint.sh" ]
-
-
-# The default build doesn't need bindfs and related configs
-FROM quarto-base as quarto-default
-
-USER vast:vast

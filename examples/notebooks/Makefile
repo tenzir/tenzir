@@ -27,18 +27,23 @@ quarto: $(QUARTO_MD_OUTPUTS)
 clean:
 	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
 
-bash: # enable `make docker TARGET=bash`
+# A straitforward target to enable `make docker TARGET=bash`
+bash:
 	@bash
 
 define VAST_COMPOSE_OVERLAYS
--f ../../docker/quarto/docker-compose.build.yaml
+-f ../../docker/quarto/docker-compose.yaml
 -f ../../docker/quarto/docker-compose.bind.yaml
 -f ../../docker/quarto/docker-compose.vast.yaml
 -f ../../docker/vast/docker-compose.yaml
 endef
 
 export VAST_COMPOSE_OVERLAYS
-docker: # run Quarto with a VAST server running in another service
+# Run this makefile from within the Quarto Docker image, with a VAST server
+# running in another service.
+# You can specify another target using the TARGET variable:
+# make docker TARGET=clean
+docker: 
 	docker compose \
 		$$VAST_COMPOSE_OVERLAYS \
 		up -d vast && \

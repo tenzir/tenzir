@@ -97,12 +97,16 @@ clean:
 	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
 
 
-bash: # enable `make docker TARGET=bash`
+# A straitforward target to enable `make docker TARGET=bash`
+bash: 
 	@bash
 
+# Run this makefile from within the Quarto Docker image.
+# You can specify another target using the TARGET variable:
+# make docker TARGET=clean
 docker:
 	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \
-		-f ../docker/quarto/docker-compose.build.yaml \
+		-f ../docker/quarto/docker-compose.yaml \
 		-f ../docker/quarto/docker-compose.bind.yaml \
 		run quarto \
 		make -C web $(TARGET)

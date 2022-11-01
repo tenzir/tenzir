@@ -13,7 +13,7 @@ export HOST_UID=$(id -u)
 export HOST_GID=$(id -g) 
 
 docker compose \
-    -f docker-compose.build.yaml \
+    -f docker-compose.yaml \
     -f docker-compose.bind.yaml \
     run quarto \
     make -C web
@@ -21,7 +21,7 @@ docker compose \
 # OR
 
 docker compose \
-    -f docker-compose.build.yaml \
+    -f docker-compose.yaml \
     -f docker-compose.bind.yaml \
     run quarto \
     make -C examples/notebooks
