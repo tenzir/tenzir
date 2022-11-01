@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
     }
     if (compression_level < min_level.ValueUnsafe()
         || compression_level > max_level.ValueUnsafe()) {
-      VAST_ERROR("zstd compression level '{}' outside of valid range [{}, {}]",
+      VAST_ERROR("Zstd compression level '{}' outside of valid range [{}, {}]",
                  compression_level, min_level.ValueUnsafe(),
                  max_level.ValueUnsafe());
       return EXIT_FAILURE;
