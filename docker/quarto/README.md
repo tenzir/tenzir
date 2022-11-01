@@ -2,6 +2,9 @@
 
 In this directory we define a dockerized environment to run Quarto.
 
+We don't publish the Quarto Docker image, so users are required to build it
+locally.
+
 The `docker-compose.bind.yaml` overlay contains the configurations to bind mount
 the VAST repository. The provided commands are executed as the `vast:vast` user
 but the resulting output files will be created from the user defined in the
