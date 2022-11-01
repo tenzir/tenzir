@@ -38,6 +38,7 @@ services:
   neuron:
     image: tenzir/vast-neuron
     pull_policy: build
+    network_mode: host
     build:
       context: ./vol/vast-cortex-neuron/
       args:
