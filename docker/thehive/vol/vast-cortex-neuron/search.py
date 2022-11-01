@@ -11,10 +11,6 @@ from pyvast import VAST
 
 class VastAnalyzer(Analyzer):
     def __init__(self):
-        # thomas adding a comment to change the failing line no
-        print(f"tp;args: {sys.argv}")
-        print(f"tp;stdin: {sys.stdin.readlines()}")
-        time.sleep(6)
         Analyzer.__init__(self)
         self.host = self.get_param(
             "config.endpoint", None, "Vast Server endpoint is missing"
