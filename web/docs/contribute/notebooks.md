@@ -36,9 +36,14 @@ there to run `quarto render` to generate all contained notebooks.
 
 ## Run within Docker
 
-We also provide a docker environment to enable a reproduceable execution of
-Quarto commands. To enter this environment, within the `web` or
-`examples/notebooks` directory, simply run:
+We also provide a Docker environment to enable a reproducible execution of
+Quarto commands (including its dependencies such as R). This images is built on
+top of the VAST image, and thus contains a working binary that can be used to
+demonstrate VAST features.
+
+Build commands, such as `yarn build`, use this containerized environment. You
+can also enter it to run some tests. Within the `web` or `examples/notebooks`
+directory, run:
 
 ```bash
 make docker TARGET=bash

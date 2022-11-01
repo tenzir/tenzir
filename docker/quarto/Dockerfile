@@ -27,7 +27,7 @@ RUN apt-get update && \
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-key '95C0FAF38DB3CCAD0C080A7BDC78B2DDEABC47B7' && \
     add-apt-repository 'deb http://cloud.r-project.org/bin/linux/debian bullseye-cran40/' && \
     apt-get update && \
-    apt-get install -y  r-base && \
+    apt-get install -y r-base && \
     rm -rf /var/lib/apt/lists/*
 
 RUN git clone -b v${QUARTO_VERSION} https://github.com/quarto-dev/quarto-cli.git /opt/quarto && \

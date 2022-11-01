@@ -2,11 +2,11 @@ Package: VAST
 Version: 0.0.1
 Description: VAST website
 Imports:
-    pkgdepends,
     dplyr,
     ggplot2,
     ggrepel,
     lubridate,
+    pkgdepends,
     readr,
     rmarkdown,
     svglite,
