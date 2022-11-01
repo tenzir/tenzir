@@ -98,7 +98,7 @@ clean:
 
 
 bash: # enable `make docker TARGET=bash`
-	bash
+	@bash
 
 docker:
 	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \

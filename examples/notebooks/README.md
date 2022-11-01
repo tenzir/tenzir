@@ -5,7 +5,7 @@ This directory contains various example notebooks. Please consult our
 
 [notebooks]: https://vast.io/docs/contribute/notebooks
 
-To simply get started without installing dependencies on your system, run:
+To build all notebooks without installing dependencies on your system, run:
 ```bash
 make docker
 ```

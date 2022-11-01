@@ -42,8 +42,6 @@ ENV POETRY_HOME=$PREFIX
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
-ENV PATH=$PATH
-
 
 # extra layers to have clean write on host file system
 FROM quarto-base as quarto-bind-mount
