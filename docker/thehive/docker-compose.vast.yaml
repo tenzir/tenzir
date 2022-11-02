@@ -1,14 +1,14 @@
 version: "3.8"
 services:
   neuron:
-    network_mode: "service:vast" # used for tests only
-    links:
-      - "vast:vast"
+    network_mode: "container:vast-vast-1" # used for tests only
+
   cortex:
     environment:
-      - CORTEX_NETWORK_MODE=service:vast
+      - CORTEX_NETWORK_MODE=container:vast-vast-1
     depends_on:
       - vast
+
   thehive:
     environment:
       - VAST_HOSTNAME=vast:42000

@@ -40,6 +40,8 @@ The analyzer takes following input datatype:
 ## How to test and debug
 
 To run this Neuron individually, in the `tests` directory you will find:
-- a `test` script with the actual docker command
-- an `input` directory with an example `input.json` file
+- a `test` script with some scafolding around the Docker commands
+  - run `test host` if VAST is running on your localhost
+  - run `test service` if VAST is running as a Compose service
+- an `input` directory with example input files (mounted as `input.json`)
 - an `output` directory where the resulting output is written
