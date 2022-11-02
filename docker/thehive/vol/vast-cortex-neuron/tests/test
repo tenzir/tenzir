@@ -8,7 +8,7 @@ PROJECT_DIRECTORY="--project-directory $SCRIPT_DIR/../../../"
 
 COMPOSE_FILES="-f docker-compose.yaml"
 if [[ "$1" == "service" ]]; then
-  COMPOSE_FILES="${COMPOSE_FILES} -f docker-compose.vast.yaml"
+  COMPOSE_FILES="${COMPOSE_FILES} -f ../vast/docker-compose.yaml -f docker-compose.vast.yaml"
 elif [[ "$1" == "host" ]]; then
   COMPOSE_FILES=$COMPOSE_FILES
 else
