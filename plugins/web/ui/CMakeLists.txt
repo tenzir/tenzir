@@ -6,7 +6,7 @@ set(VAST_WEB_UI_BUNDLE
     CACHE STRING "Specify a path to an external web UI bundle")
 if (VAST_WEB_UI_BUNDLE)
   file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/${ui_install_dir}")
-  file(COPY "${VAST_WEB_UI_BUNDLE}"
+  file(COPY "${VAST_WEB_UI_BUNDLE}/"
        DESTINATION "${CMAKE_BINARY_DIR}/${ui_install_dir}")
 else ()
   # Build and install the frontend as a static site.
