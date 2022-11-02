@@ -3,6 +3,9 @@
 set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+EXPECTED_OUTPUT_FILE=$SCRIPT_DIR/output/output.json
+
+rm -f EXPECTED_OUTPUT_FILE
 
 docker compose -f $SCRIPT_DIR/../../../docker-compose.yaml \
     run \
@@ -13,7 +16,6 @@ docker compose -f $SCRIPT_DIR/../../../docker-compose.yaml \
     neuron \
     /job
 
-EXPECTED_OUTPUT_FILE=$SCRIPT_DIR/output/output.json
 if [ ! -f "$EXPECTED_OUTPUT_FILE" ]; then
     echo "$EXPECTED_OUTPUT_FILE not found"
     exit 1
