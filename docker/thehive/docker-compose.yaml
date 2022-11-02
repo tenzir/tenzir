@@ -11,6 +11,7 @@ services:
       - MAX_HEAP_SIZE=1G
       - HEAP_NEWSIZE=1G
       - CORTEX_URL=http://cortex:9001
+      - VAST_HOSTNAME=localhost:42000
     command:
       - "--no-config-cortex"
     volumes:
@@ -20,7 +21,8 @@ services:
       - thehive-data:/opt/thp/thehive/data
 
   cortex:
-    image: thehiveproject/cortex:3.1.7-1-withdeps
+    build:
+      context: ./vol/cortex
     depends_on:
       - elasticsearch
     command: --job-directory /tmp/cortex-jobs
@@ -28,24 +30,25 @@ services:
       - 9001:9001
     environment:
       - JOB_DIRECTORY=/tmp/cortex-jobs
+      - ELASTICSEARCH_URI=http://elasticsearch:9200
+      - CORTEX_NETWORK_MODE=host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./vol/cortex/application.conf:/etc/cortex/application.conf
-      - ./vol/cortex/local-analyzers.json:/opt/cortex/analyzers/local-analyzers.json
       - /tmp/cortex-jobs:/tmp/cortex-jobs
       - cortex-index:/opt/cortex/index
 
   neuron:
     image: tenzir/vast-neuron
     pull_policy: build
-    network_mode: host
+    network_mode: host # used for tests only
     build:
       context: ./vol/vast-cortex-neuron/
       args:
         - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
         - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
     entrypoint:
-      - "true"
+      - echo
+      - "Build completed"
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2

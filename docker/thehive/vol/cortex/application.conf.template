@@ -1,12 +1,12 @@
 play.http.secret.key="CortexTestPassword"
 play.http.session.secure=true
 
-docker.container.networkMode=host
+docker.container.networkMode="__CORTEX_NETWORK_MODE_PLACEHOLDER__"
 auth.method.basic=true
 
 search {
   index = cortex
-  uri = "http://elasticsearch:9200"
+  uri = "__ELASTICSEARCH_URI_PLACEHOLDER__"
 }
 
 ## Cache

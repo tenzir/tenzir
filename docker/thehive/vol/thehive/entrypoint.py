@@ -10,6 +10,7 @@ import subprocess
 logging.getLogger().setLevel(logging.INFO)
 
 CORTEX_URL = os.getenv("CORTEX_URL")
+VAST_HOSTNAME = os.getenv("VAST_HOSTNAME")
 THEHIVE_URL = "http://localhost:9000"
 
 CONFIG_LOCATION = "/opt/thp/thehive/conf/application.conf"
@@ -135,13 +136,12 @@ def init_cortex():
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
 
-    # TODO setup analyzer
     call_cortex(
         "/api/organization/analyzer/VAST-Search_1_0",
         {
             "name": "VAST-Search_1_0",
             "configuration": {
-                "endpoint": "localhost:42000",
+                "endpoint": VAST_HOSTNAME,
                 "max_events": 40,
                 "auto_extract_artifacts": False,
                 "check_tlp": False,
