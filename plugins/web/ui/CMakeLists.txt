@@ -1,5 +1,6 @@
 # The install dir of the UI root relative to the install prefix of VAST itself.
-set(ui_install_dir "${CMAKE_INSTALL_DATADIR}/vast/plugin/web/www")
+set(ui_install_dir "${CMAKE_INSTALL_DATADIR}/vast/plugin/web/www/"
+)# TODO REVIEW do we need the trailing slash?
 
 set(VAST_WEB_UI_BUNDLE
     ""

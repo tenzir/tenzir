@@ -8,6 +8,7 @@
 , git
 , pandoc
 , caf
+, openssl
 , libpcap
 , arrow-cpp
 , fast_float
@@ -25,8 +26,6 @@
 , tcpdump
 , dpkg
 , restinio
-, nodejs
-, nodePackages
 , versionOverride ? null
 , versionShortOverride ? null
 , withPlugins ? []
@@ -35,6 +34,7 @@
 , buildType ? "Release"
 , buildAsPackage ? false
 , packageName ? "vast"
+, vast-ui
 }:
 let
   inherit (stdenv.hostPlatform) isStatic;
@@ -71,11 +71,10 @@ stdenv.mkDerivation (rec {
     cmake
     cmake-format
     dpkg
-    nodejs
-    nodePackages.pnpm
   ];
   propagatedNativeBuildInputs = [ pkg-config pandoc ];
   buildInputs = [
+    openssl
     fast_float
     jemalloc
     libpcap
@@ -117,6 +116,8 @@ stdenv.mkDerivation (rec {
     "-DVAST_ENABLE_UNIT_TESTS=OFF"
   ] ++ lib.optionals (withPlugins != []) [
     "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
+    # TODO limit this to just web plugin
+    "-DVAST_WEB_UI_BUNDLE=${vast-ui}"
   ] ++ lib.optionals buildAsPackage [
     "-UCMAKE_INSTALL_BINDIR"
     "-UCMAKE_INSTALL_SBINDIR"
@@ -159,7 +160,7 @@ stdenv.mkDerivation (rec {
 
   meta = with lib; {
     description = "Visibility Across Space and Time";
-    homepage = http://vast.io/;
+    homepage = "https://vast.io/";
     license = licenses.bsd3;
     platforms = platforms.unix;
     maintainers = with maintainers; [ tobim ];

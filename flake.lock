@@ -53,17 +53,14 @@
         ]
       },
       "locked": {
-        "lastModified": 1666251292,
-        "narHash": "sha256-8U27YbBwITbnVcC/PBQWsOP2EkpBMfKlD82Fb4NBOcc=",
-        "owner": "serokell",
-        "repo": "nix-npm-buildpackage",
-        "rev": "47f5444116df877b22cd262bfd01d0874f370e8a",
-        "type": "github"
+        "lastModified": 1667402268,
+        "narHash": "sha256-xfznpOhycEWc3qlReQfOD09sSBByAUtb73hJNIzlnXE=",
+        "path": "/home/halum/code/nix-npm-buildpackage",
+        "type": "path"
       },
       "original": {
-        "owner": "serokell",
-        "repo": "nix-npm-buildpackage",
-        "type": "github"
+        "path": "/home/halum/code/nix-npm-buildpackage",
+        "type": "path"
       }
     },
     "nixpkgs": {

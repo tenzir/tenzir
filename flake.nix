@@ -11,7 +11,7 @@
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.nix-filter.url = "github:numtide/nix-filter";
-  inputs.nix-npm-buildpackage.url = "github:serokell/nix-npm-buildpackage";
+  inputs.nix-npm-buildpackage.url = "github:dit7ya/nix-npm-buildpackage"; # TODO send a PR to upstream
   inputs.nix-npm-buildpackage.inputs.nixpkgs.follows = "nixpkgs";
 
   outputs = { self, nixpkgs, flake-utils, nix-filter, flake-compat, nix-npm-buildpackage }@inputs: {
