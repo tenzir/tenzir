@@ -46,6 +46,26 @@
         "type": "github"
       }
     },
+    "nix-npm-buildpackage": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1666251292,
+        "narHash": "sha256-8U27YbBwITbnVcC/PBQWsOP2EkpBMfKlD82Fb4NBOcc=",
+        "owner": "serokell",
+        "repo": "nix-npm-buildpackage",
+        "rev": "47f5444116df877b22cd262bfd01d0874f370e8a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "serokell",
+        "repo": "nix-npm-buildpackage",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1665940183,
@@ -67,6 +87,7 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "nix-filter": "nix-filter",
+        "nix-npm-buildpackage": "nix-npm-buildpackage",
         "nixpkgs": "nixpkgs"
       }
     }
