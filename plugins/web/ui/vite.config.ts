@@ -7,18 +7,18 @@ import { presetUno } from 'unocss';
 import presetIcons from '@unocss/preset-icons';
 
 const config: UserConfig = {
-	plugins: [
-		sveltekit(),
+  plugins: [
+    sveltekit(),
 
-		Unocss({
-			presets: [
-				presetUno(),
-				presetIcons({
-					/* options */
-				})
-			]
-		})
-	]
+    Unocss({
+      presets: [
+        presetUno(),
+        presetIcons({
+          /* options */
+        })
+      ]
+    })
+  ]
 };
 
 export default config;
