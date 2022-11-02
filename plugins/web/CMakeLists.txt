@@ -59,5 +59,3 @@ VASTCompileFlatBuffers(
 target_link_libraries(web PUBLIC web-fbs)
 
 add_subdirectory(ui)
-
-add_dependencies(web web-ui)

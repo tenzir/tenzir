@@ -71,6 +71,7 @@ else ()
     DEPENDS ${ui_sources})
 
   add_custom_target(web-ui DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/ui.marker")
+  add_dependencies(web web-ui)
 endif ()
 
 install(
