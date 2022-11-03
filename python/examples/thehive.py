@@ -4,7 +4,7 @@ from dynaconf import Dynaconf
 import stix2
 
 from vast import VAST
-import vast.apps.thehive as thehive
+import vast.fabric.apps.thehive as thehive
 import vast.utils.asyncio
 import vast.utils.config
 import vast.utils.logging

@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "vast-cortex"
+version = "0.1.0"
+description = "VAST cortex analyzer"
+authors = ["Thomas Peiselt <pi@kulturguerilla.org>"]
+license = "???"
+readme = "README.md"
+packages = [{include = "vast_cortex"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+vast = { path = "../../../../python/", extras = [ "fabric", "misp-stix" ] }
+# vast = { git = "https://github.com/tenzir/vast.git", subdirectory = "python" }
+cortexutils = "2.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
