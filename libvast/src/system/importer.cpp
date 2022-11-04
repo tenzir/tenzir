@@ -153,9 +153,14 @@ void importer_state::send_report() {
   samples.reserve(num_schemas_seen);
   samples.push_back(performance_sample{"importer"s, measurement_});
   samples.push_back(performance_sample{"node_throughput"s, node_throughput});
-  for (const auto& [name, count] : schema_counters)
+  auto total_count = count{0};
+  for (const auto& [name, count] : schema_counters) {
+    total_count += count;
     samples.push_back(performance_sample{
       "ingest", measurement{elapsed, count}, {{"schema", name}}});
+  }
+  samples.push_back(performance_sample{
+    "ingest-total", measurement{elapsed, total_count}});
   schema_counters.clear();
   auto r = performance_report{
     .data = std::move(samples),
