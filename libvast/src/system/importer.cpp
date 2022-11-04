@@ -159,8 +159,8 @@ void importer_state::send_report() {
     samples.push_back(performance_sample{
       "ingest", measurement{elapsed, count}, {{"schema", name}}});
   }
-  samples.push_back(performance_sample{
-    "ingest-total", measurement{elapsed, total_count}});
+  auto total_measurement = measurement{elapsed, total_count};
+  samples.push_back(performance_sample{"ingest-total"s, total_measurement});
   schema_counters.clear();
   auto r = performance_report{
     .data = std::move(samples),
