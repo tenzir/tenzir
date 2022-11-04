@@ -85,12 +85,11 @@ public:
     return bloom_filter_.memusage();
   }
 
-  caf::error serialize(caf::serializer& sink) const override {
-    return sink(bloom_filter_);
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return source(bloom_filter_);
+  caf::error inspect(supported_inspectors& inspector) override {
+    return std::visit(detail::overload{[this](auto inspector) {
+                        return inspector(bloom_filter_);
+                      }},
+                      inspector);
   }
 
   bool deserialize(vast::detail::legacy_deserializer& source) override {

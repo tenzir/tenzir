@@ -31,9 +31,7 @@ public:
 
   [[nodiscard]] size_t memusage() const override;
 
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
+  caf::error inspect(supported_inspectors& inspector) override;
 
   bool deserialize(vast::detail::legacy_deserializer& source) override;
 
