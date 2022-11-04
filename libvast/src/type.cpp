@@ -2151,7 +2151,7 @@ enumeration_type::array_type::make(
     = string_type::make_arrow_builder(arrow::default_memory_pool());
   for (const auto& [canonical, internal] : type->vast_type_.fields()) {
     const auto append_status = dict_builder->Append(
-      arrow::util::string_view{canonical.data(), canonical.size()});
+      std::string_view{canonical.data(), canonical.size()});
     VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
   }
   ARROW_ASSIGN_OR_RAISE(auto dict, dict_builder->Finish());
@@ -2170,7 +2170,7 @@ enumeration_type::builder_type::builder_type(std::shared_ptr<arrow_type> type,
     // a second stage integer -> integer lookup table.
     const auto memo_table_status
       = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
-        arrow::util::string_view{canonical.data(), canonical.size()},
+        std::string_view{canonical.data(), canonical.size()},
         &memo_index);
     VAST_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
     VAST_ASSERT(memo_index == detail::narrow_cast<int32_t>(internal));
@@ -2190,7 +2190,7 @@ arrow::Status enumeration_type::builder_type::Append(enumeration index) {
   auto memo_index = int32_t{-1};
   const auto memo_table_status
     = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
-      arrow::util::string_view{canonical.data(), canonical.size()},
+      std::string_view{canonical.data(), canonical.size()},
       &memo_index);
   VAST_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
   VAST_ASSERT(memo_index == index);

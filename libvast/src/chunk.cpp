@@ -102,11 +102,11 @@ private:
   }
 
   /// Peek at the next bytes.
-  arrow::Result<arrow::util::string_view> Peek(int64_t nbytes) override {
+  arrow::Result<std::string_view> Peek(int64_t nbytes) override {
     const auto clamped_size = std::min(chunk_->size() - position_,
                                        detail::narrow_cast<size_t>(nbytes));
     const auto bytes = as_bytes(chunk_).subspan(position_, clamped_size);
-    return arrow::util::string_view{reinterpret_cast<const char*>(bytes.data()),
+    return std::string_view{reinterpret_cast<const char*>(bytes.data()),
                                     bytes.size()};
   }
 
