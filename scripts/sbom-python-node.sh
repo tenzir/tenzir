@@ -1,33 +1,46 @@
-# Dependencies - cdxgen and syft
-# cdxgen can be installed from npm
+#!/usr/bin/env -S nix run 'github:clhodapp/nix-runner/32a984cfa14e740a34d14fad16fc479dec72bf07' --
+#!registry nixpkgs github:NixOS/nixpkgs/104e8082de1b20f9d0e1f05b1028795ed0e0e4bc
+#!package nixpkgs#syft
+#!package nixpkgs#gum
+#!command bash
 
-# npm install -g @appthreat/cdxgen
-
-# syft and gum are available on nixpkgs
-
-# nix shell nixpkgs#syft nixpkgs#gum
+if ! command -v cdxgen &>/dev/null; then
+  echo "Couldn't find cdxgen, it can be installed using 'npm install -g @appthreat/cdxgen'"
+  exit
+fi
 
 # make a temporary directory
-
-mkdir -p boms
+BOMDIR=$(mktemp -d)
 
 # Generate the frontend ui SBOM
-# the main reason for using cdxgen (and then converting to spdx format)
+# The primary reason for using cdxgen (and then converting to spdx format via syft)
 # is that it can look up nodeJS license fields online
-FETCH_LICENSE=true gum spin --spinner dot --title "Generating CycloneDX SBOM for the Frontend UI packages. This may take a while as we need to fetch the license fields online..." \
-  -- cdxgen plugins/web/ui -o boms/ui_cyclonedx.json
+FETCH_LICENSE=true gum spin --spinner dot --title \
+  "Generating CycloneDX SBOM for the Frontend UI packages. Fetching the licenses from online may take a while..." \
+  -- cdxgen plugins/web/ui -o $BOMDIR/ui_cyclonedx.json
 
 # Generate the python deps SBOM
 gum spin --spinner dot --title "Generating CycloneDX SBOM for the Python packages..." \
-  -- cdxgen python -o boms/python_cyclonedx.json
+  -- cdxgen python -o $BOMDIR/python_cyclonedx.json
 
 # Convert to SPDX formats
-touch boms/output.spdx
+touch $BOMDIR/output.spdx
 
-syft convert boms/ui_cyclonedx.json -o spdx-tag-value >> boms/output.spdx
-syft convert boms/python_cyclonedx.json -o spdx-tag-value >> boms/output.spdx
+syft convert $BOMDIR/ui_cyclonedx.json -o spdx-tag-value >$BOMDIR/ui.spdx
+syft convert $BOMDIR/python_cyclonedx.json -o spdx-tag-value >$BOMDIR/python.spdx
 
-cat boms/output.spdx
+cat $BOMDIR/ui.spdx $BOMDIR/python.spdx |
+  grep -e "SPDXID:" -e PackageName: -e PackageVersion: -e PackageLicenseConcluded: -e PackageHomepage: -e ExternalRef: -e'^$' >output.spdx
 
-# delete the boms directory
-rm -r boms
+echo "SPDX generation done - written to output.spdx."
+echo "Please manually check the licences of the following packages."
+echo "\n"
+
+echo "Python packages..."
+cat $BOMDIR/python_cyclonedx.json | jq '.components | [.[] | select(.licenses == [])] | map(."bom-ref" ) | map (match("\/(.*?)@") | .captures | .[] | .string)'
+
+echo "NodeJS packages..."
+cat $BOMDIR/ui_cyclonedx.json | jq '.components | [.[] | select(.licenses == [])] | map(."bom-ref" ) | map (match("\/(.*?)@") | .captures | .[] | .string)'
+
+# delete the $BOMDIR directory
+rm -r $BOMDIR
