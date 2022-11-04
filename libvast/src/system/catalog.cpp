@@ -516,13 +516,19 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         num_partitions += 1;
         num_events += synopsis->events;
       }
+      auto total_num_partitions = count{0};
+      auto total_num_events = count{0};
       auto r = report{};
       r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
       for (const auto& [schema_and_version, num_partitions_and_events] :
            num_partitions_and_events_per_schema_and_version) {
+        auto schema_num_partitions = num_partitions_and_events.first;
+        auto schema_num_events = num_partitions_and_events.second;
+        total_num_partitions += schema_num_partitions;
+        total_num_events += schema_num_events;
         r.data.push_back(data_point{
           .key = "catalog.num-partitions",
-          .value = num_partitions_and_events.first,
+          .value = schema_num_partitions,
           .metadata = {
             {"schema", std::string{schema_and_version.first}},
             {"partition-version", fmt::to_string(schema_and_version.second)},
@@ -530,13 +536,21 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         });
         r.data.push_back(data_point{
           .key = "catalog.num-events",
-          .value = num_partitions_and_events.second,
+          .value = schema_num_events,
           .metadata = {
             {"schema", std::string{schema_and_version.first}},
             {"partition-version", fmt::to_string(schema_and_version.second)},
           },
         });
       }
+      r.data.push_back(data_point{
+        .key = "catalog.num-partitions-total",
+        .value = total_num_partitions
+      });
+      r.data.push_back(data_point{
+        .key = "catalog.num-events-total",
+        .value = total_num_events
+      });
       r.data.push_back(data_point{
           .key = "memory-usage",
           .value = self->state.memusage(),
