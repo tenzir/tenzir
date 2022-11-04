@@ -545,11 +545,11 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       }
       r.data.push_back(data_point{
         .key = "catalog.num-partitions-total",
-        .value = total_num_partitions
+        .value = total_num_partitions,
       });
       r.data.push_back(data_point{
         .key = "catalog.num-events-total",
-        .value = total_num_events
+        .value = total_num_events,
       });
       r.data.push_back(data_point{
           .key = "memory-usage",
