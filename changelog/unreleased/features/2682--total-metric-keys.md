@@ -1,0 +1,1 @@
+VAST has three new metric keys: `catalog.num-partitions-total`, `catalog.num-events-total` and `ingest-total` that sum up all schema-based metrics by their respective schema-based metric counterparts.

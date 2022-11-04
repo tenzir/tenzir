@@ -100,6 +100,7 @@ The following list describes all available metrics keys:
 |`importer.rate`|The rate of events processed by the importer component.|#events/second||
 |`index.memory-usage`|The rough estimate of memory used by the index|#bytes||
 |`ingest.rate`|The ingest rate keyed by the schema name.|#events/second|🗂️|
+|`ingest-total.rate`|The total ingest rate of all schemas.|#events/second||
 |`json-reader.invalid-line`|The number of invalid NDJSON lines.|#events||
 |`json-reader.rate`|The rate of events processed by the JSON source.|#events/second||
 |`json-reader.unknown-layout`|The number if NDJSON lines with an unknown layout.|#event||
@@ -110,6 +111,8 @@ The following list describes all available metrics keys:
 |`catalog.memory-usage`|The rough estimate of memory used by the catalog|#bytes||
 |`catalog.num-partitions`|The number of partitions registered in the catalog per schema.|#partitions|🗂️#️⃣|
 |`catalog.num-events`|The number of events registered in the catalog per schema.|#events|🗂️#️⃣|
+|`catalog.num-partitions-total`|The sum of all partitions registered in the catalog.|#partitions||
+|`catalog.num-events-total`|The sum of all events registered in the catalog.|#events||
 |`node_throughput.rate`|The rate of events processed by the node component.|#events/second||
 |`null-writer.rate`|The rate of events processed by the null sink.|#events/second||
 |`partition.events-written`|The number of events written in one partition.|#events|🗂|
