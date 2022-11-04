@@ -522,8 +522,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
       for (const auto& [schema_and_version, num_partitions_and_events] :
            num_partitions_and_events_per_schema_and_version) {
-        auto schema_num_partitions = num_partitions_and_events.first;
-        auto schema_num_events = num_partitions_and_events.second;
+        auto [schema_num_partitions, schema_num_events] = num_partitions_and_events;
         total_num_partitions += schema_num_partitions;
         total_num_events += schema_num_events;
         r.data.push_back(data_point{
