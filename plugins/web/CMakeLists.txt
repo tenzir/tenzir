@@ -58,4 +58,8 @@ VASTCompileFlatBuffers(
 
 target_link_libraries(web PUBLIC web-fbs)
 
-add_subdirectory(ui)
+option(VAST_ENABLE_WEB_UI "Build the web ui" ON)
+add_feature_info("VAST_ENABLE_WEB_UI" VAST_ENABLE_WEB_UI "build the web ui")
+if (VAST_ENABLE_WEB_UI)
+  add_subdirectory(ui)
+endif ()
