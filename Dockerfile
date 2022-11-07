@@ -44,7 +44,7 @@ RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow-dev=9.0.0-1 libprotobuf-dev libparquet-dev=9.0.0-1 && \
+    apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev && \
     rm -rf /var/lib/apt/lists/* *.deb
 
 # VAST
@@ -151,8 +151,8 @@ RUN apt-get update && \
     wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libarrow900 libparquet900 && \
+    apt-get update && echo "HELLO" &&\
+    apt-get -y --no-install-recommends install libarrow1000 libparquet1000 && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast
