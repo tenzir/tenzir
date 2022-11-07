@@ -904,6 +904,10 @@ jobs:
           export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
+          # test Cortex Analyzer individually
+          docker compose --project-directory docker/vast/ up -d && sleep 3
+          docker/thehive/vast-cortex-neuron/tests/run service
+          docker compose --project-directory docker/vast/ down
 
 
   example-notebooks:
@@ -930,7 +934,7 @@ jobs:
       - name: Build notebooks
         working-directory: examples/notebooks
         run: |
-          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast_container_ref }}"
+          export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           make docker
           # TODO: An assertion of the actual content of the output would be welcome

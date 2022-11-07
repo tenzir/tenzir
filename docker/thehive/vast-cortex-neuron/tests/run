@@ -4,13 +4,13 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 EXPECTED_OUTPUT_FILE=$SCRIPT_DIR/output/output.json
-PROJECT_DIRECTORY="--project-directory $SCRIPT_DIR/../../"
+THEHIVE_DIRECTORY="$SCRIPT_DIR/../.."
 
-COMPOSE_FILES="-f docker-compose.yaml"
+THEHIVE_COMPOSE_FILES="-f $THEHIVE_DIRECTORY/docker-compose.yaml"
 if [[ "$1" == "service" ]]; then
-  COMPOSE_FILES="${COMPOSE_FILES} -f ../vast/docker-compose.yaml -f docker-compose.vast.yaml"
+  THEHIVE_COMPOSE_FILES="${THEHIVE_COMPOSE_FILES} -f $THEHIVE_DIRECTORY/docker-compose.vast.yaml"
 elif [[ "$1" == "host" ]]; then
-  COMPOSE_FILES=$COMPOSE_FILES
+  THEHIVE_COMPOSE_FILES=$THEHIVE_COMPOSE_FILES
 else
   echo "Missing argument service|host"
   exit 1
@@ -18,12 +18,12 @@ fi
 
 # Cleanup before
 rm -f EXPECTED_OUTPUT_FILE
-docker compose $PROJECT_DIRECTORY \
-  $COMPOSE_FILES \
+echo docker compose \
+  $THEHIVE_COMPOSE_FILES \
   down -v
 
-docker compose $PROJECT_DIRECTORY \
-  $COMPOSE_FILES \
+docker compose \
+  $THEHIVE_COMPOSE_FILES \
   run \
   --entrypoint vast/search.py \
   --volume $SCRIPT_DIR/input/$1.json:/job/input/input.json \
@@ -36,9 +36,9 @@ docker compose $PROJECT_DIRECTORY \
   || true
 
 # Cleanup after
-docker compose $PROJECT_DIRECTORY \
-  $COMPOSE_FILES \
+docker compose \
+  $THEHIVE_COMPOSE_FILES \
   down -v
 
 grep -q "\"success\": true" $EXPECTED_OUTPUT_FILE || \
-  (echo "Neuron execution failed" && exit 1)
+  (echo "Neuron execution failed" && cat $EXPECTED_OUTPUT_FILE && exit 1)
