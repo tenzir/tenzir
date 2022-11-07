@@ -80,12 +80,11 @@ public:
     return sizeof(min_max_synopsis);
   }
 
-  caf::error serialize(caf::serializer& sink) const override {
-    return sink(min_, max_);
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return source(min_, max_);
+  caf::error inspect(supported_inspectors& inspector) override {
+    return std::visit(detail::overload{[this](auto inspector) {
+                        return inspector(min_, max_);
+                      }},
+                      inspector);
   }
 
   bool deserialize(vast::detail::legacy_deserializer& source) override {

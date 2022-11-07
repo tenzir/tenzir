@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/fbs/synopsis.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
@@ -21,6 +22,7 @@
 
 #include <memory>
 #include <optional>
+#include <variant>
 
 namespace vast {
 
@@ -30,6 +32,9 @@ using synopsis_ptr = std::unique_ptr<synopsis>;
 /// The abstract base class for synopsis data structures.
 class synopsis {
 public:
+  using supported_inspectors
+    = std::variant<std::reference_wrapper<caf::serializer>,
+                   std::reference_wrapper<caf::deserializer>>;
   // -- construction & destruction ---------------------------------------------
 
   /// Constructs a synopsis from a type.
@@ -73,11 +78,7 @@ public:
 
   // -- serialization ----------------------------------------------------------
 
-  /// Saves the contents (excluding the layout!) of this slice to `sink`.
-  virtual caf::error serialize(caf::serializer& sink) const = 0;
-
-  /// Loads the contents for this slice from `source`.
-  virtual caf::error deserialize(caf::deserializer& source) = 0;
+  virtual caf::error inspect(supported_inspectors& inspector) = 0;
 
   /// Loads the contents for this slice from `source`.
   virtual bool deserialize(vast::detail::legacy_deserializer& source) = 0;
@@ -96,14 +97,6 @@ private:
   vast::type type_;
 };
 
-/// TODO: Serializing and deserializing a synopsis still involves conversion
-/// to/from legacy types. We need to change the synopsis FlatBuffers table to
-/// embed a vast.fbs.Type directly. Ideally we can make the synopsis
-/// memory-mappable just like table slices and types at the same time.
-/// @relates synopsis
-caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
-caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
-
 /// @relates synopsis
 bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr);
 
@@ -114,5 +107,67 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr&,
 
 [[nodiscard]] caf::error
 unpack(const fbs::synopsis::LegacySynopsis&, synopsis_ptr&);
+
+/// helper function implemented in cpp as the factory<synopsis> can't be used in
+/// deserialize function below (factory must include synopsis.hpp)
+synopsis_ptr make_synopsis(const type& t);
+
+/// TODO: Serializing and deserializing a synopsis still involves conversion
+/// to/from legacy types. We need to change the synopsis FlatBuffers table to
+/// embed a vast.fbs.Type directly. Ideally we can make the synopsis
+/// memory-mappable just like table slices and types at the same time.
+/// @relates synopsis
+
+/// Loads the contents for this synopsis from `source`.
+template <class Inspector>
+caf::error deserialize(Inspector& source, synopsis_ptr& ptr) {
+  // Read synopsis type.
+  legacy_type t;
+  if (auto err = source(t))
+    return err;
+  // Only nullptr has an none type.
+  if (!t) {
+    ptr.reset();
+    return caf::none;
+  }
+  // Deserialize into a new instance.
+  auto new_ptr = make_synopsis(type::from_legacy_type(t));
+  if (!new_ptr)
+    return ec::invalid_synopsis_type;
+  synopsis::supported_inspectors i{std::ref(source)};
+  if (auto err = new_ptr->inspect(i))
+    return err;
+  // Change `ptr` only after successfully deserializing.
+  using std::swap;
+  swap(ptr, new_ptr);
+  return caf::none;
+}
+
+/// Saves the contents (excluding the layout!) of this slice to `sink`.
+template <class Inspector>
+caf::error serialize(Inspector& sink, synopsis_ptr& ptr) {
+  if (!ptr) {
+    static legacy_type dummy;
+    return sink(dummy);
+  }
+  return caf::error::eval(
+    [&] {
+      return sink(ptr->type().to_legacy_type());
+    },
+    [&] {
+      synopsis::supported_inspectors i{std::ref(sink)};
+      return ptr->inspect(i);
+    });
+}
+
+template <class Inspector>
+  requires(std::is_same_v<typename Inspector::result_type, caf::error>)
+caf::error inspect(Inspector& inspector, synopsis_ptr& ptr) {
+  if constexpr (Inspector::writes_state) {
+    return deserialize(inspector, ptr);
+  } else {
+    return serialize(inspector, ptr);
+  }
+}
 
 } // namespace vast
