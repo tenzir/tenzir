@@ -107,7 +107,7 @@ private:
                                        detail::narrow_cast<size_t>(nbytes));
     const auto bytes = as_bytes(chunk_).subspan(position_, clamped_size);
     return std::string_view{reinterpret_cast<const char*>(bytes.data()),
-                                    bytes.size()};
+                            bytes.size()};
   }
 
   /// Return true if the stream is capable of zero copy Buffer reads.

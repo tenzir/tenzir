@@ -2170,8 +2170,7 @@ enumeration_type::builder_type::builder_type(std::shared_ptr<arrow_type> type,
     // a second stage integer -> integer lookup table.
     const auto memo_table_status
       = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
-        std::string_view{canonical.data(), canonical.size()},
-        &memo_index);
+        std::string_view{canonical.data(), canonical.size()}, &memo_index);
     VAST_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
     VAST_ASSERT(memo_index == detail::narrow_cast<int32_t>(internal));
   }
@@ -2190,8 +2189,7 @@ arrow::Status enumeration_type::builder_type::Append(enumeration index) {
   auto memo_index = int32_t{-1};
   const auto memo_table_status
     = memo_table_->GetOrInsert<type_to_arrow_type_t<string_type>>(
-      std::string_view{canonical.data(), canonical.size()},
-      &memo_index);
+      std::string_view{canonical.data(), canonical.size()}, &memo_index);
   VAST_ASSERT(memo_table_status.ok(), memo_table_status.ToString().c_str());
   VAST_ASSERT(memo_index == index);
 #endif // VAST_ENABLE_ASSERTIONS
