@@ -68,7 +68,7 @@ fix_enum_array(const enumeration_type& et,
         die("failed to reserve builder capacity for dict indices");
       for (auto v : *values) {
         if (v) {
-          if (!builder.Append(*et.resolve(v->to_string())).ok())
+          if (!builder.Append(*et.resolve(*v)).ok())
             die("unable to append dict value");
         } else {
           if (!builder.AppendNull().ok())
