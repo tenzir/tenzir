@@ -40,7 +40,7 @@ services:
   neuron:
     image: tenzir/vast-neuron
     pull_policy: build
-    network_mode: host # used for tests only
+    network_mode: host  # used for tests only
     build:
       context: ./vol/vast-cortex-neuron/
       args:

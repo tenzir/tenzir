@@ -3,8 +3,6 @@
 
 import asyncio
 import json
-import time
-import sys
 from cortexutils.analyzer import Analyzer
 from pyvast import VAST
 

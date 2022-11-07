@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   neuron:
-    network_mode: "container:vast-vast-1" # used for tests only
+    network_mode: "container:vast-vast-1"  # used for tests only
 
   cortex:
     environment:
