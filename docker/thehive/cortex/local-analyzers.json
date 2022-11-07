@@ -38,8 +38,8 @@
         "free_subscription": true,
         "service_homepage": "https://www.vast.io",
         "service_logo": {
-            "path": "assets/vast-black.svg",
-            "caption": "VAST logo"
+            "path": "",
+            "caption": ""
         },
         "dockerImage": "tenzir/vast-neuron"
     }

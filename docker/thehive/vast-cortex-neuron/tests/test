@@ -4,7 +4,7 @@ set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 EXPECTED_OUTPUT_FILE=$SCRIPT_DIR/output/output.json
-PROJECT_DIRECTORY="--project-directory $SCRIPT_DIR/../../../"
+PROJECT_DIRECTORY="--project-directory $SCRIPT_DIR/../../"
 
 COMPOSE_FILES="-f docker-compose.yaml"
 if [[ "$1" == "service" ]]; then

@@ -12,7 +12,7 @@ The analyzer takes following input datatype:
 
 ## Requirements for the Non-Dockerized Analyzer
 - VAST binary should be available on Cortex host. We are providing example
-  [Cortex Dockerfile](/thehive/vol/cortex/Dockerfile). Please refer to [VAST
+  [Cortex Dockerfile](/thehive/cortex/Dockerfile). Please refer to [VAST
   Documentation](vast.io) for instructions on manual installation.
 - Install [analyzer dependencies](/thehive/analyzers/VAST/requirements.txt) on
   the host by `pip3 install -r requirements.txt`
@@ -23,7 +23,7 @@ The analyzer takes following input datatype:
   [Cortex Neurons Library](https://hub.docker.com/u/cortexneurons)
 - Build and push analyzer image to local image repo. We are providing
   [analyzers.json](analyzers/local-analyzers.json) to be used in [Cortex
-  Config](vol/cortex/application.conf):
+  Config](cortex/application.conf):
 
     ```
     ## ANALYZERS
@@ -34,7 +34,7 @@ The analyzer takes following input datatype:
     }
     ```
 - For local development and debugging make sure to include
-  `docker.autoUpdate=false` in [Cortex Config](vol/cortex/application.conf) and
+  `docker.autoUpdate=false` in [Cortex Config](cortex/application.conf) and
   build/pull the image into local image repository.
 
 ## How to test and debug
