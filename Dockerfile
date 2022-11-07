@@ -151,7 +151,7 @@ RUN apt-get update && \
     wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && echo "HELLO" &&\
+    apt-get update && \
     apt-get -y --no-install-recommends install libarrow1000 libparquet1000 && \
     rm -rf /var/lib/apt/lists/*
 
