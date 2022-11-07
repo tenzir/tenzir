@@ -5,10 +5,10 @@ services:
 
   cortex:
     environment:
-      - CORTEX_NETWORK_MODE=container:vast-server
+      - CORTEX_NEURON_NETWORK_MODE=container:vast-server
     depends_on:
       - vast
 
   thehive:
     environment:
-      - VAST_HOSTNAME=vast:42000
+      - VAST_ENDPOINT=vast:42000

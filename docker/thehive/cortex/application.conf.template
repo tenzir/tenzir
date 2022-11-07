@@ -1,7 +1,7 @@
 play.http.secret.key="CortexTestPassword"
 play.http.session.secure=true
 
-docker.container.networkMode="__CORTEX_NETWORK_MODE_PLACEHOLDER__"
+docker.container.networkMode="__CORTEX_NEURON_NETWORK_MODE_PLACEHOLDER__"
 auth.method.basic=true
 
 search {
