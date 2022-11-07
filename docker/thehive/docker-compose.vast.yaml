@@ -1,11 +1,11 @@
 version: "3.8"
 services:
   neuron:
-    network_mode: "container:vast-vast-1"  # used for tests only
+    network_mode: "container:vast-server"  # used for tests only
 
   cortex:
     environment:
-      - CORTEX_NETWORK_MODE=container:vast-vast-1
+      - CORTEX_NETWORK_MODE=container:vast-server
     depends_on:
       - vast
 
