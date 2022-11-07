@@ -269,7 +269,7 @@ jobs:
           wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
           apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
           apt-get update
-          apt-get -y install libarrow-dev=9.0.0-1 libparquet-dev=9.0.0-1
+          apt-get -y install libarrow-dev=10.0.0-1 libparquet-dev=10.0.0-1
 
           cmake --version
 
@@ -726,7 +726,7 @@ jobs:
           wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
           apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
           apt-get update
-          apt-get -y install libarrow-dev=9.0.0-1 libparquet-dev=9.0.0-1
+          apt-get -y install libarrow-dev=10.0.0-1 libparquet-dev=10.0.0-1
           python3 -m pip install --upgrade pip
       - name: Checkout
         uses: actions/checkout@v3
