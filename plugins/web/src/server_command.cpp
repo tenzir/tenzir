@@ -283,37 +283,42 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         .append_header(restinio::http_field::location, "/index")
         .done();
     });
-  VAST_VERBOSE("using {} as document root", server_config->webroot);
-  router->http_get(
-    "/:path(.*)", restinio::path2regex::options_t{}.strict(true),
-    [webroot = server_config->webroot](auto req, auto /*params*/) {
-      auto ec = std::error_code{};
-      auto http_path = req->header().path();
-      auto path = std::filesystem::path{std::string{http_path}};
-      VAST_DEBUG("serving static file {}", http_path);
-      auto normalized_path
-        = (webroot / path.relative_path()).lexically_normal();
-      if (ec)
-        return restinio::request_rejected();
-      if (!normalized_path.string().starts_with(webroot.string()))
-        return restinio::request_rejected();
-      // Map e.g. /status -> /status.html on disk.
-      if (!exists(normalized_path) && !normalized_path.has_extension())
-        normalized_path.replace_extension("html");
-      if (!exists(normalized_path))
-        return req->create_response(restinio::status_not_found())
-          .set_body("404 not found")
+  if (server_config->webroot) {
+    VAST_VERBOSE("using {} as document root", *server_config->webroot);
+    router->http_get(
+      "/:path(.*)", restinio::path2regex::options_t{}.strict(true),
+      [webroot = *server_config->webroot](auto req, auto /*params*/) {
+        auto ec = std::error_code{};
+        auto http_path = req->header().path();
+        auto path = std::filesystem::path{std::string{http_path}};
+        VAST_DEBUG("serving static file {}", http_path);
+        auto normalized_path
+          = (webroot / path.relative_path()).lexically_normal();
+        if (ec)
+          return restinio::request_rejected();
+        if (!normalized_path.string().starts_with(webroot.string()))
+          return restinio::request_rejected();
+        // Map e.g. /status -> /status.html on disk.
+        if (!exists(normalized_path) && !normalized_path.has_extension())
+          normalized_path.replace_extension("html");
+        if (!exists(normalized_path))
+          return req->create_response(restinio::status_not_found())
+            .set_body("404 not found")
+            .done();
+        auto extension = normalized_path.extension().string();
+        auto sf = restinio::sendfile(normalized_path);
+        auto const* mime_type = content_type_by_file_extension(extension);
+        return req->create_response()
+          .append_header(restinio::http_field::server, "VAST")
+          .append_header_date_field()
+          .append_header(restinio::http_field::content_type, mime_type)
+          .set_body(std::move(sf))
           .done();
-      auto extension = normalized_path.extension().string();
-      auto sf = restinio::sendfile(normalized_path);
-      auto const* mime_type = content_type_by_file_extension(extension);
-      return req->create_response()
-        .append_header(restinio::http_field::server, "VAST")
-        .append_header_date_field()
-        .append_header(restinio::http_field::content_type, mime_type)
-        .set_body(std::move(sf))
-        .done();
-    });
+      });
+  } else {
+    VAST_VERBOSE("not serving a document root because no --web-root was given "
+                 "and the default location does not exist");
+  }
   // Run server.
   if (!server_config->require_tls) {
     struct my_server_traits : public restinio::default_single_thread_traits_t {

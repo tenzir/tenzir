@@ -58,17 +58,20 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   }
   result.certfile = config.certfile;
   result.keyfile = config.keyfile;
-  if (!config.web_root.empty())
-    result.webroot = std::filesystem::canonical(config.web_root);
-  else
-    result.webroot = detail::install_datadir() / "plugin" / "web" / "www";
-  // This doesn't help against TOCTOU errors, but at least it
-  // catches obvious ones.
-  if (!result.webroot.empty())
-    if (!exists(result.webroot) || !is_directory(result.webroot))
+  auto default_webroot = detail::install_datadir() / "plugin" / "web" / "www";
+  auto ec = std::error_code{};
+  if (!config.web_root.empty()) {
+    result.webroot = config.web_root;
+    // This doesn't help against TOCTOU errors, but at least it
+    // catches obvious ones.
+    if (!is_directory(*result.webroot, ec))
       return caf::make_error(ec::invalid_argument, fmt::format("directory not "
                                                                "found: {}",
                                                                result.webroot));
+  } else if (is_directory(default_webroot, ec))
+    result.webroot = default_webroot;
+  else
+    result.webroot = std::nullopt;
   if (!result.certfile.empty() && !exists(result.certfile))
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.certfile));

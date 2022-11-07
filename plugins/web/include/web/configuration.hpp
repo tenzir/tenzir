@@ -81,7 +81,7 @@ public:
   std::unordered_map<std::string, std::string> response_headers;
 
   /// The path from which to serve static files.
-  std::filesystem::path webroot = {};
+  std::optional<std::filesystem::path> webroot = {};
 };
 
 /// Validate that the user-provided configuration makes sense.
