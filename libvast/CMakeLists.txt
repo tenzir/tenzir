@@ -59,7 +59,12 @@ VASTCompileFlatBuffers(
 
 # -- arrow ---------------------------------------------------------------------
 
-find_package(Arrow 10.0 REQUIRED CONFIG)
+find_package(Arrow REQUIRED CONFIG)
+if (Arrow_VERSION_MAJOR LESS 8)
+  message(
+    FATAL_ERROR
+      "VAST requires at least Arrow version 8.0, but found ${ARROW_VERSION}")
+endif ()
 mark_as_advanced(
   BROTLI_COMMON_LIBRARY
   BROTLI_DEC_LIBRARY

@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/arrow_compat.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/detail/base64.hpp>
@@ -68,7 +69,7 @@ fix_enum_array(const enumeration_type& et,
         die("failed to reserve builder capacity for dict indices");
       for (auto v : *values) {
         if (v) {
-          if (!builder.Append(*et.resolve(*v)).ok())
+          if (!builder.Append(*et.resolve(arrow_compat::align_type(*v))).ok())
             die("unable to append dict value");
         } else {
           if (!builder.AppendNull().ok())
