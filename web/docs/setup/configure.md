@@ -174,8 +174,7 @@ Static plugins do not require installation since they are compiled into VAST.
 ### Load plugins
 
 The onfiguration key `vast.plugins` specifies the list of plugins that should
-load at startup. The `bundled` and `all` plugin names are reserved. When
-`bundled` is specified VAST loads all plugins built along with it. When `all` is
+load at startup. The `all` plugin name is reserved. When `all` is
 specified VAST loads all available plugins in the configured plugin directories.
 If no `vast.plugins` are specified, VAST will load `all` plugins by default.
 
