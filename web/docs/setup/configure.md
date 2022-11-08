@@ -177,6 +177,7 @@ The onfiguration key `vast.plugins` specifies the list of plugins that should
 load at startup. The `bundled` and `all` plugin names are reserved. When
 `bundled` is specified VAST loads all plugins built along with it. When `all` is
 specified VAST loads all available plugins in the configured plugin directories.
+If no `vast.plugins` are specified, VAST will load `all` plugins by default.
 
 Since dynamic plugins are shared libraries, they must be loaded first into the
 running VAST process. At startup, VAST looks for the `vast.plugins` inside the
