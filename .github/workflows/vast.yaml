@@ -904,11 +904,7 @@ jobs:
           export VAST_CONTAINER_REF="${{ needs.determine-version.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
-          # test Cortex Analyzer individually
-          docker compose --project-directory docker/vast/ up -d && sleep 3
           docker/thehive/vast-cortex-neuron/tests/run service
-          docker compose --project-directory docker/vast/ down
-
 
   example-notebooks:
     needs:
