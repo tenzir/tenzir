@@ -5,10 +5,11 @@ set -e
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 EXPECTED_OUTPUT_FILE=$SCRIPT_DIR/output/output.json
 THEHIVE_DIRECTORY="$SCRIPT_DIR/../.."
+VAST_DIRECTORY="$THEHIVE_DIRECTORY/../vast"
 
 THEHIVE_COMPOSE_FILES="-f $THEHIVE_DIRECTORY/docker-compose.yaml"
 if [[ "$1" == "service" ]]; then
-  THEHIVE_COMPOSE_FILES="${THEHIVE_COMPOSE_FILES} -f $THEHIVE_DIRECTORY/docker-compose.vast.yaml"
+  THEHIVE_COMPOSE_FILES="${THEHIVE_COMPOSE_FILES} -f $VAST_DIRECTORY/docker-compose.yaml -f $THEHIVE_DIRECTORY/docker-compose.vast.yaml"
 elif [[ "$1" == "host" ]]; then
   THEHIVE_COMPOSE_FILES=$THEHIVE_COMPOSE_FILES
 else

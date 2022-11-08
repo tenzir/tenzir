@@ -2,6 +2,8 @@ version: "3.8"
 services:
   neuron:
     network_mode: "container:vast-server"  # used for tests only
+    depends_on:
+      - vast
 
   cortex:
     environment:

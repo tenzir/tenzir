@@ -26,7 +26,6 @@ The analyzer takes following input datatype:
   Config](cortex/application.conf):
 
     ```
-    ## ANALYZERS
     analyzer {
       urls = [
         "/opt/cortex/analyzers/local-analyzers.json"
@@ -42,6 +41,6 @@ The analyzer takes following input datatype:
 To run this Neuron individually, in the `tests` directory you will find:
 - a `run` script with some scafolding around the Docker commands
   - use `tests/run host` if VAST is running on your localhost
-  - use `tests/run service` if VAST is running as a Compose service
+  - use `tests/run service` to start VAST as a Compose service
 - an `input` directory with example input files (mounted as `input.json`)
 - an `output` directory where the resulting output is written
