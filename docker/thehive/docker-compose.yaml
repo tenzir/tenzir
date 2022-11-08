@@ -6,7 +6,7 @@ services:
     depends_on:
       - cortex
     ports:
-      - 9000:9000
+      - ${THEHIVE_PORT:-9000}:9000
     environment:
       - MAX_HEAP_SIZE=1G
       - HEAP_NEWSIZE=1G
@@ -27,7 +27,7 @@ services:
       - elasticsearch
     command: --job-directory /tmp/cortex-jobs
     ports:
-      - 9001:9001
+      - ${CORTEX_PORT:-9001}:9001
     environment:
       - JOB_DIRECTORY=/tmp/cortex-jobs
       - ELASTICSEARCH_URI=http://elasticsearch:9200
@@ -53,8 +53,6 @@ services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2
     mem_limit: 1024m
-    ports:
-      - 9200:9200
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
