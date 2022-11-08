@@ -204,7 +204,7 @@ load(const std::vector<std::string>& bundled_plugins,
   auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
   // Get the necessary options.
   auto paths_or_names
-    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
+    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{"all"});
   if (paths_or_names.empty() && bundled_plugins.empty())
     return loaded_plugin_paths;
   const auto plugin_dirs = get_plugin_dirs(cfg);
