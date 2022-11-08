@@ -26,10 +26,6 @@ value_index::value_index(vast::type t, caf::settings opts)
   // nop
 }
 
-value_index::~value_index() {
-  // nop
-}
-
 caf::expected<void> value_index::append(data_view x) {
   return append(x, offset());
 }
@@ -102,12 +98,12 @@ const caf::settings& value_index::options() const {
   return opts_;
 }
 
-caf::error value_index::serialize(caf::serializer& sink) const {
-  return sink(mask_, none_);
-}
-
-caf::error value_index::deserialize(caf::deserializer& source) {
-  return source(mask_, none_);
+caf::error value_index::inspect_impl(supported_inspectors& inspector) {
+  return std::visit(
+    [this](auto visitor) {
+      return visitor(mask_, none_);
+    },
+    inspector);
 }
 
 bool value_index::deserialize(detail::legacy_deserializer& source) {
@@ -185,47 +181,8 @@ const ewah_bitmap& value_index::none() const {
   return none_;
 }
 
-caf::error inspect(caf::serializer& sink, const value_index& x) {
-  return x.serialize(sink);
-}
-
-caf::error inspect(caf::deserializer& source, value_index& x) {
-  return x.deserialize(source);
-}
-
 bool inspect(detail::legacy_deserializer& source, value_index& x) {
   return x.deserialize(source);
-}
-
-caf::error inspect(caf::serializer& sink, const value_index_ptr& x) {
-  auto lt = legacy_type{};
-  if (x == nullptr)
-    return sink(lt);
-  lt = x->type().to_legacy_type();
-  return caf::error::eval(
-    [&] {
-      return sink(lt, x->options());
-    },
-    [&] {
-      return x->serialize(sink);
-    });
-}
-
-caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
-  legacy_type lt;
-  if (auto err = source(lt))
-    return err;
-  if (caf::holds_alternative<legacy_none_type>(lt)) {
-    x = nullptr;
-    return caf::none;
-  }
-  caf::settings opts;
-  if (auto err = source(opts))
-    return err;
-  x = factory<value_index>::make(type::from_legacy_type(lt), std::move(opts));
-  if (x == nullptr)
-    return caf::make_error(ec::unspecified, "failed to construct value index");
-  return x->deserialize(source);
 }
 
 bool inspect(detail::legacy_deserializer& source, value_index_ptr& x) {
@@ -254,6 +211,10 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
   if (error)
     return nullptr;
   return chunk::make(std::move(buf));
+}
+
+value_index_ptr make_value_index(const type& t, caf::settings opts) {
+  return factory<value_index>::make(t, std::move(opts));
 }
 
 } // namespace vast

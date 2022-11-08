@@ -112,23 +112,17 @@ public:
     }
   }
 
-  caf::error serialize(caf::serializer& sink) const override {
+  caf::error inspect_impl(supported_inspectors& inspector) override {
     return caf::error::eval(
       [&] {
-        return value_index::serialize(sink);
+        return value_index::inspect_impl(inspector);
       },
       [&] {
-        return sink(bmi_);
-      });
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return caf::error::eval(
-      [&] {
-        return value_index::deserialize(source);
-      },
-      [&] {
-        return source(bmi_);
+        return std::visit(
+          [this](auto visitor) {
+            return visitor(bmi_);
+          },
+          inspector);
       });
   }
 

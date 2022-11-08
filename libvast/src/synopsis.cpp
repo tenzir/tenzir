@@ -31,10 +31,6 @@ synopsis::synopsis(vast::type x) : type_{std::move(x)} {
   // nop
 }
 
-synopsis::~synopsis() {
-  // nop
-}
-
 const vast::type& synopsis::type() const {
   return type_;
 }

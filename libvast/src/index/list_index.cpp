@@ -46,23 +46,17 @@ list_index::list_index(vast::type t, caf::settings opts)
   size_ = size_bitmap_index{base::uniform(10, components)};
 }
 
-caf::error list_index::serialize(caf::serializer& sink) const {
+caf::error list_index::inspect_impl(supported_inspectors& inspector) {
   return caf::error::eval(
     [&] {
-      return value_index::serialize(sink);
+      return value_index::inspect_impl(inspector);
     },
     [&] {
-      return sink(elements_, size_, max_size_, value_type_);
-    });
-}
-
-caf::error list_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval(
-    [&] {
-      return value_index::deserialize(source);
-    },
-    [&] {
-      return source(elements_, size_, max_size_, value_type_);
+      return std::visit(
+        [this](auto visitor) {
+          return visitor(elements_, size_, max_size_, value_type_);
+        },
+        inspector);
     });
 }
 

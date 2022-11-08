@@ -31,29 +31,29 @@ subnet_index::subnet_index(vast::type x, caf::settings opts)
   // nop
 }
 
-caf::error subnet_index::serialize(caf::serializer& sink) const {
+caf::error subnet_index::inspect_impl(supported_inspectors& inspector) {
   return caf::error::eval(
     [&] {
-      return value_index::serialize(sink);
+      return value_index::inspect_impl(inspector);
     },
     [&] {
-      auto* network_as_address = dynamic_cast<address_index*>(network_.get());
-      VAST_ASSERT(network_as_address);
-      return sink(*network_as_address, length_);
-    });
-}
-
-caf::error subnet_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval(
-    [&] {
-      return value_index::deserialize(source);
-    },
-    [&] {
-      network_ = factory<value_index>::make(vast::type{address_type{}},
-                                            caf::settings{});
-      auto* network_as_address = dynamic_cast<address_index*>(network_.get());
-      VAST_ASSERT(network_as_address);
-      return source(*network_as_address, length_);
+      return std::visit(
+        detail::overload{
+          [this](std::reference_wrapper<caf::serializer> visitor) {
+            auto* network_as_address
+              = dynamic_cast<address_index*>(network_.get());
+            VAST_ASSERT(network_as_address);
+            return visitor(*network_as_address, length_);
+          },
+          [this](std::reference_wrapper<caf::deserializer> visitor) {
+            network_ = factory<value_index>::make(vast::type{address_type{}},
+                                                  caf::settings{});
+            auto* network_as_address
+              = dynamic_cast<address_index*>(network_.get());
+            VAST_ASSERT(network_as_address);
+            return visitor(*network_as_address, length_);
+          }},
+        inspector);
     });
 }
 

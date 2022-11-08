@@ -93,28 +93,25 @@ public:
     : value_index{std::move(t), std::move(opts)} {
   }
 
-  caf::error serialize(caf::serializer& sink) const override {
-    // Prune unneeded seeds.
-    decltype(seeds_) non_null_seeds;
-    for (auto& [k, v] : seeds_)
-      if (v > 0)
-        non_null_seeds.emplace(k, v);
+  caf::error inspect_impl(supported_inspectors& inspector) override {
     return caf::error::eval(
       [&] {
-        return value_index::serialize(sink);
+        return value_index::inspect_impl(inspector);
       },
       [&] {
-        return sink(digests_, non_null_seeds);
-      });
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return caf::error::eval(
-      [&] {
-        return value_index::deserialize(source);
-      },
-      [&] {
-        return source(digests_, seeds_);
+        return std::visit(
+          detail::overload{
+            [this](std::reference_wrapper<caf::serializer> visitor) {
+              decltype(seeds_) non_null_seeds;
+              for (auto& [k, v] : seeds_)
+                if (v > 0)
+                  non_null_seeds.emplace(k, v);
+              return visitor(digests_, non_null_seeds);
+            },
+            [this](std::reference_wrapper<caf::deserializer> visitor) {
+              return visitor(digests_, seeds_);
+            }},
+          inspector);
       });
   }
 

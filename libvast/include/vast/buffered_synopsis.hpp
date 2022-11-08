@@ -9,7 +9,6 @@
 #pragma once
 
 #include "vast/bloom_filter_parameters.hpp"
-#include "vast/bloom_filter_synopsis.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/synopsis.hpp"
@@ -105,7 +104,7 @@ public:
     }
   }
 
-  caf::error inspect(supported_inspectors&) override {
+  caf::error inspect_impl(supported_inspectors&) override {
     return caf::make_error(ec::logic_error, "attempted to inspect a "
                                             "buffered_string_synopsis");
   }

@@ -14,6 +14,7 @@
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
@@ -23,6 +24,7 @@
 #include <caf/settings.hpp>
 
 #include <memory>
+#include <variant>
 
 namespace vast {
 
@@ -34,9 +36,13 @@ using value_index_ptr = std::unique_ptr<value_index>;
 /// and an explit query for nil, e.g., `x != 42 || x == nil`.
 class value_index {
 public:
+  using supported_inspectors
+    = std::variant<std::reference_wrapper<caf::serializer>,
+                   std::reference_wrapper<caf::deserializer>>;
+
   value_index(vast::type x, caf::settings opts);
 
-  virtual ~value_index();
+  virtual ~value_index() noexcept = default;
 
   using size_type = typename ids::size_type;
 
@@ -79,9 +85,7 @@ public:
 
   // -- persistence -----------------------------------------------------------
 
-  virtual caf::error serialize(caf::serializer& sink) const;
-
-  virtual caf::error deserialize(caf::deserializer& source);
+  virtual caf::error inspect_impl(supported_inspectors& inspector);
 
   virtual bool deserialize(detail::legacy_deserializer& source);
 
@@ -116,24 +120,64 @@ private:
 };
 
 /// @relates value_index
-caf::error inspect(caf::serializer& sink, const value_index& x);
-
-/// @relates value_index
-caf::error inspect(caf::deserializer& source, value_index& x);
-
-/// @relates value_index
 bool inspect(detail::legacy_deserializer& source, value_index& x);
-
-/// @relates value_index
-caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
-
-/// @relates value_index
-caf::error inspect(caf::deserializer& source, value_index_ptr& x);
 
 /// @relates value_index
 bool inspect(detail::legacy_deserializer& source, value_index_ptr& x);
 
 /// Serialize the value index into a chunk.
 vast::chunk_ptr chunkify(const value_index_ptr& idx);
+
+/// helper function implemented in cpp as the factory<value_index> can't be used
+/// in deserialize function below (factory must include value_index.hpp)
+value_index_ptr make_value_index(const type& t, caf::settings opts);
+
+caf::error deserialize(auto& source, value_index_ptr& x) {
+  legacy_type lt;
+  if (auto err = source(lt))
+    return err;
+  if (caf::holds_alternative<legacy_none_type>(lt)) {
+    x = nullptr;
+    return caf::none;
+  }
+  caf::settings opts;
+  if (auto err = source(opts))
+    return err;
+  x = make_value_index(type::from_legacy_type(lt), std::move(opts));
+  if (x == nullptr)
+    return caf::make_error(ec::unspecified, "failed to construct value index");
+  value_index::supported_inspectors i{std::ref(source)};
+  return x->inspect_impl(i);
+}
+
+caf::error serialize(auto& sink, value_index_ptr& x) {
+  auto lt = legacy_type{};
+  if (x == nullptr)
+    return sink(lt);
+  lt = x->type().to_legacy_type();
+  return caf::error::eval(
+    [&] {
+      return sink(lt, x->options());
+    },
+    [&] {
+      value_index::supported_inspectors i{std::ref(sink)};
+      return x->inspect_impl(i);
+    });
+}
+
+caf::error inspect(auto& inspector, value_index& x) {
+  value_index::supported_inspectors i{std::ref(inspector)};
+  return x.inspect_impl(i);
+}
+
+template <class Inspector>
+  requires(std::is_same_v<typename Inspector::result_type, caf::error>)
+caf::error inspect(Inspector& inspector, value_index_ptr& ptr) {
+  if constexpr (Inspector::writes_state) {
+    return deserialize(inspector, ptr);
+  } else {
+    return serialize(inspector, ptr);
+  }
+}
 
 } // namespace vast

@@ -28,23 +28,17 @@ address_index::address_index(vast::type t, caf::settings opts)
     byte = byte_index{8};
 }
 
-caf::error address_index::serialize(caf::serializer& sink) const {
+caf::error address_index::inspect_impl(supported_inspectors& inspector) {
   return caf::error::eval(
     [&] {
-      return value_index::serialize(sink);
+      return value_index::inspect_impl(inspector);
     },
     [&] {
-      return sink(bytes_, v4_);
-    });
-}
-
-caf::error address_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval(
-    [&] {
-      return value_index::deserialize(source);
-    },
-    [&] {
-      return source(bytes_, v4_);
+      return std::visit(
+        [this](auto visitor) {
+          return visitor(bytes_, v4_);
+        },
+        inspector);
     });
 }
 

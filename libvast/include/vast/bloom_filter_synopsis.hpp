@@ -13,10 +13,6 @@
 #include "vast/synopsis.hpp"
 #include "vast/type.hpp"
 
-#include <caf/deserializer.hpp>
-#include <caf/optional.hpp>
-#include <caf/serializer.hpp>
-
 #include <optional>
 
 namespace vast {
@@ -85,11 +81,12 @@ public:
     return bloom_filter_.memusage();
   }
 
-  caf::error inspect(supported_inspectors& inspector) override {
-    return std::visit(detail::overload{[this](auto inspector) {
-                        return inspector(bloom_filter_);
-                      }},
-                      inspector);
+  caf::error inspect_impl(supported_inspectors& inspector) override {
+    return std::visit(
+      [this](auto inspector) {
+        return inspector(bloom_filter_);
+      },
+      inspector);
   }
 
   bool deserialize(vast::detail::legacy_deserializer& source) override {

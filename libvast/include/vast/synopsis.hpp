@@ -41,7 +41,7 @@ public:
   /// @param x The type the synopsis should act for.
   explicit synopsis(vast::type x);
 
-  virtual ~synopsis();
+  virtual ~synopsis() noexcept = default;
 
   /// Returns a copy of this synopsis.
   [[nodiscard]] virtual synopsis_ptr clone() const = 0;
@@ -78,7 +78,7 @@ public:
 
   // -- serialization ----------------------------------------------------------
 
-  virtual caf::error inspect(supported_inspectors& inspector) = 0;
+  virtual caf::error inspect_impl(supported_inspectors& inspector) = 0;
 
   /// Loads the contents for this slice from `source`.
   virtual bool deserialize(vast::detail::legacy_deserializer& source) = 0;
@@ -119,8 +119,7 @@ synopsis_ptr make_synopsis(const type& t);
 /// @relates synopsis
 
 /// Loads the contents for this synopsis from `source`.
-template <class Inspector>
-caf::error deserialize(Inspector& source, synopsis_ptr& ptr) {
+caf::error deserialize(auto& source, synopsis_ptr& ptr) {
   // Read synopsis type.
   legacy_type t;
   if (auto err = source(t))
@@ -135,7 +134,7 @@ caf::error deserialize(Inspector& source, synopsis_ptr& ptr) {
   if (!new_ptr)
     return ec::invalid_synopsis_type;
   synopsis::supported_inspectors i{std::ref(source)};
-  if (auto err = new_ptr->inspect(i))
+  if (auto err = new_ptr->inspect_impl(i))
     return err;
   // Change `ptr` only after successfully deserializing.
   using std::swap;
@@ -144,8 +143,7 @@ caf::error deserialize(Inspector& source, synopsis_ptr& ptr) {
 }
 
 /// Saves the contents (excluding the layout!) of this slice to `sink`.
-template <class Inspector>
-caf::error serialize(Inspector& sink, synopsis_ptr& ptr) {
+caf::error serialize(auto& sink, synopsis_ptr& ptr) {
   if (!ptr) {
     static legacy_type dummy;
     return sink(dummy);
@@ -156,7 +154,7 @@ caf::error serialize(Inspector& sink, synopsis_ptr& ptr) {
     },
     [&] {
       synopsis::supported_inspectors i{std::ref(sink)};
-      return ptr->inspect(i);
+      return ptr->inspect_impl(i);
     });
 }
 

@@ -11,9 +11,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 
-#include <caf/deserializer.hpp>
-#include <caf/serializer.hpp>
-
 namespace vast {
 
 bool_synopsis::bool_synopsis(vast::type x) : synopsis{std::move(x)} {
@@ -66,11 +63,12 @@ bool bool_synopsis::any_true() {
   return true_;
 }
 
-caf::error bool_synopsis::inspect(supported_inspectors& inspector) {
-  return std::visit(detail::overload{[this](auto inspector) {
-                      return inspector(false_, true_);
-                    }},
-                    inspector);
+caf::error bool_synopsis::inspect_impl(supported_inspectors& inspector) {
+  return std::visit(
+    [this](auto inspector) {
+      return inspector(false_, true_);
+    },
+    inspector);
 }
 
 bool bool_synopsis::deserialize(vast::detail::legacy_deserializer& source) {
