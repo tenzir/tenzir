@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "misp_app"
+version = "0.1.0"
+description = "MISP integration with VAST"
+authors = ["Tenzir <dev@tenzir.com>"]
+license = "BSD-3-Clause"
+packages = [{include = "app.py"}]
+
+[tool.poetry.scripts]
+run-app = "app:run"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+vast = { path = "/vast" }
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
