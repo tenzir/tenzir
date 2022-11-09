@@ -414,7 +414,7 @@ jobs:
       - docker
       - configure
     if: ${{ needs.configure.outputs.run-example-notebooks == 'true' }}
-    name: Build example notebooks
+    name: Build Example Notebooks
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -814,11 +814,13 @@ jobs:
       matrix:
         setup:
           - os: ubuntu-20.04
+            name: Debian
             container: debian:bullseye-slim
             cc: gcc-10
             cxx: g++-10
             package-suffix: Release-GCC
           - os: macos-latest
+            name: macOS
             cc: clang
             cxx: clang++
             package-suffix: Release-Clang
@@ -845,7 +847,7 @@ jobs:
           - name: PCAP
             target: pcap
             path: plugins/pcap
-          - name: Web Debian
+          - name: Web
             target: web
             path: plugins/web
             debian-dependencies:
@@ -871,7 +873,7 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       HOMEBREW_NO_AUTO_UPDATE: 1
       DESTDIR: "${{ github.workspace }}"
-    name: VAST Plugins (${{ matrix.plugin.name }}, ${{ matrix.setup.os }})
+    name: VAST Plugins (${{ matrix.plugin.name }}, ${{ matrix.setup.name }})
     steps:
       - name: Install Git (Debian)
         if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
