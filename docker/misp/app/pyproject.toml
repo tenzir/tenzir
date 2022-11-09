@@ -11,7 +11,7 @@ run-app = "app:run"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-vast = { path = "/vast" }
+vast = {path = "../../../python", develop = true}
 
 [build-system]
 requires = ["poetry-core"]
