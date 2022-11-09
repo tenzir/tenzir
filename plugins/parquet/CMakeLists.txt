@@ -19,19 +19,31 @@ VASTRegisterPlugin(
   TEST_SOURCES tests/parquet.cpp)
 
 if (BUILD_SHARED_LIBS)
-  set(ARROW_LIBRARY arrow_shared)
-  set(PARQUET_LIBRARY parquet_shared)
+  set(PARQUET_LIBRARY Parquet::parquet_shared)
 else ()
-  set(ARROW_LIBRARY arrow_static)
-  set(PARQUET_LIBRARY parquet_static)
+  set(PARQUET_LIBRARY Parquet::parquet_static)
 endif ()
 
-find_package(Arrow REQUIRED)
-get_target_property(PARQUET_PATH "${ARROW_LIBRARY}" LOCATION)
-get_filename_component(PARQUET_PATH "${PARQUET_PATH}" DIRECTORY)
+find_package(Parquet 10.0)
+if (NOT Parquet_FOUND)
+  # Compatibility for Arrow < 10. The ParquetConfig.cmake file is in the wrong
+  # location in that case.
+  if (BUILD_SHARED_LIBS)
+    set(ARROW_LIBRARY arrow_shared)
+    set(PARQUET_LIBRARY parquet_shared)
+  else ()
+    set(ARROW_LIBRARY arrow_static)
+    set(PARQUET_LIBRARY parquet_static)
+  endif ()
 
-find_package(Parquet CONFIG REQUIRED PATHS "${PARQUET_PATH}/cmake/arrow"
-             NO_DEFAULT_PATH)
+  find_package(Arrow REQUIRED)
+  get_target_property(PARQUET_PATH "${ARROW_LIBRARY}" LOCATION)
+  get_filename_component(PARQUET_PATH "${PARQUET_PATH}" DIRECTORY)
+
+  find_package(Parquet CONFIG REQUIRED PATHS "${PARQUET_PATH}/cmake/arrow"
+               NO_DEFAULT_PATH)
+endif ()
+
 target_link_libraries(parquet PRIVATE "${PARQUET_LIBRARY}")
 
 if (VAST_ENABLE_STATIC_EXECUTABLE)

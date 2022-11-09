@@ -1,0 +1,45 @@
+#! /usr/bin/env bash
+
+set -e
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+EXPECTED_OUTPUT_FILE=$SCRIPT_DIR/output/output.json
+THEHIVE_DIRECTORY="$SCRIPT_DIR/../.."
+VAST_DIRECTORY="$THEHIVE_DIRECTORY/../vast"
+
+THEHIVE_COMPOSE_FILES="-f $THEHIVE_DIRECTORY/docker-compose.yaml"
+if [[ "$1" == "service" ]]; then
+  THEHIVE_COMPOSE_FILES="${THEHIVE_COMPOSE_FILES} -f $VAST_DIRECTORY/docker-compose.yaml -f $THEHIVE_DIRECTORY/docker-compose.vast.yaml"
+elif [[ "$1" == "host" ]]; then
+  THEHIVE_COMPOSE_FILES=$THEHIVE_COMPOSE_FILES
+else
+  echo "Missing argument service|host"
+  exit 1
+fi
+
+# Cleanup before
+rm -f EXPECTED_OUTPUT_FILE
+echo docker compose \
+  $THEHIVE_COMPOSE_FILES \
+  down -v
+
+docker compose \
+  $THEHIVE_COMPOSE_FILES \
+  run \
+  --entrypoint vast/search.py \
+  --volume $SCRIPT_DIR/input/$1.json:/job/input/input.json \
+  --volume $SCRIPT_DIR/output:/job/output \
+  --interactive=false \
+  --no-TTY \
+  --rm \
+  neuron \
+  /job \
+  || true
+
+# Cleanup after
+docker compose \
+  $THEHIVE_COMPOSE_FILES \
+  down -v
+
+grep -q "\"success\": true" $EXPECTED_OUTPUT_FILE || \
+  (echo "Neuron execution failed" && cat $EXPECTED_OUTPUT_FILE && exit 1)

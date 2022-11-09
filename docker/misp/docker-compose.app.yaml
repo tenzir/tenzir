@@ -1,0 +1,15 @@
+version: "3"
+services:
+  misp-app:
+    image: ${VAST_CONTAINER_REGISTRY:-docker.io}/tenzir/vast-poetry:${VAST_CONTAINER_REF:-latest}
+    volumes:
+      - bindings-cache:/home/vast/.cache
+      - ./app/:/opt/misp/app  # relative paths must match on host and in the container
+      - ../../python/:/python
+    working_dir: /opt/misp/app
+    entrypoint:
+      - bash
+      - -c
+      - "poetry install && poetry run run-app"
+volumes:
+  bindings-cache:

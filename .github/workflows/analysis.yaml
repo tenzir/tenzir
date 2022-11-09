@@ -70,7 +70,7 @@ jobs:
           wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
           apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
           apt-get update
-          apt-get -y install libarrow-dev libparquet-dev
+          apt-get -y install libarrow-dev=10.0.0-1 libparquet-dev=10.0.0-1
           # Install CMake from pip -- we need at least 3.17 in CI for CCache
           python3 -m pip install --upgrade pip
           python3 -m pip install --upgrade cmake

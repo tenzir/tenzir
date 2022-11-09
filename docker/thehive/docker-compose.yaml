@@ -1,0 +1,69 @@
+version: "3.8"
+services:
+  thehive:
+    build:
+      context: ./thehive
+    depends_on:
+      - cortex
+    ports:
+      - ${THEHIVE_PORT:-9000}:9000
+    environment:
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=1G
+      - CORTEX_URL=http://cortex:9001
+      - VAST_ENDPOINT=${VAST_ENDPOINT:-"localhost:42000"}
+    command:
+      - "--no-config-cortex"
+    volumes:
+      - thehive-config:/opt/thp/thehive/conf
+      - thehive-db:/opt/thp/thehive/db
+      - thehive-index:/opt/thp/thehive/index
+      - thehive-data:/opt/thp/thehive/data
+
+  cortex:
+    build:
+      context: ./cortex
+    depends_on:
+      - elasticsearch
+    command: --job-directory /tmp/cortex-jobs
+    ports:
+      - ${CORTEX_PORT:-9001}:9001
+    environment:
+      - JOB_DIRECTORY=/tmp/cortex-jobs
+      - ELASTICSEARCH_URI=http://elasticsearch:9200
+      - CORTEX_NEURON_NETWORK_MODE=host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/cortex-jobs:/tmp/cortex-jobs
+      - cortex-index:/opt/cortex/index
+
+  neuron:
+    image: tenzir/vast-neuron
+    pull_policy: build
+    network_mode: host  # used for tests only
+    build:
+      context: ./vast-cortex-neuron/
+      args:
+        - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
+        - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
+    entrypoint:
+      - echo
+      - "Build completed"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2
+    mem_limit: 1024m
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+
+volumes:
+  thehive-config:
+  thehive-db:
+  thehive-index:
+  thehive-data:
+  cortex-jobs:
+  cortex-index:
+  elasticsearch-data:

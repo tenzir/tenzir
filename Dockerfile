@@ -67,12 +67,10 @@ COPY BANNER CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
 
 # Resolve repository-internal symlinks.
 # TODO: We should try to get rid of these long-term, as Docker does not work
-# well with repository-internal symlinks. The pyvast symlink is unnecessary, and
-# the integration test symlinks we can get rid of by copying the integration
-# test directory to the build directory when building VAST.
-RUN ln -sf ../../pyvast/pyvast examples/jupyter/pyvast && \
-    ln -sf ../../vast.yaml.example vast/integration/vast.yaml.example && \
-    ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
+# well with repository-internal symlinks. The the integration test symlinks we
+# can get rid of by copying the integration test directory to the build
+# directory when building VAST.
+RUN ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
     ln -sf ../../vast/integration/data/ plugins/sigma/integration/data/ && \
     ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py && \
     ln -sf ../../../schema/types/base.schema libvast_test/artifacts/schemas/base.schema && \
@@ -158,7 +156,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow900 libparquet900 && \
+    apt-get -y --no-install-recommends install libarrow1000 libparquet1000 && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast

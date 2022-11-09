@@ -24,28 +24,25 @@ changelog: $(CHANGELOG_OUTPUT)
 $(CHANGELOG_OUTPUT): $(CHANGELOG_INPUT)
 	cp -f $< $@
 
-.github:
-	git clone https://github.com/tenzir/.github.git
-
 dot-github: \
   $(CONTRIBUTING_DIR)/code-of-conduct.md \
   $(CONTRIBUTING_DIR)/coding-style.md \
   $(CONTRIBUTING_DIR)/security.md \
   $(CONTRIBUTING_DIR)/workflow.md
 
-$(CONTRIBUTING_DIR)/code-of-conduct.md: .github
+$(CONTRIBUTING_DIR)/code-of-conduct.md:
 	@printf -- "---\nsidebar_position: 0\n---\n" > $@
 	@cat .github/CODE-OF-CONDUCT.md >> $@
 
-$(CONTRIBUTING_DIR)/coding-style.md: .github
+$(CONTRIBUTING_DIR)/coding-style.md:
 	@printf -- "---\nsidebar_position: 2\n---\n" > $@
 	@cat .github/$(@F) >> $@
 
-$(CONTRIBUTING_DIR)/security.md: .github
+$(CONTRIBUTING_DIR)/security.md:
 	@printf -- "---\nsidebar_position: 10\n---\n" > $@
 	@cat .github/SECURITY.md >> $@
 
-$(CONTRIBUTING_DIR)/workflow.md: .github
+$(CONTRIBUTING_DIR)/workflow.md:
 	@printf -- "---\nsidebar_position: 1\n---\n" > $@
 	@cat .github/$(@F) >> $@
 
@@ -92,10 +89,24 @@ quarto: poetry pak $(QUARTO_MD_OUTPUTS)
 
 clean:
 	rm -f $(CHANGELOG_OUTPUT)
-	rm -rf .github
 	rm -f $(RFC_OUTPUT)
 	rm -f $(CONTRIBUTING_DIR)/code-of-conduct.md
 	rm -f $(CONTRIBUTING_DIR)/coding-style.md
 	rm -f $(CONTRIBUTING_DIR)/security.md
 	rm -f $(CONTRIBUTING_DIR)/workflow.md
 	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
+
+
+# A straightforward target to enable `make docker TARGET=bash`
+bash: 
+	@bash
+
+# Run this makefile from within the Quarto Docker image.
+# You can specify another target using the TARGET variable:
+# make docker TARGET=clean
+docker:
+	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \
+		-f ../docker/quarto/docker-compose.yaml \
+		-f ../docker/quarto/docker-compose.bind.yaml \
+		run quarto \
+		make -C web $(TARGET)

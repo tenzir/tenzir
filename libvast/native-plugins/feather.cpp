@@ -8,6 +8,7 @@
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/chunk.hpp>
+#include <vast/concept/convertible/data.hpp>
 #include <vast/data.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
@@ -23,6 +24,25 @@
 #include <arrow/util/key_value_metadata.h>
 
 namespace vast::plugins::feather {
+
+/// Configuration for the Feather plugin.
+struct configuration {
+  int64_t zstd_compression_level{
+    arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+      .ValueOrDie()};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, configuration& x) {
+    return f(x.zstd_compression_level);
+  }
+
+  static const record_type& layout() noexcept {
+    static auto result = record_type{
+      {"zstd-compression-level", integer_type{}},
+    };
+    return result;
+  }
+};
 
 namespace {
 
@@ -129,6 +149,11 @@ private:
 };
 
 class active_feather_store final : public active_store {
+public:
+  explicit active_feather_store(const configuration& config)
+    : feather_config_(config) {
+  }
+
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     slices_.reserve(new_slices.size() + slices_.size());
     for (auto& slice : new_slices) {
@@ -159,8 +184,7 @@ class active_feather_store final : public active_store {
     // TODO: Set write_properties.chunksize to the expected batch size
     write_properties.compression = arrow::Compression::ZSTD;
     write_properties.compression_level
-      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-          .ValueOrDie();
+      = detail::narrow<int>(feather_config_.zstd_compression_level);
     const auto write_status = ::arrow::ipc::feather::WriteTable(
       *table.ValueUnsafe(), output_stream.get(), write_properties);
     if (!write_status.ok())
@@ -172,8 +196,8 @@ class active_feather_store final : public active_store {
   }
 
   [[nodiscard]] detail::generator<table_slice> slices() const override {
-    // We need to make a copy of the slices here because the slices_ vector may
-    // get invalidated while we iterate over it.
+    // We need to make a copy of the slices here because the slices_ vector
+    // may get invalidated while we iterate over it.
     auto slices = slices_;
     for (auto& slice : slices)
       co_yield std::move(slice);
@@ -185,12 +209,15 @@ class active_feather_store final : public active_store {
 
 private:
   std::vector<table_slice> slices_ = {};
+  configuration feather_config_ = {};
   size_t num_events_ = {};
 };
 
 class plugin final : public virtual store_plugin {
-  [[nodiscard]] caf::error initialize([[maybe_unused]] data config) override {
-    return {};
+  [[nodiscard]] caf::error initialize(data options) override {
+    if (caf::holds_alternative<caf::none_t>(options))
+      return caf::none;
+    return convert(options, feather_config_);
   }
 
   [[nodiscard]] const char* name() const override {
@@ -203,9 +230,16 @@ class plugin final : public virtual store_plugin {
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const override {
-    return std::make_unique<active_feather_store>();
+  make_active_store(const caf::settings& vast_config) const override {
+    const auto default_compression_level
+      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie();
+    return std::make_unique<active_feather_store>(configuration{caf::get_or(
+      vast_config, "vast.zstd-compression-level", default_compression_level)});
   }
+
+private:
+  configuration feather_config_ = {};
 };
 
 } // namespace

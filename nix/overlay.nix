@@ -8,28 +8,18 @@ let
   nnbp = final.callPackage inputs.nix-npm-buildpackage {};
 in
 {
-  abseil-cpp = if !isStatic then prev.abseil-cpp else prev.abseil-cpp_202111;
+  abseil-cpp = if !isStatic then prev.abseil-cpp else prev.abseil-cpp_202206;
   arrow-cpp = (prev.arrow-cpp.override { 
     enableShared = !isStatic;
     enableS3 = !isStatic;
     enableGcs = !isStatic;
   }).overrideAttrs (old: {
-    patches = old.patches ++ lib.optionals isMusl [
-      (prev.fetchpatch {
-        name = "arrow-cpp-9-fix-musl.patch";
-        url = "https://github.com/apache/arrow/commit/7d8e1fbc96a0b527475b736e82580894363fc7cf.patch";
-        hash = "sha256-HvQEYCZ5tYiXS1qukNryR1qTQ1CVI99LueCxY63dAtc=";
-        stripLen = 1;
-      })
-    ];
     buildInputs = old.buildInputs ++ lib.optionals isStatic [ final.sqlite ];
     cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
       # Needed for correct dependency resolution, should be the default...
       "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
       # Backtrace doesn't build in static mode, need to investigate.
       "-DARROW_WITH_BACKTRACE=OFF"
-      # Plasma is deprecated for 10.0.0 so we don't bother fixing any issues.
-      "-DARROW_PLASMA=OFF"
     ];
     doCheck = false;
     doInstallCheck = !isStatic;
@@ -40,24 +30,14 @@ in
     ];
   });
   flatbuffers = prev.flatbuffers.overrideAttrs(_: rec {
-    version = "22.9.29";
+    version = "1.12.0";
     src = prev.fetchFromGitHub {
       owner = "google";
       repo = "flatbuffers";
       rev = "v${version}";
-      sha256 = "sha256-Wc+DLihAN0EvaGkyuCreoRvzsNS3tIN7e2qIZhGldkw=";
+      hash = "sha256-L1B5Y/c897Jg9fGwT2J3+vaXsZ+lfXnskp8Gto1p/Tg=";
     };
-  });
-  google-cloud-cpp = if !isStatic then prev.google-cloud-cpp else
-  prev.google-cloud-cpp.override {
-    abseil-cpp = final.abseil-cpp_202111;
-  };
-  grpc = if !isStatic then prev.grpc else
-  prev.grpc.overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ [
-      "-DCMAKE_CXX_STANDARD=17"
-    ];
-    abseil-cpp = final.abseil-cpp_202111;
+    NIX_CFLAGS_COMPILE = "-Wno-error=class-memaccess";
   });
   libevent = if !isStatic then prev.libevent else
   prev.libevent.overrideAttrs (old: {
@@ -137,11 +117,21 @@ in
       ];
       dontStrip = true;
     });
+  c-ares = prev.c-ares.overrideAttrs (old: {
+    cmakeFlags = (old.cmakeFlags or []) ++ lib.optionals isStatic [
+      "-DCARES_SHARED=OFF"
+      "-DCARES_STATIC=ON"
+    ];
+  });
   fast_float = final.callPackage ./fast_float { };
   jemalloc = prev.jemalloc.overrideAttrs (old: {
     EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
     configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
     doCheck = !isStatic;
+  });
+  re2 = prev.re2.overrideAttrs (_: {
+    # Times out.
+    doInstallCheck = !isStatic;
   });
   simdjson = prev.simdjson.overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [

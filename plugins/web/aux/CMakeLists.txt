@@ -1,5 +1,11 @@
 find_program(PATCH_EXECUTABLE patch REQUIRED)
 
+if (NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/restinio/.git")
+  message(
+    FATAL_ERROR
+      "submodule '${CMAKE_CURRENT_LIST_DIR}/restinio' is not initialized")
+endif ()
+
 if (NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/patched-restinio")
 endif ()

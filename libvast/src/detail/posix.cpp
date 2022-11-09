@@ -10,6 +10,7 @@
 
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/raise_error.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -135,10 +136,16 @@ uds_datagram_sender::make(const std::string& path) {
 caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
   // We try sending directly before polling to only use a single system call in
   // the happy path.
-  if (::sendto(src_fd, data.data(), data.size(), 0,
-               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
-      == 0)
+  auto sent
+    = ::sendto(src_fd, data.data(), data.size(), 0,
+               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un));
+  if (sent == detail::narrow_cast<int>(data.size()))
     return caf::none;
+  if (sent >= 0)
+    return caf::make_error(ec::incomplete,
+                           fmt::format("::sendto could only transmit {} of {} "
+                                       "bytes in a single datagram",
+                                       sent, data.size()));
   if (errno != EAGAIN && errno != EWOULDBLOCK)
     return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
   if (timeout_usec == 0)
@@ -150,10 +157,16 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
   // This handles the case when the receiving socket was replaced on the file
   // system, but the original one was kept alive with an open file descriptor.
   // The next send would go to the correct destination in that case.
-  if (::sendto(src_fd, data.data(), data.size(), 0,
-               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
-      == 0)
+  sent
+    = ::sendto(src_fd, data.data(), data.size(), 0,
+               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un));
+  if (sent == detail::narrow_cast<int>(data.size()))
     return caf::none;
+  if (sent >= 0)
+    return caf::make_error(ec::incomplete,
+                           fmt::format("::sendto could only transmit {} of {} "
+                                       "bytes in a single datagram",
+                                       sent, data.size()));
   if (errno != EAGAIN && errno != EWOULDBLOCK)
     return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
   return ec::timeout;

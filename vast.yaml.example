@@ -111,11 +111,6 @@ vast:
   # The amount of queries that can be executed in parallel.
   max-queries: 10
 
-  # Opt-in to the legacy query scheduling algorithm. This is offered as a safety
-  # mechanism for users that have trouble with the new scheduler. The option
-  # will be removed before the release of VAST v2.1.0
-  use-legacy-query-scheduler: false
-
   # The directory to use for the partition synopses of the catalog.
   #catalog-dir: <dbdir>/index
 
@@ -127,6 +122,9 @@ vast:
   # The store backend to use. Can be 'feather', or the name of a user-provided
   # store plugin.
   store-backend: feather
+
+  # Zstd compression level applied to both Feather and Parquet store backends.
+  # zstd-compression-level: <default>
 
   # Interval between two aging cycles.
   aging-frequency: 24h

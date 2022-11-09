@@ -51,6 +51,7 @@ filesystem_actor::behavior_type posix_filesystem(
   self->state.root = std::move(root);
   if (accountant) {
     self->state.accountant = accountant;
+    self->send(accountant, atom::announce_v, self->name());
     self->send(self, atom::telemetry_v);
   }
   return {
