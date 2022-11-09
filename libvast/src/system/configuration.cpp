@@ -451,14 +451,16 @@ caf::error configuration::parse(int argc, char** argv) {
     auto [ec, _] = plugin_opts.parse(content, {plugin_arg});
     if (ec == caf::pec::success) {
       continue;
-    } else if (plugin_arg.starts_with("--plugins=") && ec == caf::pec::missing_argument) {
+    } else if (plugin_arg.starts_with("--plugins=")
+               && ec == caf::pec::missing_argument) {
       plugin_arg.append("[]");
       ec = plugin_opts.parse(content, {plugin_arg}).first;
       if (ec == caf::pec::success) {
         continue;
       }
     }
-    return caf::make_error(ec, fmt::format("failed to parse option '{}'", plugin_arg));
+    return caf::make_error(ec, fmt::format("failed to parse option '{}'",
+                                           plugin_arg));
   }
   // Now parse all CAF options from the command line. Prior to doing so, we
   // clear the config_file_path first so it does not use caf-application.ini as
