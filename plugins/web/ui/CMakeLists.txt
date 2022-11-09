@@ -56,7 +56,6 @@ else ()
 
   add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ui.marker"
-    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/copy-ui.cmake"
     COMMENT "Building UI in ${CMAKE_BINARY_DIR}/${ui_install_dir}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/copy-ui.cmake"
