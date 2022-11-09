@@ -7,3 +7,6 @@
 [submodule "web/.github"]
 	path = web/.github
 	url = https://github.com/tenzir/.github.git
+[submodule "libvast/aux/caf"]
+	path = libvast/aux/caf
+	url = https://github.com/actor-framework/actor-framework
