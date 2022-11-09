@@ -15,6 +15,9 @@
           <a href="/status">
             <button class="i-pajamas-status-health m-2 hover:border hover:rounded w-16px" />
           </a>
+          <a href="/report">
+            <button class="i-pajamas-status-health m-2 hover:border hover:rounded w-16px" />
+          </a>
         </div>
       </nav>
     </div>
