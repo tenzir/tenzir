@@ -177,8 +177,9 @@ The onfiguration key `vast.plugins` specifies the list of plugins that should
 load at startup. The `all` plugin name is reserved. When `all` is specified
 VAST loads all available plugins in the configured plugin directories. If no
 `vast.plugins` key is specified, VAST will load `all` plugins by default.
-To load no plugins at all, specify a `vast.plugins` key with no
-values in the configuration file or use the launch parameter `--plugins=[]`.
+To load no plugins at all, specify a `vast.plugins` configuration key with no
+plugin values, e.g. the configuration file entry `plugins: []` or launch
+parameter `--plugins=`.
 
 Since dynamic plugins are shared libraries, they must be loaded first into the
 running VAST process. At startup, VAST looks for the `vast.plugins` inside the
