@@ -8,6 +8,7 @@
 
 #include "vast/chunk.hpp"
 
+#include "vast/arrow_compat.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/tracepoint.hpp"
@@ -102,12 +103,12 @@ private:
   }
 
   /// Peek at the next bytes.
-  arrow::Result<std::string_view> Peek(int64_t nbytes) override {
+  arrow::Result<arrow_compat::string_view> Peek(int64_t nbytes) override {
     const auto clamped_size = std::min(chunk_->size() - position_,
                                        detail::narrow_cast<size_t>(nbytes));
     const auto bytes = as_bytes(chunk_).subspan(position_, clamped_size);
-    return std::string_view{reinterpret_cast<const char*>(bytes.data()),
-                            bytes.size()};
+    return arrow_compat::string_view{
+      reinterpret_cast<const char*>(bytes.data()), bytes.size()};
   }
 
   /// Return true if the stream is capable of zero copy Buffer reads.

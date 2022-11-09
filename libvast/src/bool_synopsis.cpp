@@ -66,12 +66,11 @@ bool bool_synopsis::any_true() {
   return true_;
 }
 
-caf::error bool_synopsis::serialize(caf::serializer& sink) const {
-  return sink(false_, true_);
-}
-
-caf::error bool_synopsis::deserialize(caf::deserializer& source) {
-  return source(false_, true_);
+caf::error bool_synopsis::inspect(supported_inspectors& inspector) {
+  return std::visit(detail::overload{[this](auto inspector) {
+                      return inspector(false_, true_);
+                    }},
+                    inspector);
 }
 
 bool bool_synopsis::deserialize(vast::detail::legacy_deserializer& source) {

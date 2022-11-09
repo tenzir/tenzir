@@ -13,7 +13,6 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -42,43 +41,6 @@ const vast::type& synopsis::type() const {
 
 synopsis_ptr synopsis::shrink() const {
   return nullptr;
-}
-
-caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
-  if (!ptr) {
-    static legacy_type dummy;
-    return sink(dummy);
-  }
-  return caf::error::eval(
-    [&] {
-      return sink(ptr->type().to_legacy_type());
-    },
-    [&] {
-      return ptr->serialize(sink);
-    });
-}
-
-caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
-  // Read synopsis type.
-  legacy_type t;
-  if (auto err = source(t))
-    return err;
-  // Only nullptr has an none type.
-  if (!t) {
-    ptr.reset();
-    return caf::none;
-  }
-  // Deserialize into a new instance.
-  auto new_ptr
-    = factory<synopsis>::make(type::from_legacy_type(t), caf::settings{});
-  if (!new_ptr)
-    return ec::invalid_synopsis_type;
-  if (auto err = new_ptr->deserialize(source))
-    return err;
-  // Change `ptr` only after successfully deserializing.
-  using std::swap;
-  swap(ptr, new_ptr);
-  return caf::none;
 }
 
 bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr) {
@@ -157,6 +119,10 @@ unpack(const fbs::synopsis::LegacySynopsis& synopsis, synopsis_ptr& ptr) {
     return caf::make_error(ec::format_error, "no synopsis type");
   }
   return caf::none;
+}
+
+synopsis_ptr make_synopsis(const type& t) {
+  return factory<synopsis>::make(t, caf::settings{});
 }
 
 } // namespace vast

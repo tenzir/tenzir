@@ -105,14 +105,8 @@ public:
     }
   }
 
-  caf::error serialize(caf::serializer&) const override {
-    return caf::make_error(ec::logic_error, "attempted to serialize a "
-                                            "buffered_string_synopsis; did you "
-                                            "forget to shrink?");
-  }
-
-  caf::error deserialize(caf::deserializer&) override {
-    return caf::make_error(ec::logic_error, "attempted to deserialize a "
+  caf::error inspect(supported_inspectors&) override {
+    return caf::make_error(ec::logic_error, "attempted to inspect a "
                                             "buffered_string_synopsis");
   }
 

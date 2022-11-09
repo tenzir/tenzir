@@ -8,6 +8,7 @@
 
 #include "vast/arrow_table_slice_builder.hpp"
 
+#include "vast/arrow_compat.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/config.hpp"
@@ -269,7 +270,7 @@ arrow::Status
 append_builder(const string_type&,
                type_to_arrow_builder_t<string_type>& builder,
                const view<type_to_data_t<string_type>>& view) noexcept {
-  return builder.Append(std::string_view{view.data(), view.size()});
+  return builder.Append(arrow_compat::string_view{view.data(), view.size()});
 }
 
 arrow::Status
@@ -277,7 +278,7 @@ append_builder(const pattern_type&,
                type_to_arrow_builder_t<pattern_type>& builder,
                const view<type_to_data_t<pattern_type>>& view) noexcept {
   const auto str = view.string();
-  return builder.Append(std::string_view{str.data(), str.size()});
+  return builder.Append(arrow_compat::string_view{str.data(), str.size()});
 }
 
 arrow::Status
@@ -286,7 +287,7 @@ append_builder(const address_type&,
                const view<type_to_data_t<address_type>>& view) noexcept {
   const auto bytes = as_bytes(view);
   VAST_ASSERT(bytes.size() == 16);
-  return builder.Append(std::string_view{
+  return builder.Append(arrow_compat::string_view{
     reinterpret_cast<const char*>(bytes.data()), bytes.size()});
 }
 
