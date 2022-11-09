@@ -7,15 +7,17 @@
 </script>
 
 <div>
-  <div class="flex overflow-hidden">
-    <nav class="flex flex-col items-center h-screen w-12 bg-gray-200 dark:bg-gray-800 z-50">
-      <img class="my-4" src={vastLogoUrl} alt="" />
-      <div class="border rounded border-gray-400 hover:bg-gray-300">
-        <a href="/status">
-          <button class="i-pajamas-status-health m-2 hover:border hover:rounded w-16px" />
-        </a>
-      </div>
-    </nav>
+  <div class="flex">
+    <div class="sticky top-0 h-screen">
+      <nav class="flex flex-col items-center h-100% w-12 bg-gray-200 dark:bg-gray-800 z-50">
+        <img class="my-4" src={vastLogoUrl} alt="" />
+        <div class="border rounded border-gray-400 hover:bg-gray-300">
+          <a href="/status">
+            <button class="i-pajamas-status-health m-2 hover:border hover:rounded w-16px" />
+          </a>
+        </div>
+      </nav>
+    </div>
 
     <div id="detail" class="flex flex-col overflow-y-auto w-full">
       <QueryClientProvider {client}>
