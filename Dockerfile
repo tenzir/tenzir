@@ -46,10 +46,10 @@ RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
     apt-get -y --no-install-recommends install libarrow-dev=9.0.0-1 libprotobuf-dev libparquet-dev=9.0.0-1 && \
-    rm -rf /var/lib/apt/lists/* *.deb && \
     curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs && \
-    corepack enable
+    corepack enable \
+    rm -rf /var/lib/apt/lists/* *.deb &&
 
 # VAST
 COPY changelog ./changelog
