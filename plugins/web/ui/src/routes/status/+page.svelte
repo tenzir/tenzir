@@ -51,8 +51,6 @@
   ];
 
   const getEventsRows = (events: Events) => {
-    console.log(events);
-
     return Object.keys(events).map((key) => ({
       layout: key,
       count: events[key].count,
@@ -63,8 +61,6 @@
   };
 
   const queryResult = useQuery('status', getStatus, { refetchInterval: 5000 });
-
-  $: console.log($queryResult);
 </script>
 
 <svelte:head>
