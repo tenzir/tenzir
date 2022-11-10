@@ -478,24 +478,12 @@ caf::error configuration::parse(int argc, char** argv, const caf::config_option_
         .add<std::vector<std::string>>("?vast", "schema-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugins", "");
-
-  // edge case for "plugins" option: no argument specified (e.g. "--plugins=")
-  // this case should then be resolved to "load no plugins" (empty list)
-  for (auto& plugin_arg : plugin_args) {
-    auto [ec, _] = plugin_opts.parse(content, {plugin_arg});
-    if (ec == caf::pec::success) {
-      continue;
-    } else if (plugin_arg.starts_with("--plugins=")
-               && ec == caf::pec::missing_argument) {
-      plugin_arg.append("[]");
-      ec = plugin_opts.parse(content, {plugin_arg}).first;
-      if (ec == caf::pec::success) {
-        continue;
-      }
-    }
-    return caf::make_error(ec, fmt::format("failed to parse option '{}'",
-                                           plugin_arg));
+  auto [ec, it] = plugin_opts.parse(content, plugin_args);
+  if (ec != caf::pec::success) {
+    VAST_ASSERT(it != plugin_args.end());
+    return caf::make_error(ec, fmt::format("failed to parse option '{}'", *it));
   }
+  VAST_ASSERT(it == plugin_args.end());
   // Now parse all CAF options from the command line. Prior to doing so, we
   // clear the config_file_path first so it does not use caf-application.ini as
   // fallback during actor_system_config::parse().
