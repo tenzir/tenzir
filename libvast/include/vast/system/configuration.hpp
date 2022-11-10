@@ -53,8 +53,6 @@ public:
 
 private:
   caf::error embed_config(const caf::settings& settings);
-
-  void sanitize_missing_arguments(std::vector<std::string>& arguments, const caf::config_option_set& options);
 };
 
 } // namespace vast::system

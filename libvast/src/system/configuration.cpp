@@ -23,6 +23,7 @@
 #include "vast/detail/stable_set.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/launch_parameter_sanitation.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -285,19 +286,6 @@ caf::expected<caf::settings> to_settings(record config) {
   return to<caf::settings>(config);
 }
 
-
-auto generate_default_value_for_argument_type(std::string_view type_name) {
-  if (type_name.starts_with("uint") || type_name.starts_with("int")
-      || type_name == "timespan") {
-    return "1";
-  } else if (type_name == "boolean") {
-    return "false";
-  } else if (type_name.starts_with("list")) {
-    return "[]";
-  }
-  return "";
-}
-
 } // namespace
 
 std::vector<std::filesystem::path>
@@ -349,27 +337,8 @@ configuration::configuration() {
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
-void configuration::sanitize_missing_arguments(std::vector<std::string>& arguments, const caf::config_option_set& options) {
-  auto dummy_options = caf::settings{};
-  for (auto& command : arguments) {
-    auto [state, _] = options.parse(dummy_options, {command});
-    if (state == caf::pec::missing_argument) {
-      auto name = command.substr(2, command.length() - 3);
-      auto option = options.cli_long_name_lookup(name);
-      if (!option) {
-        // something is wrong with the long name options:
-        // reveal this during the actual parsing.
-        return;
-      }
-      auto option_type = option->type_name();
-      auto options_type_default_val
-        = generate_default_value_for_argument_type(option_type.data());
-      command.append(options_type_default_val);
-    }
-  }
-}
-
-caf::error configuration::parse(int argc, char** argv, const caf::config_option_set& options) {
+caf::error configuration::parse(int argc, char** argv,
+                                const caf::config_option_set& options) {
   // The main objective of this function is to parse the command line and put
   // it into the actor_system_config instance (`content`), which components
   // throughout VAST query to find out the application settings. This process
@@ -391,7 +360,8 @@ caf::error configuration::parse(int argc, char** argv, const caf::config_option_
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
-  sanitize_missing_arguments(command_line, options);
+  launch_parameter_sanitation::sanitize_missing_arguments(command_line,
+                                                          options);
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
   const auto replacements = std::vector<std::pair<std::string, std::string>>{
@@ -472,7 +442,8 @@ caf::error configuration::parse(int argc, char** argv, const caf::config_option_
     plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
   // Newly added plugin arguments from environment variables
   // may contain empty values - sanitize them.
-  sanitize_missing_arguments(plugin_args, options);
+  launch_parameter_sanitation::
+    sanitize_missing_arguments(plugin_args, options);
   // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());
