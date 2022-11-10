@@ -285,6 +285,19 @@ caf::expected<caf::settings> to_settings(record config) {
   return to<caf::settings>(config);
 }
 
+
+auto generate_default_value_for_argument_type(std::string_view type_name) {
+  if (type_name.starts_with("uint") || type_name.starts_with("int")
+      || type_name == "timespan") {
+    return "1";
+  } else if (type_name == "boolean") {
+    return "false";
+  } else if (type_name.starts_with("list")) {
+    return "[]";
+  }
+  return "";
+}
+
 } // namespace
 
 std::vector<std::filesystem::path>
