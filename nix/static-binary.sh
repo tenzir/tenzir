@@ -89,7 +89,6 @@ pkgs.pkgsStatic."${target}".override {
   withPlugins = [ ${plugins[@]} ];
   extraCmakeFlags = [ ${cmakeFlags} ];
   buildAsPackage = true;
-  vast-ui = pkgs.vast-ui;
 }
 EOF
 

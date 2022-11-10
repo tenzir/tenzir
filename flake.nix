@@ -14,7 +14,7 @@
   inputs.nix-npm-buildpackage.url = "github:dit7ya/nix-npm-buildpackage"; # TODO send a PR to upstream
   inputs.nix-npm-buildpackage.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { self, nixpkgs, flake-utils, nix-filter, flake-compat, nix-npm-buildpackage }@inputs: {
+  outputs = { self, nixpkgs, flake-utils, ... }@inputs: {
     nixosModules.vast = {
       imports = [
         ./nix/module.nix

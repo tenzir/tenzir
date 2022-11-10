@@ -8,7 +8,6 @@
 , git
 , pandoc
 , caf
-, openssl
 , libpcap
 , arrow-cpp
 , fast_float
@@ -34,7 +33,7 @@
 , buildType ? "Release"
 , buildAsPackage ? false
 , packageName ? "vast"
-, vast-ui
+, pkgsBuildHost
 }:
 let
   inherit (stdenv.hostPlatform) isStatic;
@@ -74,7 +73,6 @@ stdenv.mkDerivation (rec {
   ];
   propagatedNativeBuildInputs = [ pkg-config pandoc ];
   buildInputs = [
-    openssl
     fast_float
     jemalloc
     libpcap
@@ -117,7 +115,7 @@ stdenv.mkDerivation (rec {
   ] ++ lib.optionals (withPlugins != []) [
     "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
     # TODO limit this to just web plugin
-    "-DVAST_WEB_UI_BUNDLE=${vast-ui}"
+    "-DVAST_WEB_UI_BUNDLE=${pkgsBuildHost.vast-ui}"
   ] ++ lib.optionals buildAsPackage [
     "-UCMAKE_INSTALL_BINDIR"
     "-UCMAKE_INSTALL_SBINDIR"
