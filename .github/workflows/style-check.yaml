@@ -21,7 +21,8 @@ jobs:
           pip install --upgrade clang-format
           which clang-format
           clang-format --version
-          git diff -U0 --no-color $(git merge-base origin/master HEAD) -- '*.cpp' '*.hpp' |
+          git diff -U0 --no-color $(git merge-base origin/master HEAD) -- \
+              '*.cpp' '*.cpp.in' '*.hpp' '*.hpp.in' |
             scripts/clang-format-diff.py -p1
 
       - name: CMake Format

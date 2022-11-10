@@ -26,7 +26,7 @@ install_format_show_branch() {
   git config --local --get alias.format-show-branch >/dev/null
   if [ $? -ne 0 ] || [ "$force" = TRUE ]; then
     echo 'Adding alias for `git format-show-branch`'
-    git config --local alias.format-show-branch "!f() { git diff -U0 --no-color \$@ \$(git merge-base origin/master HEAD) -- \"*.cpp\" \"*.hpp\" | ${format_call} -p1; }; f"
+    git config --local alias.format-show-branch "!f() { git diff -U0 --no-color \$@ \$(git merge-base origin/master HEAD) -- \"*.cpp\" \"*.cpp.in\" \"*.hpp\" \"*.hpp.in\" | ${format_call} -p1; }; f"
   else
     echo 'alias for `git format-show-branch` already exists, skipping'
   fi
