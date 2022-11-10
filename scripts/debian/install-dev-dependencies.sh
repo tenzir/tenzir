@@ -31,7 +31,6 @@ apt-get -y --no-install-recommends install \
     libyaml-cpp-dev \
     lsb-release \
     ninja-build \
-    nodejs \
     pandoc \
     pkg-config \
     python3-dev \
@@ -45,5 +44,6 @@ apt-get -y --no-install-recommends install ./apache-arrow-apt-source-latest-$(ls
 apt-get update
 apt-get -y --no-install-recommends install libarrow-dev=10.0.0-1 libprotobuf-dev libparquet-dev=10.0.0-1
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+apt-get -y install nodejs
 wget -O - 'https://deb.nodesource.com/setup_18.x' | bash -
 corepack enable
