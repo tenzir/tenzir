@@ -355,7 +355,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
         next_ = module_.begin();
     }
   }
-  finish(f);
+  [[maybe_unused]] auto err = finish(f);
   return caf::none;
 }
 

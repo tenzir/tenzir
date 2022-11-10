@@ -143,7 +143,10 @@ void print_partition_legacy(
   // Print column indices.
   fmt::print("{}Column Indexes\n", indent);
   vast::legacy_record_type intermediate;
-  vast::fbs::deserialize_bytes(partition->combined_layout(), intermediate);
+  auto err
+    = vast::fbs::deserialize_bytes(partition->combined_layout(), intermediate);
+  if (err)
+    fmt::print(stderr, "Err during combined layout deserialization {}", err);
   auto combined_layout
     = caf::get<vast::record_type>(vast::type::from_legacy_type(intermediate));
   if (auto const* indexes = partition->indexes()) {

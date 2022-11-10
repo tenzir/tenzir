@@ -399,7 +399,7 @@ active_local_store(local_store_actor::stateful_pointer<active_store_state> self,
         return slices.error();
       self->state.builder->reset(id);
       for (auto&& slice : std::exchange(*slices, {}))
-        self->state.builder->add(std::move(slice));
+        [[maybe_unused]] auto err = self->state.builder->add(std::move(slice));
       return rank(self->state.builder->ids());
     },
     // store builder

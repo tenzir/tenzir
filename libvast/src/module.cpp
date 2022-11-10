@@ -112,9 +112,9 @@ caf::expected<module> get_module(const caf::settings& options) {
   auto sc = caf::get_if<std::string>(&options, "vast.import.schema");
   auto mf = caf::get_if<std::string>(&options, "vast.import.schema-file");
   if (sc && mf)
-    caf::make_error(ec::invalid_configuration,
-                    "had both schema and schema-file "
-                    "provided");
+    return caf::make_error(ec::invalid_configuration,
+                           "had both schema and schema-file "
+                           "provided");
   if (!sc && !mf)
     return module;
   caf::expected<vast::module> update = caf::error{};
