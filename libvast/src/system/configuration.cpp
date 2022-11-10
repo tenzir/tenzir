@@ -349,9 +349,9 @@ configuration::configuration() {
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
-void configuration::sanitize_missing_arguments(const caf::config_option_set& options) {
+void configuration::sanitize_missing_arguments(std::vector<std::string>& arguments, const caf::config_option_set& options) {
   auto dummy_options = caf::settings{};
-  for (auto& command : command_line) {
+  for (auto& command : arguments) {
     auto [state, _] = options.parse(dummy_options, {command});
     if (state == caf::pec::missing_argument) {
       auto name = command.substr(2, command.length() - 3);
@@ -391,7 +391,7 @@ caf::error configuration::parse(int argc, char** argv, const caf::config_option_
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
-  sanitize_missing_arguments(options);
+  sanitize_missing_arguments(command_line, options);
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
   const auto replacements = std::vector<std::pair<std::string, std::string>>{
