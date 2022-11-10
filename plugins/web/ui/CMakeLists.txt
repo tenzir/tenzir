@@ -59,7 +59,7 @@ else ()
     COMMENT "Building UI in ${CMAKE_BINARY_DIR}/${ui_install_dir}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/copy-ui.cmake"
-    COMMAND "${YARN_PATH}" install
+    COMMAND "${YARN_PATH}" install --frozen-lockfile
     COMMAND "${YARN_PATH}" build
     COMMAND "${CMAKE_COMMAND}" -E rm -rf "${CMAKE_BINARY_DIR}/${ui_install_dir}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory
