@@ -47,7 +47,7 @@ git switch -C "topic/release-${new_version}" origin/master
 
 # Update the fallback version.
 version_json="$(jq --arg v "${new_version#v}" '."vast-version-fallback" = $v' version.json)"
-echo -E "${version_json}" > version.json)
+echo -E "${version_json}" > version.json
 
 # If the new version is not a release candidate, change mentions of the version
 # in README.md as well.
