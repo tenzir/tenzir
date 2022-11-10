@@ -42,8 +42,10 @@ apt-get -y --no-install-recommends install \
 wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb"
 apt-get -y --no-install-recommends install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 apt-get update
-apt-get -y --no-install-recommends install libarrow-dev=10.0.0-1 libprotobuf-dev libparquet-dev=10.0.0-1
+apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
-apt-get -y install nodejs
 wget -O - 'https://deb.nodesource.com/setup_18.x' | bash -
-corepack enable
+wget -O - 'https://dl.yarnpkg.com/debian/pubkey.gpg' | gpg --dearmor | tee /usr/share/keyrings/yarnkey.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/yarnkey.gpg] https://dl.yarnpkg.com/debian stable main" | tee /etc/apt/sources.list.d/yarn.list
+apt-get update
+apt-get -y install yarn

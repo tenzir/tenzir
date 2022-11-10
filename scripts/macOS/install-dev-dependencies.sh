@@ -18,10 +18,10 @@ brew install \
     openssl \
     pandoc \
     pkg-config \
-    yarn \
     rsync \
     simdjson \
     spdlog \
     tcpdump \
     xxhash \
-    yaml-cpp
+    yaml-cpp \
+    yarn
