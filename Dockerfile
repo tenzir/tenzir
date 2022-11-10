@@ -8,44 +8,9 @@ ENV CC="gcc-10" \
 
 WORKDIR /tmp/vast
 
-RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
-      > /etc/apt/sources.list.d/backports.list && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install \
-      build-essential \
-      ca-certificates \
-      cmake/bullseye-backports \
-      cmake-data/bullseye-backports \
-      flatbuffers-compiler-dev \
-      g++-10 \
-      gcc-10 \
-      git-core \
-      gnupg2 \
-      jq \
-      libasio-dev \
-      libcaf-dev \
-      libbroker-dev \
-      libflatbuffers-dev \
-      libfmt-dev \
-      libpcap-dev tcpdump \
-      libhttp-parser-dev \
-      libsimdjson-dev \
-      libspdlog-dev \
-      libssl-dev \
-      libunwind-dev \
-      libyaml-cpp-dev \
-      libxxhash-dev \
-      lsb-release \
-      ninja-build \
-      pkg-config \
-      robin-map-dev \
-      wget && \
-    wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-    apt-get -y --no-install-recommends install \
-      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev && \
-    rm -rf /var/lib/apt/lists/* *.deb
+COPY scripts ./scripts
+
+RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 
 # VAST
 COPY changelog ./changelog
@@ -55,7 +20,6 @@ COPY libvast ./libvast
 COPY libvast_test ./libvast_test
 COPY plugins ./plugins
 COPY schema ./schema
-COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
 COPY BANNER CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
