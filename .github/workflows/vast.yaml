@@ -430,7 +430,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build notebooks
+      - name: Build Notebooks
         working-directory: examples/notebooks
         run: |
           export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
@@ -463,18 +463,15 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
       - name: Install Nix
         uses: cachix/install-nix-action@v18
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-
       - name: Setup Cachix
         uses: cachix/cachix-action@v12
         with:
           name: vast
           signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
-
       - name: Build Static Packages
         id: build_static_packages
         env:
@@ -485,7 +482,6 @@ jobs:
           STORE_PATH=$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
             ${{ matrix.nix.build-options }})
           echo "store_path=${STORE_PATH}" >> $GITHUB_OUTPUT
-
       - name: Get Artifact Names
         id: get_artifact_names
         run: |
@@ -493,33 +489,28 @@ jobs:
           DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.deb")
           echo "tar_gz=${TAR_GZ}" >> $GITHUB_OUTPUT
           echo "deb=${DEB}" >> $GITHUB_OUTPUT
-
       - name: Upload Tarball to Github
         uses: actions/upload-artifact@v3
         with:
           name: "${{ steps.get_artifact_names.outputs.tar_gz }}"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
           if-no-files-found: error
-
       - name: Upload Debian Package to Github
         uses: actions/upload-artifact@v3
         with:
           name: "${{ steps.get_artifact_names.outputs.deb }}"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
           if-no-files-found: error
-
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.9"
-
       - name: Configure GCS Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v0
+        uses: google-github-actions/setup-gcloud@v1
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
-
       - name: Upload Artifact to GCS (push)
         if: github.event_name == 'push'
         env:
@@ -530,7 +521,6 @@ jobs:
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.outputs.deb }}"
           gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
           gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.out4puts.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-static-latest.deb"
-
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
         env:
@@ -540,7 +530,6 @@ jobs:
           VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_gz }}" | cut -d"-" -f2)
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.tar.gz"
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-${VERSION}-static-latest.deb"
-
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete Release Assets
@@ -554,7 +543,6 @@ jobs:
           # only delete assets when `tag` refers to a release
           fail-if-no-release: true
           assets: "${{ matrix.nix.target }}-linux-static.tar.gz"
-
       - name: Upload Release Tarball
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
@@ -568,7 +556,6 @@ jobs:
           # for a build of the latest release.
           asset_name: "${{ matrix.nix.target }}-linux-static.tar.gz"
           asset_content_type: application/gzip
-
       - name: Upload Debian Release Package
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
@@ -674,7 +661,6 @@ jobs:
             ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
             ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}-master
             ${{ github.workflow }}-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}
-
       - name: Configure
         run: |
           python3 --version
@@ -701,18 +687,15 @@ jobs:
             -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
             ${{ needs.configure.outputs.cmake-version-args }} \
             ${{ matrix.vast.cmake-extra-flags }}
-
       - name: Compile All Targets
         run: |
           cmake --build "$BUILD_DIR" --target all --parallel --verbose
-
       - name: Show ccache Statistics
         run: |
           # Print statistics counter IDs and corresponding values.
           ccache --show-stats
           # Print statistics about cache compression.
           ccache --show-compression
-
       - name: Run Unit Tests
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
@@ -720,15 +703,12 @@ jobs:
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           ctest --parallel
-
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"
-
       - name: Run Integration Tests
         run: |
           cmake --build "$BUILD_DIR" --target integration
-
       - name: Upload Integration Test Logs on Failure
         if: failure()
         uses: actions/upload-artifact@v3
@@ -736,32 +716,27 @@ jobs:
           name: "vast-integration-test-${{ matrix.vast.name }}-${{ matrix.vast.compiler }}"
           path: "${{ env.BUILD_DIR }}/vast/vast-integration-test"
           if-no-files-found: error
-
       - name: Package
         env:
           DESTDIR: ${{ env.PWD }}
         run: |
           cmake --build "$BUILD_DIR" --target package
-
       - name: Upload Artifact to GitHub
         uses: actions/upload-artifact@v3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
           if-no-files-found: error
-
       - name: Configure GCS Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v0
+        uses: google-github-actions/setup-gcloud@v1
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
-
       - name: Upload Artifact to GCS
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
           gsutil -m cp "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz" "gs://${{ secrets.GCS_BUCKET }}/${{ env.PACKAGE_NAME }}.tar.gz"
-
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete existing Release Assets
@@ -775,7 +750,6 @@ jobs:
           # only delete assets when `tag` refers to a release
           fail-if-no-release: tru
           assets: "${{ env.PUBLISH_NAME }}.tar.gz"
-
       - name: Publish to GitHub Release
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
@@ -790,7 +764,6 @@ jobs:
           # for builds of the latest release.
           asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
           asset_content_type: application/gzip
-
       - name: Publish VAST.spdx to GitHub Release
         if: ${{ github.event_name == 'release' && matrix.vast.name == 'Debian' }}
         uses: actions/upload-release-asset@v1
@@ -921,7 +894,7 @@ jobs:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Configure GCS Credentials
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
-        uses: google-github-actions/setup-gcloud@v0
+        uses: google-github-actions/setup-gcloud@v1
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
@@ -1053,3 +1026,23 @@ jobs:
         working-directory: python
         run: |
           poetry publish --build
+
+  pass-branch-protections:
+    needs:
+      - configure
+      - changelog
+      - vast-io
+      - docker
+      - docker-compose
+      - example-notebooks
+      - vast-nix
+      - vast
+      - vast-plugins
+      - python
+      - python-package
+    runs-on: ubuntu-latest
+    name: Pass Branch Protections
+    steps:
+      - name: Success
+        run: |
+          echo "This check runs after all other jobs are done or skipped"
