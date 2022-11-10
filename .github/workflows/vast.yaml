@@ -507,7 +507,7 @@ jobs:
           python-version: "3.9"
       - name: Configure GCS Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v0
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
@@ -729,7 +729,7 @@ jobs:
           if-no-files-found: error
       - name: Configure GCS Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v0
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
@@ -894,7 +894,7 @@ jobs:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Configure GCS Credentials
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v0
         with:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
