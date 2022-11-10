@@ -349,6 +349,26 @@ configuration::configuration() {
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
+void configuration::sanitize_missing_arguments(const caf::config_option_set& options) {
+  auto dummy_options = caf::settings{};
+  for (auto& command : command_line) {
+    auto [state, _] = options.parse(dummy_options, {command});
+    if (state == caf::pec::missing_argument) {
+      auto name = command.substr(2, command.length() - 3);
+      auto option = options.cli_long_name_lookup(name);
+      if (!option) {
+        // something is wrong with the long name options:
+        // reveal this during the actual parsing.
+        return;
+      }
+      auto option_type = option->type_name();
+      auto options_type_default_val
+        = generate_default_value_for_argument_type(option_type.data());
+      command.append(options_type_default_val);
+    }
+  }
+}
+
 caf::error configuration::parse(int argc, char** argv, const caf::config_option_set& options) {
   // The main objective of this function is to parse the command line and put
   // it into the actor_system_config instance (`content`), which components
@@ -371,6 +391,7 @@ caf::error configuration::parse(int argc, char** argv, const caf::config_option_
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
+  sanitize_missing_arguments(options);
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
   const auto replacements = std::vector<std::pair<std::string, std::string>>{
