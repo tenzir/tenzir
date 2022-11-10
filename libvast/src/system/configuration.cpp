@@ -470,6 +470,9 @@ caf::error configuration::parse(int argc, char** argv, const caf::config_option_
     plugin_args.push_back(fmt::format("--plugin-dirs={}", *vast_plugin_dirs));
   if (auto vast_schema_dirs = detail::getenv("VAST_SCHEMA_DIRS"))
     plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
+  // Newly added plugin arguments from environment variables
+  // may contain empty values - sanitize them.
+  sanitize_missing_arguments(plugin_args, options);
   // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());
