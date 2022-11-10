@@ -37,6 +37,7 @@ dependencies and versions.
 |✓|[xxHash](https://github.com/Cyan4973/xxHash)|>= 0.8.0|Required for computing fast hash digests.|
 |✓|[robin-map](https://github.com/Tessil/robin-map)|>= 0.6.3|Fast hash map and hash set using robin hood hashing. (Bundled as subtree.)|
 |✓|[fast_float](https://github.com/FastFloat/fast_float)|>= 3.2.0|Required for parsing floating point numbers. (Bundled as submodule.)|
+||[yarn](https://yarnpkg.com)||Required for building the web frontend.|
 ||[libpcap](https://www.tcpdump.org)||Required for PCAP import, export, and pivoting to and from PCAP traces.|
 ||[restinio](https://stiffstream.com/en/products/restinio.html)||Required for providing a REST API|
 ||[broker](https://github.com/zeek/broker)||Required to build the Broker plugin.|

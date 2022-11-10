@@ -1,13 +1,15 @@
-#!/bin/sh
-set -e
+#! /usr/bin/env bash
+
+set -euo pipefail
+
 echo 'deb http://deb.debian.org/debian bullseye-backports main' > /etc/apt/sources.list.d/backports.list 
 apt-get update 
 apt-get -y --no-install-recommends install \
     build-essential \
     ca-certificates \
     ccache \
-    cmake/bullseye-backports \
     cmake-data/bullseye-backports \
+    cmake/bullseye-backports \
     flatbuffers-compiler-dev \
     g++-10 \
     gcc-10 \
@@ -15,18 +17,18 @@ apt-get -y --no-install-recommends install \
     gnupg2 gnupg-agent\
     jq \
     libasio-dev \
-    libcaf-dev \
     libbroker-dev \
+    libcaf-dev \
     libflatbuffers-dev \
     libfmt-dev \
-    libpcap-dev tcpdump \
     libhttp-parser-dev \
+    libpcap-dev tcpdump \
     libsimdjson-dev \
     libspdlog-dev \
     libssl-dev \
     libunwind-dev \
-    libyaml-cpp-dev \
     libxxhash-dev \
+    libyaml-cpp-dev \
     lsb-release \
     ninja-build \
     pandoc \
@@ -40,5 +42,10 @@ apt-get -y --no-install-recommends install \
 wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb"
 apt-get -y --no-install-recommends install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 apt-get update
-apt-get -y --no-install-recommends install libarrow-dev=10.0.0-1 libprotobuf-dev libparquet-dev=10.0.0-1
+apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+wget -O - 'https://deb.nodesource.com/setup_18.x' | bash -
+wget -O - 'https://dl.yarnpkg.com/debian/pubkey.gpg' | gpg --dearmor | tee /usr/share/keyrings/yarnkey.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/yarnkey.gpg] https://dl.yarnpkg.com/debian stable main" | tee /etc/apt/sources.list.d/yarn.list
+apt-get update
+apt-get -y install yarn

@@ -33,6 +33,7 @@
 , buildType ? "Release"
 , buildAsPackage ? false
 , packageName ? "vast"
+, pkgsBuildHost
 }:
 let
   inherit (stdenv.hostPlatform) isStatic;
@@ -65,7 +66,11 @@ stdenv.mkDerivation (rec {
       --replace nm "''${NM}"
   '';
 
-  nativeBuildInputs = [ cmake cmake-format dpkg ];
+  nativeBuildInputs = [
+    cmake
+    cmake-format
+    dpkg
+  ];
   propagatedNativeBuildInputs = [ pkg-config pandoc ];
   buildInputs = [
     fast_float
@@ -109,6 +114,8 @@ stdenv.mkDerivation (rec {
     "-DVAST_ENABLE_UNIT_TESTS=OFF"
   ] ++ lib.optionals (withPlugins != []) [
     "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
+    # TODO limit this to just web plugin
+    "-DVAST_WEB_UI_BUNDLE=${pkgsBuildHost.vast-ui}"
   ] ++ lib.optionals buildAsPackage [
     "-UCMAKE_INSTALL_BINDIR"
     "-UCMAKE_INSTALL_SBINDIR"
@@ -151,7 +158,7 @@ stdenv.mkDerivation (rec {
 
   meta = with lib; {
     description = "Visibility Across Space and Time";
-    homepage = http://vast.io/;
+    homepage = "https://vast.io/";
     license = licenses.bsd3;
     platforms = platforms.unix;
     maintainers = with maintainers; [ tobim ];

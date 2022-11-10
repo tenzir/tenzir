@@ -1,9 +1,11 @@
-#!/bin/sh
-set -e
+#! /usr/bin/env bash
+
+set -euo pipefail
+
 brew --version
 brew install \
-    asio \
     apache-arrow \
+    asio \
     ccache \
     flatbuffers \
     fmt \
@@ -20,5 +22,6 @@ brew install \
     simdjson \
     spdlog \
     tcpdump \
+    xxhash \
     yaml-cpp \
-    xxhash
+    yarn
