@@ -282,8 +282,8 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
 
 } // namespace
 
-caf::message dump_command(const invocation& inv, caf::actor_system&) {
-  auto as_yaml = caf::get_or(inv.options, "vast.dump.yaml", false);
+caf::message show_command(const invocation& inv, caf::actor_system&) {
+  auto as_yaml = caf::get_or(inv.options, "vast.show.yaml", false);
   auto self = this_node;
   auto [type_registry] = self->state.registry.find<type_registry_actor>();
   if (!type_registry)
@@ -296,7 +296,7 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
       [=](struct taxonomies taxonomies) mutable {
         auto result = list{};
         result.reserve(taxonomies.concepts.size());
-        if (inv.full_name == "dump" || inv.full_name == "dump concepts") {
+        if (inv.full_name == "show" || inv.full_name == "show concepts") {
           for (auto& [name, concept_] : taxonomies.concepts) {
             auto fields = list{};
             fields.reserve(concept_.fields.size());
@@ -318,7 +318,7 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
             result.push_back(std::move(entry));
           }
         }
-        if (inv.full_name == "dump" || inv.full_name == "dump models") {
+        if (inv.full_name == "show" || inv.full_name == "show models") {
           for (auto& [name, model] : taxonomies.models) {
             auto definition = list{};
             definition.reserve(model.definition.size());
@@ -349,7 +349,7 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
       },
       [=](caf::error& err) mutable {
         request_error
-          = caf::make_error(ec::unspecified, fmt::format("'dump' failed to get "
+          = caf::make_error(ec::unspecified, fmt::format("'show' failed to get "
                                                          "taxonomies from "
                                                          "type-registry: {}",
                                                          std::move(err)));
@@ -486,9 +486,9 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
   auto result = command::factory{
-    {"dump", dump_command},
-    {"dump concepts", dump_command},
-    {"dump models", dump_command},
+    {"show", show_command},
+    {"show concepts", show_command},
+    {"show models", show_command},
     {"kill", kill_command},
     {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
