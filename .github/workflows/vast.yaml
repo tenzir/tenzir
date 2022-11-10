@@ -489,6 +489,19 @@ jobs:
           DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.deb")
           echo "tar_gz=${TAR_GZ}" >> $GITHUB_OUTPUT
           echo "deb=${DEB}" >> $GITHUB_OUTPUT
+      - name: Run Integration Tests
+        run: |
+          mkdir -p vast-integration-test
+          tar xf ./result/${{ steps.get_artifact_names.outputs.tar_gz }} --directory vast-integration-test
+          nix shell --impure mach-nix#gen.python.coloredlogs.jsondiff.pyarrow.pyyaml.schema --command python vast/integration/integration.py --app \
+            vast-integration-test/opt/vast/bin/vast
+      - name: Upload Integration Test Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: "vast-integration-test-nix-static-${{ matrix.nix.target }}"
+          path: "vast-integration-test"
+          if-no-files-found: error
       - name: Upload Tarball to Github
         uses: actions/upload-artifact@v3
         with:
