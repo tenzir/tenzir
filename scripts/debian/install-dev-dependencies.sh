@@ -1,5 +1,7 @@
-#!/bin/sh
-set -e
+#! /usr/bin/env bash
+
+set -euo pipefail
+
 echo 'deb http://deb.debian.org/debian bullseye-backports main' > /etc/apt/sources.list.d/backports.list 
 apt-get update 
 apt-get -y --no-install-recommends install \

@@ -1,5 +1,7 @@
-#!/bin/sh
-set -e
+#! /usr/bin/env bash
+
+set -euo pipefail
+
 brew --version
 brew install \
     apache-arrow \
