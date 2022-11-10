@@ -308,7 +308,7 @@ to replicate the matcher at another VAST instance.
 
 ### Save/load state at the client
 
-To dump the state of a specific matcher, use the `matcher save` command:
+To show the state of a specific matcher, use the `matcher save` command:
 
 ```bash
 vast matcher save ips > ips.state
