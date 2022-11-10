@@ -18,7 +18,7 @@ brew install \
     openssl \
     pandoc \
     pkg-config \
-    pnpm \
+    yarn \
     rsync \
     simdjson \
     spdlog \

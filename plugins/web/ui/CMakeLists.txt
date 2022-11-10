@@ -11,11 +11,11 @@ if (VAST_WEB_UI_BUNDLE)
        DESTINATION "${CMAKE_BINARY_DIR}/${ui_install_dir}")
 else ()
   # Build and install the frontend as a static site.
-  find_program(PNPM_PATH pnpm)
-  if (NOT PNPM_PATH)
+  find_program(YARN_PATH yarn)
+  if (NOT YARN_PATH)
     message(
       FATAL_ERROR
-        "Cannot find 'pnpm' in PATH, which is required for building the web frontend"
+        "Cannot find 'yarn' in PATH, which is required for building the web frontend"
     )
   endif ()
 
@@ -59,8 +59,8 @@ else ()
     COMMENT "Building UI in ${CMAKE_BINARY_DIR}/${ui_install_dir}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/copy-ui.cmake"
-    COMMAND "${PNPM_PATH}" install
-    COMMAND "${PNPM_PATH}" build
+    COMMAND "${YARN_PATH}" install
+    COMMAND "${YARN_PATH}" build
     COMMAND "${CMAKE_COMMAND}" -E rm -rf "${CMAKE_BINARY_DIR}/${ui_install_dir}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory
             "${CMAKE_BINARY_DIR}/${ui_install_dir}"
