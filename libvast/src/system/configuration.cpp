@@ -349,7 +349,7 @@ configuration::configuration() {
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
-caf::error configuration::parse(int argc, char** argv) {
+caf::error configuration::parse(int argc, char** argv, const caf::config_option_set& options) {
   // The main objective of this function is to parse the command line and put
   // it into the actor_system_config instance (`content`), which components
   // throughout VAST query to find out the application settings. This process

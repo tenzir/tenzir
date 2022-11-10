@@ -41,7 +41,7 @@ public:
 
   // -- modifiers --------------------------------------------------------------
 
-  caf::error parse(int argc, char** argv);
+  caf::error parse(int argc, char** argv, const caf::config_option_set& options = {});
 
   // -- configuration options --------------------------------------------------
 
