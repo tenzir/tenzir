@@ -105,6 +105,12 @@ FileCopyrightText: (c) Peter C. Dillinger, (c) Facebook, Inc. and its affiliates
 LicenseConcluded: MIT
 LicenseComment: https://github.com/pdillinger/wormhashing
 
+SPDXID: SPDXRef-File
+FileName: ./plugins/web/include/web/mime.hpp
+FileCopyrightText: Copyright (c) 2017-2022 Stiffstream <info@stiffstream.com>
+LicenseConcluded: BSD-3-Clause
+LicenseComment: https://github.com/Stiffstream/restinio
+
 SPDXID: SPDXRef-Package
 PackageName: musl
 PackageHomePage: https://musl.libc.org
