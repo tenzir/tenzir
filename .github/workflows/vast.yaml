@@ -1053,3 +1053,23 @@ jobs:
         working-directory: python
         run: |
           poetry publish --build
+
+  pass-branch-protections:
+    needs:
+      - configure
+      - changelog
+      - vast-io
+      - docker
+      - docker-compose
+      - example-notebooks
+      - vast-nix
+      - vast
+      - vast-plugins
+      - python
+      - python-package
+    runs-on: ubuntu-latest
+    name: Pass Branch Protections
+    steps:
+      - name: Success
+        run: |
+          echo "This check runs after all other jobs are done or skipped"
