@@ -67,6 +67,11 @@ jobs:
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
         uses: rlespinasse/github-slug-action@v4
+      - name: Configure GCS Credentials
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Configure
         id: configure
         run: |
@@ -152,12 +157,22 @@ jobs:
           if ! is_unchanged cmake/ CMakeLists.txt libvast/ libvast_test/ scripts/ schema/ tools/ vast/ vast.yaml.example version.json; then
             run_vast=true
           fi
-          echo "run-vast=${run_vast}" >> $GITHUB_OUTPUT
           run_vast_plugins=${run_vast}
           if ! is_unchanged plugins/; then
             run_vast_plugins=true
           fi
           echo "run-vast-plugins=${run_vast_plugins}" >> $GITHUB_OUTPUT
+          # Build vast if no artifact is present in google store
+          if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
+            deb_package="$(echo "vast-${before_version}-linux-Release-GCC" | awk '{ print tolower($0) }')"
+            mac_package="$(echo "vast-${before_version}-darwin-Release-Clang" | awk '{ print tolower($0) }')"
+            if ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${deb_package}.tar.gz; then
+              run_vast=true
+            elif ! gsutil -q stat gs://${{ secrets.GCS_BUCKET }}/${mac_package}.tar.gz; then
+              run_vast=true
+            fi
+          fi
+          echo "run-vast=${run_vast}" >> $GITHUB_OUTPUT
           run_docker_compose=${run_vast}
           if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
             run_docker_compose=false
