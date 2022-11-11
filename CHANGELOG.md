@@ -6,6 +6,89 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
+## [v2.4.0-rc1][v2.4.0-rc1]
+
+### Changes
+
+- VAST now emits per-component memory usage metrics under the `memory-usage` key. As of now the index and catalog components calculate this value.
+  [#2471](https://github.com/tenzir/vast/pull/2471)
+
+- We changed the default VAST endpoint from 'localhost' to '127.0.0.1', to ensure the listen address is deterministic and eliminate a race where VAST fails to acquire the IPv6 address due to a lingering port reservation but then successfully listens on the IPv6 address.
+  [#2512](https://github.com/tenzir/vast/pull/2512)
+
+- Building VAST from source now requires CMake 3.19 or greater.
+  [#2582](https://github.com/tenzir/vast/pull/2582)
+
+- The default store-backend of VAST is now `feather`. Reading from VAST's custom `segment-store` backend is still transparently supported, but new partitions automatically write to the Apache Feather V2 backend instead.
+  [#2587](https://github.com/tenzir/vast/pull/2587)
+
+- Log messages concerning automatic rebuilds are not printed at INFO verbosity any more.
+  [#2619](https://github.com/tenzir/vast/pull/2619)
+
+- We removed PyVAST from the code base in favor of the new Python bindings. PyVAST continues to work as a thin wrapper around the VAST binary, but will no longer be released alongside VAST.
+  [#2674](https://github.com/tenzir/vast/pull/2674)
+
+- Building VAST from source now requires [Apache Arrow 10.0](https://arrow.apache.org/blog/2022/10/31/10.0.0-release/) or newer.
+  [#2685](https://github.com/tenzir/vast/pull/2685)
+
+- The `vast dump` command is now called `vast show` instead.
+  [#2686](https://github.com/tenzir/vast/pull/2686)
+
+### Features
+
+- VAST is now distributed as a Debian Package. It is attached to each [release on GitHub](https://github.com/tenzir/vast/releases). This package automatically installs a systemd service and creates a `vast` user for the database process, greatly simplifying the setup process. Refer to [the docs](https://vast.io/docs/setup/install/linux#debian) for detailed instructions.
+  [#2513](https://github.com/tenzir/vast/pull/2513)
+
+- VAST Cloud has now a MISP plugin that enables to add a MISP instance to the cloud stack.
+  [#2548](https://github.com/tenzir/vast/pull/2548)
+
+- The new and experimental web plugin offers a RESTful API to VAST and a bundled web user interface in Svelte.
+  [#2567](https://github.com/tenzir/vast/pull/2567)
+  [#2614](https://github.com/tenzir/vast/pull/2614)
+  [#2638](https://github.com/tenzir/vast/pull/2638)
+  [#3681](https://github.com/tenzir/vast/pull/3681)
+
+- VAST now emits metrics for filesystem access under the keys `posix-filesystem.{checks,writes,reads,mmaps,erases,moves}.{successful,failed,bytes}`.
+  [#2572](https://github.com/tenzir/vast/pull/2572)
+
+- VAST now ships a docker-compose file.
+  [#2574](https://github.com/tenzir/vast/pull/2574)
+
+- VAST Cloud can now expose HTTP services using Cloudflare Access.
+  [#2578](https://github.com/tenzir/vast/pull/2578)
+
+- Rebuilding parttitions now additionally rebatches the contained events to `vast.import.batch-size` events per batch, which makes queries against partitions that previously had undersized batches faster.
+  [#2583](https://github.com/tenzir/vast/pull/2583)
+
+- VAST has a new configuration setting, `vast.zstd-compression-level`, to control the compression level of the Zstd algorithm used in both the Feather and Parquet store backends. The default level is set by the Apache Arrow library, and for Parquet is no longer explicitly defaulted to `9`.
+  [#2623](https://github.com/tenzir/vast/pull/2623)
+
+- The Docker compose stack now has a TheHive integration that can run VAST queries as an Analyzer.
+  [#2652](https://github.com/tenzir/vast/pull/2652)
+
+- VAST has three new metric keys: `catalog.num-partitions-total`, `catalog.num-events-total` and `ingest-total` that sum up all schema-based metrics by their respective schema-based metric counterparts.
+  [#2682](https://github.com/tenzir/vast/pull/2682)
+
+### Bug Fixes
+
+- VAST now skips unreadable partitions while starting up, instead of aborting the initialization routine.
+  [#2515](https://github.com/tenzir/vast/pull/2515)
+
+- Rebuild of heterogeneous partition no longer hangs the whole rebuilder on rebuild pipeline failures.
+  [#2530](https://github.com/tenzir/vast/pull/2530)
+
+- VAST no longer attempts to hard-kill itself if the shutdown did not finish within the configured grace period. The option `vast.shutdown-grace-period` no longer exists. We recommend setting `TimeoutStopSec=180` in the VAST systemd service definition to restore the previous behavior.
+  [#2568](https://github.com/tenzir/vast/pull/2568)
+
+- The error message on connection failure now contains a correctly formatted target endpoint.
+  [#2609](https://github.com/tenzir/vast/pull/2609)
+
+- The UDS metrics sink doesn't deadlock because of suspended listeners any more.
+  [#2635](https://github.com/tenzir/vast/pull/2635)
+
+- VAST will now eject failed partitions from the cache after returning an error from a query.
+  [#2642](https://github.com/tenzir/vast/pull/2642)
+
 ## [v2.3.1][v2.3.1]
 
 ### Bug Fixes
@@ -1939,6 +2022,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
+[v2.4.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.4.0-rc1
 [v2.3.1]: https://github.com/tenzir/vast/releases/tag/v2.3.1
 [v2.3.0]: https://github.com/tenzir/vast/releases/tag/v2.3.0
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
