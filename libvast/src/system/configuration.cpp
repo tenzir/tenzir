@@ -372,8 +372,7 @@ configuration::configuration() {
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
-caf::error configuration::parse(int argc, char** argv,
-                                const command& root) {
+caf::error configuration::parse(int argc, char** argv, const command& root) {
   // The main objective of this function is to parse the command line and put
   // it into the actor_system_config instance (`content`), which components
   // throughout VAST query to find out the application settings. This process
@@ -397,7 +396,7 @@ caf::error configuration::parse(int argc, char** argv,
   command_line.assign(argv + 1, argv + argc);
   for (auto& argument : command_line) {
     if (argument.starts_with("--")) {
-     sanitize_long_form_argument(argument, root);
+      sanitize_long_form_argument(argument, root);
     }
   }
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs

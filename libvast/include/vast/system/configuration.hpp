@@ -42,7 +42,7 @@ public:
 
   // -- modifiers --------------------------------------------------------------
 
-  caf::error parse(int argc, char** argv, const command& root = {"","", {}});
+  caf::error parse(int argc, char** argv, const command& root = {"", "", {}});
 
   // -- configuration options --------------------------------------------------
 
