@@ -360,8 +360,11 @@ caf::error configuration::parse(int argc, char** argv,
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
-  launch_parameter_sanitation::sanitize_missing_arguments(command_line,
-                                                          root);
+  for (auto& argument : command_line) {
+    if (argument.starts_with("--")) {
+      launch_parameter_sanitation::sanitize_long_form_argument(argument, root);
+    }
+  }
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
   const auto replacements = std::vector<std::pair<std::string, std::string>>{
@@ -442,8 +445,9 @@ caf::error configuration::parse(int argc, char** argv,
     plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
   // Newly added plugin arguments from environment variables
   // may contain empty values - sanitize them.
-  launch_parameter_sanitation::
-    sanitize_missing_arguments(plugin_args, root);
+  for (auto& plugin_arg : plugin_args) {
+    launch_parameter_sanitation::sanitize_long_form_argument(plugin_arg, root);
+  }
   // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());

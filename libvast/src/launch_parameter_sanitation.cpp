@@ -29,31 +29,26 @@ auto generate_default_value_for_argument_type(std::string_view type_name) {
 }
 } // namespace
 
-void sanitize_missing_arguments(std::vector<std::string>& arguments,
-                                const vast::command& cmd) {
+void sanitize_long_form_argument(std::string& argument,
+                                 const vast::command& cmd) {
   auto dummy_options = caf::settings{};
-  for (auto& argument : arguments) {
-    if (!argument.starts_with("--")) {
-      continue;
+  auto [state, _] = cmd.options.parse(dummy_options, {argument});
+  if (state == caf::pec::not_an_option) {
+    for (const auto& child_cmd : cmd.children) {
+      sanitize_long_form_argument(argument, *child_cmd);
     }
-    auto [state, _] = cmd.options.parse(dummy_options, {argument});
-    if (state == caf::pec::not_an_option) {
-      for (const auto& child_cmd : cmd.children) {
-        sanitize_missing_arguments(arguments, *child_cmd);
-      }
-    } else if (state == caf::pec::missing_argument) {
-      auto name = argument.substr(2, argument.length() - 3);
-      auto option = cmd.options.cli_long_name_lookup(name);
-      if (!option) {
-        // something is wrong with the long name options:
-        // reveal this during the actual parsing.
-        continue;
-      }
-      auto option_type = option->type_name();
-      auto options_type_default_val
-        = generate_default_value_for_argument_type(option_type.data());
-      argument.append(options_type_default_val);
+  } else if (state == caf::pec::missing_argument) {
+    auto name = argument.substr(2, argument.length() - 3);
+    auto option = cmd.options.cli_long_name_lookup(name);
+    if (!option) {
+      // something is wrong with the long name options:
+      // reveal this during the actual parsing.
+      return;
     }
+    auto option_type = option->type_name();
+    auto options_type_default_val
+      = generate_default_value_for_argument_type(option_type.data());
+    argument.append(options_type_default_val);
   }
 }
 
