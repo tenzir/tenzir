@@ -19,8 +19,6 @@ auto generate_default_value_for_argument_type(std::string_view type_name) {
     return "0";
   } else if (type_name == "timespan") {
     return "0s";
-  } else if (type_name == "boolean") {
-    return "false";
   } else if (type_name.starts_with("list")) {
     return "[]";
   }

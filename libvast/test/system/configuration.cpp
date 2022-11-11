@@ -155,9 +155,9 @@ TEST(command line no value for timespan value generates default value) {
               std::chrono::milliseconds{0}.count());
 }
 
-TEST(command line no value for bool value generates default value) {
+TEST(command line no value for bool value generates default true value by CAF) {
   parse(std::vector<std::string>{"rebuild", "--all="});
-  CHECK(get<bool>("vast.rebuild.all") == false);
+  CHECK_EQUAL(get<bool>("vast.rebuild.all"), true);
 }
 
 FIXTURE_SCOPE_END()
