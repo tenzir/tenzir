@@ -192,8 +192,7 @@ struct invocation {
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command
 caf::expected<invocation>
-parse(const command& root, command::argument_iterator first,
-      command::argument_iterator last);
+parse(const command& root, std::vector<std::string>& arguments);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.

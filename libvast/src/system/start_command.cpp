@@ -127,7 +127,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
       while (tokenizer >> std::quoted(current))
         cli.push_back(std::move(current));
       VAST_INFO("running post-start command {}", command);
-      auto hook_invocation = parse(*root, cli.begin(), cli.end());
+      auto hook_invocation = parse(*root, cli);
       if (!hook_invocation)
         return caf::make_message(hook_invocation.error());
       detail::merge_settings(inv.options, hook_invocation->options,

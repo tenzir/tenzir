@@ -23,7 +23,6 @@
 #include "vast/detail/stable_set.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
-#include "vast/launch_parameter_sanitation.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -337,7 +336,7 @@ configuration::configuration() {
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
-caf::error configuration::parse(int argc, char** argv, const command& root) {
+caf::error configuration::parse(int argc, char** argv) {
   // The main objective of this function is to parse the command line and put
   // it into the actor_system_config instance (`content`), which components
   // throughout VAST query to find out the application settings. This process
@@ -359,11 +358,6 @@ caf::error configuration::parse(int argc, char** argv, const command& root) {
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
-  for (auto& argument : command_line) {
-    if (argument.starts_with("--")) {
-      launch_parameter_sanitation::sanitize_long_form_argument(argument, root);
-    }
-  }
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
   const auto replacements = std::vector<std::pair<std::string, std::string>>{
@@ -442,14 +436,16 @@ caf::error configuration::parse(int argc, char** argv, const command& root) {
     plugin_args.push_back(fmt::format("--plugin-dirs={}", *vast_plugin_dirs));
   if (auto vast_schema_dirs = detail::getenv("VAST_SCHEMA_DIRS"))
     plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
-  // Newly added plugin arguments from environment variables
-  // may contain empty values - sanitize them.
-  for (auto& plugin_arg : plugin_args) {
-    launch_parameter_sanitation::sanitize_long_form_argument(plugin_arg, root);
-  }
   // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());
+  // Newly added plugin arguments from environment variables
+  // may contain empty values - sanitize them manually.
+  for (auto& plugin_arg : plugin_args) {
+    if (plugin_arg.ends_with("=")) {
+      plugin_arg.append("[]");
+    }
+  }
   auto plugin_opts
     = caf::config_option_set{}
         .add<std::vector<std::string>>("?vast", "schema-dirs", "")

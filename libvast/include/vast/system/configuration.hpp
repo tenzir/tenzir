@@ -10,8 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/command.hpp"
-
 #include <caf/actor_system_config.hpp>
 
 #include <filesystem>
@@ -43,7 +41,7 @@ public:
 
   // -- modifiers --------------------------------------------------------------
 
-  caf::error parse(int argc, char** argv, const command& root = {"", "", {}});
+  caf::error parse(int argc, char** argv);
 
   // -- configuration options --------------------------------------------------
 

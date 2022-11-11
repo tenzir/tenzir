@@ -47,7 +47,7 @@ struct fixture {
     inv.options.clear();
     std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
-    auto expected_inv = parse(root, xs.begin(), xs.end());
+    auto expected_inv = parse(root, xs);
     if (!expected_inv)
       return expected_inv.error();
     inv = std::move(*expected_inv);

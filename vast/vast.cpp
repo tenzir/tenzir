@@ -116,14 +116,9 @@ int main(int argc, char** argv) {
   // for that is enabled.
   std::signal(SIGSEGV, fatal_handler);
   std::signal(SIGABRT, fatal_handler);
-  // Application setup.
-  auto [root, root_factory] = system::make_application(argv[0]);
-  if (!root)
-    return EXIT_FAILURE;
   // Set up our configuration, e.g., load of YAML config file(s).
   system::default_configuration cfg;
-
-  if (auto err = cfg.parse(argc, argv, *root)) {
+  if (auto err = cfg.parse(argc, argv)) {
     std::cerr << "failed to parse configuration: " << to_string(err)
               << std::endl;
     return EXIT_FAILURE;
@@ -136,9 +131,12 @@ int main(int argc, char** argv) {
   // Initialize factories.
   factory<format::reader>::initialize();
   factory<format::writer>::initialize();
+  // Application setup.
+  auto [root, root_factory] = system::make_application(argv[0]);
+  if (!root)
+    return EXIT_FAILURE;
   // Parse the CLI.
-  auto invocation
-    = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
+  auto invocation = parse(*root, cfg.command_line);
   if (!invocation) {
     if (invocation.error()) {
       system::render_error(*root, invocation.error(), std::cerr);
