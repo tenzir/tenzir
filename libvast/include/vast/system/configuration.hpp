@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "vast/command.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/command.hpp"
 
 #include <caf/actor_system_config.hpp>
 

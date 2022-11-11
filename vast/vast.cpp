@@ -128,7 +128,6 @@ int main(int argc, char** argv) {
               << std::endl;
     return EXIT_FAILURE;
   }
-
   auto loaded_plugin_paths = plugins::load({VAST_BUNDLED_PLUGINS}, cfg);
   if (!loaded_plugin_paths) {
     fmt::print(stderr, "{}\n", loaded_plugin_paths.error());
@@ -137,7 +136,6 @@ int main(int argc, char** argv) {
   // Initialize factories.
   factory<format::reader>::initialize();
   factory<format::writer>::initialize();
-
   // Parse the CLI.
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
