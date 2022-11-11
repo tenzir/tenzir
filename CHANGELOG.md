@@ -48,8 +48,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 - VAST now emits metrics for filesystem access under the keys `posix-filesystem.{checks,writes,reads,mmaps,erases,moves}.{successful,failed,bytes}`.
   [#2572](https://github.com/tenzir/vast/pull/2572)
 
-- VAST now ships a Docker Compose file.
+- VAST now ships a Docker Compose file. In particular, the Docker Compose stack now has a TheHive integration that can run VAST queries as a Cortex Analyzer.
   [#2574](https://github.com/tenzir/vast/pull/2574)
+  [#2652](https://github.com/tenzir/vast/pull/2652)
 
 - VAST Cloud can now expose HTTP services using Cloudflare Access.
   [#2578](https://github.com/tenzir/vast/pull/2578)
@@ -59,9 +60,6 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - VAST has a new configuration setting, `vast.zstd-compression-level`, to control the compression level of the Zstd algorithm used in both the Feather and Parquet store backends. The default level is set by the Apache Arrow library, and for Parquet is no longer explicitly defaulted to `9`.
   [#2623](https://github.com/tenzir/vast/pull/2623)
-
-- The Docker Compose stack now has a TheHive integration that can run VAST queries as a Cortex Analyzer.
-  [#2652](https://github.com/tenzir/vast/pull/2652)
 
 - VAST has three new metrics: `catalog.num-partitions-total`, `catalog.num-events-total`, and `ingest-total` that sum up all schema-based metrics by their respective schema-based metric counterparts.
   [#2682](https://github.com/tenzir/vast/pull/2682)
