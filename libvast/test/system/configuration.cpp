@@ -139,13 +139,13 @@ TEST(command line overrides environment even for plugins) {
 
 TEST(command line no value for integer values generates default value) {
   parse(std::vector<std::string>{"start", "--disk-budget-check-interval="});
-  CHECK_EQUAL(get<size_t>("vast.start.disk-budget-check-interval"), 0);
+  CHECK_EQUAL(get<size_t>("vast.start.disk-budget-check-interval"), size_t{0});
 
   parse(std::vector<std::string>{"explore", "--max-events-query="});
-  CHECK_EQUAL(get<size_t>("vast.explore.max-events-query"), 0);
+  CHECK_EQUAL(get<count>("vast.explore.max-events-query"), count{0});
 
   parse(std::vector<std::string>{"pivot", "--flush-interval="});
-  CHECK_EQUAL(get<size_t>("vast.pivot.flush-interval"), 0);
+  CHECK_EQUAL(get<size_t>("vast.pivot.flush-interval"), size_t{0});
 }
 
 TEST(command line no value for timespan value generates default value) {
