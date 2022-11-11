@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "vast"
-version = "2.3.0"
+version = "2.4.0-rc1"
 description = "A security telemetry engine for detection and response"
 authors = ["Tenzir <engineering@tenzir.com>"]
 maintainers = ["Tenzir <engineering@tenzir.com>"]
