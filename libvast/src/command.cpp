@@ -330,14 +330,15 @@ caf::error parse_impl(invocation& result, const command& cmd,
 
 caf::expected<invocation>
 parse(const command& root, std::vector<std::string>& arguments) {
-  for (auto &argument : arguments) {
+  for (auto& argument : arguments) {
     if (argument.starts_with("--")) {
       sanitize_long_form_argument(argument, root);
     }
   }
   invocation result;
   const command* target = nullptr;
-  if (auto err = parse_impl(result, root, arguments.begin(), arguments.end(), &target)) {
+  if (auto err
+      = parse_impl(result, root, arguments.begin(), arguments.end(), &target)) {
     render_parse_error(*target, result, err, std::cerr);
     return ec::silent;
   }
