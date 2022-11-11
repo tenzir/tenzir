@@ -14,6 +14,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
+#include "vast/launch_parameter_sanitation.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/start_command.hpp"

@@ -38,7 +38,7 @@ struct fixture {
     auto argv = cmd_line.data();
     // Application setup, as VAST main does it.
     auto [root, _] = system::make_application(argv[0]);
-    REQUIRE_EQUAL(cfg.parse(argc, argv, root->options), caf::none);
+    REQUIRE_EQUAL(cfg.parse(argc, argv, *root), caf::none);
     REQUIRE(root);
     // Parse the CLI.
     auto invocation

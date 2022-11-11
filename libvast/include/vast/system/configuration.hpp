@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/command.hpp"
 #include "vast/fwd.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -41,7 +42,7 @@ public:
 
   // -- modifiers --------------------------------------------------------------
 
-  caf::error parse(int argc, char** argv, const caf::config_option_set& options = {});
+  caf::error parse(int argc, char** argv, const command& root = {"","", {}});
 
   // -- configuration options --------------------------------------------------
 

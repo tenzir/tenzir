@@ -30,22 +30,29 @@ auto generate_default_value_for_argument_type(std::string_view type_name) {
 } // namespace
 
 void sanitize_missing_arguments(std::vector<std::string>& arguments,
-                                const caf::config_option_set& options) {
+                                const vast::command& cmd) {
   auto dummy_options = caf::settings{};
-  for (auto& command : arguments) {
-    auto [state, _] = options.parse(dummy_options, {command});
-    if (state == caf::pec::missing_argument) {
-      auto name = command.substr(2, command.length() - 3);
-      auto option = options.cli_long_name_lookup(name);
+  for (auto& argument : arguments) {
+    if (!argument.starts_with("--")) {
+      continue;
+    }
+    auto [state, _] = cmd.options.parse(dummy_options, {argument});
+    if (state == caf::pec::not_an_option) {
+      for (const auto& child_cmd : cmd.children) {
+        sanitize_missing_arguments(arguments, *child_cmd);
+      }
+    } else if (state == caf::pec::missing_argument) {
+      auto name = argument.substr(2, argument.length() - 3);
+      auto option = cmd.options.cli_long_name_lookup(name);
       if (!option) {
         // something is wrong with the long name options:
         // reveal this during the actual parsing.
-        return;
+        continue;
       }
       auto option_type = option->type_name();
       auto options_type_default_val
         = generate_default_value_for_argument_type(option_type.data());
-      command.append(options_type_default_val);
+      argument.append(options_type_default_val);
     }
   }
 }

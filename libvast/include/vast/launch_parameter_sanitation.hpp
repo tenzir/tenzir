@@ -9,10 +9,11 @@
 #pragma once
 
 #include <caf/config_option_set.hpp>
+#include "vast/command.hpp"
 
 namespace vast::launch_parameter_sanitation {
 
 void sanitize_missing_arguments(std::vector<std::string>& arguments,
-                                const caf::config_option_set& options);
+                                const vast::command& cmd);
 
 } // namespace vast::launch_parameter_sanitation

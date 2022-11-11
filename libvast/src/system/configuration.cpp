@@ -338,7 +338,7 @@ configuration::configuration() {
 }
 
 caf::error configuration::parse(int argc, char** argv,
-                                const caf::config_option_set& options) {
+                                const command& root) {
   // The main objective of this function is to parse the command line and put
   // it into the actor_system_config instance (`content`), which components
   // throughout VAST query to find out the application settings. This process
@@ -361,7 +361,7 @@ caf::error configuration::parse(int argc, char** argv,
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
   launch_parameter_sanitation::sanitize_missing_arguments(command_line,
-                                                          options);
+                                                          root);
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
   const auto replacements = std::vector<std::pair<std::string, std::string>>{
@@ -443,7 +443,7 @@ caf::error configuration::parse(int argc, char** argv,
   // Newly added plugin arguments from environment variables
   // may contain empty values - sanitize them.
   launch_parameter_sanitation::
-    sanitize_missing_arguments(plugin_args, options);
+    sanitize_missing_arguments(plugin_args, root);
   // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());

@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
   // Set up our configuration, e.g., load of YAML config file(s).
   system::default_configuration cfg;
 
-  if (auto err = cfg.parse(argc, argv, root->options)) {
+  if (auto err = cfg.parse(argc, argv, *root)) {
     std::cerr << "failed to parse configuration: " << to_string(err)
               << std::endl;
     return EXIT_FAILURE;
