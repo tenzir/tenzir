@@ -1,8 +1,8 @@
 # Fault Tolerance
 
-- **Status**: WIP
+- **Status**: In-Review
 - **Created**: Sep 5, 2022
-- **ETA**: Oct 5, 2022
+- **ETA**: Nov 30, 2022
 - **Authors**:
   - [Tobias Mayer](https://github.com/tobim)
   - [Thomas Peiselt](https://github.com/dispanser)
@@ -298,15 +298,15 @@ metastore-specific integration.
 
 The catalog requires the following interface from the metastore:
 
-1. `get: [uuid] → [partition]`
-2. `add: [partition] → ACK`
+1. `get: [uuid] → [partition_info]`
+2. `add: [partition_info] → ACK`
 3. `delete: [uuid] → ACK`
-4. `replace: [uuid], [partition] → ACK`
+4. `replace: [uuid], [partition_info] → ACK`
 5. `list: [uuid]`
 
 The semantics of the mentioned types are as follows:
 
-- `partition`: metadata about a partition, such as its URL and its schema.
+- `partition_info`: metadata about a partition, such as its URL and its schema.
 - `uuid`: a globally unique identifier for a partition.
 - `ACK`: a confirmation about an action.
 
