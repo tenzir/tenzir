@@ -1,0 +1,24 @@
+#! /usr/bin/env bash
+set -e
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+VAST_COMPOSE_FILES="-f $SCRIPT_DIR/../vast/docker-compose.yaml"
+
+COMPOSE_FILES="-f $SCRIPT_DIR/docker-compose.yaml"
+if [[ "$1" == "integ" ]]; then
+  COMPOSE_FILES="${COMPOSE_FILES}  -f $SCRIPT_DIR/docker-compose.vast.yaml"
+  docker compose $VAST_COMPOSE_FILES down -v
+  docker compose $VAST_COMPOSE_FILES up -d
+else
+  echo "Missing argument integ|local"
+  exit 1
+fi
+
+docker compose \
+    $COMPOSE_FILES \
+    run bindings \
+    "poetry install --all-extras && poetry run pytest"
+
+if [[ "$1" == "integ" ]]; then
+  docker compose $VAST_COMPOSE_FILES down -v
+fi

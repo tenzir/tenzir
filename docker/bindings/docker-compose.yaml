@@ -1,0 +1,17 @@
+version: "3"
+services:
+  bindings:
+    image: ${VAST_CONTAINER_REGISTRY:-docker.io}/tenzir/vast-poetry:${VAST_CONTAINER_REF:-latest}
+    working_dir: /vast
+    volumes:
+      - ../../python:/vast
+      - bindings-cache:/home/vast/.cache/
+    environment:
+      - TOX_ENV_DIR=/home/vast/.cache/
+    entrypoint:
+      - bash
+      - -c
+
+
+volumes:
+  bindings-cache:

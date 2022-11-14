@@ -1,0 +1,9 @@
+version: "3"
+services:
+  bindings:
+    depends_on:
+      - vast
+    environment:
+      - VAST_ENDPOINT=vast:42000
+    networks:
+      - vast
