@@ -1,12 +1,13 @@
 <script>
-  import { LayerCake, Svg } from 'layercake';
-  import { scaleOrdinal } from 'd3-scale';
+  import { Html, LayerCake, Svg } from 'layercake';
+  import { scaleOrdinal, scaleLog } from 'd3-scale';
   import { timeParse, timeFormat } from 'd3-time-format';
   import { format, precisionFixed } from 'd3-format';
 
   import MultiLine from './_components/MultiLine.svelte';
   import AxisX from './_components/AxisX.svelte';
   import AxisY from './_components/AxisY.svelte';
+  import Key from './_components/Key.html.svelte';
   import { data } from './data';
 
   /* --------------------------------------------
@@ -17,7 +18,7 @@
   const zKey = 'type';
 
   const seriesNames = Object.keys(data[0]).filter((d) => d !== xKey);
-  const seriesColors = ['#ffe4b8', '#ffb3c0', '#ff7ac7', '#ff00cc'];
+  const seriesColors = ['#11e4b8',   '#ff00cc'];
 
   const parseDate = timeParse('%Y-%m-%d');
 
@@ -54,13 +55,13 @@
   const formatTickY = (d) => format(`.${precisionFixed(d)}s`)(d);
 </script>
 
-<div class="w-800px h-600px my-10 mx-auto">
+<div class="w-600px h-400px my-30 mx-auto">
   <LayerCake
     padding={{ top: 7, right: 10, bottom: 20, left: 25 }}
     x={xKey}
     y={yKey}
     z={zKey}
-    yDomain={[0, null]}
+    yScale={scaleLog().domain([1, 1000])}
     zScale={scaleOrdinal()}
     zRange={seriesColors}
     flatData={flatten(dataLong)}
@@ -73,9 +74,15 @@
         formatTick={formatTickX}
         snapTicks={true}
         tickMarks={true}
+        yTick={50}
       />
-      <AxisY ticks={4} formatTick={formatTickY} />
+      <AxisY ticks={[10, 100, 1000]} formatTick={formatTickY} xTick={-40}  />
       <MultiLine />
     </Svg>
+    <Html pointerEvents={false}>
+      <Key
+        shape='circle'
+      />
+    </Html>
   </LayerCake>
 </div>
