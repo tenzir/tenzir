@@ -30,9 +30,9 @@ redundancy in the system.
 The scope of the problem becomes clearer when imposing three different views on
 the system:
 
-1. **Write Path**: Get data into the system
-2. **Read Path**: Get data out of the system
-3. **System Core**: The data "service" that sits between (1) and (2)
+1. **Write Path**: get data into the system
+2. **Read Path**: get data out of the system
+3. **System Core**: the data "service" that sits between (1) and (2)
 
 VAST's architecture lends itself already today to replicating and scaling the
 write path. We would like to have a similar capability for the read path. But
@@ -89,7 +89,7 @@ first point of contact for queries, the catalog also keeps per-partition index
 structures in memory. This catalog functionality is out of scope, as it
 represents derived, immutable state from the metastore.
 
-Adjacent fault-tolerance efforts outside the catalog scope involve replication
+Adjacent fault-tolerance efforts outside the catalog scope involve isolation
 of components. For example, the failure domain of the read path is a single
 query, which we can deploy in a dedicated operating system process (that extends
 to a single cloud function or container execution). Likewise, we can isolate
@@ -97,7 +97,9 @@ failure domains on the write path by spawning each data source (or pipeline) in
 its own process. This flexibility is a by-product of the actor model
 architecture that treats internal components as microservices. The spectrum of
 fate sharing is the OS process boundary. The choice highly depends on the
-specifics of the deployment environment.
+specifics of the deployment environment. Once the **metastore** architecture
+is realized moving individual read or write streams into their dedicated
+process can be done be spawning dedicated database nodes.
 
 We briefly touch on how the mechanism for making the write and read path
 resilient, and then focus the discussion on fault tolerance within the VAST
@@ -233,9 +235,10 @@ the majority of attention to the metastore
 
 ### Write Path
 
-To achieve fault-tolerance on the write path, we need an acknowledgement
-mechanism to confirm whether events at the source have been successfully
-processed. The current architecture looks as follows:
+A fault-tolerant write path can be realized with the help of the transactional
+catalog that is proposed as the main contribution of this RFC, and an
+acknowledgement mechanism to confirm whether events at the source have been
+successfully processed. The current architecture looks as follows:
 
 ![Write Path](write-path.png)
 
@@ -245,11 +248,20 @@ acquisition mechanism is available, we may consider a local disk buffer to
 emulate a reliable medium. For this proposal, working around an unreliable data
 transport channel is out of scope.
 
-A transaction that writes one or more partitions needs to store additional
-metadata, containing the offsets this partition is based on. This atomic commit
-of both the transaction and its source position allows the source to pick up
-exactly at the point of failure, without risk of re-ingesting twice or missing
-any events. It thus provides exactly-once semantics for our write path.
+Upon insertion of new data the catalog needs to be able to recognise whether
+the same data has already been ingested and discard the respective duplicate
+partitions.
+
+A possible detection mechanism can be achieved with per-source checksums on the
+written data. This requires a first architectural change: A partition may no
+longer contain data from multiple sources. Since it is the unit of work in the
+catalog, a partition can either be accepted or rejected in full.
+
+In addition to the checksums, partitions need to store source stream offsets as
+part of its metadata. An atomic commit of both partition UUID and its source
+position allows the source to pick up exactly at the point of failure, without
+risk of re-ingesting twice or missing any events. It thus provides exactly-once
+semantics for our write path.
 
 In technical terms, we can extend the CAF Streaming message type to include a
 handle to the source and source specific position, and then trigger an ACK once
@@ -257,21 +269,22 @@ the data has been persisted. VAST already implements a similar mechanism today
 that acknowledges when events arrived at an active partition, which (almost)
 guarantees that they are queryable.
 
-When an exising source reconnects to an index component after a fault, it
-needs to request the most recently acknowlegded source position from the
-catalog and advance to the returned position to prevent double ingestion.
+An existing source can re-synchronize its position with the catalog to recover
+lost ACKs and advance its position to the location of data that was last
+commited. However, this is purely an optimization and not required for
+correctness.
 
 ### Read Path
 
 For historical queries, we can achieve fault-tolerance on the read part by
-moving query execution into a dedicated process. This requires that the catalog
-is the sole owner of partitions, and that the catalog returns the set of
-candidate partitions relevant to answer a query.
+moving query execution after the catalog lookup into a dedicated process.
+If the metastore that is proposed below is also realized a dedicated node could
+be spawned for each individual query.
 
 Live queries bypass the catalog and would therefore need to implement ACK'ing
-independently, at the granularity of table slices. We do not cover this process
-in detail, as it constitutes a subset of the ACK'ing for the write path outlined
-above.
+independently, at the granularity of table slices. We leave this as a problem
+for future research, as it requires the ACK protocol to be implemented along
+all stages of the data stream, possibly involving multiple transport mechanisms.
 
 ### Metastore
 
@@ -289,6 +302,7 @@ The catalog requires the following interface from the metastore:
 2. `add: [partition] → ACK`
 3. `delete: [uuid] → ACK`
 4. `replace: [uuid], [partition] → ACK`
+5. `list: [uuid]`
 
 The semantics of the mentioned types are as follows:
 
@@ -308,6 +322,8 @@ The semantics the function signatures are as follows:
 
 4. `replace`: performs an atomic deletion and addition of partition data, by
    deleting the given UUIDs and adding new partition metadata.
+
+5. `list`: retrives the set of all UUIDs in a transactional manner.
 
 In theory, the functionality of `replace` is a superset of `add` and `delete`.
 For ease of exposition, we kept them as separate API functions.
@@ -344,24 +360,27 @@ serve to verify the validity of the transaction on request.
 To get a feel for the system, we briefly experimented with mapping our API to
 FDB primitives. We found the following:
 
-* Transactions are “all or nothing”, i.e., you can sequence multiple operations,
+- Transactions are “all or nothing”, i.e., you can sequence multiple operations,
   and if you commit and it goes through, they are all applied, otherwise rolled
   back.
 
-* Multiple transactions that modify (read to or write from) the same key are not
+- Multiple transactions that modify (read to or write from) the same key are not
   forbidden, even if they overlap - to enable our use case, we’d have to verify
   the existence of all the partitions we intend to delete, followed by doing all
   the (SET, CLEAR) operations OR rollback / cancel the transaction.
 
-* While this strategy allows for serializing the transactions into a
+- While this strategy allows for serializing the transactions into a
   conflict-free state, it does not help with each VAST node "seeing the full
   picture", i.e., being aware of the transactions that are triggered from within
   other VAST nodes.
 
-* There doesn’t seem to be a full CDC (change data capture) functionality, only
+- There doesn’t seem to be a full CDC (change data capture) functionality, only
   watching single keys - there could be a key for a "transaction_id" (an integer
   increment for every transaction), and from there we could work around the
   problem by requesting all recent transactions whenever this key is modified.
+
+- The range reads feature is suitable to enumerate a subset of the key-value
+  space. This can be used to facilitate recovery or the addition of a new node.
 
 ##### etcd
 
@@ -370,7 +389,7 @@ From a CAP theorem perspective, this brings us into the CP realm, because a
 master must be elected to perform writes. Stale reads may be supported, though,
 which we can tolerate.
 
-Here are some incomplete notes of taking a first look:
+Here are some notes after taking a first look:
 
 - Multi-write transactions are shaped like if-then-else statements, they always
   have a comparison, a list of writes on success and a list of writes on failure
@@ -379,6 +398,9 @@ Here are some incomplete notes of taking a first look:
   allow us to model our use-case naturally. Importantly, key updates are
   streamed to the client, allowing a gap-free observation of changes in the
   key-space.
+
+- Prefix reads can be used to retrive a full or partial subset of the key-value
+  space, allowing the implementation of the `list` functionality.
 
 - Etcd comes with a gRPC API, making it easy to embed for us. We're already
   depending on gRPC transitively via Apache Arrow (cf. Flight).
@@ -403,8 +425,8 @@ properties:
   to be modeled into a key-specific `index` variable, which is less flexible
   compared to the predicate interface of FoundationDB.
 
-- A `get-tree` operation is available and would allow efficient joining of a new
-  node to an existing cluster.
+- The `recurse` option on the GET operation would allow efficient joining of a
+  new node to an existing cluster.
 
 - A seemingly maintained third party client library with the relevant features
   exists: https://github.com/oliora/ppconsul. The relevant transaction API is
