@@ -410,7 +410,7 @@ tests:
         input: data/json/all-types.json
       - command: -N export arrow '#type == "all_types"'
         transformation: python @./misc/scripts/print-arrow.py
-  Arrow:
+  Arrow Export:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
     steps:
@@ -420,6 +420,17 @@ tests:
         transformation: python @./misc/scripts/print-arrow.py
       - command: -N import --batch-encoding=arrow suricata
         input: data/suricata/eve.json
+      - command: -N export arrow '#type == "suricata.http"'
+        transformation: python @./misc/scripts/print-arrow.py
+  Arrow Import:
+    condition: version | jq -e '."Apache Arrow"'
+    tags: [import, arrow]
+    steps:
+      - command: -N import --batch-encoding=arrow arrow
+        # the input corresponds to conn.log.gz + eve.json (see above)
+        input: data/suricata/arrow_ipc.bin
+      - command: -N export -n 10 arrow '#type == "zeek.conn"'
+        transformation: python @./misc/scripts/print-arrow.py
       - command: -N export arrow '#type == "suricata.http"'
         transformation: python @./misc/scripts/print-arrow.py
   Import syslog:

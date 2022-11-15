@@ -7,11 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
-
 #include "vast/fwd.hpp"
 
 #include "vast/defaults.hpp"
+#include "vast/format/reader.hpp"
 #include "vast/format/writer.hpp"
+#include "vast/module.hpp"
 #include "vast/type.hpp"
 
 #include <arrow/io/api.h>
@@ -40,7 +41,7 @@ public:
 
   caf::error write(const table_slice& x) override;
 
-  const char* name() const override;
+  [[nodiscard]] const char* name() const override;
 
   void out(output_stream_ptr ptr) {
     out_ = std::move(ptr);
@@ -53,6 +54,55 @@ private:
   type current_layout_;
   table_slice_builder_ptr current_builder_;
   batch_writer_ptr current_batch_writer_;
+};
+
+/// Arrow InputStream API implementation over `std::istream`.
+/// Implemented by adapting `arrow::io::StdinStream adapted to use `std::istream`.
+class arrow_istream_wrapper : public ::arrow::io::InputStream {
+public:
+  explicit arrow_istream_wrapper(std::shared_ptr<std::istream> input);
+  ~arrow_istream_wrapper() override = default;
+
+  ::arrow::Status Close() override;
+
+  bool closed() const override;
+
+  ::arrow::Result<int64_t> Tell() const override;
+
+  ::arrow::Result<int64_t> Read(int64_t nbytes, void* out) override;
+
+  ::arrow::Result<std::shared_ptr<::arrow::Buffer>>
+
+  Read(int64_t nbytes) override;
+
+private:
+  std::shared_ptr<std::istream> input_;
+  int64_t pos_;
+};
+
+class reader final : public vast::format::reader {
+public:
+  /// Constructs an Arrow IPC reader.
+  /// @param options Additional options.
+  /// @param in Input stream containing the IPC data.
+  reader(const caf::settings& options, std::unique_ptr<std::istream> in);
+
+  /// Replace input stream.
+  /// @param in new input stream.
+  void reset(std::unique_ptr<std::istream> in) override;
+
+  caf::error module(vast::module x) override;
+
+  [[nodiscard]] vast::module module() const override;
+
+  [[nodiscard]] const char* name() const override;
+
+private:
+  caf::error
+  read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
+
+  vast::module module_;
+  std::unique_ptr<arrow_istream_wrapper> input_;
 };
 
 } // namespace vast::format::arrow
