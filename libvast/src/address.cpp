@@ -28,6 +28,89 @@
 
 namespace vast {
 
+namespace {
+
+inline uint32_t bitmask32(size_t bottom_bits) {
+  return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
+}
+
+class AddressEncryptor {
+public:
+  AddressEncryptor(const std::array<vast::address::byte_type, 32>& key) {
+    ctx_ = EVP_CIPHER_CTX_new();
+    EVP_CIPHER_CTX_init(ctx_);
+    OpenSSL_add_all_ciphers();
+    cipher_ = EVP_get_cipherbyname("aes-128-ecb");
+    block_size_ = EVP_CIPHER_block_size(cipher_);
+    out_len_ = block_size_;
+    pad_ = std::vector<vast::address::byte_type>(block_size_);
+    auto tmp = 0;
+    EVP_CipherInit_ex(ctx_, cipher_, nullptr, key.data(), nullptr, 1);
+    // use second 16-byte half of key for padding
+    EVP_CipherUpdate(ctx_, pad_.data(), &tmp, key.data() + block_size_,
+                     block_size_);
+  }
+
+  AddressEncryptor(const AddressEncryptor&) = delete;
+
+  ~AddressEncryptor() {
+    EVP_CIPHER_CTX_cleanup(ctx_);
+  }
+
+  auto encrypt(const std::vector<vast::address::byte_type>& bytes_to_encrypt) {
+    auto encrypted_bytes = bytes_to_encrypt;
+    auto one_time_pad = generate_one_time_pad(bytes_to_encrypt);
+    for (auto i = size_t{0}; i < bytes_to_encrypt.size(); ++i) {
+      encrypted_bytes[i] = bytes_to_encrypt[i] ^ one_time_pad[i];
+    }
+    return encrypted_bytes;
+  }
+
+private:
+  static constexpr inline auto MSB_OF_BYTE_MASK = 0b10000000;
+  EVP_CIPHER_CTX* ctx_;
+  const EVP_CIPHER* cipher_;
+  int block_size_;
+  int out_len_;
+  std::vector<vast::address::byte_type> pad_;
+
+  std::vector<vast::address::byte_type> generate_one_time_pad(
+    const std::vector<vast::address::byte_type>& bytes_to_encrypt) {
+    auto cipher_input = std::vector<vast::address::byte_type>(pad_);
+    auto cipher_output = std::vector<vast::address::byte_type>(pad_);
+    EVP_CipherUpdate(ctx_, cipher_output.data(), &out_len_, cipher_input.data(),
+                     block_size_);
+    auto byte_index = 0;
+    auto bit_index = 0;
+    auto one_time_pad
+      = std::vector<vast::address::byte_type>(bytes_to_encrypt.size());
+    one_time_pad[byte_index] |= cipher_output[0] & MSB_OF_BYTE_MASK;
+    for (auto i = size_t{0}; i < bytes_to_encrypt.size() * 8 - 1;) {
+      auto padding_mask = 0xff >> (bit_index + 1);
+      auto original_mask = ~padding_mask;
+
+      auto original_byte = bytes_to_encrypt[byte_index];
+      auto padding_byte = pad_[byte_index];
+
+      cipher_input[byte_index]
+        = (original_byte & original_mask) | (padding_byte & padding_mask);
+
+      EVP_CipherUpdate(ctx_, cipher_output.data(), &out_len_,
+                       cipher_input.data(), block_size_);
+
+      i++;
+      byte_index = i >> 3;
+      bit_index = i & 7;
+
+      one_time_pad[byte_index]
+        |= (cipher_output[0] & MSB_OF_BYTE_MASK) >> bit_index;
+    }
+    return one_time_pad;
+  }
+};
+
+} // namespace
+
 bool address::is_v4() const {
   return std::memcmp(&bytes_, &v4_mapped_prefix, 12) == 0;
 }
@@ -56,14 +139,6 @@ bool address::is_broadcast() const {
 bool address::is_multicast() const {
   return is_v4() ? bytes_[12] == 224 : bytes_[0] == 0xff;
 }
-
-namespace {
-
-inline uint32_t bitmask32(size_t bottom_bits) {
-  return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
-}
-
-} // namespace
 
 bool address::mask(unsigned top_bits_to_keep) {
   if (top_bits_to_keep > 128)
@@ -115,56 +190,12 @@ bool address::compare(const address& other, size_t k) const {
 
 void address::anonymize(const std::array<byte_type, 32>& key) {
   auto address_byte_offset = (is_v4() ? 12 : 0);
-  auto ctx = EVP_CIPHER_CTX_new();
-  EVP_CIPHER_CTX_init(ctx);
-  OpenSSL_add_all_ciphers();
-  auto* cipher = EVP_get_cipherbyname("aes-128-ecb");
-  auto block_size = EVP_CIPHER_block_size(cipher);
-  auto out_len = block_size;
-  auto pad = std::vector<byte_type>(block_size);
-  auto tmp = 0;
-  EVP_CipherInit_ex(ctx, cipher, nullptr, key.data(), nullptr, 1);
-  EVP_CipherUpdate(ctx, pad.data(), &tmp, key.data() + block_size, block_size);
-
-  auto cipher_input = std::vector<byte_type>(pad);
-  auto cipher_output = std::vector<byte_type>(pad);
-  EVP_CipherUpdate(ctx, cipher_output.data(), &out_len, cipher_input.data(),
-                   block_size);
-
-  auto encrypted_bytes
-    = std::vector<byte_type>(bytes_.begin() + address_byte_offset, bytes_.end());
-  const auto MSB_OF_BYTE_MASK = 0b10000000;
-  auto byte_index = 0;
-  auto bit_index = 0;
-  auto one_time_pad = std::vector<byte_type>(encrypted_bytes.size());
-  one_time_pad[byte_index] |= cipher_output[0] & MSB_OF_BYTE_MASK;
-  for (auto i = 0; i < encrypted_bytes.size() * 8 - 1;) {
-    auto padding_mask = 0xff >> (bit_index + 1);
-    auto original_mask = ~padding_mask;
-
-    auto original_byte = encrypted_bytes[byte_index];
-    auto padding_byte = pad[byte_index];
-
-    cipher_input[byte_index]
-      = (original_byte & original_mask) | (padding_byte & padding_mask);
-
-    EVP_CipherUpdate(ctx, cipher_output.data(), &out_len, cipher_input.data(),
-                     block_size);
-
-    i++;
-    byte_index = i >> 3;
-    bit_index = i & 7;
-
-    one_time_pad[byte_index]
-      |= (cipher_output[0] & MSB_OF_BYTE_MASK) >> bit_index;
-  }
-
-  for (auto i = 0; i < encrypted_bytes.size(); ++i) {
-    encrypted_bytes[i] = encrypted_bytes[i] ^ one_time_pad[i];
-  }
-
-  std::copy(encrypted_bytes.begin(), encrypted_bytes.end(), bytes_.begin() + address_byte_offset);
-  EVP_CIPHER_CTX_cleanup(ctx);
+  auto bytes_to_encrypt = std::vector<byte_type>(
+    bytes_.begin() + address_byte_offset, bytes_.end());
+  AddressEncryptor encryptor(key);
+  auto encrypted_bytes = encryptor.encrypt(bytes_to_encrypt);
+  std::copy(encrypted_bytes.begin(), encrypted_bytes.end(),
+            bytes_.begin() + address_byte_offset);
 }
 
 bool operator==(const address& x, const address& y) {
