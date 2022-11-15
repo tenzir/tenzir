@@ -329,9 +329,8 @@ endif ()
 
 # -- libvast -------------------------------------------------------------------
 
-# The "native" plugins. These special plugins are essentially part of the
-# libvast library, but always loaded when linking against the
-# libvast_builtins library.
+# The builtins. These special plugins are essentially part of the libvast
+# library, but always loaded when linking against the libvast_builtins library.
 file(GLOB_RECURSE libvast_builtins_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 foreach (source IN LISTS libvast_builtins_sources)
@@ -344,7 +343,7 @@ foreach (source IN LISTS libvast_builtins_sources)
     endif ()
   endforeach ()
   if (NOT "${has_register}")
-    message(FATAL_ERROR "native plugin ${source} does not register as a plugin")
+    message(FATAL_ERROR "builtin ${source} does not register as a plugin")
   endif ()
 endforeach ()
 
