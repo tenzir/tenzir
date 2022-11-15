@@ -16,6 +16,11 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <openssl/bio.h>
+#include <openssl/crypto.h>
+#include <openssl/evp.h>
+#include <openssl/err.h>
+#include <openssl/ossl_typ.h>
 #include <sys/socket.h>
 
 #include <cstdlib>
@@ -106,6 +111,60 @@ bool address::compare(const address& other, size_t k) const {
       return false;
   auto mask = word<byte_type>::msb_fill(k);
   return (*x & mask) == (*y & mask);
+}
+
+void address::anonymize(const std::array<byte_type, 32>& key) {
+  auto address_byte_offset = (is_v4() ? 12 : 0);
+  auto ctx = EVP_CIPHER_CTX_new();
+  EVP_CIPHER_CTX_init(ctx);
+  OpenSSL_add_all_ciphers();
+  auto* cipher = EVP_get_cipherbyname("aes-128-ecb");
+  auto block_size = EVP_CIPHER_block_size(cipher);
+  auto out_len = block_size;
+  auto pad = std::vector<byte_type>(block_size);
+  auto tmp = 0;
+  EVP_CipherInit_ex(ctx, cipher, nullptr, key.data(), nullptr, 1);
+  EVP_CipherUpdate(ctx, pad.data(), &tmp, key.data() + block_size, block_size);
+
+  auto cipher_input = std::vector<byte_type>(pad);
+  auto cipher_output = std::vector<byte_type>(pad);
+  EVP_CipherUpdate(ctx, cipher_output.data(), &out_len, cipher_input.data(),
+                   block_size);
+
+  auto encrypted_bytes
+    = std::vector<byte_type>(bytes_.begin() + address_byte_offset, bytes_.end());
+  const auto MSB_OF_BYTE_MASK = 0b10000000;
+  auto byte_index = 0;
+  auto bit_index = 0;
+  auto one_time_pad = std::vector<byte_type>(encrypted_bytes.size());
+  one_time_pad[byte_index] |= cipher_output[0] & MSB_OF_BYTE_MASK;
+  for (auto i = 0; i < encrypted_bytes.size() * 8 - 1;) {
+    auto padding_mask = 0xff >> (bit_index + 1);
+    auto original_mask = ~padding_mask;
+
+    auto original_byte = encrypted_bytes[byte_index];
+    auto padding_byte = pad[byte_index];
+
+    cipher_input[byte_index]
+      = (original_byte & original_mask) | (padding_byte & padding_mask);
+
+    EVP_CipherUpdate(ctx, cipher_output.data(), &out_len, cipher_input.data(),
+                     block_size);
+
+    i++;
+    byte_index = i >> 3;
+    bit_index = i & 7;
+
+    one_time_pad[byte_index]
+      |= (cipher_output[0] & MSB_OF_BYTE_MASK) >> bit_index;
+  }
+
+  for (auto i = 0; i < encrypted_bytes.size(); ++i) {
+    encrypted_bytes[i] = encrypted_bytes[i] ^ one_time_pad[i];
+  }
+
+  std::copy(encrypted_bytes.begin(), encrypted_bytes.end(), bytes_.begin() + address_byte_offset);
+  EVP_CIPHER_CTX_cleanup(ctx);
 }
 
 bool operator==(const address& x, const address& y) {
