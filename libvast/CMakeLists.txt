@@ -331,10 +331,10 @@ endif ()
 
 # The "native" plugins. These special plugins are essentially part of the
 # libvast library, but always loaded when linking against the
-# libvast_native_plugins library.
-file(GLOB_RECURSE libvast_native_plugin_sources CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/native-plugins/*.cpp")
-foreach (source IN LISTS libvast_native_plugin_sources)
+# libvast_builtins library.
+file(GLOB_RECURSE libvast_builtins_sources CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
+foreach (source IN LISTS libvast_builtins_sources)
   set(has_register FALSE)
   file(STRINGS "${source}" lines)
   foreach (line IN LISTS lines)
@@ -356,16 +356,14 @@ add_library(libvast ${libvast_sources})
 VASTTargetEnableTooling(libvast)
 add_library(vast::libvast ALIAS libvast)
 
-add_library(libvast_native_plugins STATIC ${libvast_native_plugin_sources})
-VASTTargetEnableTooling(libvast_native_plugins)
-target_compile_definitions(libvast_native_plugins
-                           PRIVATE VAST_ENABLE_NATIVE_PLUGINS)
-set_target_properties(libvast_native_plugins PROPERTIES OUTPUT_NAME
-                                                        vast_native_plugins)
-add_library(vast::libvast_native_plugins ALIAS libvast_native_plugins)
+add_library(libvast_builtins STATIC ${libvast_builtins_sources})
+VASTTargetEnableTooling(libvast_builtins)
+target_compile_definitions(libvast_builtins PRIVATE VAST_ENABLE_BUILTINS)
+set_target_properties(libvast_builtins PROPERTIES OUTPUT_NAME vast_builtins)
+add_library(vast::libvast_builtins ALIAS libvast_builtins)
 
 target_link_libraries(libvast PRIVATE libvast_internal)
-target_link_libraries(libvast_native_plugins PRIVATE libvast libvast_internal)
+target_link_libraries(libvast_builtins PRIVATE libvast libvast_internal)
 
 set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
                                          ON)
@@ -595,10 +593,10 @@ install(
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
-# We install the static libvast_native_plugins archive for development targets
-# because the plugin unit test binaries need to be able to link against it.
+# We install the static libvast_builtins archive for development targets because
+# the plugin unit test binaries need to be able to link against it.
 install(
-  TARGETS libvast_native_plugins
+  TARGETS libvast_builtins
   COMPONENT Development
   EXPORT VASTTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development

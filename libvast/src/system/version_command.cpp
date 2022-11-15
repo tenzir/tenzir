@@ -62,8 +62,8 @@ record retrieve_versions() {
   result["jemalloc"] = data{};
 #endif
   record plugin_versions;
-  for (auto& plugin : plugins::get()) {
-    if (plugin.type() == plugin_ptr::type::native)
+  for (const auto& plugin : plugins::get()) {
+    if (plugin.type() == plugin_ptr::type::builtin)
       continue;
     plugin_versions[plugin->name()] = plugin.version();
   }

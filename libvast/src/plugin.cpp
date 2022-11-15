@@ -79,14 +79,14 @@ resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs
 
 std::vector<std::filesystem::path> loaded_config_files_singleton = {};
 
-/// Remove native plugins from the given list of plugins.
+/// Remove builtins the given list of plugins.
 std::vector<std::string>
-remove_native_plugins(std::vector<std::string> paths_or_names) {
+remove_builtins(std::vector<std::string> paths_or_names) {
   std::erase_if(paths_or_names, [](const auto& path_or_name) {
     return std::any_of(plugins::get().begin(), plugins::get().end(),
                        [&](const auto& plugin) {
                          return plugin->name() == path_or_name
-                                && plugin.type() == plugin_ptr::type::native;
+                                && plugin.type() == plugin_ptr::type::builtin;
                        });
   });
   return paths_or_names;
@@ -145,7 +145,7 @@ unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
         paths_or_names.erase(it, paths_or_names.end());
         return result;
       }
-      case plugin_ptr::type::native:
+      case plugin_ptr::type::builtin:
         return false;
     }
     die("unreachable");
@@ -211,8 +211,8 @@ load(const std::vector<std::string>& bundled_plugins,
   // Resolve the 'bundled' and 'all' identifiers.
   paths_or_names = expand_special_identifiers(std::move(paths_or_names),
                                               bundled_plugins, plugin_dirs);
-  // Silently ignore native plugins if they're in the list of plugins.
-  paths_or_names = remove_native_plugins(std::move(paths_or_names));
+  // Silently ignore builtins if they're in the list of plugins.
+  paths_or_names = remove_builtins(std::move(paths_or_names));
   // Disable static plugins that were not enabled, and remove the names of
   // static plugins from the list of enabled plugins.
   paths_or_names = unload_disabled_static_plugins(std::move(paths_or_names));
@@ -475,9 +475,9 @@ plugin_ptr plugin_ptr::make_static(plugin* instance, void (*deleter)(plugin*),
   return plugin_ptr{nullptr, instance, deleter, version, type::static_};
 }
 
-plugin_ptr plugin_ptr::make_native(plugin* instance, void (*deleter)(plugin*),
-                                   const char* version) noexcept {
-  return plugin_ptr{nullptr, instance, deleter, version, type::native};
+plugin_ptr plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
+                                    const char* version) noexcept {
+  return plugin_ptr{nullptr, instance, deleter, version, type::builtin};
 }
 
 plugin_ptr::plugin_ptr() noexcept = default;
