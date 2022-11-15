@@ -249,8 +249,14 @@ TEST(IPv6 anonymization) {
   std::array<vast::address::byte_type, 32> key
     = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
        216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34, 2};
+  // test data from
+  // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::map<std::string, std::string> addresses = {
-    {"2001:db8:0000:0000:0202:b3ff:fe1e:8329", "2001:db8:0000:0000:0202:b3ff:fe1e:8329"},
+    {"::1", "78ff:f001:9fc0:20df:8380:b1f1:704:ed"},
+    {"::2", "78ff:f001:9fc0:20df:8380:b1f1:704:ef"},
+    {"::ffff", "78ff:f001:9fc0:20df:8380:b1f1:704:f838"},
+    {"2001:db8::1", "4401:2bc:603f:d91d:27f:ff8e:e6f1:dc1e"},
+    {"2001:db8::2", "4401:2bc:603f:d91d:27f:ff8e:e6f1:dc1c"},
   };
 
   for (const auto& [original, anonymized] : addresses) {
