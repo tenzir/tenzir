@@ -149,7 +149,7 @@ TEST(parseable) {
   CHECK(to_string(a) == str);
 }
 
-TEST(IPv4 anonymization) {
+TEST(IPv4 anonymization - key 1) {
   std::array<vast::address::byte_type, 32> key
     = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
        216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
@@ -245,10 +245,40 @@ TEST(IPv4 anonymization) {
   }
 }
 
-TEST(IPv6 anonymization) {
+TEST(IPv4 anonymization - key 2) {
+  std::array<vast::address::byte_type, 32> key
+    = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
+       16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+  // test data from
+  // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
+  std::map<std::string, std::string> addresses = {
+    {"192.0.2.1", "2.90.93.17"},
+    // From Perl implementation:
+    {"0.0.0.0", "254.152.65.220"},
+    {"10.0.1.128", "246.35.190.47"},
+    {"127.0.0.1", "168.227.160.61"},
+    {"165.254.100.50", "90.1.157.13"},
+    {"255.255.255.255", "56.0.15.254"},
+    // From Ruby implementation:
+    {"148.88.132.153", "106.38.130.153"},
+    {"148.88.132.64", "106.38.130.64"},
+    {"148.88.133.200", "106.38.131.223"},
+  };
+
+  for (const auto& [original, anonymized] : addresses) {
+    auto original_address = *to<address>(original);
+    auto anonymized_address = *to<address>(anonymized);
+
+    original_address.anonymize(key);
+
+    REQUIRE_EQUAL(original_address, anonymized_address);
+  }
+}
+
+TEST(IPv6 anonymization - key 1) {
   std::array<vast::address::byte_type, 32> key
     = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
-       216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34, 2};
+       216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::map<std::string, std::string> addresses = {
@@ -257,6 +287,26 @@ TEST(IPv6 anonymization) {
     {"::ffff", "78ff:f001:9fc0:20df:8380:b1f1:704:f838"},
     {"2001:db8::1", "4401:2bc:603f:d91d:27f:ff8e:e6f1:dc1e"},
     {"2001:db8::2", "4401:2bc:603f:d91d:27f:ff8e:e6f1:dc1c"},
+  };
+
+  for (const auto& [original, anonymized] : addresses) {
+    auto original_address = *to<address>(original);
+    auto anonymized_address = *to<address>(anonymized);
+
+    original_address.anonymize(key);
+
+    REQUIRE_EQUAL(original_address, anonymized_address);
+  }
+}
+
+TEST(IPv6 anonymization - key 2) {
+  std::array<vast::address::byte_type, 32> key
+    = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
+       16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+  // test data from
+  // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
+  std::map<std::string, std::string> addresses = {
+    {"2001:db8::1", "dd92:2c44:3fc0:ff1e:7ff9:c7f0:8180:7e00"},
   };
 
   for (const auto& [original, anonymized] : addresses) {
