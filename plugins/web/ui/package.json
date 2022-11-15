@@ -38,7 +38,9 @@
   },
   "type": "module",
   "dependencies": {
+    "@bytemd/plugin-gfm": "^1.17.4",
     "@sveltestack/svelte-query": "^1.6.0",
+    "bytemd": "^1.17.4",
     "d3-format": "^3.1.0",
     "d3-scale": "^4.0.2",
     "d3-time-format": "^4.1.0",

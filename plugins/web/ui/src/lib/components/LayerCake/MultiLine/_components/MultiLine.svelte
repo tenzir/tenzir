@@ -5,10 +5,9 @@
 <script>
   import { getContext } from 'svelte';
 
-  const { data, xGet, yGet, zGet } = getContext('LayerCake');
+  const { data, xGet, yGet, zGet, xScale, yScale } = getContext('LayerCake');
 
   $: path = (values) => {
-
     return (
       'M' +
       values
@@ -23,6 +22,18 @@
 <g class="line-group">
   {#each $data as group}
     <path class="path-line" d={path(group.values)} stroke={$zGet(group)} />
+  {/each}
+</g>
+<g class="scatter-group">
+  {#each $data as group}
+    {#each group.values as d}
+      <circle
+        cx={$xGet(d) + ($xScale.bandwidth ? $xScale.bandwidth() / 2 : 0)}
+        cy={$yGet(d) + ($yScale.bandwidth ? $yScale.bandwidth() / 2 : 0)}
+        r={4}
+        fill={$zGet(group)}
+      />
+    {/each}
   {/each}
 </g>
 

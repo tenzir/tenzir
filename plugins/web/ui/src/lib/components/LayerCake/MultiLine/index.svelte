@@ -18,7 +18,7 @@
   const zKey = 'type';
 
   const seriesNames = Object.keys(data[0]).filter((d) => d !== xKey);
-  const seriesColors = ['#11e4b8',   '#ff00cc'];
+  const seriesColors = ['#11e4b8', '#ff00cc'];
 
   const parseDate = timeParse('%Y-%m-%d');
 
@@ -55,7 +55,7 @@
   const formatTickY = (d) => format(`.${precisionFixed(d)}s`)(d);
 </script>
 
-<div class="w-600px h-400px my-30 mx-auto">
+<div class="w-600px h-400px">
   <LayerCake
     padding={{ top: 7, right: 10, bottom: 20, left: 25 }}
     x={xKey}
@@ -76,13 +76,11 @@
         tickMarks={true}
         yTick={50}
       />
-      <AxisY ticks={[10, 100, 1000]} formatTick={formatTickY} xTick={-40}  />
+      <AxisY ticks={[10, 100, 1000]} formatTick={formatTickY} xTick={-40} />
       <MultiLine />
     </Svg>
-    <Html pointerEvents={false}>
-      <Key
-        shape='circle'
-      />
+    <Html>
+      <Key shape="circle" />
     </Html>
   </LayerCake>
 </div>
