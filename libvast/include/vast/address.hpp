@@ -158,6 +158,8 @@ public:
   /// @pre `k > 0 && k <= 128`
   [[nodiscard]] bool compare(const address& other, size_t k) const;
 
+  void anonymize(const std::array<byte_type, 32>& key);
+
   explicit constexpr operator byte_array() const {
     return bytes_;
   }
