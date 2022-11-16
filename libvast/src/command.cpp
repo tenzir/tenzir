@@ -211,27 +211,24 @@ auto generate_default_value_for_argument_type(std::string_view type_name) {
   return "";
 }
 
-std::string sanitize_long_form_argument(const std::string& argument,
+void sanitize_long_form_argument(std::string& argument,
                                  const vast::command& cmd) {
-  auto sanitized_argument = argument;
   auto dummy_options = caf::settings{};
-  auto [state, _] = cmd.options.parse(dummy_options, {sanitized_argument});
+  auto [state, _] = cmd.options.parse(dummy_options, {argument});
   if (state == caf::pec::not_an_option) {
     for (const auto& child_cmd : cmd.children) {
-      sanitize_long_form_argument(sanitized_argument, *child_cmd);
+      sanitize_long_form_argument(argument, *child_cmd);
     }
   } else if (state == caf::pec::missing_argument) {
-    auto name = sanitized_argument.substr(2, argument.length() - 3);
+    auto name = argument.substr(2, argument.length() - 3);
     auto option = cmd.options.cli_long_name_lookup(name);
     if (option) {
       auto option_type = option->type_name();
       auto options_type_default_val
         = generate_default_value_for_argument_type(option_type.data());
-      sanitized_argument.append(options_type_default_val);
+      argument.append(options_type_default_val);
     }
   }
-
-  return sanitized_argument;
 }
 
 } // namespace
@@ -334,7 +331,7 @@ sanitize_arguments(const command& root, command::argument_iterator first,
   std::vector<std::string> sanitized_arguments = {first, last};
   for (auto& argument : sanitized_arguments) {
     if (argument.starts_with("--")) {
-      argument = sanitize_long_form_argument(argument, root);
+      sanitize_long_form_argument(argument, root);
     }
   }
   return sanitized_arguments;
