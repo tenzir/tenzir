@@ -7,10 +7,7 @@ services:
       - ./app/:/opt/thehive/app # relative paths must match on host and in the container
       - ../../python/:/python
     working_dir: /opt/thehive/app
-    entrypoint:
-      - bash
-      - -c
-      - "poetry install && poetry run run-app"
+    command: run-app
     environment:
       - THEHIVE_URL=http://thehive:9000
       - VAST_ENDPOINT=vast:42000

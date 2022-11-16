@@ -39,10 +39,19 @@ docker compose \
 
 ## With the VAST app
 
+The integration uses an extended image of VAST with Poetry installed called
+`tenzir/vast-poetry`. We plan to publish that image, but for now you need to
+build it locally:
+```bash
+# from the docker/poetry directory
+docker compose build
+```
+
 We provide a very basic integration script that listens on `suricata.alert`
 events and forwards them to TheHive. You can start it along the stack by
 running:
 ```bash
+# from the docker/thehive directory
 # the COMPOSE_FILE variable is automatically picked up by Compose
 COMPOSE_FILE="docker-compose.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:docker-compose.vast.yaml"
@@ -54,7 +63,7 @@ docker compose up --build -d
 
 To test the alert forwarding with some mock data, run:
 ```bash
-# also uses the COMPOSE_FILE variable
+# from the docker/thehive directory with the COMPOSE_FILE variable above
 docker compose run --no-TTY vast import --blocking suricata \
     < ../../vast/integration/data/suricata/eve.json
 ```

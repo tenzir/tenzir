@@ -1,10 +1,11 @@
 import asyncio
 import datetime
 import hashlib
+import json
 import logging
 import os
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 import aiohttp
 import vast.utils.logging as logging
@@ -27,8 +28,8 @@ SENT_ALERT_REFS = set()
 
 async def call_thehive(
     path: str,
-    payload: Dict | None = None,
-):
+    payload: Optional[Dict] = None,
+) -> str:
     """Call a TheHive endpoint with basic auth"""
     path = f"{THEHIVE_URL}{path}"
     auth = aiohttp.BasicAuth(THEHIVE_ORGADMIN_EMAIL, THEHIVE_ORGADMIN_PWD)
@@ -45,12 +46,16 @@ async def call_thehive(
     return resp_txt
 
 
-async def wait_for_thehive(timeout):
+async def wait_for_thehive(
+    path: str,
+    timeout: int,
+    payload: Optional[Dict] = None,
+) -> str:
+    """Call thehive repeatedly until timeout"""
     start = time.time()
     while True:
         try:
-            await call_thehive("/api/v1/user/current")
-            break
+            return await call_thehive(path, payload)
         except Exception as e:
             if time.time() - start > timeout:
                 raise Exception("Timed out trying to reach TheHive")
@@ -133,7 +138,7 @@ async def on_suricata_alert(alert: Dict):
 
 async def run_async():
     await VAST.status(60, retry_delay=1)
-    await wait_for_thehive(120)
+    await wait_for_thehive("/api/v1/user/current", 120)
     expr = '#type == "suricata.alert"'
     # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
@@ -150,3 +155,10 @@ def run():
     logger.info("Starting TheHive app...")
     asyncio.run(run_async())
     logger.info("TheHive app stopped")
+
+
+def alert_count():
+    """Log alert count for tests"""
+    list_query = {"query": [{"_name": "listAlert"}]}
+    alerts = asyncio.run(wait_for_thehive("/api/v1/query", 120, list_query))
+    logger.info(f"alert_count={len(json.loads(alerts))}")

@@ -1,16 +1,17 @@
-from typing import Dict, Tuple
-import requests
-import os
-from os import path
-import time
 import logging
-import sys
+import os
 import subprocess
+import sys
+import time
+from os import path
+from typing import Dict, Optional, Tuple
+
+import requests
 
 logging.getLogger().setLevel(logging.INFO)
 
-CORTEX_URL = os.getenv("CORTEX_URL")
-VAST_ENDPOINT = os.getenv("VAST_ENDPOINT")
+CORTEX_URL = os.environ["CORTEX_URL"]
+VAST_ENDPOINT = os.environ["VAST_ENDPOINT"]
 THEHIVE_URL = "http://localhost:9000"
 
 CONFIG_LOCATION = "/opt/thp/thehive/conf/application.conf"
@@ -54,7 +55,7 @@ def call_api(
     path: str,
     payload: Dict,
     api_name: str,
-    credentials: Tuple[str, str] = None,
+    credentials: Optional[Tuple[str, str]] = None,
 ):
     """Call a JSON endpoint with optional basic auth"""
     session = requests.Session()
@@ -72,12 +73,16 @@ def call_api(
     return resp.text
 
 
-def call_cortex(path: str, payload: Dict, credentials: Tuple[str, str] = None):
+def call_cortex(
+    path: str, payload: Dict, credentials: Optional[Tuple[str, str]] = None
+):
     """Call the Cortex API (path should start with /)"""
     return call_api(CORTEX_URL, path, payload, "Cortex", credentials)
 
 
-def call_thehive(path: str, payload: Dict, credentials: Tuple[str, str] = None):
+def call_thehive(
+    path: str, payload: Dict, credentials: Optional[Tuple[str, str]] = None
+):
     """Call the TheHive API (path should start with /)"""
     return call_api(THEHIVE_URL, path, payload, "TheHive", credentials)
 
