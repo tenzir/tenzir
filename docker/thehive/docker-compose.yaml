@@ -12,6 +12,9 @@ services:
       - HEAP_NEWSIZE=1G
       - CORTEX_URL=http://cortex:9001
       - VAST_ENDPOINT=${VAST_ENDPOINT:-"localhost:42000"}
+      - DEFAULT_ADMIN_PWD=${DEFAULT_ADMIN_PWD:-secret}
+      - DEFAULT_ORGADMIN_EMAIL=${DEFAULT_ORGADMIN_EMAIL:-orgadmin@thehive.local}
+      - DEFAULT_ORGADMIN_PWD=${DEFAULT_ORGADMIN_PWD:-secret}
     command:
       - "--no-config-cortex"
     volumes:

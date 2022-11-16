@@ -15,8 +15,8 @@ from vast import VAST, ExportMode
 
 logger = logging.get("vast.thehive.app")
 
-THEHIVE_ORGADMIN_EMAIL = "orgadmin@thehive.local"
-THEHIVE_ORGADMIN_PWD = "secret"
+THEHIVE_ORGADMIN_EMAIL = os.environ["DEFAULT_ORGADMIN_EMAIL"]
+THEHIVE_ORGADMIN_PWD = os.environ["DEFAULT_ORGADMIN_PWD"]
 THEHIVE_URL = os.environ["THEHIVE_URL"]
 BACKFILL_LIMIT = int(os.environ["BACKFILL_LIMIT"])
 

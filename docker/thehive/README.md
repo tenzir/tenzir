@@ -2,13 +2,20 @@
 
 This directory contains the Docker Compose setup to run a preconfigured instance
 of TheHive with a VAST [Cortex Analyzer][cortex-analyzers-docs]. This stack can
-run with multiple levels of integration with the VAST service.
+run with multiple levels of integration with the VAST service:
+- `docker-compose.yaml`: no dependency on the VAST Compose service
+- `docker-compose.yaml` + `docker-compose.vast.yaml`: the analyzer can access
+  the VAST Compose service
+- `docker-compose.yaml` + `docker-compose.vast.yaml` +
+  `docker-compose.app.yaml`: the app is relaying events between VAST and TheHive
 
 By default, TheHive is exposed on `http://localhost:9000`. We create some
 default users for both TheHive and Cortex:
 - `admin@thehive.local`/`secret`: organization management
 - `orgadmin@thehive.local`/`secret`: user and case management within the default
   (Tenzir) organization
+
+These settings can be configured using [environment variables](env.example).
 
 [cortex-analyzers-docs]: https://docs.thehive-project.org/cortex/
 
