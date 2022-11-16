@@ -1,0 +1,54 @@
+#! /usr/bin/env bash
+set -eux -o pipefail
+
+pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/thehive"
+
+# Setup cleanup
+function down {
+  exit_code=$?
+  docker compose down -v
+  exit exit_code
+}
+trap down EXIT
+
+
+# Start thehive without the app
+COMPOSE_FILE="docker-compose.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:docker-compose.vast.yaml"
+export COMPOSE_FILE="$COMPOSE_FILE:../vast/docker-compose.yaml"
+docker compose up --build -d
+
+sleep 3
+
+# import an alert before starting the app
+docker compose run --no-TTY vast import --blocking suricata \
+    < ../../vast/integration/data/suricata/eve.json
+
+# add the app to the stack
+export COMPOSE_FILE="$COMPOSE_FILE:docker-compose.app.yaml"
+docker compose up --build -d thehive-app
+
+# wait for Poetry to install dependencies, otherwise the `alert-count`
+# entrypoint that runs on the same volume might run into concurrency issus when
+# running `poetry install` itself.
+# TODO find a more reliable way to achieve this
+sleep 60
+
+# check that the historical import took place
+docker compose run thehive-app alert-count 2>&1 | \
+    tee /dev/stderr | \
+    grep -q "alert_count=1"
+
+# import both a duplicate and a new alert
+cat ../../vast/integration/data/suricata/eve.json | \
+    docker compose run --no-TTY vast import --blocking suricata
+cat ../../vast/integration/data/suricata/eve.json | \
+    sed -e 's/2011-08-12/2011-08-13/g' | \
+    docker compose run --no-TTY vast import --blocking suricata
+
+# check that the continuous import took place, but not for the duplicate
+docker compose run thehive-app alert-count 2>&1 | \
+    tee /dev/stderr | \
+    grep -q "alert_count=2"
+
+popd

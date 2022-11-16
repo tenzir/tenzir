@@ -1,36 +1,39 @@
-from typing import Dict, Tuple
-import requests
-import os
-from os import path
-import time
 import logging
-import sys
+import json
+import os
 import subprocess
+import sys
+import time
+from os import path
+from typing import Dict, Optional, Tuple
+
+import requests
 
 logging.getLogger().setLevel(logging.INFO)
 
-CORTEX_URL = os.getenv("CORTEX_URL")
-VAST_ENDPOINT = os.getenv("VAST_ENDPOINT")
+CORTEX_URL = os.environ["CORTEX_URL"]
+VAST_ENDPOINT = os.environ["VAST_ENDPOINT"]
 THEHIVE_URL = "http://localhost:9000"
 
 CONFIG_LOCATION = "/opt/thp/thehive/conf/application.conf"
 
 # Admin email is the default and should not be changed!
 CORTEX_ADMIN_EMAIL = "admin@thehive.local"
-CORTEX_ADMIN_PWD = "secret"
+CORTEX_ADMIN_PWD = os.environ["DEFAULT_ADMIN_PWD"]
 
 # Orgadmin is the user used by TheHive through its API key
 # It can also be used to connect to Cortex on the Cortex UI
-CORTEX_ORGADMIN_EMAIL = "orgadmin@thehive.local"
-CORTEX_ORGADMIN_PWD = "secret"
+CORTEX_ORGADMIN_EMAIL = os.environ["DEFAULT_ORGADMIN_EMAIL"]
+CORTEX_ORGADMIN_PWD = os.environ["DEFAULT_ORGADMIN_PWD"]
 
 # Admin email is the default and should not be changed!
 THEHIVE_ADMIN_EMAIL = "admin@thehive.local"
-THEHIVE_ADMIN_PWD = "secret"
+THEHIVE_ADMIN_DEFAULT_PWD = "secret"
+THEHIVE_ADMIN_PWD = os.environ["DEFAULT_ADMIN_PWD"]
 
 # Orgadmin is the user to interact with the cases/alerts
-THEHIVE_ORGADMIN_EMAIL = "orgadmin@thehive.local"
-THEHIVE_ORGADMIN_PWD = "secret"
+THEHIVE_ORGADMIN_EMAIL = os.environ["DEFAULT_ORGADMIN_EMAIL"]
+THEHIVE_ORGADMIN_PWD = os.environ["DEFAULT_ORGADMIN_PWD"]
 
 
 def retry_until_timeout(retried_function, action_name: str, timeout: int):
@@ -54,7 +57,7 @@ def call_api(
     path: str,
     payload: Dict,
     api_name: str,
-    credentials: Tuple[str, str] = None,
+    credentials: Optional[Tuple[str, str]] = None,
 ):
     """Call a JSON endpoint with optional basic auth"""
     session = requests.Session()
@@ -72,12 +75,16 @@ def call_api(
     return resp.text
 
 
-def call_cortex(path: str, payload: Dict, credentials: Tuple[str, str] = None):
+def call_cortex(
+    path: str, payload: Dict, credentials: Optional[Tuple[str, str]] = None
+):
     """Call the Cortex API (path should start with /)"""
     return call_api(CORTEX_URL, path, payload, "Cortex", credentials)
 
 
-def call_thehive(path: str, payload: Dict, credentials: Tuple[str, str] = None):
+def call_thehive(
+    path: str, payload: Dict, credentials: Optional[Tuple[str, str]] = None
+):
     """Call the TheHive API (path should start with /)"""
     return call_api(THEHIVE_URL, path, payload, "TheHive", credentials)
 
@@ -173,6 +180,19 @@ def init_cortex():
 
 def init_thehive():
     """Init the org/users in TheHive"""
+
+    result = call_thehive(
+        "/api/v1/query",
+        {"query": [{"_name": "listUser"}]},
+        (THEHIVE_ADMIN_EMAIL, THEHIVE_ADMIN_DEFAULT_PWD),
+    )
+
+    admin_id = json.loads(result)[0]["_id"]
+    call_thehive(
+        f"/api/v1/user/{admin_id}/password/set",
+        {"password": THEHIVE_ADMIN_PWD},
+        (THEHIVE_ADMIN_EMAIL, THEHIVE_ADMIN_DEFAULT_PWD),
+    )
 
     call_thehive(
         "/api/v0/organisation",
