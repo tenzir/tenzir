@@ -14,6 +14,7 @@ services:
     environment:
       - THEHIVE_URL=http://thehive:9000
       - VAST_ENDPOINT=vast:42000
+      - BACKFILL_LIMIT=${BACKFILL_LIMIT:-100}
     depends_on:
       - vast
       - thehive

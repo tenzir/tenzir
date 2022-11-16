@@ -3,6 +3,7 @@ import io
 import json
 import time
 from collections import defaultdict
+from enum import Enum, auto
 from typing import Any, AsyncIterable, Dict
 
 import pyarrow as pa
@@ -13,6 +14,12 @@ import vast.utils.logging
 from .cli import CLI
 
 logger = vast.utils.logging.get("vast.vast")
+
+
+class ExportMode(Enum):
+    HISTORICAL = auto()
+    CONTINUOUS = auto()
+    UNIFIED = auto()
 
 
 class VAST:
@@ -68,7 +75,7 @@ class VAST:
 
     @staticmethod
     async def export_rows(
-        expression: str, limit=0, continuous=False
+        expression: str, mode: ExportMode, limit: int = -1
     ) -> AsyncIterable[Dict[str, Any]]:
         """Get a row wise view of the data
 
@@ -76,9 +83,16 @@ class VAST:
         as export format. It is a temporary workaround for asynchronicity issues
         with PyArrow, but we plan to have all VAST Python exports properly typed
         and backed by Arrow."""
+        if limit == 0:
+            return
         args = {}
-        if continuous:
-            args["continuous"] = True
+        match mode:
+            case ExportMode.CONTINUOUS:
+                args["continuous"] = True
+            case ExportMode.UNIFIED:
+                args["unified"] = True
+            case ExportMode.HISTORICAL:
+                pass
         if limit > 0:
             args["max_events"] = limit
         proc = await CLI().export(**args).json(expression).exec()

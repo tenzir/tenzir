@@ -10,14 +10,14 @@ import aiohttp
 import vast.utils.logging as logging
 from dateutil.parser import isoparse
 
-from vast import VAST
+from vast import VAST, ExportMode
 
 logger = logging.get("vast.thehive.app")
 
 THEHIVE_ORGADMIN_EMAIL = "orgadmin@thehive.local"
 THEHIVE_ORGADMIN_PWD = "secret"
 THEHIVE_URL = os.environ["THEHIVE_URL"]
-
+BACKFILL_LIMIT = int(os.environ["BACKFILL_LIMIT"])
 
 # An in memory cache of the event refs that where already sent to TheHive This
 # helps limiting the amount of unnecessary calls to the API when dealing with
@@ -135,11 +135,14 @@ async def run_async():
     await VAST.status(60, retry_delay=1)
     await wait_for_thehive(120)
     expr = '#type == "suricata.alert"'
+    # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
-    async for alert in VAST.export_rows(expr, limit=100):
+    hist_iter = VAST.export_rows(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)
+    async for alert in hist_iter:
         await on_suricata_alert(alert)
     logger.info("Starting live forwarding...")
-    async for alert in VAST.export_rows(expr, continuous=True):
+    cont_iter = VAST.export_rows(expr, ExportMode.CONTINUOUS)
+    async for alert in cont_iter:
         await on_suricata_alert(alert)
 
 
