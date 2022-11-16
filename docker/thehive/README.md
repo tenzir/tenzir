@@ -1,7 +1,16 @@
 # TheHive and Cortex
 
 This directory contains the Docker Compose setup to run a preconfigured instance
-of TheHive with a VAST [Cortex Analyzer](https://docs.thehive-project.org/cortex/).
+of TheHive with a VAST [Cortex Analyzer][cortex-analyzers-docs]. This stack can
+run with multiple levels of integration with the VAST service.
+
+By default, TheHive is exposed on `http://localhost:9000`. We create some
+default users for both TheHive and Cortex:
+- `admin@thehive.local`/`secret`: organization management
+- `orgadmin@thehive.local`/`secret`: user and case management within the default
+  (Tenzir) organization
+
+[cortex-analyzers-docs]: https://docs.thehive-project.org/cortex/
 
 ## With VAST running on localhost
 
@@ -30,8 +39,9 @@ docker compose \
 
 ## With the VAST app
 
-We also provide an integration script that listens on `suricata.alert` events
-and feeds them into TheHive. You can add it to the stack by running:
+We provide a very basic integration script that listens on `suricata.alert`
+events and forwards them to TheHive. You can start it along the stack by
+running:
 ```bash
 # the COMPOSE_FILE variable is automatically picked up by Compose
 COMPOSE_FILE="docker-compose.yaml"
@@ -42,7 +52,7 @@ export COMPOSE_FILE="$COMPOSE_FILE:../vast/docker-compose.yaml"
 docker compose up --build -d
 ```
 
-To test the import with some mock data, run:
+To test the alert forwarding with some mock data, run:
 ```bash
 # also uses the COMPOSE_FILE variable
 docker compose run --no-TTY vast import --blocking suricata \

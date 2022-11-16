@@ -64,3 +64,6 @@ We currently have the following override files:
 |docker/quarto/docker-compose.yaml|Build the Quarto image and run Bash inside.|
 |docker/quarto/docker-compose.bind.yaml|Bind mound the VAST respository.|
 |docker/quarto/docker-compose.vast.yaml|Apply settings to connect to the VAST service.|
+|docker/thehive/docker-compose.yaml|Start TheHive/Cortex with a basic initial setup.|
+|docker/thehive/docker-compose.vast.yaml|Integrate the Analyzer with the VAST service.|
+|docker/thehive/docker-compose.app.yaml|Start an integration app for Suricata alerts.|

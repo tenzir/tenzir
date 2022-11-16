@@ -99,8 +99,8 @@ class VAST:
     async def status(timeout=0, retry_delay=0.5, **kwargs) -> str:
         """Executes the `vast status` command and return the response string.
 
-        If `timeout` is greater than 0, the invocation of `vast status` will be retried
-        every `retry_delay` seconds for at most `timeout` seconds.
+        If `timeout` is greater than 0, the invocation of `vast status` will be
+        retried every `retry_delay` seconds for at most `timeout` seconds.
 
         Examples: `status()`, `status(timeout=30, detailed=True)`.
         """
@@ -114,7 +114,8 @@ class VAST:
             else:
                 duration = time.time() - start
                 if duration > timeout:
-                    raise Exception(f"VAST status failed with code {proc.returncode}")
+                    msg = f"VAST status failed with code {proc.returncode}"
+                    raise Exception(msg)
                 await asyncio.sleep(retry_delay)
 
     @staticmethod
@@ -126,4 +127,7 @@ class VAST:
         proc = await CLI().count(*args, **kwargs).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
+        if proc.returncode != 0:
+            msg = f"VAST count failed with code {proc.returncode}"
+            raise Exception(msg)
         return int(stdout.decode("utf-8"))
