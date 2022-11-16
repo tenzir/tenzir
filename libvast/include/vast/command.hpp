@@ -188,11 +188,19 @@ struct invocation {
   }
 };
 
+/// Sanitizes program arguments according to the options in `root`.
+/// @returns a vector of sanitized arguments.
+/// @relates command
+std::vector<std::string>
+sanitize_arguments(const command& root, command::argument_iterator first,
+                   command::argument_iterator last);
+
 /// Parses all program arguments without running the command.
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command
 caf::expected<invocation>
-parse(const command& root, std::vector<std::string>& arguments);
+parse(const command& root, command::argument_iterator first,
+      command::argument_iterator last);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.

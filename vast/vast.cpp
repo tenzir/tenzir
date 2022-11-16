@@ -136,7 +136,10 @@ int main(int argc, char** argv) {
   if (!root)
     return EXIT_FAILURE;
   // Parse the CLI.
-  auto invocation = parse(*root, cfg.command_line);
+  cfg.command_line = sanitize_arguments(*root, cfg.command_line.begin(),
+                                        cfg.command_line.end());
+  auto invocation
+    = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
   if (!invocation) {
     if (invocation.error()) {
       system::render_error(*root, invocation.error(), std::cerr);

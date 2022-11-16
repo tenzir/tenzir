@@ -41,7 +41,10 @@ struct fixture {
     auto [root, _] = system::make_application(argv[0]);
     REQUIRE(root);
     // Parse the CLI.
-    auto invocation = ::parse(*root, cfg.command_line);
+    cfg.command_line = ::sanitize_arguments(*root, cfg.command_line.begin(),
+                                            cfg.command_line.end());
+    auto invocation
+      = ::parse(*root, cfg.command_line.begin(), cfg.command_line.end());
     REQUIRE_NOERROR(invocation);
     // Merge the options from the CLI into the options from the configuration.
     // From here on, options from the command line can be used.
