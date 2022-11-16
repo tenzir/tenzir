@@ -74,3 +74,6 @@ To test the alert forwarding with some mock data, run:
 docker compose run --no-TTY vast import --blocking suricata \
     < ../../vast/integration/data/suricata/eve.json
 ```
+
+Note: To avoid forwarding the same alert multiple times, we use the hash of the
+connection timestamp and the flow id as `sourceRef` of the TheHive alert.
