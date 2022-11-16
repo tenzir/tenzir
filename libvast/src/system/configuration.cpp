@@ -439,18 +439,20 @@ caf::error configuration::parse(int argc, char** argv) {
   // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());
-  // Newly added plugin arguments from environment variables
-  // may contain empty values - sanitize them manually.
-  for (auto& plugin_arg : plugin_args) {
-    if (plugin_arg.ends_with("=")) {
-      plugin_arg.append("[]");
-    }
-  }
   auto plugin_opts
     = caf::config_option_set{}
         .add<std::vector<std::string>>("?vast", "schema-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugins", "");
+  // Newly added plugin arguments from environment variables
+  // may contain empty values - sanitize them manually.
+  for (auto& plugin_arg : plugin_args) {
+    auto dummy_settings = caf::settings{};
+    if (plugin_opts.parse(dummy_settings, {plugin_arg}).first
+        == caf::pec::missing_argument) {
+      plugin_arg.append("[]");
+    }
+  }
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   if (ec != caf::pec::success) {
     VAST_ASSERT(it != plugin_args.end());
