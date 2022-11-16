@@ -6,7 +6,7 @@ in
 pkgs.mkShell ({
   name = "vast-dev";
   hardeningDisable = [ "fortify" ] ++ lib.optional isStatic "pic";
-  inputsFrom = [ pkgs.vast ];
+  inputsFrom = [ pkgs.vast pkgs.vast-ui ];
   nativeBuildInputs = [ pkgs.ccache pkgs.speeve ]
     ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
       # Make clang available as alternative compiler when it isn't the default.
