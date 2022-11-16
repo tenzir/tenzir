@@ -1,5 +1,9 @@
+import asyncio
 import io
+import json
+import time
 from collections import defaultdict
+from typing import Any, Callable, Coroutine, Dict
 
 import pyarrow as pa
 import vast.utils.arrow
@@ -25,19 +29,6 @@ class VAST:
         await proc.communicate()
         logger.debug(proc.stderr.decode())
         return self
-
-    # TODO: agree on API.
-    @staticmethod
-    async def export_continuous(expression: str, callback):
-        proc = await CLI().export(continuous=True).json(expression).exec()
-        while True:
-            if proc.stdout.at_eof():
-                break
-            line = await proc.stdout.readline()
-            await callback(line)
-        await proc.communicate()
-        if proc.returncode != 0:
-            logger.warning(f"vast exited with non-zero code: {proc.returncode}")
 
     async def export(self, expression: str, limit: int = 100):
         """Executes a VAST and receives results as Arrow Tables."""
@@ -76,15 +67,55 @@ class VAST:
         return result
 
     @staticmethod
-    async def status(**kwargs) -> str:
+    async def export_rows(
+        expression: str,
+        callback: Callable[[Dict], Coroutine[Any, Any, None]],
+        limit=0,
+        continuous=False,
+    ):
+        """Use JSON export to get a row wise view of the data
+
+        This method is a temporary workaround for asynchronicity issues with
+        PyArrow. We plan to have all VAST Python exports backed by Arrow"""
+        args = {}
+        if continuous:
+            args["continuous"] = True
+        if limit > 0:
+            args["max_events"] = limit
+        proc = await CLI().export(**args).json(expression).exec()
+        while True:
+            if proc.stdout.at_eof():
+                break
+            line = await proc.stdout.readline()
+            if line.strip() == b"":
+                continue
+            await callback(json.loads(line))
+
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.error(stderr.decode())
+
+    @staticmethod
+    async def status(timeout=0, retry_delay=0.5, **kwargs) -> str:
+        """Executes the `vast status` command and return the response string.
+
+        If `timeout` is greater than 0, the invocation of `vast status` will be retried
+        every `retry_delay` seconds for at most `timeout` seconds.
+
+        Examples: `status()`, `status(timeout=30, detailed=True)`.
         """
-        Executes the VAST status command and return the response string.
-        Examples: `status()`, `status(detailed=True)`.
-        """
-        proc = await CLI().status(**kwargs).exec()
-        stdout, stderr = await proc.communicate()
-        logger.debug(stderr.decode())
-        return stdout.decode("utf-8")
+        start = time.time()
+        while True:
+            proc = await CLI().status(**kwargs).exec()
+            stdout, stderr = await proc.communicate()
+            logger.debug(stderr.decode())
+            if proc.returncode == 0:
+                return stdout.decode("utf-8")
+            else:
+                duration = time.time() - start
+                if duration > timeout:
+                    raise Exception(f"VAST status failed with code {proc.returncode}")
+                await asyncio.sleep(retry_delay)
 
     @staticmethod
     async def count(*args, **kwargs) -> int:

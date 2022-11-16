@@ -1,26 +1,28 @@
 import asyncio
-import json
+import datetime
+import hashlib
 import logging
 import os
-import random
-import string
 import time
-import datetime
-from dateutil.parser import isoparse
-from typing import Any, Callable, Coroutine, Dict
+from typing import Dict
 
 import aiohttp
-import vast.utils.logging
+import vast.utils.logging as logging
+from dateutil.parser import isoparse
 
-import vast
+from vast import VAST
+
+logger = logging.get("vast.thehive.app")
 
 THEHIVE_ORGADMIN_EMAIL = "orgadmin@thehive.local"
 THEHIVE_ORGADMIN_PWD = "secret"
 THEHIVE_URL = os.environ["THEHIVE_URL"]
 
-logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
+
+# An in memory cache of the event refs that where already sent to TheHive This
+# helps limiting the amount of unnecessary calls to the API when dealing with
+# duplicates
+SENT_ALERT_REFS = set()
 
 
 async def call_thehive(
@@ -37,108 +39,106 @@ async def call_thehive(
             resp = await session.post(path, json=payload, auth=auth)
 
     resp_txt = await resp.text()
-    logging.debug(f"Resp to query on TheHive API {path}: {resp_txt}")
+    logger.debug(f"Resp to query on TheHive API {path}: {resp_txt}")
     resp.raise_for_status()
-    logging.info(f"Call to TheHive API {path} successful!")
+    logger.info(f"Call to TheHive API {path} successful!")
     return resp_txt
 
 
-async def wait_for_vast():
-    while True:
-        proc = await vast.CLI().status().exec()
-        _, stderr = await proc.communicate()
-        if proc.returncode == 0:
-            break
-        else:
-            logger.debug(stderr.decode())
-            time.sleep(1)
-
-
-async def wait_for_thehive():
+async def wait_for_thehive(timeout):
+    start = time.time()
     while True:
         try:
             await call_thehive("/api/v1/user/current")
             break
         except Exception as e:
+            if time.time() - start > timeout:
+                raise Exception("Timed out trying to reach TheHive")
             logger.debug(e)
             time.sleep(1)
 
 
-async def query(
-    callback: Callable[[Dict], Coroutine[Any, Any, None]], limit=0, continuous=False
-):
-    args = {}
-    if continuous:
-        args["continuous"] = True
-    if limit > 0:
-        args["max_events"] = limit
-    proc = await vast.CLI().export(**args).json('#type == "suricata.alert"').exec()
-    while True:
-        if proc.stdout.at_eof():
-            break
-        line = await proc.stdout.readline()
-        if line.strip() == b"":
-            continue
-        await callback(json.loads(line))
+def suricata2hive(event: Dict) -> Dict:
+    # convert iso into epoch
+    sighted_time_iso = event.get("timestamp", datetime.datetime.now().isoformat())
+    sighted_time_ms = int(isoparse(sighted_time_iso).timestamp() * 1000)
+    start_time_iso = event.get("flow", {}).get("timestamp", sighted_time_iso)
+    start_time_ms = int(isoparse(start_time_iso).timestamp() * 1000)
+    current_time_ms = int(time.time() * 1000)
+    # severity is reversed
+    severity = min(5 - event.get("severity", 3), 1)
+    alert = event.get("alert", {})
+    category = alert.get("category")
+    desc = f'{alert.get("signature_id", "No signature ID")}: {alert.get("signature", "No signature")}'
+    # A unique identifier of this alert, hashing together the start time and flow id
+    src_ref = hashlib.md5(
+        f'{start_time_iso}{event.get("flow_id", "")}'.encode()
+    ).hexdigest()
 
-    _, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        logger.error(stderr.decode())
-
-
-async def on_suricata_alert(event: Dict):
-    logger.debug(f"got alert: {event}")
-    ts_iso = event.get("timestamp", datetime.datetime.now().isoformat())
-    ts_ms = int(isoparse(ts_iso).timestamp() * 1000)
-    thehive_alert = {
-        "type": "string",
+    return {
+        "type": category,
         "source": "suricata",
-        "sourceRef": "".join(random.choice(string.ascii_letters) for x in range(10)),
-        "externalLink": "string",
-        "title": "string",
-        "description": "string",
-        "severity": 1,
-        "date": ts_ms,
-        "tags": ["string"],
-        "flag": True,
-        "tlp": 0,
-        "pap": 0,
-        "summary": "string",
-        "caseTemplate": "string",
+        "sourceRef": src_ref,
+        "title": "Suricata Alert",
+        "description": desc,
+        "severity": severity,
+        "date": current_time_ms,
+        "tags": [],
         "observables": [
             {
                 "dataType": "ip",
                 "data": event["src_ip"],
-                "message": "string",
-                "startDate": 1640000000000,
-                "attachment": {
-                    "name": "string",
-                    "contentType": "string",
-                    "id": "string",
-                },
-                "tlp": 0,
-                "pap": 0,
-                "tags": ["string"],
-                "ioc": True,
+                "message": "Source IP",
+                "startDate": start_time_ms,
+                "tags": [],
+                "ioc": False,
                 "sighted": True,
-                "sightedAt": 1640000000000,
-                "ignoreSimilarity": True,
-                "isZip": True,
-                "zipPassword": "string",
-            }
+                "sightedAt": sighted_time_ms,
+                "ignoreSimilarity": False,
+            },
+            {
+                "dataType": "ip",
+                "data": event["dest_ip"],
+                "message": "Destination IP",
+                "startDate": start_time_ms,
+                "tags": [],
+                "ioc": False,
+                "sighted": True,
+                "sightedAt": sighted_time_ms,
+                "ignoreSimilarity": False,
+            },
         ],
     }
-    response = await call_thehive("/api/v1/alert", thehive_alert)
-    logger.debug(response)
+
+
+async def on_suricata_alert(alert: Dict):
+    global SENT_ALERT_REFS
+    logger.debug(f"Received alert: {alert}")
+
+    thehive_alert = suricata2hive(alert)
+    ref = thehive_alert["sourceRef"]
+    if ref in SENT_ALERT_REFS:
+        logger.debug(f"Alert with hash {ref} skipped")
+        return
+    try:
+        await call_thehive("/api/v1/alert", thehive_alert)
+        logger.debug(f"Alert with hash {ref} ingested")
+    except aiohttp.ClientResponseError as e:
+        if e.code == 400:
+            logger.debug(f"Alert with hash {ref} not ingested (error 400)")
+        else:
+            raise e
+    SENT_ALERT_REFS.add(ref)
 
 
 async def run_async():
-    await wait_for_vast()
-    await wait_for_thehive()
+    await VAST.status(60, retry_delay=1)
+    await wait_for_thehive(120)
+    expr = '#type == "suricata.alert"'
     logger.info("Starting retro filling...")
-    await query(on_suricata_alert, limit=100)
+    await VAST.export_rows(expr, on_suricata_alert, limit=100)
     logger.info("Starting live forwarding...")
-    await query(on_suricata_alert, continuous=True)
+    await VAST.export_rows(expr, on_suricata_alert, continuous=True)
 
 
 def run():
