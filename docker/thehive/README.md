@@ -22,8 +22,29 @@ some extra networking settings required. Those are specified in
 
 ```bash
 docker compose \
-    -f ../vast/docker-compose.yaml \
     -f docker-compose.yaml \
     -f docker-compose.vast.yaml \
+    -f ../vast/docker-compose.yaml \
     up --build
+```
+
+## With the VAST app
+
+We also provide an integration script that listens on `suricata.alert` events
+and feeds them into TheHive. You can add it to the stack by running:
+```bash
+# the COMPOSE_FILE variable is automatically picked up by Compose
+COMPOSE_FILE="docker-compose.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:docker-compose.vast.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:docker-compose.app.yaml"
+export COMPOSE_FILE="$COMPOSE_FILE:../vast/docker-compose.yaml"
+
+docker compose up --build -d
+```
+
+To test the import with some mock data, run:
+```bash
+# also uses the COMPOSE_FILE variable
+docker compose run --no-TTY vast import --blocking suricata \
+    < ../../vast/integration/data/suricata/eve.json
 ```

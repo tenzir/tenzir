@@ -1,5 +1,7 @@
 play.http.secret.key="ThehiveTestPassword"
 
+http.address=0.0.0.0
+
 db.janusgraph {
    storage.backend: berkeleyje
    storage.directory: /opt/thp/thehive/db

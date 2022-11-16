@@ -40,8 +40,8 @@ def configure(config: Dynaconf, logger: logging.Logger):
 
 
 def get(name=None):
-    # All VAST loggers have handlers. If not, the logger is not yet initialized
-    # and we do it lazily at the first use here.
+    # All VAST loggers (vast.*) have handlers. If not, the logger is not yet
+    # initialized and we do it lazily at the first use here.
     vast_logger = logging.getLogger("vast")
     if not vast_logger.hasHandlers():
         config = vast.utils.config.parse()

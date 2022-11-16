@@ -19,6 +19,8 @@ services:
       - thehive-db:/opt/thp/thehive/db
       - thehive-index:/opt/thp/thehive/index
       - thehive-data:/opt/thp/thehive/data
+    networks:
+      - thehive
 
   cortex:
     build:
@@ -36,11 +38,13 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/cortex-jobs:/tmp/cortex-jobs
       - cortex-index:/opt/cortex/index
+    networks:
+      - thehive
 
   neuron:
     image: tenzir/vast-neuron
     pull_policy: build
-    network_mode: host  # used for tests only
+    network_mode: host # used for tests only
     build:
       context: ./vast-cortex-neuron/
       args:
@@ -58,6 +62,8 @@ services:
       - xpack.security.enabled=false
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - thehive
 
 volumes:
   thehive-config:
@@ -67,3 +73,9 @@ volumes:
   cortex-jobs:
   cortex-index:
   elasticsearch-data:
+
+
+networks:
+  # network on which TheHive, Cortex and Elasticsearch communicate
+  thehive:
+    driver: bridge
