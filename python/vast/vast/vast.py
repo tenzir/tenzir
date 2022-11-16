@@ -3,7 +3,7 @@ import io
 import json
 import time
 from collections import defaultdict
-from typing import Any, Callable, Coroutine, Dict
+from typing import Any, AsyncIterable, Dict
 
 import pyarrow as pa
 import vast.utils.arrow
@@ -68,15 +68,14 @@ class VAST:
 
     @staticmethod
     async def export_rows(
-        expression: str,
-        callback: Callable[[Dict], Coroutine[Any, Any, None]],
-        limit=0,
-        continuous=False,
-    ):
-        """Use JSON export to get a row wise view of the data
+        expression: str, limit=0, continuous=False
+    ) -> AsyncIterable[Dict[str, Any]]:
+        """Get a row wise view of the data
 
-        This method is a temporary workaround for asynchronicity issues with
-        PyArrow. We plan to have all VAST Python exports backed by Arrow"""
+        This method does not provide type information because it is using json
+        as export format. It is a temporary workaround for asynchronicity issues
+        with PyArrow, but we plan to have all VAST Python exports properly typed
+        and backed by Arrow."""
         args = {}
         if continuous:
             args["continuous"] = True
@@ -89,7 +88,9 @@ class VAST:
             line = await proc.stdout.readline()
             if line.strip() == b"":
                 continue
-            await callback(json.loads(line))
+            line_dict = json.loads(line)
+            assert isinstance(line_dict, Dict)
+            yield line_dict
 
         _, stderr = await proc.communicate()
         if proc.returncode != 0:

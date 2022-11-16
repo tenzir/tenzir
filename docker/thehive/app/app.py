@@ -136,9 +136,11 @@ async def run_async():
     await wait_for_thehive(120)
     expr = '#type == "suricata.alert"'
     logger.info("Starting retro filling...")
-    await VAST.export_rows(expr, on_suricata_alert, limit=100)
+    async for alert in VAST.export_rows(expr, limit=100):
+        await on_suricata_alert(alert)
     logger.info("Starting live forwarding...")
-    await VAST.export_rows(expr, on_suricata_alert, continuous=True)
+    async for alert in VAST.export_rows(expr, continuous=True):
+        await on_suricata_alert(alert)
 
 
 def run():
