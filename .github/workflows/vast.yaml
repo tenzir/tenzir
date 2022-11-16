@@ -423,6 +423,7 @@ jobs:
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
           docker/thehive/vast-cortex-neuron/tests/run service
+          docker/thehive/test
 
   example-notebooks:
     needs:
@@ -787,7 +788,7 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
           # The asset names are constant so we can permanently link to
-          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-gcc.tar.gzbuild-docker
+          # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-gcc.tar.gz
           # https://github.com/tenzir/vast/releases/latest/download/vast-debian-release-clang.tar.gz
           # for builds of the latest release.
           asset_name: "${{ env.PUBLISH_NAME }}.tar.gz"
