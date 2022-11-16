@@ -1,7 +1,8 @@
 <script lang="ts">
   import Editor from '$lib/components/Editor.svelte';
   import MultiLine from '$lib/components/LayerCake/MultiLine/index.svelte';
-  let visibleBlocks: ('bytes' | 'text')[] = [];
+  import Query from '$lib/components/Query.svelte';
+  let visibleBlocks: ('bytes' | 'text' | 'query')[] = [];
 </script>
 
 <svelte:head>
@@ -13,11 +14,7 @@
   <div class="flex justify-between my-4 mr-4">
     <div class="text-xl font-bold">Reports</div>
 
-  <button
-    class="flex items-center mr-2"
-  >
-    Export
-  </button>
+    <button class="flex items-center mr-2"> Export </button>
   </div>
   {#each visibleBlocks as block}
     {#if block == 'bytes'}
@@ -25,34 +22,42 @@
       <div class="m-10">
         <MultiLine />
       </div>
-    {:else}
+    {:else if block == 'query'}
       <div class="text-l font-bold">Notes</div>
       <div class="my-10">
-        <Editor />
+        <Query />
       </div>
     {/if}
   {/each}
   <div class="flex">
+    <button
+      class="flex items-center mr-2"
+      on:click={() => {
+        visibleBlocks = [...visibleBlocks, 'tex'];
+      }}
+    >
+      <div class="i-ant-design:plus-square-outlined w-16px" />
+      Add Text Block
+    </button>
 
+    <button
+      class="flex items-center mr-2"
+      on:click={() => {
+        visibleBlocks = [...visibleBlocks, 'bytes'];
+      }}
+    >
+      <div class="i-ant-design:plus-square-outlined w-16px" />
+      Add Bytes Block
+    </button>
 
-  <button
-    class="flex items-center mr-2"
-    on:click={() => {
-      visibleBlocks = [...visibleBlocks, "tex"]
-    }}
-  >
-    <div class="i-ant-design:plus-square-outlined w-16px" />
-    Add Text Block
-  </button>
-
-  <button
-    class="flex items-center mr-2"
-    on:click={() => {
-      visibleBlocks = [...visibleBlocks, "bytes"]
-    }}
-  >
-    <div class="i-ant-design:plus-square-outlined w-16px" />
-    Add Bytes Block
-  </button>
+    <button
+      class="flex items-center mr-2"
+      on:click={() => {
+        visibleBlocks = [...visibleBlocks, 'query'];
+      }}
+    >
+      <div class="i-ant-design:plus-square-outlined w-16px" />
+      Add Query Block
+    </button>
   </div>
 </div>

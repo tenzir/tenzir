@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Render, Subscribe, createTable } from 'svelte-headless-table';
-  import { readable } from 'svelte/store';
+  import { addSortBy } from 'svelte-headless-table/plugins';
+  import { readable, writable } from 'svelte/store';
   interface TableRow {
     [key: string]: string | number;
   }
@@ -10,7 +11,9 @@
   export let tableRows: TableRow[];
   export let columnDetails: ColumnInfo[];
 
-  const table = createTable(readable(tableRows));
+  const table = createTable(writable(tableRows), {
+    sort: addSortBy()
+  });
 
   const columns = table.createColumns(
     columnDetails.map((detail) =>
@@ -21,16 +24,24 @@
   const { headerRows, rows, tableAttrs, tableBodyAttrs } = table.createViewModel(columns);
 </script>
 
-<div class="bg-gray-100 rounded p-2">
-  <table {...$tableAttrs} class="table-auto text-sm text-left text-gray-500 w-full">
+<div class="bg-gray-100 rounded p-2 overflow-x-auto">
+  <table
+    {...$tableAttrs}
+    class="table-auto text-sm text-left text-gray-500 w-full border-collapse m-2"
+  >
     <thead>
       {#each $headerRows as headerRow (headerRow.id)}
         <Subscribe rowAttrs={headerRow.attrs()} let:rowAttrs>
           <tr {...rowAttrs}>
             {#each headerRow.cells as cell (cell.id)}
-              <Subscribe attrs={cell.attrs()} let:attrs>
-                <th {...attrs}>
+              <Subscribe attrs={cell.attrs()} let:attrs props={cell.props()} let:props>
+                <th {...attrs} on:click={props.sort.toggle} class="border border-slate-300">
                   <Render of={cell.render()} />
+                  {#if props.sort.order === 'asc'}
+                    ⬇️
+                  {:else if props.sort.order === 'desc'}
+                    ⬆️
+                  {/if}
                 </th>
               </Subscribe>
             {/each}
@@ -44,7 +55,7 @@
           <tr {...rowAttrs}>
             {#each row.cells as cell (cell.id)}
               <Subscribe attrs={cell.attrs()} let:attrs>
-                <td {...attrs}>
+                <td {...attrs} class="border border-slate-300">
                   <Render of={cell.render()} />
                 </td>
               </Subscribe>
@@ -55,3 +66,10 @@
     </tbody>
   </table>
 </div>
+
+<style>
+  th,
+  td {
+    padding: 8px;
+  }
+</style>
