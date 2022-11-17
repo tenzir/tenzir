@@ -17,7 +17,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/hash/hash.hpp"
-#include "vast/time.hpp"
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
@@ -558,7 +557,7 @@ struct equal_to<vast::data> : equal_to<vast::data_view> {};
 
 } // namespace std
 
-#include "vast/concept/printable/vast/view.hpp"
+#include "vast/concept/printable/vast/view.hpp" // IWYU pragma: keep
 
 namespace fmt {
 

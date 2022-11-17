@@ -11,14 +11,10 @@
 #include "vast/address.hpp"
 #include "vast/aliases.hpp"
 #include "vast/concept/printable/print.hpp"
-#include "vast/concepts.hpp"
 #include "vast/data/integer.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/hash/uhash.hpp"
-#include "vast/hash/xxhash.hpp"
-#include "vast/offset.hpp"
 #include "vast/pattern.hpp"
 #include "vast/policy/merge_lists.hpp"
 #include "vast/subnet.hpp"
@@ -317,7 +313,7 @@ caf::expected<std::string> to_yaml(const data& x);
 
 } // namespace vast
 
-#include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/data.hpp" // IWYU pragma: keep
 
 namespace fmt {
 

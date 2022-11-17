@@ -8,26 +8,26 @@
 
 #pragma once
 
-#include "vast/concept/parseable/core/action.hpp"
-#include "vast/concept/parseable/core/and.hpp"
-#include "vast/concept/parseable/core/as.hpp"
-#include "vast/concept/parseable/core/choice.hpp"
-#include "vast/concept/parseable/core/difference.hpp"
-#include "vast/concept/parseable/core/end_of_input.hpp"
-#include "vast/concept/parseable/core/epsilon.hpp"
-#include "vast/concept/parseable/core/guard.hpp"
-#include "vast/concept/parseable/core/ignore.hpp"
-#include "vast/concept/parseable/core/kleene.hpp"
-#include "vast/concept/parseable/core/list.hpp"
-#include "vast/concept/parseable/core/literal.hpp"
-#include "vast/concept/parseable/core/maybe.hpp"
-#include "vast/concept/parseable/core/not.hpp"
-#include "vast/concept/parseable/core/operators.hpp"
-#include "vast/concept/parseable/core/optional.hpp"
-#include "vast/concept/parseable/core/plus.hpp"
-#include "vast/concept/parseable/core/repeat.hpp"
-#include "vast/concept/parseable/core/rule.hpp"
-#include "vast/concept/parseable/core/sequence.hpp"
-#include "vast/concept/parseable/core/sequence_choice.hpp"
-#include "vast/concept/parseable/core/skip.hpp"
-#include "vast/concept/parseable/core/when.hpp"
+#include "vast/concept/parseable/core/action.hpp"       // IWYU pragma: export
+#include "vast/concept/parseable/core/and.hpp"          // IWYU pragma: export
+#include "vast/concept/parseable/core/as.hpp"           // IWYU pragma: export
+#include "vast/concept/parseable/core/choice.hpp"       // IWYU pragma: export
+#include "vast/concept/parseable/core/difference.hpp"   // IWYU pragma: export
+#include "vast/concept/parseable/core/end_of_input.hpp" // IWYU pragma: export
+#include "vast/concept/parseable/core/epsilon.hpp"      // IWYU pragma: export
+#include "vast/concept/parseable/core/guard.hpp"        // IWYU pragma: export
+#include "vast/concept/parseable/core/ignore.hpp"       // IWYU pragma: export
+#include "vast/concept/parseable/core/kleene.hpp"       // IWYU pragma: export
+#include "vast/concept/parseable/core/list.hpp"         // IWYU pragma: export
+#include "vast/concept/parseable/core/literal.hpp"      // IWYU pragma: export
+#include "vast/concept/parseable/core/maybe.hpp"        // IWYU pragma: export
+#include "vast/concept/parseable/core/not.hpp"          // IWYU pragma: export
+#include "vast/concept/parseable/core/operators.hpp"    // IWYU pragma: export
+#include "vast/concept/parseable/core/optional.hpp"     // IWYU pragma: export
+#include "vast/concept/parseable/core/plus.hpp"         // IWYU pragma: export
+#include "vast/concept/parseable/core/repeat.hpp"       // IWYU pragma: export
+#include "vast/concept/parseable/core/rule.hpp"         // IWYU pragma: export
+#include "vast/concept/parseable/core/sequence.hpp"     // IWYU pragma: export
+#include "vast/concept/parseable/core/sequence_choice.hpp" // IWYU pragma: export
+#include "vast/concept/parseable/core/skip.hpp" // IWYU pragma: export
+#include "vast/concept/parseable/core/when.hpp" // IWYU pragma: export

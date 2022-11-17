@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/config.hpp"
+#include "vast/config.hpp" // IWYU pragma: export
 
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>

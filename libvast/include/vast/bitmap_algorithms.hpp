@@ -13,7 +13,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/optional.hpp"
 
 #include <caf/error.hpp>
 
