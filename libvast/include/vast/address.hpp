@@ -35,7 +35,7 @@ public:
   static constexpr std::array<byte_type, 12> v4_mapped_prefix
     = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
 
-  static inline constexpr auto anonymization_key_size = 32;
+  static inline constexpr auto anonymization_key_size = size_t{32};
 
   /// Address family.
   enum family { ipv4, ipv6 };
