@@ -111,11 +111,11 @@ public:
     if (!config)
       return config.error();
     if (std::any_of(config->key.begin(), config->key.end(), [](auto c) {
-          return !std::isalnum(c);
+          return !std::isxdigit(c);
         })) {
       return caf::make_error(ec::invalid_configuration,
                              "vast.plugins.anonymize.key must"
-                             "only contain alphanumeric values");
+                             "contain a hexadecimal value");
     }
     return std::make_unique<anonymize_operator>(std::move(*config));
   }
