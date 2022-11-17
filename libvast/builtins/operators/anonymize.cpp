@@ -22,37 +22,18 @@ namespace vast::plugins::anonymize {
 
 /// The configuration of the anonymize pipeline operator.
 struct configuration {
-  struct address_mapping {
-    std::string from = {};
-    std::string to = {};
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, address_mapping& x) {
-      return f(x.from, x.to);
-    }
-
-    static inline const record_type& layout() noexcept {
-      static auto result = record_type{
-        {"from", address_type{}},
-        {"to", address_type{}},
-      };
-      return result;
-    }
-  };
-
-  std::vector<address_mapping> addresses = {};
+  std::string key;
+  std::vector<std::string> fields;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.addresses);
+    return f(x.key, x.fields);
   }
 
   static inline const record_type& layout() noexcept {
-    // addresses:
-    //   - from: [non-anonymized]
-    //     to: [anonymized]
     static auto result = record_type{
-      {"addresses", list_type{address_mapping::layout()}},
+      {"key", string_type{}},
+      {"fields", list_type{string_type{}}},
     };
     return result;
   }
@@ -80,7 +61,7 @@ private:
   /// Cache for transformed batches.
   std::vector<pipeline_batch> transformed_batches_ = {};
 
-  /// Step-specific configuration, including the layout name mapping.
+  /// Step-specific configuration, including the key and field names.
   configuration config_ = {};
 };
 
@@ -88,35 +69,43 @@ private:
 
 class plugin final : public virtual pipeline_operator_plugin {
 public:
-  caf::error initialize(data options) override {
-    // Configuration needs a key
-    if (const auto* rec = caf::get_if<record>(&options)) {
-      if (!rec->empty()) {
-        if (rec->size() != 1 || !caf::get_if<record>(&rec->at("key"))) {
-          return caf::make_error(ec::invalid_configuration, "anonymize configuration "
-                                                            "must contain only the "
-                                                            "'key' key");
-        }
-        return caf::none;
-      }
-
-    }
-    return caf::make_error(ec::invalid_configuration, "expected non-empty "
-                                                      "configuration under "
-                                                      "vast.plugins.anonymize");
+  caf::error initialize(data) override {
+    return {};
   }
 
-  /// The name is how the pipeline operator is addressed in a transform
-  /// definition.
   [[nodiscard]] const char* name() const override {
     return "anonymize";
   };
 
   [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
+    if (options.size() != 2) {
+      return caf::make_error(ec::invalid_configuration,
+                             "Configuration under vast.plugins.anonymize must "
+                             "only contain the 'key' and 'fields' keys");
+    }
+
+    if (!options.contains("key")) {
+      return caf::make_error(ec::invalid_configuration,
+                             "Configuration under vast.plugins.anonymize must "
+                             "does not contain 'key' key");
+    }
+    if (!options.contains("fields")) {
+      return caf::make_error(ec::invalid_configuration,
+                             "Configuration under vast.plugins.anonymize must "
+                             "does not contain 'fields' key");
+    }
+
     auto config = to<configuration>(options);
     if (!config)
       return config.error();
+    if (std::any_of(config->key.begin(), config->key.end(), [](auto c) {
+          return !std::isalnum(c);
+        })) {
+      return caf::make_error(ec::invalid_configuration,
+                             "vast.plugins.anonymize.key must"
+                             "only contain alphanumeric values");
+    }
     return std::make_unique<anonymize_operator>(std::move(*config));
   }
 };
