@@ -462,7 +462,6 @@ jobs:
     name: VAST (Nix, ${{ matrix.nix.target }})
     runs-on: ubuntu-20.04
     strategy:
-      fail-fast: false
       matrix:
         nix:
           - target: "vast"
@@ -607,7 +606,6 @@ jobs:
     runs-on: ${{ matrix.vast.os }}
     container: ${{ matrix.vast.container }}
     strategy:
-      fail-fast: false
       matrix:
         vast:
           - os: ubuntu-20.04
@@ -812,7 +810,6 @@ jobs:
     runs-on: ${{ matrix.setup.os }}
     container: ${{ matrix.setup.container }}
     strategy:
-      fail-fast: false
       matrix:
         setup:
           - os: ubuntu-20.04
@@ -990,7 +987,6 @@ jobs:
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
       matrix:
         python-version: ["3.10"]
         os: [ubuntu-latest, macos-latest]
