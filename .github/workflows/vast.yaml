@@ -1006,7 +1006,6 @@ jobs:
       - name: Run poetry install
         working-directory: python
         run: |
-          exit 1
           poetry install --all-extras
       - name: Run unit tests
         working-directory: python
