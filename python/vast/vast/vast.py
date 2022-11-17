@@ -1,5 +1,10 @@
+import asyncio
 import io
+import json
+import time
 from collections import defaultdict
+from enum import Enum, auto
+from typing import Any, AsyncIterable, Dict
 
 import pyarrow as pa
 import vast.utils.arrow
@@ -9,6 +14,12 @@ import vast.utils.logging
 from .cli import CLI
 
 logger = vast.utils.logging.get("vast.vast")
+
+
+class ExportMode(Enum):
+    HISTORICAL = auto()
+    CONTINUOUS = auto()
+    UNIFIED = auto()
 
 
 class VAST:
@@ -25,19 +36,6 @@ class VAST:
         await proc.communicate()
         logger.debug(proc.stderr.decode())
         return self
-
-    # TODO: agree on API.
-    @staticmethod
-    async def export_continuous(expression: str, callback):
-        proc = await CLI().export(continuous=True).json(expression).exec()
-        while True:
-            if proc.stdout.at_eof():
-                break
-            line = await proc.stdout.readline()
-            await callback(line)
-        await proc.communicate()
-        if proc.returncode != 0:
-            logger.warning(f"vast exited with non-zero code: {proc.returncode}")
 
     async def export(self, expression: str, limit: int = 100):
         """Executes a VAST and receives results as Arrow Tables."""
@@ -76,15 +74,64 @@ class VAST:
         return result
 
     @staticmethod
-    async def status(**kwargs) -> str:
+    async def export_rows(
+        expression: str, mode: ExportMode, limit: int = -1
+    ) -> AsyncIterable[Dict[str, Any]]:
+        """Get a row wise view of the data
+
+        This method does not provide type information because it is using json
+        as export format. It is a temporary workaround for asynchronicity issues
+        with PyArrow, but we plan to have all VAST Python exports properly typed
+        and backed by Arrow."""
+        if limit == 0:
+            return
+        args = {}
+        match mode:
+            case ExportMode.CONTINUOUS:
+                args["continuous"] = True
+            case ExportMode.UNIFIED:
+                args["unified"] = True
+            case ExportMode.HISTORICAL:
+                pass
+        if limit > 0:
+            args["max_events"] = limit
+        proc = await CLI().export(**args).json(expression).exec()
+        while True:
+            if proc.stdout.at_eof():
+                break
+            line = await proc.stdout.readline()
+            if line.strip() == b"":
+                continue
+            line_dict = json.loads(line)
+            assert isinstance(line_dict, Dict)
+            yield line_dict
+
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.error(stderr.decode())
+
+    @staticmethod
+    async def status(timeout=0, retry_delay=0.5, **kwargs) -> str:
+        """Executes the `vast status` command and return the response string.
+
+        If `timeout` is greater than 0, the invocation of `vast status` will be
+        retried every `retry_delay` seconds for at most `timeout` seconds.
+
+        Examples: `status()`, `status(timeout=30, detailed=True)`.
         """
-        Executes the VAST status command and return the response string.
-        Examples: `status()`, `status(detailed=True)`.
-        """
-        proc = await CLI().status(**kwargs).exec()
-        stdout, stderr = await proc.communicate()
-        logger.debug(stderr.decode())
-        return stdout.decode("utf-8")
+        start = time.time()
+        while True:
+            proc = await CLI().status(**kwargs).exec()
+            stdout, stderr = await proc.communicate()
+            logger.debug(stderr.decode())
+            if proc.returncode == 0:
+                return stdout.decode("utf-8")
+            else:
+                duration = time.time() - start
+                if duration > timeout:
+                    msg = f"VAST status failed with code {proc.returncode}"
+                    raise Exception(msg)
+                await asyncio.sleep(retry_delay)
 
     @staticmethod
     async def count(*args, **kwargs) -> int:
@@ -95,4 +142,7 @@ class VAST:
         proc = await CLI().count(*args, **kwargs).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
+        if proc.returncode != 0:
+            msg = f"VAST count failed with code {proc.returncode}"
+            raise Exception(msg)
         return int(stdout.decode("utf-8"))

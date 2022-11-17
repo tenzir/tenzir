@@ -1,4 +1,5 @@
 import asyncio
+from typing import List
 
 import vast.utils.logging
 
@@ -9,7 +10,7 @@ class CLI:
     """A command-line wrapper for the VAST executable."""
 
     @staticmethod
-    def arguments(**kwargs):
+    def arguments(**kwargs) -> List[str]:
         result = []
         for k, v in kwargs.items():
             if v is True:
@@ -21,8 +22,8 @@ class CLI:
     def __init__(self, **kwargs):
         self.args = CLI.arguments(**kwargs)
 
-    async def exec(self, stdin=False):
-        async def run(*args, stdin):
+    async def exec(self, stdin=False) -> asyncio.subprocess.Process:
+        async def run(*args, stdin) -> asyncio.subprocess.Process:
             return await asyncio.create_subprocess_exec(
                 "vast",
                 *args,
