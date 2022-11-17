@@ -806,7 +806,7 @@ jobs:
     needs:
       - vast
       - configure
-    if: ${{ always() && needs.configure.outputs.run-vast-plugins == 'true' }}
+    if: ${{ needs.configure.outputs.run-vast-plugins == 'true' }}
     runs-on: ${{ matrix.setup.os }}
     container: ${{ matrix.setup.container }}
     strategy:
