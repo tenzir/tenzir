@@ -188,13 +188,6 @@ struct invocation {
   }
 };
 
-/// Sanitizes program arguments according to the options in `root`.
-/// @returns a vector of sanitized arguments.
-/// @relates command
-std::vector<std::string>
-sanitize_arguments(const command& root, command::argument_iterator first,
-                   command::argument_iterator last);
-
 /// Parses all program arguments without running the command.
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command

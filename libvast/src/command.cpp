@@ -231,6 +231,16 @@ void sanitize_long_form_argument(std::string& argument,
   }
 }
 
+auto sanitize_arguments(const command& root, command::argument_iterator first,
+                        command::argument_iterator last) {
+  std::vector<std::string> sanitized_arguments = {first, last};
+  for (auto& argument : sanitized_arguments) {
+    if (argument.starts_with("--")) {
+      sanitize_long_form_argument(argument, root);
+    }
+  }
+  return sanitized_arguments;
+}
 } // namespace
 
 command::command(std::string_view name, std::string_view description,
@@ -325,24 +335,14 @@ caf::error parse_impl(invocation& result, const command& cmd,
   return parse_impl(result, **i, position + 1, last, target);
 }
 
-std::vector<std::string>
-sanitize_arguments(const command& root, command::argument_iterator first,
-                   command::argument_iterator last) {
-  std::vector<std::string> sanitized_arguments = {first, last};
-  for (auto& argument : sanitized_arguments) {
-    if (argument.starts_with("--")) {
-      sanitize_long_form_argument(argument, root);
-    }
-  }
-  return sanitized_arguments;
-}
-
 caf::expected<invocation>
 parse(const command& root, command::argument_iterator first,
       command::argument_iterator last) {
+  auto sanitized_arguments = sanitize_arguments(root, first, last);
   invocation result;
   const command* target = nullptr;
-  if (auto err = parse_impl(result, root, first, last, &target)) {
+  if (auto err = parse_impl(result, root, sanitized_arguments.begin(),
+                            sanitized_arguments.end(), &target)) {
     render_parse_error(*target, result, err, std::cerr);
     return ec::silent;
   }

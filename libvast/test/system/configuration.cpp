@@ -41,8 +41,6 @@ struct fixture {
     auto [root, _] = system::make_application(argv[0]);
     REQUIRE(root);
     // Parse the CLI.
-    cfg.command_line = ::sanitize_arguments(*root, cfg.command_line.begin(),
-                                            cfg.command_line.end());
     auto invocation
       = ::parse(*root, cfg.command_line.begin(), cfg.command_line.end());
     REQUIRE_NOERROR(invocation);

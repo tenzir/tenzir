@@ -136,8 +136,6 @@ int main(int argc, char** argv) {
   if (!root)
     return EXIT_FAILURE;
   // Parse the CLI.
-  cfg.command_line = sanitize_arguments(*root, cfg.command_line.begin(),
-                                        cfg.command_line.end());
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
   if (!invocation) {
