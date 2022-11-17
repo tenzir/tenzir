@@ -45,11 +45,13 @@ class anonymize_operator : public pipeline_operator {
 public:
   anonymize_operator(configuration config) : config_{std::move(config)} {
     auto max_key_size
-      = std::min(vast::address::anonymization_key_size, config_.key.size());
+      = std::min(vast::address::anonymization_key_size * 2, config_.key.size());
 
-    for (auto i = size_t{0}; i < max_key_size * 2; ++i) {
-      auto byte = config_.key.substr(i * 2, 2);
-      if (byte.size() == 1) {
+    for (auto i = size_t{0}; (i*2) < max_key_size; ++i) {
+      auto byte_string_pos = i*2;
+      auto byte_size = (byte_string_pos + 2 > config_.key.size()) ? 1 : 2;
+      auto byte = config_.key.substr(byte_string_pos, byte_size);
+      if (byte_size == 1) {
         byte.append("0");
       }
       config_.key_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
