@@ -282,7 +282,7 @@ TEST(where operator) {
   CHECK_EQUAL(selected5->size(), 0ull);
 }
 
-TEST(anonymize operator) {
+TEST(hash operator) {
   auto slice = make_pipelines_testdata();
   auto hash_operator = unbox(vast::make_pipeline_operator(
     "hash", {{"field", "uid"}, {"out", "hashed_uid"}}));
