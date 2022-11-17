@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/address.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
@@ -23,6 +24,7 @@ namespace vast::plugins::anonymize {
 /// The configuration of the anonymize pipeline operator.
 struct configuration {
   std::string key;
+  std::array<address::byte_type, vast::address::anonymization_key_size> key_bytes{};
   std::vector<std::string> fields;
 
   template <class Inspector>
@@ -42,7 +44,16 @@ struct configuration {
 class anonymize_operator : public pipeline_operator {
 public:
   anonymize_operator(configuration config) : config_{std::move(config)} {
-    // nop
+    auto max_key_size
+      = std::min(vast::address::anonymization_key_size, config_.key.size());
+
+    for (auto i = size_t{0}; i < max_key_size * 2; ++i) {
+      auto byte = config_.key.substr(i * 2, 2);
+      if (byte.size() == 1) {
+        byte.append("0");
+      }
+      config_.key_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
+    }
   }
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
