@@ -324,6 +324,27 @@ auto values(const type& type,
             const std::same_as<arrow::Array> auto& array) noexcept
   -> detail::generator<data_view>;
 
+template <concrete_type Type>
+auto values(const Type& type, const type_to_arrow_array_t<Type>& arr) noexcept
+  -> detail::generator<std::optional<view<type_to_data_t<Type>>>> {
+  auto impl = [](const Type& type,
+                 const type_to_arrow_array_storage_t<Type>& arr) noexcept
+    -> detail::generator<std::optional<view<type_to_data_t<Type>>>> {
+    for (int i = 0; i < arr.length(); ++i) {
+      if (arr.IsNull(i))
+        co_yield {};
+      else
+        co_yield value_at(type, arr, i);
+    }
+  };
+  if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value) {
+    return impl(type, *arr.storage());
+  } else {
+    return impl(type, arr);
+  }
+}
+
+
 struct indexed_transformation {
   using function_type = std::function<std::vector<
     std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>(

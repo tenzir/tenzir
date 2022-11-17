@@ -35,6 +35,8 @@ public:
   static constexpr std::array<byte_type, 12> v4_mapped_prefix
     = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
 
+  static inline constexpr auto anonymization_key_size = 32;
+
   /// Address family.
   enum family { ipv4, ipv6 };
 
@@ -160,7 +162,7 @@ public:
 
   /// Anonymizes the saved address using the CryptoPAn algorithm.
   /// @param key 32-byte key for the anonymization cipher.
-  void anonymize(const std::array<byte_type, 32>& key);
+  void anonymize(const std::array<byte_type, anonymization_key_size>& key);
 
   explicit constexpr operator byte_array() const {
     return bytes_;
