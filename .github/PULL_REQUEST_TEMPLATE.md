@@ -1,14 +1,10 @@
 <!--
 Please make sure to follow our pull request conventions:
-1. Describe the change you've made.
+1. Describe the change you've made in the pull request description in a way that
+   is consumable by everyone, not just developers who know the context of the
+   change you've made.
 2. Ensure that all user-facing changes have changelog entries according to our
    guidelines: https://vast.io/docs/contribute/changelog
 3. Provide instructions for the reviewer.
+4. Remove this comment so it doesn't show up in the merge commit.
 -->
-
-### :memo: Reviewer Checklist
-
-Review this pull request by ensuring the following items:
-
-- [ ] All user-facing changes have changelog entries
-- [ ] User-facing changes are reflected on [vast.io](https://github.com/tenzir/vast/tree/master/web)
