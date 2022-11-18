@@ -326,6 +326,13 @@ TEST(hash operator) {
   // TODO: not sure how we can check that the data was correctly hashed.
 }
 
+TEST(anonymize operator- invalid key) {
+  auto slice = make_anonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  REQUIRE_ERROR(vast::make_pipeline_operator(
+    "anonymize",
+    {{"key", "foobar"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+}
+
 TEST(anonymize operator- key input too short and odd amount of chars) {
   auto slice = make_anonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   auto anonymize_op = unbox(vast::make_pipeline_operator(
