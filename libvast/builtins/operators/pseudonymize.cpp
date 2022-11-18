@@ -24,7 +24,7 @@ namespace vast::plugins::pseudonymize {
 /// The configuration of the pseudonymize pipeline operator.
 struct configuration {
   std::string seed;
-  std::array<address::byte_type, vast::address::pseudonymization_seed_size> seed_bytes{};
+  std::array<address::byte_type, vast::address::pseudonymization_seed_array_size> seed_bytes{};
   std::vector<std::string> fields;
 
   template <class Inspector>
@@ -45,7 +45,7 @@ class pseudonymize_operator : public pipeline_operator {
 public:
   pseudonymize_operator(configuration config) : config_{std::move(config)} {
     auto max_seed_size
-      = std::min(vast::address::pseudonymization_seed_size * 2, config_.seed.size());
+      = std::min(vast::address::pseudonymization_seed_array_size * 2, config_.seed.size());
     for (auto i = size_t{0}; (i*2) < max_seed_size; ++i) {
       auto byte_string_pos = i*2;
       auto byte_size = (byte_string_pos + 2 > config_.seed.size()) ? 1 : 2;

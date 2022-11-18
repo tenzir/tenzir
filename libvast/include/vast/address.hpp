@@ -35,7 +35,7 @@ public:
   static constexpr std::array<byte_type, 12> v4_mapped_prefix
     = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
 
-  static inline constexpr auto pseudonymization_seed_size = size_t{32};
+  static inline constexpr auto pseudonymization_seed_array_size = size_t{32};
 
   /// Address family.
   enum family { ipv4, ipv6 };
