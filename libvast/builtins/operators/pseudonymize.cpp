@@ -24,7 +24,8 @@ namespace vast::plugins::pseudonymize {
 /// The configuration of the pseudonymize pipeline operator.
 struct configuration {
   std::string seed;
-  std::array<address::byte_type, vast::address::pseudonymization_seed_array_size> seed_bytes{};
+  std::array<address::byte_type, vast::address::pseudonymization_seed_array_size>
+    seed_bytes{};
   std::vector<std::string> fields;
 
   template <class Inspector>
@@ -146,19 +147,20 @@ public:
   make_pipeline_operator(const record& options) const override {
     if (options.size() != 2) {
       return caf::make_error(ec::invalid_configuration,
-                             "Configuration under vast.plugins.pseudonymize must "
-                             "only contain the 'seed' and 'fields' seeds");
+                             "Configuration under vast.plugins.pseudonymize "
+                             "must "
+                             "only contain the 'seed' and 'fields' keys");
     }
 
     if (!options.contains("seed")) {
       return caf::make_error(ec::invalid_configuration,
-                             "Configuration under vast.plugins.pseudonymize must "
-                             "does not contain 'seed' seed");
+                             "Configuration under vast.plugins.pseudonymize "
+                             "does not contain 'seed' key");
     }
     if (!options.contains("fields")) {
       return caf::make_error(ec::invalid_configuration,
-                             "Configuration under vast.plugins.pseudonymize must "
-                             "does not contain 'fields' seed");
+                             "Configuration under vast.plugins.pseudonymize "
+                             "does not contain 'fields' key");
     }
 
     auto config = to<configuration>(options);
