@@ -7,11 +7,11 @@
     "target and add the changes to CHANGELOG.md and the changelog directory",
     "to the same commit."
   ],
-  "vast-version-fallback": "2.4.0-rc1",
+  "vast-version-fallback": "2.4.0-rc2",
   "vast-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",
     "layout of VAST's partitions."
   ],
-  "vast-partition-version": 1
+  "vast-partition-version": 2
 }

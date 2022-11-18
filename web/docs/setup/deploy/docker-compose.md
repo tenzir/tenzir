@@ -8,7 +8,7 @@ We offer a range of Docker Compose files for quickly getting up and running with
 VAST. All mentioned files are in the [`docker`][vast-repo-docker] directory of
 the VAST repository, and require having the repository checked out locally.
 
--[vast-repo-docker]: https://github.com/tenzir/vast/tree/master/docker
+[vast-repo-docker]: https://github.com/tenzir/vast/tree/master/docker
 
 :::info Docker Compose V2 CLI
 All examples shown use the [Docker Compose V2 CLI][docker-compose-v2-cli]. If
