@@ -141,8 +141,8 @@ struct pipelines_fixture {
   /// Creates a table slice with three IP address and one port column.
   static vast::table_slice
   make_pseudonymize_testdata(const std::string& orig_ip,
-                          const std::string& dest_ip,
-                          const std::string& non_anon_ip) {
+                             const std::string& dest_ip,
+                             const std::string& non_anon_ip) {
     auto builder = vast::factory<vast::table_slice_builder>::make(
       vast::defaults::import::table_slice_type, testdata_layout3);
     REQUIRE(builder);
@@ -319,8 +319,7 @@ TEST(hash operator) {
   REQUIRE(!add_failed);
   auto hashed = unbox(hash_operator->finish());
   REQUIRE_EQUAL(hashed.size(), 1ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(hashed)).num_fields(),
-                4ull);
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(hashed)).num_fields(), 4ull);
   REQUIRE_EQUAL(caf::get<vast::record_type>(layout(hashed)).field(1).name,
                 "hashed_uid");
   // TODO: not sure how we can check that the data was correctly hashed.
