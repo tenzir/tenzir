@@ -6,7 +6,7 @@ This file is generated automatically. Add individual changelog entries to the 'c
 
 This changelog documents all notable changes to VAST and is updated on every release.
 
-## [v2.4.0-rc1][v2.4.0-rc1]
+## [v2.4.0-rc2][v2.4.0-rc2]
 
 ### Changes
 
@@ -30,6 +30,9 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 - The `vast dump` command is now called `vast show`.
   [#2686](https://github.com/tenzir/vast/pull/2686)
+
+- VAST now loads all plugins by default. To revert to the old behavior, explicitly set the `vast.plugins` option to have no value.
+  [#2689](https://github.com/tenzir/vast/pull/2689)
 
 ### Features
 
@@ -2017,7 +2020,7 @@ This changelog documents all notable changes to VAST and is updated on every rel
 
 This is the first official release.
 
-[v2.4.0-rc1]: https://github.com/tenzir/vast/releases/tag/v2.4.0-rc1
+[v2.4.0-rc2]: https://github.com/tenzir/vast/releases/tag/v2.4.0-rc2
 [v2.3.1]: https://github.com/tenzir/vast/releases/tag/v2.3.1
 [v2.3.0]: https://github.com/tenzir/vast/releases/tag/v2.3.0
 [v2.2.0]: https://github.com/tenzir/vast/releases/tag/v2.2.0
