@@ -65,10 +65,10 @@ public:
                         && "record batch field to be pseudonymized but does "
                            "not "
                            "have address type");
-            VAST_ERROR("Field {} is to be pseudonymized but does not contain "
-                       "IP "
-                       "address values; skipping pseudonymization",
-                       field);
+            VAST_WARN("Field {} is to be pseudonymized but does not contain "
+                      "IP "
+                      "address values; skipping pseudonymization",
+                      field);
             return {{field, array}};
           }
           auto builder
