@@ -46,7 +46,6 @@ public:
   anonymize_operator(configuration config) : config_{std::move(config)} {
     auto max_key_size
       = std::min(vast::address::anonymization_key_size * 2, config_.key.size());
-
     for (auto i = size_t{0}; (i*2) < max_key_size; ++i) {
       auto byte_string_pos = i*2;
       auto byte_size = (byte_string_pos + 2 > config_.key.size()) ? 1 : 2;
@@ -95,20 +94,14 @@ public:
             }
             VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
           }
-
-          // turn address::anonymize() into anonymize(key, address_view) -
-          // static function
-
-          auto new_array = builder->Finish().ValueOrDie(); // don't use this.
+          auto new_array = builder->Finish().ValueOrDie();
           return {
             {field, new_array},
           };
         };
-
         transformations.push_back({index, std::move(transformation)});
       }
     }
-
     std::sort(transformations.begin(), transformations.end());
     auto [adjusted_layout, adjusted_batch]
       = transform_columns(layout, batch, transformations);
