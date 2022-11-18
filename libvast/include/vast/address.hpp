@@ -91,7 +91,7 @@ public:
   /// Construct a pseudonymized address using the Crypto-PAn algorithm.
   /// @param original The address to be pseudonymized.
   /// @param seed 256-bit seed for the cipher and padding.
-  /// @returns A copy of the `original` address pseudonymized bytes.
+  /// @returns A copy of the `original` address with pseudonymized bytes.
   static address pseudonymized(
     const address& original,
     const std::array<byte_type, pseudonymization_seed_array_size>& seed);
