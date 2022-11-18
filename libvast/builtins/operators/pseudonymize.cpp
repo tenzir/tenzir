@@ -90,8 +90,8 @@ public:
             if (address) {
               auto pseudonymized_address
                 = vast::address::pseudonymized(*address, config_.seed_bytes);
-              append_status
-                = append_builder(address_type{}, *builder, pseudonymized_address);
+              append_status = append_builder(address_type{}, *builder,
+                                             pseudonymized_address);
             } else {
               append_status = builder->AppendNull();
             }
