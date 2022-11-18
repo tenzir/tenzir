@@ -35,7 +35,7 @@ pyzmq = {version = "^24.0", optional = true}
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.2"
-pytest-asyncio = "^0.20.1"
+pytest-asyncio = "^0.20.2"
 
 [tool.poetry.extras]
 fabric = ["pyzmq", "misp-stix" ]

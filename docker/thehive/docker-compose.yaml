@@ -12,6 +12,9 @@ services:
       - HEAP_NEWSIZE=1G
       - CORTEX_URL=http://cortex:9001
       - VAST_ENDPOINT=${VAST_ENDPOINT:-"localhost:42000"}
+      - DEFAULT_ADMIN_PWD=${DEFAULT_ADMIN_PWD:-secret}
+      - DEFAULT_ORGADMIN_EMAIL=${DEFAULT_ORGADMIN_EMAIL:-orgadmin@thehive.local}
+      - DEFAULT_ORGADMIN_PWD=${DEFAULT_ORGADMIN_PWD:-secret}
     command:
       - "--no-config-cortex"
     volumes:
@@ -19,6 +22,8 @@ services:
       - thehive-db:/opt/thp/thehive/db
       - thehive-index:/opt/thp/thehive/index
       - thehive-data:/opt/thp/thehive/data
+    networks:
+      - thehive
 
   cortex:
     build:
@@ -36,11 +41,13 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/cortex-jobs:/tmp/cortex-jobs
       - cortex-index:/opt/cortex/index
+    networks:
+      - thehive
 
   neuron:
     image: tenzir/vast-neuron
     pull_policy: build
-    network_mode: host  # used for tests only
+    network_mode: host # used for tests only
     build:
       context: ./vast-cortex-neuron/
       args:
@@ -58,6 +65,8 @@ services:
       - xpack.security.enabled=false
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - thehive
 
 volumes:
   thehive-config:
@@ -67,3 +76,9 @@ volumes:
   cortex-jobs:
   cortex-index:
   elasticsearch-data:
+
+
+networks:
+  # network on which TheHive, Cortex and Elasticsearch communicate
+  thehive:
+    driver: bridge
