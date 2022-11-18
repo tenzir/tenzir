@@ -239,9 +239,11 @@ TEST(IPv4 pseudonymization - seed 1) {
     auto original_address = *to<address>(original);
     auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
+    auto pseudonymized_adress_actual
+      = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
+    REQUIRE_EQUAL(pseudonymized_adress_actual,
+                  pseudonymized_address_expectation);
   }
 }
 
@@ -261,9 +263,11 @@ TEST(IPv4 pseudonymization - seed 2) {
     auto original_address = *to<address>(original);
     auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
+    auto pseudonymized_adress_actual
+      = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
+    REQUIRE_EQUAL(pseudonymized_adress_actual,
+                  pseudonymized_address_expectation);
   }
 }
 
@@ -274,14 +278,10 @@ TEST(IPv4 pseudonymization - seed 3) {
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
-    {"192.0.2.1", "2.90.93.17"},
-    {"0.0.0.0", "254.152.65.220"},
-    {"10.0.1.128", "246.35.190.47"},
-    {"127.0.0.1", "168.227.160.61"},
-    {"165.254.100.50", "90.1.157.13"},
-    {"255.255.255.255", "56.0.15.254"},
-    {"148.88.132.153", "106.38.130.153"},
-    {"148.88.132.64", "106.38.130.64"},
+    {"192.0.2.1", "2.90.93.17"},          {"0.0.0.0", "254.152.65.220"},
+    {"10.0.1.128", "246.35.190.47"},      {"127.0.0.1", "168.227.160.61"},
+    {"165.254.100.50", "90.1.157.13"},    {"255.255.255.255", "56.0.15.254"},
+    {"148.88.132.153", "106.38.130.153"}, {"148.88.132.64", "106.38.130.64"},
     {"148.88.133.200", "106.38.131.223"},
   };
 
@@ -289,9 +289,11 @@ TEST(IPv4 pseudonymization - seed 3) {
     auto original_address = *to<address>(original);
     auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
+    auto pseudonymized_adress_actual
+      = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
+    REQUIRE_EQUAL(pseudonymized_adress_actual,
+                  pseudonymized_address_expectation);
   }
 }
 
@@ -313,9 +315,11 @@ TEST(IPv6 pseudonymization - seed 1) {
     auto original_address = *to<address>(original);
     auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
+    auto pseudonymized_adress_actual
+      = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
+    REQUIRE_EQUAL(pseudonymized_adress_actual,
+                  pseudonymized_address_expectation);
   }
 }
 
@@ -342,9 +346,11 @@ TEST(IPv6 pseudonymization - seed 2) {
     auto original_address = *to<address>(original);
     auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
+    auto pseudonymized_adress_actual
+      = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
+    REQUIRE_EQUAL(pseudonymized_adress_actual,
+                  pseudonymized_address_expectation);
   }
 }
 
@@ -362,8 +368,10 @@ TEST(IPv6 pseudonymization - seed 3) {
     auto original_address = *to<address>(original);
     auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
+    auto pseudonymized_adress_actual
+      = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
+    REQUIRE_EQUAL(pseudonymized_adress_actual,
+                  pseudonymized_address_expectation);
   }
 }
