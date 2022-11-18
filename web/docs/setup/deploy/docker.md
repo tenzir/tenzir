@@ -4,13 +4,6 @@ sidebar_position: 0
 
 # Docker
 
-:::note Docker Compose
-We offer a range of Docker Compose files for quickly getting up and running with
-VAST. For more information, see the [`docker`][vast-repo-docker] directory.
-:::
-
-[vast-repo-docker]: https://github.com/tenzir/vast/tree/master/docker
-
 Our Docker image contains a dynamic of VAST build with plugins as shared
 libraries. The system user `vast` runs the VAST executable with limited
 privileges. Database contents go into the volume exposed at `/var/lib/vast`.
