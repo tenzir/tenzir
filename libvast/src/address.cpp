@@ -182,7 +182,7 @@ bool address::compare(const address& other, size_t k) const {
   return (*x & mask) == (*y & mask);
 }
 
-void address::anonymize(const std::array<byte_type, anonymization_key_size>& key) {
+void address::pseudonymize(const std::array<byte_type, pseudonymization_key_size>& key) {
   auto address_byte_offset = (is_v4() ? 12 : 0);
   auto bytes_to_encrypt = std::vector<byte_type>(
     bytes_.begin() + address_byte_offset, bytes_.end());

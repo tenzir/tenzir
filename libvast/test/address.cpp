@@ -149,7 +149,7 @@ TEST(parseable) {
   CHECK(to_string(a) == str);
 }
 
-TEST(IPv4 anonymization - key 1) {
+TEST(IPv4 pseudonymization - key 1) {
   std::array<vast::address::byte_type, 32> key
     = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
        216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
@@ -235,17 +235,17 @@ TEST(IPv4 anonymization - key 1) {
     {"255.255.255.255", "206.120.97.255"},
   };
 
-  for (const auto& [original, anonymized] : addresses) {
+  for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto anonymized_address = *to<address>(anonymized);
+    auto pseudonymized_address = *to<address>(pseudonymized);
 
-    original_address.anonymize(key);
+    original_address.pseudonymize(key);
 
-    REQUIRE_EQUAL(original_address, anonymized_address);
+    REQUIRE_EQUAL(original_address, pseudonymized_address);
   }
 }
 
-TEST(IPv4 anonymization - key 2) {
+TEST(IPv4 pseudonymization - key 2) {
   std::array<vast::address::byte_type, 32> key
     = {0x80, 0x09, 0xAB, 0x3A, 0x60, 0x54, 0x35, 0xBE, 0xA0, 0xC3, 0x85,
        0xBE, 0xA1, 0x84, 0x85, 0xD8, 0xB0, 0xA1, 0x10, 0x3D, 0x65, 0x90,
@@ -257,17 +257,17 @@ TEST(IPv4 anonymization - key 2) {
     {"8.8.8.8", "55.21.62.136"},          {"255.8.1.100", "240.232.0.156"},
     {"0.0.0.0", "56.131.176.115"},        {"255.255.255.255", "240.15.248.0"}};
 
-  for (const auto& [original, anonymized] : addresses) {
+  for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto anonymized_address = *to<address>(anonymized);
+    auto pseudonymized_address = *to<address>(pseudonymized);
 
-    original_address.anonymize(key);
+    original_address.pseudonymize(key);
 
-    REQUIRE_EQUAL(original_address, anonymized_address);
+    REQUIRE_EQUAL(original_address, pseudonymized_address);
   }
 }
 
-TEST(IPv4 anonymization - key 3) {
+TEST(IPv4 pseudonymization - key 3) {
   std::array<vast::address::byte_type, 32> key
     = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
@@ -285,17 +285,17 @@ TEST(IPv4 anonymization - key 3) {
     {"148.88.133.200", "106.38.131.223"},
   };
 
-  for (const auto& [original, anonymized] : addresses) {
+  for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto anonymized_address = *to<address>(anonymized);
+    auto pseudonymized_address = *to<address>(pseudonymized);
 
-    original_address.anonymize(key);
+    original_address.pseudonymize(key);
 
-    REQUIRE_EQUAL(original_address, anonymized_address);
+    REQUIRE_EQUAL(original_address, pseudonymized_address);
   }
 }
 
-TEST(IPv6 anonymization - key 1) {
+TEST(IPv6 pseudonymization - key 1) {
   std::array<vast::address::byte_type, 32> key
     = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
        216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
@@ -309,17 +309,17 @@ TEST(IPv6 anonymization - key 1) {
     {"2001:db8::2", "4401:2bc:603f:d91d:27f:ff8e:e6f1:dc1c"},
   };
 
-  for (const auto& [original, anonymized] : addresses) {
+  for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto anonymized_address = *to<address>(anonymized);
+    auto pseudonymized_address = *to<address>(pseudonymized);
 
-    original_address.anonymize(key);
+    original_address.pseudonymize(key);
 
-    REQUIRE_EQUAL(original_address, anonymized_address);
+    REQUIRE_EQUAL(original_address, pseudonymized_address);
   }
 }
 
-TEST(IPv6 anonymization - key 2) {
+TEST(IPv6 pseudonymization - key 2) {
   std::array<vast::address::byte_type, 32> key
     = {0x80, 0x09, 0xAB, 0x3A, 0x60, 0x54, 0x35, 0xBE, 0xA0, 0xC3, 0x85,
        0xBE, 0xA1, 0x84, 0x85, 0xD8, 0xB0, 0xA1, 0x10, 0x3D, 0x65, 0x90,
@@ -338,17 +338,17 @@ TEST(IPv6 anonymization - key 2) {
     {"fc00::", "f33c:8ca3:ef0f:e019:e7ff:f1e3:f91f:f800"},
   };
 
-  for (const auto& [original, anonymized] : addresses) {
+  for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto anonymized_address = *to<address>(anonymized);
+    auto pseudonymized_address = *to<address>(pseudonymized);
 
-    original_address.anonymize(key);
+    original_address.pseudonymize(key);
 
-    REQUIRE_EQUAL(original_address, anonymized_address);
+    REQUIRE_EQUAL(original_address, pseudonymized_address);
   }
 }
 
-TEST(IPv6 anonymization - key 3) {
+TEST(IPv6 pseudonymization - key 3) {
   std::array<vast::address::byte_type, 32> key
     = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
@@ -358,12 +358,12 @@ TEST(IPv6 anonymization - key 3) {
     {"2001:db8::1", "dd92:2c44:3fc0:ff1e:7ff9:c7f0:8180:7e00"},
   };
 
-  for (const auto& [original, anonymized] : addresses) {
+  for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto anonymized_address = *to<address>(anonymized);
+    auto pseudonymized_address = *to<address>(pseudonymized);
 
-    original_address.anonymize(key);
+    original_address.pseudonymize(key);
 
-    REQUIRE_EQUAL(original_address, anonymized_address);
+    REQUIRE_EQUAL(original_address, pseudonymized_address);
   }
 }

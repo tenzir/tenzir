@@ -19,12 +19,12 @@
 
 #include <arrow/table.h>
 
-namespace vast::plugins::anonymize {
+namespace vast::plugins::pseudonymize {
 
-/// The configuration of the anonymize pipeline operator.
+/// The configuration of the pseudonymize pipeline operator.
 struct configuration {
   std::string key;
-  std::array<address::byte_type, vast::address::anonymization_key_size> key_bytes{};
+  std::array<address::byte_type, vast::address::pseudonymization_key_size> key_bytes{};
   std::vector<std::string> fields;
 
   template <class Inspector>
@@ -41,11 +41,11 @@ struct configuration {
   }
 };
 
-class anonymize_operator : public pipeline_operator {
+class pseudonymize_operator : public pipeline_operator {
 public:
-  anonymize_operator(configuration config) : config_{std::move(config)} {
+  pseudonymize_operator(configuration config) : config_{std::move(config)} {
     auto max_key_size
-      = std::min(vast::address::anonymization_key_size * 2, config_.key.size());
+      = std::min(vast::address::pseudonymization_key_size * 2, config_.key.size());
     for (auto i = size_t{0}; (i*2) < max_key_size; ++i) {
       auto byte_string_pos = i*2;
       auto byte_size = (byte_string_pos + 2 > config_.key.size()) ? 1 : 2;
@@ -71,10 +71,10 @@ public:
                                    std::shared_ptr<arrow::Array>>> {
           if (!caf::holds_alternative<address_type>(field.type)) {
             VAST_ASSERT(false
-                        && "record batch field to be anonymized but does not "
+                        && "record batch field to be pseudonymized but does not "
                            "have address type");
-            VAST_ERROR("Field {} is to be anonymized but does not contain IP "
-                       "address values; skipping anonymization",
+            VAST_ERROR("Field {} is to be pseudonymized but does not contain IP "
+                       "address values; skipping pseudonymization",
                        field);
             return {{field, array}};
           }
@@ -86,7 +86,7 @@ public:
           for (auto&& address : address_view_generator) {
             auto append_status = arrow::Status{};
             if (address) {
-              address->anonymize(config_.key_bytes);
+              address->pseudonymize(config_.key_bytes);
               append_status
                 = append_builder(address_type{}, *builder, *address);
             } else {
@@ -132,25 +132,25 @@ public:
   }
 
   [[nodiscard]] const char* name() const override {
-    return "anonymize";
+    return "pseudonymize";
   };
 
   [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
     if (options.size() != 2) {
       return caf::make_error(ec::invalid_configuration,
-                             "Configuration under vast.plugins.anonymize must "
+                             "Configuration under vast.plugins.pseudonymize must "
                              "only contain the 'key' and 'fields' keys");
     }
 
     if (!options.contains("key")) {
       return caf::make_error(ec::invalid_configuration,
-                             "Configuration under vast.plugins.anonymize must "
+                             "Configuration under vast.plugins.pseudonymize must "
                              "does not contain 'key' key");
     }
     if (!options.contains("fields")) {
       return caf::make_error(ec::invalid_configuration,
-                             "Configuration under vast.plugins.anonymize must "
+                             "Configuration under vast.plugins.pseudonymize must "
                              "does not contain 'fields' key");
     }
 
@@ -161,13 +161,13 @@ public:
           return !std::isxdigit(c);
         })) {
       return caf::make_error(ec::invalid_configuration,
-                             "vast.plugins.anonymize.key must"
+                             "vast.plugins.pseudonymize.key must"
                              "contain a hexadecimal value");
     }
-    return std::make_unique<anonymize_operator>(std::move(*config));
+    return std::make_unique<pseudonymize_operator>(std::move(*config));
   }
 };
 
-} // namespace vast::plugins::anonymize
+} // namespace vast::plugins::pseudonymize
 
-VAST_REGISTER_PLUGIN(vast::plugins::anonymize::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::pseudonymize::plugin)
