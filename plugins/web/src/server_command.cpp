@@ -113,16 +113,22 @@ request_dispatcher_actor::behavior_type request_dispatcher(
     [self](atom::internal, atom::request, restinio_response_ptr& response,
            const rest_endpoint& endpoint, system::rest_handler_actor handler) {
       // TODO: Also consider params in the request body here.
-      restinio::query_string_params_t string_params
-        = restinio::parse_query(response->request()->header().query());
+      auto query_params = std::optional<restinio::query_string_params_t>{};
+      try {
+        query_params
+          = restinio::parse_query(response->request()->header().query());
+      } catch (restinio::exception_t& e) {
+        return response->abort(
+          400, fmt::format("failed to parse query parameters: {}\n", e.what()));
+      }
       vast::record params;
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
           auto restinio_name
             = restinio::string_view_t{name.data(), name.size()};
-          if (string_params.has(restinio_name)) {
-            auto string_value = std::string{string_params[restinio_name]};
+          if (query_params->has(restinio_name)) {
+            auto string_value = std::string{(*query_params)[restinio_name]};
             auto typed_value = caf::visit(
               detail::overload{
                 [&string_value](const string_type&) -> caf::expected<data> {
