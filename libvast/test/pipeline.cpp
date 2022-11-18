@@ -326,18 +326,18 @@ TEST(hash operator) {
   // TODO: not sure how we can check that the data was correctly hashed.
 }
 
-TEST(pseudonymize operator- invalid key) {
+TEST(pseudonymize operator- invalid seed) {
   auto slice = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   REQUIRE_ERROR(vast::make_pipeline_operator(
     "pseudonymize",
-    {{"key", "foobar"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+    {{"seed", "foobar"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
 }
 
-TEST(pseudonymize operator- key input too short and odd amount of chars) {
+TEST(pseudonymize operator- seed input too short and odd amount of chars) {
   auto slice = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   auto pseudonymize_op = unbox(vast::make_pipeline_operator(
     "pseudonymize",
-    {{"key", "deadbee"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+    {{"seed", "deadbee"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
   auto pseudonymize_failed
     = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!pseudonymize_failed);
@@ -353,10 +353,10 @@ TEST(pseudonymize operator- key input too short and odd amount of chars) {
                 vast::data_view(*vast::to<vast::address>("0.0.0.0")));
 }
 
-TEST(pseudonymize operator- key input too long) {
+TEST(pseudonymize operator- seed input too long) {
   auto slice = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   auto pseudonymize_op = unbox(vast::make_pipeline_operator(
-    "pseudonymize", {{"key", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
+    "pseudonymize", {{"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
                           "8be5de53836e8009ab3a605435bea0c385bea18485d8b0a1103d"
                           "6590bdf48c968be5de53836e"},
                   {"fields", vast::list{"orig_addr", "dest_addr"}}}));
@@ -378,7 +378,7 @@ TEST(pseudonymize operator- key input too long) {
 TEST(pseudonymize operator- IPv4 address batch pseudonymizing) {
   auto slice = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   auto pseudonymize_op = unbox(vast::make_pipeline_operator(
-    "pseudonymize", {{"key", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
+    "pseudonymize", {{"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
                           "8be5de53836e"},
                   {"fields", vast::list{"orig_addr", "dest_addr"}}}));
   auto pseudonymize_failed
@@ -401,7 +401,7 @@ TEST(pseudonymize operator- IPv6 address batch pseudonymizing) {
     = make_pseudonymize_testdata("2a02:0db8:85a3:0000:0000:8a2e:0370:7344",
                               "fc00::", "2a02:db8:85a3::8a2e:370:7344");
   auto pseudonymize_op = unbox(vast::make_pipeline_operator(
-    "pseudonymize", {{"key", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
+    "pseudonymize", {{"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
                           "8be5de53836e"},
                   {"fields", vast::list{"orig_addr", "dest_addr"}}}));
   auto pseudonymize_failed

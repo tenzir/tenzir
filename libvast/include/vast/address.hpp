@@ -35,7 +35,7 @@ public:
   static constexpr std::array<byte_type, 12> v4_mapped_prefix
     = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
 
-  static inline constexpr auto pseudonymization_key_size = size_t{32};
+  static inline constexpr auto pseudonymization_seed_size = size_t{32};
 
   /// Address family.
   enum family { ipv4, ipv6 };
@@ -162,7 +162,7 @@ public:
 
   /// Pseudonymizes the saved address using the CryptoPAn algorithm.
   /// @param key 32-byte key for the pseudonymization cipher.
-  void pseudonymize(const std::array<byte_type, pseudonymization_key_size>& key);
+  void pseudonymize(const std::array<byte_type, pseudonymization_seed_size>& key);
 
   explicit constexpr operator byte_array() const {
     return bytes_;

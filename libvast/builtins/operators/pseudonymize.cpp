@@ -23,18 +23,18 @@ namespace vast::plugins::pseudonymize {
 
 /// The configuration of the pseudonymize pipeline operator.
 struct configuration {
-  std::string key;
-  std::array<address::byte_type, vast::address::pseudonymization_key_size> key_bytes{};
+  std::string seed;
+  std::array<address::byte_type, vast::address::pseudonymization_seed_size> seed_bytes{};
   std::vector<std::string> fields;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.key, x.fields);
+    return f(x.seed, x.fields);
   }
 
   static inline const record_type& layout() noexcept {
     static auto result = record_type{
-      {"key", string_type{}},
+      {"seed", string_type{}},
       {"fields", list_type{string_type{}}},
     };
     return result;
@@ -44,16 +44,16 @@ struct configuration {
 class pseudonymize_operator : public pipeline_operator {
 public:
   pseudonymize_operator(configuration config) : config_{std::move(config)} {
-    auto max_key_size
-      = std::min(vast::address::pseudonymization_key_size * 2, config_.key.size());
-    for (auto i = size_t{0}; (i*2) < max_key_size; ++i) {
+    auto max_seed_size
+      = std::min(vast::address::pseudonymization_seed_size * 2, config_.seed.size());
+    for (auto i = size_t{0}; (i*2) < max_seed_size; ++i) {
       auto byte_string_pos = i*2;
-      auto byte_size = (byte_string_pos + 2 > config_.key.size()) ? 1 : 2;
-      auto byte = config_.key.substr(byte_string_pos, byte_size);
+      auto byte_size = (byte_string_pos + 2 > config_.seed.size()) ? 1 : 2;
+      auto byte = config_.seed.substr(byte_string_pos, byte_size);
       if (byte_size == 1) {
         byte.append("0");
       }
-      config_.key_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
+      config_.seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
     }
   }
 
@@ -86,7 +86,7 @@ public:
           for (auto&& address : address_view_generator) {
             auto append_status = arrow::Status{};
             if (address) {
-              address->pseudonymize(config_.key_bytes);
+              address->pseudonymize(config_.seed_bytes);
               append_status
                 = append_builder(address_type{}, *builder, *address);
             } else {
@@ -119,7 +119,7 @@ private:
   /// Cache for transformed batches.
   std::vector<pipeline_batch> transformed_batches_ = {};
 
-  /// Step-specific configuration, including the key and field names.
+  /// Step-specific configuration, including the seed and field names.
   configuration config_ = {};
 };
 
@@ -140,28 +140,28 @@ public:
     if (options.size() != 2) {
       return caf::make_error(ec::invalid_configuration,
                              "Configuration under vast.plugins.pseudonymize must "
-                             "only contain the 'key' and 'fields' keys");
+                             "only contain the 'seed' and 'fields' seeds");
     }
 
-    if (!options.contains("key")) {
+    if (!options.contains("seed")) {
       return caf::make_error(ec::invalid_configuration,
                              "Configuration under vast.plugins.pseudonymize must "
-                             "does not contain 'key' key");
+                             "does not contain 'seed' seed");
     }
     if (!options.contains("fields")) {
       return caf::make_error(ec::invalid_configuration,
                              "Configuration under vast.plugins.pseudonymize must "
-                             "does not contain 'fields' key");
+                             "does not contain 'fields' seed");
     }
 
     auto config = to<configuration>(options);
     if (!config)
       return config.error();
-    if (std::any_of(config->key.begin(), config->key.end(), [](auto c) {
+    if (std::any_of(config->seed.begin(), config->seed.end(), [](auto c) {
           return !std::isxdigit(c);
         })) {
       return caf::make_error(ec::invalid_configuration,
-                             "vast.plugins.pseudonymize.key must"
+                             "vast.plugins.pseudonymize.seed must"
                              "contain a hexadecimal value");
     }
     return std::make_unique<pseudonymize_operator>(std::move(*config));
