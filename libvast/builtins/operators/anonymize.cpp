@@ -70,14 +70,20 @@ public:
                                   std::shared_ptr<arrow::Array> array) noexcept
           -> std::vector<std::pair<struct record_type::field,
                                    std::shared_ptr<arrow::Array>>> {
-          VAST_ASSERT(caf::holds_alternative<address_type>(field.type));
+          if (!caf::holds_alternative<address_type>(field.type)) {
+            VAST_ASSERT(false
+                        && "record batch field to be anonymized but does not "
+                           "have address type");
+            VAST_ERROR("Field {} is to be anonymized but does not contain IP "
+                       "address values; skipping anonymization",
+                       field);
+            return {{field, array}};
+          }
           auto builder
             = address_type::make_arrow_builder(arrow::default_memory_pool());
-
           auto address_view_generator
             = values(address_type{},
                      caf::get<type_to_arrow_array_t<address_type>>(*array));
-
           for (auto&& address : address_view_generator) {
             auto append_status = arrow::Status{};
             if (address) {
