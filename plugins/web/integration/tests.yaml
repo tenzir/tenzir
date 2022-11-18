@@ -45,6 +45,8 @@ tests:
       - command: curl http://127.0.0.1:42025/api/v0/status
         prepend_vast: false
         transformation: jq .catalog
+      # Invalid parameter
+      - command: curl http://127.0.0.1:42025/api/v0/status?verbosity=!~asdf
   Export Endpoint:
     tags: [rest, export]
     fixture: ServerTester
