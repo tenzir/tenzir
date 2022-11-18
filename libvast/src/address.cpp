@@ -56,13 +56,14 @@ public:
     EVP_CIPHER_CTX_free(ctx_);
   }
 
-  auto encrypt(const std::vector<address::byte_type>& bytes_to_encrypt) {
-    auto encrypted_bytes = bytes_to_encrypt;
+  auto encrypt(address::byte_array bytes, size_t byte_offset) {
+    auto bytes_to_encrypt = std::vector<address::byte_type>{
+      bytes.begin() + byte_offset, bytes.end()};
     auto one_time_pad = generate_one_time_pad(bytes_to_encrypt);
     for (auto i = size_t{0}; i < bytes_to_encrypt.size(); ++i) {
-      encrypted_bytes[i] = bytes_to_encrypt[i] ^ one_time_pad[i];
+      bytes[i + byte_offset] = bytes_to_encrypt[i] ^ one_time_pad[i];
     }
-    return encrypted_bytes;
+    return bytes;
   }
 
 private:
@@ -72,8 +73,8 @@ private:
   int block_size_;
   std::vector<address::byte_type> pad_;
 
-  std::vector<address::byte_type> generate_one_time_pad(
-    const std::vector<address::byte_type>& bytes_to_encrypt) {
+  std::vector<address::byte_type>
+  generate_one_time_pad(std::span<address::byte_type> bytes_to_encrypt) {
     auto out_len = 0;
     auto cipher_input = std::vector<address::byte_type>(pad_);
     auto cipher_output = std::vector<address::byte_type>(pad_);
@@ -104,6 +105,15 @@ private:
 };
 
 } // namespace
+
+address address::pseudonymized(
+  const address& original,
+  const std::array<byte_type, pseudonymization_seed_array_size>& seed) {
+  auto byte_offset = (original.is_v4() ? 12 : 0);
+  AddressEncryptor encryptor(seed);
+  auto pseudonymized_bytes = encryptor.encrypt(original.bytes_, byte_offset);
+  return address(pseudonymized_bytes);
+}
 
 bool address::is_v4() const {
   return std::memcmp(&bytes_, &v4_mapped_prefix, 12) == 0;
@@ -180,16 +190,6 @@ bool address::compare(const address& other, size_t k) const {
       return false;
   auto mask = word<byte_type>::msb_fill(k);
   return (*x & mask) == (*y & mask);
-}
-
-void address::pseudonymize(const std::array<byte_type, pseudonymization_seed_size>& key) {
-  auto address_byte_offset = (is_v4() ? 12 : 0);
-  auto bytes_to_encrypt = std::vector<byte_type>(
-    bytes_.begin() + address_byte_offset, bytes_.end());
-  AddressEncryptor encryptor(key);
-  auto encrypted_bytes = encryptor.encrypt(bytes_to_encrypt);
-  std::copy(encrypted_bytes.begin(), encrypted_bytes.end(),
-            bytes_.begin() + address_byte_offset);
 }
 
 bool operator==(const address& x, const address& y) {

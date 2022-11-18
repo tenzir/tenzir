@@ -237,11 +237,11 @@ TEST(IPv4 pseudonymization - seed 1) {
 
   for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto pseudonymized_address = *to<address>(pseudonymized);
+    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    original_address.pseudonymize(key);
+    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(original_address, pseudonymized_address);
+    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
   }
 }
 
@@ -259,11 +259,11 @@ TEST(IPv4 pseudonymization - seed 2) {
 
   for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto pseudonymized_address = *to<address>(pseudonymized);
+    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    original_address.pseudonymize(key);
+    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(original_address, pseudonymized_address);
+    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
   }
 }
 
@@ -287,11 +287,11 @@ TEST(IPv4 pseudonymization - seed 3) {
 
   for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto pseudonymized_address = *to<address>(pseudonymized);
+    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    original_address.pseudonymize(key);
+    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(original_address, pseudonymized_address);
+    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
   }
 }
 
@@ -311,11 +311,11 @@ TEST(IPv6 pseudonymization - seed 1) {
 
   for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto pseudonymized_address = *to<address>(pseudonymized);
+    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    original_address.pseudonymize(key);
+    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(original_address, pseudonymized_address);
+    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
   }
 }
 
@@ -340,11 +340,11 @@ TEST(IPv6 pseudonymization - seed 2) {
 
   for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto pseudonymized_address = *to<address>(pseudonymized);
+    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    original_address.pseudonymize(key);
+    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(original_address, pseudonymized_address);
+    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
   }
 }
 
@@ -360,10 +360,10 @@ TEST(IPv6 pseudonymization - seed 3) {
 
   for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
-    auto pseudonymized_address = *to<address>(pseudonymized);
+    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
 
-    original_address.pseudonymize(key);
+    auto pseudonymized_adress_actual = address::pseudonymized(original_address, seed);
 
-    REQUIRE_EQUAL(original_address, pseudonymized_address);
+    REQUIRE_EQUAL(pseudonymized_adress_actual, pseudonymized_address_expectation);
   }
 }

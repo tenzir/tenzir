@@ -85,12 +85,13 @@ public:
           auto address_view_generator
             = values(address_type{},
                      caf::get<type_to_arrow_array_t<address_type>>(*array));
-          for (auto&& address : address_view_generator) {
+          for (const auto& address : address_view_generator) {
             auto append_status = arrow::Status{};
             if (address) {
-              address->pseudonymize(config_.seed_bytes);
+              auto pseudonymized_address
+                = vast::address::pseudonymized(*address, config_.seed_bytes);
               append_status
-                = append_builder(address_type{}, *builder, *address);
+                = append_builder(address_type{}, *builder, pseudonymized_address);
             } else {
               append_status = builder->AppendNull();
             }

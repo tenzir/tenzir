@@ -88,6 +88,14 @@ public:
     return result;
   }
 
+  /// Construct a pseudonymized address using the Crypto-PAn algorithm.
+  /// @param original The address to be pseudonymized.
+  /// @param seed 256-bit seed for the cipher and padding.
+  /// @returns A copy of the `original` address pseudonymized bytes.
+  static address pseudonymized(
+    const address& original,
+    const std::array<byte_type, pseudonymization_seed_array_size>& seed);
+
   /// Default-constructs an (invalid) address.
   constexpr address() {
     bytes_.fill(0);
@@ -159,10 +167,6 @@ public:
   /// @returns `true` if the first *k* bits of both addresses are equal
   /// @pre `k > 0 && k <= 128`
   [[nodiscard]] bool compare(const address& other, size_t k) const;
-
-  /// Pseudonymizes the saved address using the CryptoPAn algorithm.
-  /// @param key 32-byte key for the pseudonymization cipher.
-  void pseudonymize(const std::array<byte_type, pseudonymization_seed_size>& key);
 
   explicit constexpr operator byte_array() const {
     return bytes_;
