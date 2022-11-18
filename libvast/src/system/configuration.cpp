@@ -444,6 +444,15 @@ caf::error configuration::parse(int argc, char** argv) {
         .add<std::vector<std::string>>("?vast", "schema-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugins", "");
+  // Newly added plugin arguments from environment variables
+  // may contain empty values - sanitize them manually.
+  for (auto& plugin_arg : plugin_args) {
+    auto dummy_settings = caf::settings{};
+    if (plugin_opts.parse(dummy_settings, {plugin_arg}).first
+        == caf::pec::missing_argument) {
+      plugin_arg.append("[]");
+    }
+  }
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   if (ec != caf::pec::success) {
     VAST_ASSERT(it != plugin_args.end());

@@ -172,8 +172,8 @@ configuration or the command line first. Use `vast --plugins=example version`
 and look into the `plugins`. A key-value pair with your plugin name and version
 should exist in the output.
 
-To enable all bundled plugins, i.e., plugins built this way alongside VAST, run
-with `--plugins=bundled` or add `bundled` to the list of enabled plugins in your
+To enable all plugins, i.e., plugins built this way alongside VAST, run
+with `--plugins=all` or add `all` to the list of enabled plugins in your
 `vast.yaml` configuration file.
 
 ### Building against an installed VAST

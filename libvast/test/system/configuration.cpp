@@ -109,4 +109,55 @@ TEST(command line overrides environment) {
   CHECK_EQUAL(get<std::string>("vast.endpoint"), "5.6.7.8");
 }
 
+TEST(command line no value for list generates empty list value) {
+  parse("--plugins=");
+  CHECK(get<std::vector<std::string>>("vast.plugins").empty());
+}
+
+TEST(command line empty list value for list generates empty list value) {
+  parse("--plugins=[]");
+  CHECK(get<std::vector<std::string>>("vast.plugins").empty());
+}
+
+TEST(environment key no value for plugin list generates empty list value) {
+  env("VAST_PLUGINS", "");
+  parse();
+  CHECK(get<std::vector<std::string>>("vast.plugins").empty());
+}
+
+TEST(environment key empty value for plugin list generates empty list value) {
+  env("VAST_PLUGINS", "[]");
+  parse();
+  CHECK(get<std::vector<std::string>>("vast.plugins").empty());
+}
+
+TEST(command line overrides environment even for plugins) {
+  env("VAST_PLUGINS", "plugin1");
+  parse("--plugins=[plugin2]");
+  CHECK_EQUAL(get<std::vector<std::string>>("vast.plugins"),
+              std::vector<std::string>{"plugin2"});
+}
+
+TEST(command line no value for integer values generates default value) {
+  parse(std::vector<std::string>{"start", "--disk-budget-check-interval="});
+  CHECK_EQUAL(get<size_t>("vast.start.disk-budget-check-interval"), size_t{0});
+
+  parse(std::vector<std::string>{"explore", "--max-events-query="});
+  CHECK_EQUAL(get<count>("vast.explore.max-events-query"), count{0});
+
+  parse(std::vector<std::string>{"pivot", "--flush-interval="});
+  CHECK_EQUAL(get<size_t>("vast.pivot.flush-interval"), size_t{0});
+}
+
+TEST(command line no value for timespan value generates default value) {
+  parse("--active-partition-timeout=");
+  CHECK_EQUAL(get<caf::timespan>("vast.active-partition-timeout").count(),
+              std::chrono::milliseconds{0}.count());
+}
+
+TEST(command line no value for bool value generates default true value by CAF) {
+  parse(std::vector<std::string>{"rebuild", "--all="});
+  CHECK_EQUAL(get<bool>("vast.rebuild.all"), true);
+}
+
 FIXTURE_SCOPE_END()

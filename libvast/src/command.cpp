@@ -198,6 +198,49 @@ void render_parse_error(const command& cmd, const invocation& inv,
   }
 }
 
+auto generate_default_value_for_argument_type(std::string_view type_name) {
+  if (type_name.starts_with("uint") || type_name.starts_with("int")
+      || type_name.starts_with("long")) {
+    return "0";
+  } else if (type_name == "timespan") {
+    return "0s";
+  } else if (type_name.starts_with("list")) {
+    return "[]";
+  }
+  VAST_ASSERT(false && "option has type with no default value support");
+  return "";
+}
+
+void sanitize_long_form_argument(std::string& argument,
+                                 const vast::command& cmd) {
+  auto dummy_options = caf::settings{};
+  auto [state, _] = cmd.options.parse(dummy_options, {argument});
+  if (state == caf::pec::not_an_option) {
+    for (const auto& child_cmd : cmd.children) {
+      sanitize_long_form_argument(argument, *child_cmd);
+    }
+  } else if (state == caf::pec::missing_argument) {
+    auto name = argument.substr(2, argument.length() - 3);
+    auto option = cmd.options.cli_long_name_lookup(name);
+    if (option) {
+      auto option_type = option->type_name();
+      auto options_type_default_val
+        = generate_default_value_for_argument_type(option_type.data());
+      argument.append(options_type_default_val);
+    }
+  }
+}
+
+auto sanitize_arguments(const command& root, command::argument_iterator first,
+                        command::argument_iterator last) {
+  std::vector<std::string> sanitized_arguments = {first, last};
+  for (auto& argument : sanitized_arguments) {
+    if (argument.starts_with("--")) {
+      sanitize_long_form_argument(argument, root);
+    }
+  }
+  return sanitized_arguments;
+}
 } // namespace
 
 command::command(std::string_view name, std::string_view description,
@@ -295,9 +338,11 @@ caf::error parse_impl(invocation& result, const command& cmd,
 caf::expected<invocation>
 parse(const command& root, command::argument_iterator first,
       command::argument_iterator last) {
+  auto sanitized_arguments = sanitize_arguments(root, first, last);
   invocation result;
   const command* target = nullptr;
-  if (auto err = parse_impl(result, root, first, last, &target)) {
+  if (auto err = parse_impl(result, root, sanitized_arguments.begin(),
+                            sanitized_arguments.end(), &target)) {
     render_parse_error(*target, result, err, std::cerr);
     return ec::silent;
   }
