@@ -44,17 +44,7 @@ struct configuration {
 class pseudonymize_operator : public pipeline_operator {
 public:
   pseudonymize_operator(configuration config) : config_{std::move(config)} {
-    auto max_seed_size
-      = std::min(vast::address::pseudonymization_seed_array_size * 2, config_.seed.size());
-    for (auto i = size_t{0}; (i*2) < max_seed_size; ++i) {
-      auto byte_string_pos = i*2;
-      auto byte_size = (byte_string_pos + 2 > config_.seed.size()) ? 1 : 2;
-      auto byte = config_.seed.substr(byte_string_pos, byte_size);
-      if (byte_size == 1) {
-        byte.append("0");
-      }
-      config_.seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
-    }
+    parse_seed_string();
   }
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
@@ -124,6 +114,20 @@ private:
 
   /// Step-specific configuration, including the seed and field names.
   configuration config_ = {};
+
+  void parse_seed_string() {
+    auto max_seed_size = std::min(
+      vast::address::pseudonymization_seed_array_size * 2, config_.seed.size());
+    for (auto i = size_t{0}; (i * 2) < max_seed_size; ++i) {
+      auto byte_string_pos = i * 2;
+      auto byte_size = (byte_string_pos + 2 > config_.seed.size()) ? 1 : 2;
+      auto byte = config_.seed.substr(byte_string_pos, byte_size);
+      if (byte_size == 1) {
+        byte.append("0");
+      }
+      config_.seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
+    }
+  }
 };
 
 // -- plugin ------------------------------------------------------------------
