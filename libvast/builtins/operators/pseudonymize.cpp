@@ -71,9 +71,11 @@ public:
                                    std::shared_ptr<arrow::Array>>> {
           if (!caf::holds_alternative<address_type>(field.type)) {
             VAST_ASSERT(false
-                        && "record batch field to be pseudonymized but does not "
+                        && "record batch field to be pseudonymized but does "
+                           "not "
                            "have address type");
-            VAST_ERROR("Field {} is to be pseudonymized but does not contain IP "
+            VAST_ERROR("Field {} is to be pseudonymized but does not contain "
+                       "IP "
                        "address values; skipping pseudonymization",
                        field);
             return {{field, array}};

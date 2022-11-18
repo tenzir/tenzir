@@ -16,7 +16,7 @@
 #define SUITE address
 #include "vast/test/test.hpp"
 
-#include <map>
+#include <unordered_map>
 
 using namespace vast;
 using namespace std::string_literals;
@@ -149,13 +149,13 @@ TEST(parseable) {
   CHECK(to_string(a) == str);
 }
 
-TEST(IPv4 pseudonymization - key 1) {
-  std::array<vast::address::byte_type, 32> key
+TEST(IPv4 pseudonymization - seed 1) {
+  std::array<vast::address::byte_type, 32> seed
     = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
        216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
-  std::map<std::string, std::string> addresses = {
+  std::unordered_map<std::string, std::string> addresses = {
     {"128.11.68.132", "135.242.180.132"},
     {"129.118.74.4", "134.136.186.123"},
     {"130.132.252.244", "133.68.164.234"},
@@ -245,14 +245,14 @@ TEST(IPv4 pseudonymization - key 1) {
   }
 }
 
-TEST(IPv4 pseudonymization - key 2) {
-  std::array<vast::address::byte_type, 32> key
+TEST(IPv4 pseudonymization - seed 2) {
+  std::array<vast::address::byte_type, 32> seed
     = {0x80, 0x09, 0xAB, 0x3A, 0x60, 0x54, 0x35, 0xBE, 0xA0, 0xC3, 0x85,
        0xBE, 0xA1, 0x84, 0x85, 0xD8, 0xB0, 0xA1, 0x10, 0x3D, 0x65, 0x90,
        0xBD, 0xF4, 0x8C, 0x96, 0x8B, 0xE5, 0xDE, 0x53, 0x83, 0x6E};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
-  std::map<std::string, std::string> addresses = {
+  std::unordered_map<std::string, std::string> addresses = {
     {"123.123.123.123", "117.8.135.123"}, {"131.159.1.42", "162.112.255.43"},
     {"8.8.8.8", "55.21.62.136"},          {"255.8.1.100", "240.232.0.156"},
     {"0.0.0.0", "56.131.176.115"},        {"255.255.255.255", "240.15.248.0"}};
@@ -267,13 +267,13 @@ TEST(IPv4 pseudonymization - key 2) {
   }
 }
 
-TEST(IPv4 pseudonymization - key 3) {
-  std::array<vast::address::byte_type, 32> key
+TEST(IPv4 pseudonymization - seed 3) {
+  std::array<vast::address::byte_type, 32> seed
     = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
-  std::map<std::string, std::string> addresses = {
+  std::unordered_map<std::string, std::string> addresses = {
     {"192.0.2.1", "2.90.93.17"},
     {"0.0.0.0", "254.152.65.220"},
     {"10.0.1.128", "246.35.190.47"},
@@ -295,13 +295,13 @@ TEST(IPv4 pseudonymization - key 3) {
   }
 }
 
-TEST(IPv6 pseudonymization - key 1) {
-  std::array<vast::address::byte_type, 32> key
+TEST(IPv6 pseudonymization - seed 1) {
+  std::array<vast::address::byte_type, 32> seed
     = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
        216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
-  std::map<std::string, std::string> addresses = {
+  std::unordered_map<std::string, std::string> addresses = {
     {"::1", "78ff:f001:9fc0:20df:8380:b1f1:704:ed"},
     {"::2", "78ff:f001:9fc0:20df:8380:b1f1:704:ef"},
     {"::ffff", "78ff:f001:9fc0:20df:8380:b1f1:704:f838"},
@@ -319,14 +319,14 @@ TEST(IPv6 pseudonymization - key 1) {
   }
 }
 
-TEST(IPv6 pseudonymization - key 2) {
-  std::array<vast::address::byte_type, 32> key
+TEST(IPv6 pseudonymization - seed 2) {
+  std::array<vast::address::byte_type, 32> seed
     = {0x80, 0x09, 0xAB, 0x3A, 0x60, 0x54, 0x35, 0xBE, 0xA0, 0xC3, 0x85,
        0xBE, 0xA1, 0x84, 0x85, 0xD8, 0xB0, 0xA1, 0x10, 0x3D, 0x65, 0x90,
        0xBD, 0xF4, 0x8C, 0x96, 0x8B, 0xE5, 0xDE, 0x53, 0x83, 0x6E};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
-  std::map<std::string, std::string> addresses = {
+  std::unordered_map<std::string, std::string> addresses = {
     {"2a02:0db8:85a3:0000:0000:8a2e:0370:7344", "1482:f447:75b3:f1f9:fbdf:622e:"
                                                 "34f:ff7b"},
     {"2a02:db8:85a3:0:0:8a2e:370:7344", "1482:f447:75b3:f1f9:fbdf:622e:34f:"
@@ -348,13 +348,13 @@ TEST(IPv6 pseudonymization - key 2) {
   }
 }
 
-TEST(IPv6 pseudonymization - key 3) {
-  std::array<vast::address::byte_type, 32> key
+TEST(IPv6 pseudonymization - seed 3) {
+  std::array<vast::address::byte_type, 32> seed
     = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
-  std::map<std::string, std::string> addresses = {
+  std::unordered_map<std::string, std::string> addresses = {
     {"2001:db8::1", "dd92:2c44:3fc0:ff1e:7ff9:c7f0:8180:7e00"},
   };
 

@@ -66,7 +66,7 @@ public:
   }
 
 private:
-  static constexpr inline auto MSB_OF_BYTE_MASK = 0b10000000;
+  static constexpr inline auto msb_of_byte_mask = 0b10000000;
   EVP_CIPHER_CTX* ctx_;
   const EVP_CIPHER* cipher_;
   int block_size_;
@@ -83,7 +83,7 @@ private:
     auto bit_index = 0;
     auto one_time_pad
       = std::vector<address::byte_type>(bytes_to_encrypt.size());
-    one_time_pad[byte_index] |= cipher_output[0] & MSB_OF_BYTE_MASK;
+    one_time_pad[byte_index] |= cipher_output[0] & msb_of_byte_mask;
     for (auto i = size_t{0}; i < bytes_to_encrypt.size() * 8 - 1;) {
       auto padding_mask = 0xff >> (bit_index + 1);
       auto original_mask = ~padding_mask;
@@ -97,7 +97,7 @@ private:
       byte_index = i / 8;
       bit_index = i % 8;
       one_time_pad[byte_index]
-        |= (cipher_output[0] & MSB_OF_BYTE_MASK) >> bit_index;
+        |= (cipher_output[0] & msb_of_byte_mask) >> bit_index;
     }
     return one_time_pad;
   }
