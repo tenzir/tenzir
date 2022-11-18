@@ -11,7 +11,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/command.hpp"
-#include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/pp.hpp"
 #include "vast/http_api.hpp"

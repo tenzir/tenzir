@@ -6,20 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/atoms.hpp"
-#include "vast/concept/convertible/to.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/config.hpp"
-#include "vast/data.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/detail/signal_handlers.hpp"
-#include "vast/detail/system.hpp"
-#include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/factory.hpp"
-#include "vast/format/reader_factory.hpp"
-#include "vast/format/writer_factory.hpp"
+#include "vast/format/reader_factory.hpp" // IWYU pragma: keep
+#include "vast/format/writer_factory.hpp" // IWYU pragma: keep
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
 #include "vast/plugin.hpp"

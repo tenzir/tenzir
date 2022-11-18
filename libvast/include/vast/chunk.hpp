@@ -11,7 +11,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/as_bytes.hpp"
-#include "vast/detail/assert.hpp"
 #include "vast/detail/function.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 

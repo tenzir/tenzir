@@ -12,10 +12,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
-#include "vast/concepts.hpp"
 #include "vast/detail/generator.hpp"
-#include "vast/detail/range.hpp"
-#include "vast/detail/stack_vector.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/offset.hpp"
