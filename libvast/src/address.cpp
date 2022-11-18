@@ -57,8 +57,7 @@ public:
   }
 
   auto encrypt(address::byte_array bytes, size_t byte_offset) {
-    auto bytes_to_encrypt = std::vector<address::byte_type>{
-      bytes.begin() + byte_offset, bytes.end()};
+    auto bytes_to_encrypt = std::span{bytes.begin() + byte_offset, bytes.end()};
     auto one_time_pad = generate_one_time_pad(bytes_to_encrypt);
     for (auto i = size_t{0}; i < bytes_to_encrypt.size(); ++i) {
       bytes[i + byte_offset] = bytes_to_encrypt[i] ^ one_time_pad[i];
