@@ -383,7 +383,7 @@ public:
   enum class type {
     dynamic, ///< The plugin is dynamically linked.
     static_, ///< The plugin is statically linked.
-    native,  ///< The plugin is builtin to the binary.
+    builtin, ///< The plugin is builtin to the binary.
   };
 
   /// Load a dynamic plugin from the specified library filename.
@@ -399,12 +399,12 @@ public:
   static plugin_ptr make_static(plugin* instance, void (*deleter)(plugin*),
                                 const char* version) noexcept;
 
-  /// Take ownership of a native plugin.
+  /// Take ownership of a builtin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
-  static plugin_ptr make_native(plugin* instance, void (*deleter)(plugin*),
-                                const char* version) noexcept;
+  static plugin_ptr make_builtin(plugin* instance, void (*deleter)(plugin*),
+                                 const char* version) noexcept;
 
   /// Default-construct an invalid plugin.
   plugin_ptr() noexcept;
@@ -495,22 +495,22 @@ detail::generator<const Plugin*> get() noexcept {
 
 // -- helper macros ------------------------------------------------------------
 
-#if defined(VAST_ENABLE_NATIVE_PLUGINS)
-#  define VAST_PLUGIN_VERSION "native"
+#if defined(VAST_ENABLE_BUILTINS)
+#  define VAST_PLUGIN_VERSION "builtin"
 #else
 extern const char* VAST_PLUGIN_VERSION;
 #endif
 
-#if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_NATIVE_PLUGINS)
+#if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_BUILTINS)
 
 #  error "Plugins cannot be both static and native"
 
-#elif defined(VAST_ENABLE_STATIC_PLUGINS) || defined(VAST_ENABLE_NATIVE_PLUGINS)
+#elif defined(VAST_ENABLE_STATIC_PLUGINS) || defined(VAST_ENABLE_BUILTINS)
 
 #  if defined(VAST_ENABLE_STATIC_PLUGINS)
 #    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_static
 #  else
-#    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_native
+#    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_builtin
 #  endif
 
 #  define VAST_REGISTER_PLUGIN(name)                                           \

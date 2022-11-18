@@ -282,83 +282,6 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
 
 } // namespace
 
-caf::message show_command(const invocation& inv, caf::actor_system&) {
-  auto as_yaml = caf::get_or(inv.options, "vast.show.yaml", false);
-  auto self = this_node;
-  auto [type_registry] = self->state.registry.find<type_registry_actor>();
-  if (!type_registry)
-    return caf::make_message(caf::make_error(ec::missing_component, //
-                                             "type-registry"));
-  caf::error request_error = caf::none;
-  auto rp = self->make_response_promise();
-  self->request(type_registry, caf::infinite, atom::get_v, atom::taxonomies_v)
-    .then(
-      [=](struct taxonomies taxonomies) mutable {
-        auto result = list{};
-        result.reserve(taxonomies.concepts.size());
-        if (inv.full_name == "show" || inv.full_name == "show concepts") {
-          for (auto& [name, concept_] : taxonomies.concepts) {
-            auto fields = list{};
-            fields.reserve(concept_.fields.size());
-            for (auto& field : concept_.fields)
-              fields.push_back(std::move(field));
-            auto concepts = list{};
-            concepts.reserve(concept_.concepts.size());
-            for (auto& concept_ : concept_.concepts)
-              concepts.push_back(std::move(concept_));
-            auto entry = record{
-              {"concept",
-               record{
-                 {"name", std::move(name)},
-                 {"description", std::move(concept_.description)},
-                 {"fields", std::move(fields)},
-                 {"concepts", std::move(concepts)},
-               }},
-            };
-            result.push_back(std::move(entry));
-          }
-        }
-        if (inv.full_name == "show" || inv.full_name == "show models") {
-          for (auto& [name, model] : taxonomies.models) {
-            auto definition = list{};
-            definition.reserve(model.definition.size());
-            for (auto& definition_entry : model.definition)
-              definition.push_back(std::move(definition_entry));
-            auto entry = record{
-              {"model",
-               record{
-                 {"name", std::move(name)},
-                 {"description", std::move(model.description)},
-                 {"definition", std::move(definition)},
-               }},
-            };
-            result.push_back(std::move(entry));
-          }
-        }
-        if (as_yaml) {
-          if (auto yaml = to_yaml(data{std::move(result)}))
-            rp.deliver(to_string(std::move(*yaml)));
-          else
-            request_error = std::move(yaml.error());
-        } else {
-          if (auto json = to_json(data{std::move(result)}))
-            rp.deliver(std::move(*json));
-          else
-            request_error = std::move(json.error());
-        }
-      },
-      [=](caf::error& err) mutable {
-        request_error
-          = caf::make_error(ec::unspecified, fmt::format("'show' failed to get "
-                                                         "taxonomies from "
-                                                         "type-registry: {}",
-                                                         std::move(err)));
-      });
-  if (request_error)
-    return caf::make_message(std::move(request_error));
-  return caf::none;
-}
-
 caf::message status_command(const invocation& inv, caf::actor_system&) {
   auto self = this_node;
   auto verbosity = status_verbosity::info;
@@ -486,9 +409,6 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
   auto result = command::factory{
-    {"show", show_command},
-    {"show concepts", show_command},
-    {"show models", show_command},
     {"kill", kill_command},
     {"send", send_command},
     {"spawn accountant", node_state::spawn_command},

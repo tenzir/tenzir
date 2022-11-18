@@ -59,17 +59,6 @@ auto make_count_command() {
                                "skipping candidate checks"));
 }
 
-auto make_show_command() {
-  auto show = std::make_unique<command>(
-    "show", "print configuration objects as JSON",
-    opts("?vast.show").add<bool>("yaml", "format output as YAML"));
-  show->add_subcommand("concepts", "print all registered concept definitions",
-                       opts("?vast.show.concepts"));
-  show->add_subcommand("models", "print all registered model definitions",
-                       opts("?vast.show.models"));
-  return show;
-}
-
 auto make_explore_command() {
   return std::make_unique<command>(
     "explore", "explore context around query results",
@@ -325,9 +314,6 @@ auto make_command_factory() {
   // clang-format off
   auto result = command::factory{
     {"count", count_command},
-    {"show", remote_command},
-    {"show concepts", remote_command},
-    {"show models", remote_command},
     {"explore", explore_command},
     {"export ascii", make_writer_command("ascii")},
     {"export csv", make_writer_command("csv")},
@@ -452,7 +438,6 @@ auto make_root_command(std::string_view path) {
   root->add_subcommand(make_peer_command());
   root->add_subcommand(make_pivot_command());
   root->add_subcommand(make_send_command());
-  root->add_subcommand(make_show_command());
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
   root->add_subcommand(make_status_command());
