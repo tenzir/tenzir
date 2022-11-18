@@ -344,7 +344,6 @@ auto values(const Type& type, const type_to_arrow_array_t<Type>& arr) noexcept
   }
 }
 
-
 struct indexed_transformation {
   using function_type = std::function<std::vector<
     std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>(
