@@ -13,5 +13,5 @@
     "version for releases that contain major format changes to the on-disk",
     "layout of VAST's partitions."
   ],
-  "vast-partition-version": 1
+  "vast-partition-version": 2
 }
