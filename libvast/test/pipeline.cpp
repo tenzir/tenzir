@@ -334,6 +334,19 @@ TEST(pseudonymize operator - invalid seed) {
     {{"seed", "foobar"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
 }
 
+TEST(pseudonymize operator- seed but no fields) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  REQUIRE_ERROR(vast::make_pipeline_operator("pseudonymize", {{"seed", "1"}}));
+}
+
+TEST(pseudonymize operator - fields but no seed) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  REQUIRE_ERROR(vast::make_pipeline_operator(
+    "pseudonymize", {{"fields", vast::list{"orig_addr", "dest_addr"}}}));
+}
+
 TEST(pseudonymize operator - seed input too short and odd amount of chars) {
   auto slice
     = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
