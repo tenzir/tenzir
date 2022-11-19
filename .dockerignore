@@ -7,6 +7,5 @@ CMakeUserPresets.json
 build/
 compile_commands.json
 nix/
-!CHANGELOG.md
 !README.md
 !VERSIONING.md
