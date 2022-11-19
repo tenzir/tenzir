@@ -164,7 +164,6 @@ in
       ../CMakeLists.txt
       ../LICENSE
       ../VAST.spdx
-      ../BANNER
       ../README.md
       ../vast.yaml.example
       ../version.json
