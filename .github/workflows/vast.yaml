@@ -260,14 +260,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Delete existing changelog
-        run: |
-          rm: web/src/pages/changelog.md
       - name: Download CHANGELOG.md
         uses: actions/download-artifact@v3
         with:
           name: CHANGELOG.md
-          path: web/src/pages/changelog.md
+      - name: Override Stub Changelog
+        run: |
+          cp -f CHANGELOG.md web/src/pages/changelog.md
       - uses: actions/setup-node@v3
         with:
           node-version: 16.x
