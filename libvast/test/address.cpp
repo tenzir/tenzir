@@ -42,10 +42,8 @@ void check_address_pseudonymization(
   for (const auto& [original, pseudonymized] : addresses) {
     auto original_address = *to<address>(original);
     auto pseudonymized_address_expectation = *to<address>(pseudonymized);
-
     auto pseudonymized_adress_actual
       = address::pseudonymized(original_address, seed);
-
     REQUIRE_EQUAL(pseudonymized_adress_actual,
                   pseudonymized_address_expectation);
   }
