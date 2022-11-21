@@ -235,24 +235,6 @@ jobs:
           name: CHANGELOG.md
           path: build/CHANGELOG.md
           if-no-files-found: error
-      - name: Check CHANGELOG.md
-        if: github.event_name == 'pull_request'
-        run: |
-          alias is_unchanged="git diff --exit-code ${{ needs.configure.outputs.before-sha }} --"
-          if ! is_unchanged .github/workflows/changelog-override.md; then
-            exit 0
-          fi
-          if is_unchanged version.json; then
-            # CHANGELOG.md must not be modified in non-release PRs, unless the
-            # template also changed.
-            is_unchanged CHANGELOG.md || ! is_unchanged cmake/VASTChangelog.cmake.in
-          else
-            # CHANGELOG.md must be modified in release PRs
-            ! is_unchanged CHANGELOG.md
-            # Check whether the updated CHANGELOG.md is correct
-            cmake --build build --target update-changelog
-            git diff-index --exit-code HEAD -- CHANGELOG.md
-          fi
 
   vast-io:
     needs:
@@ -278,13 +260,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Delete existing CHANGELOG.md
-        run:
-          rm CHANGELOG.md
-      - name: Download new CHANGELOG.md
+      - name: Download CHANGELOG.md
         uses: actions/download-artifact@v3
         with:
           name: CHANGELOG.md
+      - name: Override Stub Changelog
+        run: |
+          cp -f CHANGELOG.md web/src/pages/changelog.md
       - uses: actions/setup-node@v3
         with:
           node-version: 16.x

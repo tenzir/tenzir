@@ -76,10 +76,6 @@ if [[ "${last_rc_version}" == *"-rc"* ]]; then
   fi
 fi
 
-# Configure the build and update the local changelog.
-cmake -B "${build_dir}" -DVAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE:BOOL=ON
-cmake --build "${build_dir}" --target update-changelog
-
 # Update version of Python bindings.
 pushd "${source_dir}/python"
 poetry version "${new_version#v}"
