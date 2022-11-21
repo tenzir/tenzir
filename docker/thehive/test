@@ -1,22 +1,17 @@
 #! /usr/bin/env bash
 set -eux -o pipefail
 
+pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/thehive"
 
 # Setup cleanup
 function down {
   exit_code=$?
-  docker compose down
-  # down -v only works after the poetry container is removed, because otherwise
-  # it blocks on the bindings_cache volume.
-  # On the other hand, we need the volumes erased otherwise TheHive still has
-  # the cases from the last run (at least in local execution of this)
-  docker container ls --all -q | xargs docker rm
+  docker compose logs
   docker compose down -v
+  popd
   exit $exit_code
 }
 trap down EXIT
-
-pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/thehive"
 
 # build vast-poetry image, as it is not available in the registry.
 docker compose -f ../poetry/docker-compose.yaml build
@@ -59,5 +54,3 @@ cat ../../vast/integration/data/suricata/eve.json | \
 docker compose run thehive-app alert-count 2>&1 | \
     tee /dev/stderr | \
     grep -q "alert_count=2"
-
-popd
