@@ -56,7 +56,7 @@ public:
     EVP_CIPHER_CTX_free(ctx_);
   }
 
-  auto encrypt(address::byte_array bytes, size_t byte_offset) {
+  auto operator()(address::byte_array bytes, size_t byte_offset) {
     auto bytes_to_encrypt = std::span{bytes.begin() + byte_offset, bytes.end()};
     auto one_time_pad = generate_one_time_pad(bytes_to_encrypt);
     for (auto i = size_t{0}; i < bytes_to_encrypt.size(); ++i) {
@@ -110,7 +110,7 @@ address address::pseudonymized(
   const std::array<byte_type, pseudonymization_seed_array_size>& seed) {
   auto byte_offset = (original.is_v4() ? 12 : 0);
   address_encryptor encryptor(seed);
-  auto pseudonymized_bytes = encryptor.encrypt(original.bytes_, byte_offset);
+  auto pseudonymized_bytes = encryptor(original.bytes_, byte_offset);
   return address(pseudonymized_bytes);
 }
 
