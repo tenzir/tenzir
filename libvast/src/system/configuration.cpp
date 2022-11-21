@@ -32,9 +32,7 @@
 
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
-#if VAST_ENABLE_OPENSSL
-#  include <caf/openssl/manager.hpp>
-#endif
+#include <caf/openssl/manager.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -465,14 +463,12 @@ caf::error configuration::parse(int argc, char** argv) {
   config_file_path.clear();
   auto result = actor_system_config::parse(std::move(caf_args));
   // Load OpenSSL last because it uses the parsed configuration.
-#if VAST_ENABLE_OPENSSL
   const auto use_encryption
     = !openssl_certificate.empty() || !openssl_key.empty()
       || !openssl_passphrase.empty() || !openssl_capath.empty()
       || !openssl_cafile.empty();
   if (use_encryption)
     load<caf::openssl::manager>();
-#endif // VAST_ENABLE_OPENSSL
   return result;
 }
 
