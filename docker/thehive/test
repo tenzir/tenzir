@@ -1,16 +1,25 @@
 #! /usr/bin/env bash
 set -eux -o pipefail
 
-pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/thehive"
 
 # Setup cleanup
 function down {
   exit_code=$?
+  docker compose down
+  # down -v only works after the poetry container is removed, because otherwise
+  # it blocks on the bindings_cache volume.
+  # On the other hand, we need the volumes erased otherwise TheHive still has
+  # the cases from the last run (at least in local execution of this)
+  docker container ls --all -q | xargs docker rm
   docker compose down -v
   exit $exit_code
 }
 trap down EXIT
 
+pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/thehive"
+
+# build vast-poetry image, as it is not available in the registry.
+docker compose -f ../poetry/docker-compose.yaml build
 
 # Start thehive without the app
 COMPOSE_FILE="docker-compose.yaml"
@@ -32,7 +41,7 @@ docker compose up --build -d thehive-app
 # entrypoint that runs on the same volume might run into concurrency issus when
 # running `poetry install` itself.
 # TODO find a more reliable way to achieve this
-sleep 60
+sleep 90
 
 # check that the historical import took place
 docker compose run thehive-app alert-count 2>&1 | \
