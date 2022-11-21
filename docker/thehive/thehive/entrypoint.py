@@ -100,6 +100,9 @@ def init_cortex():
         120,
     )
 
+    # ES is eventually conistent, so wait for things to settle
+    time.sleep(5)
+
     # This user already exists by default but does not have sufficient priviledges to set passwords
     call_cortex(
         "/api/user",
