@@ -11,7 +11,7 @@ Pseudonymizes IP addresses according to the [Crypto-PAn](https://en.wikipedia.or
 
 ```yaml
 pseudonymize:
-  seed: "abcdef1234567890987654321fedcbaabcdef1234567890987654321fedcbaab"
+  seed: abcdef1234567890987654321fedcbaabcdef1234567890987654321fedcbaab
   fields:
     - ip_origin
     - ip_dest
