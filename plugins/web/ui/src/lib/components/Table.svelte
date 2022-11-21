@@ -1,8 +1,9 @@
 <script lang="ts">
   import { Render, Subscribe, createTable } from 'svelte-headless-table';
   import { addSortBy } from 'svelte-headless-table/plugins';
-  import { readable, writable } from 'svelte/store';
-  interface TableRow {
+  import { writable } from 'svelte/store';
+
+  type TableRow = {
     [key: string]: string | number;
   }
 

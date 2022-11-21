@@ -1,8 +1,16 @@
 <script lang="ts">
-  import Editor from '$lib/components/Editor.svelte';
   import MultiLine from '$lib/components/LayerCake/MultiLine/index.svelte';
   import Query from '$lib/components/Query.svelte';
-  let visibleBlocks: ('bytes' | 'text' | 'query')[] = [];
+  import Menu from '$lib/components/Menu.svelte';
+  import Editor from '$lib/components/Editor.svelte';
+  import { capitalizeFirstLetter } from '$lib/util/strings';
+  let possibleBlocks = ['bytes', 'text', 'query'] as const;
+
+  type Block = typeof possibleBlocks[number];
+  let visibleBlocks: Block[] = [];
+  let addAction = (block: Block) => () => {
+    visibleBlocks = [...visibleBlocks, block];
+  };
 </script>
 
 <svelte:head>
@@ -23,41 +31,21 @@
         <MultiLine />
       </div>
     {:else if block == 'query'}
-      <div class="text-l font-bold">Notes</div>
+      <div class="text-l font-bold">Query</div>
       <div class="my-10">
         <Query />
       </div>
+    {:else}
+      <div class="text-l font-bold">Text</div>
+      <div class="my-10">
+        <Editor />
+      </div>
     {/if}
   {/each}
-  <div class="flex">
-    <button
-      class="flex items-center mr-2"
-      on:click={() => {
-        visibleBlocks = [...visibleBlocks, 'tex'];
-      }}
-    >
-      <div class="i-ant-design:plus-square-outlined w-16px" />
-      Add Text Block
-    </button>
-
-    <button
-      class="flex items-center mr-2"
-      on:click={() => {
-        visibleBlocks = [...visibleBlocks, 'bytes'];
-      }}
-    >
-      <div class="i-ant-design:plus-square-outlined w-16px" />
-      Add Bytes Block
-    </button>
-
-    <button
-      class="flex items-center mr-2"
-      on:click={() => {
-        visibleBlocks = [...visibleBlocks, 'query'];
-      }}
-    >
-      <div class="i-ant-design:plus-square-outlined w-16px" />
-      Add Query Block
-    </button>
-  </div>
+  <Menu
+    description="Add Block"
+    items={possibleBlocks.map((block) => {
+      return { text: capitalizeFirstLetter(block), onClick: addAction(block) };
+    })}
+  />
 </div>

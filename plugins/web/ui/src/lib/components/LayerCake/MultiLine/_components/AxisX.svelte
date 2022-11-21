@@ -3,6 +3,7 @@
   Generates an SVG x-axis. This component is also configured to detect if your x-scale is an ordinal scale. If so, it will place the markers in the middle of the bandwidth.
  -->
 <script lang="ts">
+
   import { getContext } from 'svelte';
   const { width, height, xScale, yRange } = getContext('LayerCake');
 
@@ -22,7 +23,7 @@
   export let formatTick = (d) => d;
 
   /** @type {Number|Array|Function} [ticks] - If this is a number, it passes that along to the [d3Scale.ticks](https://github.com/d3/d3-scale) function. If this is an array, hardcodes the ticks to those values. If it's a function, passes along the default tick values and expects an array of tick values in return. If nothing, it uses the default ticks supplied by the D3 function. */
-  export let ticks = undefined;
+  export let ticks;
 
   /** @type {Number} [xTick=0] - TK */
   export let xTick: number = 0;

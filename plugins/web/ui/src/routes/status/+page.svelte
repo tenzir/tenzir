@@ -41,8 +41,11 @@
     [index: string]: { count: number; percentage: number };
   }
 
-  const getPluginRows = (plugins) =>
-    Object.keys(plugins).map((key) => ({ name: key, version: plugins[key] }));
+  const getPluginRows = (plugins: Record<string, string>) =>
+    { console.log(plugins)
+ return Object.keys(plugins).map((key) => ({ name: key, version: plugins[key] }));
+    }
+
 
   let eventColumns = [
     { header: 'Layout', accessor: 'layout' },

@@ -1,16 +1,16 @@
-<script>
+<script lang="ts">
   import 'bytemd/dist/index.css';
-  import { Editor, Viewer } from 'bytemd';
+  import { Editor } from 'bytemd';
   import gfm from '@bytemd/plugin-gfm';
 
-  let value;
+  let value: string;
   export let placeholder = 'Write here...';
   const plugins = [
     gfm()
     // Add more plugins here
   ];
 
-  function handleChange(e) {
+  function handleChange(e: CustomEvent) {
     value = e.detail.value;
   }
 </script>

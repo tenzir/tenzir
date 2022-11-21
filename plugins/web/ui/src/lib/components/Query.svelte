@@ -1,6 +1,8 @@
 <script lang="ts">
   import Table from './Table.svelte';
 
+  import type TableRow from './Table.svelte';
+
   let inputVal = '';
 
   const getQuery = async (expression: string) => {
@@ -21,8 +23,14 @@
       console.error(`Error in getQuery function : ${error}`);
     }
   };
+  interface QueryResult {
+    version: string,
+    num_events: number,
+    events: TableRow[], // TODO better type it once the API is stabilized
+  }
 
-  let queryResult;
+  let queryResult : QueryResult
+  $: console.log(queryResult)
 
   const handleRun = async () => {
     queryResult = await getQuery(inputVal);
