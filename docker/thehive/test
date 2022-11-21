@@ -5,12 +5,12 @@ set -eux -o pipefail
 # Setup cleanup
 function down {
   exit_code=$?
-  docker compose down
-  # down -v only works after the poetry container is removed, because otherwise
-  # it blocks on the bindings_cache volume.
-  # On the other hand, we need the volumes erased otherwise TheHive still has
-  # the cases from the last run (at least in local execution of this)
-  docker container ls --all -q | xargs docker rm
+#   docker compose down
+#   # down -v only works after the poetry container is removed, because otherwise
+#   # it blocks on the bindings_cache volume.
+#   # On the other hand, we need the volumes erased otherwise TheHive still has
+#   # the cases from the last run (at least in local execution of this)
+#   docker container ls --all -q | xargs docker rm
   docker compose down -v
   exit $exit_code
 }
