@@ -389,6 +389,12 @@ endif ()
 # Link against libvast-fbs.
 target_link_libraries(libvast PUBLIC libvast-fbs)
 
+# Link against OpenSSL
+find_package(OpenSSL REQUIRED)
+target_link_libraries(libvast PUBLIC OpenSSL::SSL)
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(OpenSSL REQUIRED)")
+dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
+
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)
 target_link_libraries(libvast PRIVATE yaml-cpp)
