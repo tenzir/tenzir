@@ -33,9 +33,9 @@ inline uint32_t bitmask32(size_t bottom_bits) {
   return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
 }
 
-class AddressEncryptor {
+class address_encryptor {
 public:
-  AddressEncryptor(const std::array<address::byte_type, 32>& key) {
+  address_encryptor(const std::array<address::byte_type, 32>& key) {
     ctx_ = EVP_CIPHER_CTX_new();
     EVP_CIPHER_CTX_init(ctx_);
     OpenSSL_add_all_ciphers();
@@ -49,9 +49,9 @@ public:
                      block_size_);
   }
 
-  AddressEncryptor(const AddressEncryptor&) = delete;
+  address_encryptor(const address_encryptor&) = delete;
 
-  ~AddressEncryptor() {
+  ~address_encryptor() {
     EVP_CIPHER_CTX_cleanup(ctx_);
     EVP_CIPHER_CTX_free(ctx_);
   }
@@ -109,7 +109,7 @@ address address::pseudonymized(
   const address& original,
   const std::array<byte_type, pseudonymization_seed_array_size>& seed) {
   auto byte_offset = (original.is_v4() ? 12 : 0);
-  AddressEncryptor encryptor(seed);
+  address_encryptor encryptor(seed);
   auto pseudonymized_bytes = encryptor.encrypt(original.bytes_, byte_offset);
   return address(pseudonymized_bytes);
 }
