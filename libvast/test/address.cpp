@@ -21,6 +21,38 @@
 using namespace vast;
 using namespace std::string_literals;
 
+namespace {
+
+std::array<vast::address::byte_type, 32> seed_1
+  = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
+     216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
+
+std::array<vast::address::byte_type, 32> seed_2
+  = {0x80, 0x09, 0xAB, 0x3A, 0x60, 0x54, 0x35, 0xBE, 0xA0, 0xC3, 0x85,
+     0xBE, 0xA1, 0x84, 0x85, 0xD8, 0xB0, 0xA1, 0x10, 0x3D, 0x65, 0x90,
+     0xBD, 0xF4, 0x8C, 0x96, 0x8B, 0xE5, 0xDE, 0x53, 0x83, 0x6E};
+
+std::array<vast::address::byte_type, 32> seed_3
+  = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
+     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+
+void check_address_pseudonymization(
+  const std::unordered_map<std::string, std::string>& addresses,
+  const std::array<vast::address::byte_type, 32>& seed) {
+  for (const auto& [original, pseudonymized] : addresses) {
+    auto original_address = *to<address>(original);
+    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
+
+    auto pseudonymized_adress_actual
+      = address::pseudonymized(original_address, seed);
+
+    REQUIRE_EQUAL(pseudonymized_adress_actual,
+                  pseudonymized_address_expectation);
+  }
+}
+
+} // namespace
+
 TEST(IPv4) {
   address x;
   address y;
@@ -150,9 +182,6 @@ TEST(parseable) {
 }
 
 TEST(IPv4 pseudonymization - seed 1) {
-  std::array<vast::address::byte_type, 32> seed
-    = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
-       216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -234,47 +263,20 @@ TEST(IPv4 pseudonymization - seed 1) {
     {"169.254.100.50", "169.251.68.45"},
     {"255.255.255.255", "206.120.97.255"},
   };
-
-  for (const auto& [original, pseudonymized] : addresses) {
-    auto original_address = *to<address>(original);
-    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
-
-    auto pseudonymized_adress_actual
-      = address::pseudonymized(original_address, seed);
-
-    REQUIRE_EQUAL(pseudonymized_adress_actual,
-                  pseudonymized_address_expectation);
-  }
+  check_address_pseudonymization(addresses, seed_1);
 }
 
 TEST(IPv4 pseudonymization - seed 2) {
-  std::array<vast::address::byte_type, 32> seed
-    = {0x80, 0x09, 0xAB, 0x3A, 0x60, 0x54, 0x35, 0xBE, 0xA0, 0xC3, 0x85,
-       0xBE, 0xA1, 0x84, 0x85, 0xD8, 0xB0, 0xA1, 0x10, 0x3D, 0x65, 0x90,
-       0xBD, 0xF4, 0x8C, 0x96, 0x8B, 0xE5, 0xDE, 0x53, 0x83, 0x6E};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
     {"123.123.123.123", "117.8.135.123"}, {"131.159.1.42", "162.112.255.43"},
     {"8.8.8.8", "55.21.62.136"},          {"255.8.1.100", "240.232.0.156"},
     {"0.0.0.0", "56.131.176.115"},        {"255.255.255.255", "240.15.248.0"}};
-
-  for (const auto& [original, pseudonymized] : addresses) {
-    auto original_address = *to<address>(original);
-    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
-
-    auto pseudonymized_adress_actual
-      = address::pseudonymized(original_address, seed);
-
-    REQUIRE_EQUAL(pseudonymized_adress_actual,
-                  pseudonymized_address_expectation);
-  }
+  check_address_pseudonymization(addresses, seed_2);
 }
 
 TEST(IPv4 pseudonymization - seed 3) {
-  std::array<vast::address::byte_type, 32> seed
-    = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
-       16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -284,23 +286,10 @@ TEST(IPv4 pseudonymization - seed 3) {
     {"148.88.132.153", "106.38.130.153"}, {"148.88.132.64", "106.38.130.64"},
     {"148.88.133.200", "106.38.131.223"},
   };
-
-  for (const auto& [original, pseudonymized] : addresses) {
-    auto original_address = *to<address>(original);
-    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
-
-    auto pseudonymized_adress_actual
-      = address::pseudonymized(original_address, seed);
-
-    REQUIRE_EQUAL(pseudonymized_adress_actual,
-                  pseudonymized_address_expectation);
-  }
+  check_address_pseudonymization(addresses, seed_3);
 }
 
 TEST(IPv6 pseudonymization - seed 1) {
-  std::array<vast::address::byte_type, 32> seed
-    = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
-       216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -310,24 +299,10 @@ TEST(IPv6 pseudonymization - seed 1) {
     {"2001:db8::1", "4401:2bc:603f:d91d:27f:ff8e:e6f1:dc1e"},
     {"2001:db8::2", "4401:2bc:603f:d91d:27f:ff8e:e6f1:dc1c"},
   };
-
-  for (const auto& [original, pseudonymized] : addresses) {
-    auto original_address = *to<address>(original);
-    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
-
-    auto pseudonymized_adress_actual
-      = address::pseudonymized(original_address, seed);
-
-    REQUIRE_EQUAL(pseudonymized_adress_actual,
-                  pseudonymized_address_expectation);
-  }
+  check_address_pseudonymization(addresses, seed_1);
 }
 
 TEST(IPv6 pseudonymization - seed 2) {
-  std::array<vast::address::byte_type, 32> seed
-    = {0x80, 0x09, 0xAB, 0x3A, 0x60, 0x54, 0x35, 0xBE, 0xA0, 0xC3, 0x85,
-       0xBE, 0xA1, 0x84, 0x85, 0xD8, 0xB0, 0xA1, 0x10, 0x3D, 0x65, 0x90,
-       0xBD, 0xF4, 0x8C, 0x96, 0x8B, 0xE5, 0xDE, 0x53, 0x83, 0x6E};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
@@ -341,37 +316,14 @@ TEST(IPv6 pseudonymization - seed 2) {
     {"2001:b8:a3:00:00:2e:70:44", "1f18:b37b:1cc3:8118:41f:9fd1:f875:fab8"},
     {"fc00::", "f33c:8ca3:ef0f:e019:e7ff:f1e3:f91f:f800"},
   };
-
-  for (const auto& [original, pseudonymized] : addresses) {
-    auto original_address = *to<address>(original);
-    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
-
-    auto pseudonymized_adress_actual
-      = address::pseudonymized(original_address, seed);
-
-    REQUIRE_EQUAL(pseudonymized_adress_actual,
-                  pseudonymized_address_expectation);
-  }
+  check_address_pseudonymization(addresses, seed_2);
 }
 
 TEST(IPv6 pseudonymization - seed 3) {
-  std::array<vast::address::byte_type, 32> seed
-    = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
-       16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
   // test data from
   // https://github.com/noinkling/node-cryptopan/blob/main/src/test/test_data.ts
   std::unordered_map<std::string, std::string> addresses = {
     {"2001:db8::1", "dd92:2c44:3fc0:ff1e:7ff9:c7f0:8180:7e00"},
   };
-
-  for (const auto& [original, pseudonymized] : addresses) {
-    auto original_address = *to<address>(original);
-    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
-
-    auto pseudonymized_adress_actual
-      = address::pseudonymized(original_address, seed);
-
-    REQUIRE_EQUAL(pseudonymized_adress_actual,
-                  pseudonymized_address_expectation);
-  }
+  check_address_pseudonymization(addresses, seed_3);
 }
