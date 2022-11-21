@@ -60,16 +60,6 @@ public:
                               std::shared_ptr<arrow::Array> array) noexcept
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-      if (!caf::holds_alternative<address_type>(field.type)) {
-        VAST_ASSERT(false, "record batch field to be pseudonymized but does "
-                           "not "
-                           "have address type");
-        die(fmt::format("Field {} is to be pseudonymized but does not "
-                        "contain "
-                        "IP "
-                        "address values; skipping pseudonymization",
-                        field));
-      }
       auto builder
         = address_type::make_arrow_builder(arrow::default_memory_pool());
       auto address_view_generator = values(
@@ -91,9 +81,21 @@ public:
         {field, new_array},
       };
     };
-    for (const auto& field : config_.fields) {
+    for (const auto& field_name : config_.fields) {
       for (const auto& index : caf::get<record_type>(layout).resolve_key_suffix(
-             field, layout.name())) {
+             field_name, layout.name())) {
+        if (!caf::holds_alternative<address_type>(
+              caf::get<record_type>(layout).field(index).type)) {
+          VAST_ASSERT(false, "record batch field to be pseudonymized but does "
+                             "not "
+                             "have address type");
+          VAST_WARN(fmt::format("Field {} is to be pseudonymized but does not "
+                                "contain "
+                                "IP "
+                                "address values; skipping pseudonymization",
+                                field_name));
+          continue;
+        }
         transformations.push_back({index, std::move(transformation)});
       }
     }
