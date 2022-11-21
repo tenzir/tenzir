@@ -4,10 +4,10 @@
   import { timeParse, timeFormat } from 'd3-time-format';
   import { format, precisionFixed } from 'd3-format';
 
-  import MultiLine from './_components/MultiLine.svelte';
-  import AxisX from './_components/AxisX.svelte';
-  import AxisY from './_components/AxisY.svelte';
-  import Key from './_components/Key.html.svelte';
+  import MultiLine from '../_components/MultiLine.svelte';
+  import AxisX from '../_components/AxisX.svelte';
+  import AxisY from '../_components/AxisY.svelte';
+  import Key from '../_components/Key.html.svelte';
   import { data } from './data';
 
   /* --------------------------------------------
