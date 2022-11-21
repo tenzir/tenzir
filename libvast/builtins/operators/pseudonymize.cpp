@@ -78,7 +78,7 @@ public:
         auto append_status = arrow::Status{};
         if (address) {
           auto pseudonymized_address
-            = vast::address::pseudonymized(*address, config_.seed_bytes);
+            = vast::address::pseudonymize(*address, config_.seed_bytes);
           append_status
             = append_builder(address_type{}, *builder, pseudonymized_address);
         } else {

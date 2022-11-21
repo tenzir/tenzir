@@ -105,7 +105,7 @@ private:
 
 } // namespace
 
-address address::pseudonymized(
+address address::pseudonymize(
   const address& original,
   const std::array<byte_type, pseudonymization_seed_array_size>& seed) {
   auto byte_offset = (original.is_v4() ? 12 : 0);
