@@ -7,7 +7,7 @@ pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/
 function down {
   exit_code=$?
   docker compose down -v
-  exit exit_code
+  exit $exit_code
 }
 trap down EXIT
 
