@@ -23,20 +23,23 @@
   );
 
   const { headerRows, rows, tableAttrs, tableBodyAttrs } = table.createViewModel(columns);
+  export let showHeaderBorder = false;
+  export let showCellBorder = false;
 </script>
 
-<div class="bg-gray-100 rounded p-2 overflow-x-auto">
-  <table
-    {...$tableAttrs}
-    class="table-auto text-sm text-left text-gray-500 w-full border-collapse m-2"
-  >
+<div class="bg-gray-100 rounded p-2 overflow-auto">
+  <table {...$tableAttrs} class={`table-auto text-sm text-left text-gray-500 border-collapse m-2`}>
     <thead>
       {#each $headerRows as headerRow (headerRow.id)}
         <Subscribe rowAttrs={headerRow.attrs()} let:rowAttrs>
           <tr {...rowAttrs}>
             {#each headerRow.cells as cell (cell.id)}
               <Subscribe attrs={cell.attrs()} let:attrs props={cell.props()} let:props>
-                <th {...attrs} on:click={props.sort.toggle} class="border border-slate-300">
+                <th
+                  {...attrs}
+                  on:click={props.sort.toggle}
+                  class={showHeaderBorder ? 'border border-slate-300' : ''}
+                >
                   <Render of={cell.render()} />
                   {#if props.sort.order === 'asc'}
                     ⬇️
@@ -50,13 +53,14 @@
         </Subscribe>
       {/each}
     </thead>
+
     <tbody {...$tableBodyAttrs}>
       {#each $rows as row (row.id)}
         <Subscribe rowAttrs={row.attrs()} let:rowAttrs>
           <tr {...rowAttrs}>
             {#each row.cells as cell (cell.id)}
               <Subscribe attrs={cell.attrs()} let:attrs>
-                <td {...attrs} class="border border-slate-300">
+                <td {...attrs} class={showCellBorder ? 'border border-slate-300' : ''}>
                   <Render of={cell.render()} />
                 </td>
               </Subscribe>

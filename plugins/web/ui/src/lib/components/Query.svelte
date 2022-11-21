@@ -44,19 +44,24 @@
 </script>
 
 <div class="w-1/3 pb-4">
-<input
-  bind:value={inputVal}
-  class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-/>
+  <input
+    bind:value={inputVal}
+    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+  />
 </div>
 
-<Button onClick={handleRun} class="flex items-center mr-2">Run</Button>
+<Button onClick={handleRun}>Run</Button>
 
-<div>
-  <!-- NOTE: We need to use the key block as the table does not update otherwise (due to use of stores?) -->
-  {#key queryResult}
-    {#if queryResult?.events?.[0] && columnNames}
-      <Table tableRows={queryResult.events} columnDetails={columnNames} />
-    {/if}
-  {/key}
-</div>
+<!-- NOTE: We need to use the key block as the table does not update otherwise (due to use of stores?) -->
+{#key queryResult}
+  {#if queryResult?.events?.[0] && columnNames}
+    <div class="py-2 max-w-80% max-h-300px overflow-auto">
+      <Table
+        tableRows={queryResult.events}
+        columnDetails={columnNames}
+        showCellBorder
+        showHeaderBorder
+      />
+    </div>
+  {/if}
+{/key}
