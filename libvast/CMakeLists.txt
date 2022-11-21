@@ -229,9 +229,7 @@ else ()
       RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
     if (NOT TARGET libcaf_openssl_${_linkage_suffix})
       string(
-        JOIN
-        " "
-        err_message
+        JOIN " " err_message
         "Unable to find the bundled CAF's OpenSSL module; consider setting "
         "OPENSSL_ROOT_DIR to the install prefix of your OpenSSL installation.")
       message(FATAL_ERROR "${err_message}")
