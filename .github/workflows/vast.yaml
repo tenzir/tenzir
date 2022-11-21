@@ -1047,11 +1047,14 @@ jobs:
       - name: Publish ${{ needs.configure.outputs.release-version }} to Test PyPI
         working-directory: python
         run: |
-          poetry publish --build -r test-pypi
-      - name: Publish to PyPI
-        working-directory: python
-        run: |
-          poetry publish --build
+          poetry publish --build -r test-pypi --no-interaction
+      # FIXME: Temporarily disabled until the name-squatting on PyPI is
+      # resolved, or we have decided on another name. See this PEP 541 request
+      # for reference: https://github.com/pypa/pypi-support/issues/2352
+      # - name: Publish to PyPI
+      #   working-directory: python
+      #   run: |
+      #     poetry publish --build --no-interaction
 
   pass-branch-protections:
     needs:
