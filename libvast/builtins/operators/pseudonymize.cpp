@@ -23,6 +23,8 @@ namespace vast::plugins::pseudonymize {
 
 /// The configuration of the pseudonymize pipeline operator.
 struct configuration {
+  // field for future extensibility; currently we only use the Crypto-PAn method
+  std::string method;
   std::string seed;
   std::array<address::byte_type, vast::address::pseudonymization_seed_array_size>
     seed_bytes{};
@@ -30,11 +32,12 @@ struct configuration {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.seed, x.fields);
+    return f(x.method, x.seed, x.fields);
   }
 
   static inline const record_type& layout() noexcept {
     static auto result = record_type{
+      {"method", string_type{}},
       {"seed", string_type{}},
       {"fields", list_type{string_type{}}},
     };
@@ -145,13 +148,17 @@ public:
 
   [[nodiscard]] caf::expected<std::unique_ptr<pipeline_operator>>
   make_pipeline_operator(const record& options) const override {
-    if (options.size() != 2) {
+    if (options.size() != 3) {
       return caf::make_error(ec::invalid_configuration,
                              "Configuration under vast.plugins.pseudonymize "
                              "must "
-                             "only contain the 'seed' and 'fields' keys");
+                             "only contain 'method', 'seed' and 'fields' keys");
     }
-
+    if (!options.contains("method")) {
+      return caf::make_error(ec::invalid_configuration,
+                             "Configuration under vast.plugins.pseudonymize "
+                             "does not contain 'method' key");
+    }
     if (!options.contains("seed")) {
       return caf::make_error(ec::invalid_configuration,
                              "Configuration under vast.plugins.pseudonymize "
@@ -162,7 +169,6 @@ public:
                              "Configuration under vast.plugins.pseudonymize "
                              "does not contain 'fields' key");
     }
-
     auto config = to<configuration>(options);
     if (!config)
       return config.error();

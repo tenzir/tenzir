@@ -329,8 +329,9 @@ TEST(pseudonymize - invalid seed) {
   auto slice
     = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   REQUIRE_ERROR(vast::make_pipeline_operator(
-    "pseudonymize",
-    {{"seed", "foobar"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+    "pseudonymize", {{"method", "crypto-pan"},
+                     {"seed", "foobar"},
+                     {"fields", vast::list{"orig_addr", "dest_addr"}}}));
 }
 
 TEST(pseudonymize - seed but no fields) {
@@ -346,12 +347,21 @@ TEST(pseudonymize - fields but no seed) {
     "pseudonymize", {{"fields", vast::list{"orig_addr", "dest_addr"}}}));
 }
 
+TEST(pseudonymize - seed and fields but no method) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  REQUIRE_ERROR(vast::make_pipeline_operator(
+    "pseudonymize",
+    {{"seed", "deadbee"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+}
+
 TEST(pseudonymize - seed input too short and odd amount of chars) {
   auto slice
     = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   auto pseudonymize_op = unbox(vast::make_pipeline_operator(
-    "pseudonymize",
-    {{"seed", "deadbee"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+    "pseudonymize", {{"method", "crypto-pan"},
+                     {"seed", "deadbee"},
+                     {"fields", vast::list{"orig_addr", "dest_addr"}}}));
   auto pseudonymize_failed
     = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!pseudonymize_failed);
@@ -373,7 +383,8 @@ TEST(pseudonymize - seed input too long) {
     = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   auto pseudonymize_op = unbox(vast::make_pipeline_operator(
     "pseudonymize",
-    {{"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
+    {{"method", "crypto-pan"},
+     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
               "8be5de53836e8009ab3a605435bea0c385bea18485d8b0a1103d"
               "6590bdf48c968be5de53836e"},
      {"fields", vast::list{"orig_addr", "dest_addr"}}}));
@@ -397,7 +408,8 @@ TEST(pseudonymize - IPv4 address batch pseudonymizing) {
   auto slice
     = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
   auto pseudonymize_op = unbox(vast::make_pipeline_operator(
-    "pseudonymize", {{"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf4"
+    "pseudonymize", {{"method", "crypto-pan"},
+                     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf4"
                               "8c96"
                               "8be5de53836e"},
                      {"fields", vast::list{"orig_addr", "dest_addr"}}}));
@@ -422,7 +434,8 @@ TEST(pseudonymize - IPv6 address batch pseudonymizing) {
     = make_pseudonymize_testdata("2a02:0db8:85a3:0000:0000:8a2e:0370:7344",
                                  "fc00::", "2a02:db8:85a3::8a2e:370:7344");
   auto pseudonymize_op = unbox(vast::make_pipeline_operator(
-    "pseudonymize", {{"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf4"
+    "pseudonymize", {{"method", "crypto-pan"},
+                     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf4"
                               "8c96"
                               "8be5de53836e"},
                      {"fields", vast::list{"orig_addr", "dest_addr"}}}));

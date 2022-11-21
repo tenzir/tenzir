@@ -1,9 +1,10 @@
 # pseudonymize
 
-Pseudonymizes IP addresses according to the [Crypto-PAn](https://en.wikipedia.org/wiki/Crypto-PAn) algorithm.
+Pseudonymizes IP addresses according to a certain method. Currently, VAST only uses the [Crypto-PAn](https://en.wikipedia.org/wiki/Crypto-PAn) algorithm.
 
 ## Parameters
 
+- `method: [string]`: The method to pseudonymize the address. Currently this always defaults to `crypto-pan`.
 - `seed: [string]`: The 64-byte seed that describes a hexadecimal value. When the seed is shorter than 64 bytes, the operator will append zeros to match the size; when it is longer, it will truncate the seed.
 - `fields: <list>`: The list of fields to apply the pseudonymization to. During pseudonymization, the operator will ignore specified fields that do not contain IP addresses.
 
@@ -11,6 +12,7 @@ Pseudonymizes IP addresses according to the [Crypto-PAn](https://en.wikipedia.or
 
 ```yaml
 pseudonymize:
+  method: crypto-pan
   seed: abcdef1234567890987654321fedcbaabcdef1234567890987654321fedcbaab
   fields:
     - ip_origin
