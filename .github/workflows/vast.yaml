@@ -1047,11 +1047,11 @@ jobs:
       - name: Publish ${{ needs.configure.outputs.release-version }} to Test PyPI
         working-directory: python
         run: |
-          poetry publish --build -r test-pypi
+          poetry publish --build -r test-pypi --no-interaction
       - name: Publish to PyPI
         working-directory: python
         run: |
-          poetry publish --build
+          poetry publish --build --no-interaction
 
   pass-branch-protections:
     needs:
