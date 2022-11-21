@@ -9,7 +9,7 @@ from typing import Dict, Optional, Tuple
 
 import requests
 
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
 
 CORTEX_URL = os.environ["CORTEX_URL"]
 VAST_ENDPOINT = os.environ["VAST_ENDPOINT"]
