@@ -64,15 +64,15 @@ public:
           -> std::vector<std::pair<struct record_type::field,
                                    std::shared_ptr<arrow::Array>>> {
           if (!caf::holds_alternative<address_type>(field.type)) {
-            VAST_ASSERT(false
-                        && "record batch field to be pseudonymized but does "
-                           "not "
-                           "have address type");
-            VAST_WARN("Field {} is to be pseudonymized but does not contain "
-                      "IP "
-                      "address values; skipping pseudonymization",
-                      field);
-            return {{field, array}};
+            VAST_ASSERT(false,
+                        "record batch field to be pseudonymized but does "
+                        "not "
+                        "have address type");
+            die(fmt::format("Field {} is to be pseudonymized but does not "
+                            "contain "
+                            "IP "
+                            "address values; skipping pseudonymization",
+                            field));
           }
           auto builder
             = address_type::make_arrow_builder(arrow::default_memory_pool());
