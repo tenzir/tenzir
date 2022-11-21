@@ -98,6 +98,9 @@ public:
       }
     }
     std::sort(transformations.begin(), transformations.end());
+    transformations.erase(std::unique(transformations.begin(),
+                                      transformations.end()),
+                          transformations.end());
     auto [adjusted_layout, adjusted_batch]
       = transform_columns(layout, batch, transformations);
     transformed_batches_.emplace_back(std::move(adjusted_layout),
