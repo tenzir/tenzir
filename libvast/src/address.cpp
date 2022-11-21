@@ -28,6 +28,7 @@
 namespace vast {
 
 namespace {
+
 inline uint32_t bitmask32(size_t bottom_bits) {
   return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
 }
