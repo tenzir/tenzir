@@ -56,46 +56,44 @@ public:
   [[nodiscard]] caf::error
   add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
     std::vector<indexed_transformation> transformations;
+    auto transformation = [&](struct record_type::field field,
+                              std::shared_ptr<arrow::Array> array) noexcept
+      -> std::vector<
+        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+      if (!caf::holds_alternative<address_type>(field.type)) {
+        VAST_ASSERT(false, "record batch field to be pseudonymized but does "
+                           "not "
+                           "have address type");
+        die(fmt::format("Field {} is to be pseudonymized but does not "
+                        "contain "
+                        "IP "
+                        "address values; skipping pseudonymization",
+                        field));
+      }
+      auto builder
+        = address_type::make_arrow_builder(arrow::default_memory_pool());
+      auto address_view_generator = values(
+        address_type{}, caf::get<type_to_arrow_array_t<address_type>>(*array));
+      for (const auto& address : address_view_generator) {
+        auto append_status = arrow::Status{};
+        if (address) {
+          auto pseudonymized_address
+            = vast::address::pseudonymized(*address, config_.seed_bytes);
+          append_status
+            = append_builder(address_type{}, *builder, pseudonymized_address);
+        } else {
+          append_status = builder->AppendNull();
+        }
+        VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
+      }
+      auto new_array = builder->Finish().ValueOrDie();
+      return {
+        {field, new_array},
+      };
+    };
     for (const auto& field : config_.fields) {
       for (const auto& index : caf::get<record_type>(layout).resolve_key_suffix(
              field, layout.name())) {
-        auto transformation = [&](struct record_type::field field,
-                                  std::shared_ptr<arrow::Array> array) noexcept
-          -> std::vector<std::pair<struct record_type::field,
-                                   std::shared_ptr<arrow::Array>>> {
-          if (!caf::holds_alternative<address_type>(field.type)) {
-            VAST_ASSERT(false,
-                        "record batch field to be pseudonymized but does "
-                        "not "
-                        "have address type");
-            die(fmt::format("Field {} is to be pseudonymized but does not "
-                            "contain "
-                            "IP "
-                            "address values; skipping pseudonymization",
-                            field));
-          }
-          auto builder
-            = address_type::make_arrow_builder(arrow::default_memory_pool());
-          auto address_view_generator
-            = values(address_type{},
-                     caf::get<type_to_arrow_array_t<address_type>>(*array));
-          for (const auto& address : address_view_generator) {
-            auto append_status = arrow::Status{};
-            if (address) {
-              auto pseudonymized_address
-                = vast::address::pseudonymized(*address, config_.seed_bytes);
-              append_status = append_builder(address_type{}, *builder,
-                                             pseudonymized_address);
-            } else {
-              append_status = builder->AppendNull();
-            }
-            VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
-          }
-          auto new_array = builder->Finish().ValueOrDie();
-          return {
-            {field, new_array},
-          };
-        };
         transformations.push_back({index, std::move(transformation)});
       }
     }
