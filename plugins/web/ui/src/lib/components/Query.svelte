@@ -2,6 +2,7 @@
   import Table from './Table.svelte';
 
   import type TableRow from './Table.svelte';
+  import Button from './Button.svelte';
 
   let inputVal = '';
 
@@ -24,13 +25,13 @@
     }
   };
   interface QueryResult {
-    version: string,
-    num_events: number,
-    events: TableRow[], // TODO better type it once the API is stabilized
+    version: string;
+    num_events: number;
+    events: TableRow[]; // TODO better type it once the API is stabilized
   }
 
-  let queryResult : QueryResult
-  $: console.log(queryResult)
+  let queryResult: QueryResult;
+  $: console.log(queryResult);
 
   const handleRun = async () => {
     queryResult = await getQuery(inputVal);
@@ -42,8 +43,14 @@
     });
 </script>
 
-<input bind:value={inputVal} />
-<button on:click={handleRun} class="flex items-center mr-2"> Run </button>
+<div class="w-1/3 pb-4">
+<input
+  bind:value={inputVal}
+  class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+/>
+</div>
+
+<Button onClick={handleRun} class="flex items-center mr-2">Run</Button>
 
 <div>
   <!-- NOTE: We need to use the key block as the table does not update otherwise (due to use of stores?) -->

@@ -8,7 +8,7 @@
   const { data, xGet, yGet, zGet, xScale, yScale } = getContext('LayerCake');
 
   $: path = (values) => {
-    console.log({ values })
+    console.log({ values });
     return (
       'M' +
       values

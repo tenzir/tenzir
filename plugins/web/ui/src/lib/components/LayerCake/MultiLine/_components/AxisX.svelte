@@ -3,7 +3,6 @@
   Generates an SVG x-axis. This component is also configured to detect if your x-scale is an ordinal scale. If so, it will place the markers in the middle of the bandwidth.
  -->
 <script lang="ts">
-
   import { getContext } from 'svelte';
   const { width, height, xScale, yRange } = getContext('LayerCake');
 

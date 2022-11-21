@@ -4,6 +4,7 @@
   import Menu from '$lib/components/Menu.svelte';
   import Editor from '$lib/components/Editor.svelte';
   import { capitalizeFirstLetter } from '$lib/util/strings';
+  import Button from '$lib/components/Button.svelte';
   let possibleBlocks = ['bytes', 'text', 'query'] as const;
 
   type Block = typeof possibleBlocks[number];
@@ -22,7 +23,7 @@
   <div class="flex justify-between my-4 mr-4">
     <div class="text-xl font-bold">Reports</div>
 
-    <button class="flex items-center mr-2"> Export </button>
+    <Button onClick={() => {}}>Export</Button>
   </div>
   {#each visibleBlocks as block}
     {#if block == 'bytes'}

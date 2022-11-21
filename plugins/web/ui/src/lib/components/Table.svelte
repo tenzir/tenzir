@@ -5,7 +5,7 @@
 
   type TableRow = {
     [key: string]: string | number;
-  }
+  };
 
   type ColumnInfo = { header: string; accessor: string };
 
