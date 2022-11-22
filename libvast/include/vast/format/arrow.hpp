@@ -35,7 +35,7 @@ public:
   writer();
   writer(writer&&) = default;
   writer& operator=(writer&&) = default;
-  ~writer() override;
+  ~writer() override = default;
 
   explicit writer(const caf::settings& options);
 

@@ -36,10 +36,6 @@ writer::writer(const caf::settings&) {
   out_ = std::make_shared<::arrow::io::StdoutStream>();
 }
 
-writer::~writer() {
-  // nop
-}
-
 caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
     return caf::make_error(ec::logic_error, "invalid arrow output stream");
@@ -176,8 +172,8 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 
 caf::error reader::module([[maybe_unused]] vast::module m) {
   // The VAST types are automatically generated and cannot be changed.
-  return caf::make_error(ec::logic_error, "schema is derived from the Arrow "
-                                          "input and can't be changed");
+  return caf::make_error(ec::no_error, "schema is derived from the Arrow "
+                                       "input and can't be changed");
 }
 
 module reader::module() const {
