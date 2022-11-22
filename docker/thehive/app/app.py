@@ -138,7 +138,7 @@ async def on_suricata_alert(alert: Dict):
 
 async def run_async():
     await VAST.status(60, retry_delay=1)
-    await wait_for_thehive("/api/v1/user/current", 120)
+    await wait_for_thehive("/api/v1/user/current", 180)
     expr = '#type == "suricata.alert"'
     # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
@@ -160,5 +160,5 @@ def run():
 def alert_count():
     """Log alert count for tests"""
     list_query = {"query": [{"_name": "listAlert"}]}
-    alerts = asyncio.run(wait_for_thehive("/api/v1/query", 120, list_query))
+    alerts = asyncio.run(wait_for_thehive("/api/v1/query", 180, list_query))
     logger.info(f"alert_count={len(json.loads(alerts))}")
