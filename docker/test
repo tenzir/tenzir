@@ -40,10 +40,10 @@ fi
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/vast"
 
 # We set a unique project name during testing so we can check at the end whether
-# all containers we spun up during testing exited cleanly. Docker Compose uses
-# this as a prefix for the service, network, and volume names unless we set a
-# custom 'container_name', which we do not.
+# all containers we spun up during testing exited cleanly. We also disable the
+# manual override of VAST container name for the same reason.
 export COMPOSE_PROJECT_NAME="vast-test-${RANDOM}"
+export VAST_CONTAINER_NAME=null
 
 # Bring up the Docker Compose stack.
 docker compose ${compose_files} down --volumes
