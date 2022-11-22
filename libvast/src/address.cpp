@@ -36,24 +36,16 @@ inline uint32_t bitmask32(size_t bottom_bits) {
 class address_encryptor {
 public:
   explicit address_encryptor(const std::array<address::byte_type, 32>& key) {
-    ctx_ = EVP_CIPHER_CTX_new();
-    EVP_CIPHER_CTX_init(ctx_);
+    EVP_CIPHER_CTX_init(ctx_.get());
     OpenSSL_add_all_ciphers();
     cipher_ = EVP_get_cipherbyname("aes-128-ecb");
     block_size_ = EVP_CIPHER_block_size(cipher_);
     pad_ = std::vector<address::byte_type>(block_size_);
     auto pad_out_len = 0;
-    EVP_CipherInit_ex(ctx_, cipher_, nullptr, key.data(), nullptr, 1);
+    EVP_CipherInit_ex(ctx_.get(), cipher_, nullptr, key.data(), nullptr, 1);
     // use second 16-byte half of key for padding
-    EVP_CipherUpdate(ctx_, pad_.data(), &pad_out_len, key.data() + block_size_,
-                     block_size_);
-  }
-
-  address_encryptor(const address_encryptor&) = delete;
-
-  ~address_encryptor() {
-    EVP_CIPHER_CTX_cleanup(ctx_);
-    EVP_CIPHER_CTX_free(ctx_);
+    EVP_CipherUpdate(ctx_.get(), pad_.data(), &pad_out_len,
+                     key.data() + block_size_, block_size_);
   }
 
   auto operator()(address::byte_array bytes, size_t byte_offset) {
@@ -67,7 +59,8 @@ public:
 
 private:
   static constexpr inline auto msb_of_byte_mask = 0b10000000;
-  EVP_CIPHER_CTX* ctx_ = {};
+  std::unique_ptr<EVP_CIPHER_CTX, std::function<void(EVP_CIPHER_CTX*)>> ctx_
+    = {EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free};
   const EVP_CIPHER* cipher_ = {};
   int block_size_ = {};
   std::vector<address::byte_type> pad_ = {};
@@ -77,8 +70,8 @@ private:
     auto out_len = 0;
     auto cipher_input = std::vector<address::byte_type>(pad_);
     auto cipher_output = std::vector<address::byte_type>(pad_);
-    EVP_CipherUpdate(ctx_, cipher_output.data(), &out_len, cipher_input.data(),
-                     block_size_);
+    EVP_CipherUpdate(ctx_.get(), cipher_output.data(), &out_len,
+                     cipher_input.data(), block_size_);
     auto byte_index = 0;
     auto bit_index = 0;
     auto one_time_pad
@@ -91,7 +84,7 @@ private:
       auto original_byte = bytes_to_encrypt[byte_index];
       cipher_input[byte_index]
         = (original_byte & original_mask) | (padding_byte & padding_mask);
-      EVP_CipherUpdate(ctx_, cipher_output.data(), &out_len,
+      EVP_CipherUpdate(ctx_.get(), cipher_output.data(), &out_len,
                        cipher_input.data(), block_size_);
       ++i;
       byte_index = i / 8;
