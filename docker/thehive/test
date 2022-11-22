@@ -13,9 +13,6 @@ function down {
 }
 trap down EXIT
 
-# build vast-poetry image, as it is not available in the registry.
-docker compose -f ../poetry/docker-compose.yaml build
-
 # Start thehive without the app
 COMPOSE_FILE="docker-compose.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:docker-compose.vast.yaml"
@@ -31,12 +28,6 @@ docker compose run --no-TTY vast import --blocking suricata \
 # add the app to the stack
 export COMPOSE_FILE="$COMPOSE_FILE:docker-compose.app.yaml"
 docker compose up --build -d thehive-app
-
-# wait for Poetry to install dependencies, otherwise the `alert-count`
-# entrypoint that runs on the same volume might run into concurrency issus when
-# running `poetry install` itself.
-# TODO find a more reliable way to achieve this
-sleep 90
 
 # check that the historical import took place
 docker compose run thehive-app alert-count 2>&1 | \

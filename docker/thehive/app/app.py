@@ -63,7 +63,8 @@ async def wait_for_thehive(
             time.sleep(1)
 
 
-def suricata2hive(event: Dict) -> Dict:
+def suricata2thehive(event: Dict) -> Dict:
+    """Convert a Suricata alert event into a TheHive alert"""
     # convert iso into epoch
     sighted_time_iso = event.get("timestamp", datetime.datetime.now().isoformat())
     sighted_time_ms = int(isoparse(sighted_time_iso).timestamp() * 1000)
@@ -120,7 +121,7 @@ async def on_suricata_alert(alert: Dict):
     global SENT_ALERT_REFS
     logger.debug(f"Received alert: {alert}")
 
-    thehive_alert = suricata2hive(alert)
+    thehive_alert = suricata2thehive(alert)
     ref = thehive_alert["sourceRef"]
     if ref in SENT_ALERT_REFS:
         logger.debug(f"Alert with hash {ref} skipped")
