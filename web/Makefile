@@ -5,9 +5,6 @@ POETRY := $(shell command -v poetry 2> /dev/null)
 RSCRIPT := $(shell command -v Rscript 2> /dev/null)
 QUARTO := $(shell command -v quarto 2> /dev/null)
 
-CHANGELOG_INPUT := ../CHANGELOG.md
-CHANGELOG_OUTPUT := src/pages/changelog.md
-
 CONTRIBUTING_DIR := docs/contribute
 
 QUARTO_INPUTS := $(shell find docs blog -name '*.qmd')
@@ -17,12 +14,7 @@ QUARTO_FILES_OUTPUTS := $(patsubst %.qmd, %_files, $(QUARTO_INPUTS))
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
 
-all: changelog dot-github rfc quarto
-
-changelog: $(CHANGELOG_OUTPUT)
-
-$(CHANGELOG_OUTPUT): $(CHANGELOG_INPUT)
-	cp -f $< $@
+all: dot-github rfc quarto
 
 dot-github: \
   $(CONTRIBUTING_DIR)/code-of-conduct.md \

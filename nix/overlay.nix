@@ -162,10 +162,8 @@ in
       (inputs.nix-filter.lib.inDirectory ../changelog)
       ../VERSIONING.md
       ../CMakeLists.txt
-      ../CHANGELOG.md
       ../LICENSE
       ../VAST.spdx
-      ../BANNER
       ../README.md
       ../vast.yaml.example
       ../version.json
