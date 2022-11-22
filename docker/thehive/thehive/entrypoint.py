@@ -91,19 +91,14 @@ def call_thehive(
 def init_cortex():
     """Configure Cortex and copy the obtained API key to TheHive config"""
 
+    # Note: all calls to cortex must be retried because of consitency issues
+
     # The maintenance/migrate initializes the ES database
     # It will fail until ES is "sufficiently" ready, whatever that means
-    retry_until_timeout(
-        lambda: call_cortex("/api/maintenance/migrate", {}),
-        "Cortex server migration",
-        120,
-    )
+    call = lambda: call_cortex("/api/maintenance/migrate", {})
+    retry_until_timeout(call, "Cortex server migration", 120)
 
-    # ES is eventually conistent, so wait for things to settle
-    time.sleep(60)
-
-    # This user already exists by default but does not have sufficient priviledges to set passwords
-    call_cortex(
+    call = lambda: call_cortex(
         "/api/user",
         {
             "login": CORTEX_ADMIN_EMAIL,
@@ -113,8 +108,9 @@ def init_cortex():
             "organization": "cortex",
         },
     )
+    retry_until_timeout(call, "Cortex upgrade admin to superadmin", 120)
 
-    call_cortex(
+    call = lambda: call_cortex(
         "/api/organization",
         {
             "name": "Tenzir",
@@ -123,10 +119,11 @@ def init_cortex():
         },
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
+    retry_until_timeout(call, "Cortex create Tenzir org", 30)
 
     # We need an orgadmin because the superadmin can only perform user/org
     # related tasks
-    call_cortex(
+    call = lambda: call_cortex(
         "/api/user",
         {
             "name": "Tenzir org Admin",
@@ -136,16 +133,18 @@ def init_cortex():
         },
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
+    retry_until_timeout(call, "Cortex orgadmin", 30)
 
     # Setting a password is not strictly required but can come in handy to
     # interact with the Cortex UI
-    call_cortex(
+    call = lambda: call_cortex(
         f"/api/user/{CORTEX_ORGADMIN_EMAIL}/password/set",
         {"password": CORTEX_ORGADMIN_PWD},
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
+    retry_until_timeout(call, "Cortex set orgadmin password", 30)
 
-    call_cortex(
+    call = lambda: call_cortex(
         "/api/organization/analyzer/VAST-Search_1_0",
         {
             "name": "VAST-Search_1_0",
@@ -163,6 +162,7 @@ def init_cortex():
         },
         (CORTEX_ORGADMIN_EMAIL, CORTEX_ORGADMIN_PWD),
     )
+    retry_until_timeout(call, "Cortex create analyzer", 30)
 
     # The API key is how TheHive interacts with Cortex
     api_key = call_cortex(
