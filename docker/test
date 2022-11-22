@@ -22,17 +22,17 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-compose_files='-f docker-compose.yaml -f docker-compose.web.yaml'
+export COMPOSE_FILE="docker-compose.yaml:docker-compose.web.yaml"
 if (( "${build}" == 1 )); then
   export VAST_CONTAINER_REGISTRY='docker.io'
   export VAST_CONTAINER_REF='latest'
-  compose_files="${compose_files} -f docker-compose.build.yaml"
+  export COMPOSE_FILE="${COMPOSE_FILE}:docker-compose.build.yaml"
   build_policy='--pull=never'
 else
   export VAST_CONTAINER_REGISTRY="${VAST_CONTAINER_REGISTRY:-ghcr.io}"
   export VAST_CONTAINER_REF="${VAST_CONTAINER_REF:-$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')}"
   if [[ "${VAST_CONTAINER_REF}" == "master" ]]; then
-    export VAST_CONTAINER_REF="$(git rev-parse HEAD)"
+    expoet VAST_CONTAINER_REF="$(git rev-parse HEAD)"
   fi
   build_policy='--pull=always'
 fi
@@ -46,8 +46,8 @@ export COMPOSE_PROJECT_NAME="vast-test-${RANDOM}"
 export VAST_CONTAINER_NAME=null
 
 # Bring up the Docker Compose stack.
-docker compose ${compose_files} down --volumes
-docker compose ${compose_files} up ${build_policy} --detach
+docker compose down --volumes
+docker compose up ${build_policy} --detach
 
 # Wait for VAST to be reachable.
 # FIXME: The below would be ideal in the absence of VAST's client commands
@@ -61,28 +61,28 @@ sleep 3
 
 # Run a basic status check; we don't particularly care about the output itself,
 # so essentially we're just checking for the exit code.
-docker compose ${compose_files} run vast status > /dev/null
+docker compose run vast status > /dev/null
 
 # Ingest some test data.
 gunzip -c ../../vast/integration/data/zeek/*.log.gz |
-  docker compose ${compose_files} run --no-TTY vast import --blocking zeek
-docker compose ${compose_files} run --no-TTY vast import --blocking suricata \
+  docker compose run --no-TTY vast import --blocking zeek
+docker compose run --no-TTY vast import --blocking suricata \
   < ../../vast/integration/data/suricata/eve.json
 
 # Check whether we imported the right amount of data.
-num_imported="$(docker compose ${compose_files} run --interactive=false vast count)"
+num_imported="$(docker compose run --interactive=false vast count)"
 num_imported_expected="18493"
 [[ "${num_imported}" == "${num_imported_expected}" ]]
 
 # Print logs for easier debugging in case something went wrong.
-docker compose ${compose_files} ps
-docker compose ${compose_files} logs
+docker compose ps
+docker compose logs
 
 # Assert that all containers that exited have exited cleanly.
 exited_all="$(docker ps --all --filter "name=${COMPOSE_PROJECT_NAME}" --filter 'status=exited' -q | sort -u)"
 exited_cleanly="$(docker ps --all --filter "name=${COMPOSE_PROJECT_NAME}" --filter 'exited=0' -q | sort -u)"
 [[ "${exited_all}" == "${exited_cleanly}" ]]
 
-docker compose ${compose_files} down --volumes
+docker compose down --volumes
 
 popd
