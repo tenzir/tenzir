@@ -84,16 +84,11 @@ public:
     for (const auto& field_name : config_.fields) {
       for (const auto& index : caf::get<record_type>(layout).resolve_key_suffix(
              field_name, layout.name())) {
-        if (!caf::holds_alternative<address_type>(
-              caf::get<record_type>(layout).field(index).type)) {
-          VAST_ASSERT(false, "record batch field to be pseudonymized but does "
-                             "not "
-                             "have address type");
-          VAST_WARN(fmt::format("Field {} is to be pseudonymized but does not "
-                                "contain "
-                                "IP "
-                                "address values; skipping pseudonymization",
-                                field_name));
+        auto index_type = caf::get<record_type>(layout).field(index).type;
+        if (!caf::holds_alternative<address_type>(index_type)) {
+          VAST_DEBUG("pseudonymize operator skips field '{}' of unsupported "
+                     "type '{}'",
+                     field_name, index_type.name());
           continue;
         }
         transformations.push_back({index, std::move(transformation)});
