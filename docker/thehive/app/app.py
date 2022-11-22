@@ -60,7 +60,7 @@ async def wait_for_thehive(
             if time.time() - start > timeout:
                 raise Exception("Timed out trying to reach TheHive")
             logger.debug(e)
-            time.sleep(1)
+            await asyncio.sleep(1)
 
 
 def suricata2thehive(event: Dict) -> Dict:
@@ -158,8 +158,25 @@ def run():
     logger.info("TheHive app stopped")
 
 
-def alert_count():
-    """Log alert count for tests"""
+async def wait_for_alerts(timeout):
+    """Call TheHive listAlert API until the number of alerts is greater than 0"""
     list_query = {"query": [{"_name": "listAlert"}]}
-    alerts = asyncio.run(wait_for_thehive("/api/v1/query", 180, list_query))
-    logger.info(f"alert_count={len(json.loads(alerts))}")
+    start = time.time()
+    while True:
+        try:
+            alerts_json = await call_thehive("/api/v1/query", list_query)
+            alert_count = len(json.loads(alerts_json))
+            if alert_count == 0:
+                raise Exception("No alerts in TheHive yet")
+            return alert_count
+        except Exception as e:
+            if time.time() - start > timeout:
+                raise Exception("Timed out trying to reach TheHive")
+            logger.debug(e)
+            await asyncio.sleep(1)
+
+
+def count_alerts():
+    """Wait for alerts in TheHive then print their count"""
+    nb_alerts = asyncio.run(wait_for_alerts(180))
+    logger.info(f"alert_count={nb_alerts}")

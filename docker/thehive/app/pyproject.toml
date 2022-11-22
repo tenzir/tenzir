@@ -8,7 +8,7 @@ packages = [{include = "app.py"}]
 
 [tool.poetry.scripts]
 run-app = "app:run"
-alert-count = "app:alert_count"
+count-alerts = "app:count_alerts"
 
 [tool.poetry.dependencies]
 python = "^3.10"

@@ -133,7 +133,7 @@ def init_cortex():
         },
         (CORTEX_ADMIN_EMAIL, CORTEX_ADMIN_PWD),
     )
-    retry_until_timeout(call, "Cortex orgadmin", 30)
+    retry_until_timeout(call, "Cortex create orgadmin", 30)
 
     # Setting a password is not strictly required but can come in handy to
     # interact with the Cortex UI
