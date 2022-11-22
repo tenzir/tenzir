@@ -36,8 +36,6 @@ inline uint32_t bitmask32(size_t bottom_bits) {
 class address_encryptor {
 public:
   explicit address_encryptor(const std::array<address::byte_type, 32>& key) {
-    EVP_CIPHER_CTX_init(ctx_.get());
-    OpenSSL_add_all_ciphers();
     cipher_ = EVP_get_cipherbyname("aes-128-ecb");
     block_size_ = EVP_CIPHER_block_size(cipher_);
     pad_ = std::vector<address::byte_type>(block_size_);
