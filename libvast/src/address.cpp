@@ -67,10 +67,10 @@ public:
 
 private:
   static constexpr inline auto msb_of_byte_mask = 0b10000000;
-  EVP_CIPHER_CTX* ctx_;
-  const EVP_CIPHER* cipher_;
-  int block_size_;
-  std::vector<address::byte_type> pad_;
+  EVP_CIPHER_CTX* ctx_ = {};
+  const EVP_CIPHER* cipher_ = {};
+  int block_size_ = {};
+  std::vector<address::byte_type> pad_ = {};
 
   std::vector<address::byte_type>
   generate_one_time_pad(std::span<address::byte_type> bytes_to_encrypt) {
