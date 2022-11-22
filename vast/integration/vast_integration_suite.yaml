@@ -655,3 +655,10 @@ tests:
       - command: export json
       - command: export arrow
         transformation: python @./misc/scripts/print-arrow-batch-size.py
+
+  Import with max-events and import filter:
+   tags: [import]
+   steps:
+     - command: import --max-events=200 json 'SourceIp == 51.91.69.20'
+       input: data/json/sysmon.json
+     - command: -qq count
