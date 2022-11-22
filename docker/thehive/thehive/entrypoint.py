@@ -49,7 +49,6 @@ def retry_until_timeout(retried_function, action_name: str, timeout: int):
             if time.time() - start > timeout:
                 raise Exception(f"Timeout {timeout} exceeded for {action_name}")
             time.sleep(1)
-    logging.info(f"{action_name} reached!")
 
 
 def call_api(
@@ -101,7 +100,7 @@ def init_cortex():
     )
 
     # ES is eventually conistent, so wait for things to settle
-    time.sleep(5)
+    time.sleep(60)
 
     # This user already exists by default but does not have sufficient priviledges to set passwords
     call_cortex(
