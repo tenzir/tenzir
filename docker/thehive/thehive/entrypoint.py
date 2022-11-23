@@ -91,7 +91,7 @@ def call_thehive(
 def init_cortex():
     """Configure Cortex and copy the obtained API key to TheHive config"""
 
-    # Note: all calls to cortex must be retried because of consitency issues
+    # Note: all calls to cortex must be retried because of consistency issues
 
     # The maintenance/migrate initializes the ES database
     # It will fail until ES is "sufficiently" ready, whatever that means
