@@ -38,6 +38,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@sveltestack/svelte-query": "^1.6.0"
+    "@sveltestack/svelte-query": "^1.6.0",
+    "layercake": "^7.1.0"
   }
 }

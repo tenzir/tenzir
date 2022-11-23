@@ -7,6 +7,18 @@
   import { formatBytes } from '$lib/util/formatBytes';
   import Tooltip from '$lib/components/Tooltip.svelte';
 
+  import { LayerCake, Svg } from 'layercake';
+  import Scatter from '$lib/components/Scatter.svelte';
+
+  // Define some data
+  const points = [
+    {x: 0, y: 0},
+    {x: 5, y: 10},
+    {x: 10, y: 20},
+    {x: 15, y: 30},
+    {x: 20, y: 40}
+  ];
+
   const dtFormat = new Intl.DateTimeFormat('en-US', {
     timeStyle: 'medium',
     timeZone: 'UTC'
@@ -63,6 +75,19 @@
   const queryResult = useQuery('status', getStatus, { refetchInterval: 5000 });
 </script>
 
+<style>
+  /*
+    The wrapper div needs to have an explicit width and height in CSS.
+    It can also be a flexbox child or CSS grid element.
+    The point being it needs dimensions since the <LayerCake> element will
+    expand to fill it.
+  */
+  .chart-container {
+    width: 100%;
+    height: 300px;
+  }
+</style>
+
 <svelte:head>
   <title>VAST Status</title>
   <meta name="description" content="Status page for VAST" />
@@ -117,6 +142,18 @@
       {:else}
         Database is empty.
       {/if}
+    </div>
+    <div class="chart-container">
+      <LayerCake
+        data={ points }
+        x='x'
+        y='y'
+      >
+        <Svg>
+          <!-- You can expose properties on your chart components to make them more reusable -->
+          <Scatter fill={'blue'} r={3} />
+        </Svg>
+      </LayerCake>
     </div>
   {/if}
 </div>
