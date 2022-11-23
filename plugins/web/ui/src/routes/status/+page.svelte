@@ -13,6 +13,7 @@
   import Scatter from '$lib/components/Scatter.svelte';
 
   import Bar from '$lib/components/Bar.svelte';
+  import DetailView from '$lib/components/DetailView.svelte';
   import AxisX from '$lib/components/AxisX.svelte';
   import AxisY from '$lib/components/AxisY.svelte';
 
@@ -42,6 +43,8 @@
 
   const xKey = 'value';
   const yKey = 'schema';
+
+  let detailedSchema = "";
 
   const dtFormat = new Intl.DateTimeFormat('en-US', {
     timeStyle: 'medium',
@@ -169,7 +172,7 @@
     </div>
     <div class="chart-container">
       <LayerCake
-        padding={{ top: 0, bottom: 100, left: 155 }}
+        padding={{ top: 0, bottom: 100, left: 70 }}
         x={xKey}
         y={yKey}
         yScale={scaleBand().paddingInner([0.55])}
@@ -181,20 +184,14 @@
             gridlines={false}
           />
           <Bar
-            callback="{(d) => $detailEnabled = true; }"
+            callback="{(schema) => detailedSchema = (detailedSchema != schema) ? schema : '' }"
           />
         </Svg>
       </LayerCake>
     </div>
   {/if}
 
-  <div id="detail-view">
-    <!-- DetailView / -->
-  </div>
-
-  {#if detailEnabled}
-    detail is enabled
-  {:else}
-    detail is NOT enabled
+  {#if detailedSchema != ""}
+    <DetailView schema={detailedSchema}/>
   {/if}
 </div>
