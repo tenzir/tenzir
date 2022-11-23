@@ -4,10 +4,10 @@ This plugin provides a web server and access to the REST frontend for VAST.
 
 ## Usage
 
-To spin up the REST server as a separate process, the `vast rest server`
+To spin up the REST server as a separate process, the `vast web server`
 subcommand can be used:
 
-    vast rest server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
+    vast web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
 
 By default, the server will only accept TLS requests. To allow clients to
 connect succesfully, a valid certificate and the corresponding private key
@@ -16,7 +16,7 @@ need to be passed with the `--certfile` and `--keyfile` arguments.
 Alternatively, one can run the server within the main VAST process by
 specifying a start command:
 
-    vast start --commands="rest server [...]"
+    vast start --commands="web server [...]"
 
 All requests must be authenticated by a valid authentication token,
 which is a short string that must be sent in the `X-VAST-Token` request
@@ -24,13 +24,13 @@ header.
 
 A valid token can be generated on the command line using the following command
 
-    vast rest generate-token
+    vast web generate-token
 
 For local testing and development, generating suitable certificates and tokens
 can be a hassle. For this scenario, the server can be started in "development"
 mode where plain HTTP connections are accepted and no authentication is performed:
 
-    vast rest server --mode=dev
+    vast web server --mode=dev
 
 ## Security
 
