@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { scaleBand } from 'd3-scale';
+
   import { useQuery } from '@sveltestack/svelte-query';
 
   import Table from '$lib/components/Table.svelte';
@@ -10,14 +12,36 @@
   import { LayerCake, Svg } from 'layercake';
   import Scatter from '$lib/components/Scatter.svelte';
 
+  import Bar from '$lib/components/Bar.svelte';
+  import AxisX from '$lib/components/AxisX.svelte';
+  import AxisY from '$lib/components/AxisY.svelte';
+
   // Define some data
-  const points = [
-    {x: 0, y: 0},
-    {x: 5, y: 10},
-    {x: 10, y: 20},
-    {x: 15, y: 30},
-    {x: 20, y: 40}
-  ];
+  const groups =  [
+  {
+    schema: 'suricata.flow',
+    value: 2
+  },
+  {
+    schema: 'suricata.dns',
+    value: 8
+  },
+  {
+    schema: 'suricata.fileinfo',
+    value: 5
+  },
+  {
+    schema: 'suricata.alert',
+    value: 3
+  },
+  {
+    schema: 'suricata.http',
+    value: 18
+  }
+];
+
+  const xKey = 'value';
+  const yKey = 'schema';
 
   const dtFormat = new Intl.DateTimeFormat('en-US', {
     timeStyle: 'medium',
@@ -145,15 +169,32 @@
     </div>
     <div class="chart-container">
       <LayerCake
-        data={ points }
-        x='x'
-        y='y'
+        padding={{ top: 0, bottom: 100, left: 155 }}
+        x={xKey}
+        y={yKey}
+        yScale={scaleBand().paddingInner([0.55])}
+        xDomain={[0, null]}
+        data={groups}
       >
         <Svg>
-          <!-- You can expose properties on your chart components to make them more reusable -->
-          <Scatter fill={'blue'} r={3} />
+          <AxisY
+            gridlines={false}
+          />
+          <Bar
+            callback="{(d) => $detailEnabled = true; }"
+          />
         </Svg>
       </LayerCake>
     </div>
+  {/if}
+
+  <div id="detail-view">
+    <!-- DetailView / -->
+  </div>
+
+  {#if detailEnabled}
+    detail is enabled
+  {:else}
+    detail is NOT enabled
   {/if}
 </div>
