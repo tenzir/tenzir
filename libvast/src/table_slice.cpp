@@ -826,6 +826,9 @@ struct column_evaluator<Op, LhsType, caf::none_t> {
       if (!array.IsNull(row))
         continue;
       result.append(false, id - result.size());
+      // FIXME: This is only correct if Op is equals; instead, what we should be
+      // doing here is to implement this specifically depending on the
+      // operation.
       result.append(true, 1u);
     }
     result.append(false, offset + array.length() - result.size());
