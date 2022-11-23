@@ -9,6 +9,7 @@
   - [Matthias Vallentin](https://github.com/mavam)
 - **Contributors**:
   - [Dominik Lohmann](https://github.com/dominiklohmann)
+  - [Rémi Dettai](https://github.com/rdettai)
 - **Discussion**: [PR #2562](https://github.com/tenzir/vast/pull/2562)
 
 ## Overview
@@ -84,10 +85,10 @@ cost.
 
 The most important architectural effort concerns making the catalog a
 fault-tolerant component. To this end, we propose to factor the logic that
-operates on partition metadata into a dedicated **metastore** component. As a
-first point of contact for queries, the catalog also keeps per-partition index
-structures in memory. This catalog functionality is out of scope, as it
-represents derived, immutable state from the metastore.
+operates on partition metadata into a dedicated **metastore**. As a first point
+of contact for queries, the catalog also keeps per-partition index structures in
+memory. This catalog functionality is out of scope, as it represents derived,
+immutable state from the metastore.
 
 Adjacent fault-tolerance efforts outside the catalog scope involve isolation
 of components. For example, the failure domain of the read path is a single
@@ -104,6 +105,10 @@ process can be done be spawning dedicated database nodes.
 We briefly touch on how the mechanism for making the write and read path
 resilient, and then focus the discussion on fault tolerance within the VAST
 server node, specifically the catalog.
+
+To avoid bloating the propoal with caveats unrealted to the core problem, we
+assume a starting architecture that has been planned earlier, but is not fully
+implemented yet.
 
 ### Resilient Write Path
 
@@ -122,7 +127,8 @@ the stream.
 Because security telemetry data is already lossy upstream (e.g., due to packet
 loss or lacking instrumentation), operators are often willing to accept looser
 guarantees. Therefore, we deem it sufficient to offer a mechanism that
-implements interaction with a durable message bus.
+implements interaction with a durable message bus. Such a mechanism may require
+a - possibly user supplied - unique identifier for every input stream.
 
 ### Resilient Read Path
 
@@ -134,6 +140,10 @@ ran in its own execution context. For example, a crashing cloud function will
 not affect other running queries. But when VAST executes multiple queries in the
 same server node, all queries exhibit fate sharing. We leave it to the operator
 to decide what model works best for the scenario at hand.
+
+Full end-to-end query isolation will only be possible after a distributed
+catalog such as proposed in this document has been implemented, until then the
+first level of the lookup has to run in the central database node.
 
 Regardless of component distribution, the recovery of a failing query involves a
 restart. We may consider snapshotting in the future, in case users demand more
@@ -325,7 +335,7 @@ The semantics the function signatures are as follows:
 
 5. `list`: retrives the set of all UUIDs in a transactional manner.
 
-In theory, the functionality of `replace` is a superset of `add` and `delete`.
+In practice, the functionality of `replace` is a superset of `add` and `delete`.
 For ease of exposition, we kept them as separate API functions.
 
 #### Subscription API
@@ -334,8 +344,10 @@ The metastore must also expose a subscription mechanism to hook into the feed of
 updates, such that the catalog can learn about new partitions from other catalog
 instances.
 
-Once a catalog learns about a new partition, it will load its sketches so that
-they become available for querying.
+Once a catalog learns about an addition or deletion of a partition, it will
+synchronize its internal state by updating the corresponding partition id list
+of the related table. Sketches can be loaded from disk on demand, when they
+are needed for a lookup.
 
 Given these requirements, we briefly looked at the following systems with regard
 to their suitability.
@@ -417,8 +429,7 @@ encryption. For the use case at hand we identified the following relevant
 properties:
 
 - The only way to interact with a Consul service is through an HTTP API, meaning
-  there would be some overhead for each transaction. This also means that we
-  would have to use HTTP long polling to observe changes on a specific key.
+  there would be some overhead for each transaction.
 
 - Transactions are supported with a dedicated API endpoint
   (https://developer.hashicorp.com/consul/api-docs/txn). Failure conditions have
@@ -432,18 +443,18 @@ properties:
   exists: https://github.com/oliora/ppconsul. The relevant transaction API is
   supported.
 
-- While it is possible to add run a blocking query to a single key or a prefix,
-  such a query has to be re-registered after every return. If multiple changes
-  have been applied before the new query is registered the client misses
-  updates. We can not observe changes in the key space directly, only the
-  current values. That means modeling a change feed as desired requires a custom
-  protocol.
+- While it is possible to add run a blocking query to a single key or a prefix
+  using HTTP long polling, such a query has to be re-registered after every
+  return. If multiple changes have been applied before the new query is
+  registered the client misses updates. We can not observe changes in the key
+  space directly, only the current values. That means modeling a change feed as
+  desired requires a custom protocol.
 
 ##### Native Raft
 
-Instead of depending on etcd, we may consider our own actor-based Raft
-implementation. In this case, Raft would be a frontend for a key-value store
-that supports the desired transactional operations natively.
+Instead of depending on an auxiliary service, we may consider our own
+actor-based Raft implementation. In this case, Raft would be a frontend for a
+key-value store that supports the desired transactional operations natively.
 
 The shape of a metastore would be dedicated CAF service that VAST can speak
 natively to. Not every VAST node should include a Raft metastore, as a typical
