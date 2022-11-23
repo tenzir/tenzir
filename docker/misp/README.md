@@ -5,13 +5,13 @@ compose stack.
 
 ## MISP app
 
-To run the misp app, you first need to build the VAST Poetry image (we plan to
-host this image on Dockerhub to make this step optional):
+Run:
 ```
-cd docker/poetry
-docker compose up
-cd ../misp
-docker compose -f docker-compose.app.yaml run misp-app
+COMPOSE_FILE="docker-compose.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:docker-compose.app.yaml"
+export COMPOSE_FILE="$COMPOSE_FILE:../vast/docker-compose.yaml"
+
+docker compose up --build
 ```
 
 ## Dynamic hostname

@@ -12,6 +12,9 @@ run-app = "app:run"
 [tool.poetry.dependencies]
 python = "^3.10"
 vast = {path = "../../../python", develop = true}
+stix2 = "^3.0.1"
+misp-stix = {version = "^2.4"}
+pyzmq = {version = "^24.0"}
 
 [build-system]
 requires = ["poetry-core"]

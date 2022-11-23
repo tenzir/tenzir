@@ -15,3 +15,5 @@ services:
       - NGINX_PLACEHOLDER_HOSTNAME=placeholder-hostname-to-rewrite-in-nginx
       - NGINX_PORT=80
       - NGINX_PROXY_PASS=http://misp:80
+    networks:
+      - misp
