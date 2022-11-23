@@ -628,29 +628,32 @@ bool evaluate_meta_extractor(const table_slice& slice,
 
 template <relational_operator Op>
 struct cell_evaluator {
-  template <class LhsView, class RhsView>
-  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+  static bool evaluate(auto, auto) noexcept {
     die("not implemented");
   }
 };
 
 template <>
 struct cell_evaluator<relational_operator::equal> {
-  template <class LhsView, class RhsView>
-  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+  static bool evaluate(auto, auto) noexcept {
     die("type mismatch");
+    return false;
   }
 
   template <class LhsView, class RhsView>
-    requires std::is_same_v<LhsView, RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+      { lhs == rhs } -> std::same_as<bool>;
+    }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    lhs == rhs;
+    return lhs == rhs;
   }
 
   static bool evaluate(std::string_view lhs, view<pattern> rhs) noexcept {
     return evaluate(rhs, lhs);
   }
 
+  // TODO does it make sense to have pattern in lhs? (Implies existence of array
+  // of patterns)
   static bool evaluate(view<pattern> lhs, std::string_view rhs) noexcept {
     return lhs.match(rhs);
   }
@@ -658,92 +661,227 @@ struct cell_evaluator<relational_operator::equal> {
 
 template <>
 struct cell_evaluator<relational_operator::not_equal> {
-  template <class LhsView, class RhsView>
-    requires std::is_same_v<LhsView, RhsView>
-  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
     return !cell_evaluator<relational_operator::equal>::evaluate(lhs, rhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::less> {
+  static bool evaluate(auto, auto) noexcept {
+    die("type mismatch");
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+      { lhs < rhs } -> std::same_as<bool>;
+    }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs < rhs;
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::less_equal> {
+  static bool evaluate(auto, auto) noexcept {
+    die("type mismatch");
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+      { lhs <= rhs } -> std::same_as<bool>;
+    }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs <= rhs;
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::greater> {
+  static bool evaluate(auto, auto) noexcept {
+    die("type mismatch");
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+      { lhs > rhs } -> std::same_as<bool>;
+    }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs > rhs;
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::greater_equal> {
+  static bool evaluate(auto, auto) noexcept {
+    die("type mismatch");
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+      { lhs >= rhs } -> std::same_as<bool>;
+    }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs >= rhs;
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::match> {
+  static bool evaluate(auto, auto) noexcept {
+    die("type mismatch");
+    return false;
+  }
+
+  static bool evaluate(view<std::string> lhs, view<pattern> rhs) noexcept {
+    return rhs.match(lhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::not_match> {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
+    return !cell_evaluator<relational_operator::match>::evaluate(lhs, rhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::in> {
+  static bool evaluate(auto, auto) noexcept {
+    die("type mismatch");
+    return false;
+  }
+
+  static bool evaluate(view<std::string> lhs, view<std::string> rhs) {
+    return rhs.find(lhs) != view<std::string>::npos;
+  }
+  static bool evaluate(view<std::string> lhs, view<pattern> rhs) {
+    return rhs.search(lhs);
+  }
+  static bool evaluate(view<address> lhs, view<subnet> rhs) {
+    return rhs.contains(lhs);
+  }
+  static bool evaluate(view<subnet> lhs, view<subnet> rhs) {
+    return rhs.contains(lhs);
+  }
+  static bool evaluate(auto lhs, view<list> rhs) {
+    return std::any_of(rhs.begin(), rhs.end(), [lhs](data_view data) {
+      return caf::visit(
+        [lhs](auto view) {
+          return cell_evaluator<relational_operator::equal>::evaluate(lhs,
+                                                                      view);
+        },
+        data);
+    });
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::not_in> {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
+    return !cell_evaluator<relational_operator::in>::evaluate(lhs, rhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::ni> {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
+    return cell_evaluator<relational_operator::in>::evaluate(rhs, lhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::not_ni> {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
+    return !cell_evaluator<relational_operator::ni>::evaluate(lhs, rhs);
   }
 };
 
 template <relational_operator Op, concrete_type LhsType, class RhsView>
 struct column_evaluator {
-  static ids evaluate(const arrow::Array& array, RhsView rhs,
-                      const ids& selection, LhsType type, id offset) noexcept {
+  static ids evaluate(LhsType type, id offset, const arrow::Array& array,
+                      RhsView rhs, const ids& selection) noexcept {
     ids result{};
+    // iterate over conjunction of selection and non null rows in the array
+    // Look into array not null bitmap function
     for (auto id : select(selection)) {
       VAST_ASSERT(id >= offset);
       const auto row = id - offset;
       result.append(false, id - result.size());
       result.append(cell_evaluator<Op>::evaluate(
-        value_at(type, array, detail::narrow_cast<int64_t>(row)), rhs));
+                      value_at(type, array, detail::narrow_cast<int64_t>(row)),
+                      rhs),
+                    1u);
     }
+    result.append(false, offset + array.length() - result.size());
     return result;
   }
 };
 
-template <>
-struct column_evaluator<relational_operator::equal, string_type, view<pattern>> {
-  static ids evaluate(const arrow::Array& array, view<pattern> rhs,
-                      const ids& selection, string_type, id offset) {
-    auto opts
-      = arrow::compute::MatchSubstringOptions{std::string{rhs.string()}, false};
-    auto res = arrow::compute::CallFunction(
-      "match_substring_regex", std::vector<arrow::Datum>{array}, &opts);
+template <relational_operator Op>
+struct column_evaluator<Op, enumeration_type, view<std::string>> {
+  static ids
+  evaluate(enumeration_type type, id offset, const arrow::Array& array,
+           view<std::string> rhs, const ids& selection) noexcept {
+    if (auto key = type.resolve(rhs)) {
+      auto rhs_internal = detail::narrow_cast<view<enumeration>>(*key);
+      return column_evaluator<Op, enumeration_type, view<enumeration>>::evaluate(
+        type, offset, array, rhs_internal, selection);
+    }
+
+    return ids{offset + array.length(), false};
   }
 };
 
+// template <>
+// struct column_evaluator<relational_operator::equal, string_type,
+// view<pattern>> {
+//   static ids evaluate(const arrow::Array& array, view<pattern> rhs,
+//                       const ids& selection, string_type, id offset) {
+//     auto opts
+//       = arrow::compute::MatchSubstringOptions{std::string{rhs.string()},
+//       false};
+//     auto res = arrow::compute::CallFunction(
+//       "match_substring_regex", std::vector<arrow::Datum>{array}, &opts);
+//   }
+// };
+
 template <relational_operator Op>
-ids eval3(const arrow::Array& array, data_view rhs, const ids& selection,
-          type type, id offset) {
+ids eval3(type type, id offset, const arrow::Array& array, data_view rhs,
+          const ids& selection) {
   auto f
     = [&]<concrete_type Type, class RhsView>(Type type, RhsView rhs) -> ids {
-    return column_evaluator<Op, Type, RhsView>::evaluate(array, rhs, selection,
-                                                         type, offset);
+    return column_evaluator<Op, Type, RhsView>::evaluate(type, offset, array,
+                                                         rhs, selection);
   };
   return caf::visit(f, type, rhs);
 }
 
-ids eval2(type type, const arrow::Array& array, id offset,
+#define VAST_EVAL_DISPATCH(op)                                                 \
+  case relational_operator::op:                                                \
+    return eval3<relational_operator::op>(type, offset, array, rhs, selection);
+
+ids eval2(type type, id offset, const arrow::Array& array,
           const relational_operator& op, data_view rhs, const ids& selection) {
-  ids result{};
   switch (op) {
-    default:
-      VAST_ASSERT(!"missing case");
-      die("missing case");
-    case relational_operator::equal:
-      return eval3<relational_operator::equal>(array, rhs, selection, type,
-                                               offset);
-      // case relational_operator::match:
-      //   return eval3<relational_operator::equal>(array, rhs, selection, type,
-      //                                            offset);
-      //   case relational_operator::not_match:
-      //     return !eval_match(lhs, rhs);
-      //   case relational_operator::in:
-      //     return eval_in(lhs, rhs);
-      //   case relational_operator::not_in:
-      //     return !eval_in(lhs, rhs);
-      //   case relational_operator::ni:
-      //     return eval_in(rhs, lhs);
-      //   case relational_operator::not_ni:
-      //     return !eval_in(rhs, lhs);
-      //   // TODO: pattern vs number, is that allowed and just evaluates to
-      //   false? case relational_operator::equal:
-      //     if (auto x = eval_string_and_pattern(lhs, rhs))
-      //       return *x;
-      //     return lhs == rhs;
-      //   case relational_operator::not_equal:
-      //     if (auto x = eval_string_and_pattern(lhs, rhs))
-      //       return !*x;
-      //     return lhs != rhs;
-      //   case relational_operator::less:
-      //     return lhs < rhs;
-      //   case relational_operator::less_equal:
-      //     return lhs <= rhs;
-      //   case relational_operator::greater:
-      //     return lhs > rhs;
-      //   case relational_operator::greater_equal:
-      //     return lhs >= rhs;
+    VAST_EVAL_DISPATCH(equal);
+    VAST_EVAL_DISPATCH(not_equal);
+    VAST_EVAL_DISPATCH(in);
+    VAST_EVAL_DISPATCH(less);
+    VAST_EVAL_DISPATCH(not_in);
+    VAST_EVAL_DISPATCH(match);
+    VAST_EVAL_DISPATCH(not_match);
+    VAST_EVAL_DISPATCH(greater);
+    VAST_EVAL_DISPATCH(greater_equal);
+    VAST_EVAL_DISPATCH(less_equal);
+    VAST_EVAL_DISPATCH(ni);
+    VAST_EVAL_DISPATCH(not_ni);
   }
+  die("unreachable");
 }
 
 ids evaluate(const expression& expr, const table_slice& slice,
@@ -774,24 +912,8 @@ ids evaluate(const expression& expr, const table_slice& slice,
       const auto array = static_cast<arrow::FieldPath>(index)
                            .Get(*to_record_batch(slice))
                            .ValueOrDie();
-      auto result = ids{};
-      const auto rhs_internal
-        = materialize(to_internal(type, make_data_view(rhs)));
-      for (auto id : select(selection)) {
-        VAST_ASSERT(id >= offset);
-        const auto row = id - offset;
-        result.append(false, id - result.size());
-        // TODO: Introduce an evaluate function that takes an entire
-        // *arrow::Array*, a *relational_operator*, a `data` for the rhs, and a
-        // set of *ids*, insread of materializing every element here and
-        // comparing element by element.
-        auto lhs = materialize(
-          value_at(type, *array, detail::narrow_cast<int64_t>(row)));
-        const bool matches = evaluate(lhs, op, rhs_internal);
-        result.append(matches, 1);
-      }
-      result.append(false, offset + num_rows - result.size());
-      return result;
+      VAST_ASSERT(array);
+      return eval2(type, offset, *array, op, make_data_view(rhs), selection);
     },
   };
   const auto evaluate_expression
