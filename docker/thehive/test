@@ -6,7 +6,7 @@ pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/
 # Setup cleanup
 function down {
   exit_code=$?
-#   docker compose logs
+  docker compose logs
   docker compose down -v
   popd
   exit $exit_code
