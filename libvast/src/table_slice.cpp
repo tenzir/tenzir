@@ -627,23 +627,18 @@ bool evaluate_meta_extractor(const table_slice& slice,
 } // namespace
 
 template <relational_operator Op>
-struct cell_evaluator {
-  static bool evaluate(auto, auto) noexcept {
-    die("not implemented");
-  }
-};
+struct cell_evaluator;
 
 template <>
 struct cell_evaluator<relational_operator::equal> {
   static bool evaluate(auto, auto) noexcept {
-    die("type mismatch");
     return false;
   }
 
   template <class LhsView, class RhsView>
     requires requires(const LhsView& lhs, const RhsView& rhs) {
-      { lhs == rhs } -> std::same_as<bool>;
-    }
+               { lhs == rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
     return lhs == rhs;
   }
@@ -669,14 +664,13 @@ struct cell_evaluator<relational_operator::not_equal> {
 template <>
 struct cell_evaluator<relational_operator::less> {
   static bool evaluate(auto, auto) noexcept {
-    die("type mismatch");
     return false;
   }
 
   template <class LhsView, class RhsView>
     requires requires(const LhsView& lhs, const RhsView& rhs) {
-      { lhs < rhs } -> std::same_as<bool>;
-    }
+               { lhs < rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
     return lhs < rhs;
   }
@@ -685,14 +679,13 @@ struct cell_evaluator<relational_operator::less> {
 template <>
 struct cell_evaluator<relational_operator::less_equal> {
   static bool evaluate(auto, auto) noexcept {
-    die("type mismatch");
     return false;
   }
 
   template <class LhsView, class RhsView>
     requires requires(const LhsView& lhs, const RhsView& rhs) {
-      { lhs <= rhs } -> std::same_as<bool>;
-    }
+               { lhs <= rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
     return lhs <= rhs;
   }
@@ -701,14 +694,13 @@ struct cell_evaluator<relational_operator::less_equal> {
 template <>
 struct cell_evaluator<relational_operator::greater> {
   static bool evaluate(auto, auto) noexcept {
-    die("type mismatch");
     return false;
   }
 
   template <class LhsView, class RhsView>
     requires requires(const LhsView& lhs, const RhsView& rhs) {
-      { lhs > rhs } -> std::same_as<bool>;
-    }
+               { lhs > rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
     return lhs > rhs;
   }
@@ -717,14 +709,13 @@ struct cell_evaluator<relational_operator::greater> {
 template <>
 struct cell_evaluator<relational_operator::greater_equal> {
   static bool evaluate(auto, auto) noexcept {
-    die("type mismatch");
     return false;
   }
 
   template <class LhsView, class RhsView>
     requires requires(const LhsView& lhs, const RhsView& rhs) {
-      { lhs >= rhs } -> std::same_as<bool>;
-    }
+               { lhs >= rhs } -> std::same_as<bool>;
+             }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
     return lhs >= rhs;
   }
@@ -733,7 +724,6 @@ struct cell_evaluator<relational_operator::greater_equal> {
 template <>
 struct cell_evaluator<relational_operator::match> {
   static bool evaluate(auto, auto) noexcept {
-    die("type mismatch");
     return false;
   }
 
@@ -752,7 +742,6 @@ struct cell_evaluator<relational_operator::not_match> {
 template <>
 struct cell_evaluator<relational_operator::in> {
   static bool evaluate(auto, auto) noexcept {
-    die("type mismatch");
     return false;
   }
 
@@ -810,12 +799,34 @@ struct column_evaluator {
     // Look into array not null bitmap function
     for (auto id : select(selection)) {
       VAST_ASSERT(id >= offset);
-      const auto row = id - offset;
+      const auto row = detail::narrow_cast<int64_t>(id - offset);
+      // FIXME: Instead of this in the loop, do selection &= array.null_bitmap
+      // outside of it.
+      if (array.IsNull(row))
+        continue;
       result.append(false, id - result.size());
-      result.append(cell_evaluator<Op>::evaluate(
-                      value_at(type, array, detail::narrow_cast<int64_t>(row)),
-                      rhs),
-                    1u);
+      result.append(
+        cell_evaluator<Op>::evaluate(value_at(type, array, row), rhs), 1u);
+    }
+    result.append(false, offset + array.length() - result.size());
+    return result;
+  }
+};
+
+template <relational_operator Op, concrete_type LhsType>
+struct column_evaluator<Op, LhsType, caf::none_t> {
+  static ids
+  evaluate([[maybe_unused]] LhsType type, id offset, const arrow::Array& array,
+           [[maybe_unused]] caf::none_t rhs, const ids& selection) noexcept {
+    ids result{};
+    // FIXME: this should just be selection & ~array.null_bitmap()
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      const auto row = detail::narrow_cast<int64_t>(id - offset);
+      if (!array.IsNull(row))
+        continue;
+      result.append(false, id - result.size());
+      result.append(true, 1u);
     }
     result.append(false, offset + array.length() - result.size());
     return result;
