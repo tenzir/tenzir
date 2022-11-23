@@ -626,6 +626,126 @@ bool evaluate_meta_extractor(const table_slice& slice,
 
 } // namespace
 
+template <relational_operator Op>
+struct cell_evaluator {
+  template <class LhsView, class RhsView>
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    die("not implemented");
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::equal> {
+  template <class LhsView, class RhsView>
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    die("type mismatch");
+  }
+
+  template <class LhsView, class RhsView>
+    requires std::is_same_v<LhsView, RhsView>
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    lhs == rhs;
+  }
+
+  static bool evaluate(std::string_view lhs, view<pattern> rhs) noexcept {
+    return evaluate(rhs, lhs);
+  }
+
+  static bool evaluate(view<pattern> lhs, std::string_view rhs) noexcept {
+    return lhs.match(rhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::not_equal> {
+  template <class LhsView, class RhsView>
+    requires std::is_same_v<LhsView, RhsView>
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return !cell_evaluator<relational_operator::equal>::evaluate(lhs, rhs);
+  }
+};
+
+template <relational_operator Op, concrete_type LhsType, class RhsView>
+struct column_evaluator {
+  static ids evaluate(const arrow::Array& array, RhsView rhs,
+                      const ids& selection, LhsType type, id offset) noexcept {
+    ids result{};
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      const auto row = id - offset;
+      result.append(false, id - result.size());
+      result.append(cell_evaluator<Op>::evaluate(
+        value_at(type, array, detail::narrow_cast<int64_t>(row)), rhs));
+    }
+    return result;
+  }
+};
+
+template <>
+struct column_evaluator<relational_operator::equal, string_type, view<pattern>> {
+  static ids evaluate(const arrow::Array& array, view<pattern> rhs,
+                      const ids& selection, string_type, id offset) {
+    auto opts
+      = arrow::compute::MatchSubstringOptions{std::string{rhs.string()}, false};
+    auto res = arrow::compute::CallFunction(
+      "match_substring_regex", std::vector<arrow::Datum>{array}, &opts);
+  }
+};
+
+template <relational_operator Op>
+ids eval3(const arrow::Array& array, data_view rhs, const ids& selection,
+          type type, id offset) {
+  auto f
+    = [&]<concrete_type Type, class RhsView>(Type type, RhsView rhs) -> ids {
+    return column_evaluator<Op, Type, RhsView>::evaluate(array, rhs, selection,
+                                                         type, offset);
+  };
+  return caf::visit(f, type, rhs);
+}
+
+ids eval2(type type, const arrow::Array& array, id offset,
+          const relational_operator& op, data_view rhs, const ids& selection) {
+  ids result{};
+  switch (op) {
+    default:
+      VAST_ASSERT(!"missing case");
+      die("missing case");
+    case relational_operator::equal:
+      return eval3<relational_operator::equal>(array, rhs, selection, type,
+                                               offset);
+      // case relational_operator::match:
+      //   return eval3<relational_operator::equal>(array, rhs, selection, type,
+      //                                            offset);
+      //   case relational_operator::not_match:
+      //     return !eval_match(lhs, rhs);
+      //   case relational_operator::in:
+      //     return eval_in(lhs, rhs);
+      //   case relational_operator::not_in:
+      //     return !eval_in(lhs, rhs);
+      //   case relational_operator::ni:
+      //     return eval_in(rhs, lhs);
+      //   case relational_operator::not_ni:
+      //     return !eval_in(rhs, lhs);
+      //   // TODO: pattern vs number, is that allowed and just evaluates to
+      //   false? case relational_operator::equal:
+      //     if (auto x = eval_string_and_pattern(lhs, rhs))
+      //       return *x;
+      //     return lhs == rhs;
+      //   case relational_operator::not_equal:
+      //     if (auto x = eval_string_and_pattern(lhs, rhs))
+      //       return !*x;
+      //     return lhs != rhs;
+      //   case relational_operator::less:
+      //     return lhs < rhs;
+      //   case relational_operator::less_equal:
+      //     return lhs <= rhs;
+      //   case relational_operator::greater:
+      //     return lhs > rhs;
+      //   case relational_operator::greater_equal:
+      //     return lhs >= rhs;
+  }
+}
+
 ids evaluate(const expression& expr, const table_slice& slice,
              const ids& hints) {
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
