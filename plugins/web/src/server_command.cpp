@@ -149,7 +149,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         } else if (maybe_content_type == "application/json") {
           auto json_params = parser.parse(body);
           if (!json_params.is_object())
-            return response->abort(400, "invalid query parameters");
+            return response->abort(400, "invalid JSON body\n");
           body_params = json_params.get_object();
         } else {
           return response->abort(400, "unsupported content type");
