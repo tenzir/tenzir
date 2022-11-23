@@ -2,6 +2,8 @@
 
 This plugin provides a web server and access to the REST frontend for VAST.
 
+The following describes the backend web server part of the web plugin. For information regarding the frontend vast UI, see [this](./ui/README.md).
+
 ## Usage
 
 To spin up the REST server as a separate process, the `vast web server`
