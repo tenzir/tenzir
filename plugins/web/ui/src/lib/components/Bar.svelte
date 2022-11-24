@@ -25,7 +25,7 @@
 <g class="bar-group">
 	{#each $data as d, i}
 		<rect
-		    on:click="{() => {callback(d['schema']); highlight = i;} }"
+		    on:click="{() => {callback(d['layout']); highlight = i;} }"
 			class='group-rect'
 			data-id="{i}"
 			x="{$xScale.range()[0]}"

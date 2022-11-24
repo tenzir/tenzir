@@ -17,32 +17,8 @@
   import AxisX from '$lib/components/AxisX.svelte';
   import AxisY from '$lib/components/AxisY.svelte';
 
-  // Define some data
-  const groups =  [
-  {
-    schema: 'suricata.flow',
-    value: 2
-  },
-  {
-    schema: 'suricata.dns',
-    value: 8
-  },
-  {
-    schema: 'suricata.fileinfo',
-    value: 5
-  },
-  {
-    schema: 'suricata.alert',
-    value: 3
-  },
-  {
-    schema: 'suricata.http',
-    value: 18
-  }
-];
-
-  const xKey = 'value';
-  const yKey = 'schema';
+  const xKey = 'count';
+  const yKey = 'layout';
 
   let detailedSchema = "";
 
@@ -170,14 +146,15 @@
         Database is empty.
       {/if}
     </div>
+    {#if $queryResult.data?.index.statistics.layouts}
     <div class="chart-container">
       <LayerCake
-        padding={{ top: 0, bottom: 100, left: 70 }}
+        padding={{ top: 0, bottom: 100, left: 120 }}
         x={xKey}
         y={yKey}
         yScale={scaleBand().paddingInner([0.55])}
         xDomain={[0, null]}
-        data={groups}
+        data={Object.values(getEventsRows($queryResult.data?.index.statistics.layouts))}
       >
         <Svg>
           <AxisY
@@ -189,6 +166,7 @@
         </Svg>
       </LayerCake>
     </div>
+    {/if}
   {/if}
 
   {#if detailedSchema != ""}
