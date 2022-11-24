@@ -139,7 +139,7 @@ stdenv.mkDerivation (rec {
 
   dontStrip = true;
 
-  doInstallCheck = !buildAsPackage;
+  doInstallCheck = !isCross;
   installCheckInputs = [ py3 jq tcpdump ];
   # TODO: Investigate why the disk monitor test fails in the build sandbox.
   installCheckPhase = ''
