@@ -126,7 +126,7 @@ struct cell_evaluator<relational_operator::match> {
   }
 
   static bool evaluate(view<std::string> lhs, view<pattern> rhs) noexcept {
-    return rhs.match(lhs);
+    return cell_evaluator<relational_operator::equal>::evaluate(lhs, rhs);
   }
 };
 
