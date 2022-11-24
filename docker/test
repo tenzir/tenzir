@@ -32,18 +32,12 @@ else
   export VAST_CONTAINER_REGISTRY="${VAST_CONTAINER_REGISTRY:-ghcr.io}"
   export VAST_CONTAINER_REF="${VAST_CONTAINER_REF:-$(git rev-parse --abbrev-ref HEAD | sed -E 's/[^a-zA-Z0-9._-]+/-/g;s/^-*//')}"
   if [[ "${VAST_CONTAINER_REF}" == "master" ]]; then
-    expoet VAST_CONTAINER_REF="$(git rev-parse HEAD)"
+    export VAST_CONTAINER_REF="$(git rev-parse HEAD)"
   fi
   build_policy='--pull=always'
 fi
 
 pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/vast"
-
-# We set a unique project name during testing so we can check at the end whether
-# all containers we spun up during testing exited cleanly. We also disable the
-# manual override of VAST container name for the same reason.
-export COMPOSE_PROJECT_NAME="vast-test-${RANDOM}"
-export VAST_CONTAINER_NAME=null
 
 # Bring up the Docker Compose stack.
 docker compose down --volumes
@@ -79,9 +73,8 @@ docker compose ps
 docker compose logs
 
 # Assert that all containers that exited have exited cleanly.
-exited_all="$(docker ps --all --filter "name=${COMPOSE_PROJECT_NAME}" --filter 'status=exited' -q | sort -u)"
-exited_cleanly="$(docker ps --all --filter "name=${COMPOSE_PROJECT_NAME}" --filter 'exited=0' -q | sort -u)"
-[[ "${exited_all}" == "${exited_cleanly}" ]]
+docker compose ps --format json --all --status exited |
+  jq -re 'map(.ExitCode != 0) | index(false)'
 
 docker compose down --volumes
 
