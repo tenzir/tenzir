@@ -93,7 +93,7 @@ we're working on making that as easy as possible using VAST's Python bindings.
 The new bindings support analyzing data from VAST using industry-standard Python
 libraries, like Pandas.
 
-This is all enabled by our committment to open standards: VAST leverages Apache
+This is all enabled by our commitment to open standards: VAST leverages Apache
 Arrow as its in-memory data representation. The Python bindings make it easy to
 use VAST's security-specific data types. For example, when running a query, IP
 addresses, subnets, and patterns automatically convert to the Python-native
