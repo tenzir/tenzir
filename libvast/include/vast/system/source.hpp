@@ -106,8 +106,7 @@ struct source_state {
 
   void send_report();
 
-  void filter_and_push(table_slice slice,
-                       const std::function<void(table_slice)>& push_to_out);
+  std::optional<table_slice> apply_filter(table_slice slice);
 };
 
 /// An event producer.

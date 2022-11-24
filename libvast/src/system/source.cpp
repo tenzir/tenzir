@@ -132,23 +132,23 @@ void source_state::send_report() {
                        metrics_metadata{});
 }
 
-void source_state::filter_and_push(
-  table_slice slice, const std::function<void(table_slice)>& push_to_out) {
+std::optional<table_slice> source_state::apply_filter(table_slice slice) {
   const auto unfiltered_rows = slice.rows();
   if (filter) {
     if (auto filtered_slice = vast::filter(std::move(slice), *filter)) {
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
                  slice.layout());
-      push_to_out(std::move(*filtered_slice));
+      return filtered_slice;
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
                  reader->name(), unfiltered_rows, slice.layout());
+      return {};
     }
   } else {
     VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
                unfiltered_rows, slice.layout());
-    push_to_out(std::move(slice));
+    return slice;
   }
 }
 
@@ -245,12 +245,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
-        self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
-          const auto& layout = slice.layout();
-          self->state.event_counters[std::string{layout.name()}]
-            += slice.rows();
-          self->state.mgr->out().push(std::move(slice));
-        });
+        const auto& layout = slice.layout();
+        self->state.event_counters[std::string{layout.name()}] += slice.rows();
+        self->state.mgr->out().push(std::move(slice));
       };
       // We can produce up to num * table_slice_size events per run.
       auto events = static_cast<size_t>(num) * self->state.table_slice_size;

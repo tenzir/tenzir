@@ -109,9 +109,9 @@ caf::behavior datagram_source(
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
-        self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
+        if (auto filtered_slice = self->state.apply_filter(slice)) {
           self->state.mgr->out().push(std::move(slice));
-        });
+        }
       };
       auto events = capacity * self->state.table_slice_size;
       if (self->state.requested)
