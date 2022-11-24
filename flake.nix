@@ -43,6 +43,14 @@
       };
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       apps.vast-static = flake-utils.lib.mkApp { drv = packages.vast-static; };
+      apps.stream-image = {
+        type = "app";
+        program = "${pkgs.dockerTools.streamLayeredImage {
+          name = "tenzir/vast";
+          tag = "latest";
+          config.Cmd = [ "${self.packages.${system}."vast-static"}/bin/vast" ];
+        }}";
+      };
       apps.default = apps.vast;
       devShell = import ./shell.nix { inherit pkgs; };
       hydraJobs = { inherit packages; } // (
