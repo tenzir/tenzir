@@ -134,6 +134,10 @@ stdenv.mkDerivation (rec {
 
   hardeningDisable = lib.optional isStatic "pic";
 
+  fixupPhase = lib.optionalString (buildAsPackage || isStatic) ''
+    rm -rf $out/nix-support
+  '';
+
   doCheck = false;
   checkTarget = "test";
 
@@ -155,11 +159,17 @@ stdenv.mkDerivation (rec {
     platforms = platforms.unix;
     maintainers = with maintainers; [ tobim ];
   };
+} // lib.optionalAttrs isStatic {
+  installPhase = ''
+    runHook preInstall
+    cmake --install . --component Runtime
+    runHook postInstall
+  '';
 } // lib.optionalAttrs buildAsPackage {
   installPhase = ''
+    runHook preInstall
     cmake --build . --target package
     install -m 644 -Dt $out package/*.deb package/*.tar.gz
+    runHook postInstall
   '';
-  # We don't need the nix support files in this case.
-  fixupPhase = "";
 })
