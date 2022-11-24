@@ -652,6 +652,8 @@ active_partition_actor::behavior_type active_partition(
       const auto timeout = defaults::system::status_request_timeout / 5 * 3;
       indexer_states.reserve(self->state.indexers.size());
       for (auto& i : self->state.indexers) {
+        if (!i.second)
+          continue;
         auto& ps = caf::get<record>(indexer_states.emplace_back(record{}));
         collect_status(
           rs, timeout, v, i.second,

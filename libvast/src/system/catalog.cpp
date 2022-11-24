@@ -476,29 +476,50 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       record result;
       result["memory-usage"] = count{self->state.memusage()};
       result["num-partitions"] = count{self->state.synopses.size()};
-      if (v >= status_verbosity::detailed) {
-        auto partitions = list{};
-        partitions.reserve(self->state.synopses.size());
-        for (const auto& [id, synopsis] : self->state.synopses) {
-          VAST_ASSERT(synopsis);
-          auto partition = record{
-            {"id", fmt::to_string(id)},
-            {"schema", synopsis->schema
-                         ? data{std::string{synopsis->schema.name()}}
-                         : data{}},
-            {"num-events", synopsis->events},
-            {"import-time",
-             record{
-               {"min", synopsis->min_import_time},
-               {"max", synopsis->max_import_time},
-             }},
-          };
-          if (v >= status_verbosity::debug)
-            partition["version"] = synopsis->version;
-          partitions.emplace_back(std::move(partition));
-        }
-        result["partitions"] = std::move(partitions);
+      auto schemas
+        = std::map<std::string,
+                   std::vector<decltype(self->state.synopses)::iterator>>{};
+      for (auto iter = self->state.synopses.begin();
+           iter != self->state.synopses.end(); ++iter) {
+        // TODO: Use string view!
+        const std::string name = !iter->second->schema.name().empty()
+                                   ? std::string{iter->second->schema.name()}
+                                   : "multi-schema-partition";
+        schemas[name].push_back(iter);
       }
+      auto schema_statuses = list{};
+      for (const auto& [schema, table_synopsis_iters] : schemas) {
+        size_t table_events = 0;
+        auto partitions = list{};
+        if (v >= status_verbosity::debug)
+          partitions.reserve(table_synopsis_iters.size());
+        for (const auto synopsis_iter : table_synopsis_iters) {
+          const auto& [id, synopsis] = *synopsis_iter;
+          VAST_ASSERT(synopsis);
+          table_events += synopsis->events;
+          if (v >= status_verbosity::debug) {
+            auto partition = record{
+              {"id", fmt::to_string(id)},
+              {"num-events", synopsis->events},
+              {"import-time",
+               record{
+                 {"min", synopsis->min_import_time},
+                 {"max", synopsis->max_import_time},
+               }},
+              {"version", synopsis->version},
+            };
+            partitions.emplace_back(std::move(partition));
+          }
+        }
+        auto schema_status = record{
+          {"name", schema},
+          {"num-events", table_events},
+        };
+        if (v >= status_verbosity::debug)
+          schema_status["partitions"] = std::move(partitions);
+        schema_statuses.push_back(std::move(schema_status));
+      }
+      result["schemas"] = std::move(schema_statuses);
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       return result;
