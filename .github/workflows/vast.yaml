@@ -606,11 +606,7 @@ jobs:
             cc: clang
             cxx: clang++
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
-            # Note that we disable address sanitizer because of a hit inside Arrow
-            # when roundtripping table slices that started occurring with the
-            # 9.0.0_3 release of Arrow on Homebrew. It's likely a false positive,
-            # but we haven't had the time to investigate it further yet.
-            cmake-extra-flags: -DVAST_ENABLE_ASAN:BOOL=OFF -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
+            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
     env:
       BUILD_DIR: build
       CC: ${{ matrix.vast.cc }}
