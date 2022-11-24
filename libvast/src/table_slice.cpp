@@ -745,22 +745,26 @@ struct cell_evaluator<relational_operator::in> {
     return false;
   }
 
-  static bool evaluate(view<std::string> lhs, view<std::string> rhs) {
+  static bool evaluate(view<std::string> lhs, view<std::string> rhs) noexcept {
     return rhs.find(lhs) != view<std::string>::npos;
   }
-  static bool evaluate(view<std::string> lhs, view<pattern> rhs) {
+
+  static bool evaluate(view<std::string> lhs, view<pattern> rhs) noexcept {
     return rhs.search(lhs);
   }
-  static bool evaluate(view<address> lhs, view<subnet> rhs) {
+
+  static bool evaluate(view<address> lhs, view<subnet> rhs) noexcept {
     return rhs.contains(lhs);
   }
-  static bool evaluate(view<subnet> lhs, view<subnet> rhs) {
+
+  static bool evaluate(view<subnet> lhs, view<subnet> rhs) noexcept {
     return rhs.contains(lhs);
   }
-  static bool evaluate(auto lhs, view<list> rhs) {
+
+  static bool evaluate(auto lhs, view<list> rhs) noexcept {
     return std::any_of(rhs.begin(), rhs.end(), [lhs](data_view data) {
       return caf::visit(
-        [lhs](auto view) {
+        [lhs](auto view) noexcept {
           return cell_evaluator<relational_operator::equal>::evaluate(lhs,
                                                                       view);
         },
@@ -813,26 +817,57 @@ struct column_evaluator {
   }
 };
 
-template <relational_operator Op, concrete_type LhsType>
-struct column_evaluator<Op, LhsType, caf::none_t> {
+template <concrete_type LhsType>
+struct column_evaluator<relational_operator::equal, LhsType, caf::none_t> {
   static ids
   evaluate([[maybe_unused]] LhsType type, id offset, const arrow::Array& array,
            [[maybe_unused]] caf::none_t rhs, const ids& selection) noexcept {
+    // TODO: This entire loop semantically is just selection &
+    // ~array.null_bitmap, but we cannot do bitwise operations with Arrow's
+    // bitmaps yet.
     ids result{};
-    // FIXME: this should just be selection & ~array.null_bitmap()
     for (auto id : select(selection)) {
       VAST_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);
       if (!array.IsNull(row))
         continue;
       result.append(false, id - result.size());
-      // FIXME: This is only correct if Op is equals; instead, what we should be
-      // doing here is to implement this specifically depending on the
-      // operation.
       result.append(true, 1u);
     }
     result.append(false, offset + array.length() - result.size());
     return result;
+  }
+};
+
+template <concrete_type LhsType>
+struct column_evaluator<relational_operator::not_equal, LhsType, caf::none_t> {
+  static ids
+  evaluate([[maybe_unused]] LhsType type, id offset, const arrow::Array& array,
+           [[maybe_unused]] caf::none_t rhs, const ids& selection) noexcept {
+    // TODO: This entire loop semantically is just selection &
+    // array.null_bitmap, but we cannot do bitwise operations with Arrow's
+    // bitmaps yet.
+    ids result{};
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      const auto row = detail::narrow_cast<int64_t>(id - offset);
+      if (array.IsNull(row))
+        continue;
+      result.append(false, id - result.size());
+      result.append(true, 1u);
+    }
+    result.append(false, offset + array.length() - result.size());
+    return result;
+  }
+};
+
+template <relational_operator Op, concrete_type LhsType>
+struct column_evaluator<Op, LhsType, caf::none_t> {
+  static ids
+  evaluate([[maybe_unused]] LhsType type, id offset, const arrow::Array& array,
+           [[maybe_unused]] caf::none_t rhs,
+           [[maybe_unused]] const ids& selection) noexcept {
+    return ids{offset + array.length(), false};
   }
 };
 
@@ -846,57 +881,9 @@ struct column_evaluator<Op, enumeration_type, view<std::string>> {
       return column_evaluator<Op, enumeration_type, view<enumeration>>::evaluate(
         type, offset, array, rhs_internal, selection);
     }
-
     return ids{offset + array.length(), false};
   }
 };
-
-// template <>
-// struct column_evaluator<relational_operator::equal, string_type,
-// view<pattern>> {
-//   static ids evaluate(const arrow::Array& array, view<pattern> rhs,
-//                       const ids& selection, string_type, id offset) {
-//     auto opts
-//       = arrow::compute::MatchSubstringOptions{std::string{rhs.string()},
-//       false};
-//     auto res = arrow::compute::CallFunction(
-//       "match_substring_regex", std::vector<arrow::Datum>{array}, &opts);
-//   }
-// };
-
-template <relational_operator Op>
-ids eval3(type type, id offset, const arrow::Array& array, data_view rhs,
-          const ids& selection) {
-  auto f
-    = [&]<concrete_type Type, class RhsView>(Type type, RhsView rhs) -> ids {
-    return column_evaluator<Op, Type, RhsView>::evaluate(type, offset, array,
-                                                         rhs, selection);
-  };
-  return caf::visit(f, type, rhs);
-}
-
-#define VAST_EVAL_DISPATCH(op)                                                 \
-  case relational_operator::op:                                                \
-    return eval3<relational_operator::op>(type, offset, array, rhs, selection);
-
-ids eval2(type type, id offset, const arrow::Array& array,
-          const relational_operator& op, data_view rhs, const ids& selection) {
-  switch (op) {
-    VAST_EVAL_DISPATCH(equal);
-    VAST_EVAL_DISPATCH(not_equal);
-    VAST_EVAL_DISPATCH(in);
-    VAST_EVAL_DISPATCH(less);
-    VAST_EVAL_DISPATCH(not_in);
-    VAST_EVAL_DISPATCH(match);
-    VAST_EVAL_DISPATCH(not_match);
-    VAST_EVAL_DISPATCH(greater);
-    VAST_EVAL_DISPATCH(greater_equal);
-    VAST_EVAL_DISPATCH(less_equal);
-    VAST_EVAL_DISPATCH(ni);
-    VAST_EVAL_DISPATCH(not_ni);
-  }
-  die("unreachable");
-}
 
 ids evaluate(const expression& expr, const table_slice& slice,
              const ids& hints) {
@@ -927,7 +914,32 @@ ids evaluate(const expression& expr, const table_slice& slice,
                            .Get(*to_record_batch(slice))
                            .ValueOrDie();
       VAST_ASSERT(array);
-      return eval2(type, offset, *array, op, make_data_view(rhs), selection);
+      switch (op) {
+#define VAST_EVAL_DISPATCH(op)                                                 \
+  case relational_operator::op: {                                              \
+    auto f = [&]<concrete_type Type, class Rhs>(                               \
+               Type type, const Rhs& rhs) noexcept -> ids {                    \
+      return column_evaluator<relational_operator::op, Type,                   \
+                              view<Rhs>>::evaluate(type, offset, *array,       \
+                                                   make_view(rhs), selection); \
+    };                                                                         \
+    return caf::visit(f, type, rhs);                                           \
+  }
+        VAST_EVAL_DISPATCH(equal);
+        VAST_EVAL_DISPATCH(not_equal);
+        VAST_EVAL_DISPATCH(in);
+        VAST_EVAL_DISPATCH(less);
+        VAST_EVAL_DISPATCH(not_in);
+        VAST_EVAL_DISPATCH(match);
+        VAST_EVAL_DISPATCH(not_match);
+        VAST_EVAL_DISPATCH(greater);
+        VAST_EVAL_DISPATCH(greater_equal);
+        VAST_EVAL_DISPATCH(less_equal);
+        VAST_EVAL_DISPATCH(ni);
+        VAST_EVAL_DISPATCH(not_ni);
+#undef VAST_EVAL_DISPATCH
+      }
+      die("unreachable");
     },
   };
   const auto evaluate_expression
