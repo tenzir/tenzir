@@ -80,12 +80,12 @@ caf::expected<std::vector<table_slice>> pipeline::finish() {
     auto max_import_timestamp
       = *std::max_element(import_timestamps_.begin(), import_timestamps_.end());
     for (auto& [layout, batch] : *finished) {
-      auto& slice = result.emplace_back(batch);
+      auto& slice = result.emplace_back(batch, layout);
       slice.import_time(max_import_timestamp);
     }
   } else {
     for (size_t i = 0; auto& [layout, batch] : *finished) {
-      auto& slice = result.emplace_back(batch);
+      auto& slice = result.emplace_back(batch, layout);
       slice.import_time(import_timestamps_[i++]);
     }
   }
@@ -267,7 +267,7 @@ caf::expected<std::vector<table_slice>> pipeline_executor::finish() {
   }
   for (auto& [layout, queue] : batches) {
     for (auto& [layout, batch] : queue)
-      result.emplace_back(batch);
+      result.emplace_back(batch, layout);
     queue.clear();
   }
   return result;

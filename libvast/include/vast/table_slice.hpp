@@ -84,11 +84,11 @@ public:
 
   /// Construct an Arrow-encoded table slice from an existing record batch.
   /// @param record_batch The record batch containing the table slice data.
-  /// @param VAST type for the provided record batch.
+  /// @param VAST type for the provided record batch. When not set, the type is
+  /// inferred from the record batch.
   /// @param serialize Whether to store IPC format as a backing.
   explicit table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
-                       type schema = {},
-                       enum serialize serialize = serialize::no);
+                       type schema, enum serialize serialize = serialize::no);
 
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.
@@ -361,6 +361,8 @@ uint64_t rows(const std::vector<table_slice>& slices);
 /// @param slice The table slice to apply *expr* on.
 /// @param hints An optional pre-selection of rows to look at.
 /// @returns The set of row IDs in *slice* for which *expr* yields true.
+/// @note This function is defined in evaluate.cpp rather than table_slice.cpp
+/// because it is comparatively expensive to compile.
 ids evaluate(const expression& expr, const table_slice& slice,
              const ids& hints);
 

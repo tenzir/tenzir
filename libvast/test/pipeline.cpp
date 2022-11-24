@@ -134,7 +134,7 @@ vast::type layout(caf::expected<std::vector<vast::pipeline_batch>> batches) {
 
 vast::table_slice
 as_table_slice(caf::expected<std::vector<vast::pipeline_batch>> batches) {
-  return vast::table_slice{(*batches)[0].batch};
+  return vast::table_slice{(*batches)[0].batch, {}};
 }
 
 FIXTURE_SCOPE(pipeline_tests, pipelines_fixture)

@@ -621,7 +621,7 @@ TEST(record batch roundtrip) {
   auto t = count_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
   auto batch = to_record_batch(slice1);
-  auto slice2 = table_slice{batch};
+  auto slice2 = table_slice{batch, {}};
   CHECK_EQUAL(slice1, slice2);
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, t), 0_c);
   CHECK_VARIANT_EQUAL(slice2.at(1, 0, t), 1_c);
@@ -871,7 +871,7 @@ TEST(full_table_slice) {
   check_column(slice, 14, pattern_type{}, f3_pattern); // f11_2_2
   MESSAGE("test is_serilaized");
   CHECK(slice.is_serialized());
-  auto slice2 = table_slice{to_record_batch(slice)};
+  auto slice2 = table_slice{to_record_batch(slice), {}};
   CHECK(!slice2.is_serialized());
   CHECK_EQUAL(slice, slice2);
   CHECK(table_slice{}.is_serialized());

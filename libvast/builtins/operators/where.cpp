@@ -71,7 +71,7 @@ public:
     }
     // TODO: Replace this with an Arrow-native filter function as soon as we are
     // able to directly evaluate expressions on a record batch.
-    if (auto new_slice = filter(table_slice{batch}, *tailored_expr)) {
+    if (auto new_slice = filter(table_slice{batch, layout}, *tailored_expr)) {
       auto as_batch = to_record_batch(*new_slice);
       transformed_.emplace_back(new_slice->layout(), std::move(as_batch));
     }

@@ -567,7 +567,10 @@ table_slice truncate(table_slice slice, size_t num_rows) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   VAST_ASSERT(num_rows > 0);
   auto rb = to_record_batch(slice);
-  return table_slice{rb->Slice(0, detail::narrow_cast<int64_t>(num_rows))};
+  return table_slice{
+    rb->Slice(0, detail::narrow_cast<int64_t>(num_rows)),
+    slice.layout(),
+  };
 }
 
 std::pair<table_slice, table_slice>
@@ -576,7 +579,16 @@ split(table_slice slice, size_t partition_point) {
   auto rb = to_record_batch(slice);
   auto pp = detail::narrow_cast<int64_t>(partition_point);
   auto rows = detail::narrow_cast<int64_t>(slice.rows());
-  return {table_slice{rb->Slice(0, pp)}, table_slice{rb->Slice(pp, rows - pp)}};
+  return {
+    table_slice{
+      rb->Slice(0, pp),
+      slice.layout(),
+    },
+    table_slice{
+      rb->Slice(pp, rows - pp),
+      slice.layout(),
+    },
+  };
 }
 
 uint64_t rows(const std::vector<table_slice>& slices) {

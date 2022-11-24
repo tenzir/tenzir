@@ -119,7 +119,7 @@ TEST(summarize Zeek conn log) {
                 caf::none);
   const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
-  const auto summarized_slice = table_slice{result[0].batch};
+  const auto summarized_slice = table_slice{result[0].batch, {}};
   // NOTE: I calculated this data ahead of time using jq, so it can safely be
   // used for comparison here. As an example, here's how to calculate the
   // grouped sums of the duration values using jq:
@@ -185,7 +185,7 @@ TEST(summarize test) {
     summarize_operator->add(agg_test_layout, to_record_batch(make_testdata())));
   const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
-  const auto summarized_slice = table_slice{result[0].batch};
+  const auto summarized_slice = table_slice{result[0].batch, {}};
   CHECK_EQUAL(summarized_slice.at(0, 0),
               data_view{vast::time{std::chrono::seconds(1258329600)}});
   CHECK_EQUAL(summarized_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
@@ -243,7 +243,7 @@ TEST(summarize test fully qualified field names) {
   REQUIRE_SUCCESS(summarize_operator->add(agg_test_layout, test_batch));
   const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
-  const auto summarized_slice = table_slice{result[0].batch};
+  const auto summarized_slice = table_slice{result[0].batch, {}};
   REQUIRE_EQUAL(summarized_slice.columns(), 11u);
   CHECK_EQUAL(summarized_slice.at(0, 0),
               data_view{vast::time{std::chrono::seconds(1258329600)}});
