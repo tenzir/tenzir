@@ -10,6 +10,7 @@
 - **Contributors**:
   - [Dominik Lohmann](https://github.com/dominiklohmann)
   - [Rémi Dettai](https://github.com/rdettai)
+  - [Anthony Verez](https://github.com/netantho)
 - **Discussion**: [PR #2562](https://github.com/tenzir/vast/pull/2562)
 
 ## Overview
@@ -24,7 +25,7 @@ event of a partial failure.
 To date, VAST has no application-level mechanisms for achieving fault tolerance.
 Prudent engineering practices help in avoiding catastrophic state corruption in
 the face of crashes (e.g., all data is unreadable), but there exists no
-principled architectural element that makes fault tolerance easy. Operators who
+principled approach that addresses fault tolerance specifically. Operators who
 would like more reliability currently have no control over the degree of
 redundancy in the system.
 
@@ -35,16 +36,15 @@ the system:
 2. **Read Path**: get data out of the system
 3. **System Core**: the data "service" that sits between (1) and (2)
 
-VAST's architecture lends itself already today to replicating and scaling the
-write path. We would like to have a similar capability for the read path. But
-most importantly, the system core deserves the most attention, as it is the
-central component that maintains the internal state of VAST.
+Today, VAST's architecture lends itself already to replicating and scaling the
+write path (1). We would like to have a similar capability for the read path (2)
+and the system core (3).
 
 From a fault-tolerance perspective, the system core is the *catalog*, as it owns
 all data and metadata. VAST stores data into partitions. Mutating operations
-like compaction, rollup, or deletion of partitions must leave the catalog in an
+like compaction, roll-up, or deletion of partitions must leave the catalog in an
 internally consistent state. The catalog provides atomic functions for
-insertion, replacement and removal of partitions to support this requirement.
+insertion, replacement, and removal of partitions to support this requirement.
 The current implementation of the catalog is based on a custom in-memory store,
 without support for distribution or replication. It is therefore not suitable
 for environments with stronger fault tolerance requirements.
@@ -54,59 +54,61 @@ for environments with stronger fault tolerance requirements.
 We can frame the requirements we are facing more generally in terms of the CAP
 theorem. Given that availability is of utmost importance for processing security
 data, we cannot compromise on it. On the contrary, we can compromise on
-consistency, given that telemetry data is fundamentally incomplete. Security
-analysts are always working with a subset of descriptions of activity, and
-stitching together analytics based on partial knowledge is the norm. For this
-reason, it makes sense to also prioritize availability when facing a network
-partition.
+consistency, given that telemetry data is fundamentally incomplete. For example,
+packet drops upstream may lead to a stream of events that does not cover all
+activity. Security analysts are accustomed to working with a subset of activity,
+and stitching together analytics based on partial knowledge is the norm. For
+this reason, it makes sense to also prioritize availability when facing a
+network partition.
 
-Unlike a transactional RDBMS, the system expectations for our use case center
-around *eventual consistency*. For example, it is acceptable for the system to
-have slightly different knowledge about existing data, and thereby produce
-slightly different query results in the short term, as long these discrepancies
-consolidate eventually.
+Unlike a transactional relational DBMS, the system expectations for our use case
+center around *eventual consistency*. For example, it is acceptable for the
+system to have slightly different knowledge about existing data, and thereby
+produce slightly different query results in the short term, as long these
+discrepancies consolidate eventually.
 
 With respect to the system core, this implies that the catalog must support
 transactions when processing partition operations. For example, a compaction
-operation may remove N partitions and replace them with a new one. These
-operations break down to a sequence of deletes, followed by an insert.
+operation may remove N partitions and replace them with single new one. These
+operations break down to a sequence of deletes, followed by one insert.
+Atomicity of these operations is a requirement for correctness.
 
 ### Non-requirements
 
 Infrastructure approaches for hardware redundancy are considered out of scope.
 In particular, we do not consider fault tolerance at the storage layer. There
 are many different ways to provide redundant storage, e.g., RAID storage,
-distributed file systems or NAS. Cloud storage, like S3 or Azure blob storage,
-are replicated three times, and adding an additional layer of fault tolerance on
-top does not provide a lot of additional safety but considerably increases the
-cost.
+distributed file systems, or NAS. Cloud storage, like S3 or Azure blob storage,
+are often replicated three times, and adding an additional layer of fault
+tolerance on top does not provide a lot of additional safety but considerably
+increases the cost.
 
 ## Solution Proposal
 
-The most important architectural effort concerns making the catalog a
-fault-tolerant component. To this end, we propose to factor the logic that
-operates on partition metadata into a dedicated **metastore**. As a first point
-of contact for queries, the catalog also keeps per-partition index structures in
-memory. This catalog functionality is out of scope, as it represents derived,
-immutable state from the metastore.
+The most important architectural effort concerns making the catalog
+fault-tolerant. To this end, we propose to factor the logic that operates on
+partition metadata into a dedicated **metastore**. As a first point of contact
+for queries, the catalog also keeps per-partition index structures in memory.
+The indexing functionality of the catalog is out of scope, as it represents
+derived, immutable state from the metastore.
 
-Adjacent fault-tolerance efforts outside the catalog scope involve isolation
-of components. For example, the failure domain of the read path is a single
-query, which we can deploy in a dedicated operating system process (that extends
-to a single cloud function or container execution). Likewise, we can isolate
-failure domains on the write path by spawning each data source (or pipeline) in
-its own process. This flexibility is a by-product of the actor model
-architecture that treats internal components as microservices. The spectrum of
-fate sharing is the OS process boundary. The choice highly depends on the
-specifics of the deployment environment. Once the **metastore** architecture
-is realized moving individual read or write streams into their dedicated
-process can be done be spawning dedicated database nodes.
+Adjacent fault-tolerance efforts outside the catalog scope involve isolation of
+components. For example, the failure domain of the read path is a single query,
+which we can deploy in a dedicated operating system process, which extends to a
+single cloud function or container execution. Likewise, we can isolate failure
+domains on the write path by spawning each data source (or pipeline) in its own
+process. This flexibility is a by-product of the actor model architecture that
+treats internal components as microservices. The spectrum of fate sharing is the
+OS process boundary. The choice highly depends on the specifics of the
+deployment environment. Once the **metastore** architecture is realized moving
+individual read or write streams into their dedicated process can be done be
+spawning dedicated database nodes.
 
 We briefly touch on how the mechanism for making the write and read path
 resilient, and then focus the discussion on fault tolerance within the VAST
 server node, specifically the catalog.
 
-To avoid bloating the propoal with caveats unrealted to the core problem, we
+To avoid bloating the proposal with caveats unrelated to the core problem, we
 assume a starting architecture that has been planned earlier, but is not fully
 implemented yet.
 
@@ -120,15 +122,14 @@ processing semantics on the ingest stream.
 If the circumstances require high-fidelity data acquisition, we can resort to an
 external data plane with exactly-once processing stream semantics, such as
 Apache Kafka. VAST must not acknowledge events from the data plane until having
-received a confirmation that the corresponding partition is durable. In the
-presence of a crash, VAST must restart from the last acknowledged position in
-the stream.
+received a confirmation from the catalog that the corresponding partition is
+durable. In the presence of a crash, VAST must restart from the last
+acknowledged position in the stream.
 
-Because security telemetry data is already lossy upstream (e.g., due to packet
-loss or lacking instrumentation), operators are often willing to accept looser
-guarantees. Therefore, we deem it sufficient to offer a mechanism that
-implements interaction with a durable message bus. Such a mechanism may require
-a - possibly user supplied - unique identifier for every input stream.
+As mentioned above, operators are often willing to accept looser guarantees.
+Therefore, we deem it sufficient to offer a mechanism that implements
+interaction with a durable message bus. Such a mechanism may require a—possibly
+user supplied—unique identifier for every input stream.
 
 ### Resilient Read Path
 
@@ -183,7 +184,8 @@ of the core components as complete system failure. For example, if the network
 interface dies, the machine is unreachable, which we treat as an entire system
 failure.
 
-![Single Deployment](single-deployment.png)
+![Single Deployment](single-deployment-light.png#gh-light-mode-only)
+![Single Deployment](single-deployment-dark.png#gh-dark-mode-only)
 
 No fault tolerance mechanism can work around an entire system failure. The only
 requirement is that VAST crashes safely, without corrupting its existing state.
@@ -197,8 +199,11 @@ architecture for high availability.
 
 We consider two approaches:
 
-1. **Active-passive:** (or hot-spare) a redundant machine replaces the primary system that failed.
-2. **Load sharing**: there exist multiple system instances that operate on the same metastore.
+1. **Active-passive:** (or hot-spare) a redundant machine replaces the primary
+   system that failed.
+
+2. **Load sharing**: there exist multiple system instances that operate on the
+   same metastore.
 
 Option (1) falls into the high-availability (HA) category that requires
 substantial involvement from operations, as it requires non-trivial
@@ -208,10 +213,11 @@ when the performance requirements are met.
 When operators require higher degrees of reliability that goes beyond HA
 failover, or when scaling out for performance reasons becomes a necessity, we
 need to consider option (2) with a distributed operation of VAST. In this case,
-we treat the metastore of the catalog as a _shared service_ between multiple
+we treat the metastore of the catalog as a *shared service* between multiple
 VAST nodes.
 
-![Distributed Deployment](distributed-deployment.png)
+![Distributed Deployment](distributed-deployment-light.png#gh-light-mode-only)
+![Distributed Deployment](distributed-deployment-dark.png#gh-dark-mode-only)
 
 In the above diagram, both VAST nodes serve as a valid entry point for data, as
 well as queries. If one location fails, the other remains fully operational.
@@ -234,23 +240,21 @@ adds the requirement for a quick resynchronization ability to the metastore.
 
 The most extreme variant of this scenario would be to create a dedicated
 instance for each query, which can be realized on top of serverless
-architectures such as AWS Lambda or Azure Cloud Functions. However, for systems
-with an at-least medium query rate we recommend to use longer-running read nodes
-to exploit IO synergies and in-memory caches.
+architectures, such as AWS Lambda or Azure Cloud Functions. However, for systems
+with a medium query rate we recommend to use longer-running read nodes to
+exploit I/O synergies and in-memory caches.
 
 ## Implementation
 
 We briefly touch on the implementation of write and read path, before dedicating
-the majority of attention to the metastore
+the majority of attention to the metastore.
 
 ### Write Path
 
 A fault-tolerant write path can be realized with the help of the transactional
 catalog that is proposed as the main contribution of this RFC, and an
 acknowledgement mechanism to confirm whether events at the source have been
-successfully processed. The current architecture looks as follows:
-
-![Write Path](write-path.png)
+successfully processed.
 
 We are assuming that we can begin with reading from a reliable medium that
 supports an indexed stream of events, such as Apache Kafka. If no such data
@@ -258,38 +262,36 @@ acquisition mechanism is available, we may consider a local disk buffer to
 emulate a reliable medium. For this proposal, working around an unreliable data
 transport channel is out of scope.
 
-Upon insertion of new data the catalog needs to be able to recognise whether
-the same data has already been ingested and discard the respective duplicate
-partitions.
+The unit of transaction with the catalog is a single partition. It is up to the
+source-specific data acquisition implementation to handle ACK'ing upstream data.
+For example, the Kafka source would forward its offset after having received an
+ACK from metastore about the corresponding partition.
 
-A possible detection mechanism can be achieved with per-source checksums on the
-written data. This requires a first architectural change: A partition may no
-longer contain data from multiple sources. Since it is the unit of work in the
-catalog, a partition can either be accepted or rejected in full.
+#### Duplicate Detection
 
-In addition to the checksums, partitions need to store source stream offsets as
-part of its metadata. An atomic commit of both partition UUID and its source
-position allows the source to pick up exactly at the point of failure, without
-risk of re-ingesting twice or missing any events. It thus provides exactly-once
-semantics for our write path.
+Detecting duplicates is frequent concern of users. We consider this topic as
+*client-side* functionality that is orthogonal to the atomic partition
+submission at the catalog. For example, a client may add a mechanism to keep
+track of already ingested files, e.g., by file name and/or hash digest.
 
-In technical terms, we can extend the CAF Streaming message type to include a
-handle to the source and source specific position, and then trigger an ACK once
-the data has been persisted. VAST already implements a similar mechanism today
-that acknowledges when events arrived at an active partition, which (almost)
-guarantees that they are queryable.
-
-An existing source can re-synchronize its position with the catalog to recover
-lost ACKs and advance its position to the location of data that was last
-commited. However, this is purely an optimization and not required for
-correctness.
+A specific scenario to consider during regular ingestion is the event that the
+server (and thereby the catalog) crashes during partition submission. In this
+case the ACK of the transaction may not arrive at the client. The client would
+then have to re-submit the same partition after a timeout. This will not
+introduce duplicates if the client initiates the submission with a uniquely
+chosen transaction ID. Since the server keeps a durable log of all transaction
+IDs, it will not accept an already completed transaction again. Alternatively,
+the server can generate a unique transaction ID and require the client to
+provide that ID during the final submission. Both approaches have the same
+effect, and we leave the implementation detail to the specific metastore at
+hand.
 
 ### Read Path
 
-For historical queries, we can achieve fault-tolerance on the read part by
-moving query execution after the catalog lookup into a dedicated process.
-If the metastore that is proposed below is also realized a dedicated node could
-be spawned for each individual query.
+For historical queries, we can achieve fault-tolerance on the read path by
+separating the catalog lookup from query execution, and moving the two phases
+into dedicated processes. This results in a dedicated operating system process
+per query.
 
 Live queries bypass the catalog and would therefore need to implement ACK'ing
 independently, at the granularity of table slices. We leave this as a problem
@@ -298,11 +300,10 @@ all stages of the data stream, possibly involving multiple transport mechanisms.
 
 ### Metastore
 
-The metastore primarily stores the state of partition data. We restrict our
-analysis to this use case. From the perspective of the catalog, the metastore
-API should expose itself as an actor that encapsulates the implementation
-details. This actor can rely on VAST's plugin architecture to implement the
-metastore-specific integration.
+The metastore stores partition metadata. From the perspective of the catalog,
+the metastore API should expose itself as an actor that encapsulates the
+implementation details. This actor can rely on VAST's plugin architecture to
+implement the metastore-specific integration.
 
 #### Request-Response API
 
@@ -333,7 +334,7 @@ The semantics the function signatures are as follows:
 4. `replace`: performs an atomic deletion and addition of partition data, by
    deleting the given UUIDs and adding new partition metadata.
 
-5. `list`: retrives the set of all UUIDs in a transactional manner.
+5. `list`: retrieves the set of all UUIDs in a transactional manner.
 
 In practice, the functionality of `replace` is a superset of `add` and `delete`.
 For ease of exposition, we kept them as separate API functions.
@@ -345,7 +346,7 @@ updates, such that the catalog can learn about new partitions from other catalog
 instances.
 
 Once a catalog learns about an addition or deletion of a partition, it will
-synchronize its internal state by updating the corresponding partition id list
+synchronize its internal state by updating the corresponding partition ID list
 of the related table. Sketches can be loaded from disk on demand, when they
 are needed for a lookup.
 
@@ -361,23 +362,24 @@ sets of read and write operations into atomic transactions. It also supports
 single-key watches.
 
 Unfortunately there is no way to hook into a feed of all committed transactions,
-so a layer for the CDC requirement must be implemented on top of the primitive
-operations. This could be implemented by writing the transaction log into a
-separate key space and keeping a dedicated key that counts the transactions to
-be watched by all participants. Whenever the watch triggers on a node it can
-consume the latest updates to synchronize the local representation of the state.
-The original key space that tracks the set of existing partitions would only
-serve to verify the validity of the transaction on request.
+so a layer for the change data capture (CDC) requirement must be implemented on
+top of the primitive operations. This could be implemented by writing the
+transaction log into a separate key space and keeping a dedicated key that
+counts the transactions to be watched by all participants. Whenever the watch
+triggers on a node it can consume the latest updates to synchronize the local
+representation of the state. The original key space that tracks the set of
+existing partitions would only serve to verify the validity of the transaction
+on request.
 
 To get a feel for the system, we briefly experimented with mapping our API to
 FDB primitives. We found the following:
 
-- Transactions are “all or nothing”, i.e., you can sequence multiple operations,
+- Transactions are "all or nothing", i.e., you can sequence multiple operations,
   and if you commit and it goes through, they are all applied, otherwise rolled
   back.
 
 - Multiple transactions that modify (read to or write from) the same key are not
-  forbidden, even if they overlap - to enable our use case, we’d have to verify
+  forbidden, even if they overlap. To enable our use case, we'd have to verify
   the existence of all the partitions we intend to delete, followed by doing all
   the (SET, CLEAR) operations OR rollback / cancel the transaction.
 
@@ -386,10 +388,10 @@ FDB primitives. We found the following:
   picture", i.e., being aware of the transactions that are triggered from within
   other VAST nodes.
 
-- There doesn’t seem to be a full CDC (change data capture) functionality, only
-  watching single keys - there could be a key for a "transaction_id" (an integer
-  increment for every transaction), and from there we could work around the
-  problem by requesting all recent transactions whenever this key is modified.
+- There doesn't seem to be a full CDC functionality, only watching single keys. 
+  There could be a key for a `transaction_id` (an integer increment for every
+  transaction), and from there we could work around the problem by requesting
+  all recent transactions whenever this key is modified.
 
 - The range reads feature is suitable to enumerate a subset of the key-value
   space. This can be used to facilitate recovery or the addition of a new node.
@@ -411,7 +413,7 @@ Here are some notes after taking a first look:
   streamed to the client, allowing a gap-free observation of changes in the
   key-space.
 
-- Prefix reads can be used to retrive a full or partial subset of the key-value
+- Prefix reads can be used to retrieve a full or partial subset of the key-value
   space, allowing the implementation of the `list` functionality.
 
 - Etcd comes with a gRPC API, making it easy to embed for us. We're already
@@ -466,7 +468,7 @@ VAST already had a
 [working-albeit-minimal](https://github.com/tenzir/vast/pull/926) implementation
 in the past that we removed, given that we didn't need the functionality at the
 time. There are some [open questions on composability of log and state
-machine](https://groups.google.com/g/raft-dev/c/O80OSWrQieo) that we should
+machine](https://groups.google.com/g/raft-dev/c/O80OSWrQieo) that we may
 revisit.
 
 #### Recommendation
@@ -474,7 +476,7 @@ revisit.
 As of our current understanding etcd and the home grown Raft implementation
 match the requirements most closely. Of those two etc is the mature product
 which has been hardened and improved over many years of heavy use. For that
-reason **we recommend etcd for the backend** of the fault tolerant catalog.
+reason we lean towards etcd to implement the metastore.
 
 ## Alternatives
 
