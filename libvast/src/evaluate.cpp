@@ -26,45 +26,6 @@ namespace vast {
 
 namespace {
 
-// A utility function for evaluating meta extractors in predicates. This is
-// always a yes or no question per batch, so the function does not have to deal
-// with bitmaps at all.
-bool evaluate_meta_extractor(const table_slice& slice,
-                             const meta_extractor& lhs, relational_operator op,
-                             const data& rhs) {
-  switch (lhs.kind) {
-    case meta_extractor::kind::type:
-      return evaluate(materialize(slice.layout().name()), op, rhs);
-    case meta_extractor::kind::field: {
-      const auto* s = caf::get_if<std::string>(&rhs);
-      if (!s) {
-        VAST_WARN("#field can only compare with string");
-        return false;
-      }
-      auto result = false;
-      auto neg = is_negated(op);
-      for (const auto& layout_rt = caf::get<record_type>(slice.layout());
-           const auto& [field, index] : layout_rt.leaves()) {
-        const auto fqn
-          = fmt::format("{}.{}", slice.layout().name(), layout_rt.key(index));
-        // This is essentially s->ends_with(fqn), except that it also checks
-        // the dot separators correctly (modulo quoting).
-        const auto [fqn_mismatch, s_mismatch]
-          = std::mismatch(fqn.rbegin(), fqn.rend(), s->rbegin(), s->rend());
-        if (s_mismatch == s->rend()
-            && (fqn_mismatch == fqn.rend() || *fqn_mismatch == '.')) {
-          result = true;
-          break;
-        }
-      }
-      return neg != result;
-    }
-    case meta_extractor::kind::import_time:
-      return evaluate(data{slice.import_time()}, op, rhs);
-  }
-  __builtin_unreachable();
-}
-
 template <relational_operator Op>
 struct cell_evaluator;
 
@@ -328,6 +289,93 @@ struct column_evaluator<Op, enumeration_type, view<std::string>> {
     return ids{offset + array.length(), false};
   }
 };
+
+// A utility function for evaluating meta extractors in predicates. This is
+// always a yes or no question per batch, so the function does not have to deal
+// with bitmaps at all.
+bool evaluate_meta_extractor(const table_slice& slice,
+                             const meta_extractor& lhs, relational_operator op,
+                             const data& rhs) {
+  switch (lhs.kind) {
+    case meta_extractor::kind::type: {
+      switch (op) {
+#define VAST_EVAL_DISPATCH(op)                                                 \
+  case relational_operator::op: {                                              \
+    auto f = [&](const auto& rhs) noexcept {                                   \
+      return cell_evaluator<relational_operator::op>::evaluate(                \
+        slice.layout().name(), make_view(rhs));                                \
+    };                                                                         \
+    return caf::visit(f, rhs);                                                 \
+  }
+        VAST_EVAL_DISPATCH(equal);
+        VAST_EVAL_DISPATCH(not_equal);
+        VAST_EVAL_DISPATCH(in);
+        VAST_EVAL_DISPATCH(less);
+        VAST_EVAL_DISPATCH(not_in);
+        VAST_EVAL_DISPATCH(match);
+        VAST_EVAL_DISPATCH(not_match);
+        VAST_EVAL_DISPATCH(greater);
+        VAST_EVAL_DISPATCH(greater_equal);
+        VAST_EVAL_DISPATCH(less_equal);
+        VAST_EVAL_DISPATCH(ni);
+        VAST_EVAL_DISPATCH(not_ni);
+#undef VAST_EVAL_DISPATCH
+      }
+      die("unreachable");
+    }
+    case meta_extractor::kind::field: {
+      const auto* s = caf::get_if<std::string>(&rhs);
+      if (!s) {
+        VAST_WARN("#field can only compare with string");
+        return false;
+      }
+      auto result = false;
+      auto neg = is_negated(op);
+      for (const auto& layout_rt = caf::get<record_type>(slice.layout());
+           const auto& [field, index] : layout_rt.leaves()) {
+        const auto fqn
+          = fmt::format("{}.{}", slice.layout().name(), layout_rt.key(index));
+        // This is essentially s->ends_with(fqn), except that it also checks
+        // the dot separators correctly (modulo quoting).
+        const auto [fqn_mismatch, s_mismatch]
+          = std::mismatch(fqn.rbegin(), fqn.rend(), s->rbegin(), s->rend());
+        if (s_mismatch == s->rend()
+            && (fqn_mismatch == fqn.rend() || *fqn_mismatch == '.')) {
+          result = true;
+          break;
+        }
+      }
+      return neg != result;
+    }
+    case meta_extractor::kind::import_time: {
+      switch (op) {
+#define VAST_EVAL_DISPATCH(op)                                                 \
+  case relational_operator::op: {                                              \
+    auto f = [&](const auto& rhs) noexcept {                                   \
+      return cell_evaluator<relational_operator::op>::evaluate(                \
+        slice.import_time(), make_view(rhs));                                  \
+    };                                                                         \
+    return caf::visit(f, rhs);                                                 \
+  }
+        VAST_EVAL_DISPATCH(equal);
+        VAST_EVAL_DISPATCH(not_equal);
+        VAST_EVAL_DISPATCH(in);
+        VAST_EVAL_DISPATCH(less);
+        VAST_EVAL_DISPATCH(not_in);
+        VAST_EVAL_DISPATCH(match);
+        VAST_EVAL_DISPATCH(not_match);
+        VAST_EVAL_DISPATCH(greater);
+        VAST_EVAL_DISPATCH(greater_equal);
+        VAST_EVAL_DISPATCH(less_equal);
+        VAST_EVAL_DISPATCH(ni);
+        VAST_EVAL_DISPATCH(not_ni);
+#undef VAST_EVAL_DISPATCH
+      }
+      die("unreachable");
+    }
+  }
+  __builtin_unreachable();
+}
 
 } // namespace
 
