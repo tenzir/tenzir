@@ -387,9 +387,9 @@ bool evaluate_meta_extractor(const table_slice& slice,
 //    resulting bitmaps accordingly.
 // 3. Evaluate predicates:
 //    a) If it's a meta extractor, operate on the batch metadata. In case of a
-//       match, the selection bitmap is the result directly.
+//       match, the selection bitmap is the very result.
 //    b) If it's a data predicate, access the desired array, and lift the
-//       resolved types for both sides of the predicate into a compile time
+//       resolved types for both sides of the predicate into a compile-time
 //       context for the column evaluator.
 // 4. The column evaluator has specialization based on the three-tuple of lhs
 //    type, relational operator, and rhs view. The generic fall back case
