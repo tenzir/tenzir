@@ -460,11 +460,11 @@ ids evaluate(const expression& expr, const table_slice& slice,
         return ids{offset + num_rows, false};
       },
       [&](const negation& negation, const ids& selection) {
-        // For negations we can simply XOR the selection bitmap with the
-        // resulting bitmap of the recursive expression evaluation. For bits
-        // that are zero because of the offset the result bitmap is also always
-        // guaranteed to be zero, which means that for all other bits in the
-        // result bitmap we effectively flip the bits here.
+        // For negations we want to return a bitmap that has 1s in places where
+        // the selection had 1s and the nested expression evaluation returned
+        // 0s. The opposite case where the selection has 0s and the nested
+        // expression evaluation returns 1s cannot exist (this is a precondition
+        // violation), so we can simply XOR the bitmaps to do the negation.
         return selection ^ self(self, negation.expr(), selection);
       },
       [&](const conjunction& conjunction, ids selection) {
