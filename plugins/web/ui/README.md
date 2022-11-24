@@ -16,7 +16,7 @@ nix-shell -p nodejs-18_x yarn
 
 ### Develop
 
-This folder can be developed independently from the rest of the VAST package.
+To develop the UI independently from VAST itself:
 
 1. Install the nodejs dependencies
 
@@ -24,13 +24,16 @@ This folder can be developed independently from the rest of the VAST package.
 yarn install
 ```
 
-2. You need a running vast instance with the web server enabled in the dev mode. For example
+2. You need a running VAST instance with the web server enabled in the dev mode.
+   For example
 
 ```fish
-vast --plugins=bundled start '--commands="web server --mode=dev"'
+vast start '--commands="web server --mode=dev"'
 ```
 
-3. (optional) If your vast server's REST API endpoint is different from the default (`http://localhost:42001/api/v0`), copy the `.env.example` to `.env` and edit that.
+3. (optional) If your VAST server's REST API endpoint is different from the
+   default (`http://localhost:42001/api/v0`), copy
+   the `.env.example` to `.env` and edit that.
 
 4. Run the dev server
 
