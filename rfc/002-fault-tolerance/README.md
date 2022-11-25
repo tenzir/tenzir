@@ -69,7 +69,7 @@ discrepancies consolidate eventually.
 
 With respect to the system core, this implies that the catalog must support
 transactions when processing partition operations. For example, a compaction
-operation may remove N partitions and replace them with single new one. These
+operation may remove N partitions and replace them with a single new one. These
 operations break down to a sequence of deletes, followed by one insert.
 Atomicity of these operations is a requirement for correctness.
 
@@ -265,11 +265,11 @@ transport channel is out of scope.
 The unit of transaction with the catalog is a single partition. It is up to the
 source-specific data acquisition implementation to handle ACK'ing upstream data.
 For example, the Kafka source would forward its offset after having received an
-ACK from metastore about the corresponding partition.
+ACK from the metastore about the corresponding partition.
 
 #### Duplicate Detection
 
-Detecting duplicates is frequent concern of users. We consider this topic as
+Detecting duplicates is a frequent concern of users. We consider this topic as
 *client-side* functionality that is orthogonal to the atomic partition
 submission at the catalog. For example, a client may add a mechanism to keep
 track of already ingested files, e.g., by file name and/or hash digest.
@@ -398,7 +398,7 @@ FDB primitives. We found the following:
 
 ##### etcd
 
-Etcd is a distributed key-value store that uses Raft for quorum-based consensus.
+etcd is a distributed key-value store that uses Raft for quorum-based consensus.
 From a CAP theorem perspective, this brings us into the CP realm, because a
 master must be elected to perform writes. Stale reads may be supported, though,
 which we can tolerate.
@@ -416,7 +416,7 @@ Here are some notes after taking a first look:
 - Prefix reads can be used to retrieve a full or partial subset of the key-value
   space, allowing the implementation of the `list` functionality.
 
-- Etcd comes with a gRPC API, making it easy to embed for us. We're already
+- etcd comes with a gRPC API, making it easy to embed for us. We're already
   depending on gRPC transitively via Apache Arrow (cf. Flight).
 
 - An official C++ client library exists:
