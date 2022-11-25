@@ -146,3 +146,9 @@ ports, or you can spawn more dedicated web server processes:
 
 ![REST API - Multiple Deployments](rest-api-deployment-multiple.light.png#gh-light-mode-only)
 ![REST API - Multiple Deployments](rest-api-deployment-multiple.dark.png#gh-dark-mode-only)
+
+We do not anticipate that the web frontend will be on the critical path, since
+the web server itself performs very little work. But we get this form of scaling
+"for free" as a byproduct of VAST's [actor model
+architecture](/docs/understand/architecture/actor-model), which is why we
+mentioned it here.
