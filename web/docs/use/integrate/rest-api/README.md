@@ -10,9 +10,11 @@ VAST provides a REST API to interact with a server node. The `web`
 dedicated component that can run in multiple ways.
 
 :::tip API Documentation
-You can find documentation of the API routes and an [OpenAPI
-Specification](https://spec.openapis.org/oas/latest.html) at
-[https://vast.io/api](/api).
+At [https://vast.io/api](/api) you can find documentation of the API routes and
+an [OpenAPI Specification](https://spec.openapis.org/oas/latest.html).
+
+Please note that we consider v0 still experimental and therefore do not provide
+stability guarantees.
 :::
 
 ## Deployment Modes
