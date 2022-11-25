@@ -228,6 +228,25 @@ void sanitize_long_form_argument(std::string& argument,
         = generate_default_value_for_argument_type(option_type.data());
       argument.append(options_type_default_val);
     }
+  } else if (state == caf::pec::invalid_argument) {
+    auto name = argument.substr(0, argument.find_first_of('=')).substr(2);
+    fmt::print(stderr, "name {}\n", name);
+    auto long_name = cmd.options.cli_long_name_lookup(name);
+    if (!long_name) {
+      fmt::print(stderr, "argument {}\n", argument);
+      return;
+    }
+    auto caf_type_name = long_name->type_name();
+    auto type_name = std::string_view{caf_type_name.data()};
+    fmt::print(stderr, "type_name {}\n", type_name);
+    if (type_name.starts_with("std::vector")) {
+      auto arg = argument.substr(argument.find_first_of('=') + 1);
+      fmt::print(stderr, "arg {}\n", arg);
+      auto split_args = detail::split(arg, ",", "\\");
+      fmt::print(stderr, "split args {}\n", split_args);
+      argument
+        = fmt::format("--{}=[\"{}\"]", name, fmt::join(split_args, "\",\""));
+    }
   }
 }
 

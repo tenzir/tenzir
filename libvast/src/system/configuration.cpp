@@ -410,9 +410,18 @@ caf::error configuration::parse(int argc, char** argv) {
   // may contain empty values - sanitize them manually.
   for (auto& plugin_arg : plugin_args) {
     auto dummy_settings = caf::settings{};
-    if (plugin_opts.parse(dummy_settings, {plugin_arg}).first
-        == caf::pec::missing_argument) {
+    auto parse_result = plugin_opts.parse(dummy_settings, {plugin_arg}).first;
+    if (parse_result == caf::pec::missing_argument)
       plugin_arg.append("[]");
+    else if (parse_result == caf::pec::invalid_argument) {
+      auto name = plugin_arg.substr(0, plugin_arg.find_first_of('=')).substr(2);
+      fmt::print(stderr, "name {}\n", name);
+      auto arg = plugin_arg.substr(plugin_arg.find_first_of('=') + 1);
+      fmt::print(stderr, "arg {}\n", arg);
+      auto split_args = detail::split(arg, ",", "\\");
+      fmt::print(stderr, "split args {}\n", split_args);
+      plugin_arg
+        = fmt::format("--{}=[\"{}\"]", name, fmt::join(split_args, "\",\""));
     }
   }
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
