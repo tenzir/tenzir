@@ -37,6 +37,13 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_INSTALLED_DIRECTORIES "/var/lib/vast" "/var/log/vast")
 
+# VAST switched it's versioning scheme from CalVer to SemVer, so we have to set
+# the package epoch so an older package with calendar-based versioning is not
+# considered newer than this one. This for whatever reason implies that the
+# package revision must be set, which is just zero for us.
+set(CPACK_DEBIAN_PACKAGE_EPOCH "1")
+set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
+
 set(CPACK_DEBIAN_COMPRESSION_TYPE "gzip")
 set(CPACK_DEBIAN_PACKAGE_SECTION "contrib/database")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

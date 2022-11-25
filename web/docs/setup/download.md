@@ -55,19 +55,12 @@ version][development-version-build].
   <a class="button button--md button--info margin-left--md" href="https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.deb">Static Build (Development)</a>
 </div>
 
-We also offer prebuilt statically linked binaries for every git commit to the
+We also offer prebuilt statically linked binaries for every Git commit to the
 `master` branch.
 
 ```bash
-https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-${version}-linux-static.tar.gz
-https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast_${version}_amd64.deb
-```
-
-To determine the version, check out the desired commit locally and run this
-command:
-
-```bash
 version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
+curl -fsSL "https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-${version}-linux-static.tar.gz"
 ```
 
 ### Nix
