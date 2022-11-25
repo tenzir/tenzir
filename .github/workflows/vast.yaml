@@ -503,13 +503,13 @@ jobs:
       - name: Upload Tarball to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ steps.get_artifact_names.outputs.tar_gz }}"
+          name: "${{ matrix.nix.target }}.tar.gz"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
           if-no-files-found: error
       - name: Upload Debian Package to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ steps.get_artifact_names.outputs.deb }}"
+          name: "${{ matrix.nix.target }}.deb"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
           if-no-files-found: error
       - name: Setup Python
