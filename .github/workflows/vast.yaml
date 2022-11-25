@@ -358,7 +358,7 @@ jobs:
           registries=('' 'ghcr.io/')
           images=('tenzir/vast' 'tenzir/vast-dev' 'tenzir/vast-deps')
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ needs.configure.outputs.release-version }}")
+            tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
           else
             tags=('latest' "${{ github.sha }}")
           fi
