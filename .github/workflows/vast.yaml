@@ -94,6 +94,9 @@ jobs:
           # Inject the branch slugs for cache names.
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
+          # Utility alias for detecting changes to files.
+          shopt -s expand_aliases
+          alias is_unchanged="git diff --exit-code ${before_sha} --"
           # For pull requests we make it possible to cache all layers by setting
           # a fixed VAST_BUILD_OPTIONS for within a given pull request. We
           # accept the downaside that this means that Docker images created
@@ -131,7 +134,7 @@ jobs:
           fi
           echo "run-example-notebooks=${run_example_notebooks}" >> $GITHUB_OUTPUT
           echo "run-python-package=${run_python_package}" >> $GITHUB_OUTPUT
-          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]] || ! is_unchanged .github/workflows/vast.yaml; then
             echo "run-changelog=true" >> $GITHUB_OUTPUT
             echo "run-vast-io=true" >> $GITHUB_OUTPUT
             echo "run-docker=true" >> $GITHUB_OUTPUT
@@ -141,8 +144,6 @@ jobs:
             echo "run-vast-plugins=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          shopt -s expand_aliases
-          alias is_unchanged="git diff --exit-code ${before_sha} --"
           run_vast_io=false
           if ! is_unchanged web/; then
             run_vast_io=true
@@ -178,15 +179,13 @@ jobs:
             run_docker_compose=false
           elif ${run_vast_plugins} cmake/; then
             run_docker_compose=true
-          elif ! is_unchanged docker/ Dockerfile; then
+          elif ! is_unchanged docker/ Dockerfile .dockerignore; then
             run_docker_compose=true
           fi
           echo "run-docker-compose=${run_docker_compose}" >> $GITHUB_OUTPUT
           run_docker=${run_docker_compose}
           if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
             run_docker=false
-          elif ! is_unchanged .dockerignore; then
-            run_docker=true
           elif ${run_vast_io}; then
             run_docker=true
           fi
@@ -358,7 +357,7 @@ jobs:
           registries=('' 'ghcr.io/')
           images=('tenzir/vast' 'tenzir/vast-dev' 'tenzir/vast-deps')
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ needs.configure.outputs.release-version }}")
+            tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
           else
             tags=('latest' "${{ github.sha }}")
           fi
@@ -405,8 +404,7 @@ jobs:
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
           docker/thehive/vast-cortex-neuron/tests/run service
-          # FIXME: This test is failing.
-          # docker/thehive/test
+          docker/thehive/test
 
   example-notebooks:
     needs:
@@ -606,11 +604,7 @@ jobs:
             cc: clang
             cxx: clang++
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
-            # Note that we disable address sanitizer because of a hit inside Arrow
-            # when roundtripping table slices that started occurring with the
-            # 9.0.0_3 release of Arrow on Homebrew. It's likely a false positive,
-            # but we haven't had the time to investigate it further yet.
-            cmake-extra-flags: -DVAST_ENABLE_ASAN:BOOL=OFF -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
+            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
     env:
       BUILD_DIR: build
       CC: ${{ matrix.vast.cc }}
@@ -839,7 +833,12 @@ jobs:
               - asio
               - http-parser
         exclude:
+          # Disable the Broker plugin for macOS because we do not support
+          # building it on macOS, and disable the Parquet plugin because trying
+          # to use it on the macOS CI runners crashes because of an illegal
+          # instruction as of Arrow 10.0.0.
           - {setup: {os: macos-latest}, plugin: {name: Broker}}
+          - {setup: {os: macos-latest}, plugin: {name: Parquet}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
@@ -1044,7 +1043,8 @@ jobs:
       - changelog
       - vast-io
       - docker
-      - docker-compose
+      # We currently have a transient error on TheHive init script (sc-39576)
+      # - docker-compose
       - example-notebooks
       - vast-nix
       - vast

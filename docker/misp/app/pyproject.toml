@@ -2,7 +2,7 @@
 name = "misp_app"
 version = "0.1.0"
 description = "MISP integration with VAST"
-authors = ["Tenzir <dev@tenzir.com>"]
+authors = ["Tenzir <engineering@tenzir.com>"]
 license = "BSD-3-Clause"
 packages = [{include = "app.py"}]
 
