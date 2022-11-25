@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import hashlib
 import json
-import logging
 import os
 import time
 from typing import Dict, Optional
@@ -60,10 +59,11 @@ async def wait_for_thehive(
             if time.time() - start > timeout:
                 raise Exception("Timed out trying to reach TheHive")
             logger.debug(e)
-            time.sleep(1)
+            await asyncio.sleep(1)
 
 
-def suricata2hive(event: Dict) -> Dict:
+def suricata2thehive(event: Dict) -> Dict:
+    """Convert a Suricata alert event into a TheHive alert"""
     # convert iso into epoch
     sighted_time_iso = event.get("timestamp", datetime.datetime.now().isoformat())
     sighted_time_ms = int(isoparse(sighted_time_iso).timestamp() * 1000)
@@ -120,7 +120,7 @@ async def on_suricata_alert(alert: Dict):
     global SENT_ALERT_REFS
     logger.debug(f"Received alert: {alert}")
 
-    thehive_alert = suricata2hive(alert)
+    thehive_alert = suricata2thehive(alert)
     ref = thehive_alert["sourceRef"]
     if ref in SENT_ALERT_REFS:
         logger.debug(f"Alert with hash {ref} skipped")
@@ -138,7 +138,7 @@ async def on_suricata_alert(alert: Dict):
 
 async def run_async():
     await VAST.status(60, retry_delay=1)
-    await wait_for_thehive("/api/v1/user/current", 120)
+    await wait_for_thehive("/api/v1/user/current", 180)
     expr = '#type == "suricata.alert"'
     # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
@@ -157,8 +157,25 @@ def run():
     logger.info("TheHive app stopped")
 
 
-def alert_count():
-    """Log alert count for tests"""
+async def wait_for_alerts(timeout):
+    """Call TheHive listAlert API until the number of alerts is greater than 0"""
     list_query = {"query": [{"_name": "listAlert"}]}
-    alerts = asyncio.run(wait_for_thehive("/api/v1/query", 120, list_query))
-    logger.info(f"alert_count={len(json.loads(alerts))}")
+    start = time.time()
+    while True:
+        try:
+            alerts_json = await call_thehive("/api/v1/query", list_query)
+            alert_count = len(json.loads(alerts_json))
+            if alert_count == 0:
+                raise Exception("No alerts in TheHive yet")
+            return alert_count
+        except Exception as e:
+            if time.time() - start > timeout:
+                raise Exception("Timed out trying to reach TheHive")
+            logger.debug(e)
+            await asyncio.sleep(1)
+
+
+def count_alerts():
+    """Wait for alerts in TheHive then print their count"""
+    nb_alerts = asyncio.run(wait_for_alerts(180))
+    logger.info(f"alert_count={nb_alerts}")

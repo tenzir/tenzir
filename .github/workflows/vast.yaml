@@ -404,8 +404,7 @@ jobs:
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
           docker/thehive/vast-cortex-neuron/tests/run service
-          # FIXME: This test is failing.
-          # docker/thehive/test
+          docker/thehive/test
 
   example-notebooks:
     needs:
@@ -1044,7 +1043,8 @@ jobs:
       - changelog
       - vast-io
       - docker
-      - docker-compose
+      # We currently have a transient error on TheHive init script (sc-39576)
+      # - docker-compose
       - example-notebooks
       - vast-nix
       - vast
