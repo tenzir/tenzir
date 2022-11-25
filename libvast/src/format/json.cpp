@@ -1253,18 +1253,31 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& cons) {
     bptr = builder(*layout);
     if (bptr == nullptr)
       return caf::make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(get_object_result.value(), *bptr))
-      return finish(cons, //
+    if (auto err = add(get_object_result.value(), *bptr)) {
+      auto table_slice = *generate_table_slice(bptr);
+      auto filtered_table_slice = cons.on_before_consuming(table_slice);
+      return finish(cons, *filtered_table_slice,
                     caf::make_error(ec::logic_error,
                                     fmt::format("failed to add line {} of "
                                                 "layout {} to builder: {}",
                                                 lines_->line_number(), *layout,
                                                 err)));
+    }
     produced++;
     batch_events_++;
-    if (bptr->rows() == max_slice_size)
-      if (auto err = finish(cons, bptr))
+    if (bptr->rows() == max_slice_size || produced == max_events) {
+      auto table_slice = *generate_table_slice(bptr);
+      auto original_table_slice_rows = table_slice.rows();
+      auto filtered_table_slice = cons.on_before_consuming(table_slice);
+      if (!filtered_table_slice) {
+        produced = 0;
+      } else if (original_table_slice_rows > filtered_table_slice->rows()) {
+        produced = filtered_table_slice->rows();
+      }
+      if (auto err = finish(cons, std::move(*filtered_table_slice))) {
         return err;
+      }
+    }
   }
   return finish(cons);
 }
