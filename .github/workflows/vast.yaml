@@ -529,9 +529,8 @@ jobs:
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.outputs.deb }}"
           gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ steps.get_artifact_names.out4puts.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-static-latest.deb"
+          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.deb"
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
         env:
@@ -540,7 +539,7 @@ jobs:
         run: |
           VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_gz }}" | cut -d"-" -f2)
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/debian/${{ matrix.nix.target }}-${VERSION}-static-latest.deb"
+          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.deb"
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete Release Assets
