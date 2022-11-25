@@ -1,14 +1,14 @@
 openapi: 3.0.0
 info:
-  title: VAST Rest API
+  title: VAST REST API
   version: 0.1
   description: |-
 
-    This API can be used to interact with a VAST Node in a RESTful manner.
+    This API can be used to interact with a VAST node in a RESTful manner.
 
     All API requests must be authenticated with a valid token, which must be
     supplied in the `X-VAST-Token` request header. The token can be generated
-    on the command-line using the `vast rest generate-token` command.
+    on the command-line using the `vast web generate-token` command.
 servers:
   - url: https://vast.example.com/api/v0
 security:
@@ -35,14 +35,14 @@ paths:
           required: true
           default: A query matching every event.
           description: The query expression to execute.
-          example: ':ip in 10.42.0.0/16'
+          example: net.src.ip in 10.42.0.0/16
         - in: query
           name: limit
           schema:
             type: integer
           required: false
           default: 50
-          description: Maximum number of returned events
+          description: Maximum number of returned events.
           example: 3
       responses:
         '200':
