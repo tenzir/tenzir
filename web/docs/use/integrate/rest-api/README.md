@@ -63,7 +63,7 @@ perform token authentication.
 
 ## TLS Modes
 
-There exist 4 modes to start the REST API, each of which suits a slightly
+There exist four modes to start the REST API, each of which suits a slightly
 different use case.
 
 ### Developer Mode
