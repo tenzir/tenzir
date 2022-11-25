@@ -29,7 +29,10 @@ ProtectSystem=strict
 ReadWritePaths=/var/lib/vast
 ReadWritePaths=/var/log/vast
 PrivateTmp=no
-ProtectHome=yes
+# Allow read access to the home directory of the user so config files can be
+# read. In theory the config directory may be outside of the home directory, but
+# systemd has no mechanism to specify that.
+ProtectHome=read-only
 PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
