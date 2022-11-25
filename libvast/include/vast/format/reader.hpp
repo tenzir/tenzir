@@ -46,6 +46,8 @@ public:
     virtual ~consumer();
 
     virtual void operator()(table_slice) = 0;
+
+    virtual std::optional<table_slice> on_before_consuming(table_slice slice) = 0;
   };
 
   // -- constructors, destructors, and assignment operators --------------------
@@ -74,8 +76,12 @@ public:
   /// @pre max_events > 0
   /// @pre max_slice_size > 0
   template <class F>
-  std::pair<caf::error, size_t>
-  read(size_t max_events, size_t max_slice_size, F f) {
+  std::pair<caf::error, size_t> read(
+    size_t max_events, size_t max_slice_size, F f,
+    std::function<std::optional<table_slice>(table_slice)> on_before_fun
+    = [](auto slice) {
+        return slice;
+      }) {
     VAST_ASSERT(max_events > 0);
     VAST_ASSERT(max_slice_size > 0);
     struct consumer_impl : consumer {
@@ -83,13 +89,18 @@ public:
         produced += x.rows();
         f_(std::move(x));
       }
-      consumer_impl(F& fun) : f_(fun), produced(0) {
+      std::optional<table_slice> on_before_consuming(table_slice slice) override {
+        return on_before_consuming_(slice);
+      }
+      consumer_impl(F& fun,  std::function<std::optional<table_slice>(table_slice)>& on_before_fun)
+        : f_(fun), on_before_consuming_(on_before_fun), produced(0) {
         // nop
       }
       F& f_;
+       std::function<std::optional<table_slice>(table_slice)>& on_before_consuming_;
       size_t produced;
     };
-    consumer_impl g{f};
+    consumer_impl g{f, on_before_fun};
     if (auto err = read_impl(max_events, max_slice_size, g))
       return {err, g.produced};
     return {caf::none, g.produced};

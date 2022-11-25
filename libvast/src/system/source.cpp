@@ -244,6 +244,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     [self](atom::internal, atom::run, uint64_t num) {
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
+      auto filter_slice = [&](table_slice slice) {
+        return self->state.apply_filter(slice);
+      };
       auto push_slice = [&](table_slice slice) {
         const auto& layout = slice.layout();
         self->state.event_counters[std::string{layout.name()}] += slice.rows();
@@ -255,7 +258,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         events = std::min(events, *self->state.requested - self->state.count);
       auto t = timer::start(self->state.metrics);
       auto [err, produced] = self->state.reader->read(
-        events, self->state.table_slice_size, push_slice);
+        events, self->state.table_slice_size, push_slice, filter_slice);
       VAST_DEBUG("{} read {} events", *self, produced);
       // TODO: We use the produced number in metrics and INFO logs, but it is
       // the number _before_ filtering which may be a bit unexpected to the

@@ -108,16 +108,17 @@ caf::behavior datagram_source(
       // we have completed a batch.
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
+      auto filter_slice = [&](table_slice slice) {
+        return self->state.apply_filter(slice);
+      };
       auto push_slice = [&](table_slice slice) {
-        if (auto filtered_slice = self->state.apply_filter(slice)) {
-          self->state.mgr->out().push(std::move(slice));
-        }
+        self->state.mgr->out().push(std::move(slice));
       };
       auto events = capacity * self->state.table_slice_size;
       if (self->state.requested)
         events = std::min(events, *self->state.requested - self->state.count);
       auto [err, produced] = self->state.reader->read(
-        events, self->state.table_slice_size, push_slice);
+        events, self->state.table_slice_size, push_slice, filter_slice);
       t.stop(produced);
       self->state.count += produced;
       if (self->state.requested && self->state.count >= *self->state.requested)
