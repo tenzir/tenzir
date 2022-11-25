@@ -388,7 +388,7 @@ FDB primitives. We found the following:
   picture", i.e., being aware of the transactions that are triggered from within
   other VAST nodes.
 
-- There doesn't seem to be a full CDC functionality, only watching single keys. 
+- There doesn't seem to be a full CDC functionality, only watching single keys.
   There could be a key for a `transaction_id` (an integer increment for every
   transaction), and from there we could work around the problem by requesting
   all recent transactions whenever this key is modified.
