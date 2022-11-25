@@ -274,17 +274,15 @@ Detecting duplicates is a frequent concern of users. We consider this topic as
 submission at the catalog. For example, a client may add a mechanism to keep
 track of already ingested files, e.g., by file name and/or hash digest.
 
-A specific scenario to consider during regular ingestion is the event that the
-server (and thereby the catalog) crashes during partition submission. In this
-case the ACK of the transaction may not arrive at the client. The client would
-then have to re-submit the same partition after a timeout. This will not
-introduce duplicates if the client initiates the submission with a uniquely
-chosen transaction ID. Since the server keeps a durable log of all transaction
-IDs, it will not accept an already completed transaction again. Alternatively,
-the server can generate a unique transaction ID and require the client to
-provide that ID during the final submission. Both approaches have the same
-effect, and we leave the implementation detail to the specific metastore at
-hand.
+We assume a transaction is a 2-phase operation where the client (1) opens a
+transaction with an ID, either provided by the server or the client, and (2)
+commits the transaction under the given ID. If the server (and thereby the
+catalog) crashes during or after a transaction, an ACK of the transaction may
+not arrive at the client. The client would then have to re-submit the same
+partition (under the same transaction ID) after a timeout. This will not
+introduce duplicates if the client initiates the submission with a
+uniquely chosen transaction ID. Since the server keeps a durable log of all
+transaction IDs, it will not accept an already completed transaction again.
 
 ### Read Path
 
