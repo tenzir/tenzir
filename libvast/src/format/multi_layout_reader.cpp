@@ -25,6 +25,36 @@ multi_layout_reader::~multi_layout_reader() {
   // nop
 }
 
+std::optional<table_slice>
+multi_layout_reader::generate_table_slice(table_slice_builder_ptr& builder_ptr) {
+  auto rows = builder_ptr->rows();
+  if (builder_ptr != nullptr && rows > 0) {
+    if (batch_events_ >= rows) {
+      batch_events_ -= rows;
+    } else {
+      // This is a defensive mechanism to prevent wrap-around. If we run into
+      // this case we probably have a counting logic bug in the reader
+      // implementation (which is required to bump batch_events_ for every
+      // successfully added event), but it is not an error, so there is no
+      // reason to treat it as one.
+      VAST_WARN("{} detected event counting mismatch: expected {}, got {}",
+                name(), rows, batch_events_);
+      batch_events_ = 0;
+    }
+    auto slice = builder_ptr->finish();
+    return slice;
+  }
+  return {};
+}
+
+caf::error
+multi_layout_reader::finish(consumer& f, table_slice slice, caf::error result) {
+  if (slice.encoding() == table_slice_encoding::none)
+    return caf::make_error(ec::parse_error, "unable to finish current slice");
+  f(std::move(slice));
+  return result;
+}
+
 caf::error
 multi_layout_reader::finish(consumer& f, table_slice_builder_ptr& builder_ptr,
                             caf::error result) {

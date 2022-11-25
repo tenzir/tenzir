@@ -24,6 +24,11 @@ public:
   ~multi_layout_reader() override;
 
 protected:
+  std::optional<table_slice> generate_table_slice(table_slice_builder_ptr& builder_ptr);
+
+  caf::error
+  finish(consumer& f, table_slice slice, caf::error result = caf::none);
+
   /// Convenience function for finishing the current table slice in
   /// `builder_ptr` before reporting an error. Usually simply returns `result`
   /// after finishing the slice, however, an error in finishing the slice
