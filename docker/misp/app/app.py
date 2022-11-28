@@ -1,19 +1,15 @@
 import asyncio
 import json
 import logging
-import time
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncIterable
 
-import misp_stix_converter
 import pymisp
-import stix2
+import vast.utils.logging as logging
 import zmq
 import zmq.asyncio
-from concurrent.futures import ThreadPoolExecutor
-
-import vast.utils.logging as logging
-import vast.utils.stix
 
 logger = logging.get("vast.thehive.app")
 
@@ -39,98 +35,62 @@ async def misp_client() -> pymisp.ExpandedPyMISP:
             await asyncio.sleep(1)
 
 
-# async def _on_stix(bundle: stix2.Bundle):
-#     logger.debug(f"got {bundle}")
-#     # Make it easier to look up referenced objects.
-#     store = stix2.MemoryStore()
-#     store.add(bundle)
-#     misp_sightings = []
-#     for object in bundle.objects:
-#         match type(object):
-#             # For every Sighting, do the following:
-#             # 1. Check the embedded "sightee" if it was already a MISP object.
-#             # 2. If not, extract the UUID and ask MISP whether it maps to an
-#             #    existing object.
-#             # 3. Take the value of the attached SCOs and register them as sightings,
-#             #    with the timestamp being from the Observed Data SDO.
-#             case stix2.Sighting:
-#                 # Ad (1): misp-stix embeds MISP meta data in STIX objects.
-#                 # find it.
-#                 sightee = store.get(object.sighting_of_ref)
-#                 logger.info(sightee)
-#                 match type(sightee):
-#                     case stix2.Indicator:
-#                         pass
-#                     case stix2.ObservedData:
-#                         pass
-#                     case _:
-#                         logger.warning(f"not a valid sightee: {type(sightee)}")
-
-#                 # Ad (2): Nothing found locally, MISP may not have associated objects.
-#                 misp_uuid = vast.utils.stix.make_uuid(sightee.id)
-#                 data = MISP.search(uuid=misp_uuid, controller="attributes")
-#                 logger.warning(data)
-# FIXME: this a shortcut. We'll go through the bundle and assume that
-# all SCOs are sightings.
-# for object in bundle.objects:
-#    # TODO: get timestamp from out Observed Data.
-#    if type(object) is stix2.IPv4Address:
-#        sighting = pymisp.MISPSighting()
-#        sighting.from_dict(
-#            value=object.value,
-#            type="0",  # true positive
-#            timestamp=11111111,
-#            source="VAST",
-#        )
-#        misp_sightings.append(sighting)
-# for sighting in misp_sightings:
-#    response = self.misp.add_sighting(sighting)
-#    if not response or type(response) is dict and response.get("message", None):
-#        logger.error(
-#            f"failed to add sighting to MISP: '{sighting}' ({response})"
-#        )
-#    else:
-#        logger.info(f"reported sighting: {response}")
-
-
-async def pull_zmq() -> AsyncIterable[stix2.Bundle]:
-    # Hook into event feed via 0mq.
+async def pull_zmq() -> AsyncIterable[str]:
+    """Connect to the MISP ZMQ feed and create a raw string iterator out of it"""
     socket = zmq.asyncio.Context().socket(zmq.SUB)
     logger.info(f"connecting to 0mq endpoint at {MISP_ZMQ_URL}")
     socket.connect(MISP_ZMQ_URL)
-    # TODO: also subscribe to attributes, not just entire events.
     socket.setsockopt(zmq.SUBSCRIBE, b"misp_json")
     try:
         while True:
             raw = await socket.recv()
-            _, message = raw.decode("utf-8").split(" ", 1)
-            json_msg = json.loads(message)
-            logger.debug(json_msg)
-            event = json_msg.get("Event", None)
-            attribute = json_msg.get("Attribute", None)
-            # Only consider events, not Attributes that ship within Events.
-            if not event or attribute:
-                continue
-            parser = misp_stix_converter.MISPtoSTIX21Parser()
-            try:
-                parser.parse_misp_event(event)
-                logger.debug(parser.bundle.serialize(pretty=True))
-                yield parser.bundle
-            except Exception as e:
-                logger.warning(f"failed to parse MISP event as STIX: {e}")
-                continue
+            raw_str = raw.decode("utf-8")
+            logger.debug(raw_str)
+            yield raw_str
     finally:
         logger.info(f"terminating")
         socket.setsockopt(zmq.LINGER, 0)
         socket.close()
 
 
+async def published_misp_events(
+    zmq_messages: AsyncIterable[str],
+) -> AsyncIterable[pymisp.MISPEvent]:
+    """Filter and parse published events out of the MISP ZMQ stream.
+
+    MISP publishes:
+    - misp_json_event messages when interacting with the event entity
+    - misp_json_attribute messages when creating attributes
+    - misp_json messages when clicking on "Publish Event"
+    This method filters published events only (misp_json) and parses them into
+    pymisp.MISPEvent objects."""
+    async for raw_message in zmq_messages:
+        # decode raw zmq message and skip everything except misp_json_event
+        event_name, json_payload = raw_message.split(" ", 1)
+        if event_name != "misp_json":
+            continue
+        payload = json.loads(json_payload)
+        event = payload.get("Event", None)
+        if event is None:
+            logger.warning(f"Unexpected payload for misp_json_event: {event}")
+            continue
+        # parse payload as pymisp.MISPEvent
+        try:
+            misp_event = pymisp.MISPEvent()
+            misp_event.from_dict(**event)
+            yield misp_event
+        except Exception as e:
+            logger.warning(f"Failed to parse ZMQ message as MISP event: {e}")
+            continue
+
+
 async def run_async():
-    async for bundle in pull_zmq():
-        print(bundle)
+    async for event in published_misp_events(pull_zmq()):
+        logger.info(event.to_json())
+        # TODO: handle event
 
 
 def run():
-    logger.info("Starting TheHive app...")
+    logger.info("Starting MISP app...")
     asyncio.run(run_async())
-    logger.info("TheHive app stopped")
+    logger.info("MISP app stopped")
