@@ -48,7 +48,23 @@
         program = "${pkgs.dockerTools.streamLayeredImage {
           name = "tenzir/vast";
           tag = "latest";
-          config.Cmd = [ "${self.packages.${system}."vast-static"}/bin/vast" ];
+          config = let
+            vast-dir = "/var/lib/vast";
+          in {
+            Entrypoint = [ "${self.packages.${system}."vast-static"}/bin/vast" ];
+            Env = [
+              "VAST_ENDPOINT=0.0.0.0:42000"
+              "VAST_DB_DIRECTORY=${vast-dir}"
+              "VAST_LOG_FILE=/var/log/vast/server.log"
+            ];
+            ExposedPorts = {
+              "42000/tcp" = {};
+            };
+            WorkingDir = "${vast-dir}";
+            Volumes = {
+              "${vast-dir}" = {};
+            };
+          };
         }}";
       };
       apps.default = apps.vast;
