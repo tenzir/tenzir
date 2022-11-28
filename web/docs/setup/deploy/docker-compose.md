@@ -25,12 +25,10 @@ To get up and running with VAST in Docker Compose, simply run `docker compose
 up` from the `docker/vast` directory, which fetches the latest version of VAST
 from Docker Hub.
 
-:::info Cached Images and Containers
-By default, Docker aggressively caches images and containers. To prevent Docker
-from re-using an image, pass `--pull always` to `docker compose up`. Similarly,
-to prevent Docker from re-using an already built container, pass
-`--force-recreate`.
-:::
+:::info Cached Images and Containers By default, Docker aggressively caches
+images and containers. To prevent Docker from re-using an image, pass `--pull
+always` (Compose v2.8+) to `docker compose up`. Similarly, to prevent Docker
+from re-using an already built container, pass `--force-recreate`. :::
 
 The `docker compose run` command makes interacting with VAST inside Docker
 Compose easy:
