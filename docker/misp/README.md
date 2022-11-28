@@ -1,5 +1,8 @@
 # MISP integration
 
+> **Warning** The MISP integration is considered experimental and subject to
+> change without notice.
+
 This directory contains the scripts to run MISP as part of the VAST Docker
 compose stack.
 
