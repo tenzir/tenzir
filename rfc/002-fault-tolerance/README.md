@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Created**: Sep 5, 2022
-- **Accepted**: Nov :8, 2022
+- **Accepted**: Nov 28, 2022
 - **Authors**:
   - [Tobias Mayer](https://github.com/tobim)
   - [Thomas Peiselt](https://github.com/dispanser)
