@@ -47,6 +47,30 @@ static auto const* SPEC_V0 = R"_(
         default: 50
         description: Maximum number of returned events
         example: 3
+      - in: query
+        name: flatten
+        schema:
+          type: bool
+        required: false
+        default: false
+        description: Flatten nested elements in the response data.
+        example: false
+      - in: query
+        name: omit-nulls
+        schema:
+          type: bool
+        required: false
+        default: false
+        description: Omit null elements in the response data.
+        example: false
+      - in: query
+        name: numeric-durations
+        schema:
+          type: bool
+        required: false
+        default: false
+        description: Render durations as numeric values.
+        example: false
     responses:
       200:
         description: The result data.
@@ -64,11 +88,11 @@ static auto const* SPEC_V0 = R"_(
                     items: object
                 example:
                   version: v2.3.0-169-ge42a9652e5-dirty
+                  num_events: 3
                   events:
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
                     - "{\"timestamp\": \"2011-08-12T13:00:36.378914\", \"flow_id\": 269421754201300, \"pcap_cnt\": 22569, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 1027, \"dest_ip\": \"74.125.232.202\", \"dest_port\": 80, \"proto\": \"TCP\", \"event_type\": \"http\", \"community_id\": null, \"http\": {\"hostname\": \"cr-tools.clients.google.com\", \"url\": \"/service/check2?appid=%7B430FD4D0-B729-4F61-AA34-91526481799D%7D&appversion=1.3.21.65&applang=&machine=0&version=1.3.21.65&osversion=5.1&servicepack=Service%20Pack%202\", \"http_port\": null, \"http_user_agent\": \"Google Update/1.3.21.65;winhttp\", \"http_content_type\": null, \"http_method\": \"GET\", \"http_refer\": null, \"protocol\": \"HTTP/1.1\", \"status\": null, \"redirect\": null, \"length\": 0}, \"tx_id\": 0}"
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-                  num_events: 3
       401:
         description: Not authenticated.
       422:
@@ -136,9 +160,18 @@ struct export_helper_state {
   system::index_actor index_ = {};
   size_t events_ = 0;
   size_t limit_ = std::string::npos;
+  caf::settings formatting_options;
   std::optional<system::query_cursor> cursor_ = std::nullopt;
   std::string stringified_events_;
   http_request request_;
+};
+
+struct export_parameters {
+  vast::expression expr;
+  size_t limit;
+  bool flatten;
+  bool numeric_durations;
+  bool omit_nulls;
 };
 
 struct export_multiplexer_state {
@@ -149,15 +182,22 @@ struct export_multiplexer_state {
 
 export_helper_actor::behavior_type
 export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
-              system::index_actor index, vast::expression expr, size_t limit,
+              system::index_actor index, export_parameters&& params,
               http_request&& request) {
   self->state.index_ = std::move(index);
   self->state.request_ = std::move(request);
-  self->state.limit_ = limit;
+  self->state.limit_ = params.limit;
+  put(self->state.formatting_options, "vast.export.json.flatten",
+      params.flatten);
+  put(self->state.formatting_options, "vast.export.json.numeric-durations",
+      params.numeric_durations);
+  put(self->state.formatting_options, "vast.export.json.omit-nulls",
+      params.omit_nulls);
   auto initial_response = fmt::format(
     "{{\n  \"version\": \"{}\",\n  \"events\": [\n", vast::version::version);
   self->state.request_.response->append(initial_response);
-  auto query = vast::query_context::make_extract("api", self, std::move(expr));
+  auto query
+    = vast::query_context::make_extract("api", self, std::move(params.expr));
   self->request(self->state.index_, caf::infinite, atom::evaluate_v, query)
     .await(
       [self](system::query_cursor cursor) {
@@ -175,8 +215,8 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
         return;
       auto remaining = self->state.limit_ - self->state.events_;
       auto ostream = std::make_unique<std::stringstream>();
-      auto writer
-        = vast::format::json::writer{std::move(ostream), caf::settings{}};
+      auto writer = vast::format::json::writer{std::move(ostream),
+                                               self->state.formatting_options};
       if (slice.rows() < remaining)
         writer.write(slice);
       else
@@ -243,17 +283,37 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         rq.response->abort(400, "couldn't parse expression\n");
         return;
       }
-      constexpr size_t DEFAULT_EXPORT_LIMIT = 50;
-      size_t limit = DEFAULT_EXPORT_LIMIT;
+      auto params = export_parameters{
+        .expr = std::move(*expr),
+        .limit = defaults::rest::export_::limit,
+        .flatten = defaults::rest::export_::flatten,
+        .numeric_durations = defaults::rest::export_::numeric_durations,
+        .omit_nulls = defaults::rest::export_::omit_nulls,
+      };
       if (rq.params.contains("limit")) {
         auto& param = rq.params.at("limit");
         // Should be type-checked by the server.
         VAST_ASSERT(caf::holds_alternative<count>(param));
-        limit = caf::get<count>(param);
+        params.limit = caf::get<count>(param);
+      }
+      if (rq.params.contains("flatten")) {
+        auto& param = rq.params.at("flatten");
+        VAST_ASSERT(caf::holds_alternative<bool>(param));
+        params.flatten = caf::get<bool>(param);
+      }
+      if (rq.params.contains("omit-nulls")) {
+        auto& param = rq.params.at("omit-nulls");
+        VAST_ASSERT(caf::holds_alternative<bool>(param));
+        params.omit_nulls = caf::get<bool>(param);
+      }
+      if (rq.params.contains("numeric-durations")) {
+        auto& param = rq.params.at("numeric-durations");
+        VAST_ASSERT(caf::holds_alternative<bool>(param));
+        params.numeric_durations = caf::get<bool>(param);
       }
       // TODO: Abort the request after some time limit has passed.
-      auto exporter = self->spawn(export_helper, self->state.index_, *expr,
-                                  limit, std::move(rq));
+      auto exporter = self->spawn(export_helper, self->state.index_,
+                                  std::move(params), std::move(rq));
     },
   };
 }
@@ -289,6 +349,9 @@ class plugin final : public virtual rest_endpoint_plugin {
       .params = vast::record_type{
         {"expression", vast::string_type{}},
         {"limit", vast::count_type{}},
+        {"flatten", vast::bool_type{}},
+        {"omit-nulls", vast::bool_type{}},
+        {"numeric-durations", vast::bool_type{}},
       },
       .version = api_version::v0,
       .content_type = http_content_type::json,
