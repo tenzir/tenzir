@@ -81,7 +81,14 @@ Fundamentally, the API serves two purposes:
 1. Make it easier to write integrations with VAST
 2. Serve as a backend for VAST's bundled frontend
 
-TODO: Add screenshot of UI
+The frontend UI currently displays a status page for the installed VAST node.
+
+<!--- this weird markup is to render a border around the image --->
+<kbd>
+<img src="./vast-ui-experimental.png" alt="UI showing a status page">
+</kbd>
+
+We have some exciting features planned for both of these. Stay tuned!
 
 [rest-api]: /api
 [frontend-code]: https://github.com/tenzir/vast/tree/v2.4.0/plugins/web/ui
