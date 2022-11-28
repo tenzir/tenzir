@@ -445,12 +445,13 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return atom::ok_v;
     },
     [self](atom::merge, uuid partition,
-        partition_synopsis_ptr& synopsis) -> atom::ok {
+           partition_synopsis_ptr& synopsis) -> atom::ok {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(partition));
       self->state.merge(partition, std::move(synopsis));
       return atom::ok_v;
     },
-    [self](atom::merge, std::vector<augmented_partition_synopsis> v) -> atom::ok {
+    [self](atom::merge,
+           std::vector<augmented_partition_synopsis> v) -> atom::ok {
       for (auto& aps : v)
         self->state.merge(aps.uuid, aps.synopsis);
       return atom::ok_v;
@@ -473,7 +474,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return atom::ok_v;
     },
     [self](atom::replace, std::vector<uuid> old_uuids,
-        std::vector<augmented_partition_synopsis> new_synopses) -> atom::ok {
+           std::vector<augmented_partition_synopsis> new_synopses) -> atom::ok {
       for (auto const& uuid : old_uuids)
         self->state.erase(uuid);
       for (auto& aps : new_synopses)
