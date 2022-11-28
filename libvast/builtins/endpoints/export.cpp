@@ -139,6 +139,100 @@ static auto const* SPEC_V0 = R"_(
         description: Not authenticated.
       422:
         description: Invalid query string or invalid limit.
+
+/export/with-schemas:
+  post:
+    summary: Export data together with schema information.
+    description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
+    requestBody:
+      description: Request parameters
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              expression:
+                required: false
+                type: string
+                description: The query expression to execute.
+                example: ":addr in 10.42.0.0/16"
+                default: A query matching every event.
+              limit:
+                type: integer
+                required: false
+                default: 50
+                description: Maximum number of returned events
+                example: 3
+              omit-nulls:
+                type: bool
+                description: Omit null elements in the response data.
+                required: false
+                default: false
+                example: false
+              numeric-durations:
+                type: bool
+                required: false
+                default: false
+                description: Render durations as numeric values.
+                example: false
+              flatten:
+                type: bool
+                required: false
+                default: true
+                description: Flatten nested elements in the response data.
+                example: false
+    responses:
+      200:
+        description: The result data.
+        content:
+          application/json:
+            schema:
+                type: object
+                properties:
+                  num_events:
+                    type: integer
+                  version:
+                    type: string
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        schema:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              type:
+                                type: string
+                        data:
+                          type: array
+                          items: object
+
+                example:
+                  version: v2.3.0-169-ge42a9652e5-dirty
+                  num_events: 3
+                  events:
+                    - name: "suricata.netflow"
+                      schema:
+                        - { "name": "timestamp", "type": "timestamp" }
+                        - { "name": "pcap_cnt", "type": "count" }
+                        - { "name": "src_ip", "type": "addr" }
+                        - { "name": "src_port", "type": "count" }
+                        - { "name": "pkts", "type": "count" }
+                        - { "name": "bytes", "type": "count" }
+                        - { "name": "action", "type": "enum {allowed: 0, blocked: 1}"}
+                      data:
+                        - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"pcap_cnt\": null,  \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"netflow.pkts\": 2, \"netflow.bytes\": 486, \"alert.action\": \"allowed\"}"
+      401:
+        description: Not authenticated.
+      422:
+        description: Invalid query string or invalid limit.
     )_";
 
 /// The EXPORT_HELPER handles a single query request.
@@ -154,25 +248,154 @@ using export_multiplexer_actor = system::typed_actor_fwd<>
   // Provide the REST HANDLER actor interface.
   ::extend_with<system::rest_handler_actor>::unwrap;
 
+struct export_format_options {
+  bool typed_results = false;
+  bool flatten = defaults::rest::export_::flatten;
+  bool numeric_durations = defaults::rest::export_::numeric_durations;
+  bool omit_nulls = defaults::rest::export_::omit_nulls;
+};
+
+struct export_parameters {
+  vast::expression expr = {};
+  size_t limit = defaults::rest::export_::limit;
+  export_format_options format_opts = {};
+};
+
 struct export_helper_state {
   export_helper_state() = default;
 
   system::index_actor index_ = {};
+  export_parameters params_ = {};
   size_t events_ = 0;
-  size_t limit_ = std::string::npos;
-  caf::settings formatting_options;
   std::optional<system::query_cursor> cursor_ = std::nullopt;
-  std::string stringified_events_;
+  std::vector<table_slice> results_ = {};
   http_request request_;
 };
 
-struct export_parameters {
-  vast::expression expr;
-  size_t limit;
-  bool flatten;
-  bool numeric_durations;
-  bool omit_nulls;
-};
+/// Format a set of table slices like this:
+// clang-format off
+//
+//  {
+//    "version": "v2.4-rc2",
+//    "num_events": 3,
+//    "events": [
+//      {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null}
+//      {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null}
+//      {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null}
+//      [...]
+//    ]
+//  }
+//
+// clang-format on
+std::string format_result_flat(const std::vector<table_slice>& slices,
+                               const caf::settings& formatting_options) {
+  auto num_events = size_t{0ull};
+  auto ostream = std::make_unique<std::stringstream>();
+  auto writer
+    = vast::format::json::writer{std::move(ostream), formatting_options};
+  for (auto const& slice : slices) {
+    num_events += slice.rows();
+    writer.write(slice);
+  }
+  auto data = static_cast<std::stringstream&>(writer.out()).str();
+  // Remove line breaks since writer output is NDJSON, except for the
+  // last since JSON doesn't support trailing commas in arrays.
+  std::replace(data.begin(), data.end(), '\n', ',');
+  if (!data.empty())
+    data.back() = ' ';
+  return fmt::format("{{\"version\": \"{}\",\n \"num_events\": {},\n "
+                     "\"events\": "
+                     "[{}] }}",
+                     vast::version::version, num_events, data);
+}
+
+/// Format a set of table slices like this:
+// clang-format off
+//
+// {
+//   "version": "v2.4-rc2",
+//   "num_events": 3,
+//   "events": [
+//      {
+//        "name": "zeek.conn",
+//        "schema": [{"name": "_path", "type": "string"}, {"name": "uid", "type": "string"}, ...]
+//        "data": [
+//          {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null,
+//          "up_since": null},
+//          {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null},
+//          {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null}
+//        ],
+//      },
+//      {
+//        "name": "zeek.dns",
+//        [...]
+//
+// clang-format on
+std::string format_result_typed(const std::vector<table_slice>& slices,
+                                const caf::settings& formatting_options) {
+  auto num_events = size_t{0ull};
+  std::set<vast::type> all_types;
+  for (auto const& slice : slices)
+    all_types.insert(slice.layout());
+  std::unordered_map<vast::type, vast::format::json::writer> events;
+  std::unordered_map<vast::type, std::string> schemas;
+  for (auto const& type : all_types) {
+    auto ostream = std::make_unique<std::stringstream>();
+    auto writer
+      = vast::format::json::writer{std::move(ostream), formatting_options};
+    events.insert({vast::type{type}, std::move(writer)});
+    auto& schema = schemas[type];
+    schema = "[";
+    auto record = caf::get<vast::record_type>(type);
+    bool first = true;
+    for (auto const& leaf : record.leaves()) {
+      if (!first)
+        schema += ", ";
+      schema += fmt::format(R"_({{"name": "{}", "type": "{:-a}"}})_",
+                            leaf.field.name, leaf.field.type);
+      first = false;
+    }
+    schema += "]";
+  }
+  for (auto const& slice : slices) {
+    auto& writer = events.at(slice.layout());
+    num_events += slice.rows();
+    writer.write(slice);
+  }
+  std::string events_stringified;
+  for (auto& [type, writer] : events) {
+    if (!events_stringified.empty())
+      events_stringified += ",\n";
+    auto data = static_cast<std::stringstream&>(writer.out()).str();
+    // Remove line breaks since writer output is NDJSON, except for the
+    // last since JSON doesn't support trailing commas in arrays.
+    std::replace(data.begin(), data.end(), '\n', ',');
+    if (!data.empty())
+      data.back() = ' ';
+    events_stringified += fmt::format("{{ \"name\": \"{}\",\n \"schema\": "
+                                      "{},\n \"data\": [{}] }}",
+                                      type.name(), schemas[type], data);
+  }
+  return fmt::format("{{\"version\": \"{}\",\n \"num_events\": {},\n "
+                     "\"events\": [\n{}\n] }}",
+                     vast::version::version, num_events, events_stringified);
+}
+
+std::string format_results(const std::vector<table_slice>& slices,
+                           const export_format_options& opts) {
+  auto json_writer_settings = caf::settings{};
+  put(json_writer_settings, "vast.export.json.flatten", opts.flatten);
+  put(json_writer_settings, "vast.export.json.numeric-durations",
+      opts.numeric_durations);
+  put(json_writer_settings, "vast.export.json.omit-nulls", opts.omit_nulls);
+  if (opts.typed_results)
+    return format_result_typed(slices, json_writer_settings);
+  else
+    return format_result_flat(slices, json_writer_settings);
+}
+
+constexpr static const auto ENDPOINT_EXPORT = 0ull;
+constexpr static const auto ENDPOINT_EXPORT_TYPED = 1ull;
 
 struct export_multiplexer_state {
   export_multiplexer_state() = default;
@@ -186,18 +409,9 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
               http_request&& request) {
   self->state.index_ = std::move(index);
   self->state.request_ = std::move(request);
-  self->state.limit_ = params.limit;
-  put(self->state.formatting_options, "vast.export.json.flatten",
-      params.flatten);
-  put(self->state.formatting_options, "vast.export.json.numeric-durations",
-      params.numeric_durations);
-  put(self->state.formatting_options, "vast.export.json.omit-nulls",
-      params.omit_nulls);
-  auto initial_response = fmt::format(
-    "{{\n  \"version\": \"{}\",\n  \"events\": [\n", vast::version::version);
-  self->state.request_.response->append(initial_response);
+  self->state.params_ = std::move(params);
   auto query
-    = vast::query_context::make_extract("api", self, std::move(params.expr));
+    = vast::query_context::make_extract("api", self, self->state.params_.expr);
   self->request(self->state.index_, caf::infinite, atom::evaluate_v, query)
     .await(
       [self](system::query_cursor cursor) {
@@ -211,12 +425,9 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
   return {
     // Index-facing API
     [self](vast::table_slice& slice) {
-      if (self->state.limit_ <= self->state.events_)
+      if (self->state.params_.limit_ <= self->state.events_)
         return;
-      auto remaining = self->state.limit_ - self->state.events_;
-      auto ostream = std::make_unique<std::stringstream>();
-      auto writer
-        = vast::format::json::writer{std::move(ostream), self->state.formatting_options};
+      auto remaining = self->state.params_limit_ - self->state.events_;
       if (slice.rows() > remaining)
         slice = head(std::move(slice), remaining);
       if (auto err = writer.write(slice)) {
@@ -224,29 +435,21 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
         return;
       }
       self->state.events_ += std::min<size_t>(slice.rows(), remaining);
-      self->state.stringified_events_
-        += static_cast<std::stringstream&>(writer.out()).str();
     },
     [self](atom::done) {
       bool remaining_partitions = self->state.cursor_->candidate_partitions
                                   > self->state.cursor_->scheduled_partitions;
-      auto remaining_events = self->state.limit_ > self->state.events_;
+      auto remaining_events = self->state.params_.limit > self->state.events_;
       if (remaining_partitions && remaining_events) {
         auto next_batch_size = uint32_t{1};
         self->state.cursor_->scheduled_partitions += next_batch_size;
         self->send(self->state.index_, atom::query_v, self->state.cursor_->id,
                    next_batch_size);
       } else {
-        auto& events_string = self->state.stringified_events_;
-        // Remove line breaks since the answer isn't LDJSON, except for the
-        // last since JSON doesn't support trailing commas.
-        std::replace(events_string.begin(), events_string.end(), '\n', ',');
-        if (!events_string.empty())
-          events_string.back() = ' ';
-        self->state.request_.response->append(std::move(events_string));
-        auto footer
-          = fmt::format("],\n  \"num_events\": {}\n}}\n", self->state.events_);
-        self->state.request_.response->append(footer);
+        auto response_body
+          = format_results(std::exchange(self->state.results_, {}),
+                           self->state.params_.format_opts);
+        self->state.request_.response->append(response_body);
         self->state.request_.response.reset();
       }
     }};
@@ -269,7 +472,7 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         self->quit();
       });
   return {
-    [self](atom::http_request, uint64_t, http_request rq) {
+    [self](atom::http_request, uint64_t endpoint_id, http_request rq) {
       VAST_VERBOSE("{} handles /export request", *self);
       auto query_string = std::optional<std::string>{};
       if (rq.params.contains("expression")) {
@@ -287,11 +490,9 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       }
       auto params = export_parameters{
         .expr = std::move(*expr),
-        .limit = defaults::rest::export_::limit,
-        .flatten = defaults::rest::export_::flatten,
-        .numeric_durations = defaults::rest::export_::numeric_durations,
-        .omit_nulls = defaults::rest::export_::omit_nulls,
       };
+      if (endpoint_id == ENDPOINT_EXPORT_TYPED)
+        params.format_opts.typed_results = true;
       if (rq.params.contains("limit")) {
         auto& param = rq.params.at("limit");
         // Should be type-checked by the server.
@@ -301,17 +502,17 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       if (rq.params.contains("flatten")) {
         auto& param = rq.params.at("flatten");
         VAST_ASSERT(caf::holds_alternative<bool>(param));
-        params.flatten = caf::get<bool>(param);
+        params.format_opts.flatten = caf::get<bool>(param);
       }
       if (rq.params.contains("omit-nulls")) {
         auto& param = rq.params.at("omit-nulls");
         VAST_ASSERT(caf::holds_alternative<bool>(param));
-        params.omit_nulls = caf::get<bool>(param);
+        params.format_opts.omit_nulls = caf::get<bool>(param);
       }
       if (rq.params.contains("numeric-durations")) {
         auto& param = rq.params.at("numeric-durations");
         VAST_ASSERT(caf::holds_alternative<bool>(param));
-        params.numeric_durations = caf::get<bool>(param);
+        params.format_opts.numeric_durations = caf::get<bool>(param);
       }
       // TODO: Abort the request after some time limit has passed.
       auto exporter = self->spawn(export_helper, self->state.index_,
@@ -337,6 +538,8 @@ class plugin final : public virtual rest_endpoint_plugin {
     if (version != api_version::v0)
       return vast::record{};
     auto result = from_yaml(SPEC_V0);
+    if (!result)
+      VAST_ERROR("invalid yaml: {}", result.error());
     VAST_ASSERT(result);
     return *result;
   }
@@ -344,31 +547,39 @@ class plugin final : public virtual rest_endpoint_plugin {
   /// List of API endpoints provided by this plugin.
   [[nodiscard]] const std::vector<rest_endpoint>&
   rest_endpoints() const override {
+    static auto common_parameters = vast::record_type{
+      {"expression", vast::string_type{}},
+      {"limit", vast::count_type{}},
+      {"flatten", vast::bool_type{}},
+      {"omit-nulls", vast::bool_type{}},
+      {"numeric-durations", vast::bool_type{}},
+    };
     static auto endpoints = std::vector<vast::rest_endpoint>{
-    {
-      .method = http_method::get,
-      .path = "/export",
-      .params = vast::record_type{
-        {"expression", vast::string_type{}},
-        {"limit", vast::count_type{}},
-        {"flatten", vast::bool_type{}},
-        {"omit-nulls", vast::bool_type{}},
-        {"numeric-durations", vast::bool_type{}},
+      {
+        .endpoint_id = ENDPOINT_EXPORT,
+        .method = http_method::get,
+        .path = "/export",
+        .params = common_parameters,
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
       },
-      .version = api_version::v0,
-      .content_type = http_content_type::json,
-    },
-    {
-      .method = http_method::post,
-      .path = "/export",
-      .params = vast::record_type{
-        {"expression", vast::string_type{}},
-        {"limit", vast::count_type{}},
+      {
+        .endpoint_id = ENDPOINT_EXPORT,
+        .method = http_method::post,
+        .path = "/export",
+        .params = common_parameters,
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
       },
-      .version = api_version::v0,
-      .content_type = http_content_type::json,
-    },
-  };
+      {
+        .endpoint_id = ENDPOINT_EXPORT_TYPED,
+        .method = http_method::post,
+        .path = "/export/with-schemas",
+        .params = common_parameters,
+        .version = api_version::v0,
+        .content_type = http_content_type::json,
+      },
+    };
     return endpoints;
   }
 
