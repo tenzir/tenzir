@@ -12,6 +12,8 @@
 
 	export let callback = null;
 
+	export let horizontal = true;
+
 	let highlight = -1;
 
 	let color = function(i) {
@@ -22,17 +24,37 @@
 	}
 </script>
 
+{#if horizontal}
+
 <g class="bar-group">
 	{#each $data as d, i}
 		<rect
-		    on:click="{() => {callback(d['layout']); highlight = i;} }"
+		    on:click="{() => { callback(d['layout']); highlight = i;} }"
 			class='group-rect'
 			data-id="{i}"
-			x="{$xScale.range()[0]}"
-			y="{$yGet(d)}"
-			height={$yScale.bandwidth()}
-			width="{$xGet(d)}"
+            x="{$xScale.range()[0]}"
+            y="{$yGet(d)}"
+            height={$yScale.bandwidth()}
+            width="{$xGet(d)}"
 			fill={fill}
 		></rect>
 	{/each}
 </g>
+
+{:else}
+
+<g class="bar-group">
+	{#each $data as d, i}
+		<rect
+			class='group-rect'
+			data-id="{i}"
+            x="{$yGet(d)}"
+            y="{$xScale.range()[0]}"
+            height="{$xGet(d)}"
+            width={$yScale.bandwidth()}
+			fill={fill}
+		></rect>
+	{/each}
+</g>
+
+{/if}

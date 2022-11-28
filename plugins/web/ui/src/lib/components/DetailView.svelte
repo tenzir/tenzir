@@ -8,8 +8,6 @@
 		for (var i=0; i<n; ++i) {
 			seed = (seed * 9301 + 49297) % 233280;
 			let rnd = seed / 233280;
-			console.log(rnd);
-			console.log(rnd * (max - min));
 			result.push({"x": i, "y": min + rnd * (max - min)});
 		}
 		return result;
@@ -17,6 +15,7 @@
 
 	let TSH=s=>{for(var i=0,h=9;i<s.length;)h=Math.imul(h^s.charCodeAt(i++),9**9);return h^h>>>9};
 
+	export let points = [];
 	export let schema = "<undefined>";
 
 	const yTicks = [0, 2, 4, 6, 8];
@@ -24,8 +23,6 @@
 
 	let width = 500;
 	let height = 200;
-
-	$: points = randomSequence(Math.abs(TSH(schema)), 42, 2.00, 8.00);
 
 	$: xScale = scaleLinear()
 		.domain([minX, maxX])

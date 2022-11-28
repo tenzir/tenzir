@@ -35,7 +35,7 @@
       // under the current BASE_URL of the frontend deployment
       const API_BASE =
         import.meta.env.VITE_VAST_API_ENDPOINT ?? `${import.meta.env.BASE_URL}api/v0`;
-      const url = `${API_BASE}/status?verbosity=detailed`;
+      const url = `${API_BASE}/status?verbosity=debug`;
 
       const response = await fetch(url);
 
@@ -73,6 +73,25 @@
         events[key].percentage
       )
     }));
+  };
+
+  const getHistogram = (catalogStatus, schema) => {
+    let result = [];
+    let schemas = catalogStatus["schemas"];
+    let bucket_width = "5 days";
+    for (let i in schemas) {
+      let obj = schemas[i];
+      if (obj["name"] != schema)
+        continue;
+      let partitions = obj["partitions"];
+      for (let j in partitions) {
+        let partition = partitions[j];
+        let age = Date.now() - Date.parse(partition["import-time"]["min"]);
+        let days = Math.floor(age / 1000 / 60 / 60 / 24);
+        result.push({"x": days, "y": partition["num-events"]});
+      }
+    }
+    return result;
   };
 
   const queryResult = useQuery('status', getStatus, { refetchInterval: 5000 });
@@ -147,6 +166,7 @@
       {/if}
     </div>
     {#if $queryResult.data?.index.statistics.layouts}
+    <h2>Event Distribution</h2>
     <div class="chart-container">
       <LayerCake
         padding={{ top: 0, bottom: 100, left: 120 }}
@@ -170,6 +190,25 @@
   {/if}
 
   {#if detailedSchema != ""}
-    <DetailView schema={detailedSchema}/>
+    <div class="chart-container">
+      <LayerCake
+        padding={{ top: 0, bottom: 100, left: 120 }}
+        x='x'
+        y='y'
+        yScale={scaleBand().paddingInner([0.55])}
+        xDomain={[0, null]}
+        data={getHistogram($queryResult.data?.catalog, detailedSchema)}
+      >
+        <Svg>
+          <Bar
+            horizontal={false}
+          />
+          <AxisX
+            gridlines={false}
+            tickMarks={false}
+          />
+        </Svg>
+      </LayerCake>
+    </div>
   {/if}
 </div>
