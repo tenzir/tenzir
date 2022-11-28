@@ -70,7 +70,9 @@ def suricata2thehive(event: Dict) -> Dict:
     start_time_iso = event.get("flow", {}).get("timestamp", sighted_time_iso)
     start_time_ms = int(isoparse(start_time_iso).timestamp() * 1000)
     alert = event.get("alert", {})
-    # severity is reversed, can go up to 255 in suricata
+    # Severity is defined differently:
+    # - in Suricata: 1-255 (usually 1-4), 1 being the highest
+    # - in Thehive: 1-4, 4 being the highest
     severity = max(5 - alert.get("severity", 3), 1)
     category = alert.get("category")
     desc = f'{alert.get("signature_id", "No signature ID")}: {alert.get("signature", "No signature")}'
