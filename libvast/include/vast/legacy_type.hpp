@@ -863,6 +863,4 @@ auto inspect(Inspector& f, legacy_type& x) -> bool {
     .fields(f.field("type-tag", type_tag), f.field("value", helper));
 }
 
-auto inspect(caf::binary_deserializer& f, legacy_type& x) = delete;
-
 } // namespace vast

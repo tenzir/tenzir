@@ -182,7 +182,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   const auto* indexes = part_fb->indexes();
   REQUIRE_EQUAL(indexes->size(), 1u);
   CHECK_EQUAL(indexes->Get(0)->field_name()->str(), "y.x");
-  CHECK_EQUAL(indexes->Get(0)->index()->data(), nullptr);
+  CHECK_EQUAL(indexes->Get(0)->index()->caf_0_18_data(), nullptr);
 }
 
 TEST(Delegate query to store with all possible ids in partition when query is to

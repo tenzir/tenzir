@@ -89,31 +89,79 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
   if (!indexer) {
     const auto* qualified_index = flatbuffer->indexes()->Get(position);
     const auto* index = qualified_index->index();
-    auto data = index->data();
-    auto external_idx = index->external_container_idx();
-    if (!data && external_idx == 0)
-      return {};
-    VAST_ASSERT_CHEAP(data || external_idx > 0);
-    auto data_view = std::span<const std::byte>{};
-    if (external_idx == 0) {
-      data_view = as_bytes(*data);
-    } else {
+    auto data = index->caf_0_17_data();
+    auto caf_data = index->caf_0_18_data();
+    auto external_idx_caf_0_17 = index->external_container_idx_caf_0_17();
+    auto external_idx_caf_0_18 = index->external_container_idx_caf_0_18();
+    if (caf_data) {
+      auto data_view = as_bytes(*caf_data);
       // If an external idx was specified, the data is not stored inline in
       // the flatbuffer but in a separate segment of this file.
-      data_view = as_bytes(container->get_raw(external_idx));
-    }
-    auto uncompressed_data
-      = index->decompressed_size() != 0
-          ? chunk::decompress(data_view, index->decompressed_size())
-          : chunk::make(data_view, []() noexcept {});
-    VAST_ASSERT(uncompressed_data);
-    detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
-    value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr) {
-      VAST_ERROR("{} failed to deserialize value index at {}", *self, position);
+      auto uncompressed_data
+        = index->decompressed_size() != 0
+            ? chunk::decompress(data_view, index->decompressed_size())
+            : chunk::make(data_view, []() noexcept {});
+      VAST_ASSERT(uncompressed_data);
+
+      auto bytes = as_bytes(*uncompressed_data);
+      caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
+      value_index_ptr state_ptr;
+      if (!sink.apply(state_ptr) || !state_ptr) {
+        VAST_ERROR("{} failed to CAF deserialize value index at {}", *self,
+                   position);
+        return {};
+      }
+      indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
+    } else if (data) {
+      auto data_view = as_bytes(*data);
+      auto uncompressed_data
+        = index->decompressed_size() != 0
+            ? chunk::decompress(data_view, index->decompressed_size())
+            : chunk::make(data_view, []() noexcept {});
+      VAST_ASSERT(uncompressed_data);
+      detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
+      value_index_ptr state_ptr;
+      if (!sink(state_ptr) || !state_ptr) {
+        VAST_ERROR("{} failed to deserialize value index at {}", *self,
+                   position);
+        return {};
+      }
+      indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
+    } else if (external_idx_caf_0_17) {
+      auto data_view = as_bytes(container->get_raw(external_idx_caf_0_17));
+      auto uncompressed_data
+        = index->decompressed_size() != 0
+            ? chunk::decompress(data_view, index->decompressed_size())
+            : chunk::make(data_view, []() noexcept {});
+      VAST_ASSERT(uncompressed_data);
+      detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
+      value_index_ptr state_ptr;
+      if (!sink(state_ptr) || !state_ptr) {
+        VAST_ERROR("{} failed to deserialize value index at {}", *self,
+                   position);
+        return {};
+      }
+      indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
+    } else if (external_idx_caf_0_18) {
+      auto data_view = as_bytes(container->get_raw(external_idx_caf_0_18));
+      auto uncompressed_data
+        = index->decompressed_size() != 0
+            ? chunk::decompress(data_view, index->decompressed_size())
+            : chunk::make(data_view, []() noexcept {});
+      VAST_ASSERT(uncompressed_data);
+
+      auto bytes = as_bytes(*uncompressed_data);
+      caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
+      value_index_ptr state_ptr;
+      if (!sink.apply(state_ptr) || !state_ptr) {
+        VAST_ERROR("{} failed to CAF deserialize value index at {}", *self,
+                   position);
+        return {};
+      }
+      indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
+    } else {
       return {};
     }
-    indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
   }
   return indexer;
 }
@@ -134,8 +182,9 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   if (!partition.uuid())
     return caf::make_error(ec::format_error, //
                            "missing 'uuid' field in partition flatbuffer");
-  auto const* combined_layout = partition.combined_layout();
-  if (!combined_layout)
+  auto const* combined_layout = partition.combined_layout_caf_0_17();
+  auto const* schema = partition.schema();
+  if (!combined_layout && !schema)
     return caf::make_error(ec::format_error, //
                            "missing 'layouts' field in partition flatbuffer");
   auto const* store_header = partition.store();
@@ -170,10 +219,21 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   state.events = partition.events();
   state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
-  legacy_record_type lrt{};
-  if (auto error = fbs::deserialize_bytes(combined_layout, lrt))
-    return error;
-  state.combined_layout_ = caf::get<record_type>(type::from_legacy_type(lrt));
+  if (combined_layout) {
+    legacy_record_type lrt{};
+    if (auto error = fbs::deserialize_bytes(combined_layout, lrt))
+      return error;
+    state.combined_layout_ = caf::get<record_type>(type::from_legacy_type(lrt));
+  } else {
+    auto chunk = chunk::copy(as_bytes(*schema));
+    // TODO rename t
+    auto t = type{std::move(chunk)};
+    auto* layout = caf::get_if<record_type>(&t);
+    if (!layout)
+      return caf::make_error(ec::format_error, "schema field contained "
+                                               "unexpected type");
+    state.combined_layout_ = *layout;
+  }
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
   if (state.combined_layout_->num_fields() < indexes->size()) {

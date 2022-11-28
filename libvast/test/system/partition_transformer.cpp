@@ -214,14 +214,14 @@ TEST(delete pipeline / persist before done) {
       // TODO: Implement a new pipeline operator that deletes
       // whole events, as opposed to specific fields.
       CHECK_EQUAL(partition_legacy->events(), events);
-      vast::legacy_record_type intermediate;
-      REQUIRE(!vast::fbs::deserialize_bytes(partition_legacy->combined_layout(),
-                                            intermediate));
-      auto combined_layout = vast::type::from_legacy_type(intermediate);
-      REQUIRE(caf::holds_alternative<vast::record_type>(combined_layout));
+
+      auto schema_chunk
+        = vast::chunk::copy(vast::as_bytes(*partition_legacy->schema()));
+      auto schema = vast::type{std::move(schema_chunk)};
+      REQUIRE(caf::holds_alternative<vast::record_type>(schema));
       // Verify that the deleted column does not exist anymore.
-      const auto column = caf::get<vast::record_type>(combined_layout)
-                            .resolve_key("zeek.conn.uid");
+      const auto column
+        = caf::get<vast::record_type>(schema).resolve_key("zeek.conn.uid");
       CHECK(!column.has_value());
     },
     [](const caf::error& e) {

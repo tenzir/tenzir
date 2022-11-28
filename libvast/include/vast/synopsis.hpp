@@ -20,6 +20,7 @@
 
 #include <vast/detail/legacy_deserialize.hpp>
 
+#include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
@@ -38,6 +39,7 @@ class synopsis {
 public:
   using supported_inspectors
     = std::variant<std::reference_wrapper<caf::binary_serializer>,
+                   std::reference_wrapper<caf::binary_deserializer>,
                    std::reference_wrapper<caf::detail::stringification_inspector>,
                    std::reference_wrapper<detail::legacy_deserializer>>;
   // -- construction & destruction ---------------------------------------------

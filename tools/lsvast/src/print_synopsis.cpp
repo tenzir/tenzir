@@ -70,7 +70,8 @@ void print_synopsis(const vast::fbs::synopsis::LegacySynopsis* synopsis,
     fmt::print("bool_synopsis: {} {}\n", bs->any_true(), bs->any_false());
   else if (auto const* os = synopsis->opaque_synopsis()) {
     fmt::print("opaque_synopsis");
-    auto size = os->data()->size();
+    const auto size = os->caf_0_17_data() ? os->caf_0_17_data()->size()
+                                          : os->caf_0_18_data()->size();
     if (options.format.print_bytesizes)
       fmt::print(" ({})", print_bytesize(size, options.format));
     if (options.synopsis.bloom_raw) {

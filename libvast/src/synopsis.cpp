@@ -67,7 +67,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
     if (!data)
       return data.error();
     fbs::synopsis::LegacyOpaqueSynopsisBuilder opaque_builder(builder);
-    opaque_builder.add_data(*data);
+    opaque_builder.add_caf_0_18_data(*data);
     auto opaque_synopsis = opaque_builder.Finish();
     fbs::synopsis::LegacySynopsisBuilder synopsis_builder(builder);
     synopsis_builder.add_qualified_record_field(*column_name);
@@ -87,10 +87,21 @@ unpack(const fbs::synopsis::LegacySynopsis& synopsis, synopsis_ptr& ptr) {
       vast::time{} + vast::duration{ts->start()},
       vast::time{} + vast::duration{ts->end()});
   else if (auto os = synopsis.opaque_synopsis()) {
-    vast::detail::legacy_deserializer sink(as_bytes(*os->data()));
-    if (!sink(ptr))
-      return caf::make_error(ec::parse_error, "opaque_synopsis not "
-                                              "deserializable");
+    if (auto data = os->caf_0_17_data()) {
+      vast::detail::legacy_deserializer sink(as_bytes(*data));
+      if (!sink(ptr))
+        return caf::make_error(ec::parse_error, "opaque_synopsis not "
+                                                "deserializable");
+    } else if (auto data = os->caf_0_18_data()) {
+      caf::binary_deserializer sink(nullptr, data->data(), data->size());
+      if (!sink.apply(ptr))
+        return caf::make_error(ec::parse_error, "opaque_synopsis(0_18) not "
+                                                "deserializable");
+    } else {
+      return caf::make_error(ec::parse_error, "Lack of data in "
+                                              "opaque_synopsis. Unable to "
+                                              "deserialize");
+    }
   } else {
     return caf::make_error(ec::format_error, "no synopsis type");
   }

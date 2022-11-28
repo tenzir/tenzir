@@ -40,7 +40,8 @@ using value_index_ptr = std::unique_ptr<value_index>;
 class value_index {
 public:
   using supported_inspectors
-    = std::variant<std::reference_wrapper<caf::binary_serializer>,
+    = std::variant<std::reference_wrapper<caf::binary_deserializer>,
+                   std::reference_wrapper<caf::binary_serializer>,
                    std::reference_wrapper<caf::detail::stringification_inspector>,
                    std::reference_wrapper<detail::legacy_deserializer>>;
   value_index(vast::type x, caf::settings opts);
