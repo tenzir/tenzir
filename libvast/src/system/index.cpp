@@ -404,7 +404,7 @@ caf::error index_state::load_from_disk() {
         for (auto const* id : *transform_v0->input_partitions()) {
           auto uuid = vast::uuid::from_flatbuffer(*id);
           auto path = partition_path(uuid);
-          if (std::filesystem::exists(path), err) {
+          if (std::filesystem::exists(path, err)) {
             // TODO: In combination with inhomogeneous partitions, this may
             // result in incorrect index statistics. This depends on whether the
             // statistics where already updated on-disk before VAST crashed or
