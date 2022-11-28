@@ -46,13 +46,9 @@ struct fixture : fixture_base {
     run();
   }
 
-  void spawn_type_registry() {
-    type_registry
-      = self->spawn(system::type_registry, directory / "type-registry");
-  }
-
   void spawn_catalog() {
-    catalog = self->spawn(system::catalog, system::accountant_actor{});
+    catalog = self->spawn(system::catalog, system::accountant_actor{},
+                          directory / "type-registry");
   }
 
   void spawn_index() {
@@ -60,14 +56,14 @@ struct fixture : fixture_base {
                           system::accountant_actor{});
     auto indexdir = directory / "index";
     index = self->spawn(system::index, system::accountant_actor{}, fs,
-                        system::archive_actor{}, catalog, type_registry,
-                        indexdir, defaults::system::store_backend, 10000,
-                        duration{}, 5, 5, 1, indexdir, vast::index_config{});
+                        system::archive_actor{}, catalog, indexdir,
+                        defaults::system::store_backend, 10000, duration{}, 5,
+                        5, 1, indexdir, vast::index_config{});
   }
 
   void spawn_importer() {
     importer = self->spawn(system::importer, directory / "importer",
-                           system::archive_actor{}, index, type_registry,
+                           system::archive_actor{}, index,
                            std::vector<vast::pipeline>{});
   }
 
@@ -77,8 +73,6 @@ struct fixture : fixture_base {
   }
 
   void importer_setup() {
-    if (!type_registry)
-      spawn_type_registry();
     if (!catalog)
       spawn_catalog();
     if (!index)
@@ -132,7 +126,6 @@ struct fixture : fixture_base {
     CHECK_EQUAL(xs[4][1], "07mJRfg5RU5");
   }
 
-  system::type_registry_actor type_registry;
   system::catalog_actor catalog;
   system::index_actor index;
   system::importer_actor importer;

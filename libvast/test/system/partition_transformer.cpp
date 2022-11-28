@@ -45,7 +45,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       VAST_PP_STRINGIFY(SUITE)) {
     filesystem = self->spawn(memory_filesystem);
     auto type_system_path = std::filesystem::path{"/type-registry"};
-    type_registry = self->spawn(vast::system::type_registry, type_system_path);
+    catalog = self->spawn(vast::system::catalog, accountant, type_system_path);
   }
 
   fixture(const fixture&) = delete;
@@ -55,11 +55,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   ~fixture() override {
     self->send_exit(filesystem, caf::exit_reason::user_shutdown);
-    self->send_exit(type_registry, caf::exit_reason::user_shutdown);
+    self->send_exit(catalog, caf::exit_reason::user_shutdown);
   }
 
   vast::system::accountant_actor accountant = {};
-  vast::system::type_registry_actor type_registry;
+  vast::system::catalog_actor catalog;
   vast::system::filesystem_actor filesystem;
 };
 
@@ -80,7 +80,7 @@ TEST(identity pipeline / done before persist) {
   pipeline->add_operator(std::move(*identity_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, type_registry, filesystem,
+                  index_opts, accountant, catalog, filesystem,
                   std::move(pipeline), PARTITION_PATH_TEMPLATE,
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
@@ -163,7 +163,7 @@ TEST(delete pipeline / persist before done) {
   pipeline->add_operator(std::move(*delete_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, type_registry, filesystem,
+                  index_opts, accountant, catalog, filesystem,
                   std::move(pipeline), PARTITION_PATH_TEMPLATE,
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
@@ -255,7 +255,7 @@ TEST(partition with multiple types) {
   pipeline->add_operator(std::move(*identity_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, type_registry, filesystem,
+                  index_opts, accountant, catalog, filesystem,
                   std::move(pipeline), PARTITION_PATH_TEMPLATE,
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
@@ -338,7 +338,8 @@ TEST(identity partition pipeline via the index) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
   auto archive = vast::system::archive_actor{};
-  auto catalog = self->spawn(vast::system::catalog, accountant);
+  auto catalog
+    = self->spawn(vast::system::catalog, accountant, directory / "types");
   const auto partition_capacity = 8;
   const auto active_partition_timeout = vast::duration{};
   const auto in_mem_partitions = 10;
@@ -347,10 +348,10 @@ TEST(identity partition pipeline via the index) {
   const auto index_config = vast::index_config{};
   auto index
     = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
-                  type_registry, index_dir,
-                  vast::defaults::system::store_backend, partition_capacity,
-                  active_partition_timeout, in_mem_partitions, taste_count,
-                  num_query_supervisors, index_dir, index_config);
+                  index_dir, vast::defaults::system::store_backend,
+                  partition_capacity, active_partition_timeout,
+                  in_mem_partitions, taste_count, num_query_supervisors,
+                  index_dir, index_config);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   // Get one of the partitions that were persisted.
@@ -439,7 +440,8 @@ TEST(query after transform) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
   auto archive = vast::system::archive_actor{};
-  auto catalog = self->spawn(vast::system::catalog, accountant);
+  auto catalog
+    = self->spawn(vast::system::catalog, accountant, directory / "types");
   const auto partition_capacity = vast::defaults::system::max_partition_size;
   const auto active_partition_timeout = vast::duration{};
   const auto in_mem_partitions = 10;
@@ -453,10 +455,10 @@ TEST(query after transform) {
   };
   auto index
     = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
-                  type_registry, index_dir,
-                  vast::defaults::system::store_backend, partition_capacity,
-                  active_partition_timeout, in_mem_partitions, taste_count,
-                  num_query_supervisors, index_dir, index_config);
+                  index_dir, vast::defaults::system::store_backend,
+                  partition_capacity, active_partition_timeout,
+                  in_mem_partitions, taste_count, num_query_supervisors,
+                  index_dir, index_config);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   // Persist the partition to disk
@@ -551,7 +553,8 @@ TEST(select pipeline with an empty result set) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
   auto archive = vast::system::archive_actor{};
-  auto catalog = self->spawn(vast::system::catalog, accountant);
+  auto catalog
+    = self->spawn(vast::system::catalog, accountant, directory / "types");
   const auto partition_capacity = 8;
   const auto active_partition_timeout = vast::duration{};
   const auto in_mem_partitions = 10;
@@ -559,10 +562,10 @@ TEST(select pipeline with an empty result set) {
   const auto num_query_supervisors = 10;
   auto index
     = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
-                  type_registry, index_dir,
-                  vast::defaults::system::store_backend, partition_capacity,
-                  active_partition_timeout, in_mem_partitions, taste_count,
-                  num_query_supervisors, index_dir, vast::index_config{});
+                  index_dir, vast::defaults::system::store_backend,
+                  partition_capacity, active_partition_timeout,
+                  in_mem_partitions, taste_count, num_query_supervisors,
+                  index_dir, vast::index_config{});
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   // Get one of the partitions that were persisted.
@@ -626,7 +629,7 @@ TEST(exceeded partition size) {
   pipeline->add_operator(std::move(*identity_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
-                  index_opts, accountant, type_registry, filesystem,
+                  index_opts, accountant, catalog, filesystem,
                   std::move(pipeline), PARTITION_PATH_TEMPLATE,
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);

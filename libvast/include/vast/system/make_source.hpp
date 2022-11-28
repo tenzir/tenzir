@@ -23,7 +23,7 @@ namespace vast::system {
 /// @param format The input format.
 /// @param inv The invocation that prompted the actor to be spawned.
 /// @param accountant A handle to the accountant component.
-/// @param type_registry A handle to the type registry component.
+/// @param catalog A handle to the catalog.
 /// @param importer A handle to the stream sink of the source, which usually is
 /// the importer component.
 /// @param pipelines The input transformations to apply.
@@ -31,7 +31,7 @@ namespace vast::system {
 caf::expected<caf::actor>
 make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
-            type_registry_actor type_registry,
+            catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
             std::vector<pipeline>&& pipelines, bool detached = false);
 

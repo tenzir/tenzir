@@ -75,6 +75,24 @@ public:
   /// Update the list of fields that should not be touched by the pruner.
   void update_unprunable_fields(const partition_synopsis& ps);
 
+  /// Summarizes the actors state.
+  [[nodiscard]] record status(status_verbosity v) const;
+
+  /// Create the path that the catalog's type registry is persisted at on disk.
+  [[nodiscard]] std::filesystem::path type_registry_filename() const;
+
+  /// Save the type-registry to disk.
+  [[nodiscard]] caf::error save_to_disk() const;
+
+  /// Load the type-registry from disk.
+  caf::error load_from_disk();
+
+  /// Store a new layout in the registry.
+  void insert(vast::type layout);
+
+  /// Get a list of known types from the registry.
+  [[nodiscard]] type_set types() const;
+
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.
@@ -91,6 +109,11 @@ public:
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;
+
+  std::map<std::string, type_set> type_data = {};
+  vast::module configuration_module = {};
+  vast::taxonomies taxonomies = {};
+  std::filesystem::path type_registry_dir = {};
 };
 
 /// The result of a catalog query.
@@ -116,45 +139,6 @@ struct catalog_result {
 /// @param accountant An actor handle to the accountant.
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant);
-
-
-
-struct type_registry_state {
-  /// The name of the actor.
-  static inline constexpr auto name = "type-registry";
-
-       /// Generate a telemetry report for the accountant.
-  [[nodiscard]] report telemetry() const;
-
-       /// Summarizes the actors state.
-  [[nodiscard]] record status(status_verbosity v) const;
-
-       /// Create the path that the type-registry is persisted at on disk.
-  [[nodiscard]] std::filesystem::path filename() const;
-
-       /// Save the type-registry to disk.
-  [[nodiscard]] caf::error save_to_disk() const;
-
-       /// Load the type-registry from disk.
-  caf::error load_from_disk();
-
-       /// Store a new layout in the registry.
-  void insert(vast::type layout);
-
-       /// Get a list of known types from the registry.
-  [[nodiscard]] type_set types() const;
-
-  type_registry_actor::pointer self = {};
-  accountant_actor accountant = {};
-  std::map<std::string, type_set> data = {};
-  vast::module configuration_module = {};
-  vast::taxonomies taxonomies = {};
-  std::filesystem::path dir = {};
-};
-
-type_registry_actor::behavior_type
-type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
-              const std::filesystem::path& dir);
+        accountant_actor accountant, const std::filesystem::path& dir);
 
 } // namespace vast::system

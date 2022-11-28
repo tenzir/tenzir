@@ -410,10 +410,27 @@ catalog_state::lookup_impl(const expression& expr) const {
 
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant) {
+        accountant_actor accountant, const std::filesystem::path& dir) {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("vast.catalog");
   self->state.self = self;
+  self->state.type_registry_dir = dir;
+  // Register the exit handler.
+  self->set_exit_handler([self](const caf::exit_msg& msg) {
+    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
+    if (auto err = self->state.save_to_disk())
+      VAST_ERROR("{} failed to persist state to disk: {}", *self, err);
+    self->quit(msg.reason);
+  });
+  // Load existing state from disk if possible.
+  if (auto err = self->state.load_from_disk()) {
+    self->quit(std::move(err));
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
+  // Load loaded schema types from the singleton.
+  // TODO: Move to the load handler and re-parse the files.
+  if (const auto* module = vast::event_types::get())
+    self->state.configuration_module = *module;
   if (accountant) {
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());
@@ -445,6 +462,12 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         result.push_back({synopsis.first, synopsis.second});
       return result;
     },
+    [self](atom::get, atom::type) {
+      VAST_TRACE_SCOPE("{} retrieves a list of all known types", *self);
+      // TODO: We can generate this list out of partition_synopses
+      // when we drop partition version 0 support.
+      return self->state.types();
+    },
     [=](atom::erase, uuid partition) {
       self->state.erase(partition);
       return atom::ok_v;
@@ -455,6 +478,47 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         self->state.erase(uuid);
       for (auto& aps : new_synopses)
         self->state.merge(aps.uuid, aps.synopsis);
+      return atom::ok_v;
+    },
+    [self](atom::load) -> caf::result<atom::ok> {
+      VAST_DEBUG("{} loads taxonomies", *self);
+      std::error_code err{};
+      auto dirs = get_module_dirs(self->system().config());
+      concepts_map concepts;
+      models_map models;
+      for (const auto& dir : dirs) {
+        const auto dir_exists = std::filesystem::exists(dir, err);
+        if (err)
+          VAST_WARN("{} failed to open directory {}: {}", *self, dir,
+                    err.message());
+        if (!dir_exists)
+          continue;
+        auto yamls = load_yaml_dir(dir);
+        if (!yamls)
+          return yamls.error();
+        for (auto& [file, yaml] : *yamls) {
+          VAST_DEBUG("{} extracts taxonomies from {}", *self, file.string());
+          if (auto err = convert(yaml, concepts, concepts_data_layout))
+            return caf::make_error(ec::parse_error,
+                                   "failed to extract concepts from file",
+                                   file.string(), err.context());
+          for (auto& [name, definition] : concepts)
+            VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
+                       definition.fields.size());
+          if (auto err = convert(yaml, models, models_data_layout))
+            return caf::make_error(ec::parse_error,
+                                   "failed to extract models from file",
+                                   file.string(), err.context());
+          for (auto& [name, definition] : models) {
+            VAST_DEBUG("{} extracted model {} with {} fields", *self, name,
+                       definition.definition.size());
+            VAST_TRACE("{} uses model mapping {} -> {}", *self, name,
+                       definition.definition);
+          }
+        }
+      }
+      self->state.taxonomies
+        = taxonomies{std::move(concepts), std::move(models)};
       return atom::ok_v;
     },
     [=](atom::candidates, const vast::query_context& query_context)
@@ -486,6 +550,10 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                  });
       return result;
     },
+    [self](atom::resolve,
+           const expression& e) -> caf::result<vast::expression> {
+      return resolve(self->state.taxonomies, e, self->state.type_data);
+    },
     [=](atom::status, status_verbosity v) {
       record result;
       result["memory-usage"] = count{self->state.memusage()};
@@ -516,6 +584,18 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       return result;
+    },
+    [self](atom::put, taxonomies t) {
+      VAST_TRACE_SCOPE("");
+      self->state.taxonomies = std::move(t);
+    },
+    [self](atom::put, vast::type layout) {
+      VAST_TRACE_SCOPE("");
+      self->state.insert(std::move(layout));
+    },
+    [self](atom::get, atom::taxonomies) {
+      VAST_TRACE_SCOPE("");
+      return self->state.taxonomies;
     },
     [=](atom::telemetry) {
       VAST_ASSERT(self->state.accountant);
@@ -576,18 +656,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     }};
-
-
-
-}
-  //////////////////////////////////////////////////////////////////////////
-
-report type_registry_state::telemetry() const {
-  // TODO: Generate a status report for the accountant.
-  return {};
 }
 
-record type_registry_state::status(status_verbosity v) const {
+record catalog_state::status(status_verbosity v) const {
   auto result = record{};
   if (v >= status_verbosity::detailed) {
     // The list of defined concepts
@@ -619,10 +690,11 @@ record type_registry_state::status(status_verbosity v) const {
       }
       result["models"] = std::move(models_status);
       // Sorted list of all keys.
-      auto keys = std::vector<std::string>(data.size());
-      std::transform(data.begin(), data.end(), keys.begin(), [](const auto& x) {
-        return x.first;
-      });
+      auto keys = std::vector<std::string>(type_data.size());
+      std::transform(type_data.begin(), type_data.end(), keys.begin(),
+                     [](const auto& x) {
+                       return x.first;
+                     });
       std::sort(keys.begin(), keys.end());
       result["types"] = to_list(keys);
       // The usual per-component status.
@@ -632,15 +704,15 @@ record type_registry_state::status(status_verbosity v) const {
   return result;
 }
 
-std::filesystem::path type_registry_state::filename() const {
-  return dir / fmt::format("{}.reg", name);
+std::filesystem::path catalog_state::type_registry_filename() const {
+  return type_registry_dir / fmt::format("type-registry.reg", name);
 }
 
-caf::error type_registry_state::save_to_disk() const {
+caf::error catalog_state::save_to_disk() const {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto entry_offsets
     = std::vector<flatbuffers::Offset<fbs::type_registry::Entry>>{};
-  for (const auto& [key, types] : data) {
+  for (const auto& [key, types] : type_data) {
     const auto key_offset = builder.CreateString(key);
     auto type_offsets = std::vector<flatbuffers::Offset<fbs::TypeBuffer>>{};
     type_offsets.reserve(types.size());
@@ -665,24 +737,24 @@ caf::error type_registry_state::save_to_disk() const {
     type_registry_v0_offset.Union());
   fbs::FinishTypeRegistryBuffer(builder, type_registry_offset);
   auto buffer = builder.Release();
-  return io::save(filename(), as_bytes(buffer));
+  return io::save(type_registry_filename(), as_bytes(buffer));
 }
 
-caf::error type_registry_state::load_from_disk() {
+caf::error catalog_state::load_from_disk() {
   // Nothing to load is not an error.
   std::error_code err{};
-  const auto dir_exists = std::filesystem::exists(dir, err);
+  const auto dir_exists = std::filesystem::exists(type_registry_dir, err);
   if (err)
     return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to find directory {}: {}", dir,
-                                       err.message()));
+                           fmt::format("failed to find directory {}: {}",
+                                       type_registry_dir, err.message()));
   if (!dir_exists) {
     VAST_DEBUG("{} found no directory to load from", *self);
     return caf::none;
   }
   // Support the legacy CAF-serialized state, and delete it afterwards.
   {
-    const auto fname = dir / name;
+    const auto fname = type_registry_dir / name;
     const auto file_exists = std::filesystem::exists(fname, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
@@ -701,7 +773,7 @@ caf::error type_registry_state::load_from_disk() {
         auto entry = type_set{};
         for (const auto& v : vs)
           entry.emplace(type::from_legacy_type(v));
-        data.emplace(k, entry);
+        type_data.emplace(k, entry);
       }
       VAST_DEBUG("{} loaded state from disk", *self);
       // We save the new state already now before removing the old state just to
@@ -715,7 +787,7 @@ caf::error type_registry_state::load_from_disk() {
   }
   // Support the new FlatBuffers state.
   {
-    const auto fname = filename();
+    const auto fname = type_registry_filename();
     const auto file_exists = std::filesystem::exists(fname, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
@@ -737,7 +809,7 @@ caf::error type_registry_state::load_from_disk() {
         for (const auto& value : *entry->values())
           types.emplace(
             type{flatbuffer.chunk()->slice(as_bytes(*value->buffer()))});
-        data.emplace(entry->key()->string_view(), std::move(types));
+        type_data.emplace(entry->key()->string_view(), std::move(types));
       }
       VAST_DEBUG("{} loaded state from disk", *self);
     }
@@ -745,8 +817,8 @@ caf::error type_registry_state::load_from_disk() {
   return caf::none;
 }
 
-void type_registry_state::insert(vast::type layout) {
-  auto& old_layouts = data[std::string{layout.name()}];
+void catalog_state::insert(vast::type layout) {
+  auto& old_layouts = type_data[std::string{layout.name()}];
   // Insert into the existing bucket.
   auto [hint, success] = old_layouts.insert(std::move(layout));
   if (success) {
@@ -765,135 +837,11 @@ void type_registry_state::insert(vast::type layout) {
   std::rotate(old_layouts.begin(), hint, std::next(hint));
 }
 
-type_set type_registry_state::types() const {
+type_set catalog_state::types() const {
   auto result = type_set{};
   for (const auto& x : configuration_module)
     result.insert(x);
   return result;
-}
-
-type_registry_actor::behavior_type
-type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
-              const std::filesystem::path& dir) {
-  self->state.self = self;
-  self->state.dir = dir;
-  // Register the exit handler.
-  self->set_exit_handler([self](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
-    if (auto telemetry = self->state.telemetry(); !telemetry.data.empty())
-      self->send(self->state.accountant, atom::metrics_v, std::move(telemetry));
-    if (auto err = self->state.save_to_disk())
-      VAST_ERROR("{} failed to persist state to disk: {}", *self, err);
-    self->quit(msg.reason);
-  });
-  // Load existing state from disk if possible.
-  if (auto err = self->state.load_from_disk()) {
-    self->quit(std::move(err));
-    return type_registry_actor::behavior_type::make_empty_behavior();
-  }
-  // Load loaded schema types from the singleton.
-  // TODO: Move to the load handler and re-parse the files.
-  if (const auto* module = vast::event_types::get())
-    self->state.configuration_module = *module;
-  // The behavior of the type-registry.
-  return {
-    [self](atom::telemetry) {
-      if (auto telemetry = self->state.telemetry(); !telemetry.data.empty()) {
-        VAST_TRACE_SCOPE("{} sends out a telemetry report to the {}", *self,
-                         VAST_ARG("accountant", self->state.accountant));
-        self->send(self->state.accountant, atom::metrics_v,
-                   std::move(telemetry));
-      }
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
-    },
-    [self](atom::status, status_verbosity v) {
-      VAST_TRACE_SCOPE("{} sends out a status report", *self);
-      return self->state.status(v);
-    },
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_TRACE_SCOPE("{} attaches to {}", *self, VAST_ARG("stream", in));
-      auto result = caf::attach_stream_sink(
-        self, in,
-        [=](caf::unit_t&) {
-          // nop
-        },
-        [=](caf::unit_t&, const table_slice& x) {
-          self->state.insert(x.layout());
-        });
-      return result.inbound_slot();
-    },
-    [self](atom::get) {
-      VAST_TRACE_SCOPE("{} retrieves a list of all known types", *self);
-      return self->state.types();
-    },
-    [self](atom::put, taxonomies t) {
-      VAST_TRACE_SCOPE("");
-      self->state.taxonomies = std::move(t);
-    },
-    [self](atom::put, vast::type layout) {
-      VAST_TRACE_SCOPE("");
-      self->state.insert(std::move(layout));
-    },
-    [self](atom::get, atom::taxonomies) {
-      VAST_TRACE_SCOPE("");
-      return self->state.taxonomies;
-    },
-    [self](atom::load) -> caf::result<atom::ok> {
-      VAST_DEBUG("{} loads taxonomies", *self);
-      std::error_code err{};
-      auto dirs = get_module_dirs(self->system().config());
-      concepts_map concepts;
-      models_map models;
-      for (const auto& dir : dirs) {
-        const auto dir_exists = std::filesystem::exists(dir, err);
-        if (err)
-          VAST_WARN("{} failed to open directory {}: {}", *self, dir,
-                    err.message());
-        if (!dir_exists)
-          continue;
-        auto yamls = load_yaml_dir(dir);
-        if (!yamls)
-          return yamls.error();
-        for (auto& [file, yaml] : *yamls) {
-          VAST_DEBUG("{} extracts taxonomies from {}", *self, file.string());
-          if (auto err = convert(yaml, concepts, concepts_data_layout))
-            return caf::make_error(ec::parse_error,
-                                   "failed to extract concepts from file",
-                                   file.string(), err.context());
-          for (auto& [name, definition] : concepts)
-            VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
-                       definition.fields.size());
-          if (auto err = convert(yaml, models, models_data_layout))
-            return caf::make_error(ec::parse_error,
-                                   "failed to extract models from file",
-                                   file.string(), err.context());
-          for (auto& [name, definition] : models) {
-            VAST_DEBUG("{} extracted model {} with {} fields", *self, name,
-                       definition.definition.size());
-            VAST_TRACE("{} uses model mapping {} -> {}", *self, name,
-                       definition.definition);
-          }
-        }
-      }
-      self->state.taxonomies
-        = taxonomies{std::move(concepts), std::move(models)};
-      return atom::ok_v;
-    },
-    [self](atom::resolve,
-           const expression& e) -> caf::result<vast::expression> {
-      return resolve(self->state.taxonomies, e, self->state.data);
-    },
-    [self](atom::set, accountant_actor accountant) {
-      VAST_ASSERT(accountant);
-      VAST_DEBUG("{} connects to {}", *self, VAST_ARG(accountant));
-      self->state.accountant = accountant;
-      self->send(self->state.accountant, atom::announce_v, self->name());
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
-    },
-  };
 }
 
 } // namespace vast::system

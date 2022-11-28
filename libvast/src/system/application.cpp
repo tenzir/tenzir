@@ -339,7 +339,6 @@ auto make_command_factory() {
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
     {"spawn importer", remote_command},
-    {"spawn type-registry", remote_command},
     {"spawn index", remote_command},
     {"spawn sink ascii", remote_command},
     {"spawn sink csv", remote_command},

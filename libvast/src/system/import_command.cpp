@@ -21,6 +21,7 @@
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/transformer.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/make_message.hpp>
 #include <caf/settings.hpp>
@@ -45,11 +46,11 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   VAST_DEBUG("{} received node handle", inv.full_name);
   // Get node components.
   auto components = get_node_components< //
-    accountant_actor, type_registry_actor, importer_actor>(self, node);
+    accountant_actor, catalog_actor, importer_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
-  auto& [accountant, type_registry, importer] = *components;
-  if (!type_registry)
+  auto& [accountant, catalog, importer] = *components;
+  if (!catalog)
     return caf::make_message(caf::make_error( //
       ec::missing_component, "type-registry"));
   if (!importer)
@@ -65,8 +66,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   const auto format = std::string{inv.name()};
   // Start the source.
-  auto src_result = make_source(sys, format, inv, accountant, type_registry,
-                                importer, std::move(*pipelines));
+  auto src_result = make_source(sys, format, inv, accountant, catalog, importer,
+                                std::move(*pipelines));
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(*src_result);

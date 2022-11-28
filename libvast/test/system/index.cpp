@@ -100,17 +100,17 @@ size_t receive_result(fixtures::deterministic_actor_system& fixture,
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-
   fixture()
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     auto index_dir = directory / "index";
-    catalog = self->spawn(system::catalog, system::accountant_actor{});
+    catalog = self->spawn(system::catalog, system::accountant_actor{},
+                          directory / "types");
     index = self->spawn(system::index, system::accountant_actor{}, fs,
-                        system::archive_actor{}, catalog, type_registry,
-                        index_dir, defaults::system::store_backend, slice_size,
+                        system::archive_actor{}, catalog, index_dir,
+                        defaults::system::store_backend, slice_size,
                         vast::duration{}, in_mem_partitions, taste_count,
                         num_query_supervisors, index_dir, vast::index_config{});
   }
@@ -154,10 +154,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   // Handle to the INDEX actor.
   system::index_actor index;
-  system::catalog_actor catalog;
   // Type registry should only be used for partition transforms, so it's
   // safe to pass a nullptr in this test.
-  system::type_registry_actor type_registry = {};
+  system::catalog_actor catalog = {};
 };
 
 } // namespace
@@ -238,7 +237,7 @@ struct recovery_fixture : fixtures::deterministic_actor_system {
     : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
   }
 
-  system::type_registry_actor type_registry = {};
+  system::catalog_actor catalog = {};
 };
 
 } // namespace
@@ -261,10 +260,11 @@ TEST(oversized partition recovery) {
     0);
   auto fs = self->spawn(system::posix_filesystem, root_dir,
                         system::accountant_actor{});
-  auto catalog = self->spawn(system::catalog, system::accountant_actor{});
+  auto catalog = self->spawn(system::catalog, system::accountant_actor{},
+                             directory / "types");
   auto index
     = self->spawn(system::index, system::accountant_actor{}, fs,
-                  system::archive_actor{}, catalog, type_registry, index_dir,
+                  system::archive_actor{}, catalog, index_dir,
                   defaults::system::store_backend, 1000u, vast::duration{},
                   in_mem_partitions, taste_count, num_query_supervisors,
                   index_dir, vast::index_config{});

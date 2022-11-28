@@ -54,12 +54,12 @@
 #include "vast/system/spawn_pivoter.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
-#include "vast/system/spawn_type_registry.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/system/version_command.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/function_view.hpp>
 #include <caf/io/middleman.hpp>
@@ -110,8 +110,8 @@ bool is_singleton(std::string_view type) {
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
   const char* singletons[]
-    = {"accountant", "archive", "disk-monitor", "eraser",       "filesystem",
-       "importer",   "index",   "catalog",      "type-registry"};
+    = {"accountant", "archive",  "disk-monitor", "eraser",
+       "filesystem", "importer", "index",        "catalog"};
   auto pred = [&](const char* x) {
     return x == type;
   };
@@ -376,7 +376,6 @@ auto make_component_factory() {
     {"spawn explorer", lift_component_factory<spawn_explorer>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
-    {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
     {"spawn source", lift_component_factory<spawn_source>()},
@@ -420,7 +419,6 @@ auto make_command_factory() {
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn catalog", node_state::spawn_command},
-    {"spawn type-registry", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
     {"spawn pivoter", node_state::spawn_command},
     {"spawn sink ascii", node_state::spawn_command},
@@ -535,16 +533,13 @@ node_state::spawn_command(const invocation& inv,
   if (query_handlers.count(comp_type) > 0u
       && !caf::get_or(spawn_inv.options,
                       "vast." + comp_type + ".disable-taxonomies", false)) {
-    if (auto [type_registry] = self->state.registry.find<type_registry_actor>();
-        type_registry) {
+    if (auto [catalog] = self->state.registry.find<catalog_actor>(); catalog) {
       auto expr = normalized_and_validated(spawn_inv.arguments);
       if (!expr) {
         rp.deliver(expr.error());
         return make_message(expr.error());
       }
-      self
-        ->request(type_registry, caf::infinite, atom::resolve_v,
-                  std::move(*expr))
+      self->request(catalog, caf::infinite, atom::resolve_v, std::move(*expr))
         .then(handle_taxonomies, [=](caf::error& err) mutable {
           rp.deliver(err);
           return make_message(err);

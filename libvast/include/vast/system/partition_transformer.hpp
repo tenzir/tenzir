@@ -63,8 +63,8 @@ struct partition_transformer_state {
       self,
     stream_data&&, path_data&&) const;
 
-  /// Actor handle of the type registry.
-  type_registry_actor type_registry = {};
+  /// Actor handle of the catalog.
+  catalog_actor catalog = {};
 
   /// Actor handle of the accountant.
   accountant_actor accountant = {};
@@ -173,8 +173,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  type_registry_actor type_registry, filesystem_actor fs,
-  pipeline_ptr transform, std::string partition_path_template,
-  std::string synopsis_path_template);
+  catalog_actor catalog, filesystem_actor fs, pipeline_ptr transform,
+  std::string partition_path_template, std::string synopsis_path_template);
 
 } // namespace vast::system
