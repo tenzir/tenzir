@@ -69,10 +69,9 @@ def suricata2thehive(event: Dict) -> Dict:
     sighted_time_ms = int(isoparse(sighted_time_iso).timestamp() * 1000)
     start_time_iso = event.get("flow", {}).get("timestamp", sighted_time_iso)
     start_time_ms = int(isoparse(start_time_iso).timestamp() * 1000)
-    current_time_ms = int(time.time() * 1000)
-    # severity is reversed
-    severity = min(5 - event.get("severity", 3), 1)
     alert = event.get("alert", {})
+    # severity is reversed, can go up to 255 in suricata
+    severity = max(5 - alert.get("severity", 3), 1)
     category = alert.get("category")
     desc = f'{alert.get("signature_id", "No signature ID")}: {alert.get("signature", "No signature")}'
     # A unique identifier of this alert, hashing together the start time and flow id
@@ -87,7 +86,7 @@ def suricata2thehive(event: Dict) -> Dict:
         "title": "Suricata Alert",
         "description": desc,
         "severity": severity,
-        "date": current_time_ms,
+        "date": sighted_time_ms,
         "tags": [],
         "observables": [
             {
@@ -118,9 +117,10 @@ def suricata2thehive(event: Dict) -> Dict:
 
 async def on_suricata_alert(alert: Dict):
     global SENT_ALERT_REFS
-    logger.debug(f"Received alert: {alert}")
-
+    logger.debug(f"Received Suricata alert: {alert}")
     thehive_alert = suricata2thehive(alert)
+    logger.debug(f"Resulting TheHive alert: {thehive_alert}")
+
     ref = thehive_alert["sourceRef"]
     if ref in SENT_ALERT_REFS:
         logger.debug(f"Alert with hash {ref} skipped")
