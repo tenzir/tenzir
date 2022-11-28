@@ -65,9 +65,8 @@ We currently have the following override files:
 
 |File|Description|
 |-|-|
-|docker/vast/docker-compose.yaml|The `vast` service that starts up a VAST server.|
+|docker/vast/docker-compose.yaml|The `vast` service that starts up a VAST server including REST API.|
 |docker/vast/docker-compose.volume.yaml|Add persistent storage to VAST.|
-|docker/vast/docker-compose.web.yaml|Expose the VAST web server.|
 |docker/vast/docker-compose.build.yaml|Force VAST to be built from source.|
 |docker/quarto/docker-compose.yaml|Build the Quarto image and run Bash inside.|
 |docker/quarto/docker-compose.bind.yaml|Bind mound the VAST respository.|
