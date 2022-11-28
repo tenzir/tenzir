@@ -37,10 +37,26 @@ caf::error print_definition(const data& definition, bool as_yaml) {
   return caf::none;
 }
 
-list to_definition(const concepts_map& concepts) {
+bool matches_filter(std::string_view name, std::string_view filter) {
+  if (filter.empty())
+    return true;
+  const auto [name_mismatch, filter_mismatch]
+    = std::mismatch(name.begin(), name.end(), filter.begin(), filter.end());
+  const auto filter_consumed = filter_mismatch == filter.end();
+  if (!filter_consumed)
+    return false;
+  const auto name_consumed = name_mismatch == name.end();
+  if (name_consumed)
+    return true;
+  return *name_mismatch == '.';
+}
+
+list to_definition(const concepts_map& concepts, std::string_view filter) {
   auto result = list{};
   result.reserve(concepts.size());
   for (const auto& [name, concept_] : concepts) {
+    if (!matches_filter(name, filter))
+      continue;
     auto fields = list{};
     fields.reserve(concept_.fields.size());
     for (const auto& field : concept_.fields)
@@ -63,10 +79,12 @@ list to_definition(const concepts_map& concepts) {
   return result;
 }
 
-list to_definition(const models_map& models) {
+list to_definition(const models_map& models, std::string_view filter) {
   auto result = list{};
   result.reserve(models.size());
   for (const auto& [name, model] : models) {
+    if (!matches_filter(name, filter))
+      continue;
     auto definition = list{};
     definition.reserve(model.definition.size());
     for (const auto& definition_entry : model.definition)
@@ -84,15 +102,23 @@ list to_definition(const models_map& models) {
   return result;
 }
 
-list to_definition(const type_set& types) {
+list to_definition(const type_set& types, std::string_view filter) {
   auto result = list{};
   result.reserve(types.size());
-  for (const auto& type : types)
+  for (const auto& type : types) {
+    if (!matches_filter(type.name(), filter))
+      continue;
     result.push_back(type.to_definition());
+  }
   return result;
 }
 
 caf::message show_command(const invocation& inv, caf::actor_system& sys) {
+  if (inv.arguments.size() > 1)
+    return caf::make_message(caf::make_error(
+      ec::invalid_argument, "show command expects at most one argument"));
+  const auto filter
+    = inv.arguments.empty() ? std::string_view{} : inv.arguments[0];
   const auto as_yaml = caf::get_or(inv.options, "vast.show.yaml", false);
   const auto show_concepts
     = inv.full_name == "show" || inv.full_name == "show concepts";
@@ -124,13 +150,14 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
       .receive(
         [&](const taxonomies& taxonomies) mutable {
           if (show_concepts) {
-            auto concepts_definition = to_definition(taxonomies.concepts);
+            auto concepts_definition
+              = to_definition(taxonomies.concepts, filter);
             command_result->insert(command_result->end(),
                                    concepts_definition.begin(),
                                    concepts_definition.end());
           }
           if (show_models) {
-            auto models_definition = to_definition(taxonomies.models);
+            auto models_definition = to_definition(taxonomies.models, filter);
             command_result->insert(command_result->end(),
                                    models_definition.begin(),
                                    models_definition.end());
@@ -163,7 +190,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
             if (partition.schema)
               types.insert(partition.schema);
           }
-          auto types_definition = to_definition(types);
+          auto types_definition = to_definition(types, filter);
           command_result->insert(command_result->end(),
                                  types_definition.begin(),
                                  types_definition.end());
