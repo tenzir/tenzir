@@ -789,6 +789,83 @@ data type::construct() const noexcept {
   return *this ? caf::visit(f, *this) : data{};
 }
 
+data type::to_definition() const noexcept {
+  // Utility function for adding the attributes to a type definition, if
+  // required.
+  auto attributes_enriched_definition
+    = [&](data type_definition) noexcept -> data {
+    auto attributes_definition = list{};
+    for (const auto& [key, value] : attributes(recurse::no)) {
+      if (value.empty())
+        attributes_definition.push_back(std::string{key});
+      else
+        attributes_definition.push_back(
+          record{{std::string{key}, std::string{value}}});
+    }
+    if (attributes_definition.empty())
+      return type_definition;
+    return record{
+      {"type", std::move(type_definition)},
+      {"attributes", std::move(attributes_definition)},
+    };
+  };
+  // Check if there is an alias, and if there is then visit then one first.
+  for (const auto& alias : aliases()) {
+    auto definition = attributes_enriched_definition(alias.to_definition());
+    const auto name = this->name();
+    if (name.empty())
+      return definition;
+    return record{
+      {std::string{name}, std::move(definition)},
+    };
+  }
+  // At this point we've gone through all named aliases, but the last innermost
+  // type may still have attributes.
+  VAST_ASSERT(name().empty());
+  auto make_type_definition = [&]() noexcept -> data {
+    if (!*this)
+      return {};
+    auto f = detail::overload{
+      [](const basic_type auto& self) noexcept -> data {
+        return fmt::to_string(self);
+      },
+      [](const enumeration_type& self) noexcept -> data {
+        auto definition = list{};
+        for (const auto& field : self.fields())
+          definition.push_back(std::string{field.name});
+        return record{
+          {"enum", std::move(definition)},
+        };
+      },
+      [](const list_type& self) noexcept -> data {
+        return record{
+          {"list", self.value_type().to_definition()},
+        };
+      },
+      [](const map_type& self) noexcept -> data {
+        return record{
+          {"map",
+           record{
+             {"key", self.key_type().to_definition()},
+             {"value", self.value_type().to_definition()},
+           }},
+        };
+      },
+      [](const record_type& self) noexcept -> data {
+        auto definition = record::vector_type{};
+        definition.reserve(self.num_fields());
+        for (const auto& [name, type] : self.fields())
+          definition.emplace_back(std::string{name}, type.to_definition());
+        return record{
+          {"record", record::make_unsafe(std::move(definition))},
+        };
+      },
+    };
+    return caf::visit(f, *this);
+  };
+  return attributes_enriched_definition(make_type_definition());
+}
+
 type type::from_arrow(const arrow::DataType& other) noexcept {
   auto f = detail::overload{
     []<class T>(const T&) noexcept -> type {

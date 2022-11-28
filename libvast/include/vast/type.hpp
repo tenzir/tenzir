@@ -264,6 +264,9 @@ public:
   /// Constructs data from the type.
   [[nodiscard]] data construct() const noexcept;
 
+  /// Converts the type into its type definition.
+  [[nodiscard]] data to_definition() const noexcept;
+
   /// Creates a type from an Arrow DataType, Field, or Schema.
   [[nodiscard]] static type from_arrow(const arrow::DataType& other) noexcept;
   [[nodiscard]] static type from_arrow(const arrow::Field& field) noexcept;
