@@ -263,6 +263,10 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
   if (!caf::get_or(content(self->system().config()), "vast.enable-metrics",
                    false))
     return {};
+  // It doesn't make much sense to run the accountant for one-shot commands
+  // with a local database using `--node`, so this prevents spawning it.
+  if (caf::get_or(content(self->system().config()), "vast.node", false))
+    return {};
   const auto metrics_opts = caf::get_or(content(self->system().config()),
                                         "vast.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
