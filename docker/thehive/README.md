@@ -1,5 +1,8 @@
 # TheHive and Cortex
 
+> **Warning** The TheHive and Cortex integrations are considered experimental
+> and subject to change without notice.
+
 This directory contains the Docker Compose setup to run a preconfigured instance
 of TheHive with a VAST [Cortex Analyzer][cortex-analyzers-docs]. This stack can
 run with multiple levels of integration with the VAST service:

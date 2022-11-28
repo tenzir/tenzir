@@ -25,6 +25,11 @@ To get up and running with VAST in Docker Compose, simply run `docker compose
 up` from the `docker/vast` directory, which fetches the latest version of VAST
 from Docker Hub.
 
+:::info Cached Images and Containers By default, Docker aggressively caches
+images and containers. To prevent Docker from re-using an image, pass `--pull
+always` (Compose v2.8+) to `docker compose up`. Similarly, to prevent Docker
+from re-using an already built container, pass `--force-recreate`. :::
+
 The `docker compose run` command makes interacting with VAST inside Docker
 Compose easy:
 
@@ -65,9 +70,8 @@ We currently have the following override files:
 
 |File|Description|
 |-|-|
-|docker/vast/docker-compose.yaml|The `vast` service that starts up a VAST server.|
+|docker/vast/docker-compose.yaml|The `vast` service that starts up a VAST server including REST API.|
 |docker/vast/docker-compose.volume.yaml|Add persistent storage to VAST.|
-|docker/vast/docker-compose.web.yaml|Expose the VAST web server.|
 |docker/vast/docker-compose.build.yaml|Force VAST to be built from source.|
 |docker/quarto/docker-compose.yaml|Build the Quarto image and run Bash inside.|
 |docker/quarto/docker-compose.bind.yaml|Bind mound the VAST respository.|
