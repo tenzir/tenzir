@@ -15,9 +15,11 @@
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
+#include "vast/module.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/taxonomies.hpp"
 #include "vast/time_synopsis.hpp"
 #include "vast/uuid.hpp"
 
@@ -115,5 +117,44 @@ struct catalog_result {
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
         accountant_actor accountant);
+
+
+
+struct type_registry_state {
+  /// The name of the actor.
+  static inline constexpr auto name = "type-registry";
+
+       /// Generate a telemetry report for the accountant.
+  [[nodiscard]] report telemetry() const;
+
+       /// Summarizes the actors state.
+  [[nodiscard]] record status(status_verbosity v) const;
+
+       /// Create the path that the type-registry is persisted at on disk.
+  [[nodiscard]] std::filesystem::path filename() const;
+
+       /// Save the type-registry to disk.
+  [[nodiscard]] caf::error save_to_disk() const;
+
+       /// Load the type-registry from disk.
+  caf::error load_from_disk();
+
+       /// Store a new layout in the registry.
+  void insert(vast::type layout);
+
+       /// Get a list of known types from the registry.
+  [[nodiscard]] type_set types() const;
+
+  type_registry_actor::pointer self = {};
+  accountant_actor accountant = {};
+  std::map<std::string, type_set> data = {};
+  vast::module configuration_module = {};
+  vast::taxonomies taxonomies = {};
+  std::filesystem::path dir = {};
+};
+
+type_registry_actor::behavior_type
+type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
+              const std::filesystem::path& dir);
 
 } // namespace vast::system

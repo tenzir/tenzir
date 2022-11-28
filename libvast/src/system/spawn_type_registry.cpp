@@ -10,9 +10,9 @@
 
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/system/type_registry.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 

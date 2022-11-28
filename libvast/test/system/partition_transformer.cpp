@@ -22,7 +22,6 @@
 #include "vast/pipeline.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/memory_filesystem.hpp"
