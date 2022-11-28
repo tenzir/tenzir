@@ -438,24 +438,24 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                        atom::telemetry_v);
   }
   return {
-    [=](
+    [self](
       atom::merge,
       std::shared_ptr<std::map<uuid, partition_synopsis_ptr>>& ps) -> atom::ok {
       self->state.create_from(std::move(*ps));
       return atom::ok_v;
     },
-    [=](atom::merge, uuid partition,
+    [self](atom::merge, uuid partition,
         partition_synopsis_ptr& synopsis) -> atom::ok {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(partition));
       self->state.merge(partition, std::move(synopsis));
       return atom::ok_v;
     },
-    [=](atom::merge, std::vector<augmented_partition_synopsis> v) -> atom::ok {
+    [self](atom::merge, std::vector<augmented_partition_synopsis> v) -> atom::ok {
       for (auto& aps : v)
         self->state.merge(aps.uuid, aps.synopsis);
       return atom::ok_v;
     },
-    [=](atom::get) -> std::vector<partition_synopsis_pair> {
+    [self](atom::get) -> std::vector<partition_synopsis_pair> {
       std::vector<partition_synopsis_pair> result;
       result.reserve(self->state.synopses.size());
       for (const auto& synopsis : self->state.synopses)
@@ -468,11 +468,11 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       // when we drop partition version 0 support.
       return self->state.types();
     },
-    [=](atom::erase, uuid partition) {
+    [self](atom::erase, uuid partition) {
       self->state.erase(partition);
       return atom::ok_v;
     },
-    [=](atom::replace, std::vector<uuid> old_uuids,
+    [self](atom::replace, std::vector<uuid> old_uuids,
         std::vector<augmented_partition_synopsis> new_synopses) -> atom::ok {
       for (auto const& uuid : old_uuids)
         self->state.erase(uuid);
@@ -521,7 +521,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         = taxonomies{std::move(concepts), std::move(models)};
       return atom::ok_v;
     },
-    [=](atom::candidates, const vast::query_context& query_context)
+    [self](atom::candidates, const vast::query_context& query_context)
       -> caf::result<catalog_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
       bool has_expression = query_context.expr != vast::expression{};
@@ -554,7 +554,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
            const expression& e) -> caf::result<vast::expression> {
       return resolve(self->state.taxonomies, e, self->state.type_data);
     },
-    [=](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v) {
       record result;
       result["memory-usage"] = count{self->state.memusage()};
       result["num-partitions"] = count{self->state.synopses.size()};
@@ -597,7 +597,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       VAST_TRACE_SCOPE("");
       return self->state.taxonomies;
     },
-    [=](atom::telemetry) {
+    [self](atom::telemetry) {
       VAST_ASSERT(self->state.accountant);
       auto num_partitions_and_events_per_schema_and_version
         = detail::stable_map<std::pair<std::string_view, count>,
