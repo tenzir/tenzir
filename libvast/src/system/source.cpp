@@ -69,7 +69,7 @@ void source_state::initialize(const catalog_actor& catalog,
                    && (name_mismatch == name.end() || *name_mismatch == '.');
           };
           // First, merge and de-duplicate the local module with types from the
-          // type-registry.
+          // catalog's type-registry.
           auto merged_module = module{};
           for (const auto& type : local_module)
             if (prefix_then_dot(type.name(), type_filter))

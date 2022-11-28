@@ -52,7 +52,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto& [accountant, catalog, importer] = *components;
   if (!catalog)
     return caf::make_message(caf::make_error( //
-      ec::missing_component, "type-registry"));
+      ec::missing_component, "catalog"));
   if (!importer)
     return caf::make_message(caf::make_error( //
       ec::missing_component, "importer"));
