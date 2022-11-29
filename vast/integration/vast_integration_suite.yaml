@@ -258,7 +258,7 @@ tests:
       - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: count '#type == "zeek.conn"'
       - command: flush
-      - command: show schemas
+      - command: show schemas --yaml
   Query Operators:
     tags: [server, operator]
     fixture: ServerTester
