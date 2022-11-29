@@ -250,12 +250,15 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: flush
+      - command: show schemas
       - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
       - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: count '#type == "zeek.conn"'
+      - command: flush
+      - command: show schemas
   Query Operators:
     tags: [server, operator]
     fixture: ServerTester
@@ -402,6 +405,7 @@ tests:
       - command: show concepts
         transformation: jq '.[] | select(.concept.name == "net.app") | .concept.fields | map(split(".")[0]) | unique'
       - command: show --yaml models
+      - command: show --yaml schemas
   Arrow Full Data Model:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
