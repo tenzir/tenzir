@@ -5,7 +5,7 @@
       uid:
         type: string
         attributes:
-          - index: hash
+          index: hash
       id.orig_h: addr
       id.orig_p:
         port: count
@@ -38,7 +38,7 @@
       uid:
         type: string
         attributes:
-          - index: hash
+          index: hash
       id.orig_h: addr
       id.orig_p:
         port: count

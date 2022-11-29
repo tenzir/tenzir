@@ -7,11 +7,9 @@
         },
         "uid": {
           "type": "string",
-          "attributes": [
-            {
-              "index": "hash"
-            }
-          ]
+          "attributes": {
+            "index": "hash"
+          }
         },
         "id.orig_h": "addr",
         "id.orig_p": {
