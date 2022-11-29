@@ -7,11 +7,11 @@ notebooks.
 
 We don't publish the Quarto Docker image, so you need to build it locally.
 
-The `docker-compose.bind.yaml` overlay contains the configurations to bind-mount
+The `quarto.bind.yaml` overlay contains the configurations to bind-mount
 the VAST repository on the Quarto container and avoid filesystem permission
 conflicts between the container and the host users. For instance, to run the
-Quarto build in the `web` directory, open a terminal in the directory containing
-this README and run the following:
+Quarto build in the `web` directory, open a terminal in the `docker/compose/`
+directory and run:
 
 ```bash
 # required to allow writing on the host without permission conflicts
@@ -19,37 +19,32 @@ export HOST_UID=$(id -u)
 export HOST_GID=$(id -g) 
 
 docker compose \
-    -f docker-compose.yaml \
-    -f docker-compose.bind.yaml \
+    -f quarto.yaml \
+    -f quarto.bind.yaml \
     run quarto \
     make -C web
 ```
 
-The `docker-compose.vast.yaml` overlay adds the settings to enable communication
+The `quarto.vast.yaml` overlay adds the settings to enable communication
 between the VAST binary in the Quarto image and the `vast` service (configured
 using the `vast` Compose configurations). To run the Quarto build of the
 examples notebooks with a pristine `vast` service running in the background, in
-the directory containing this README execute:
+the `docker/compose/` directory run:
 
 ```bash
 export HOST_UID=$(id -u) 
 export HOST_GID=$(id -g) 
 
-OVERLAYS="-f ../vast/docker-compose.yaml \
-    -f docker-compose.yaml \
-    -f docker-compose.bind.yaml \
-    -f docker-compose.vast.yaml"
+export COMPOSE_FILE="vast.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:quarto.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:quarto.bind.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:quarto.vast.yaml"
+
+docker compose up -d vast
 
 docker compose \
-    $OVERLAYS \
-    up -d vast
-
-docker compose \
-    $OVERLAYS \
     run quarto \
     make -C examples/notebooks
 
-docker compose \
-    $OVERLAYS \
-    down
+docker compose down
 ```
