@@ -483,8 +483,8 @@ TEST(catalog taxonomies) {
     },
   };
   auto slices_x = std::vector{make_data(lx, 1u)};
-  vast::detail::spawn_container_source(sys, std::move(slices_a), catalog_act);
-  vast::detail::spawn_container_source(sys, std::move(slices_x), catalog_act);
+  vast::detail::spawn_container_source(sys, std::move(slices_a), index);
+  vast::detail::spawn_container_source(sys, std::move(slices_x), index);
   run();
   MESSAGE("resolving an expression");
   auto exp = unbox(to<expression>("foo == 1"));
