@@ -1,7 +1,3 @@
-# NOTE: Copy this file to .env in your current working directory for Docker
-# Compose to pick it up automatically. Using a .env file is optional. The below
-# values are defaulted in the Docker Compose files as well.
-
 # The container registry to pull VAST images from.
 VAST_CONTAINER_REGISTRY=docker.io
 

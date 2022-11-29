@@ -1,7 +1,7 @@
 #! /usr/bin/env bash
 set -eux -o pipefail
 
-pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/thehive"
+pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker"
 
 # Setup cleanup
 function down {
@@ -14,19 +14,20 @@ function down {
 trap down EXIT
 
 # Start thehive without the app
-COMPOSE_FILE="docker-compose.yaml"
-COMPOSE_FILE="$COMPOSE_FILE:docker-compose.vast.yaml"
-export COMPOSE_FILE="$COMPOSE_FILE:../vast/docker-compose.yaml"
+export COMPOSE_FILE
+COMPOSE_FILE="compose/thehive.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:compose/thehive.vast.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:compose/vast.yaml"
 docker compose up --build -d
 
 sleep 3
 
 # import an alert before starting the app
 docker compose run --no-TTY vast import --blocking suricata \
-    < ../../vast/integration/data/suricata/eve.json
+    < ../vast/integration/data/suricata/eve.json
 
 # add the app to the stack
-export COMPOSE_FILE="$COMPOSE_FILE:docker-compose.app.yaml"
+COMPOSE_FILE="$COMPOSE_FILE:compose/thehive.app.yaml"
 docker compose up --build -d thehive-app
 
 # check that the historical import took place
@@ -35,9 +36,9 @@ docker compose run thehive-app count-alerts 2>&1 | \
     grep -q "alert_count=1"
 
 # import both a duplicate and a new alert
-cat ../../vast/integration/data/suricata/eve.json | \
+cat ../vast/integration/data/suricata/eve.json | \
     docker compose run --no-TTY vast import --blocking suricata
-cat ../../vast/integration/data/suricata/eve.json | \
+cat ../vast/integration/data/suricata/eve.json | \
     sed -e 's/2011-08-12/2011-08-13/g' | \
     docker compose run --no-TTY vast import --blocking suricata
 

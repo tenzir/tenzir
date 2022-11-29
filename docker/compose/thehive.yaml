@@ -2,7 +2,7 @@ version: "3.8"
 services:
   thehive:
     build:
-      context: ./thehive
+      context: ../thehive/thehive
     depends_on:
       - cortex
     ports:
@@ -27,7 +27,7 @@ services:
 
   cortex:
     build:
-      context: ./cortex
+      context: ../thehive/cortex
     depends_on:
       - elasticsearch
     command: --job-directory /tmp/cortex-jobs
@@ -49,7 +49,7 @@ services:
     pull_policy: build
     network_mode: host  # used for tests only
     build:
-      context: ./vast-cortex-neuron/
+      context: ../thehive/vast-cortex-neuron/
       args:
         - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
         - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}

@@ -22,11 +22,11 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-export COMPOSE_FILE="docker-compose.yaml"
+export COMPOSE_FILE="compose/vast.yaml"
 if (( "${build}" == 1 )); then
   export VAST_CONTAINER_REGISTRY='docker.io'
   export VAST_CONTAINER_REF='latest'
-  export COMPOSE_FILE="${COMPOSE_FILE}:docker-compose.build.yaml"
+  export COMPOSE_FILE="${COMPOSE_FILE}:compose/vast.build.yaml"
   build_policy='--pull=never'
 else
   export VAST_CONTAINER_REGISTRY="${VAST_CONTAINER_REGISTRY:-ghcr.io}"
@@ -37,7 +37,7 @@ else
   build_policy='--pull=always'
 fi
 
-pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker/vast"
+pushd "$(git -C "$(dirname "$(readlink -f "${0}")")" rev-parse --show-toplevel)/docker"
 
 # Bring up the Docker Compose stack.
 docker compose down --volumes
@@ -58,10 +58,10 @@ sleep 3
 docker compose run vast status > /dev/null
 
 # Ingest some test data.
-gunzip -c ../../vast/integration/data/zeek/*.log.gz |
+gunzip -c ../vast/integration/data/zeek/*.log.gz |
   docker compose run --no-TTY vast import --blocking zeek
 docker compose run --no-TTY vast import --blocking suricata \
-  < ../../vast/integration/data/suricata/eve.json
+  < ../vast/integration/data/suricata/eve.json
 
 # Check whether we imported the right amount of data.
 num_imported="$(docker compose run --interactive=false vast count)"
