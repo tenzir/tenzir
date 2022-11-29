@@ -21,9 +21,14 @@ should work that way as well.
 
 ## Quick Start with Docker Compose
 
-To get up and running with VAST in Docker Compose, simply run `docker compose
-up` from the `docker/vast` directory, which fetches the latest version of VAST
-from Docker Hub.
+To get up and running with VAST in Docker Compose, simply run from the
+`docker/compose` directory:
+```bash
+export COMPOSE_FILE=vast.yaml
+docker compose up
+```
+
+This fetches the latest version of VAST from Docker Hub.
 
 :::info Cached Images and Containers By default, Docker aggressively caches
 images and containers. To prevent Docker from re-using an image, pass `--pull
@@ -60,9 +65,9 @@ Docker Compose:
 # Load both VAST and Zeek, and the import that sits between the two.
 # NOTE: The override file for Zeek does not exist yet, but we plan to add it in
 # the near future.
-docker compose -f docker/vast/docker-compose.yaml \
-               -f docker/zeek/docker-compose.yaml \
-               -f docker/zeek/docker-compose.vast-import.yaml \
+docker compose -f docker/compose/vast.yaml \
+               -f docker/compose/zeek.yaml \
+               -f docker/compose/zeek.vast-import.yaml \
                up
 ```
 
@@ -70,12 +75,14 @@ We currently have the following override files:
 
 |File|Description|
 |-|-|
-|docker/vast/docker-compose.yaml|The `vast` service that starts up a VAST server including REST API.|
-|docker/vast/docker-compose.volume.yaml|Add persistent storage to VAST.|
-|docker/vast/docker-compose.build.yaml|Force VAST to be built from source.|
-|docker/quarto/docker-compose.yaml|Build the Quarto image and run Bash inside.|
-|docker/quarto/docker-compose.bind.yaml|Bind mound the VAST respository.|
-|docker/quarto/docker-compose.vast.yaml|Apply settings to connect to the VAST service.|
-|docker/thehive/docker-compose.yaml|Start TheHive/Cortex with a basic initial setup.|
-|docker/thehive/docker-compose.vast.yaml|Integrate the Analyzer with the VAST service.|
-|docker/thehive/docker-compose.app.yaml|Start an integration app for Suricata alerts.|
+|docker/compose/vast.yaml|The `vast` service that starts up a VAST server including REST API.|
+|docker/compose/vast.volume.yaml|Add persistent storage to VAST.|
+|docker/compose/vast.build.yaml|Force VAST to be built from source.|
+|docker/compose/quarto.yaml|Build the Quarto image and run Bash inside.|
+|docker/compose/quarto.bind.yaml|Bind mound the VAST respository.|
+|docker/compose/quarto.vast.yaml|Apply settings to connect to the VAST service.|
+|docker/compose/thehive.yaml|Start TheHive/Cortex with a basic initial setup.|
+|docker/compose/thehive.vast.yaml|Integrate the Analyzer with the VAST service.|
+|docker/compose/thehive.app.yaml|Start an integration app for Suricata alerts.|
+|docker/compose/misp.yaml|Start MISP with a basic initial setup.|
+|docker/compose/misp.proxy.yaml|Add a reverse proxy for dynamic hostnames.|
