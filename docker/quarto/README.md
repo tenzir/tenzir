@@ -27,7 +27,7 @@ docker compose \
 
 The `quarto.vast.yaml` overlay adds the settings to enable communication
 between the VAST binary in the Quarto image and the `vast` service (configured
-using the `vast` Compose configurations). To run the Quarto build of the
+using the `vast` Compose configurations). To perform the Quarto build of the
 examples notebooks with a pristine `vast` service running in the background, in
 the `docker/compose/` directory run:
 

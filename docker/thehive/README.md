@@ -22,12 +22,13 @@ These settings can be configured using [environment variables](env.example).
 
 [cortex-analyzers-docs]: https://docs.thehive-project.org/cortex/
 
-## With VAST running on localhost
+## Standalone (or with VAST running locally)
 
-If you have VAST instance running locally already, run the default configuration:
+If you have VAST instance running locally already or you don't plan on using the
+Cortex VAST Analyzer, run the default configuration:
 
 ```bash
-docker compose up --build
+docker compose up -f thehive.yaml --build
 ```
 
 You can also use the `VAST_ENDPOINT` environment variable to target a remote
@@ -37,8 +38,7 @@ VAST server.
 
 If you want to connect to a VAST server running as a Docker Compose service,
 some extra networking settings required. Those are specified in
-`thehive.vast.yaml`. For instance from the `docker/compose/` directory you can
-run:
+`thehive.vast.yaml`. For instance from the `docker/compose/` directory run:
 
 ```bash
 docker compose \
@@ -54,19 +54,18 @@ We provide a very basic integration script that listens on `suricata.alert`
 events and forwards them to TheHive. You can start it along the stack by
 running:
 ```bash
-# from the docker/thehive directory
-# the COMPOSE_FILE variable is automatically picked up by Compose
+# from the docker/compose/ directory
 export COMPOSE_FILE="vast.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:thehive.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:thehive.vast.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:thehive.app.yaml"
 
-docker compose up --build -d
+docker compose up --build --detach
 ```
 
 To test the alert forwarding with some mock data, run:
 ```bash
-# from the docker/thehive directory with the COMPOSE_FILE variable above
+# from the docker/compose/ directory with the COMPOSE_FILE variable above
 docker compose run --no-TTY vast import --blocking suricata \
     < ../../vast/integration/data/suricata/eve.json
 ```
