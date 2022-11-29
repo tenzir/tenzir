@@ -126,6 +126,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
     = inv.full_name == "show" || inv.full_name == "show models";
   const auto show_schemas
     = inv.full_name == "show" || inv.full_name == "show schemas";
+  const auto timeout = system::node_connection_timeout(inv.options);
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
@@ -146,7 +147,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
   // show!
   auto command_result = caf::expected<list>{list{}};
   if (show_concepts || show_models) {
-    self->request(catalog, caf::infinite, atom::get_v, atom::taxonomies_v)
+    self->request(catalog, timeout, atom::get_v, atom::taxonomies_v)
       .receive(
         [&](const taxonomies& taxonomies) mutable {
           if (show_concepts) {
@@ -181,8 +182,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
       = query_context::make_extract("show", self, std::move(catch_all_query));
     query_context.id = uuid::random();
     self
-      ->request(catalog, caf::infinite, atom::candidates_v,
-                std::move(query_context))
+      ->request(catalog, timeout, atom::candidates_v, std::move(query_context))
       .receive(
         [&](const system::catalog_result& catalog_result) {
           auto types = type_set{};
