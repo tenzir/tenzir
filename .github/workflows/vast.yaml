@@ -318,12 +318,6 @@ jobs:
           password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
       - name: Build Docker Images
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            ref_tag="${{ needs.configure.outputs.head-ref-slug }}"
-          else
-            ref_tag="${{ github.sha }}"
-          fi
-          docker_build_args="${{ needs.configure.outputs.docker-build-args }}"
           # Build the Docker images using ghcr.io/tenzir/vast as a registry-type
           # layer cache. We upload this cache for every merge but also for every
           # pull request, using the head ref slug as an identifier within PRs.
@@ -331,44 +325,52 @@ jobs:
           # prefer an existing cache for the current trigger over the cache that
           # we attempt to restore from, which is the before sha for pushes and
           # the merge-base for pull requests.
-          docker buildx build . -t tenzir/vast:latest --target production --load \
-            --platform linux/amd64 \
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            registries=('ghcr.io')
+            tags=("${{ needs.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            registries=('docker.io' 'ghcr.io')
+            tags=('stable' 'latest' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
+          else
+            registries=('docker.io' 'ghcr.io')
+            tags=('latest' "${{ github.sha }}")
+          fi
+          function tag_arguments {
+            for registry in "${registries[@]}"; do
+              for tag in "${tags[@]}"; do
+                printf "%s %s/%s:%s " '--tag' "${registry}" "${1}" "${tag}"
+              done
+            done
+          }
+          docker_build_args="${{ needs.configure.outputs.docker-build-args }}"
+          echo $(tag_arguments tenzir/vast)
+          echo $(tag_arguments tenzir/vast-dev)
+          echo $(tag_arguments tenzir/vast-deps)
+          docker buildx build . \
+            --target production \
+            $(tag_arguments tenzir/vast) \
+            --platform linux/amd64 --platform linux/arm64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
             --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:build-cache" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
-          docker buildx build . -t tenzir/vast-dev:latest --target development --load \
-            --platform linux/amd64 \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache" \
+            --push
+          docker buildx build . \
+            --target development \
+            $(tag_arguments tenzir/vast-dev) \
+            --platform linux/amd64 --platform linux/arm64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
-          docker buildx build . -t tenzir/vast-deps:latest --target dependencies --load \
-            --platform linux/amd64 \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache" \
+            --push
+          docker buildx build . \
+            --target dependencies \
+            $(tag_arguments tenzir/vast-deps) \
+            --platform linux/amd64 --platform linux/arm64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            docker tag tenzir/vast:latest "ghcr.io/tenzir/vast:${ref_tag}"
-            docker push "ghcr.io/tenzir/vast:${ref_tag}"
-          fi
-      - name: Publish Docker Images
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          registries=('' 'ghcr.io/')
-          images=('tenzir/vast' 'tenzir/vast-dev' 'tenzir/vast-deps')
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
-          else
-            tags=('latest' "${{ github.sha }}")
-          fi
-          for registry in "${registries[@]}"; do
-            for image in "${images[@]}"; do
-              for tag in "${tags[@]}"; do
-                docker tag "${image}:latest" "${registry}${image}:${tag}"
-                docker push "${registry}${image}:${tag}"
-              done
-            done
-          done
+            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache" \
+            --push
 
   docker-compose:
     needs:
