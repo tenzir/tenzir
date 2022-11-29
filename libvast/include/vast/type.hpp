@@ -265,6 +265,7 @@ public:
   [[nodiscard]] data construct() const noexcept;
 
   /// Converts the type into its type definition.
+  /// @pre *this
   [[nodiscard]] data to_definition() const noexcept;
 
   /// Creates a type from an Arrow DataType, Field, or Schema.
