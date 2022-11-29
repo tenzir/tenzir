@@ -21,6 +21,8 @@
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/index.hpp"
+#include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
@@ -42,6 +44,8 @@ namespace {
 
 constexpr size_t num_partitions = 4;
 constexpr size_t num_events_per_parttion = 25;
+constexpr uint32_t taste_count = 4;
+constexpr size_t num_query_supervisors = 1;
 
 const vast::time epoch;
 
@@ -129,7 +133,15 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     factory<synopsis>::initialize();
     MESSAGE("register table_slice_builder factory");
     factory<table_slice_builder>::initialize();
+    auto index_dir = directory / "index";
+    auto fs = self->spawn(system::posix_filesystem, directory,
+                          system::accountant_actor{});
     catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");
+    index = self->spawn(system::index, system::accountant_actor{}, fs,
+                        system::archive_actor{}, catalog_act, index_dir,
+                        defaults::system::store_backend, slice_size,
+                        vast::duration{}, num_partitions, taste_count,
+                        num_query_supervisors, index_dir, vast::index_config{});
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -170,6 +182,10 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       CHECK_EQUAL(p3.range.to, epoch + 99s);
     }
     MESSAGE("run test");
+  }
+
+  ~fixture() {
+    anon_send_exit(index, caf::exit_reason::user_shutdown);
   }
 
   auto slice(size_t first, size_t last) const {
@@ -266,6 +282,9 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   // Our unit-under-test.
   catalog_actor catalog_act;
+
+  // Index for registering types.
+  index_actor index;
 
   // Partition IDs.
   std::vector<uuid> ids;
