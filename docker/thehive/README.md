@@ -37,8 +37,7 @@ VAST server.
 
 If you want to connect to a VAST server running as a Docker Compose service,
 some extra networking settings required. Those are specified in
-`thehive.vast.yaml`. For instance from the `docker/compose/` directory you can
-run:
+`thehive.vast.yaml`. For instance from the `docker/compose/` directory run:
 
 ```bash
 docker compose \
