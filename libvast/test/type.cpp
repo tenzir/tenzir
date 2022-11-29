@@ -41,6 +41,8 @@ TEST(bool_type) {
   CHECK(caf::holds_alternative<bool_type>(bt));
   const auto lbt = type::from_legacy_type(legacy_bool_type{});
   CHECK(caf::holds_alternative<bool_type>(lbt));
+  const auto expected_definition = data{"bool"};
+  CHECK_EQUAL(bt.to_definition(), expected_definition);
 }
 
 TEST(integer_type) {
@@ -60,6 +62,8 @@ TEST(integer_type) {
   CHECK(caf::holds_alternative<integer_type>(it));
   const auto lit = type::from_legacy_type(legacy_integer_type{});
   CHECK(caf::holds_alternative<integer_type>(lit));
+  const auto expected_definition = data{"int"};
+  CHECK_EQUAL(it.to_definition(), expected_definition);
 }
 
 TEST(count_type) {
@@ -79,6 +83,8 @@ TEST(count_type) {
   CHECK(caf::holds_alternative<count_type>(ct));
   const auto lct = type::from_legacy_type(legacy_count_type{});
   CHECK(caf::holds_alternative<count_type>(lct));
+  const auto expected_definition = data{"count"};
+  CHECK_EQUAL(ct.to_definition(), expected_definition);
 }
 
 TEST(real_type) {
@@ -98,6 +104,8 @@ TEST(real_type) {
   CHECK(caf::holds_alternative<real_type>(rt));
   const auto lrt = type::from_legacy_type(legacy_real_type{});
   CHECK(caf::holds_alternative<real_type>(lrt));
+  const auto expected_definition = data{"real"};
+  CHECK_EQUAL(rt.to_definition(), expected_definition);
 }
 
 TEST(duration_type) {
@@ -117,6 +125,8 @@ TEST(duration_type) {
   CHECK(caf::holds_alternative<duration_type>(dt));
   const auto ldt = type::from_legacy_type(legacy_duration_type{});
   CHECK(caf::holds_alternative<duration_type>(ldt));
+  const auto expected_definition = data{"duration"};
+  CHECK_EQUAL(dt.to_definition(), expected_definition);
 }
 
 TEST(time_type) {
@@ -136,6 +146,8 @@ TEST(time_type) {
   CHECK(caf::holds_alternative<time_type>(tt));
   const auto ltt = type::from_legacy_type(legacy_time_type{});
   CHECK(caf::holds_alternative<time_type>(ltt));
+  const auto expected_definition = data{"time"};
+  CHECK_EQUAL(tt.to_definition(), expected_definition);
 }
 
 TEST(string_type) {
@@ -155,6 +167,8 @@ TEST(string_type) {
   CHECK(caf::holds_alternative<string_type>(st));
   const auto lst = type::from_legacy_type(legacy_string_type{});
   CHECK(caf::holds_alternative<string_type>(lst));
+  const auto expected_definition = data{"string"};
+  CHECK_EQUAL(st.to_definition(), expected_definition);
 }
 
 TEST(pattern_type) {
@@ -174,6 +188,8 @@ TEST(pattern_type) {
   CHECK(caf::holds_alternative<pattern_type>(pt));
   const auto lpt = type::from_legacy_type(legacy_pattern_type{});
   CHECK(caf::holds_alternative<pattern_type>(lpt));
+  const auto expected_definition = data{"pattern"};
+  CHECK_EQUAL(pt.to_definition(), expected_definition);
 }
 
 TEST(address_type) {
@@ -193,6 +209,8 @@ TEST(address_type) {
   CHECK(caf::holds_alternative<address_type>(at));
   const auto lat = type::from_legacy_type(legacy_address_type{});
   CHECK(caf::holds_alternative<address_type>(lat));
+  const auto expected_definition = data{"addr"};
+  CHECK_EQUAL(at.to_definition(), expected_definition);
 }
 
 TEST(subnet_type) {
@@ -212,6 +230,8 @@ TEST(subnet_type) {
   CHECK(caf::holds_alternative<subnet_type>(st));
   const auto lst = type::from_legacy_type(legacy_subnet_type{});
   CHECK(caf::holds_alternative<subnet_type>(lst));
+  const auto expected_definition = data{"subnet"};
+  CHECK_EQUAL(st.to_definition(), expected_definition);
 }
 
 TEST(enumeration_type) {
@@ -242,6 +262,9 @@ TEST(enumeration_type) {
   CHECK_EQUAL(caf::get<enumeration_type>(let).field(1), "second");
   CHECK_EQUAL(caf::get<enumeration_type>(let).field(2), "third");
   CHECK_EQUAL(caf::get<enumeration_type>(let).field(3), "");
+  const auto expected_definition
+    = data{record{{"enum", list{"first", "third", "fourth"}}}};
+  CHECK_EQUAL(et.to_definition(), expected_definition);
 }
 
 TEST(list_type) {
@@ -265,6 +288,8 @@ TEST(list_type) {
     = type::from_legacy_type(legacy_list_type{legacy_bool_type{}});
   CHECK(caf::holds_alternative<list_type>(llbt));
   CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
+  const auto expected_definition = data{record{{"list", "int"}}};
+  CHECK_EQUAL(tlit.to_definition(), expected_definition);
 }
 
 TEST(map_type) {
@@ -290,6 +315,9 @@ TEST(map_type) {
   CHECK(caf::holds_alternative<map_type>(lmabt));
   CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{address_type{}});
   CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
+  const auto expected_definition
+    = data{record{{"map", record{{"key", "string"}, {"value", "int"}}}}};
+  CHECK_EQUAL(tmsit.to_definition(), expected_definition);
 }
 
 TEST(record_type) {
@@ -318,6 +346,38 @@ TEST(record_type) {
   CHECK_EQUAL(r.field({1, 1}).type, address_type{});
   CHECK_EQUAL(r.field({3, 0}).name, "s");
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
+  const auto expected_definition = data{record{
+    {
+      "record",
+      record{
+        {"i", "int"},
+        {"r1",
+         record{
+           {
+             "record",
+             record{
+               {"p",
+                record{
+                  {"port", "int"},
+                }},
+               {"a", "addr"},
+             },
+           },
+         }},
+        {"b", "bool"},
+        {"r2",
+         record{
+           {
+             "record",
+             record{
+               {"s", "subnet"},
+             },
+           },
+         }},
+      },
+    },
+  }};
+  CHECK_EQUAL(rt.to_definition(), expected_definition);
 }
 
 TEST(record_type name resolving) {
@@ -575,9 +635,11 @@ TEST(record_type merging) {
      }},
     {"y", subnet_type{}},
   };
-  const auto expected_result_fail = caf::make_error(
-    ec::logic_error,
-    fmt::format("conflicting field x; failed to merge {} and {}", lhs, rhs));
+  const auto expected_result_fail
+    = caf::make_error(ec::logic_error, fmt::format("conflicting field x; "
+                                                   "failed to merge {} and "
+                                                   "{}",
+                                                   lhs, rhs));
   const auto result_prefer_right
     = merge(lhs, rhs, record_type::merge_conflict::prefer_right);
   const auto result_prefer_left
@@ -607,7 +669,8 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
   // Enumeration types cannot be inferred.
   CHECK_EQUAL(type::infer(enumeration{0}), type{});
-  // List and map types can only be inferred if the nested values can be inferred.
+  // List and map types can only be inferred if the nested values can be
+  // inferred.
   CHECK_EQUAL(type::infer(list{}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{caf::none}), list_type{type{}});
   CHECK_EQUAL(type::infer(list{bool{}}), list_type{bool_type{}});
@@ -737,6 +800,34 @@ TEST(aliases) {
   CHECK_EQUAL(aliases[2], t3);
   CHECK_EQUAL(aliases[3], t2);
   CHECK_EQUAL(aliases[4], t1);
+  const auto expected_definition = data{record{
+    {"foo",
+     record{
+       {"type",
+        record{
+          {"bar",
+           record{
+             {"type",
+              record{
+                {"baz",
+                 record{
+                   {"qux",
+                    record{
+                      {"type",
+                       record{
+                         {"quux", "bool"},
+                       }},
+                      {"attributes", list{"first"}},
+                    }},
+                 }},
+              }},
+             {"attributes", list{"second", "third"}},
+           }},
+        }},
+       {"attributes", list{"fourth"}},
+     }},
+  }};
+  CHECK_EQUAL(t7.to_definition(), expected_definition);
 }
 
 TEST(metadata layer merging) {
@@ -796,10 +887,11 @@ TEST(sorting) {
 }
 
 TEST(construct) {
-  // This type is taking from the "vast import test" generator feature. The
-  // default blueprint record type contains the duplicate field name "s", for
-  // which we must still be able to correctly create a record. This is achieved
-  // by internally using record::make_unsafe to allow for duplicates.
+  // This type is taking from the "vast import test" generator feature.
+  // The default blueprint record type contains the duplicate field name
+  // "s", for which we must still be able to correctly create a record.
+  // This is achieved by internally using record::make_unsafe to allow for
+  // duplicates.
   // TODO: This test will once we replace record with a better-suited data
   // structure that more clearly enforces its contract. The
   // `record::make_unsafe` functionality should not exist.
@@ -828,8 +920,8 @@ TEST(construct) {
 }
 
 TEST(sum type) {
-  // Returns a visitor that checks whether the expected concrete types are the
-  // types resulting in the visitation.
+  // Returns a visitor that checks whether the expected concrete types are
+  // the types resulting in the visitation.
   auto is_type = []<concrete_type... T>(const T&...) {
     return []<concrete_type... U>(const U&...) {
       return (std::is_same_v<T, U> && ...);
@@ -846,23 +938,29 @@ TEST(hashes) {
     auto hasher = std::hash<T>{};
     return hasher(value);
   };
-  // We're comparing strings here because that is easier to change from the log
-  // output in failed unit tests. :-)
+  // We're comparing strings here because that is easier to change from
+  // the log output in failed unit tests. :-)
   CHECK_EQUAL(fmt::format("0x{:X}", hash(type{})), "0xB51ACBDD64EF56FF");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(bool_type{})), "0x295A1E349D71CC23");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(bool_type{})), "0x295A1E349D71CC2"
+                                                        "3");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(integer_type{})), "0x5B0D4F0B0B16740"
                                                            "4");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(count_type{})), "0x529C2667783DB09D");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0x41615FDB30A38AAF");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(count_type{})), "0x529C2667783DB09"
+                                                         "D");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0x41615FDB30A38AA"
+                                                        "F");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(duration_type{})), "0x6C3BE97C5D5B269"
                                                             "A");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(time_type{})), "0xAD8E364A7A3BFE79");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(string_type{})), "0x2476398993549B5");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(time_type{})), "0xAD8E364A7A3BFE7"
+                                                        "9");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(string_type{})), "0x2476398993549B"
+                                                          "5");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(pattern_type{})), "0xE5A24AB16469BBD"
                                                            "B");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(address_type{})), "0xD1678F8D9318E8B"
                                                            "2");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(subnet_type{})), "0xA927755C10035193");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(subnet_type{})), "0xA927755C100351"
+                                                          "93");
   CHECK_EQUAL(fmt::format("0x{:X}",
                           hash(enumeration_type{{"a"}, {"b"}, {"c"}})),
               "0xFFF139D14A6FFAA4");
