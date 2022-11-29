@@ -34,6 +34,14 @@ env:
 
 jobs:
 
+  compose-version:
+    name: compose ver
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Configure
+        id: configure
+        run: docker compose version
+
   configure:
     name: Configure
     runs-on: ubuntu-20.04
