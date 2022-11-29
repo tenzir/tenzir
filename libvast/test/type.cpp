@@ -817,14 +817,24 @@ TEST(aliases) {
                        record{
                          {"quux", "bool"},
                        }},
-                      {"attributes", list{"first"}},
+                      {"attributes",
+                       record{
+                         {"first", caf::none},
+                       }},
                     }},
                  }},
               }},
-             {"attributes", list{"second", "third"}},
+             {"attributes",
+              record{
+                {"second", caf::none},
+                {"third", caf::none},
+              }},
            }},
         }},
-       {"attributes", list{"fourth"}},
+       {"attributes",
+        record{
+          {"fourth", caf::none},
+        }},
      }},
   }};
   CHECK_EQUAL(t7.to_definition(), expected_definition);

@@ -795,19 +795,19 @@ data type::to_definition() const noexcept {
   // required.
   auto attributes_enriched_definition
     = [&](data type_definition) noexcept -> data {
-    auto attributes_definition = list{};
+    auto attributes_definition = record::vector_type{};
     for (const auto& [key, value] : attributes(recurse::no)) {
       if (value.empty())
-        attributes_definition.push_back(std::string{key});
+        attributes_definition.emplace_back(std::string{key}, caf::none);
       else
-        attributes_definition.push_back(
-          record{{std::string{key}, std::string{value}}});
+        attributes_definition.emplace_back(std::string{key},
+                                           std::string{value});
     }
     if (attributes_definition.empty())
       return type_definition;
     return record{
       {"type", std::move(type_definition)},
-      {"attributes", std::move(attributes_definition)},
+      {"attributes", record::make_unsafe(std::move(attributes_definition))},
     };
   };
   // Check if there is an alias, and if there is then visit then one first.
