@@ -24,6 +24,20 @@
 
 namespace vast {
 
+TEST(type) {
+  const auto t = type{};
+  CHECK(!t);
+  CHECK_EQUAL(fmt::format("{}", t), "none");
+  const auto expected_definition_t = data{caf::none};
+  CHECK_EQUAL(t.to_definition(), expected_definition_t);
+  const auto at = type{type{}, {{"foo", "bar"}}};
+  CHECK(!at);
+  CHECK_EQUAL(fmt::format("{}", at), "none #foo=bar");
+  const auto expected_definition_at = data{
+    record{{"type", caf::none}, {"attributes", list{record{{"foo", "bar"}}}}}};
+  CHECK_EQUAL(at.to_definition(), expected_definition_at);
+}
+
 TEST(bool_type) {
   static_assert(concrete_type<bool_type>);
   static_assert(basic_type<bool_type>);
