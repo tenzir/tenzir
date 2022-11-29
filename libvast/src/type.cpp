@@ -850,12 +850,12 @@ data type::to_definition() const noexcept {
       };
     },
     [](const record_type& self) noexcept -> data {
-      auto definition = record::vector_type{};
+      auto definition = list{};
       definition.reserve(self.num_fields());
       for (const auto& [name, type] : self.fields())
-        definition.emplace_back(std::string{name}, type.to_definition());
+        definition.push_back(record{{std::string{name}, type.to_definition()}});
       return record{
-        {"record", record::make_unsafe(std::move(definition))},
+        {"record", std::move(definition)},
       };
     },
   };

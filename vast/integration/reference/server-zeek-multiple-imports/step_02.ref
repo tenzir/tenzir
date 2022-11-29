@@ -1,41 +1,81 @@
 [
   {
     "zeek.conn": {
-      "record": {
-        "ts": {
-          "timestamp": "time"
-        },
-        "uid": {
-          "type": "string",
-          "attributes": {
-            "index": "hash"
+      "record": [
+        {
+          "ts": {
+            "timestamp": "time"
           }
         },
-        "id.orig_h": "addr",
-        "id.orig_p": {
-          "port": "count"
+        {
+          "uid": {
+            "type": "string",
+            "attributes": {
+              "index": "hash"
+            }
+          }
         },
-        "id.resp_h": "addr",
-        "id.resp_p": {
-          "port": "count"
+        {
+          "id.orig_h": "addr"
         },
-        "proto": "string",
-        "service": "string",
-        "duration": "duration",
-        "orig_bytes": "count",
-        "resp_bytes": "count",
-        "conn_state": "string",
-        "local_orig": "bool",
-        "missed_bytes": "count",
-        "history": "string",
-        "orig_pkts": "count",
-        "orig_ip_bytes": "count",
-        "resp_pkts": "count",
-        "resp_ip_bytes": "count",
-        "tunnel_parents": {
-          "list": "string"
+        {
+          "id.orig_p": {
+            "port": "count"
+          }
+        },
+        {
+          "id.resp_h": "addr"
+        },
+        {
+          "id.resp_p": {
+            "port": "count"
+          }
+        },
+        {
+          "proto": "string"
+        },
+        {
+          "service": "string"
+        },
+        {
+          "duration": "duration"
+        },
+        {
+          "orig_bytes": "count"
+        },
+        {
+          "resp_bytes": "count"
+        },
+        {
+          "conn_state": "string"
+        },
+        {
+          "local_orig": "bool"
+        },
+        {
+          "missed_bytes": "count"
+        },
+        {
+          "history": "string"
+        },
+        {
+          "orig_pkts": "count"
+        },
+        {
+          "orig_ip_bytes": "count"
+        },
+        {
+          "resp_pkts": "count"
+        },
+        {
+          "resp_ip_bytes": "count"
+        },
+        {
+          "tunnel_parents": {
+            "list": "string"
+          }
         }
-      }
+      ]
     }
   }
 ]

@@ -347,35 +347,37 @@ TEST(record_type) {
   CHECK_EQUAL(r.field({3, 0}).name, "s");
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
   const auto expected_definition = data{record{
-    {
-      "record",
-      record{
-        {"i", "int"},
-        {"r1",
-         record{
-           {
-             "record",
-             record{
-               {"p",
+    {"record",
+     list{
+       record{{"i", "int"}},
+       record{
+         {"r1",
+          record{
+            {
+              "record",
+              list{
                 record{
-                  {"port", "int"},
-                }},
-               {"a", "addr"},
-             },
-           },
-         }},
-        {"b", "bool"},
-        {"r2",
-         record{
-           {
-             "record",
-             record{
-               {"s", "subnet"},
-             },
-           },
-         }},
-      },
-    },
+                  {"p",
+                   record{
+                     {"port", "int"},
+                   }},
+                },
+                record{{"a", "addr"}},
+              },
+            },
+          }},
+       },
+       record{{"b", "bool"}},
+       record{
+         {"r2",
+          record{
+            {"record",
+             list{
+               record{{"s", "subnet"}},
+             }},
+          }},
+       },
+     }},
   }};
   CHECK_EQUAL(rt.to_definition(), expected_definition);
 }
