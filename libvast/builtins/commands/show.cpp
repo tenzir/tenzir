@@ -173,11 +173,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
         });
   }
   if (show_schemas && !command_result.error()) {
-    auto catch_all_query = expression{predicate{
-      meta_extractor{meta_extractor::type},
-      relational_operator::not_equal,
-      data{""},
-    }};
+    auto catch_all_query = expression{negation{expression{}}};
     auto query_context
       = query_context::make_extract("show", self, std::move(catch_all_query));
     query_context.id = uuid::random();
