@@ -32,10 +32,10 @@ bash:
 	@bash
 
 define VAST_COMPOSE_OVERLAYS
--f ../../docker/quarto/docker-compose.yaml
--f ../../docker/quarto/docker-compose.bind.yaml
--f ../../docker/quarto/docker-compose.vast.yaml
--f ../../docker/vast/docker-compose.yaml
+-f ../../docker/compose/quarto.yaml
+-f ../../docker/compose/quarto.bind.yaml
+-f ../../docker/compose/quarto.vast.yaml
+-f ../../docker/compose/vast.yaml
 endef
 
 export VAST_COMPOSE_OVERLAYS

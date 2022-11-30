@@ -98,7 +98,7 @@ bash:
 # make docker TARGET=clean
 docker:
 	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \
-		-f ../docker/quarto/docker-compose.yaml \
-		-f ../docker/quarto/docker-compose.bind.yaml \
+		-f ../docker/compose/quarto.yaml \
+		-f ../docker/compose/quarto.bind.yaml \
 		run quarto \
 		make -C web $(TARGET)
