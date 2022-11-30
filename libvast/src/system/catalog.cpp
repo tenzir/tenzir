@@ -402,52 +402,6 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   // }
 }
 
-record catalog_state::status(status_verbosity v) const {
-  auto result = record{};
-  if (v >= status_verbosity::detailed) {
-    // The list of defined concepts
-    if (v >= status_verbosity::debug) {
-      // TODO: Replace with a generic to data converter.
-      auto to_list = [](concepts::range auto xs) {
-        list l;
-        for (const auto& x : xs)
-          l.emplace_back(x);
-        return l;
-      };
-      auto concepts_status = list{};
-      for (const auto& [name, definition] : taxonomies.concepts) {
-        auto concept_status = record{};
-        concept_status["name"] = name;
-        concept_status["description"] = definition.description;
-        concept_status["fields"] = to_list(definition.fields);
-        concept_status["concepts"] = to_list(definition.concepts);
-        concepts_status.push_back(std::move(concept_status));
-      }
-      result["concepts"] = std::move(concepts_status);
-      auto models_status = list{};
-      for (const auto& [name, definition] : taxonomies.models) {
-        auto model_status = record{};
-        model_status["name"] = name;
-        model_status["description"] = definition.description;
-        model_status["definition"] = to_list(definition.definition);
-        models_status.emplace_back(std::move(model_status));
-      }
-      result["models"] = std::move(models_status);
-      // Sorted list of all keys.
-      auto keys = std::vector<std::string>(type_data.size());
-      std::transform(type_data.begin(), type_data.end(), keys.begin(),
-                     [](const auto& x) {
-                       return x.first;
-                     });
-      std::sort(keys.begin(), keys.end());
-      result["types"] = to_list(keys);
-      // The usual per-component status.
-      detail::fill_status_map(result, self);
-    }
-  }
-  return result;
-}
-
 std::filesystem::path catalog_state::type_registry_filename() const {
   return type_registry_dir / fmt::format("type-registry.reg", name);
 }

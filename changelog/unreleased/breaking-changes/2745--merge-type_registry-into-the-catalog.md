@@ -1,1 +1,2 @@
-The `.type-registry` part of the `vast status` output is now in `.catalog`.
+`vast status` does not show type registry-related information anymore. Instead,
+refer to `vast show` for detailed type metadata information.

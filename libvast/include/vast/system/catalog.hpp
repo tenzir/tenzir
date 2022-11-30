@@ -70,9 +70,6 @@ public:
   /// Update the list of fields that should not be touched by the pruner.
   void update_unprunable_fields(const partition_synopsis& ps);
 
-  /// Summarizes the actor's state.
-  [[nodiscard]] record status(status_verbosity v) const;
-
   /// Create the path that the catalog's type registry is persisted at on disk.
   [[nodiscard]] std::filesystem::path type_registry_filename() const;
 
