@@ -70,5 +70,13 @@ docker compose run --no-TTY vast import --blocking suricata \
     < ../../vast/integration/data/suricata/eve.json
 ```
 
+You can also test it out on a real world dataset:
+```bash
+wget -O - -o /dev/null https://storage.googleapis.com/tenzir-public-data/malware-traffic-analysis.net/2020-eve.json.gz | \
+  gzip -d | \
+  head -n 1000 | \
+  docker compose run --no-TTY vast import --blocking suricata
+```
+
 Note: To avoid forwarding the same alert multiple times, we use the hash of the
 connection timestamp and the flow id as `sourceRef` of the TheHive alert.
