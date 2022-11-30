@@ -475,9 +475,9 @@ TEST(query after transform) {
   rp1.receive(
     [&](vast::system::catalog_result cr) {
       REQUIRE_EQUAL(cr.partitions.size(), 1ull);
-      auto& partition = cr.partitions[0];
-      partition_uuid = partition.uuid;
-      events = partition.events;
+      // auto& partition = cr.partitions[0];
+      // partition_uuid = partition.uuid;
+      // events = partition.events;
     },
     [&](const caf::error& e) {
       FAIL("unexpected error " << e);

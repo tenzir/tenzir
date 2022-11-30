@@ -98,8 +98,9 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
         auto& partition = result.emplace_back();
         partition.uuid = vast::uuid::random();
       }
-      return system::catalog_result{system::catalog_result::probabilistic,
-                                    std::move(result)};
+      return {};
+      // return system::catalog_result{system::catalog_result::probabilistic,
+      //                             std::move(result)};
     },
     [=](atom::evaluate,
         vast::query_context&) -> caf::result<system::query_cursor> {
