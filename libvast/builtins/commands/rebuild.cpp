@@ -417,40 +417,55 @@ struct rebuilder_state {
       .then(
         [this, finish](system::catalog_result& result) mutable {
           if (!run->options.all) {
-            std::erase_if(
-              result.partitions, [&](const partition_info& partition) {
+            for (auto& [type, entries] : result.partitions) {
+              auto& [exp, infos] = entries;
+              std::erase_if(infos, [&](const partition_info& partition) {
                 return partition.version >= version::partition_version;
               });
+            }
           }
           if (result.partitions.empty())
             return finish({}, true);
-          if (run->options.undersized)
-            std::erase_if(
-              result.partitions, [this](const partition_info& partition) {
+          if (run->options.undersized) {
+            for (auto& [type, entries] : result.partitions) {
+              auto& [exp, infos] = entries;
+              std::erase_if(infos, [&](const partition_info& partition) {
                 return static_cast<bool>(partition.schema)
                        && partition.events > detail::narrow_cast<size_t>(
                             detail::narrow_cast<double>(max_partition_size)
                             * undersized_threshold);
               });
+            }
+          }
           if (run->options.max_partitions < result.partitions.size()) {
-            std::stable_sort(result.partitions.begin(), result.partitions.end(),
-                             [](const auto& lhs, const auto& rhs) {
-                               return lhs.schema < rhs.schema;
-                             });
-            result.partitions.erase(
-              result.partitions.begin()
-                + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
-              result.partitions.end());
+            for (auto& [type, entries] : result.partitions) {
+              auto& [exp, infos] = entries;
+              std::stable_sort(infos.begin(), infos.end(),
+                               [](const auto& lhs, const auto& rhs) {
+                                 return lhs.schema < rhs.schema;
+                               });
+            }
+            for (auto& [type, entries] : result.partitions) {
+              auto& [exp, infos] = entries;
+              infos.erase(
+                infos.begin()
+                  + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
+                infos.end());
+            }
           }
           if (result.partitions.empty())
             return finish({});
           run->statistics.num_total = result.partitions.size();
-          run->statistics.num_heterogeneous
-            = std::count_if(result.partitions.begin(), result.partitions.end(),
-                            [](const partition_info& partition) {
-                              return !partition.schema;
-                            });
-          run->remaining_partitions = std::move(result.partitions);
+
+          for (auto& [type, entries] : result.partitions) {
+            auto& [exp, infos] = entries;
+            run->statistics.num_heterogeneous += std::count_if(
+              infos.begin(), infos.end(), [](const partition_info& partition) {
+                return !partition.schema;
+              });
+            run->remaining_partitions.insert(run->remaining_partitions.end(),
+                                             infos.begin(), infos.end());
+          }
           auto counter = detail::make_fanout_counter(
             run->options.parallel,
             [finish]() mutable {

@@ -94,8 +94,12 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
             // the transform to avoid unnecessary noise.
             auto partition_ids = std::vector<uuid>{};
             partition_ids.reserve(result.partitions.size());
-            for (const auto& partition : result.partitions)
-              partition_ids.push_back(partition.uuid);
+            for (const auto& [type, partition_infos] : result.partitions) {
+              const auto& [exp, partition_info_vec] = partition_infos;
+              for (const auto& info : partition_info_vec) {
+                partition_ids.push_back(info.uuid);
+              }
+            }
             self
               ->request(self->state.index_, caf::infinite, atom::apply_v,
                         transform, partition_ids, keep_original_partition::no)

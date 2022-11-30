@@ -79,10 +79,13 @@ catalog_result catalog_state::lookup(const expression& expr) const {
   auto result = lookup_impl(pruned);
   // Sort partitions by their max import time, returning the most recent
   // partitions first.
-  std::sort(result.begin(), result.end(),
-            [&](const partition_info& lhs, const partition_info& rhs) {
-              return lhs.max_import_time > rhs.max_import_time;
-            });
+  for (auto& [type, exp_partition_infos] : result) {
+    auto& [expression, infos] = exp_partition_infos;
+    std::sort(infos.begin(), infos.end(),
+              [&](const partition_info& lhs, const partition_info& rhs) {
+                return lhs.max_import_time > rhs.max_import_time;
+              });
+  }
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
   VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",
@@ -97,7 +100,7 @@ catalog_result catalog_state::lookup(const expression& expr) const {
   return catalog_result{catalog_result::probabilistic, std::move(result)};
 }
 
-std::vector<partition_info>
+catalog_result::partition_data
 catalog_state::lookup_impl(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   // The partition UUIDs must be sorted, otherwise the invariants of the
@@ -106,21 +109,22 @@ catalog_state::lookup_impl(const expression& expr) const {
   // ensure the post-condition of returning a sorted list. We currently
   // rely on `flat_map` already traversing them in the correct order, so
   // no separate sorting step is required.
-  using result_type = std::vector<partition_info>;
-  result_type memoized_partitions = {};
+  catalog_result::partition_data memoized_partitions = {};
   auto all_partitions = [&] {
     if (!memoized_partitions.empty() || synopses.empty())
       return memoized_partitions;
-    memoized_partitions.reserve(synopses.size());
     for (const auto& [partition, synopsis] : synopses) {
-      memoized_partitions.emplace_back(partition, synopsis->events,
-                                       synopsis->max_import_time,
-                                       synopsis->schema, synopsis->version);
+      for (const auto& [type, type_synopsis] : synopsis->type_synopses_) {
+        memoized_partitions[type].first = expr;
+        memoized_partitions[type].second.emplace_back(
+          partition, synopsis->events, synopsis->max_import_time,
+          synopsis->schema, synopsis->version);
+      }
     }
     return memoized_partitions;
   };
   auto f = detail::overload{
-    [&](const conjunction& x) -> result_type {
+    [&](const conjunction& x) -> catalog_result::partition_data {
       VAST_ASSERT(!x.empty());
       auto i = x.begin();
       auto result = lookup_impl(*i);
@@ -137,22 +141,26 @@ catalog_state::lookup_impl(const expression& expr) const {
         }
       return result;
     },
-    [&](const disjunction& x) -> result_type {
-      result_type result;
+    [&](const disjunction& x) -> catalog_result::partition_data {
+      catalog_result::partition_data result;
       auto string_synopsis_memo = detail::stable_set<std::string>{};
       for (const auto& op : x) {
         // TODO: A disjunction means that we can restrict the lookup to the
         // set of partitions that are outside of the current result set.
         auto xs = lookup_impl(op);
-        VAST_ASSERT(std::is_sorted(xs.begin(), xs.end()));
-        if (xs.size() == synopses.size())
-          return xs; // short-circuit
-        detail::inplace_unify(result, xs);
-        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+        for (const auto& [type, entries] : xs) {
+          const auto& [exp, infos] = entries;
+          // if (xs.size() == synopses.size())
+          // return xs; // short-circuit
+          VAST_ASSERT(std::is_sorted(infos.begin(), infos.end()));
+          detail::inplace_unify(result[type].second, infos);
+          VAST_ASSERT(std::is_sorted(result[type].second.begin(),
+                                     result[type].second.end()));
+        }
       }
       return result;
     },
-    [&](const negation&) -> result_type {
+    [&](const negation&) -> catalog_result::partition_data {
       // We cannot handle negations, because a synopsis may return false
       // positives, and negating such a result may cause false
       // negatives.
@@ -160,7 +168,7 @@ catalog_state::lookup_impl(const expression& expr) const {
       // synopses, but it should be possible to handle time or bool synopses.
       return all_partitions();
     },
-    [&](const predicate& x) -> result_type {
+    [&](const predicate& x) -> catalog_result::partition_data {
       // Performs a lookup on all *matching* synopses with operator and
       // data from the predicate of the expression. The match function
       // uses a qualified_record_field to determine whether the synopsis
@@ -168,7 +176,7 @@ catalog_state::lookup_impl(const expression& expr) const {
       auto search = [&](auto match) {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
         const auto& rhs = caf::get<data>(x.rhs);
-        result_type result;
+        catalog_result::partition_data result;
         for (const auto& [part_id, part_syn] : synopses) {
           for (const auto& [field, syn] : part_syn->field_synopses_) {
             if (match(field)) {
@@ -186,9 +194,10 @@ catalog_state::lookup_impl(const expression& expr) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.emplace_back(part_id, part_syn->events,
-                                      part_syn->max_import_time,
-                                      part_syn->schema, part_syn->version);
+                  result[field.type()].first = expr;
+                  result[field.type()].second.emplace_back(
+                    part_id, part_syn->events, part_syn->max_import_time,
+                    part_syn->schema, part_syn->version);
                   break;
                 }
                 // The field has no dedicated synopsis. Check if there is one
@@ -199,17 +208,19 @@ catalog_state::lookup_impl(const expression& expr) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.emplace_back(part_id, part_syn->events,
-                                      part_syn->max_import_time,
-                                      part_syn->schema, part_syn->version);
+                  result[field.type()].first = expr;
+                  result[field.type()].second.emplace_back(
+                    part_id, part_syn->events, part_syn->max_import_time,
+                    part_syn->schema, part_syn->version);
                   break;
                 }
               } else {
                 // The catalog couldn't rule out this partition, so we have
                 // to include it in the result set.
-                result.emplace_back(part_id, part_syn->events,
-                                    part_syn->max_import_time, part_syn->schema,
-                                    part_syn->version);
+                result[field.type()].first = expr;
+                result[field.type()].second.emplace_back(
+                  part_id, part_syn->events, part_syn->max_import_time,
+                  part_syn->schema, part_syn->version);
                 break;
               }
             }
@@ -223,11 +234,12 @@ catalog_state::lookup_impl(const expression& expr) const {
         return result;
       };
       auto extract_expr = detail::overload{
-        [&](const meta_extractor& lhs, const data& d) -> result_type {
+        [&](const meta_extractor& lhs,
+            const data& d) -> catalog_result::partition_data {
           if (lhs.kind == meta_extractor::type) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
-            result_type result;
+            catalog_result::partition_data result;
             for (const auto& [part_id, part_syn] : synopses) {
               for (const auto& [fqf, _] : part_syn->field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
@@ -235,9 +247,10 @@ catalog_state::lookup_impl(const expression& expr) const {
                 // short, so we're probably not hitting the allocator due to
                 // SSO.
                 if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
-                  result.emplace_back(part_id, part_syn->events,
-                                      part_syn->max_import_time,
-                                      part_syn->schema, part_syn->version);
+                  result[fqf.type()].first = expr;
+                  result[fqf.type()].second.emplace_back(
+                    part_id, part_syn->events, part_syn->max_import_time,
+                    part_syn->schema, part_syn->version);
                   break;
                 }
               }
@@ -245,7 +258,7 @@ catalog_state::lookup_impl(const expression& expr) const {
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
             return result;
           } else if (lhs.kind == meta_extractor::import_time) {
-            result_type result;
+            catalog_result::partition_data result;
             for (const auto& [part_id, part_syn] : synopses) {
               VAST_ASSERT(part_syn->min_import_time
                             <= part_syn->max_import_time,
@@ -256,9 +269,14 @@ catalog_state::lookup_impl(const expression& expr) const {
               };
               auto add = ts.lookup(x.op, caf::get<vast::time>(d));
               if (!add || *add) {
-                result.emplace_back(part_id, part_syn->events,
-                                    part_syn->max_import_time, part_syn->schema,
-                                    part_syn->version);
+                for (const auto& [type, type_synopsis] :
+                     part_syn->type_synopses_) {
+                  result[type].first = expr;
+                  result[type].second.emplace_back(part_id, part_syn->events,
+                                                   part_syn->max_import_time,
+                                                   part_syn->schema,
+                                                   part_syn->version);
+                }
               }
             }
             VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
@@ -266,7 +284,7 @@ catalog_state::lookup_impl(const expression& expr) const {
           } else if (lhs.kind == meta_extractor::field) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
-            result_type result;
+            catalog_result::partition_data result;
             const auto* s = caf::get_if<std::string>(&d);
             if (!s) {
               VAST_WARN("#field meta queries only support string "
@@ -289,9 +307,14 @@ catalog_state::lookup_impl(const expression& expr) const {
                 // operator is "positive" and matching is true, or both are
                 // negative.
                 if (!is_negated(x.op) == matching) {
-                  result.emplace_back(part_id, part_syn->events,
-                                      part_syn->max_import_time,
-                                      part_syn->schema, part_syn->version);
+                  for (const auto& [type, type_synopsis] :
+                       part_syn->type_synopses_) {
+                    result[type].first = expr;
+                    result[type].second.emplace_back(part_id, part_syn->events,
+                                                     part_syn->max_import_time,
+                                                     part_syn->schema,
+                                                     part_syn->version);
+                  }
                 }
               }
             }
@@ -302,7 +325,8 @@ catalog_state::lookup_impl(const expression& expr) const {
                     detail::pretty_type_name(this), lhs.kind);
           return all_partitions();
         },
-        [&](const field_extractor& lhs, const data& d) -> result_type {
+        [&](const field_extractor& lhs,
+            const data& d) -> catalog_result::partition_data {
           auto pred = [&](const auto& field) {
             auto match_name = [&] {
               auto field_name = field.field_name();
@@ -332,7 +356,8 @@ catalog_state::lookup_impl(const expression& expr) const {
           };
           return search(pred);
         },
-        [&](const type_extractor& lhs, const data& d) -> result_type {
+        [&](const type_extractor& lhs,
+            const data& d) -> catalog_result::partition_data {
           auto result = [&] {
             if (!lhs.type) {
               auto pred = [&](auto& field) {
@@ -356,11 +381,15 @@ catalog_state::lookup_impl(const expression& expr) const {
               const auto type = field.type();
               return type.attribute("timestamp").has_value();
             };
-            detail::inplace_unify(result, search(pred));
+            auto pred_search_result = search(pred);
+            for (const auto& [type, entries] : pred_search_result) {
+              const auto& [exp, infos] = entries;
+              detail::inplace_unify(result[type].second, infos);
+            }
           }
           return result;
         },
-        [&](const auto&, const auto&) -> result_type {
+        [&](const auto&, const auto&) -> catalog_result::partition_data {
           VAST_WARN("{} cannot process predicate: {}",
                     detail::pretty_type_name(this), x);
           return all_partitions();
@@ -368,7 +397,7 @@ catalog_state::lookup_impl(const expression& expr) const {
       };
       return caf::visit(extract_expr, x.lhs, x.rhs);
     },
-    [&](caf::none_t) -> result_type {
+    [&](caf::none_t) -> catalog_result::partition_data {
       VAST_ERROR("{} received an empty expression",
                  detail::pretty_type_name(this));
       VAST_ASSERT(!"invalid expression");

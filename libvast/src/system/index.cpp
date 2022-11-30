@@ -1528,11 +1528,16 @@ index(index_actor::stateful_pointer<index_state> self,
             VAST_DEBUG("{} got initial candidates {} and from catalog {}",
                        *self, candidates, midx_candidates);
             for (const auto initial_candidates = candidates;
-                 const auto& midx_candidate : midx_candidates)
-              if (std::find(initial_candidates.begin(),
-                            initial_candidates.end(), midx_candidate)
-                  == initial_candidates.end())
-                candidates.push_back(midx_candidate.uuid);
+                 const auto& [type, entries] : midx_candidates) {
+              const auto& [exp, infos] = entries;
+              for (const auto& info : infos) {
+                if (std::find(initial_candidates.begin(),
+                              initial_candidates.end(), info.uuid)
+                    == initial_candidates.end()) {
+                  candidates.push_back(info.uuid);
+                }
+              }
+            }
             // Allows the client to query further results after initial taste.
             auto query_id = query_context.id;
             auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);

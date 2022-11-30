@@ -27,6 +27,24 @@
 
 namespace vast::system {
 
+/// The result of a catalog query.
+struct catalog_result {
+  enum {
+    exact,
+    probabilistic,
+  } kind;
+
+  using partition_data
+    = std::map<type, std::pair<expression, std::vector<partition_info>>>;
+  partition_data partitions;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, catalog_result& x) {
+    return f(caf::meta::type_name("vast.system.catalog_result"), x.kind,
+             x.partitions);
+  }
+};
+
 /// The state of the CATALOG actor.
 struct catalog_state {
 public:
@@ -60,7 +78,7 @@ public:
   /// @returns A vector of UUIDs representing candidate partitions.
   [[nodiscard]] catalog_result lookup(const expression& expr) const;
 
-  [[nodiscard]] std::vector<partition_info>
+  [[nodiscard]] catalog_result::partition_data
   lookup_impl(const expression& expr) const;
 
   /// @returns A best-effort estimate of the amount of memory used for this
@@ -106,22 +124,6 @@ public:
   vast::module configuration_module = {};
   vast::taxonomies taxonomies = {};
   std::filesystem::path type_registry_dir = {};
-};
-
-/// The result of a catalog query.
-struct catalog_result {
-  enum {
-    exact,
-    probabilistic,
-  } kind;
-
-  std::vector<partition_info> partitions;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, catalog_result& x) {
-    return f(caf::meta::type_name("vast.system.catalog_result"), x.kind,
-             x.partitions);
-  }
 };
 
 /// The CATALOG is the first index actor that queries hit. The result
