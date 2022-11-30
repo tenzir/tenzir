@@ -115,7 +115,7 @@ struct source_state {
 /// @param reader The reader instance.
 /// @param table_slice_size The maximum size for a table slice.
 /// @param max_events The optional maximum amount of events to import.
-/// @param catalog The catalog for handling the type-registry.
+/// @param catalog The actor handle for the catalog component.
 /// @param local_module Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
