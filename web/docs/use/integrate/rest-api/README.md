@@ -48,11 +48,9 @@ vast start --commands="web server [...]"
 
 ## Authentication
 
-All requests must be authenticated by a valid authentication token,
-which is a short string that must be sent in the `X-VAST-Token` request
-header.
-
-You can generate a valid token on the command line as follows:
+Clients must authenticate all requests with a valid token. The token is a short
+string that clients put in the `X-VAST-Token` request header. You can generate a
+valid token on the command line:
 
 ```bash
 vast web generate-token
@@ -85,7 +83,8 @@ vast web server --mode=dev
 
 The server mode reflects the "traditional" mode of operation where VAST binds to
 a network interface. This mode only accepts HTTPS connections and requires a
-valid authentication token for every request.
+valid authentication token for every request. This is the default mode of
+operation.
 
 ![REST API - Server Mode](rest-api-server-mode.light.png#gh-light-mode-only)
 ![REST API - Server Mode](rest-api-server-mode.dark.png#gh-dark-mode-only)
@@ -95,10 +94,6 @@ Pass `--mode=server` to start the REST API in server mode:
 ```bash
 vast web server --mode=server
 ```
-
-:::info
-VAST defaults to this mode if you do not provide a specific mode via `--mode`.
-:::
 
 ### Upstream TLS Mode
 

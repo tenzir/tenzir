@@ -84,9 +84,7 @@ Fundamentally, the API serves two purposes:
 The frontend UI currently displays a status page for the installed VAST node.
 
 <!--- this weird markup is to render a border around the image --->
-<kbd>
-<img src="./vast-ui-experimental.png" alt="UI showing a status page">
-</kbd>
+![UI showing a status page](vast-ui-experimental.jpg)
 
 We have some exciting features planned for both of these. Stay tuned!
 
