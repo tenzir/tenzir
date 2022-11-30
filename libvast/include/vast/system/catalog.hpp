@@ -11,13 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/flat_map.hpp"
-#include "vast/detail/range_map.hpp"
-#include "vast/fbs/index.hpp"
-#include "vast/fbs/partition.hpp"
-#include "vast/ids.hpp"
 #include "vast/module.hpp"
 #include "vast/partition_synopsis.hpp"
-#include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/time_synopsis.hpp"
