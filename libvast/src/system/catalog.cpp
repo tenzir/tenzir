@@ -590,11 +590,11 @@ type_set catalog_state::types() const {
 
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant, const std::filesystem::path& dir) {
+        accountant_actor accountant, const std::filesystem::path& type_reg_dir) {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("vast.catalog");
   self->state.self = self;
-  self->state.type_registry_dir = dir;
+  self->state.type_registry_dir = type_reg_dir;
   // Register the exit handler.
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", *self, msg.source);

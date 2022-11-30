@@ -132,8 +132,9 @@ struct catalog_result {
 /// data. The CATALOG may return false positives but never false negatives.
 /// @param self The actor handle.
 /// @param accountant An actor handle to the accountant.
+/// @param type_reg_dir the folder for the type registry.
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant, const std::filesystem::path& dir);
+        accountant_actor accountant, const std::filesystem::path& type_reg_dir);
 
 } // namespace vast::system
