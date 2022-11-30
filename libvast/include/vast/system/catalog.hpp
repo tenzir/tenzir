@@ -82,10 +82,10 @@ public:
   [[nodiscard]] std::filesystem::path type_registry_filename() const;
 
   /// Save the type-registry to disk.
-  [[nodiscard]] caf::error save_to_disk() const;
+  [[nodiscard]] caf::error save_type_registry_to_disk() const;
 
   /// Load the type-registry from disk.
-  caf::error load_from_disk();
+  caf::error load_type_registry_from_disk();
 
   /// Store a new layout in the registry.
   void insert(vast::type layout);

@@ -418,12 +418,12 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
   // Register the exit handler.
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
-    if (auto err = self->state.save_to_disk())
+    if (auto err = self->state.save_type_registry_to_disk())
       VAST_ERROR("{} failed to persist state to disk: {}", *self, err);
     self->quit(msg.reason);
   });
   // Load existing state from disk if possible.
-  if (auto err = self->state.load_from_disk()) {
+  if (auto err = self->state.load_type_registry_from_disk()) {
     self->quit(std::move(err));
     return catalog_actor::behavior_type::make_empty_behavior();
   }
@@ -709,7 +709,7 @@ std::filesystem::path catalog_state::type_registry_filename() const {
   return type_registry_dir / fmt::format("type-registry.reg", name);
 }
 
-caf::error catalog_state::save_to_disk() const {
+caf::error catalog_state::save_type_registry_to_disk() const {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto entry_offsets
     = std::vector<flatbuffers::Offset<fbs::type_registry::Entry>>{};
@@ -741,7 +741,7 @@ caf::error catalog_state::save_to_disk() const {
   return io::save(type_registry_filename(), as_bytes(buffer));
 }
 
-caf::error catalog_state::load_from_disk() {
+caf::error catalog_state::load_type_registry_from_disk() {
   // Nothing to load is not an error.
   std::error_code err{};
   const auto dir_exists = std::filesystem::exists(type_registry_dir, err);
@@ -779,7 +779,7 @@ caf::error catalog_state::load_from_disk() {
       VAST_DEBUG("{} loaded state from disk", *self);
       // We save the new state already now before removing the old state just to
       // be save against crashes.
-      if (auto err = save_to_disk())
+      if (auto err = save_type_registry_to_disk())
         return err;
       if (!std::filesystem::remove(fname, err) || err)
         VAST_DEBUG("failed to delete legacy type-registry state");
