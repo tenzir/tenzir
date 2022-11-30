@@ -13,8 +13,9 @@ the VAST repository, and require having the repository checked out locally.
 :::info Docker Compose V2 CLI
 All examples shown use the [Docker Compose V2 CLI][docker-compose-v2-cli]. If
 using `docker compose` (with a space) does not work for you, try using
-`docker-compose` instead—although we don't test it explicitly, most commands
-should work that way as well.
+`docker-compose` instead. We don't test our scripts explicitly with this older
+version, so although most commands should work, we recommand upgrading to a
+recent version of Docker and Compose.
 :::
 
 [docker-compose-v2-cli]: https://docs.docker.com/compose/#compose-v2-and-the-new-docker-compose-command
@@ -30,10 +31,12 @@ docker compose up
 
 This fetches the latest version of VAST from Docker Hub.
 
-:::info Cached Images and Containers By default, Docker aggressively caches
-images and containers. To prevent Docker from re-using an image, pass `--pull
-always` (Compose v2.8+) to `docker compose up`. Similarly, to prevent Docker
-from re-using an already built container, pass `--force-recreate`. :::
+:::info Cached Images and Containers
+By default, Docker aggressively caches images and containers. To prevent Docker
+from re-using an image, pass `--pull always` (Compose v2.8+) to `docker compose
+up`. Similarly, to prevent Docker from re-using an already built container, pass
+`--force-recreate`.
+:::
 
 The `docker compose run` command makes interacting with VAST inside Docker
 Compose easy:

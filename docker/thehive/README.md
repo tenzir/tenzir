@@ -38,7 +38,7 @@ VAST server.
 
 If you want to connect to a VAST server running as a Docker Compose service,
 some extra networking settings required. Those are specified in
-`thehive.vast.yaml`. For instance from the `docker/compose/` directory run:
+`thehive.vast.yaml`. For instance from the `docker/compose` directory run:
 
 ```bash
 docker compose \
@@ -54,7 +54,7 @@ We provide a very basic integration script that listens on `suricata.alert`
 events and forwards them to TheHive. You can start it along the stack by
 running:
 ```bash
-# from the docker/compose/ directory
+# from the docker/compose directory
 export COMPOSE_FILE="vast.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:thehive.yaml"
 COMPOSE_FILE="$COMPOSE_FILE:thehive.vast.yaml"
@@ -65,7 +65,7 @@ docker compose up --build --detach
 
 To test the alert forwarding with some mock data, run:
 ```bash
-# from the docker/compose/ directory with the COMPOSE_FILE variable above
+# from the docker/compose directory with the COMPOSE_FILE variable above
 docker compose run --no-TTY vast import --blocking suricata \
     < ../../vast/integration/data/suricata/eve.json
 ```

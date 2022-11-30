@@ -10,7 +10,7 @@ We don't publish the Quarto Docker image, so you need to build it locally.
 The `quarto.bind.yaml` overlay contains the configurations to bind-mount
 the VAST repository on the Quarto container and avoid filesystem permission
 conflicts between the container and the host users. For instance, to run the
-Quarto build in the `web` directory, open a terminal in the `docker/compose/`
+Quarto build in the `web` directory, open a terminal in the `docker/compose`
 directory and run:
 
 ```bash
@@ -29,7 +29,7 @@ The `quarto.vast.yaml` overlay adds the settings to enable communication
 between the VAST binary in the Quarto image and the `vast` service (configured
 using the `vast` Compose configurations). To perform the Quarto build of the
 examples notebooks with a pristine `vast` service running in the background, in
-the `docker/compose/` directory run:
+the `docker/compose` directory run:
 
 ```bash
 export HOST_UID=$(id -u) 
