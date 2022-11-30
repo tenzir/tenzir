@@ -17,13 +17,11 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/set_operations.hpp"
 #include "vast/detail/stable_set.hpp"
-#include "vast/detail/string.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/type_registry.hpp"
-#include "vast/fbs/utils.hpp"
 #include "vast/flatbuffer.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
@@ -37,11 +35,8 @@
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
-#include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
-#include "vast/time.hpp"
 
-#include <caf/attach_stream_sink.hpp>
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
