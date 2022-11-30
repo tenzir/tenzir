@@ -36,15 +36,15 @@ To run the REST API as dedicated process, use the `web server` command:
 vast web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
 ```
 
-The server will only accept TLS requests by default. To allow clients to connect
-successfully, you need to pass a valid certificate and corresponding private key
-with the `--certfile` and `--keyfile` arguments.
-
 To run the server within the main VAST process, use a `start` command:
 
 ```bash
 vast start --commands="web server [...]"
 ```
+
+The server will only accept TLS requests by default. To allow clients to connect
+successfully, you need to pass a valid certificate and corresponding private key
+with the `--certfile` and `--keyfile` arguments.
 
 ## Authentication
 
