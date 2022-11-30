@@ -90,7 +90,7 @@ The frontend UI currently displays a status page for the installed VAST node.
 
 We have some exciting features planned for both of these. Stay tuned!
 
-[rest-api]: /api
+[rest-api]: /docs/use/integrate/rest-api
 [frontend-code]: https://github.com/tenzir/vast/tree/v2.4.0/plugins/web/ui
 
 ### Python Bindings
