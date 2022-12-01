@@ -19,10 +19,11 @@
 namespace vast {
 
 struct query_state {
+  using query_contexts = std::map<vast::type, vast::query_context>;
   static constexpr bool use_deep_to_string_formatter = true;
 
-  /// The query expression.
-  vast::query_context query_context;
+  /// The query expression for each schema.
+  query_contexts schema_query_context;
 
   /// The query client.
   system::receiver_actor<atom::done> client = {};
@@ -41,13 +42,19 @@ struct query_state {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.query_context, x.client,
+    return f(caf::meta::type_name("query_state"), x.schema_query_context, x.client,
              x.candidate_partitions, x.requested_partitions,
              x.scheduled_partitions, x.completed_partitions);
   }
 
   std::size_t memusage() const {
-    return sizeof(*this) + query_context.memusage();
+    auto total_query_context_memusage
+      = std::accumulate(schema_query_context.begin(),
+                        schema_query_context.end(), 0,
+                        [](auto value, const auto &schema_context_entry) {
+                          return value + schema_context_entry.second.memusage();
+                        });
+    return sizeof(*this) + total_query_context_memusage;
   }
 };
 

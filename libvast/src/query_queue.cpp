@@ -75,7 +75,7 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
   if (query_state.candidate_partitions != candidates.size())
     return caf::make_error(ec::unspecified, "the candidate set size must match "
                                             "the query state");
-  auto qid = query_state.query_context.id;
+  auto qid = query_state.schema_query_context.begin()->second.id;
   auto [query_state_it, emplace_success]
     = queries_.emplace(qid, std::move(query_state));
   if (!emplace_success)
@@ -84,7 +84,7 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
   for (const auto& cand : candidates) {
     auto it = std::find(partitions.begin(), partitions.end(), cand);
     if (it != partitions.end()) {
-      it->priority += query_state_it->second.query_context.priority;
+      it->priority += query_state_it->second.schema_query_context.begin()->second.priority;
       it->queries.push_back(qid);
       VAST_ASSERT(!detail::contains(inactive_partitions, cand),
                   "A partition must not be active and inactive at the same "
@@ -94,14 +94,15 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
     it
       = std::find(inactive_partitions.begin(), inactive_partitions.end(), cand);
     if (it != inactive_partitions.end()) {
-      it->priority += query_state_it->second.query_context.priority;
+      it->priority += query_state_it->second.schema_query_context.begin()->second.priority;
       it->queries.push_back(qid);
       partitions.push_back(std::move(*it));
+
       inactive_partitions.erase(it);
       continue;
     }
     partitions.push_back(
-      query_queue::entry{cand, query_state_it->second.query_context.priority,
+      query_queue::entry{cand, query_state_it->second.schema_query_context.begin()->second.priority,
                          std::vector{qid}, false});
   }
   // TODO: Insertion sort should be better.
@@ -204,7 +205,7 @@ std::optional<query_queue::entry> query_queue::next() {
           qid_it = inactive.queries.erase(qid_it);
           continue;
         }
-        inactive.priority += it->second.query_context.priority;
+        inactive.priority += it->second.schema_query_context.begin()->second.priority;
         ++qid_it;
       }
       inactive_partitions.push_back(std::move(inactive));

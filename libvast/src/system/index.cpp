@@ -979,27 +979,30 @@ void index_state::schedule_lookups() {
           schedule_lookups();
         }
       };
-      self
-        ->request(partition_actor, defaults::system::scheduler_timeout,
-                  atom::query_v, it->second.query_context)
-        .then(
-          [this, handle_completion, qid, pid = next->partition](uint64_t n) {
-            VAST_DEBUG("{} received {} results for query {} from partition {}",
-                       *self, n, qid, pid);
-            handle_completion();
-          },
-          [this, handle_completion, qid,
-           pid = next->partition](const caf::error& err) {
-            VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
-                      *self, qid, pid, err);
-            // We don't know if this was a transient error or if the
-            // partition/store is corrupted. However, the partition actor has
-            // possibly already exited so at least we have to clear it from the
-            // cache so that subsequent queries get a chance to respawn it
-            // cleanly instead of trying to talk to the dead.
-            inmem_partitions.drop(pid);
-            handle_completion();
-          });
+      for (const auto& [type, context] : it->second.schema_query_context) {
+        self
+          ->request(partition_actor, defaults::system::scheduler_timeout,
+                    atom::query_v, context)
+          .then(
+            [this, handle_completion, qid, pid = next->partition](uint64_t n) {
+              VAST_DEBUG("{} received {} results for query {} from partition "
+                         "{}",
+                         *self, n, qid, pid);
+              handle_completion();
+            },
+            [this, handle_completion, qid,
+             pid = next->partition](const caf::error& err) {
+              VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
+                        *self, qid, pid, err);
+              // We don't know if this was a transient error or if the
+              // partition/store is corrupted. However, the partition actor has
+              // possibly already exited so at least we have to clear it from
+              // the cache so that subsequent queries get a chance to respawn it
+              // cleanly instead of trying to talk to the dead.
+              inmem_partitions.drop(pid);
+              handle_completion();
+            });
+      }
     }
     running_partition_lookups++;
     num_scheduled++;
@@ -1020,11 +1023,11 @@ struct query_counters {
 auto get_query_counters(const query_queue& pending_queries) {
   auto result = query_counters{};
   for (const auto& [_, q] : pending_queries.queries()) {
-    if (q.query_context.priority == query_context::priority::low)
+    if (q.schema_query_context.begin()->second.priority == query_context::priority::low)
       result.num_low_prio++;
-    else if (q.query_context.priority == query_context::priority::normal)
+    else if (q.schema_query_context.begin()->second.priority == query_context::priority::normal)
       result.num_normal_prio++;
-    else if (q.query_context.priority == query_context::priority::high)
+    else if (q.schema_query_context.begin()->second.priority == query_context::priority::high)
       result.num_high_prio++;
     else
       result.num_custom_prio++;
@@ -1525,6 +1528,7 @@ index(index_actor::stateful_pointer<index_state> self,
           [=, candidates
               = std::move(candidates)](catalog_result& midx_result) mutable {
             auto& midx_candidates = midx_result.partitions;
+            std::map<vast::type, vast::query_context> query_contexts;
             VAST_DEBUG("{} got initial candidates {} and from catalog {}",
                        *self, candidates, midx_candidates);
             for (const auto initial_candidates = candidates;
@@ -1534,7 +1538,9 @@ index(index_actor::stateful_pointer<index_state> self,
                 if (std::find(initial_candidates.begin(),
                               initial_candidates.end(), info.uuid)
                     == initial_candidates.end()) {
+
                   candidates.push_back(info.uuid);
+                  query_contexts[type] = query_context;
                 }
               }
             }
@@ -1552,7 +1558,7 @@ index(index_actor::stateful_pointer<index_state> self,
             auto scheduled
               = std::min(num_candidates, self->state.taste_partitions);
             if (auto err = self->state.pending_queries.insert(
-                  query_state{.query_context = query_context,
+                  query_state{.schema_query_context = query_contexts,
                               .client = client,
                               .candidate_partitions = num_candidates,
                               .requested_partitions = scheduled},
@@ -1832,9 +1838,10 @@ index(index_actor::stateful_pointer<index_state> self,
       query_context.priority = query_context::priority::high;
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
+
       auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
       auto err = self->state.pending_queries.insert(
-        query_state{.query_context = query_context,
+        query_state{.schema_query_context = {{vast::type{}, query_context}},
                     .client = caf::actor_cast<receiver_actor<atom::done>>(
                       partition_transfomer),
                     .candidate_partitions = input_size,
