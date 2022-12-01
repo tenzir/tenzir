@@ -823,6 +823,7 @@ void index_state::decommission_active_partition(
   VAST_ASSERT(active_partition != active_partitions.end());
   const auto id = active_partition->second.id;
   const auto actor = std::exchange(active_partition->second.actor, {});
+  const auto type = active_partition->first;
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
   stage->out().close(active_partition->second.stream_slot);
@@ -830,7 +831,7 @@ void index_state::decommission_active_partition(
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
   VAST_ASSERT(!unpersisted.contains(id));
-  unpersisted[id] = actor;
+  unpersisted[id] = {type, actor};
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
   const auto part_dir = partition_path(id);
@@ -923,30 +924,36 @@ void index_state::schedule_lookups() {
                next->queries);
     // 2. Acquire the actor for the selected partition, potentially materializing
     //    it from its persisted state.
-    auto acquire = [&](const uuid& partition_id) -> partition_actor {
+    auto acquire =
+      [&](const uuid& partition_id) -> std::pair<vast::type, partition_actor> {
       // We need to first check whether the ID is the active partition or one
       // of our unpersisted ones. Only then can we dispatch to our LRU cache.
       partition_actor part;
-      for (const auto& [_, active_partition] : active_partitions) {
+      vast::type partition_type{};
+      for (const auto& [type, active_partition] : active_partitions) {
         if (active_partition.actor != nullptr
             && active_partition.id == partition_id) {
           part = active_partition.actor;
+          partition_type = type;
           break;
         }
       }
       if (!part) {
-        if (auto it = unpersisted.find(partition_id); it != unpersisted.end())
-          part = it->second;
-        else if (auto it = persisted_partitions.find(partition_id);
-                 it != persisted_partitions.end())
-          part = inmem_partitions.get_or_load(partition_id);
+        if (auto it = unpersisted.find(partition_id); it != unpersisted.end()) {
+          partition_type = it->second.first;
+          part = it->second.second;
+        } else if (auto it = persisted_partitions.find(partition_id);
+                   it != persisted_partitions.end()) {
+          auto inmem_part = inmem_partitions.get_or_load(partition_id);
+          part = inmem_part;
+        }
       }
       if (!part)
         VAST_WARN("{} failed to load partition {} that was part of a query",
                   *self, partition_id);
-      return part;
+      return std::pair<vast::type, partition_actor>{partition_type, part};
     };
-    auto partition_actor = acquire(next->partition);
+    auto [partition_type, partition_actor] = acquire(next->partition);
     if (!partition_actor) {
       // We need to mark failed partitions as completed to avoid clients going
       // out of sync.
@@ -979,30 +986,29 @@ void index_state::schedule_lookups() {
           schedule_lookups();
         }
       };
-      for (const auto& [type, context] : it->second.schema_query_context) {
-        self
-          ->request(partition_actor, defaults::system::scheduler_timeout,
-                    atom::query_v, context)
-          .then(
-            [this, handle_completion, qid, pid = next->partition](uint64_t n) {
-              VAST_DEBUG("{} received {} results for query {} from partition "
-                         "{}",
-                         *self, n, qid, pid);
-              handle_completion();
-            },
-            [this, handle_completion, qid,
-             pid = next->partition](const caf::error& err) {
-              VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
-                        *self, qid, pid, err);
-              // We don't know if this was a transient error or if the
-              // partition/store is corrupted. However, the partition actor has
-              // possibly already exited so at least we have to clear it from
-              // the cache so that subsequent queries get a chance to respawn it
-              // cleanly instead of trying to talk to the dead.
-              inmem_partitions.drop(pid);
-              handle_completion();
-            });
-      }
+      const auto& context = it->second.schema_query_context.at(partition_type);
+      self
+        ->request(partition_actor, defaults::system::scheduler_timeout,
+                  atom::query_v, context)
+        .then(
+          [this, handle_completion, qid, pid = next->partition](uint64_t n) {
+            VAST_DEBUG("{} received {} results for query {} from partition "
+                       "{}",
+                       *self, n, qid, pid);
+            handle_completion();
+          },
+          [this, handle_completion, qid,
+           pid = next->partition](const caf::error& err) {
+            VAST_WARN("{} failed to evaluate query {} for partition {}: {}",
+                      *self, qid, pid, err);
+            // We don't know if this was a transient error or if the
+            // partition/store is corrupted. However, the partition actor has
+            // possibly already exited so at least we have to clear it from
+            // the cache so that subsequent queries get a chance to respawn it
+            // cleanly instead of trying to talk to the dead.
+            inmem_partitions.drop(pid);
+            handle_completion();
+          });
     }
     running_partition_lookups++;
     num_scheduled++;
@@ -1023,11 +1029,14 @@ struct query_counters {
 auto get_query_counters(const query_queue& pending_queries) {
   auto result = query_counters{};
   for (const auto& [_, q] : pending_queries.queries()) {
-    if (q.schema_query_context.begin()->second.priority == query_context::priority::low)
+    if (q.schema_query_context.begin()->second.priority
+        == query_context::priority::low)
       result.num_low_prio++;
-    else if (q.schema_query_context.begin()->second.priority == query_context::priority::normal)
+    else if (q.schema_query_context.begin()->second.priority
+             == query_context::priority::normal)
       result.num_normal_prio++;
-    else if (q.schema_query_context.begin()->second.priority == query_context::priority::high)
+    else if (q.schema_query_context.begin()->second.priority
+             == query_context::priority::high)
       result.num_high_prio++;
     else
       result.num_custom_prio++;
@@ -1189,8 +1198,8 @@ index_state::status(status_verbosity v) const {
     auto& unpersisted
       = caf::get<list>(partitions.emplace("unpersisted", list{}).first->second);
     unpersisted.reserve(this->unpersisted.size());
-    for (const auto& [id, actor] : this->unpersisted)
-      partition_status(id, actor, unpersisted);
+    for (const auto& [id, actor_info] : this->unpersisted)
+      partition_status(id, actor_info.second, unpersisted);
     rs->content["partitions"] = std::move(partitions);
     // General state such as open streams.
   }
@@ -1364,7 +1373,7 @@ index(index_actor::stateful_pointer<index_state> self,
     std::vector<caf::actor> partitions;
     partitions.reserve(self->state.inmem_partitions.size() + 1);
     for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
-      partitions.push_back(caf::actor_cast<caf::actor>(part));
+      partitions.push_back(caf::actor_cast<caf::actor>(part.second));
     for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
       partitions.push_back(caf::actor_cast<caf::actor>(part));
     self->state.flush_to_disk();
@@ -1538,7 +1547,6 @@ index(index_actor::stateful_pointer<index_state> self,
                 if (std::find(initial_candidates.begin(),
                               initial_candidates.end(), info.uuid)
                     == initial_candidates.end()) {
-
                   candidates.push_back(info.uuid);
                   query_contexts[type] = query_context;
                 }

@@ -84,7 +84,8 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
   for (const auto& cand : candidates) {
     auto it = std::find(partitions.begin(), partitions.end(), cand);
     if (it != partitions.end()) {
-      it->priority += query_state_it->second.schema_query_context.begin()->second.priority;
+      it->priority
+        += query_state_it->second.schema_query_context.begin()->second.priority;
       it->queries.push_back(qid);
       VAST_ASSERT(!detail::contains(inactive_partitions, cand),
                   "A partition must not be active and inactive at the same "
@@ -94,16 +95,18 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
     it
       = std::find(inactive_partitions.begin(), inactive_partitions.end(), cand);
     if (it != inactive_partitions.end()) {
-      it->priority += query_state_it->second.schema_query_context.begin()->second.priority;
+      it->priority
+        += query_state_it->second.schema_query_context.begin()->second.priority;
       it->queries.push_back(qid);
       partitions.push_back(std::move(*it));
 
       inactive_partitions.erase(it);
       continue;
     }
-    partitions.push_back(
-      query_queue::entry{cand, query_state_it->second.schema_query_context.begin()->second.priority,
-                         std::vector{qid}, false});
+    partitions.push_back(query_queue::entry{
+      cand,
+      query_state_it->second.schema_query_context.begin()->second.priority,
+      std::vector{qid}, false});
   }
   // TODO: Insertion sort should be better.
   std::sort(partitions.begin(), partitions.end());
@@ -205,7 +208,8 @@ std::optional<query_queue::entry> query_queue::next() {
           qid_it = inactive.queries.erase(qid_it);
           continue;
         }
-        inactive.priority += it->second.schema_query_context.begin()->second.priority;
+        inactive.priority
+          += it->second.schema_query_context.begin()->second.priority;
         ++qid_it;
       }
       inactive_partitions.push_back(std::move(inactive));
