@@ -30,8 +30,6 @@ desc_short="${VAST_BUILD_VERSION_SHORT}"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 log "rev is ${vast_rev}"
 
-target="${STATIC_BINARY_TARGET:-vast}"
-
 cmakeFlags=""
 # Enable the bundled plugins by default.
 plugins=(
@@ -83,7 +81,7 @@ done
 
 read -r -d '' exp <<EOF || true
 let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
-pkgs.pkgsStatic."${target}".override {
+pkgs.pkgsStatic.vast.override {
   versionOverride = "${desc}";
   versionShortOverride = "${desc_short}";
   withPlugins = [ ${plugins[@]} ];
