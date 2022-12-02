@@ -65,11 +65,12 @@ query_context make_random_query_context() {
 uuid make_insert(query_queue& q, std::vector<uuid>&& candidates) {
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
-  /*REQUIRE_SUCCESS(q.insert(query_state{.query_context = query_context,
+  REQUIRE_SUCCESS(q.insert(query_state{.schema_query_context
+                                       = {{vast::type{}, query_context}},
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
                                        .requested_partitions = cands_size},
-                           std::move(candidates)));*/
+                           std::move(candidates)));
   return query_context.id;
 }
 
@@ -79,11 +80,12 @@ uuid make_insert(query_queue& q, std::vector<uuid>&& candidates,
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
   query_context.priority = priority;
-  /*REQUIRE_SUCCESS(q.insert(query_state{.query_context = query_context,
+  REQUIRE_SUCCESS(q.insert(query_state{.schema_query_context
+                                       = {{vast::type{}, query_context}},
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
                                        .requested_partitions = taste_size},
-                           std::move(candidates)));*/
+                           std::move(candidates)));
   return query_context.id;
 }
 
