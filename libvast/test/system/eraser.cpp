@@ -92,15 +92,15 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
       }};
     },
     [=](atom::resolve, vast::expression) -> system::catalog_result {
-      std::vector<vast::partition_info> result;
-      result.reserve(CANDIDATES_PER_MOCK_QUERY);
+      system::catalog_result::partition_data result;
       for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i) {
-        auto& partition = result.emplace_back();
+        auto exp_partition_pair = std::pair<expression, std::vector<partition_info>>{};
+        auto& partition = exp_partition_pair.second.emplace_back();
         partition.uuid = vast::uuid::random();
+        result[vast::type{std::to_string(i), vast::type{}}] = exp_partition_pair;
       }
-      return {};
-      // return system::catalog_result{system::catalog_result::probabilistic,
-      //                             std::move(result)};
+      return system::catalog_result{system::catalog_result::probabilistic,
+                                    std::move(result)};
     },
     [=](atom::evaluate,
         vast::query_context&) -> caf::result<system::query_cursor> {
