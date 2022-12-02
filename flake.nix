@@ -32,9 +32,7 @@
       inherit pkgs;
       packages = flake-utils.lib.flattenTree {
         vast = pkgs.vast;
-        vast-ci = pkgs.vast-ci;
         vast-static = pkgs.pkgsStatic.vast;
-        vast-ci-static = pkgs.pkgsStatic.vast-ci;
         staticShell = pkgs.mkShell {
           buildInputs = with pkgs; [
             git nixUnstable coreutils nix-prefetch-github
