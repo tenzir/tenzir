@@ -73,6 +73,10 @@ public:
   /// Erase this partition from the catalog.
   void erase(const uuid& partition);
 
+  caf::result<catalog_result> generate_candidates(
+    const vast::query_context& query_context,
+    const std::map<std::string, vast::type_set>& type_map) const;
+
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.

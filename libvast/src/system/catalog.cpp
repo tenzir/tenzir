@@ -73,6 +73,36 @@ void catalog_state::erase(const uuid& partition) {
   synopses.erase(partition);
 }
 
+caf::result<catalog_result> catalog_state::generate_candidates(
+  const vast::query_context& query_context,
+  const std::map<std::string, vast::type_set>& type_map) const {
+  bool has_expression = query_context.expr != vast::expression{};
+  bool has_ids = !query_context.ids.empty();
+  if (has_ids)
+    return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                 "not to have ids");
+  if (!has_expression)
+    return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                 "to have an expression");
+  auto start = std::chrono::steady_clock::now();
+  auto expr = resolve(taxonomies, query_context.expr, type_map).value();
+  auto result = lookup(expr);
+  duration runtime = std::chrono::steady_clock::now() - start;
+  auto id_str = fmt::to_string(query_context.id);
+  self->send(accountant, atom::metrics_v, "catalog.lookup.runtime", runtime,
+             metrics_metadata{
+               {"query", id_str},
+               {"issuer", query_context.issuer},
+             });
+  self->send(accountant, atom::metrics_v, "catalog.lookup.candidates",
+             result.partitions.size(),
+             metrics_metadata{
+               {"query", std::move(id_str)},
+               {"issuer", query_context.issuer},
+             });
+  return result;
+}
+
 catalog_result catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
   auto pruned = prune(expr, unprunable_fields);
@@ -690,63 +720,14 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       atom::candidates, const vast::type_set& type_set,
       const vast::query_context& query_context) -> caf::result<catalog_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
-      bool has_expression = query_context.expr != vast::expression{};
-      bool has_ids = !query_context.ids.empty();
-      if (has_ids)
-        return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                     "not to have ids");
-      if (!has_expression)
-        return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                     "to have an expression");
-      auto start = std::chrono::steady_clock::now();
-      auto expr = resolve(self->state.taxonomies, query_context.expr,
-                          {{"test", type_set}});
-      auto result = self->state.lookup(expr.value());
-      duration runtime = std::chrono::steady_clock::now() - start;
-      auto id_str = fmt::to_string(query_context.id);
-      self->send(self->state.accountant, atom::metrics_v,
-                 "catalog.lookup.runtime", runtime,
-                 metrics_metadata{
-                   {"query", id_str},
-                   {"issuer", query_context.issuer},
-                 });
-      self->send(self->state.accountant, atom::metrics_v,
-                 "catalog.lookup.candidates", result.partitions.size(),
-                 metrics_metadata{
-                   {"query", std::move(id_str)},
-                   {"issuer", query_context.issuer},
-                 });
-
-      return result;
+      return self->state.generate_candidates(query_context,
+                                             {{"test", type_set}});
     },
     [self](atom::candidates, const vast::query_context& query_context)
       -> caf::result<catalog_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
-      bool has_expression = query_context.expr != vast::expression{};
-      bool has_ids = !query_context.ids.empty();
-      if (has_ids)
-        return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                     "not to have ids");
-      if (!has_expression)
-        return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                     "to have an expression");
-      auto start = std::chrono::steady_clock::now();
-      auto result = self->state.lookup(query_context.expr);
-      duration runtime = std::chrono::steady_clock::now() - start;
-      auto id_str = fmt::to_string(query_context.id);
-      self->send(self->state.accountant, atom::metrics_v,
-                 "catalog.lookup.runtime", runtime,
-                 metrics_metadata{
-                   {"query", id_str},
-                   {"issuer", query_context.issuer},
-                 });
-      self->send(self->state.accountant, atom::metrics_v,
-                 "catalog.lookup.candidates", result.partitions.size(),
-                 metrics_metadata{
-                   {"query", std::move(id_str)},
-                   {"issuer", query_context.issuer},
-                 });
-      return result;
+      return self->state.generate_candidates(query_context,
+                                             self->state.type_data);
     },
     [self](atom::resolve,
            const expression& e) -> caf::result<vast::expression> {
