@@ -111,6 +111,12 @@ FileCopyrightText: Copyright (c) 2017-2022 Stiffstream <info@stiffstream.com>
 LicenseConcluded: BSD-3-Clause
 LicenseComment: https://github.com/Stiffstream/restinio
 
+SPDXID: SPDXRef-File
+FileName: ./libvast/include/vast/detail/streambuf.hpp
+FileCopyrightText: Copyright 2011-2018 Dominik Charousset
+LicenseConcluded: BSD-3-Clause
+LicenseComment: Includes code from https://github.com/actor-framework/actor-framework
+
 SPDXID: SPDXRef-Package
 PackageName: musl
 PackageHomePage: https://musl.libc.org
