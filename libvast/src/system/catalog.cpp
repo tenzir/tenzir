@@ -686,6 +686,39 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         = taxonomies{std::move(concepts), std::move(models)};
       return atom::ok_v;
     },
+    [self](
+      atom::candidates, const vast::type_set& type_set,
+      const vast::query_context& query_context) -> caf::result<catalog_result> {
+      VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
+      bool has_expression = query_context.expr != vast::expression{};
+      bool has_ids = !query_context.ids.empty();
+      if (has_ids)
+        return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                     "not to have ids");
+      if (!has_expression)
+        return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                     "to have an expression");
+      auto start = std::chrono::steady_clock::now();
+      auto expr = resolve(self->state.taxonomies, query_context.expr,
+                          {{"test", type_set}});
+      auto result = self->state.lookup(expr.value());
+      duration runtime = std::chrono::steady_clock::now() - start;
+      auto id_str = fmt::to_string(query_context.id);
+      self->send(self->state.accountant, atom::metrics_v,
+                 "catalog.lookup.runtime", runtime,
+                 metrics_metadata{
+                   {"query", id_str},
+                   {"issuer", query_context.issuer},
+                 });
+      self->send(self->state.accountant, atom::metrics_v,
+                 "catalog.lookup.candidates", result.partitions.size(),
+                 metrics_metadata{
+                   {"query", std::move(id_str)},
+                   {"issuer", query_context.issuer},
+                 });
+
+      return result;
+    },
     [self](atom::candidates, const vast::query_context& query_context)
       -> caf::result<catalog_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));

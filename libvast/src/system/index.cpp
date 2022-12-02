@@ -1585,7 +1585,11 @@ index(index_actor::stateful_pointer<index_state> self,
            vast::expression& expr) -> caf::result<catalog_result> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = vast::uuid::random();
-      return self->delegate(self->state.catalog, atom::candidates_v,
+      auto type_set = vast::type_set{};
+      for (const auto& [type, _] : self->state.active_partitions) {
+        type_set.insert(type);
+      }
+      return self->delegate(self->state.catalog, atom::candidates_v, type_set,
                             std::move(query_context));
     },
     [self](atom::query, const uuid& query_id, uint32_t num_partitions) {

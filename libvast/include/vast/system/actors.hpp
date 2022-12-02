@@ -230,6 +230,9 @@ using catalog_actor = typed_actor_fwd<
                   std::vector<augmented_partition_synopsis>>::with<atom::ok>,
   // Return the candidate partitions for a query.
   caf::replies_to<atom::candidates, vast::query_context>::with<catalog_result>,
+  // Return the candidate partitions for a query.
+  caf::replies_to<atom::candidates, vast::type_set,
+                  vast::query_context>::with<catalog_result>,
   // Internal telemetry loop.
   caf::reacts_to<atom::telemetry>,
   // Retrieves all known types.
