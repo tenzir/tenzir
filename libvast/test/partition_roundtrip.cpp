@@ -69,8 +69,8 @@ TEST(index roundtrip) {
   vast::system::index_state state(/*self = */ nullptr);
   // Both unpersisted and persisted partitions should show up in the created
   // flatbuffer.
-  // state.unpersisted[vast::uuid::random()] = nullptr;
-  // state.unpersisted[vast::uuid::random()] = nullptr;
+  state.unpersisted[vast::uuid::random()] = {};
+  state.unpersisted[vast::uuid::random()] = {};
   state.persisted_partitions.insert(vast::uuid::random());
   state.persisted_partitions.insert(vast::uuid::random());
   std::set<vast::uuid> expected_uuids;
@@ -216,8 +216,9 @@ TEST(empty partition roundtrip) {
   rp2.receive(
     [&](const vast::system::catalog_result& result) {
       const auto& candidates = result.partitions;
+      auto candidate_partition = candidates.begin()->second.second.front();
       REQUIRE_EQUAL(candidates.size(), 1ull);
-      // CHECK_EQUAL(candidates[0], state.data.id);
+      CHECK_EQUAL(candidate_partition.uuid, state.data.id);
     },
     [=](const caf::error& err) {
       FAIL(err);
