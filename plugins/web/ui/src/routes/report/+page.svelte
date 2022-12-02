@@ -2,9 +2,9 @@
   import MultiLine from '$lib/components/LayerCake/MultiLine/index.svelte';
   import Query from '$lib/components/Query.svelte';
   import Menu from '$lib/components/Menu.svelte';
-  import Editor from '$lib/components/Editor.svelte';
   import { capitalizeFirstLetter } from '$lib/util/strings';
   import Button from '$lib/components/Button.svelte';
+  import Authoring from '$lib/components/markdown/Authoring.svelte';
   let possibleBlocks = ['bytes', 'text', 'query'] as const;
 
   type Block = typeof possibleBlocks[number];
@@ -42,7 +42,7 @@
     {:else}
       <div class="text-l font-bold">Text</div>
       <div class="my-10">
-        <Editor />
+        <Authoring />
       </div>
     {/if}
   {/each}
