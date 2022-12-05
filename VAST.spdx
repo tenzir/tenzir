@@ -117,6 +117,12 @@ FileCopyrightText: Copyright 2011-2018 Dominik Charousset
 LicenseConcluded: BSD-3-Clause
 LicenseComment: Includes code from https://github.com/actor-framework/actor-framework
 
+SPDXID: SPDXRef-File
+FileName: ./libvast/test/detail/streambuf.cpp
+FileCopyrightText: Copyright 2011-2018 Dominik Charousset
+LicenseConcluded: BSD-3-Clause
+LicenseComment: Includes code from https://github.com/actor-framework/actor-framework
+
 SPDXID: SPDXRef-Package
 PackageName: musl
 PackageHomePage: https://musl.libc.org
