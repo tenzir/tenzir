@@ -1464,6 +1464,11 @@ dagre@^0.8.5:
     graphlib "^2.1.8"
     lodash "^4.17.15"
 
+date-picker-svelte@^2.2.4:
+  version "2.2.4"
+  resolved "https://registry.yarnpkg.com/date-picker-svelte/-/date-picker-svelte-2.2.4.tgz#42601b19112bfa36db8525400750e9044312f778"
+  integrity sha512-mpjSuzwpJS3LEQ8Y13mUtFckwNfW4sl3E6Pb2MhFiPz8iZvK2kSP3xJrYsEWqEj9kSZ+oAIOZVlfunc9UsPkkQ==
+
 debug@^4.0.0, debug@^4.1.1, debug@^4.3.2, debug@^4.3.4:
   version "4.3.4"
   resolved "https://registry.yarnpkg.com/debug/-/debug-4.3.4.tgz#1319f6579357f2338d3337d2cdd4914bb5dcc865"

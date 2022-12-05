@@ -1,86 +1,47 @@
 <script>
-  import { Html, LayerCake, Svg } from 'layercake';
-  import { scaleOrdinal, scaleLog } from 'd3-scale';
-  import { timeParse, timeFormat } from 'd3-time-format';
-  import { format, precisionFixed } from 'd3-format';
+  // @ts-nocheck
 
-  import MultiLine from '../_components/MultiLine.svelte';
-  import AxisX from '../_components/AxisX.svelte';
-  import AxisY from '../_components/AxisY.svelte';
-  import Key from '../_components/Key.html.svelte';
-  import { data } from './data';
+  import { getQuery } from '$lib/util/api';
+  import DatePicker from '$lib/components/DatePicker.svelte';
+  import Button from '$lib/components/Button.svelte';
+  import { groupZeekConnectionsByDay } from '$lib/util/misc';
 
-  /* --------------------------------------------
-   * Set what is our x key to separate it from the other series
-   */
-  const xKey = 'month';
-  const yKey = 'value';
-  const zKey = 'type';
+  import Bytes from './Bytes.svelte';
 
-  const seriesNames = Object.keys(data[0]).filter((d) => d !== xKey);
-  const seriesColors = ['#11e4b8', '#ff00cc'];
+  let startDate = new Date('2012-01-01');
+  let stopDate = new Date('2022-01-01');
 
-  const parseDate = timeParse('%Y-%m-%d');
+  let data;
+  const handleRun = async () => {
+    const queryResult = await getQuery(
+      `#type == "zeek.conn" && id.orig_h in 192.168.0.0/16 && :timestamp >= ${startDate
+        .toISOString()
+        .substring(0, 10)} && :timestamp <= ${stopDate.toISOString().substring(0, 10)}`,
+      1000000
+    ); // TODO manage limit
 
-  /* --------------------------------------------
-   * Create a "long" format that is a grouped series of data points
-   * Layer Cake uses this data structure and the key names
-   * set in xKey, yKey and zKey to map your data into each scale.
-   */
-  const dataLong = seriesNames.map((key) => {
-    return {
-      [zKey]: key,
-      values: data.map((d) => {
-        d[xKey] = typeof d[xKey] === 'string' ? parseDate(d[xKey]) : d[xKey]; // Conditional required for sapper
-        return {
-          [yKey]: +d[key],
-          [xKey]: d[xKey],
-          [zKey]: key
-        };
-      })
-    };
-  });
-
-  /* --------------------------------------------
-   * Make a flat array of the `values` of our nested series
-   * we can pluck the field set from `yKey` from each item
-   * in the array to measure the full extents
-   */
-  const flatten = (data) =>
-    data.reduce((memo, group) => {
-      return memo.concat(group.values);
-    }, []);
-
-  const formatTickX = timeFormat('%b. %e');
-  const formatTickY = (d) => format(`.${precisionFixed(d)}s`)(d);
+    const groupedEvents = groupZeekConnectionsByDay(queryResult?.events);
+    data = groupedEvents.map((d) => ({
+      day: d.day,
+      outbound: d.resp_bytes,
+      inbound: d.orig_bytes
+    }));
+  };
 </script>
 
-<div class="w-600px h-400px">
-  <LayerCake
-    padding={{ top: 7, right: 10, bottom: 20, left: 25 }}
-    x={xKey}
-    y={yKey}
-    z={zKey}
-    yScale={scaleLog().domain([1, 1000])}
-    zScale={scaleOrdinal()}
-    zRange={seriesColors}
-    flatData={flatten(dataLong)}
-    data={dataLong}
-  >
-    <Svg>
-      <AxisX
-        gridlines={false}
-        ticks={data.map((d) => d[xKey]).sort((a, b) => a - b)}
-        formatTick={formatTickX}
-        snapTicks={true}
-        tickMarks={true}
-        yTick={50}
-      />
-      <AxisY ticks={[10, 100, 1000]} formatTick={formatTickY} xTick={-40} />
-      <MultiLine />
-    </Svg>
-    <Html>
-      <Key shape="circle" />
-    </Html>
-  </LayerCake>
+<div>
+  <div class="flex m-2">
+    <div class="m-2">
+      <DatePicker bind:date={startDate} placeholder="start date(yyyy-MM-dd)" />
+    </div>
+    <div class="m-2">
+      <DatePicker bind:date={stopDate} placeholder="stop date(yyyy-MM-dd)" />
+    </div>
+    <div class="m-2">
+      <Button onClick={handleRun}>Run</Button>
+    </div>
+  </div>
+  {#if data}
+    <Bytes {data} />
+  {/if}
 </div>
