@@ -216,7 +216,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
              "uuids of maybe persisted partitions",
              state.persisted_partitions.size(), state.unpersisted.size());
   std::vector<flatbuffers::Offset<fbs::LegacyUUID>> partition_offsets;
-  for (auto uuid : state.persisted_partitions) {
+  for (const auto& [uuid, _] : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
       partition_offsets.push_back(*uuid_fb);
     else
@@ -294,8 +294,7 @@ filesystem_actor& partition_factory::filesystem() {
 
 partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
-  if (std::find(state_.persisted_partitions.begin(),
-                state_.persisted_partitions.end(), id)
+  if (state_.persisted_partitions.find(id)
       == state_.persisted_partitions.end())
     VAST_WARN("{} did not find partition {} in it's internal state, but tries "
               "to load it regardless",
@@ -546,7 +545,7 @@ caf::error index_state::load_from_disk() {
       }
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
-      persisted_partitions.insert(partition_uuid);
+      persisted_partitions[partition_uuid] = ps->schema;
       stats.layouts[std::string{ps->schema.name()}].count += ps->events;
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
@@ -615,7 +614,7 @@ caf::error index_state::load_from_disk() {
             VAST_VERBOSE("adding newly created partition {}", x.uuid);
             stats.layouts[std::string{x.synopsis->schema.name()}].count
               += x.synopsis->events;
-            persisted_partitions.insert(x.uuid);
+            persisted_partitions[x.uuid] = x.synopsis->schema;
             synopses->emplace(x.uuid, std::move(x.synopsis));
           }
         },
@@ -868,7 +867,7 @@ void index_state::decommission_active_partition(
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
-              persisted_partitions.insert(id);
+              persisted_partitions[id] = ps->schema;
               if (completion)
                 completion(caf::none);
             },
@@ -946,6 +945,7 @@ void index_state::schedule_lookups() {
                    it != persisted_partitions.end()) {
           auto inmem_part = inmem_partitions.get_or_load(partition_id);
           part = inmem_part;
+          partition_type = it->second;
         }
       }
       if (!part)
@@ -1550,7 +1550,6 @@ index(index_actor::stateful_pointer<index_state> self,
             }
             for (const auto initial_candidates = candidates;
                  const auto& [type, entries] : midx_candidates) {
-              query_contexts[type] = query_context;
               const auto& [exp, infos] = entries;
               for (const auto& info : infos) {
                 if (std::find(initial_candidates.begin(),
@@ -1957,15 +1956,15 @@ index(index_actor::stateful_pointer<index_state> self,
                           if (!apsv.empty())
                             self
                               ->request(self->state.catalog, caf::infinite,
-                                        atom::merge_v, std::move(apsv))
+                                        atom::merge_v, apsv)
                               .then(
-                                [self, deliver, new_partition_ids,
-                                 result = std::move(result)](atom::ok) mutable {
+                                [self, deliver,
+                                 result = std::move(result), apsv](atom::ok) mutable {
                                   // Update index statistics and list of
                                   // persisted partitions.
-                                  self->state.persisted_partitions.insert(
-                                    new_partition_ids.begin(),
-                                    new_partition_ids.end());
+                                  for (auto const& aps : apsv) {
+                                    self->state.persisted_partitions[aps.uuid] = aps.type;
+                                  }
                                   self->state.flush_to_disk();
                                   deliver(std::move(result));
                                 },
@@ -1978,13 +1977,13 @@ index(index_actor::stateful_pointer<index_state> self,
                           self
                             ->request(self->state.catalog, caf::infinite,
                                       atom::replace_v, old_partition_ids,
-                                      std::move(apsv))
+                                      apsv)
                             .then(
                               [self, deliver, old_partition_ids,
-                               new_partition_ids, result](atom::ok) mutable {
-                                self->state.persisted_partitions.insert(
-                                  new_partition_ids.begin(),
-                                  new_partition_ids.end());
+                               result, apsv](atom::ok) mutable {
+                                for (auto const& aps : apsv) {
+                                  self->state.persisted_partitions[aps.uuid] = aps.type;
+                                }
                                 self->state.flush_to_disk();
                                 self
                                   ->request(static_cast<index_actor>(self),

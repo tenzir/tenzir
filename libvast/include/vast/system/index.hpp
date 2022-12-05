@@ -263,7 +263,7 @@ struct index_state {
   detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
 
   /// The set of partitions that exist on disk.
-  std::unordered_set<uuid> persisted_partitions = {};
+  std::map<uuid, type> persisted_partitions = {};
 
   /// This set to true after the index finished reading the catalog state
   /// from disk.
