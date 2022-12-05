@@ -226,10 +226,10 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
   router->add_handler(
     method, path,
     [=, &self](request_handle_t req,
-               restinio::router::route_params_t /*route_params*/)
+               restinio::router::route_params_t route_params)
       -> restinio::request_handling_status_t {
-      auto response
-        = std::make_shared<restinio_response>(std::move(req), endpoint);
+      auto response = std::make_shared<restinio_response>(
+        std::move(req), std::move(route_params), endpoint);
       for (auto const& [field, value] : config.response_headers)
         response->add_header(field, value);
       self->send(dispatcher, atom::request_v, std::move(response),
