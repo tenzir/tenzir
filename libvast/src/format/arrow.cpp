@@ -10,7 +10,6 @@
 
 #include "vast/arrow_table_slice.hpp"
 #include "vast/arrow_table_slice_builder.hpp"
-#include "vast/chunk.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -21,7 +20,6 @@
 #include "vast/type.hpp"
 
 #include <arrow/api.h>
-#include <arrow/buffer.h>
 #include <arrow/io/stdio.h>
 #include <arrow/ipc/reader.h>
 #include <caf/none.hpp>
@@ -73,121 +71,103 @@ bool writer::layout(const std::shared_ptr<::arrow::Schema>& schema) {
   return false;
 }
 
-/// TODO: this is an exact copy from arrow_table_slice - better place?
-template <class Consumer>
-class record_batch_listener : public ::arrow::ipc::Listener {
-public:
-  ::arrow::Status OnEOS() override {
-    fmt::print(stderr, "tp;EOS!\n");
-    return ::arrow::Status::OK();
+arrow_istream_wrapper::arrow_istream_wrapper(std::shared_ptr<std::istream> input)
+  : input_(std::move(input)), pos_(0) {
+  set_mode(::arrow::io::FileMode::READ);
+}
+
+::arrow::Status arrow_istream_wrapper::Close() {
+  input_ = nullptr;
+  return ::arrow::Status::OK();
+}
+
+bool arrow_istream_wrapper::closed() const {
+  return input_ && input_->eof();
+}
+
+::arrow::Result<int64_t> arrow_istream_wrapper::Tell() const {
+  return pos_;
+}
+
+::arrow::Result<int64_t>
+arrow_istream_wrapper::Read(int64_t nbytes, void* out) {
+  if (input_) {
+    input_->read(static_cast<char*>(out), nbytes);
+    pos_ += nbytes;
+    return nbytes;
   }
+  return 0;
+}
 
-  explicit record_batch_listener(Consumer&& consumer)
-    : consumer_(std::forward<Consumer>(consumer)) {
-    // noop
-  }
-
-private:
-  ::arrow::Status OnRecordBatchDecoded(
-    std::shared_ptr<::arrow::RecordBatch> record_batch) override {
-    fmt::print(stderr, "tp; got record batch: {}\n", record_batch->num_rows());
-    const auto slice = table_slice{record_batch};
-    consumer_(slice);
-    return ::arrow::Status::OK();
-  }
-
-  Consumer consumer_;
-};
-
-std::shared_ptr<::arrow::Buffer>
-read_timeout(std::istream& in, int64_t chunk_size) {
-  auto buffer = ::arrow::AllocateResizableBuffer(chunk_size).ValueOrDie();
-  in.read(reinterpret_cast<char*>(buffer->mutable_data()), chunk_size);
-  auto bytes_read = in.gcount();
-  const auto shrink_to_fit = false;
-  VAST_ASSERT(buffer->size() >= bytes_read);
-  auto resize_status = buffer->Resize(in.gcount(), shrink_to_fit);
-  VAST_ASSERT(resize_status.ok(), resize_status.ToString().c_str());
-  return {std::move(buffer)};
+::arrow::Result<std::shared_ptr<::arrow::Buffer>>
+arrow_istream_wrapper::Read(int64_t nbytes) {
+  ARROW_ASSIGN_OR_RAISE(auto buffer, ::arrow::AllocateResizableBuffer(nbytes));
+  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
+                        Read(nbytes, buffer->mutable_data()));
+  ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
+  buffer->ZeroPadding();
+  return std::move(buffer);
 }
 
 reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
-  : vast::format::reader(options), input_(std::move(in)) {
-}
-
-template <class Callback>
-auto make_record_batch_listener(Callback&& callback) {
-  return std::make_shared<record_batch_listener<Callback>>(
-    std::forward<Callback>(callback));
+  : vast::format::reader(options),
+    input_(std::make_unique<arrow_istream_wrapper>(std::move(in))) {
 }
 
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
-  const auto chunk_size = uint64_t{65536};
   VAST_TRACE_SCOPE("{} {}", VAST_ARG(max_events), VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   // TODO: we currently ignore `max_slize_size` because we're just passing
   // through existing table slices / record batches from the producer system.
   VAST_ASSERT(max_slice_size > 0);
-  auto listener = make_record_batch_listener(f);
-  auto decoder = ::arrow::ipc::StreamDecoder{listener};
+  auto reader = ::arrow::ipc::RecordBatchStreamReader::Open(input_.get());
+  if (!reader.ok()) {
+    return caf::make_error(ec::logic_error,
+                           fmt::format("error creating stream reader: '{}'",
+                                       reader.status().ToString()));
+  }
   size_t produced = 0;
-  while (produced < max_events && !input_->eof()) {
-    auto b = read_timeout(*input_, chunk_size);
-    fmt::print(stderr, "tp;import::arrow: entering loop\n");
-    if (const auto& status = decoder.Consume(b); !status.ok()) {
-      fmt::print(stderr, "tp;error in consume: {}\n", status.ToString());
-      caf::make_error(ec::format_error, "arrow decoder refused bytes");
-    } else {
-      fmt::print(stderr, "tp;successfully consumed {} bytes\n", b->size());
-    }
-
+  while (produced < max_events) {
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
-      fmt::print(stderr, "tp;import::arrow: batch timeout\n");
       return caf::make_error(ec::timeout, "reached batch timeout");
     }
-
-    // input_->Peek(int64_t nbytes)
-    // if (const auto batch = (*reader)->ReadNext(); batch.ok()) {
-    //   fmt::print(stderr, "tp;import::arrow: got record batch\n");
-    //   // When the schema changes and a new IPC message begins, we see one
-    //   // record batch with status `OK` and `nullptr` as data and re-initialize
-    //   // the reader.
-    //   if (batch->batch != nullptr) {
-    //     fmt::print(stderr, "tp;import::arrow: batch w/ {} events\n",
-    //                batch->batch->num_rows());
-    //     const auto slice = table_slice{batch->batch};
-    //     f(slice);
-    //     produced += slice.rows();
-    //     ++batch_events_;
-    //     last_batch_sent_ = reader_clock::now();
-    //   } else {
-    //     fmt::print(stderr, "tp;import::arrow: empty batch, schema change\n");
-    //     reader = ::arrow::ipc::RecordBatchStreamReader::Open(input_.get());
-    //     if (!reader.ok()) {
-    //       return caf::make_error(
-    //         ec::logic_error, fmt::format("error creating stream reader: '{}'",
-    //                                      reader.status().ToString()));
-    //     }
-    //   }
-    // } else {
-    //   // Reading the next record batch yields an error if the input stream
-    //   // ends. We check if it's actually just eof or an actual error.
-    //   if (input_->closed()) {
-    //     return caf::make_error(ec::end_of_input, "input exhausted");
-    //   }
-    //   return caf::make_error(
-    //     ec::format_error, fmt::format("failed to read next record batch '{}'",
-    //                                   batch.status().ToString()));
-    // }
+    if (const auto batch = (*reader)->ReadNext(); batch.ok()) {
+      // When the schema changes and a new IPC message begins, we see one
+      // record batch with status `OK` and `nullptr` as data and re-initialize
+      // the reader.
+      if (batch->batch != nullptr) {
+        const auto slice = table_slice{batch->batch};
+        f(slice);
+        produced += slice.rows();
+        ++batch_events_;
+        last_batch_sent_ = reader_clock::now();
+      } else {
+        reader = ::arrow::ipc::RecordBatchStreamReader::Open(input_.get());
+        if (!reader.ok()) {
+          return caf::make_error(
+            ec::logic_error, fmt::format("error creating stream reader: '{}'",
+                                         reader.status().ToString()));
+        }
+      }
+    } else {
+      // Reading the next record batch yields an error if the input stream ends.
+      // We check if it's actually just eof or an actual error.
+      if (input_->closed()) {
+        return caf::make_error(ec::end_of_input, "input exhausted");
+      }
+      return caf::make_error(
+        ec::format_error, fmt::format("failed to read next record batch '{}'",
+                                      batch.status().ToString()));
+    }
   }
   return caf::none;
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {
-  input_ = std::move(in);
+  input_ = std::make_unique<arrow_istream_wrapper>(std::move(in));
 }
 
 caf::error reader::module([[maybe_unused]] vast::module m) {

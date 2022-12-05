@@ -85,7 +85,7 @@ TEST(arrow IPC write) {
   CHECK_EQUAL(slice_id, zeek_conn_log.size());
 }
 
-TEST(abcd) {
+TEST(arrow IPC read) {
   auto stream
     = arrow::io::BufferOutputStream::Create(1024, arrow::default_memory_pool())
         .ValueOrDie();

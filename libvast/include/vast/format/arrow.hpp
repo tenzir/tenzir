@@ -56,6 +56,30 @@ private:
   batch_writer_ptr current_batch_writer_;
 };
 
+/// Arrow InputStream API implementation over `std::istream`.
+/// Implemented by adapting `arrow::io::StdinStream adapted to use `std::istream`.
+class arrow_istream_wrapper : public ::arrow::io::InputStream {
+public:
+  explicit arrow_istream_wrapper(std::shared_ptr<std::istream> input);
+  ~arrow_istream_wrapper() override = default;
+
+  ::arrow::Status Close() override;
+
+  bool closed() const override;
+
+  ::arrow::Result<int64_t> Tell() const override;
+
+  ::arrow::Result<int64_t> Read(int64_t nbytes, void* out) override;
+
+  ::arrow::Result<std::shared_ptr<::arrow::Buffer>>
+
+  Read(int64_t nbytes) override;
+
+private:
+  std::shared_ptr<std::istream> input_;
+  int64_t pos_;
+};
+
 class reader final : public vast::format::reader {
 public:
   /// Constructs an Arrow IPC reader.
@@ -78,7 +102,7 @@ private:
   read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
   vast::module module_;
-  std::unique_ptr<std::istream> input_;
+  std::unique_ptr<arrow_istream_wrapper> input_;
 };
 
 } // namespace vast::format::arrow
