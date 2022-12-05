@@ -398,12 +398,20 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run Integration Tests
+      - name: Run VAST Tests
         run: |
           export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/test
+      - name: Run Cortex Neuron Tests
+        run: |
+          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/thehive/vast-cortex-neuron/tests/run service
+      - name: Run TheHive Tests
+        run: |
+          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export VAST_CONTAINER_REGISTRY=ghcr.io
           docker/thehive/test
 
   example-notebooks:
