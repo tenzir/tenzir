@@ -189,11 +189,10 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
   }
 
   auto slice(size_t first, size_t last) const {
-    std::vector<uuid> result;
+    std::set<uuid> result;
     if (first < ids.size())
       for (; first != std::min(last, ids.size()); ++first)
-        result.emplace_back(ids[first]);
-    std::sort(result.begin(), result.end());
+        result.insert(ids[first]);
     return result;
   }
 
@@ -205,7 +204,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     std::string expr = ":timestamp == 1970-01-01+";
     expr += hhmmss;
     expr += ".0";
-    std::vector<uuid> result;
+    std::set<uuid> result;
     auto query_context = vast::query_context::make_extract(
       "test", self, unbox(to<expression>(expr)));
     auto rp = self->request(catalog_act, caf::infinite,
@@ -213,10 +212,9 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     run();
     rp.receive(
       [&](catalog_result mdx_result) {
-        result.reserve(mdx_result.partitions.size());
         for (const auto& [_, exp_part_info] : mdx_result.partitions) {
           for (const auto& partition : exp_part_info.second) {
-            result.push_back(partition.uuid);
+            result.insert(partition.uuid);
           }
         }
       },
@@ -231,7 +229,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
   }
 
   auto lookup(catalog_actor& meta_idx, expression expr) {
-    std::vector<uuid> result;
+    std::set<uuid> result;
     auto query_context
       = vast::query_context::make_extract("test", self, std::move(expr));
     auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
@@ -239,17 +237,15 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     run();
     rp.receive(
       [&](catalog_result candidates) {
-        result.reserve(candidates.partitions.size());
         for (const auto& [_, exp_part_info] : candidates.partitions) {
           for (const auto& partition : exp_part_info.second) {
-            result.push_back(partition.uuid);
+            result.insert(partition.uuid);
           }
         }
       },
       [=](const caf::error& e) {
         FAIL(render(e));
       });
-    std::sort(result.begin(), result.end());
     return result;
   }
 
@@ -312,27 +308,27 @@ TEST(attribute extractor - time) {
   CHECK_EQUAL(timestamp_type_query("00:01:39"), slice(3));
   CHECK_EQUAL(timestamp_type_query("00:01:40"), empty());
   MESSAGE("check whether time-range queries return correct slices");
-  CHECK_EQUAL(timestamp_type_query("00:00:01", "00:00:10"), slice(0));
   CHECK_EQUAL(timestamp_type_query("00:00:10", "00:00:30"), slice(0, 2));
+  CHECK_EQUAL(timestamp_type_query("00:00:01", "00:00:10"), slice(0));
 }
 
 TEST(attribute extractor - type) {
-  auto foo = std::vector<uuid>{ids[0], ids[2]};
-  auto foobar = std::vector<uuid>{ids[1], ids[3]};
+  auto foo = std::set<uuid>{ids[0], ids[2]};
+  auto foobar = std::set<uuid>{ids[1], ids[3]};
   CHECK_EQUAL(lookup("#type == \"foo\""), foo);
   CHECK_EQUAL(lookup("#type == \"bar\""), empty());
   CHECK_EQUAL(lookup("#type != \"foo\""), foobar);
   CHECK_EQUAL(lookup("#type ~ /f.o/"), foo);
-  CHECK_EQUAL(lookup("#type ~ /f.*/"), ids);
+  CHECK_EQUAL(lookup("#type ~ /f.*/"), (std::set<uuid>{ids.begin(), ids.end()}));
   CHECK_EQUAL(lookup("#type ~ /x/"), empty());
-  CHECK_EQUAL(lookup("#type !~ /x/"), ids);
+  CHECK_EQUAL(lookup("#type !~ /x/"), (std::set<uuid>{ids.begin(), ids.end()}));
 }
 
 // Test the import timestamp meta extractor. Half the test data was set to
 // 1975, and the other half to 2015 in the fixture.
 TEST(attribute extractor - import time) {
-  const auto foo = std::vector<uuid>{ids[0], ids[2]};
-  const auto foobar = std::vector<uuid>{ids[1], ids[3]};
+  const auto foo = std::set<uuid>{ids[0], ids[2]};
+  const auto foobar = std::set<uuid>{ids[1], ids[3]};
   const auto y2k = unbox(to<data>("2000-01-01"));
   const auto y2021 = unbox(to<data>("2021-01-01"));
   const auto y2030 = unbox(to<data>("2030-01-01"));
@@ -356,9 +352,9 @@ TEST(attribute extractor - import time) {
                            relational_operator::greater_equal, y2030}};
   CHECK_EQUAL(lookup(older_than_y2k), foo);
   CHECK_EQUAL(lookup(newer_than_y2k), foobar);
-  CHECK_EQUAL(lookup(older_than_y2021), ids);
+  CHECK_EQUAL(lookup(older_than_y2021), (std::set<uuid>{ids.begin(), ids.end()}));
   CHECK_EQUAL(lookup(newer_than_y2021), empty());
-  CHECK_EQUAL(lookup(older_than_y2030), ids);
+  CHECK_EQUAL(lookup(older_than_y2030), (std::set<uuid>{ids.begin(), ids.end()}));
   CHECK_EQUAL(lookup(newer_than_y2030), empty());
 }
 
@@ -404,9 +400,9 @@ TEST(catalog with bool synopsis) {
   auto lookup_ = [&](std::string_view expr) {
     return lookup(meta_idx, expr);
   };
-  auto expected1 = std::vector<uuid>{id1};
-  auto expected2 = std::vector<uuid>{id2};
-  auto none = std::vector<uuid>{};
+  auto expected1 = std::set<uuid>{id1};
+  auto expected2 = std::set<uuid>{id2};
+  auto none = std::set<uuid>{};
   // Check by field name field.
   CHECK_EQUAL(lookup_("x == T"), expected1);
   CHECK_EQUAL(lookup_("x != F"), expected1);
@@ -441,14 +437,13 @@ TEST(catalog messages) {
   run();
   expr_response.receive(
     [this](catalog_result& candidates) {
-      auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
-      std::vector<uuid> actual;
+      auto expected = std::set<uuid>{ids.begin() + 1, ids.end()};
+      std::set<uuid> actual;
       for (const auto& [_, exp_part_info] : candidates.partitions) {
         for (const auto& part_info : exp_part_info.second) {
-          actual.emplace_back(part_info.uuid);
+          actual.insert(part_info.uuid);
         }
       }
-      std::sort(actual.begin(), actual.end());
       REQUIRE_EQUAL(actual.size(), expected.size());
       for (const auto& [actual_uuid, expected_uuid] :
            detail::zip(actual, expected)) {
