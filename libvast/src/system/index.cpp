@@ -1523,10 +1523,14 @@ index(index_actor::stateful_pointer<index_state> self,
         ids.emplace(query_context.id);
       }
       std::vector<uuid> candidates;
+      std::vector<vast::type> candidate_types;
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
-      for (const auto& [_, active_partition] : self->state.active_partitions)
+      for (const auto& [active_partition_type, active_partition] :
+           self->state.active_partitions) {
         candidates.push_back(active_partition.id);
+        candidate_types.emplace_back(active_partition_type);
+      }
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
       auto rp = self->make_response_promise<query_cursor>();
@@ -1534,21 +1538,25 @@ index(index_actor::stateful_pointer<index_state> self,
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
                   query_context)
         .then(
-          [=, candidates
-              = std::move(candidates)](catalog_result& midx_result) mutable {
+          [=, candidate_types = std::move(candidate_types),
+           candidates
+           = std::move(candidates)](catalog_result& midx_result) mutable {
             auto& midx_candidates = midx_result.partitions;
             std::map<vast::type, vast::query_context> query_contexts;
             VAST_DEBUG("{} got initial candidates {} and from catalog {}",
                        *self, candidates, midx_candidates);
+            for (const auto& candidate_type : candidate_types) {
+              query_contexts[candidate_type] = query_context;
+            }
             for (const auto initial_candidates = candidates;
                  const auto& [type, entries] : midx_candidates) {
+              query_contexts[type] = query_context;
               const auto& [exp, infos] = entries;
               for (const auto& info : infos) {
                 if (std::find(initial_candidates.begin(),
                               initial_candidates.end(), info.uuid)
                     == initial_candidates.end()) {
                   candidates.push_back(info.uuid);
-                  query_contexts[type] = query_context;
                 }
               }
             }
