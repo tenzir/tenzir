@@ -740,24 +740,25 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   if (!hints.empty())
     selection &= hints;
   // Do no rows qualify?
-  auto selection_rank = rank(selection);
-  if (selection_rank == 0)
+  if (!any(selection))
     return std::nullopt;
-  const auto has_expr = expr != expression{};
-  if (!has_expr) {
-    // Do all rows qualify?
-    if (rank(slice_ids) == selection_rank)
-      return slice;
-  } else {
+  // Evaluate the filter expression.
+  if (!caf::holds_alternative<caf::none_t>(expr)) {
     // Tailor the expression to the type; this is required for using the
     // evaluate function, which expects field and type extractors to be resolved
     // already.
     auto tailored_expr = tailor(expr, slice.layout());
     if (!tailored_expr)
       return {};
-    expr = std::move(*tailored_expr);
+    selection = evaluate(*tailored_expr, slice, selection);
+    // Do no rows qualify?
+    if (!any(selection))
+      return std::nullopt;
   }
-  // Get the desired encoding, and the already serialized layout.
+  // Do all rows qualify?
+  if (rank(selection) == slice.rows())
+    return slice;
+  // Start slicing and dicing.
   auto f = detail::overload{
     []() noexcept -> table_slice_encoding {
       die("cannot filter an invalid table slice");
@@ -768,7 +769,6 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   };
   table_slice_encoding implementation_id
     = visit(f, as_flatbuffer(slice.chunk_));
-  // Start slicing and dicing.
   auto builder
     = factory<table_slice_builder>::make(implementation_id, slice.layout());
   VAST_ASSERT(builder);
@@ -780,8 +780,6 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
       result.emplace_back(field.type);
     return result;
   }();
-  if (has_expr)
-    selection = evaluate(expr, slice, selection);
   for (auto id : select(selection)) {
     VAST_ASSERT(id >= offset);
     auto row = id - offset;
@@ -792,10 +790,8 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
       VAST_ASSERT(ret);
     }
   }
-  if (builder->rows() == 0)
-    return std::nullopt;
-  if (builder->rows() == slice.rows())
-    return slice;
+  VAST_ASSERT(builder->rows() != 0);
+  VAST_ASSERT(builder->rows() != slice.rows());
   auto new_slice = builder->finish();
   new_slice.import_time(slice.import_time());
   VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
