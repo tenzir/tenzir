@@ -445,15 +445,13 @@ jobs:
     strategy:
       matrix:
         nix:
+          # We keep this single entry matrix so we can add a non-static
+          # variation without much hassle in the future.
           - target: "vast"
             build-options: >-
               -DVAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
               -DVAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
               -DCPACK_PACKAGE_FILE_NAME:STRING="vast-${{ needs.configure.outputs.build-version }}"
-          - target: "vast-ci"
-            build-options: >-
-              -DVAST_ENABLE_AUTO_VECTORIZATION:BOOL=OFF
-              -DCPACK_PACKAGE_FILE_NAME:STRING="vast-ci-${{ needs.configure.outputs.build-version }}"
     env:
       BUILD_DIR: build
     steps:

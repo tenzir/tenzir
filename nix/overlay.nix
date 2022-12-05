@@ -24,11 +24,6 @@ in
     doCheck = false;
     doInstallCheck = !isStatic;
   });
-  arrow-cpp-no-simd = final.arrow-cpp.overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ [
-      "-DARROW_SIMD_LEVEL=NONE"
-    ];
-  });
   flatbuffers = prev.flatbuffers.overrideAttrs(_: rec {
     version = "1.12.0";
     src = prev.fetchFromGitHub {
@@ -173,11 +168,6 @@ in
     # https://github.com/NixOS/nixpkgs/issues/130963
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
   });
-  vast-ci = final.vast.override {
-    buildType = "CI";
-    arrow-cpp = final.arrow-cpp-no-simd;
-    packageName = "vast-ci";
-  };
   speeve = final.buildGoModule rec {
     pname = "speeve";
     version  = "0.1.3";

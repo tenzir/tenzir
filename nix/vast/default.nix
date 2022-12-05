@@ -30,9 +30,7 @@
 , withPlugins ? []
 , extraCmakeFlags ? []
 , disableTests ? true
-, buildType ? "Release"
 , buildAsPackage ? false
-, packageName ? "vast"
 , pkgsBuildHost
 }:
 let
@@ -92,7 +90,6 @@ stdenv.mkDerivation (rec {
   ];
 
   cmakeFlags = [
-    "-DCMAKE_BUILD_TYPE:STRING=${buildType}"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DVAST_VERSION_TAG=v${version}"
     "-DVAST_VERSION_SHORT=v${versionShort}"
@@ -103,8 +100,6 @@ stdenv.mkDerivation (rec {
     "-DVAST_ENABLE_VAST_REGENERATE=OFF"
     "-DVAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
     "-DCAF_ROOT_DIR=${caf}"
-  ] ++ lib.optionals (buildType == "CI") [
-    "-DVAST_ENABLE_ASSERTIONS=ON"
   ] ++ lib.optionals isStatic [
     "-DBUILD_SHARED_LIBS:BOOL=OFF"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
@@ -129,7 +124,6 @@ stdenv.mkDerivation (rec {
     "-UCMAKE_INSTALL_LOCALEDIR"
     "-DCMAKE_INSTALL_PREFIX=/opt/vast"
     "-DCPACK_GENERATOR=TGZ;DEB"
-    "-DCPACK_PACKAGE_NAME=${packageName}"
   ] ++ extraCmakeFlags;
 
   # The executable is run to generate the man page as part of the build phase.
