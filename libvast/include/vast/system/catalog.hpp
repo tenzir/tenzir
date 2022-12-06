@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/flat_map.hpp"
+#include "vast/expression.hpp"
 #include "vast/module.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/actors.hpp"
@@ -34,14 +35,13 @@ struct catalog_result {
     probabilistic,
   } kind;
 
-  using partition_data
-    = std::map<type, std::pair<expression, std::vector<partition_info>>>;
-  partition_data partitions;
+  expression exp;
+  std::vector<partition_info> partition_infos;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, catalog_result& x) {
-    return f(caf::meta::type_name("vast.system.catalog_result"), x.kind,
-             x.partitions);
+    return f(caf::meta::type_name("vast.system.catalog_result"), x.kind, x.exp,
+             x.partition_infos);
   }
 };
 
