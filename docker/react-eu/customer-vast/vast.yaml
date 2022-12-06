@@ -1,0 +1,13 @@
+vast:
+  pipelines:
+    hash_community_id:
+      - hash:
+          field: community_id
+          out: community_id_hash
+      - drop:
+          fields: [community_id]
+  pipeline-triggers:
+    export:
+      - pipeline: hash_community_id
+        location: server
+        events: [suricata.alert]
