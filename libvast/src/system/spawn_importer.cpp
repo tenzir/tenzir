@@ -12,6 +12,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"

@@ -11,6 +11,7 @@
 #include <vast/data.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
+#include <vast/system/catalog.hpp>
 #include <vast/system/node_control.hpp>
 #include <vast/system/spawn_or_connect_to_node.hpp>
 #include <vast/taxonomies.hpp>

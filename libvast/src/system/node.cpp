@@ -36,6 +36,7 @@
 #include "vast/plugin.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/accountant_config.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"

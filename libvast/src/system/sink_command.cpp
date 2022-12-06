@@ -20,6 +20,7 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"

@@ -16,6 +16,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"

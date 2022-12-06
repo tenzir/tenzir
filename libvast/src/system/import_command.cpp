@@ -15,6 +15,7 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/node_control.hpp"

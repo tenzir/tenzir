@@ -17,6 +17,7 @@
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
+#include <vast/system/catalog.hpp>
 #include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
 #include <vast/table_slice.hpp>

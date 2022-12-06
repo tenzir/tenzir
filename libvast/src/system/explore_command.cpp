@@ -13,6 +13,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/make_sink.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
