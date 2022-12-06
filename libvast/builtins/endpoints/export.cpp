@@ -39,7 +39,7 @@ static auto const* SPEC_V0 = R"_(
         required: true
         default: A query matching every event.
         description: The query expression to execute.
-        example: ":ip in 10.42.0.0/16"
+        example: ":addr in 10.42.0.0/16"
       - in: query
         name: limit
         schema:
