@@ -229,10 +229,8 @@ using catalog_actor = typed_actor_fwd<
   caf::replies_to<atom::replace, std::vector<uuid>,
                   std::vector<augmented_partition_synopsis>>::with<atom::ok>,
   // Return the candidate partitions for a query.
-  caf::replies_to<atom::candidates, vast::query_context>::with<catalog_result>,
-  // Return the candidate partitions for a query.
-  caf::replies_to<atom::candidates, vast::type_set,
-                  vast::query_context>::with<catalog_result>,
+  caf::replies_to<atom::candidates, vast::query_context,
+                  vast::type_set>::with<std::map<type, catalog_result>>,
   // Internal telemetry loop.
   caf::reacts_to<atom::telemetry>,
   // Retrieves all known types.
@@ -288,7 +286,7 @@ using index_actor = typed_actor_fwd<
   // Resolves a query to its candidate partitions.
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
-  caf::replies_to<atom::resolve, expression>::with<catalog_result>,
+  caf::replies_to<atom::resolve, expression>::with<std::map<type, catalog_result>>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<atom::query, uuid, uint32_t>,
   // Erases the given partition from the INDEX.

@@ -215,8 +215,8 @@ TEST(empty partition roundtrip) {
   run();
   rp2.receive(
     [&](const vast::system::catalog_result& result) {
-      const auto& candidates = result.partitions;
-      auto candidate_partition = candidates.begin()->second.second.front();
+      const auto& candidates = result.partition_infos;
+      auto candidate_partition = candidates.front();
       REQUIRE_EQUAL(candidates.size(), 1ull);
       CHECK_EQUAL(candidate_partition.uuid, state.data.id);
     },

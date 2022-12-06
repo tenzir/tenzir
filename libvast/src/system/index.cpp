@@ -294,8 +294,7 @@ filesystem_actor& partition_factory::filesystem() {
 
 partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
-  if (state_.persisted_partitions.find(id)
-      == state_.persisted_partitions.end())
+  if (state_.persisted_partitions.find(id) == state_.persisted_partitions.end())
     VAST_WARN("{} did not find partition {} in it's internal state, but tries "
               "to load it regardless",
               *state_.self, id);
@@ -1523,25 +1522,25 @@ index(index_actor::stateful_pointer<index_state> self,
         ids.emplace(query_context.id);
       }
       std::vector<uuid> candidates;
-      std::vector<vast::type> candidate_types;
+      type_set candidate_types;
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
       for (const auto& [active_partition_type, active_partition] :
            self->state.active_partitions) {
         candidates.push_back(active_partition.id);
-        candidate_types.emplace_back(active_partition_type);
+        candidate_types.insert(active_partition_type);
       }
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
       auto rp = self->make_response_promise<query_cursor>();
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
-                  query_context)
+                  query_context, candidate_types)
         .then(
           [=, candidate_types = std::move(candidate_types),
            candidates
-           = std::move(candidates)](catalog_result& midx_result) mutable {
-            auto& midx_candidates = midx_result.partitions;
+           = std::move(candidates)](std::map<type, catalog_result>& midx_result) mutable {
+            auto& midx_candidates = midx_result.begin()->second.partition_infos;
             std::map<vast::type, vast::query_context> query_contexts;
             VAST_DEBUG("{} got initial candidates {} and from catalog {}",
                        *self, candidates, midx_candidates);
@@ -1549,14 +1548,11 @@ index(index_actor::stateful_pointer<index_state> self,
               query_contexts[candidate_type] = query_context;
             }
             for (const auto initial_candidates = candidates;
-                 const auto& [type, entries] : midx_candidates) {
-              const auto& [exp, infos] = entries;
-              for (const auto& info : infos) {
-                if (std::find(initial_candidates.begin(),
-                              initial_candidates.end(), info.uuid)
-                    == initial_candidates.end()) {
-                  candidates.push_back(info.uuid);
-                }
+                 const auto& info : midx_candidates) {
+              if (std::find(initial_candidates.begin(),
+                            initial_candidates.end(), info.uuid)
+                  == initial_candidates.end()) {
+                candidates.push_back(info.uuid);
               }
             }
             // Allows the client to query further results after initial taste.
@@ -1588,16 +1584,16 @@ index(index_actor::stateful_pointer<index_state> self,
           });
       return rp;
     },
-    [self](atom::resolve,
-           vast::expression& expr) -> caf::result<catalog_result> {
+    [self](atom::resolve, vast::expression& expr)
+      -> caf::result<std::map<type, catalog_result>> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = vast::uuid::random();
       auto type_set = vast::type_set{};
       for (const auto& [type, _] : self->state.active_partitions) {
         type_set.insert(type);
       }
-      return self->delegate(self->state.catalog, atom::candidates_v, type_set,
-                            std::move(query_context));
+      return self->delegate(self->state.catalog, atom::candidates_v,
+                            std::move(query_context), std::move(type_set));
     },
     [self](atom::query, const uuid& query_id, uint32_t num_partitions) {
       if (auto err
@@ -1958,12 +1954,13 @@ index(index_actor::stateful_pointer<index_state> self,
                               ->request(self->state.catalog, caf::infinite,
                                         atom::merge_v, apsv)
                               .then(
-                                [self, deliver,
-                                 result = std::move(result), apsv](atom::ok) mutable {
+                                [self, deliver, result = std::move(result),
+                                 apsv](atom::ok) mutable {
                                   // Update index statistics and list of
                                   // persisted partitions.
                                   for (auto const& aps : apsv) {
-                                    self->state.persisted_partitions[aps.uuid] = aps.type;
+                                    self->state.persisted_partitions[aps.uuid]
+                                      = aps.type;
                                   }
                                   self->state.flush_to_disk();
                                   deliver(std::move(result));
@@ -1976,13 +1973,13 @@ index(index_actor::stateful_pointer<index_state> self,
                         } else { // keep == keep_original_partition::no
                           self
                             ->request(self->state.catalog, caf::infinite,
-                                      atom::replace_v, old_partition_ids,
-                                      apsv)
+                                      atom::replace_v, old_partition_ids, apsv)
                             .then(
-                              [self, deliver, old_partition_ids,
-                               result, apsv](atom::ok) mutable {
+                              [self, deliver, old_partition_ids, result,
+                               apsv](atom::ok) mutable {
                                 for (auto const& aps : apsv) {
-                                  self->state.persisted_partitions[aps.uuid] = aps.type;
+                                  self->state.persisted_partitions[aps.uuid]
+                                    = aps.type;
                                 }
                                 self->state.flush_to_disk();
                                 self

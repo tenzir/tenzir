@@ -65,25 +65,20 @@ public:
   /// Add a new partition synopsis.
   void merge(const uuid& partition, partition_synopsis_ptr);
 
-  /// Returns the partition synopsis for a specific partition.
-  /// Note that most callers will prefer to use `lookup()` instead.
-  /// @pre `partition` must be a valid key for this catalog.
-  partition_synopsis_ptr& at(const uuid& partition);
-
   /// Erase this partition from the catalog.
   void erase(const uuid& partition);
 
-  caf::result<catalog_result> generate_candidates(
-    const vast::query_context& query_context,
-    const std::map<std::string, vast::type_set>& type_map) const;
+  caf::expected<std::map<type, catalog_result>>
+  generate_candidates(const vast::query_context& query_context, const type_set& type_set) const;
 
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.
-  [[nodiscard]] catalog_result lookup(const expression& expr) const;
+  [[nodiscard]] std::map<type, catalog_result>
+  lookup(const expression& expr, const type_set& type_set) const;
 
-  [[nodiscard]] catalog_result::partition_data
-  lookup_impl(const expression& expr) const;
+  [[nodiscard]] catalog_result
+  lookup_impl(const expression& expr, const type& schema) const;
 
   /// @returns A best-effort estimate of the amount of memory used for this
   /// catalog (in bytes).
@@ -119,7 +114,8 @@ public:
   // We mainly iterate over the whole map and return a sorted set, for which
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
   // See also ae9dbed.
-  detail::flat_map<uuid, partition_synopsis_ptr> synopses = {};
+  std::unordered_map<vast::type, detail::flat_map<uuid, partition_synopsis_ptr>>
+    synopses = {};
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;

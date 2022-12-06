@@ -94,10 +94,12 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
     [=](atom::resolve, vast::expression) -> system::catalog_result {
       system::catalog_result::partition_data result;
       for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i) {
-        auto exp_partition_pair = std::pair<expression, std::vector<partition_info>>{};
+        auto exp_partition_pair
+          = std::pair<expression, std::vector<partition_info>>{};
         auto& partition = exp_partition_pair.second.emplace_back();
         partition.uuid = vast::uuid::random();
-        result[vast::type{std::to_string(i), vast::type{}}] = exp_partition_pair;
+        result[vast::type{std::to_string(i), vast::type{}}]
+          = exp_partition_pair;
       }
       return system::catalog_result{system::catalog_result::probabilistic,
                                     std::move(result)};

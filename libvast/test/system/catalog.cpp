@@ -212,10 +212,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     run();
     rp.receive(
       [&](catalog_result mdx_result) {
-        for (const auto& [_, exp_part_info] : mdx_result.partitions) {
-          for (const auto& partition : exp_part_info.second) {
-            result.insert(partition.uuid);
-          }
+        for (const auto& partition : mdx_result.partition_infos) {
+          result.insert(partition.uuid);
         }
       },
       [=](const caf::error& e) {
@@ -237,10 +235,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     run();
     rp.receive(
       [&](catalog_result candidates) {
-        for (const auto& [_, exp_part_info] : candidates.partitions) {
-          for (const auto& partition : exp_part_info.second) {
-            result.insert(partition.uuid);
-          }
+        for (const auto& partition : candidates.partition_infos) {
+          result.insert(partition.uuid);
         }
       },
       [=](const caf::error& e) {
@@ -319,7 +315,8 @@ TEST(attribute extractor - type) {
   CHECK_EQUAL(lookup("#type == \"bar\""), empty());
   CHECK_EQUAL(lookup("#type != \"foo\""), foobar);
   CHECK_EQUAL(lookup("#type ~ /f.o/"), foo);
-  CHECK_EQUAL(lookup("#type ~ /f.*/"), (std::set<uuid>{ids.begin(), ids.end()}));
+  CHECK_EQUAL(lookup("#type ~ /f.*/"),
+              (std::set<uuid>{ids.begin(), ids.end()}));
   CHECK_EQUAL(lookup("#type ~ /x/"), empty());
   CHECK_EQUAL(lookup("#type !~ /x/"), (std::set<uuid>{ids.begin(), ids.end()}));
 }
@@ -352,9 +349,11 @@ TEST(attribute extractor - import time) {
                            relational_operator::greater_equal, y2030}};
   CHECK_EQUAL(lookup(older_than_y2k), foo);
   CHECK_EQUAL(lookup(newer_than_y2k), foobar);
-  CHECK_EQUAL(lookup(older_than_y2021), (std::set<uuid>{ids.begin(), ids.end()}));
+  CHECK_EQUAL(lookup(older_than_y2021),
+              (std::set<uuid>{ids.begin(), ids.end()}));
   CHECK_EQUAL(lookup(newer_than_y2021), empty());
-  CHECK_EQUAL(lookup(older_than_y2030), (std::set<uuid>{ids.begin(), ids.end()}));
+  CHECK_EQUAL(lookup(older_than_y2030),
+              (std::set<uuid>{ids.begin(), ids.end()}));
   CHECK_EQUAL(lookup(newer_than_y2030), empty());
 }
 
@@ -439,10 +438,8 @@ TEST(catalog messages) {
     [this](catalog_result& candidates) {
       auto expected = std::set<uuid>{ids.begin() + 1, ids.end()};
       std::set<uuid> actual;
-      for (const auto& [_, exp_part_info] : candidates.partitions) {
-        for (const auto& part_info : exp_part_info.second) {
-          actual.insert(part_info.uuid);
-        }
+      for (const auto& part_info : candidates.partition_infos) {
+        actual.insert(part_info.uuid);
       }
       REQUIRE_EQUAL(actual.size(), expected.size());
       for (const auto& [actual_uuid, expected_uuid] :

@@ -474,8 +474,8 @@ TEST(query after transform) {
   run();
   rp1.receive(
     [&](vast::system::catalog_result cr) {
-      REQUIRE_EQUAL(cr.partitions.size(), 1ull);
-      auto& partition = cr.partitions.begin()->second.second.front();
+      REQUIRE_EQUAL(cr.partition_infos.size(), 1ull);
+      auto& partition = cr.partition_infos.front();
       partition_uuid = partition.uuid;
       events = partition.events;
     },
