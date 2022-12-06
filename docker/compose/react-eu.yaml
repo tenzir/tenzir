@@ -1,0 +1,39 @@
+version: "3"
+services:
+  customer-vast:
+    # TODO: Consider switching from latest to stable by default, which offers a
+    # better user experience. We can only do this after the release of VAST v2.4
+    # at the earliest, which will be the first release to offer a stable tag for
+    # Docker Hub.
+    image: ${VAST_CONTAINER_REGISTRY:-docker.io}/tenzir/vast:${VAST_CONTAINER_REF:-latest}
+    container_name: vast-customer-server
+    environment:
+      - VAST_ENDPOINT=customer-vast:42000
+    # ports:
+    #   - ${VAST_PORT:-42001}:42000
+    command:
+      - start
+    networks:
+      - vast
+  bridge-vast:
+    build:
+      context: ../react-eu/vast-bridge
+      args:
+        - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
+        - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
+    entrypoint:
+      - /entrypoint.sh
+      - vast
+      - "30"
+      - customer-vast:42000
+      - vast:42000
+    container_name: vast-bridge
+    networks:
+      - vast
+    depends_on:
+      - customer-vast
+      - vast
+
+networks:
+  vast:
+    driver: bridge

@@ -1,0 +1,10 @@
+ARG VAST_VERSION
+ARG VAST_CONTAINER_REGISTRY
+
+FROM $VAST_CONTAINER_REGISTRY/tenzir/vast:$VAST_VERSION
+
+USER root
+
+COPY sync_vast.sh /entrypoint.sh
+
+ENTRYPOINT [ "/entrypoint.sh" ]
