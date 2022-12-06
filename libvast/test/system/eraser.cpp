@@ -162,7 +162,7 @@ TEST(eraser on mock INDEX) {
   expect((atom::ping), from(aut).to(aut));
   expect((atom::run), from(aut).to(aut));
   expect((atom::resolve, vast::expression), from(aut).to(index));
-  expect((system::catalog_result), from(index).to(aut));
+  expect((std::map<vast::type, vast::system::catalog_result>), from(index).to(aut));
   expect((atom::apply, vast::pipeline_ptr, std::vector<vast::uuid>,
           vast::system::keep_original_partition),
          from(aut).to(index));
