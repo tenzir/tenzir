@@ -790,8 +790,8 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
       VAST_ASSERT(ret);
     }
   }
-  VAST_ASSERT(builder->rows() != 0);
-  VAST_ASSERT(builder->rows() != slice.rows());
+  VAST_ASSERT_CHEAP(builder->rows() != 0);
+  VAST_ASSERT_CHEAP(builder->rows() != slice.rows());
   auto new_slice = builder->finish();
   new_slice.import_time(slice.import_time());
   VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
