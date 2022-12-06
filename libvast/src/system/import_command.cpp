@@ -61,8 +61,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(pipelines.error());
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
+  auto guard = system::signal_monitor::run_guarded(sig_mon_thread, sys, self);
   const auto format = std::string{inv.name()};
   // Start the source.
   auto src_result = make_source(sys, format, inv, accountant, type_registry,

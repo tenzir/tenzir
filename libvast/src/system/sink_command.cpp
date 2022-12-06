@@ -86,8 +86,8 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   VAST_ASSERT(node != nullptr);
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto signal_guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
+  auto signal_guard
+    = system::signal_monitor::run_guarded(sig_mon_thread, sys, self);
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   VAST_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);

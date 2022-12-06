@@ -93,8 +93,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   VAST_INFO("VAST ({}) is listening on {}", version::version, listen_addr);
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
+  auto guard = system::signal_monitor::run_guarded(sig_mon_thread, sys, self);
   // Notify the service manager if it expects an update.
   if (auto error = systemd::notify_ready())
     return caf::make_message(std::move(error));

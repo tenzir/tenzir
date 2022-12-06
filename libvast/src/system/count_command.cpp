@@ -55,8 +55,7 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
   VAST_ASSERT(node != nullptr);
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
+  auto guard = system::signal_monitor::run_guarded(sig_mon_thread, sys, self);
   // Spawn COUNTER at the node.
   caf::actor cnt;
   auto args = invocation{options, "spawn counter", {*query}};
@@ -83,7 +82,13 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
     // Loop until false.
     (counting)
     // Message handlers.
-    ([&](uint64_t x) { result += x; }, [&](atom::done) { counting = false; });
+    (
+      [&](uint64_t x) {
+        result += x;
+      },
+      [&](atom::done) {
+        counting = false;
+      });
   std::cout << result << std::endl;
   return caf::none;
 }

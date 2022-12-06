@@ -21,7 +21,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <thread>
 
 using namespace caf;
 
@@ -30,6 +29,7 @@ namespace {
 // Keeps track of all signals by their value from 1 to 31. The flag at index 0
 // is used to tell whether a signal has been raised or not.
 std::atomic<bool> signals[32];
+std::condition_variable* cvp;
 
 extern "C" void signal_monitor_handler(int sig) {
   // Catch termination signals only once to allow forced termination by the OS
@@ -41,6 +41,7 @@ extern "C" void signal_monitor_handler(int sig) {
   }
   signals[0] = true;
   signals[sig] = true;
+  cvp->notify_one();
 }
 
 } // namespace
@@ -48,17 +49,22 @@ extern "C" void signal_monitor_handler(int sig) {
 namespace vast::system {
 
 std::atomic<bool> signal_monitor::stop;
+std::condition_variable signal_monitor::cv;
+std::mutex signal_monitor::m;
 
-void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
-                         actor receiver) {
+void signal_monitor::run(actor receiver) {
   [[maybe_unused]] static constexpr auto class_name = "signal_monitor";
+  cvp = &cv;
   VAST_DEBUG("{} sends signals to {}", class_name, receiver);
   for (auto s : {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2}) {
     VAST_DEBUG("{} registers signal handler for {}", class_name, strsignal(s));
     std::signal(s, &signal_monitor_handler);
   }
   while (!stop) {
-    std::this_thread::sleep_for(monitoring_interval);
+    {
+      std::unique_lock lk(m);
+      cv.wait(lk);
+    }
     if (signals[0]) {
       // TODO: this handling of singals is fundamentally unsafe, because we
       //       always have a race between the singal handler and this loop on
