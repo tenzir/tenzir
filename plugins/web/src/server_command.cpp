@@ -63,6 +63,15 @@ restinio::http_method_id_t to_restinio_method(vast::http_method method) {
   return restinio::http_method_get();
 }
 
+auto parse_query_params(std::string_view text)
+  -> caf::expected<restinio::query_string_params_t> {
+  try {
+    return restinio::parse_query(text);
+  } catch (restinio::exception_t& e) {
+    return caf::make_error(ec::parse_error, e.what());
+  }
+}
+
 struct request_dispatcher_state {
   request_dispatcher_state() = default;
 
@@ -112,24 +121,59 @@ request_dispatcher_actor::behavior_type request_dispatcher(
     },
     [self](atom::internal, atom::request, restinio_response_ptr& response,
            const rest_endpoint& endpoint, system::rest_handler_actor handler) {
-      // TODO: Also consider params in the request body here.
-      auto query_params = std::optional<restinio::query_string_params_t>{};
-      try {
-        query_params
-          = restinio::parse_query(response->request()->header().query());
-      } catch (restinio::exception_t& e) {
-        return response->abort(
-          400, fmt::format("failed to parse query parameters: {}\n", e.what()));
+      auto const& header = response->request()->header();
+      auto query_params = parse_query_params(header.query());
+      if (!query_params)
+        return response->abort(400, fmt::format("failed to parse query "
+                                                "parameters: "
+                                                "{}\n",
+                                                query_params.error()));
+      auto parser = simdjson::dom::parser{};
+      auto body_params = std::optional<simdjson::dom::object>{};
+      // POST requests can contain request parameters in their body in any
+      // format supported by the server. The client indicates the data format
+      // they used in the `Content-Type` header. See also
+      // https://stackoverflow.com/a/26717908/92560
+      if (header.method() == restinio::http_method_post()) {
+        auto const& body = response->request()->body();
+        auto maybe_content_type
+          = header.opt_value_of(restinio::http_field_t::content_type);
+        if (maybe_content_type == "application/x-www-form-urlencoded") {
+          query_params
+            = parse_query_params(response->request()->header().query());
+          if (!query_params)
+            return response->abort(400, fmt::format("failed to parse query "
+                                                    "parameters: "
+                                                    "{}\n",
+                                                    query_params.error()));
+        } else if (maybe_content_type == "application/json") {
+          auto json_params = parser.parse(body);
+          if (!json_params.is_object())
+            return response->abort(400, "invalid JSON body\n");
+          body_params = json_params.get_object();
+        } else {
+          return response->abort(400, "unsupported content type");
+        }
       }
+      auto const& route_params = response->route_params();
       vast::record params;
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
           auto restinio_name
             = restinio::string_view_t{name.data(), name.size()};
-          if (query_params->has(restinio_name)) {
-            auto string_value = std::string{(*query_params)[restinio_name]};
-            auto typed_value = caf::visit(
+          auto maybe_param = query_params->get_param(restinio_name);
+          if (!maybe_param)
+            maybe_param = route_params.get_param(restinio_name);
+          if (!maybe_param && body_params.has_value())
+            if (auto maybe_string = body_params->at_key(restinio_name);
+                maybe_string.is_string())
+              maybe_param = std::string_view{maybe_string.get_c_str()};
+          if (!maybe_param)
+            continue;
+          auto string_value = std::string{*maybe_param};
+          auto typed_value
+            = caf::visit(
               detail::overload{
                 [&string_value](const string_type&) -> caf::expected<data> {
                   return data{string_value};
@@ -150,13 +194,12 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                 },
               },
               leaf.field.type);
-            if (!typed_value) {
-              response->abort(
-                422, fmt::format("failed to parse parameter '{}'\n", name));
-              return;
-            }
-            params[name] = std::move(*typed_value);
+          if (!typed_value) {
+            response->abort(422, fmt::format("failed to parse parameter '{}'\n",
+                                             name));
+            return;
           }
+          params[name] = std::move(*typed_value);
         }
       }
       auto vast_request = vast::http_request{
@@ -183,10 +226,10 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
   router->add_handler(
     method, path,
     [=, &self](request_handle_t req,
-               restinio::router::route_params_t /*route_params*/)
+               restinio::router::route_params_t route_params)
       -> restinio::request_handling_status_t {
-      auto response
-        = std::make_shared<restinio_response>(std::move(req), endpoint);
+      auto response = std::make_shared<restinio_response>(
+        std::move(req), std::move(route_params), endpoint);
       for (auto const& [field, value] : config.response_headers)
         response->add_header(field, value);
       self->send(dispatcher, atom::request_v, std::move(response),

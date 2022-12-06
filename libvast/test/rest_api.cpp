@@ -76,7 +76,7 @@ TEST(OpenAPI specs) {
     auto spec = rest_plugin->openapi_specification(version);
     REQUIRE(caf::holds_alternative<vast::record>(spec));
     auto spec_record = caf::get<vast::record>(spec);
-    CHECK_EQUAL(endpoints.size(), spec_record.size());
+    auto endpoint_methods = size_t{0ull};
     for (auto const& [key, value] : spec_record) {
       auto path = to_express_format(key);
       auto endpoints_it = std::find_if(endpoints.begin(), endpoints.end(),
@@ -90,9 +90,11 @@ TEST(OpenAPI specs) {
       auto const& as_record = caf::get<vast::record>(value);
       auto method = method_to_string(endpoint.method);
       CHECK(as_record.contains(method));
+      endpoint_methods += as_record.size();
       // TODO: Implement a a more convenient accessor API into `vast::data`,
       // so we can also check things like number of parameters and content type.
     }
+    CHECK_EQUAL(endpoints.size(), endpoint_methods);
   }
 }
 
@@ -128,27 +130,51 @@ TEST(export endpoint) {
     = vast::plugins::find<vast::rest_endpoint_plugin>("api-export");
   REQUIRE(plugin);
   auto endpoints = plugin->rest_endpoints();
-  REQUIRE_EQUAL(endpoints.size(), 1ull);
-  auto const& export_endpoint = endpoints[0];
-  auto handler = plugin->handler(self->system(), test_node);
-  auto response = std::make_shared<test_response>();
-  auto request = vast::http_request{
-    .params = {
-      {"expression", "addr in 192.168.0.0/16"},
-      {"limit", vast::count{16}},
-    },
-    .response = response,
-  };
-  self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
-             std::move(request));
-  run();
-  CHECK_EQUAL(response->error_, caf::error{});
-  CHECK(!response->body_.empty());
-  auto padded_string = simdjson::padded_string{response->body_};
-  simdjson::dom::parser parser;
-  simdjson::dom::element doc;
-  auto error = parser.parse(padded_string).get(doc);
-  CHECK(!error);
+  REQUIRE_EQUAL(endpoints.size(), 2ull);
+  { // GET /export
+    auto const& export_endpoint = endpoints[0];
+    auto handler = plugin->handler(self->system(), test_node);
+    auto response = std::make_shared<test_response>();
+    auto request = vast::http_request{
+      .params = {
+        {"expression", "addr in 192.168.0.0/16"},
+        {"limit", vast::count{16}},
+      },
+      .response = response,
+    };
+    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
+               std::move(request));
+    run();
+    CHECK_EQUAL(response->error_, caf::error{});
+    CHECK(!response->body_.empty());
+    auto padded_string = simdjson::padded_string{response->body_};
+    simdjson::dom::parser parser;
+    simdjson::dom::element doc;
+    auto error = parser.parse(padded_string).get(doc);
+    CHECK(!error);
+  }
+  { // POST /export
+    auto const& export_endpoint = endpoints[1];
+    auto handler = plugin->handler(self->system(), test_node);
+    auto response = std::make_shared<test_response>();
+    auto request = vast::http_request{
+      .params = {
+        {"expression", "addr in 192.168.0.0/16"},
+        {"limit", vast::count{16}},
+      },
+      .response = response,
+    };
+    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
+               std::move(request));
+    run();
+    CHECK_EQUAL(response->error_, caf::error{});
+    CHECK(!response->body_.empty());
+    auto padded_string = simdjson::padded_string{response->body_};
+    simdjson::dom::parser parser;
+    simdjson::dom::element doc;
+    auto error = parser.parse(padded_string).get(doc);
+    CHECK(!error);
+  }
 }
 
 FIXTURE_SCOPE_END()
