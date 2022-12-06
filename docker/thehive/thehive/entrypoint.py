@@ -16,6 +16,10 @@ VAST_ENDPOINT = os.environ["VAST_ENDPOINT"]
 THEHIVE_URL = "http://localhost:9000"
 
 CONFIG_LOCATION = "/opt/thp/thehive/conf/application.conf"
+CHECKPOINT_LOCATION = "/opt/thp/thehive/conf/init-checkpoint"
+INCONSITENT_STATE_ERR = "Inconsistent initialization status. Clear the Cortex \
+and TheHive state completely then start again. If running with Compose, this \
+can be performed by running `docker compose down -v`"
 
 # Admin email is the default and should not be changed!
 CORTEX_ADMIN_EMAIL = "admin@thehive.local"
@@ -34,6 +38,29 @@ THEHIVE_ADMIN_PWD = os.environ["DEFAULT_ADMIN_PWD"]
 # Orgadmin is the user to interact with the cases/alerts
 THEHIVE_ORGADMIN_EMAIL = os.environ["DEFAULT_ORGADMIN_EMAIL"]
 THEHIVE_ORGADMIN_PWD = os.environ["DEFAULT_ORGADMIN_PWD"]
+
+
+def is_initialized() -> bool:
+    if not path.isfile(CHECKPOINT_LOCATION):
+        logging.info("TheHive and Cortex not initialized yet")
+        return False
+    with open(CHECKPOINT_LOCATION, "r") as checkpoint_file:
+        status = checkpoint_file.read()
+        if status != "COMPLETED":
+            raise Exception(INCONSITENT_STATE_ERR)
+        else:
+            logging.info("TheHive and Cortex already initialized")
+            return True
+
+
+def set_initialization_status(completed: bool):
+    with open(CHECKPOINT_LOCATION, "w") as checkpoint_file:
+        if completed:
+            logging.info("Setting init checkpoint to COMPLETED")
+            checkpoint_file.write("COMPLETED")
+        else:
+            logging.info("Setting init checkpoint to STARTED")
+            checkpoint_file.write("STARTED")
 
 
 def retry_until_timeout(retried_function, action_name: str, timeout: int):
@@ -222,9 +249,10 @@ def init_thehive():
 if __name__ == "__main__":
     # The init process fills the template and creates the config file
     # If the config file is not present, it means init wasn't executed yet
-    is_init = not path.isfile(CONFIG_LOCATION)
+    is_init = is_initialized()
+    set_initialization_status(completed=False)
 
-    if is_init:
+    if not is_init:
         init_cortex()
 
     thehive_proc = subprocess.Popen(
@@ -244,7 +272,8 @@ if __name__ == "__main__":
         120,
     )
 
-    if is_init:
+    if not is_init:
         init_thehive()
+        set_initialization_status(completed=True)
 
     exit(thehive_proc.wait())

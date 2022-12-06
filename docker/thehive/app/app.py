@@ -173,8 +173,9 @@ async def wait_for_alerts(timeout):
         except Exception as e:
             if time.time() - start > timeout:
                 raise Exception("Timed out trying to reach TheHive")
-            logger.debug(e)
-            await asyncio.sleep(1)
+            sleep_duration = 2
+            logger.debug(f"{e} Retryinng in {sleep_duration} second(s)")
+            await asyncio.sleep(sleep_duration)
 
 
 def count_alerts():
