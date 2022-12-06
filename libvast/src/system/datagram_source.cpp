@@ -17,6 +17,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/streambuf.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -28,10 +29,8 @@
 
 #include <caf/attach_continuous_stream_source.hpp>
 #include <caf/downstream.hpp>
-#include <caf/event_based_actor.hpp>
 #include <caf/io/broker.hpp>
 #include <caf/stateful_actor.hpp>
-#include <caf/streambuf.hpp>
 
 #include <chrono>
 #include <optional>
@@ -106,7 +105,7 @@ caf::behavior datagram_source(
       }
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
+      detail::arraybuf buf{msg.buf.data(), msg.buf.size()};
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
         self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
