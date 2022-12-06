@@ -71,13 +71,13 @@ TEST(index roundtrip) {
   // flatbuffer.
   state.unpersisted[vast::uuid::random()] = {};
   state.unpersisted[vast::uuid::random()] = {};
-  state.persisted_partitions.insert(vast::uuid::random());
-  state.persisted_partitions.insert(vast::uuid::random());
+  state.persisted_partitions[vast::uuid::random()] = {};
+  state.persisted_partitions[vast::uuid::random()] = {};
   std::set<vast::uuid> expected_uuids;
   for (auto& kv : state.unpersisted)
     expected_uuids.insert(kv.first);
-  for (auto& uuid : state.persisted_partitions)
-    expected_uuids.insert(uuid);
+  for (auto& persisted : state.persisted_partitions)
+    expected_uuids.insert(persisted.first);
   // Add some fake statistics
   state.stats.layouts["zeek.conn"] = vast::layout_statistics{54931u};
   // Serialize the index.
@@ -214,10 +214,10 @@ TEST(empty partition roundtrip) {
                            std::move(query_context));
   run();
   rp2.receive(
-    [&](const vast::system::catalog_result& result) {
-      const auto& candidates = result.partition_infos;
-      auto candidate_partition = candidates.front();
+    [&](const std::map<vast::type, vast::system::catalog_result>& candidates) {
       REQUIRE_EQUAL(candidates.size(), 1ull);
+      auto candidate_partition
+        = candidates.begin()->second.partition_infos.front();
       CHECK_EQUAL(candidate_partition.uuid, state.data.id);
     },
     [=](const caf::error& err) {
@@ -243,7 +243,8 @@ TEST(full partition roundtrip) {
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
-                vast::index_config{}, store_builder, store_id, store_header);
+                vast::index_config{}, store_builder, store_id, store_header,
+                std::make_shared<vast::taxonomies>());
   run();
   REQUIRE(partition);
   // Add data to the partition.

@@ -473,9 +473,9 @@ TEST(query after transform) {
   auto events = size_t{0ull};
   run();
   rp1.receive(
-    [&](vast::system::catalog_result cr) {
-      REQUIRE_EQUAL(cr.partition_infos.size(), 1ull);
-      auto& partition = cr.partition_infos.front();
+    [&](std::map<vast::type, vast::system::catalog_result> crs) {
+      REQUIRE_EQUAL(crs.size(), 1ull);
+      auto& partition = crs.begin()->second.partition_infos.front();
       partition_uuid = partition.uuid;
       events = partition.events;
     },

@@ -123,7 +123,8 @@ TEST(query pruning with index config) {
   auto index_opts = caf::settings{};
   auto partition
     = self->spawn(vast::system::active_partition, id, accountant, fs,
-                  index_opts, config1, store, store_id, store_header);
+                  index_opts, config1, store, store_id, store_header,
+                  std::make_shared<vast::taxonomies>());
   vast::detail::spawn_container_source(sys, zeek_conn_log, partition);
   run();
   auto ps = vast::partition_synopsis_ptr{};

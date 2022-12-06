@@ -352,6 +352,9 @@ struct index_state {
   std::vector<std::pair<caf::typed_response_promise<query_cursor>, query_context>>
     delayed_queries;
 
+  /// The taxonomies for querying.
+  std::shared_ptr<vast::taxonomies> taxonomies = {};
+
   constexpr static inline auto name = "index";
 };
 

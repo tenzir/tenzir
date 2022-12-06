@@ -42,6 +42,7 @@
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
+#include "vast/taxonomies.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
@@ -333,7 +334,8 @@ active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
   caf::settings index_opts, const index_config& synopsis_opts,
-  store_actor store, std::string store_id, chunk_ptr header) {
+  store_actor store, std::string store_id, chunk_ptr header,
+  std::shared_ptr<vast::taxonomies> taxonomies) {
   VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
                    VAST_ARG(id));
   self->state.self = self;
@@ -350,6 +352,7 @@ active_partition_actor::behavior_type active_partition(
     = get_or(index_opts, "cardinality", defaults::system::max_partition_size);
   self->state.store = std::move(store);
   self->state.synopsis_index_config = synopsis_opts;
+  self->state.taxonomies = taxonomies;
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
@@ -577,6 +580,13 @@ active_partition_actor::behavior_type active_partition(
     },
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
       auto rp = self->make_response_promise<uint64_t>();
+      auto resolved = resolve(*self->state.taxonomies, query_context.expr,
+                              self->state.data.synopsis->schema);
+      if (!resolved) {
+        rp.deliver(std::move(resolved.error()));
+        return rp;
+      }
+      query_context.expr = std::move(*resolved);
       // Don't bother with with indexers, etc. if we already have an id set.
       if (!query_context.ids.empty()) {
         // TODO: Depending on the selectivity of the query and the rank of the

@@ -415,76 +415,80 @@ struct rebuilder_state {
       ->request(catalog, caf::infinite, atom::candidates_v,
                 std::move(query_context))
       .then(
-        [this, finish](system::catalog_result& result) mutable {
-          if (!run->options.all) {
-            std::erase_if(
-              result.partition_infos, [&](const partition_info& partition) {
-                return partition.version >= version::partition_version;
-              });
-          }
-          if (result.partition_infos.empty())
-            return finish({}, true);
-          if (run->options.undersized) {
-            std::erase_if(
-              result.partition_infos, [&](const partition_info& partition) {
-                return static_cast<bool>(partition.schema)
-                       && partition.events > detail::narrow_cast<size_t>(
-                            detail::narrow_cast<double>(max_partition_size)
-                            * undersized_threshold);
-              });
-          }
-          if (run->options.max_partitions < result.partition_infos.size()) {
-            std::stable_sort(result.partition_infos.begin(),
-                             result.partition_infos.end(),
-                             [](const auto& lhs, const auto& rhs) {
-                               return lhs.schema < rhs.schema;
-                             });
-            result.partition_infos.erase(
-              result.partition_infos.begin()
-                + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
-              result.partition_infos.end());
-          }
-          if (result.partition_infos.empty())
-            return finish({});
-          run->statistics.num_total = result.partition_infos.size();
-
-          run->statistics.num_heterogeneous
-            += std::count_if(result.partition_infos.begin(),
-                             result.partition_infos.end(),
-                             [](const partition_info& partition) {
-                               return !partition.schema;
-                             });
-          run->remaining_partitions.insert(run->remaining_partitions.end(),
-                                           result.partition_infos.begin(),
-                                           result.partition_infos.end());
-          auto counter = detail::make_fanout_counter(
-            run->options.parallel,
-            [finish]() mutable {
-              finish({});
-            },
-            [finish](caf::error error) mutable {
-              finish(std::move(error));
-            });
-          if (run->options.automatic)
-            VAST_VERBOSE("{} triggered an automatic run for {} candidate "
-                         "partitions with {} threads",
-                         *self, run->statistics.num_total,
-                         run->options.parallel);
-          else
-            VAST_INFO("{} triggered a run for {} candidate partitions with {} "
-                      "threads",
-                      *self, run->statistics.num_total, run->options.parallel);
-          for (size_t i = 0; i < run->options.parallel; ++i) {
-            self
-              ->request(static_cast<rebuilder_actor>(self), caf::infinite,
-                        atom::internal_v, atom::rebuild_v)
-              .then(
-                [counter]() {
-                  counter->receive_success();
-                },
-                [counter](caf::error& error) {
-                  counter->receive_error(std::move(error));
+        [this, finish](
+          std::map<type, system::catalog_result>& catalog_result) mutable {
+          for (auto& [_, result] : catalog_result) {
+            if (!run->options.all) {
+              std::erase_if(
+                result.partition_infos, [&](const partition_info& partition) {
+                  return partition.version >= version::partition_version;
                 });
+            }
+            if (result.partition_infos.empty())
+              return finish({}, true);
+            if (run->options.undersized) {
+              std::erase_if(
+                result.partition_infos, [&](const partition_info& partition) {
+                  return static_cast<bool>(partition.schema)
+                         && partition.events > detail::narrow_cast<size_t>(
+                              detail::narrow_cast<double>(max_partition_size)
+                              * undersized_threshold);
+                });
+            }
+            if (run->options.max_partitions < result.partition_infos.size()) {
+              std::stable_sort(result.partition_infos.begin(),
+                               result.partition_infos.end(),
+                               [](const auto& lhs, const auto& rhs) {
+                                 return lhs.schema < rhs.schema;
+                               });
+              result.partition_infos.erase(
+                result.partition_infos.begin()
+                  + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
+                result.partition_infos.end());
+            }
+            if (result.partition_infos.empty())
+              return finish({});
+            run->statistics.num_total = result.partition_infos.size();
+
+            run->statistics.num_heterogeneous
+              += std::count_if(result.partition_infos.begin(),
+                               result.partition_infos.end(),
+                               [](const partition_info& partition) {
+                                 return !partition.schema;
+                               });
+            run->remaining_partitions.insert(run->remaining_partitions.end(),
+                                             result.partition_infos.begin(),
+                                             result.partition_infos.end());
+            auto counter = detail::make_fanout_counter(
+              run->options.parallel,
+              [finish]() mutable {
+                finish({});
+              },
+              [finish](caf::error error) mutable {
+                finish(std::move(error));
+              });
+            if (run->options.automatic)
+              VAST_VERBOSE("{} triggered an automatic run for {} candidate "
+                           "partitions with {} threads",
+                           *self, run->statistics.num_total,
+                           run->options.parallel);
+            else
+              VAST_INFO(
+                "{} triggered a run for {} candidate partitions with {} "
+                "threads",
+                *self, run->statistics.num_total, run->options.parallel);
+            for (size_t i = 0; i < run->options.parallel; ++i) {
+              self
+                ->request(static_cast<rebuilder_actor>(self), caf::infinite,
+                          atom::internal_v, atom::rebuild_v)
+                .then(
+                  [counter]() {
+                    counter->receive_success();
+                  },
+                  [counter](caf::error& error) {
+                    counter->receive_error(std::move(error));
+                  });
+            }
           }
         },
         [finish](caf::error& error) mutable {

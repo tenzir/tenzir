@@ -540,6 +540,7 @@ node_state::spawn_command(const invocation& inv,
         rp.deliver(expr.error());
         return make_message(expr.error());
       }
+      // TODO: Clean this up, this needs to be removed for pipeline executor
       self->request(catalog, caf::infinite, atom::resolve_v, std::move(*expr))
         .then(handle_taxonomies, [=](caf::error& err) mutable {
           rp.deliver(err);

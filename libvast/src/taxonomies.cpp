@@ -349,4 +349,10 @@ caf::expected<expression> resolve(const taxonomies& ts, const expression& e,
   return resolve_impl(ts, e, seen, true);
 }
 
+caf::expected<expression> resolve(const taxonomies& ts, const expression& e,
+                                  const vast::type& single_type) {
+  return resolve_impl(ts, e, {{std::string(single_type.name()), {single_type}}},
+                      true);
+}
+
 } // namespace vast

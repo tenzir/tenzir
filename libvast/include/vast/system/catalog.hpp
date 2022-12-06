@@ -69,13 +69,13 @@ public:
   void erase(const uuid& partition);
 
   caf::expected<std::map<type, catalog_result>>
-  generate_candidates(const vast::query_context& query_context, const type_set& type_set) const;
+  generate_candidates(const vast::query_context& query_context) const;
 
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.
-  [[nodiscard]] std::map<type, catalog_result>
-  lookup(const expression& expr, const type_set& type_set) const;
+  [[nodiscard]] caf::expected<std::map<type, catalog_result>>
+  lookup(const expression& expr) const;
 
   [[nodiscard]] catalog_result
   lookup_impl(const expression& expr, const type& schema) const;

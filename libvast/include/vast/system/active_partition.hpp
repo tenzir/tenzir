@@ -162,6 +162,9 @@ struct active_partition_state {
 
   // Vector of flush listeners.
   std::vector<flush_listener_actor> flush_listeners = {};
+
+  // Taxonomies for querying.
+  std::shared_ptr<vast::taxonomies> taxonomies = {};
 };
 
 // -- flatbuffers --------------------------------------------------------------
@@ -186,12 +189,14 @@ pack_full(const active_partition_state::serialization_data& x,
 /// @param store_header A binary blob that allows reconstructing the store
 ///                     plugin when reading this partition from disk.
 /// @param index_config The meta-index configuration of the false-positives
+/// @param taxonomies [TBD]
 /// rates for the types and fields.
 // TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
   caf::settings index_opts, const index_config& synopsis_opts,
-  store_actor store, std::string store_id, chunk_ptr store_header);
+  store_actor store, std::string store_id, chunk_ptr store_header,
+  std::shared_ptr<vast::taxonomies> taxonomies);
 
 } // namespace vast::system

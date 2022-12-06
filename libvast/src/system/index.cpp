@@ -771,6 +771,7 @@ bool i_partition_selector::operator()(const type& filter,
 
 caf::expected<std::unordered_map<type, active_partition_info>::iterator>
 index_state::create_active_partition(const type& schema) {
+  VAST_ASSERT(taxonomies);
   VAST_ASSERT(schema);
   auto id = uuid::random();
   const auto [active_partition, inserted]
@@ -799,7 +800,7 @@ index_state::create_active_partition(const type& schema) {
     = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
                   index_opts, synopsis_opts,
                   static_cast<store_actor>(active_partition->second.store),
-                  store_name, store_header);
+                  store_name, store_header, taxonomies);
   active_partition->second.stream_slot
     = stage->add_outbound_path(active_partition->second.actor);
   stage->out().set_filter(active_partition->second.stream_slot, schema);
@@ -1253,6 +1254,18 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.catalog = std::move(catalog);
+  self->request(self->state.catalog, caf::infinite, atom::load_v)
+    .await(
+      [self](vast::taxonomies& taxonomies) {
+        self->state.taxonomies
+          = std::make_shared<vast::taxonomies>(std::move(taxonomies));
+      },
+      [](caf::error& err) {
+        VAST_WARN("catalog failed to load taxonomy "
+                  "definitions: {}",
+                  std::move(err));
+        // TODO: Shutdown when failing?
+      });
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
   self->state.markersdir = dir / "markers";
@@ -1522,61 +1535,66 @@ index(index_actor::stateful_pointer<index_state> self,
         ids.emplace(query_context.id);
       }
       std::vector<uuid> candidates;
-      type_set candidate_types;
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
+      std::map<vast::type, vast::query_context> query_contexts;
       for (const auto& [active_partition_type, active_partition] :
            self->state.active_partitions) {
         candidates.push_back(active_partition.id);
-        candidate_types.insert(active_partition_type);
+        query_contexts[active_partition_type] = query_context;
       }
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
       auto rp = self->make_response_promise<query_cursor>();
+
+      // if implementing here: get taxonomies from catalog
+      // call atom::get taxonomies on catalog here
+      // resolve expressions
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
-                  query_context, candidate_types)
+                  query_context)
         .then(
-          [=, candidate_types = std::move(candidate_types),
-           candidates
-           = std::move(candidates)](std::map<type, catalog_result>& midx_result) mutable {
-            auto& midx_candidates = midx_result.begin()->second.partition_infos;
-            std::map<vast::type, vast::query_context> query_contexts;
-            VAST_DEBUG("{} got initial candidates {} and from catalog {}",
-                       *self, candidates, midx_candidates);
-            for (const auto& candidate_type : candidate_types) {
-              query_contexts[candidate_type] = query_context;
-            }
-            for (const auto initial_candidates = candidates;
-                 const auto& info : midx_candidates) {
-              if (std::find(initial_candidates.begin(),
-                            initial_candidates.end(), info.uuid)
-                  == initial_candidates.end()) {
-                candidates.push_back(info.uuid);
+          [=, candidates = std::move(candidates),
+           query_contexts = std::move(query_contexts)](
+            std::map<type, catalog_result>& catalog_results) mutable {
+            const auto initial_candidates = candidates;
+            for (const auto& [type, catalog_result] : catalog_results) {
+              query_contexts[type] = query_context;
+              query_contexts[type].expr = catalog_result.exp;
+              VAST_DEBUG("{} got initial candidates {} for schema {} and from "
+                         "catalog {}",
+                         *self, candidates, type,
+                         catalog_result.partition_infos);
+              for (const auto& info : catalog_result.partition_infos) {
+                if (std::find(initial_candidates.begin(),
+                              initial_candidates.end(), info.uuid)
+                    == initial_candidates.end()) {
+                  candidates.push_back(info.uuid);
+                }
               }
+              // Allows the client to query further results after initial taste.
+              auto query_id = query_context.id;
+              auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
+              if (candidates.empty()) {
+                VAST_DEBUG("{} returns without result: no partitions qualify",
+                           *self);
+                rp.deliver(query_cursor{query_id, 0u, 0u});
+                self->send(client, atom::done_v);
+                return;
+              }
+              auto num_candidates = detail::narrow<uint32_t>(candidates.size());
+              auto scheduled
+                = std::min(num_candidates, self->state.taste_partitions);
+              if (auto err = self->state.pending_queries.insert(
+                    query_state{.schema_query_context = query_contexts,
+                                .client = client,
+                                .candidate_partitions = num_candidates,
+                                .requested_partitions = scheduled},
+                    std::move(candidates)))
+                rp.deliver(err);
+              rp.deliver(query_cursor{query_id, num_candidates, scheduled});
+              self->state.schedule_lookups();
             }
-            // Allows the client to query further results after initial taste.
-            auto query_id = query_context.id;
-            auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
-            if (candidates.empty()) {
-              VAST_DEBUG("{} returns without result: no partitions qualify",
-                         *self);
-              rp.deliver(query_cursor{query_id, 0u, 0u});
-              self->send(client, atom::done_v);
-              return;
-            }
-            auto num_candidates = detail::narrow<uint32_t>(candidates.size());
-            auto scheduled
-              = std::min(num_candidates, self->state.taste_partitions);
-            if (auto err = self->state.pending_queries.insert(
-                  query_state{.schema_query_context = query_contexts,
-                              .client = client,
-                              .candidate_partitions = num_candidates,
-                              .requested_partitions = scheduled},
-                  std::move(candidates)))
-              rp.deliver(err);
-            rp.deliver(query_cursor{query_id, num_candidates, scheduled});
-            self->state.schedule_lookups();
           },
           [rp](const caf::error& e) mutable {
             rp.deliver(caf::make_error(
@@ -1593,7 +1611,7 @@ index(index_actor::stateful_pointer<index_state> self,
         type_set.insert(type);
       }
       return self->delegate(self->state.catalog, atom::candidates_v,
-                            std::move(query_context), std::move(type_set));
+                            std::move(query_context));
     },
     [self](atom::query, const uuid& query_id, uint32_t num_partitions) {
       if (auto err
