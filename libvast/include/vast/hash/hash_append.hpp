@@ -72,10 +72,9 @@ struct hash_inspector;
 // -- Scalars -----------------------------------------------------------------
 
 template <class HashAlgorithm, class T>
-  requires(
-    !uniquely_hashable<
-      T,
-      HashAlgorithm> && std::is_scalar_v<T> && !caf::detail::has_inspect_overload<detail::hash_inspector<HashAlgorithm>, T>::value)
+  requires(!uniquely_hashable<T, HashAlgorithm> && std::is_scalar_v<T>
+           && !caf::detail::has_inspect_overload<
+              detail::hash_inspector<HashAlgorithm>, T>::value)
 void hash_append(HashAlgorithm& h, T x) noexcept {
   if constexpr (std::is_integral_v<
                   T> || std::is_pointer_v<T> || std::is_enum_v<T>) {
@@ -116,9 +115,9 @@ void hash_append(HashAlgorithm& h, std::chrono::time_point<Clock, Duration> t) {
 // -- empty types -------------------------------------------------------------
 
 template <class HashAlgorithm, class T>
-  requires(
-    std::is_empty_v<
-      T> && !caf::detail::has_inspect_overload<detail::hash_inspector<HashAlgorithm>, T>::value)
+  requires(std::is_empty_v<T>
+           && !caf::detail::has_inspect_overload<
+              detail::hash_inspector<HashAlgorithm>, T>::value)
 void hash_append(HashAlgorithm& h, T) noexcept {
   hash_append(h, 0);
 }

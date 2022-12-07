@@ -234,8 +234,8 @@ segment::copy_without(const vast::segment& segment, const vast::ids& xs) {
   auto slices = segment.erase(xs);
   if (!slices)
     return slices.error();
-  for (auto&& slice : std::exchange(*slices, {}))
-    [[maybe_unused]] auto err = builder.add(std::move(slice));
+  for (auto&& slice : std::exchange(*slices, {})) [[maybe_unused]]
+    auto err = builder.add(std::move(slice));
   return builder.finish();
 }
 

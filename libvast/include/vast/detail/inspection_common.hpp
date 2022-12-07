@@ -96,8 +96,8 @@ auto apply_all(Inspector& f, Args&&... args) {
 }
 
 template <class Inspector, class Enum>
-  requires std::is_enum_v<Enum>
-bool inspect_enum(Inspector& f, Enum& x) {
+  requires std::is_enum_v<Enum> bool
+inspect_enum(Inspector& f, Enum& x) {
   using underlying_type = std::underlying_type_t<Enum>;
   auto setter = [&x](underlying_type value) {
     x = static_cast<Enum>(value);

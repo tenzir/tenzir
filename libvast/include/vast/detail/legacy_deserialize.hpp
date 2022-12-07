@@ -77,9 +77,11 @@ public:
 
   template <class T>
     requires requires(legacy_deserializer& f, T& x) {
-      requires !std::is_enum_v<T>;
-      { inspect(f, x) } -> std::same_as<legacy_deserializer::result_type>;
-    }
+               requires !std::is_enum_v<T>;
+               {
+                 inspect(f, x)
+                 } -> std::same_as<legacy_deserializer::result_type>;
+             }
   result_type apply(T& x) {
     return inspect(*this, x);
   }

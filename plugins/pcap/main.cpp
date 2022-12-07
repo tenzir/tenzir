@@ -786,7 +786,7 @@ public:
       .add<int64_t>("max-flow-age,a", "max flow lifetime before eviction")
       .add<int64_t>("flow-expiry,e", "flow table expiration interval")
       .add<int64_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
-                                               "1/c")
+                                                "1/c")
       .add<int64_t>("snaplen", "snapshot length in bytes")
       .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
                                           "warnings to occur")

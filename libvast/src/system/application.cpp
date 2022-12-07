@@ -154,7 +154,7 @@ auto make_pivot_command() {
     "pivot", "extracts related events of a given type",
     opts("?vast.pivot")
       .add<int64_t>("flush-interval,f", "flush to disk after this many packets "
-                                       "(only with the PCAP plugin)")
+                                        "(only with the PCAP plugin)")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<std::string>("format", "output format "
                                   "(default: JSON)"));
@@ -288,16 +288,16 @@ auto make_start_command() {
     opts("?vast.start")
       .add<bool>("print-endpoint", "print the client endpoint on stdout")
       .add<caf::config_value::list>("commands", "an ordered list of commands "
-                                                 "to run inside the node after "
-                                                 "starting")
+                                                "to run inside the node after "
+                                                "starting")
       .add<int64_t>("disk-budget-check-interval", "time between two disk size "
-                                                 "scans")
+                                                  "scans")
       .add<std::string>("disk-budget-check-binary",
                         "binary to run to determine current disk usage")
       .add<std::string>("disk-budget-high", "high-water mark for disk budget")
       .add<std::string>("disk-budget-low", "low-water mark for disk budget")
       .add<int64_t>("disk-budget-step-size", "number of partitions to erase "
-                                            "before re-checking size"));
+                                             "before re-checking size"));
 }
 
 auto make_stop_command() {
@@ -415,7 +415,7 @@ auto make_root_command(std::string_view path) {
         .add<bool>("node,N", "spawn a node instead of connecting to one")
         .add<bool>("enable-metrics", "keep track of performance metrics")
         .add<caf::config_value::list>("plugin-dirs", "additional directories "
-                                                      "to load plugins from")
+                                                     "to load plugins from")
         .add<caf::config_value::list>(
           "plugins", "plugins to load at startup; the special values 'bundled' "
                      "and 'all' enable autoloading of bundled and all plugins "

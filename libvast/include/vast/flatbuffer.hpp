@@ -63,20 +63,19 @@ public:
     requires(Type == flatbuffer_type::root)
   {
     if (!chunk)
-      return caf::make_error(ec::logic_error,
-                             fmt::format("failed to read {} from a nullptr",
-                                         qualified_name()));
+      return caf::make_error(ec::logic_error, fmt::format("failed to read {} "
+                                                          "from a nullptr",
+                                                          qualified_name()));
     if (chunk->size() == 0)
-      return caf::make_error(
-        ec::logic_error, fmt::format("failed to read {} from an empty chunk",
-                                     qualified_name()));
+      return caf::make_error(ec::logic_error, fmt::format("failed to read {} "
+                                                          "from an empty chunk",
+                                                          qualified_name()));
     if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE)
       return caf::make_error(
-        ec::format_error,
-        fmt::format("failed to read {} because its size {} "
-                    "exceeds the maximum allowed size of {}",
-                    qualified_name(), chunk->size(),
-                    FLATBUFFERS_MAX_BUFFER_SIZE));
+        ec::format_error, fmt::format("failed to read {} because its size {} "
+                                      "exceeds the maximum allowed size of {}",
+                                      qualified_name(), chunk->size(),
+                                      FLATBUFFERS_MAX_BUFFER_SIZE));
     if (verify == verify::yes) {
       const auto* const data = reinterpret_cast<const uint8_t*>(chunk->data());
       auto verifier = flatbuffers::Verifier{data, chunk->size()};

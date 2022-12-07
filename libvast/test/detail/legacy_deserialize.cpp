@@ -34,8 +34,8 @@ using namespace std::string_literals;
 using namespace vast;
 
 template <class... Ts>
-  requires(!std::is_rvalue_reference_v<Ts> && ...)
-bool ldes(caf::byte_buffer& buf, Ts&... xs) {
+  requires(!std::is_rvalue_reference_v<Ts> && ...) bool
+ldes(caf::byte_buffer& buf, Ts&... xs) {
   return detail::legacy_deserialize(buf, xs...);
 }
 

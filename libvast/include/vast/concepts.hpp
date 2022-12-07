@@ -100,8 +100,8 @@ struct example_inspector {
 /// Inspectables
 template <class T>
 concept inspectable = requires(example_inspector& i, T& x) {
-  { inspect(i, x) } -> std::same_as<bool>;
-};
+                        { inspect(i, x) } -> std::same_as<bool>;
+                      };
 
 template <class C>
 concept insertable = requires(C& xs, typename C::value_type x) {

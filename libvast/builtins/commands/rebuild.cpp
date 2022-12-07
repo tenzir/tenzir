@@ -985,9 +985,9 @@ public:
                                  "rebuild to finish")
         .add<std::string>("read,r", "path for reading the (optional) query")
         .add<int64_t>("max-partitions,n", "number of partitions to rebuild at "
-                                         "most (default: unlimited)")
+                                          "most (default: unlimited)")
         .add<int64_t>("parallel,j", "number of runs to start in parallel "
-                                   "(default: 1)"));
+                                    "(default: 1)"));
     rebuild->add_subcommand("start",
                             "rebuilds outdated partitions matching the "
                             "(optional) query qexpression",
