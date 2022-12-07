@@ -1,21 +1,17 @@
 vast:
   pipelines:
-    hash_community_id:
+    anonymize_alert_data:
       - hash:
           field: community_id
           out: community_id_hash
       - drop:
           fields: [community_id]
-    replace_src_ip:
       - replace:
           fields:
             src_ip: 1.2.3.4
     
   pipeline-triggers:
     export:
-      - pipeline: hash_community_id
-        location: server
-        events: [suricata.alert]
-      - pipeline: replace_src_ip
+      - pipeline: anonymize_alert_data
         location: server
         events: [suricata.alert]
