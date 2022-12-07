@@ -298,7 +298,7 @@ using index_actor = typed_actor_fwd<
   // erased, returns the nil uuid. When keep_original_partition is no: does an
   // in-place pipeline keeping the old ids, and makes a new partition
   // preserving the old one(s).
-  caf::replies_to<atom::apply, pipeline_ptr, std::vector<uuid>,
+  caf::replies_to<atom::apply, pipeline_ptr, std::map<uuid, type>,
                   keep_original_partition>::with<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
   caf::reacts_to<atom::flush>>

@@ -627,10 +627,10 @@ struct rebuilder_state {
               [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time < rhs.max_import_time;
               });
-    auto current_run_partition_ids = std::vector<uuid>{};
-    current_run_partition_ids.reserve(current_run_partitions.size());
-    for (const auto& partition : current_run_partitions)
-      current_run_partition_ids.push_back(partition.uuid);
+    auto current_run_partition_ids = std::map<uuid, type>{};
+    for (const auto& partition : current_run_partitions) {
+      current_run_partition_ids[partition.uuid] = partition.schema;
+    }
     self
       ->request(index, caf::infinite, atom::apply_v, std::move(pipeline),
                 std::move(current_run_partition_ids),
