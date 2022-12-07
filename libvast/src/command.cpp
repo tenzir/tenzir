@@ -198,7 +198,8 @@ void render_parse_error(const command& cmd, const invocation& inv,
   }
 }
 
-auto generate_default_value_for_argument_type(std::string_view type_name) {
+auto generate_default_value_for_argument_type(std::string_view type_name)
+  -> std::string_view {
   if (type_name.starts_with("uint") || type_name.starts_with("int")
       || type_name.starts_with("long")) {
     return "0";
@@ -206,9 +207,11 @@ auto generate_default_value_for_argument_type(std::string_view type_name) {
     return "0s";
   } else if (type_name.starts_with("std::vector")) {
     return "[]";
+  } else if (type_name.starts_with("dictionary")) {
+    return "{}";
   }
-  VAST_ASSERT(false && "option has type with no default value support");
-  return "";
+  die(fmt::format("option has type '{}' with no default value support",
+                  type_name));
 }
 
 void sanitize_long_form_argument(std::string& argument,

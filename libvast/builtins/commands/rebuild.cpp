@@ -984,9 +984,9 @@ public:
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
                                  "rebuild to finish")
         .add<std::string>("read,r", "path for reading the (optional) query")
-        .add<size_t>("max-partitions,n", "number of partitions to rebuild at "
+        .add<int64_t>("max-partitions,n", "number of partitions to rebuild at "
                                          "most (default: unlimited)")
-        .add<size_t>("parallel,j", "number of runs to start in parallel "
+        .add<int64_t>("parallel,j", "number of runs to start in parallel "
                                    "(default: 1)"));
     rebuild->add_subcommand("start",
                             "rebuilds outdated partitions matching the "

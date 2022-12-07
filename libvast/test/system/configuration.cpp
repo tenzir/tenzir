@@ -151,10 +151,8 @@ TEST(command line no value for integer values generates default value) {
   parse(std::vector<std::string>{"start", "--disk-budget-check-interval="});
   CHECK_EQUAL(get<cfg_int>("vast.start.disk-budget-check-interval"),
               cfg_int{0});
-
   parse(std::vector<std::string>{"explore", "--max-events-query="});
   CHECK_EQUAL(get<cfg_int>("vast.explore.max-events-query"), cfg_int{0});
-
   parse(std::vector<std::string>{"pivot", "--flush-interval="});
   CHECK_EQUAL(get<cfg_int>("vast.pivot.flush-interval"), cfg_int{0});
 }
