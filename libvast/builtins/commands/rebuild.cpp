@@ -417,12 +417,15 @@ struct rebuilder_state {
       .then(
         [this, finish](
           std::map<type, system::catalog_result>& catalog_result) mutable {
-          for (auto& [_, result] : catalog_result) {
+          for (auto& [type, result] : catalog_result) {
             if (!run->options.all) {
               std::erase_if(
                 result.partition_infos, [&](const partition_info& partition) {
                   return partition.version >= version::partition_version;
                 });
+              if (result.partition_infos.empty()) {
+                catalog_result.erase(type);
+              }
             }
             if (result.partition_infos.empty())
               return finish({}, true);
@@ -459,36 +462,35 @@ struct rebuilder_state {
             run->remaining_partitions.insert(run->remaining_partitions.end(),
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
-            auto counter = detail::make_fanout_counter(
-              run->options.parallel,
-              [finish]() mutable {
-                finish({});
-              },
-              [finish](caf::error error) mutable {
-                finish(std::move(error));
-              });
-            if (run->options.automatic)
-              VAST_VERBOSE("{} triggered an automatic run for {} candidate "
-                           "partitions with {} threads",
-                           *self, run->statistics.num_total,
-                           run->options.parallel);
-            else
-              VAST_INFO(
-                "{} triggered a run for {} candidate partitions with {} "
-                "threads",
-                *self, run->statistics.num_total, run->options.parallel);
-            for (size_t i = 0; i < run->options.parallel; ++i) {
-              self
-                ->request(static_cast<rebuilder_actor>(self), caf::infinite,
-                          atom::internal_v, atom::rebuild_v)
-                .then(
-                  [counter]() {
-                    counter->receive_success();
-                  },
-                  [counter](caf::error& error) {
-                    counter->receive_error(std::move(error));
-                  });
-            }
+          }
+          auto counter = detail::make_fanout_counter(
+            run->options.parallel,
+            [finish]() mutable {
+              finish({});
+            },
+            [finish](caf::error error) mutable {
+              finish(std::move(error));
+            });
+          if (run->options.automatic)
+            VAST_VERBOSE("{} triggered an automatic run for {} candidate "
+                         "partitions with {} threads",
+                         *self, run->statistics.num_total,
+                         run->options.parallel);
+          else
+            VAST_INFO("{} triggered a run for {} candidate partitions with {} "
+                      "threads",
+                      *self, run->statistics.num_total, run->options.parallel);
+          for (size_t i = 0; i < run->options.parallel; ++i) {
+            self
+              ->request(static_cast<rebuilder_actor>(self), caf::infinite,
+                        atom::internal_v, atom::rebuild_v)
+              .then(
+                [counter]() {
+                  counter->receive_success();
+                },
+                [counter](caf::error& error) {
+                  counter->receive_error(std::move(error));
+                });
           }
         },
         [finish](caf::error& error) mutable {
