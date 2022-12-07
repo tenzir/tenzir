@@ -43,16 +43,16 @@ expression to_expr(std::string_view expr) {
 } // namespace
 
 TEST(wildcard unescaping) {
-  CHECK_EQUAL(to_search_id("x: '*'"), to_expr("x ~ /.*/"));
-  CHECK_EQUAL(to_search_id("x: '?'"), to_expr("x ~ /./"));
-  CHECK_EQUAL(to_search_id("x: 'f*'"), to_expr("x ~ /f.*/"));
-  CHECK_EQUAL(to_search_id("x: 'f?'"), to_expr("x ~ /f./"));
-  CHECK_EQUAL(to_search_id("x: 'f*bar'"), to_expr("x ~ /f.*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f?bar'"), to_expr("x ~ /f.bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\*bar'"), to_expr("x ~ /f*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\?bar'"), to_expr("x ~ /f?bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\\\*bar'"), to_expr("x ~ /f\\.*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\\\?bar'"), to_expr("x ~ /f\\.bar/"));
+  CHECK_EQUAL(to_search_id("x: '*'"), to_expr("x == /.*/"));
+  CHECK_EQUAL(to_search_id("x: '?'"), to_expr("x == /./"));
+  CHECK_EQUAL(to_search_id("x: 'f*'"), to_expr("x == /f.*/"));
+  CHECK_EQUAL(to_search_id("x: 'f?'"), to_expr("x == /f./"));
+  CHECK_EQUAL(to_search_id("x: 'f*bar'"), to_expr("x == /f.*bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f?bar'"), to_expr("x == /f.bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f\\*bar'"), to_expr("x == /f*bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f\\?bar'"), to_expr("x == /f?bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f\\\\*bar'"), to_expr("x == /f\\.*bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f\\\\?bar'"), to_expr("x == /f\\.bar/"));
 }
 
 TEST(maps - single value) {
@@ -154,7 +154,7 @@ TEST(modifier - re) {
     foo|re: "^.*$"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo ~ /^.*$/");
+  auto expected = to_expr("foo == /^.*$/");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -164,7 +164,7 @@ TEST(modifier - startswith) {
   )__";
   auto search_id = to_search_id(yaml);
   // TODO: blocked by VAST has pattern matching capability
-  // auto expected = to_expr("foo ~ /^x/");
+  // auto expected = to_expr("foo == /^x/");
   auto expected = to_expr("foo ni \"x\"");
   CHECK_EQUAL(search_id, expected);
 }
@@ -175,7 +175,7 @@ TEST(modifier - endswith) {
   )__";
   auto search_id = to_search_id(yaml);
   // TODO: blocked by VAST has pattern matching capability
-  // auto expected = to_expr("foo ~ /x$/");
+  // auto expected = to_expr("foo == /x$/");
   auto expected = to_expr("foo ni \"x\"");
   CHECK_EQUAL(search_id, expected);
 }
