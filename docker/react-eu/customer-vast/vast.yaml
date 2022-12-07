@@ -6,8 +6,16 @@ vast:
           out: community_id_hash
       - drop:
           fields: [community_id]
+    replace_src_ip:
+      - replace:
+          fields:
+            src_ip: 1.2.3.4
+    
   pipeline-triggers:
     export:
       - pipeline: hash_community_id
+        location: server
+        events: [suricata.alert]
+      - pipeline: replace_src_ip
         location: server
         events: [suricata.alert]
