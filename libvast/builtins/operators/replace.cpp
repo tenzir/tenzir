@@ -8,6 +8,8 @@
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/data.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
@@ -51,10 +53,24 @@ struct bound_configuration {
   make(const type& schema, const configuration& config) {
     auto result = bound_configuration{};
     const auto& schema_rt = caf::get<record_type>(schema);
-    for (const auto& [extractor, value] : config.extractor_to_value)
+    for (const auto& [extractor, value] : config.extractor_to_value) {
+      // The config parsing never produces all possible alternatives of the data
+      // variant, e.g., addresses will be represented as strings. Because of
+      // that we need to re-parse the data if it's a string.
+      auto reparsed_value = [](auto value) {
+        const auto* str = caf::get_if<std::string>(&value);
+        if (!str)
+          return value;
+        auto result = to<data>(*str);
+        if (!result)
+          return value;
+        return std::move(*result);
+      }(value);
       for (const auto& index :
            schema_rt.resolve_key_suffix(extractor, schema.name()))
-        result.transformations.push_back({index, make_transformation(value)});
+        result.transformations.push_back(
+          {index, make_transformation(reparsed_value)});
+    }
     std::sort(result.transformations.begin(), result.transformations.end());
     result.transformations.erase(std::unique(result.transformations.begin(),
                                              result.transformations.end()),

@@ -13,7 +13,6 @@
 #include "vast/address.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/printable/vast/address.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
@@ -220,7 +219,8 @@ TEST(select operator) {
 TEST(replace operator) {
   auto slice = make_pipelines_testdata();
   auto replace_operator = unbox(vast::make_pipeline_operator(
-    "replace", {{"fields", vast::record{{"uid", "xxx"}}}}));
+    "replace",
+    {{"fields", vast::record{{"uid", "xxx"}, {"desc", "1.2.3.4"}}}}));
   auto add_failed
     = replace_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
@@ -232,14 +232,20 @@ TEST(replace operator) {
   CHECK_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(0).name,
     "uid");
+  CHECK_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(1).name,
+    "desc");
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
+  CHECK_EQUAL(table_slice.at(0, 1),
+              vast::data_view{unbox(vast::to<vast::address>("1.2.3.4"))});
 }
 
 TEST(extend operator) {
   auto slice = make_pipelines_testdata();
   auto replace_operator = unbox(vast::make_pipeline_operator(
-    "extend", {{"fields", vast::record{{"secret", "xxx"}}}}));
+    "extend",
+    {{"fields", vast::record{{"secret", "xxx"}, {"ip", "1.2.3.4"}}}}));
   auto add_failed
     = replace_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
@@ -247,12 +253,17 @@ TEST(extend operator) {
   REQUIRE_EQUAL(replaced.size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
-    4ull);
+    5ull);
   CHECK_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(3).name,
     "secret");
+  CHECK_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(4).name,
+    "ip");
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(table_slice.at(0, 3), vast::data_view{"xxx"sv});
+  CHECK_EQUAL(table_slice.at(0, 4),
+              vast::data_view{unbox(vast::to<vast::address>("1.2.3.4"))});
 }
 
 TEST(where operator) {
