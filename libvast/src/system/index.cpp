@@ -1555,10 +1555,6 @@ index(index_actor::stateful_pointer<index_state> self,
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
       auto rp = self->make_response_promise<query_cursor>();
-
-      // if implementing here: get taxonomies from catalog
-      // call atom::get taxonomies on catalog here
-      // resolve expressions
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
                   query_context)
@@ -1581,29 +1577,29 @@ index(index_actor::stateful_pointer<index_state> self,
                   candidates.push_back(info.uuid);
                 }
               }
-              // Allows the client to query further results after initial taste.
-              auto query_id = query_context.id;
-              auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
-              if (candidates.empty()) {
-                VAST_DEBUG("{} returns without result: no partitions qualify",
-                           *self);
-                rp.deliver(query_cursor{query_id, 0u, 0u});
-                self->send(client, atom::done_v);
-                return;
-              }
-              auto num_candidates = detail::narrow<uint32_t>(candidates.size());
-              auto scheduled
-                = std::min(num_candidates, self->state.taste_partitions);
-              if (auto err = self->state.pending_queries.insert(
-                    query_state{.schema_query_context = query_contexts,
-                                .client = client,
-                                .candidate_partitions = num_candidates,
-                                .requested_partitions = scheduled},
-                    std::move(candidates)))
-                rp.deliver(err);
-              rp.deliver(query_cursor{query_id, num_candidates, scheduled});
-              self->state.schedule_lookups();
             }
+            // Allows the client to query further results after initial taste.
+            auto query_id = query_context.id;
+            auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
+            if (candidates.empty()) {
+              VAST_DEBUG("{} returns without result: no partitions qualify",
+                         *self);
+              rp.deliver(query_cursor{query_id, 0u, 0u});
+              self->send(client, atom::done_v);
+              return;
+            }
+            auto num_candidates = detail::narrow<uint32_t>(candidates.size());
+            auto scheduled
+              = std::min(num_candidates, self->state.taste_partitions);
+            if (auto err = self->state.pending_queries.insert(
+                  query_state{.schema_query_context = query_contexts,
+                              .client = client,
+                              .candidate_partitions = num_candidates,
+                              .requested_partitions = scheduled},
+                  std::move(candidates)))
+              rp.deliver(err);
+            rp.deliver(query_cursor{query_id, num_candidates, scheduled});
+            self->state.schedule_lookups();
           },
           [rp](const caf::error& e) mutable {
             rp.deliver(caf::make_error(
