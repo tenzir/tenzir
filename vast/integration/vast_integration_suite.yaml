@@ -482,7 +482,8 @@ tests:
         transformation: jq -ec '.'
       - command: -N export json '#type ni "suricata"'
         transformation: jq -ec '.'
-
+      - command: -N export json 'ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/'
+        transformation: jq -ec '.'
   # Testing the #import_time meta extractor is a bit tricky and requires
   # sleeping. If this turns out to be a flaky test, increase durations and
   # queries respectively.
