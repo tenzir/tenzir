@@ -59,7 +59,6 @@ void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
                  const std::pair<uuid, partition_synopsis_ptr>& rhs) {
                 return lhs.first < rhs.first;
               });
-
     synopses[type] = decltype(synopses)::value_type::second_type::make_unsafe(
       std::move(flat_data));
   }
@@ -72,9 +71,12 @@ void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
 
 void catalog_state::erase(const uuid& partition) {
   for (auto& [type, uuid_synopsis_map] : synopses) {
-    uuid_synopsis_map.erase(partition);
-    if (uuid_synopsis_map.empty()) {
-      synopses.erase(type);
+    auto erased = uuid_synopsis_map.erase(partition);
+    if (erased) {
+      if (uuid_synopsis_map.empty()) {
+        synopses.erase(type);
+      }
+      return;
     }
   }
 }
@@ -150,6 +152,9 @@ catalog_state::lookup(const expression& expr) const {
 catalog_result
 catalog_state::lookup_impl(const expression& expr, const type& schema) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
+  auto synopsis_map_per_type_it = synopses.find(schema);
+  VAST_ASSERT(synopsis_map_per_type_it != synopses.end());
+  const auto& partition_synopses = synopsis_map_per_type_it->second;
   // The partition UUIDs must be sorted, otherwise the invariants of the
   // inplace union and intersection algorithms are violated, leading to
   // wrong results. So all places where we return an assembled set must
@@ -159,9 +164,9 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
   catalog_result memoized_partitions = {};
   auto all_partitions = [&] {
     if (!memoized_partitions.partition_infos.empty()
-        || synopses.at(schema).empty())
+        || partition_synopses.empty())
       return memoized_partitions;
-    for (const auto& [partition, synopsis] : synopses.at(schema)) {
+    for (const auto& [partition, synopsis] : partition_synopses) {
       memoized_partitions.exp = expr;
       memoized_partitions.partition_infos.emplace_back(
         partition, synopsis->events, synopsis->max_import_time,
@@ -194,8 +199,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         // TODO: A disjunction means that we can restrict the lookup to the
         // set of partitions that are outside of the current result set.
         auto xs = lookup_impl(op, schema);
-        // if (xs.size() == synopses.size())
-        // return xs; // short-circuit
+        if (xs.partition_infos.size() == partition_synopses.size())
+          return xs; // short-circuit
         VAST_ASSERT(
           std::is_sorted(xs.partition_infos.begin(), xs.partition_infos.end()));
         detail::inplace_unify(result.partition_infos, xs.partition_infos);
@@ -224,7 +229,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         // dont iterate through all synopses, rewrite lookup_impl to use a
         // singular type all synopses loops -> relevant anymore? Use type as
         // synopses key
-        for (const auto& [part_id, part_syn] : synopses.at(schema)) {
+        for (const auto& [part_id, part_syn] : partition_synopses) {
           for (const auto& [field, syn] : part_syn->field_synopses_) {
             if (match(field)) {
               // We need to prune the type's metadata here by converting it to a
@@ -288,7 +293,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             catalog_result result;
-            for (const auto& [part_id, part_syn] : synopses.at(schema)) {
+            for (const auto& [part_id, part_syn] : partition_synopses) {
               for (const auto& [fqf, _] : part_syn->field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
@@ -309,7 +314,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             return result;
           } else if (lhs.kind == meta_extractor::import_time) {
             catalog_result result;
-            for (const auto& [part_id, part_syn] : synopses.at(schema)) {
+            for (const auto& [part_id, part_syn] : partition_synopses) {
               VAST_ASSERT(part_syn->min_import_time
                             <= part_syn->max_import_time,
                           "encountered empty or moved-from partition synopsis");
@@ -338,7 +343,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
               VAST_WARN("#field meta queries only support string "
                         "comparisons");
             } else {
-              for (const auto& [part_id, part_syn] : synopses.at(schema)) {
+              for (const auto& [part_id, part_syn] : partition_synopses) {
                 // Compare the desired field name with each field in the
                 // partition.
                 auto matching = [&](const auto& part_syn) {

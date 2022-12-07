@@ -986,10 +986,19 @@ void index_state::schedule_lookups() {
           schedule_lookups();
         }
       };
-      const auto& context = it->second.schema_query_context.at(partition_type);
+      const auto& context_it
+        = it->second.schema_query_context.find(partition_type);
+      if (context_it == it->second.schema_query_context.end()) {
+        VAST_WARN("{} failed to evaluate query {} for partition {}: query "
+                  "context for schema is already unvailable",
+                  *self, qid, next->partition);
+        inmem_partitions.drop(next->partition);
+        handle_completion();
+        continue;
+      }
       self
         ->request(partition_actor, defaults::system::scheduler_timeout,
-                  atom::query_v, context)
+                  atom::query_v, context_it->second)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
             VAST_DEBUG("{} received {} results for query {} from partition "
