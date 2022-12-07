@@ -257,16 +257,9 @@ else ()
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
     VASTSystemizeTarget(libcaf_test)
     set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
-    add_custom_target(
-      caf-targets-link
-      COMMAND
-        ${CMAKE_COMMAND} -E create_symlink
-        "${CMAKE_CURRENT_BINARY_DIR}/CAFTargets.cmake"
-        "${CMAKE_BINARY_DIR}/CAFTargets.cmake"
-      COMMENT "Linking CAF targets")
     mark_as_advanced(caf_build_header_path)
     string(APPEND VAST_EXTRA_TARGETS_FILES
-           "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")"
+           "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/../CAF/CAFTargets.cmake\")"
            "\nmark_as_advanced(caf_build_header_path)")
     set(CAF_FOUND true)
   endif ()
@@ -357,7 +350,6 @@ if (VAST_ENABLE_BUNDLED_CAF)
   if (NOT caf_dir)
     set(caf_dir ${CAF_INCLUDE_DIRS})
   endif ()
-  add_dependencies(libvast caf-targets-link)
   dependency_summary("CAF" "${caf_dir}" "Dependencies")
 else ()
   dependency_summary("CAF" CAF::core "Dependencies")
