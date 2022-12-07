@@ -1,3 +1,13 @@
+if (VAST_PREBUILT_LIBVAST)
+  find_package(
+    VAST "${PROJECT_VERSION}" EXACT
+    COMPONENTS dev
+    REQUIRED)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+         "\nfind_package(VAST "${PROJECT_VERSION}" EXACT REQUIRED)")
+  dependency_summary("libvast" vast::libvast "Dependencies")
+  return()
+endif ()
 # -- bundled dependencies ------------------------------------------------------
 
 # TODO: VAST bundles robin-map in its aux directory, because we need at least
