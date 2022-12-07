@@ -250,9 +250,9 @@ if __name__ == "__main__":
     # The init process fills the template and creates the config file
     # If the config file is not present, it means init wasn't executed yet
     is_init = is_initialized()
-    set_initialization_status(completed=False)
 
     if not is_init:
+        set_initialization_status(completed=False)
         init_cortex()
 
     thehive_proc = subprocess.Popen(
