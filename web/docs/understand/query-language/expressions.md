@@ -62,8 +62,6 @@ The following operators separate two operands:
 - `!in`: not in *(left to right)*
 - `ni`: in *(right to left)*
 - `!ni`: not in *(right to left)*
-- `~`: match
-- `!~`: not match
 
 ### Type Compatibility
 
