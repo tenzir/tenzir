@@ -52,7 +52,7 @@ TEST(address) {
   CHECK(to_string(*idx.lookup(relational_operator::equal, make_data_view(x)))
         == "000000");
   MESSAGE("invalid operator");
-  CHECK(!idx.lookup(relational_operator::match, make_data_view(x)));
+  CHECK(!idx.lookup(relational_operator::in, make_data_view(x)));
   MESSAGE("prefix membership");
   x = *to<address>("192.168.0.128");
   CHECK(idx.append(make_data_view(x)));

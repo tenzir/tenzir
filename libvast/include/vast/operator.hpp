@@ -35,8 +35,6 @@ std::string to_string(arithmetic_operator op) noexcept;
 
 /// A (binary) relational operator.
 enum class relational_operator : uint8_t {
-  match,
-  not_match,
   in,
   not_in,
   ni,

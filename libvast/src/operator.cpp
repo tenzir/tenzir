@@ -35,7 +35,6 @@ std::string to_string(bool_operator op) noexcept {
 bool is_negated(relational_operator op) {
   switch (op) {
     case relational_operator::equal:
-    case relational_operator::match:
     case relational_operator::less:
     case relational_operator::less_equal:
     case relational_operator::greater:
@@ -46,7 +45,6 @@ bool is_negated(relational_operator op) {
     case relational_operator::not_ni:
     case relational_operator::not_in:
     case relational_operator::not_equal:
-    case relational_operator::not_match:
       return true;
   }
   die("missing case for relational operator");
@@ -54,10 +52,6 @@ bool is_negated(relational_operator op) {
 
 relational_operator negate(relational_operator op) {
   switch (op) {
-    case relational_operator::match:
-      return relational_operator::not_match;
-    case relational_operator::not_match:
-      return relational_operator::match;
     case relational_operator::equal:
       return relational_operator::not_equal;
     case relational_operator::not_equal:
@@ -84,8 +78,6 @@ relational_operator negate(relational_operator op) {
 
 relational_operator flip(relational_operator op) {
   switch (op) {
-    case relational_operator::match:
-    case relational_operator::not_match:
     case relational_operator::equal:
     case relational_operator::not_equal:
       return op;

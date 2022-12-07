@@ -88,10 +88,8 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
         default:
           return caf::make_error(ec::unsupported_operator, op);
         case relational_operator::equal:
-        case relational_operator::not_equal:
-        case relational_operator::match:
-        case relational_operator::not_match: {
-           return ids{offset(), true};
+        case relational_operator::not_equal: {
+          return ids{offset(), true};
         }
       }
     },

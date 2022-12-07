@@ -212,19 +212,14 @@ private:
     // Some operations we just cannot handle with this index, but they are still
     // valid operations. So for them we need to return all IDs.
     if (caf::holds_alternative<view<pattern>>(x)
-          && (op == relational_operator::equal
-              || op == relational_operator::not_equal
-              || op == relational_operator::match
-              || op == relational_operator::not_match)) {
+        && (op == relational_operator::equal
+            || op == relational_operator::not_equal)) {
       return ewah_bitmap{digests_.size(), true};
     }
     if (caf::holds_alternative<view<std::string>>(x)
-          && (op == relational_operator::in
-              || op == relational_operator::not_in
-              || op == relational_operator::ni
-              || op == relational_operator::not_ni
-              || op == relational_operator::match
-              || op == relational_operator::not_match)) {
+        && (op == relational_operator::in || op == relational_operator::not_in
+            || op == relational_operator::ni
+            || op == relational_operator::not_ni)) {
       return ewah_bitmap{digests_.size(), true};
     }
     // Implementation of the one-pass search algorithm that computes the

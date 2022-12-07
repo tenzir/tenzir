@@ -120,24 +120,6 @@ struct cell_evaluator<relational_operator::greater_equal> {
 };
 
 template <>
-struct cell_evaluator<relational_operator::match> {
-  static bool evaluate(auto, auto) noexcept {
-    return false;
-  }
-
-  static bool evaluate(view<std::string> lhs, view<pattern> rhs) noexcept {
-    return cell_evaluator<relational_operator::equal>::evaluate(lhs, rhs);
-  }
-};
-
-template <>
-struct cell_evaluator<relational_operator::not_match> {
-  static bool evaluate(auto lhs, auto rhs) noexcept {
-    return !cell_evaluator<relational_operator::match>::evaluate(lhs, rhs);
-  }
-};
-
-template <>
 struct cell_evaluator<relational_operator::in> {
   static bool evaluate(auto, auto) noexcept {
     return false;
@@ -312,8 +294,6 @@ bool evaluate_meta_extractor(const table_slice& slice,
         VAST_EVAL_DISPATCH(in);
         VAST_EVAL_DISPATCH(less);
         VAST_EVAL_DISPATCH(not_in);
-        VAST_EVAL_DISPATCH(match);
-        VAST_EVAL_DISPATCH(not_match);
         VAST_EVAL_DISPATCH(greater);
         VAST_EVAL_DISPATCH(greater_equal);
         VAST_EVAL_DISPATCH(less_equal);
@@ -362,8 +342,6 @@ bool evaluate_meta_extractor(const table_slice& slice,
         VAST_EVAL_DISPATCH(in);
         VAST_EVAL_DISPATCH(less);
         VAST_EVAL_DISPATCH(not_in);
-        VAST_EVAL_DISPATCH(match);
-        VAST_EVAL_DISPATCH(not_match);
         VAST_EVAL_DISPATCH(greater);
         VAST_EVAL_DISPATCH(greater_equal);
         VAST_EVAL_DISPATCH(less_equal);
@@ -441,8 +419,6 @@ ids evaluate(const expression& expr, const table_slice& slice,
         VAST_EVAL_DISPATCH(in);
         VAST_EVAL_DISPATCH(less);
         VAST_EVAL_DISPATCH(not_in);
-        VAST_EVAL_DISPATCH(match);
-        VAST_EVAL_DISPATCH(not_match);
         VAST_EVAL_DISPATCH(greater);
         VAST_EVAL_DISPATCH(greater_equal);
         VAST_EVAL_DISPATCH(less_equal);

@@ -1311,9 +1311,6 @@ bool compatible(const type& lhs, relational_operator op,
                && caf::holds_alternative<string_type>(y));
   };
   switch (op) {
-    case relational_operator::match:
-    case relational_operator::not_match:
-      return string_and_pattern(lhs, rhs);
     case relational_operator::equal:
     case relational_operator::not_equal:
       return !lhs || !rhs || string_and_pattern(lhs, rhs)
@@ -1349,9 +1346,6 @@ bool compatible(const type& lhs, relational_operator op,
                && caf::holds_alternative<std::string>(y));
   };
   switch (op) {
-    case relational_operator::match:
-    case relational_operator::not_match:
-      return string_and_pattern(lhs, rhs);
     case relational_operator::equal:
     case relational_operator::not_equal:
       return !lhs || caf::holds_alternative<caf::none_t>(rhs)

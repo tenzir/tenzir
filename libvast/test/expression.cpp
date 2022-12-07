@@ -254,9 +254,9 @@ TEST(validation - meta extractor) {
   expr = to<expression>("#field == \"id.orig_h\"");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("#field ~ \"orig\"");
+  expr = to<expression>("#field == \"orig\"");
   REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
+  CHECK(caf::visit(validator{}, *expr));
   expr = to<expression>("#field == /orig/");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
@@ -314,7 +314,7 @@ TEST(matcher) {
 
 TEST(labeler) {
   auto str
-    = "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
+    = "(x == 5 && :bool == T) || (foo == /foo/ && !(x == 5 || #type == /bar/))"s;
   auto expr = to_expr(str);
   // Create a visitor that records all offsets in order.
   detail::stable_map<expression, offset> offset_map;
@@ -327,26 +327,26 @@ TEST(labeler) {
     {to_expr("x == 5 && :bool == T"), {0, 0}},
     {to_expr("x == 5"), {0, 0, 0}},
     {to_expr(":bool == T"), {0, 0, 1}},
-    {to_expr("foo ~ /foo/ && !(x == 5 || #type ~ /bar/)"), {0, 1}},
-    {to_expr("foo ~ /foo/"), {0, 1, 0}},
-    {to_expr("!(x == 5 || #type ~ /bar/)"), {0, 1, 1}},
-    {to_expr("x == 5 || #type ~ /bar/"), {0, 1, 1, 0}},
+    {to_expr("foo == /foo/ && !(x == 5 || #type == /bar/)"), {0, 1}},
+    {to_expr("foo == /foo/"), {0, 1, 0}},
+    {to_expr("!(x == 5 || #type == /bar/)"), {0, 1, 1}},
+    {to_expr("x == 5 || #type == /bar/"), {0, 1, 1, 0}},
     {to_expr("x == 5"), {0, 1, 1, 0, 0}},
-    {to_expr("#type ~ /bar/"), {0, 1, 1, 0, 1}},
+    {to_expr("#type == /bar/"), {0, 1, 1, 0, 1}},
   };
   CHECK_EQUAL(offset_map, expected_offset_map);
 }
 
 TEST(at) {
   auto str
-    = "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
+    = "(x == 5 && :bool == T) || (foo == /foo/ && !(x == 5 || #type == /bar/))"s;
   auto expr = to_expr(str);
   CHECK_EQUAL(at(expr, {}), nullptr);  // invalid offset
   CHECK_EQUAL(at(expr, {0}), &expr);   // root node
   CHECK_EQUAL(at(expr, {1}), nullptr); // invalid root offset
   CHECK_EQUAL(*at(expr, {0, 0}), to_expr("x == 5 && :bool == T"));
-  CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr("foo ~ /foo/"));
-  CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("#type ~ /bar/"));
+  CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr("foo == /foo/"));
+  CHECK_EQUAL(*at(expr, {0, 1, 1, 0, 1}), to_expr("#type == /bar/"));
   CHECK_EQUAL(at(expr, {0, 1, 1, 0, 1, 0}), nullptr); // offset too long
 }
 
@@ -387,21 +387,21 @@ TEST(parse print roundtrip) {
   MESSAGE("simple roundtrip");
   {
     auto str
-      = "((x == 5 && :bool == T) || (foo ~ /foo/ && ! (x == 5 || #type ~ /bar/)))"s;
+      = "((x == 5 && :bool == T) || (foo == /foo/ && ! (x == 5 || #type == /bar/)))"s;
     auto expr = to_expr(str);
     CHECK_EQUAL(str, to_string(expr));
   }
 }
 
 TEST(expression parser composability) {
-  auto str = "x == 5 | :bool == T || #type ~ /bar/ | +3"s;
+  auto str = "x == 5 | :bool == T || #type == /bar/ | +3"s;
   std::vector<expression> result;
   auto p = (parsers::expr % (*parsers::space >> '|' >> *parsers::space))
            >> parsers::eoi;
   REQUIRE(p(str, result));
   REQUIRE_EQUAL(result.size(), 3u);
   CHECK_EQUAL(result[0], to_expr("x == 5"));
-  CHECK_EQUAL(result[1], to_expr(":bool == T || #type ~ /bar/"));
+  CHECK_EQUAL(result[1], to_expr(":bool == T || #type == /bar/"));
   CHECK_EQUAL(result[2], to_expr("+3"));
 }
 
