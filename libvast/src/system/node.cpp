@@ -465,7 +465,6 @@ node_state::spawn_command(const invocation& inv,
   if (self->state.tearing_down)
     return caf::make_message(caf::make_error( //
       ec::no_error, "can't spawn a component while tearing down"));
-  auto rp = self->make_response_promise();
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
   VAST_ASSERT(inv_name_split.size() > 1);
@@ -477,12 +476,10 @@ node_state::spawn_command(const invocation& inv,
     label = *label_ptr;
     if (label.empty()) {
       auto err = caf::make_error(ec::unspecified, "empty component label");
-      rp.deliver(err);
       return caf::make_message(std::move(err));
     }
     if (self->state.registry.find_by_label(label)) {
       auto err = caf::make_error(ec::unspecified, "duplicate component label");
-      rp.deliver(err);
       return caf::make_message(std::move(err));
     }
   } else {
@@ -504,54 +501,19 @@ node_state::spawn_command(const invocation& inv,
     spawn_inv.options["import"] = import_opt;
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }
-  auto spawn_actually = [=](spawn_arguments& args) mutable {
-    // Spawn our new VAST component.
-    auto component = spawn_component(self, args.inv, args);
-    if (!component) {
-      if (component.error())
-        VAST_WARN("{} failed to spawn component: {}", __func__,
-                  render(component.error()));
-      rp.deliver(component.error());
-      return caf::make_message(std::move(component.error()));
-    }
-    if (auto err = register_component(self, *component, comp_type, label)) {
-      rp.deliver(err);
-      return caf::make_message(std::move(err));
-    }
-    VAST_DEBUG("{} registered {} as {}", *self, comp_type, label);
-    rp.deliver(*component);
-    return caf::make_message(*component);
-  };
-  auto handle_taxonomies = [=](expression e) mutable {
-    VAST_DEBUG("{} received the substituted expression {}", *self,
-               to_string(e));
-    spawn_arguments args{spawn_inv, self->state.dir, label, std::move(e)};
-    spawn_actually(args);
-  };
-  // Retrieve taxonomies and delay spawning until the response arrives if we're
-  // dealing with a query...
-  auto query_handlers = std::set<std::string>{"counter", "exporter"};
-  if (query_handlers.count(comp_type) > 0u
-      && !caf::get_or(spawn_inv.options,
-                      "vast." + comp_type + ".disable-taxonomies", false)) {
-    if (auto [catalog] = self->state.registry.find<catalog_actor>(); catalog) {
-      auto expr = normalized_and_validated(spawn_inv.arguments);
-      if (!expr) {
-        rp.deliver(expr.error());
-        return make_message(expr.error());
-      }
-      // TODO: Clean this up, this needs to be removed for pipeline executor
-      self->request(catalog, caf::infinite, atom::resolve_v, std::move(*expr))
-        .then(handle_taxonomies, [=](caf::error& err) mutable {
-          rp.deliver(err);
-          return make_message(err);
-        });
-      return caf::none;
-    }
-  }
-  // ... or spawn the component right away if not.
+  // Spawn our new VAST component.
   spawn_arguments args{spawn_inv, self->state.dir, label, std::nullopt};
-  return spawn_actually(args);
+  auto component = spawn_component(self, args.inv, args);
+  if (!component) {
+    if (component.error())
+      VAST_WARN("{} failed to spawn component: {}", __func__,
+                render(component.error()));
+    return caf::make_message(std::move(component.error()));
+  }
+  if (auto err = register_component(self, *component, comp_type, label))
+    return caf::make_message(std::move(err));
+  VAST_DEBUG("{} registered {} as {}", *self, comp_type, label);
+  return caf::make_message(*component);
 }
 
 node_actor::behavior_type
