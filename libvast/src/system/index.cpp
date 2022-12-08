@@ -1924,7 +1924,9 @@ index(index_actor::stateful_pointer<index_state> self,
       // nested requests.
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
-          [self, deliver, old_partition_id_vec, keep, marker_path](
+          [self, deliver,
+           old_partition_id_vec = std::move(old_partition_id_vec), keep,
+           marker_path](
             std::vector<augmented_partition_synopsis>& apsv) mutable {
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
