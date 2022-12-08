@@ -22,7 +22,6 @@
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/transformer.hpp"
-#include "vast/uuid.hpp"
 
 #include <caf/make_message.hpp>
 #include <caf/settings.hpp>

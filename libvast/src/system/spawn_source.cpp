@@ -15,7 +15,6 @@
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/uuid.hpp"
 
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>

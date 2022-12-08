@@ -36,7 +36,6 @@
 #include "vast/plugin.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/accountant_config.hpp"
-#include "vast/system/catalog.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
@@ -60,7 +59,6 @@
 #include "vast/system/version_command.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
-#include "vast/uuid.hpp"
 
 #include <caf/function_view.hpp>
 #include <caf/io/middleman.hpp>

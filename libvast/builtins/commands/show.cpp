@@ -15,7 +15,6 @@
 #include <vast/system/node_control.hpp>
 #include <vast/system/spawn_or_connect_to_node.hpp>
 #include <vast/taxonomies.hpp>
-#include <vast/uuid.hpp>
 
 namespace vast::plugins::show {
 
