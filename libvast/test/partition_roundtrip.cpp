@@ -12,13 +12,11 @@
 
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/query_context.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
@@ -128,8 +126,6 @@ struct fixture : fixtures::deterministic_actor_system {
 FIXTURE_SCOPE(partition_roundtrips, fixture)
 
 TEST(empty partition roundtrip) {
-  MESSAGE((caf::detail::has_inspect_overload<vast::detail::legacy_deserializer,
-                                             vast::legacy_none_type>::value));
   // Init factory.
   vast::factory<vast::table_slice_builder>::initialize();
   // Create partition state.
@@ -187,46 +183,44 @@ TEST(empty partition roundtrip) {
   CHECK_EQUAL(partition_legacy->events(), state.data.events);
   auto error = unpack(*partition_legacy, recovered_state);
   CHECK(!error);
-  MESSAGE(error);
-  // CHECK_EQUAL(recovered_state.id, state.data.id);
-  // CHECK_EQUAL(recovered_state.events, state.data.events);
-  // // As of the Type FlatBuffers change we no longer keep the combined layout
-  // in
-  // // the active partition, which makes this test irrelevant:
-  // //   CHECK_EQUAL(recovered_state.combined_layout_, state.combined_layout);
-  // CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
-  // // Deserialize catalog state from this partition.
-  // auto ps = caf::make_copy_on_write<vast::partition_synopsis>();
-  // auto error2 = vast::system::unpack(*partition_legacy, ps.unshared());
-  // CHECK(!error2);
-  // CHECK_EQUAL(ps->field_synopses_.size(), 1u);
-  // CHECK_EQUAL(ps->events, state.data.events);
-  // auto catalog
-  //   = self->spawn(vast::system::catalog, vast::system::accountant_actor{});
-  // auto rp = self->request(catalog, caf::infinite, vast::atom::merge_v,
-  //                         recovered_state.id, ps);
-  // run();
-  // rp.receive([=](vast::atom::ok) {},
-  //            [=](const caf::error& err) {
-  //              FAIL(err);
-  //            });
-  // auto expr = vast::expression{vast::predicate{vast::field_extractor{"x"},
-  //                                              vast::relational_operator::equal,
-  //                                              vast::data{0u}}};
-  // auto query_context
-  //   = vast::query_context::make_extract("test", self, std::move(expr));
-  // auto rp2 = self->request(catalog, caf::infinite, vast::atom::candidates_v,
-  //                          std::move(query_context));
-  // run();
-  // rp2.receive(
-  //   [&](const vast::system::catalog_result& result) {
-  //     const auto& candidates = result.partitions;
-  //     REQUIRE_EQUAL(candidates.size(), 1ull);
-  //     CHECK_EQUAL(candidates[0], state.data.id);
-  //   },
-  //   [=](const caf::error& err) {
-  //     FAIL(err);
-  //   });
+  CHECK_EQUAL(recovered_state.id, state.data.id);
+  CHECK_EQUAL(recovered_state.events, state.data.events);
+  // As of the Type FlatBuffers change we no longer keep the combined layout in
+  // the active partition, which makes this test irrelevant:
+  //   CHECK_EQUAL(recovered_state.combined_layout_, state.combined_layout);
+  CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
+  // Deserialize catalog state from this partition.
+  auto ps = caf::make_copy_on_write<vast::partition_synopsis>();
+  auto error2 = vast::system::unpack(*partition_legacy, ps.unshared());
+  CHECK(!error2);
+  CHECK_EQUAL(ps->field_synopses_.size(), 1u);
+  CHECK_EQUAL(ps->events, state.data.events);
+  auto catalog
+    = self->spawn(vast::system::catalog, vast::system::accountant_actor{});
+  auto rp = self->request(catalog, caf::infinite, vast::atom::merge_v,
+                          recovered_state.id, ps);
+  run();
+  rp.receive([=](vast::atom::ok) {},
+             [=](const caf::error& err) {
+               FAIL(err);
+             });
+  auto expr = vast::expression{vast::predicate{vast::field_extractor{"x"},
+                                               vast::relational_operator::equal,
+                                               vast::data{0u}}};
+  auto query_context
+    = vast::query_context::make_extract("test", self, std::move(expr));
+  auto rp2 = self->request(catalog, caf::infinite, vast::atom::candidates_v,
+                           std::move(query_context));
+  run();
+  rp2.receive(
+    [&](const vast::system::catalog_result& result) {
+      const auto& candidates = result.partitions;
+      REQUIRE_EQUAL(candidates.size(), 1ull);
+      CHECK_EQUAL(candidates[0], state.data.id);
+    },
+    [=](const caf::error& err) {
+      FAIL(err);
+    });
 }
 
 // This test spawns a partition, fills it with some test data, then persists

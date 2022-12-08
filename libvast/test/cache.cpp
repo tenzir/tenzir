@@ -74,7 +74,7 @@ TEST(LRU cache insertion) {
 
 TEST(cache serialization) {
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, xs), true);
+  CHECK(detail::serialize(buf, xs));
   decltype(xs) ys;
   CHECK_EQUAL(detail::legacy_deserialize(buf, ys), true);
   CHECK(xs == ys);

@@ -108,11 +108,11 @@ public:
              inspector);
   }
 
+private:
   const std::vector<digest_type>& digests() const {
     return digests_;
   }
 
-private:
   bool serialize(auto& serializer) {
     // Prune unneeded seeds.
     decltype(seeds_) non_null_seeds;

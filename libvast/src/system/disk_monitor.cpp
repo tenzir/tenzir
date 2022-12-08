@@ -150,7 +150,6 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       }
       VAST_VERBOSE("{} checks db-directory of size {}", *self, *size);
       if (*size > self->state.config.high_water_mark) {
-        // TODO: Remove the static_cast when switching to CAF 0.18.
         self
           ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
                     atom::erase_v)

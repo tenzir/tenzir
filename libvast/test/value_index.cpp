@@ -66,7 +66,7 @@ TEST(bool) {
   CHECK_EQUAL(to_string(multi), "11111111");
   MESSAGE("serialization");
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), true);
+  CHECK(detail::serialize(buf, idx));
   value_index_ptr idx2;
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   t = idx2->lookup(relational_operator::equal, make_data_view(true));
@@ -114,7 +114,7 @@ TEST(integer) {
   CHECK_EQUAL(to_string(multi), "0101011");
   MESSAGE("serialization");
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), true);
+  CHECK(detail::serialize(buf, idx));
   value_index_ptr idx2;
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   less_than_leet

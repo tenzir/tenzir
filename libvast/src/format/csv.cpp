@@ -117,7 +117,7 @@ caf::error render(output_iterator& out, const view<data>& x) {
     x);
 }
 
-std::optional<char> handle_escaped_separator(const char separator) {
+std::optional<char> handle_escaped_separator(char separator) {
   switch (separator) {
     case 't':
       return '\t';

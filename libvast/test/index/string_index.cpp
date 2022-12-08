@@ -96,7 +96,7 @@ TEST(string) {
   CHECK_EQUAL(to_string(unbox(result)), "1111110000");
   MESSAGE("serialization");
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), true);
+  CHECK(detail::serialize(buf, idx));
   auto idx2 = string_index{type{string_type{}}};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::equal, make_data_view("foo"));

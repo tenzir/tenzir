@@ -213,7 +213,7 @@ TEST(serialization) {
   xs.emplace_back(count{8});
   auto x0 = data{xs};
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, x0), true);
+  CHECK(detail::serialize(buf, x0));
   data x1;
   CHECK_EQUAL(detail::legacy_deserialize(buf, x1), true);
   CHECK_EQUAL(x0, x1);

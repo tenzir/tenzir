@@ -61,7 +61,7 @@ template <concrete_type T>
 auto check_column(const table_slice& slice, int c, const T& t,
                   const std::vector<data>& ref) {
   for (size_t r = 0; r < ref.size(); ++r)
-    CHECK_VARIANT_EQUAL(slice.at(r, c, type{t}), make_view(ref[r]));
+    CAF_CHECK_EQUAL(slice.at(r, c, type{t}), make_view(ref[r]));
 }
 
 count operator"" _c(unsigned long long int x) {
@@ -78,7 +78,7 @@ table_slice roundtrip(table_slice slice) {
   table_slice slice_copy;
   caf::byte_buffer buf;
   caf::binary_serializer sink{nullptr, buf};
-  CHECK_EQUAL(inspect(sink, slice), true);
+  CHECK(inspect(sink, slice));
   CHECK_EQUAL(detail::legacy_deserialize(buf, slice_copy), true);
   return slice_copy;
 }
@@ -607,7 +607,7 @@ TEST(single column - serialization) {
   {
     caf::byte_buffer buf;
     caf::binary_serializer sink{nullptr, buf};
-    CHECK_EQUAL(sink.apply(slice1), true);
+    CHECK(sink.apply(slice1));
     CHECK_EQUAL(detail::legacy_deserialize(buf, slice2), true);
   }
   CHECK_VARIANT_EQUAL(slice2.at(0, 0, t), 0_c);

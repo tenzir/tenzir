@@ -23,7 +23,6 @@
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
-#include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
 #include <memory>

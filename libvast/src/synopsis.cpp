@@ -27,6 +27,29 @@
 
 namespace vast {
 
+namespace {
+caf::expected<synopsis_ptr> unpack_opaque_synopsis(
+  const vast::fbs::synopsis::LegacyOpaqueSynopsis& synopsis) {
+  auto ret = synopsis_ptr{nullptr};
+  if (auto data = synopsis.caf_0_17_data()) {
+    vast::detail::legacy_deserializer sink(as_bytes(*data));
+    if (sink(ret))
+      return ret;
+    return caf::make_error(ec::parse_error, "opaque_synopsis not "
+                                            "deserializable");
+  }
+  if (auto data = synopsis.caf_0_18_data()) {
+    caf::binary_deserializer sink(nullptr, data->data(), data->size());
+    if (sink.apply(ret))
+      return ret;
+    return caf::make_error(ec::parse_error, "opaque_synopsis(0_18) not "
+                                            "deserializable");
+  }
+  return caf::make_error(ec::parse_error, "Lack of data in "
+                                          "opaque_synopsis. Unable to "
+                                          "deserialize");
+}
+} // namespace
 synopsis::synopsis(vast::type x) : type_{std::move(x)} {
   // nop
 }
@@ -87,21 +110,12 @@ unpack(const fbs::synopsis::LegacySynopsis& synopsis, synopsis_ptr& ptr) {
       vast::time{} + vast::duration{ts->start()},
       vast::time{} + vast::duration{ts->end()});
   else if (auto os = synopsis.opaque_synopsis()) {
-    if (auto data = os->caf_0_17_data()) {
-      vast::detail::legacy_deserializer sink(as_bytes(*data));
-      if (!sink(ptr))
-        return caf::make_error(ec::parse_error, "opaque_synopsis not "
-                                                "deserializable");
-    } else if (auto data = os->caf_0_18_data()) {
-      caf::binary_deserializer sink(nullptr, data->data(), data->size());
-      if (!sink.apply(ptr))
-        return caf::make_error(ec::parse_error, "opaque_synopsis(0_18) not "
-                                                "deserializable");
+    if (auto synopsis = unpack_opaque_synopsis(*os)) {
+      ptr = std::move(*synopsis);
     } else {
-      return caf::make_error(ec::parse_error, "Lack of data in "
-                                              "opaque_synopsis. Unable to "
-                                              "deserialize");
+      return std::move(synopsis.error());
     }
+
   } else {
     return caf::make_error(ec::format_error, "no synopsis type");
   }

@@ -113,7 +113,7 @@ TEST(serialization) {
   mod.add(t);
   // Save & load
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, mod), true);
+  CHECK(detail::serialize(buf, mod));
   module mod2;
   CHECK_EQUAL(detail::legacy_deserialize(buf, mod2), true);
   // Check integrity

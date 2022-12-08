@@ -69,9 +69,9 @@ make_source(caf::actor_system& sys, const std::string& format,
   auto udp_port = std::optional<uint16_t>{};
   // Parse options.
   const auto& options = inv.options;
-  auto max_events
-    = to_std(caf::get_if<caf::config_value::integer>(&options, //
-                                                     "vast.import.max-events"));
+  auto max_events = to_optional(
+    caf::get_if<caf::config_value::integer>(&options, //
+                                            "vast.import.max-events"));
   auto uri = caf::get_if<std::string>(&options, "vast.import.listen");
   auto file = caf::get_if<std::string>(&options, "vast.import.read");
   auto type = caf::get_if<std::string>(&options, "vast.import.type");

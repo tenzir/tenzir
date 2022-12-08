@@ -232,11 +232,6 @@ caf::error merge_environment(record& config) {
 
 caf::expected<caf::settings> to_settings(record config) {
   // Pre-process our configuration so that it can be properly parsed later.
-  // Strip the "caf." prefix from all keys.
-  // TODO: Remove this after switching to CAF 0.18.
-  for (auto& option : config)
-    if (auto& key = option.first; std::string_view{key}.starts_with("caf."))
-      key.erase(0, 4);
   // Erase all null values because a caf::config_value has no such notion.
   for (auto i = config.begin(); i != config.end();) {
     if (caf::holds_alternative<caf::none_t>(i->second))

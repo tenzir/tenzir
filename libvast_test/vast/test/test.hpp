@@ -109,7 +109,6 @@ struct less_equal_compare {
 #define FIXTURE_SCOPE_END CAF_TEST_FIXTURE_SCOPE_END
 
 // -- macros for checking results ----------------------------------------------
-// fmt::format("{}", (x).error()
 // Checks that abort the current test on failure
 #define REQUIRE CAF_REQUIRE
 #define REQUIRE_EQUAL(x, y) CAF_REQUIRE_EQUAL((x), (y))
@@ -121,7 +120,8 @@ struct less_equal_compare {
 #define REQUIRE_NOERROR(x)                                                     \
   do {                                                                         \
     if (!(x)) {                                                                \
-      CAF_FAIL(__FILE__, __LINE__);                                            \
+      CAF_FAIL(                                                                \
+        fmt::format("Unexpected error {} in: {}", (x).error(), __FILE__));     \
     } else {                                                                   \
       MESSAGE("Successful check " #x);                                         \
     }                                                                          \
@@ -137,7 +137,6 @@ struct less_equal_compare {
     using namespace vast;                                                      \
     CAF_CHECK_EQUAL((x), (y));                                                 \
   } while (false)
-// CAF_CHECK_EQUAL((x), (y))
 #define CHECK_NOT_EQUAL(x, y) CAF_CHECK_NOT_EQUAL((x), (y))
 #define CHECK_LESS(x, y) CAF_CHECK_LESS((x), (y))
 #define CHECK_LESS_EQUAL(x, y) CAF_CHECK_LESS_OR_EQUAL((x), (y))
@@ -146,11 +145,10 @@ struct less_equal_compare {
 #define CHECK_ERROR(x) CHECK_EQUAL(!(x), true)
 #define CHECK_SUCCESS(x) CHECK_EQUAL((x), caf::none)
 #define CHECK_FAILURE(x) CHECK_NOT_EQUAL((x), caf::none)
-// Checks that automagically handle caf::variant types.
 #define CHECK_VARIANT_EQUAL(x, y)                                              \
   do {                                                                         \
-    auto v1 = x;                                                               \
-    decltype(v1) y_as_variant = y;                                             \
+    auto v1 = (x);                                                             \
+    decltype(v1) y_as_variant = (y);                                           \
     CHECK_EQUAL(v1, y_as_variant);                                             \
   } while (false)
 #define CHECK_VARIANT_NOT_EQUAL CAF_CHECK_NOT_EQUAL

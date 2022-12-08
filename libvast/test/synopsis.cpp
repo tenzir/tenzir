@@ -18,8 +18,6 @@
 #include "vast/time_synopsis.hpp"
 
 #include <caf/binary_serializer.hpp>
-#include <caf/json_reader.hpp>
-#include <caf/json_writer.hpp>
 
 using namespace std::chrono_literals;
 using namespace vast;

@@ -82,7 +82,7 @@ TEST(subnet) {
   CHECK_EQUAL(to_string(multi), "111100");
   MESSAGE("serialization");
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), true);
+  CHECK(detail::serialize(buf, idx));
   subnet_index idx2{type{subnet_type{}}};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   bm = idx2.lookup(relational_operator::not_equal, make_data_view(s1));

@@ -8,14 +8,12 @@
 
 #pragma once
 
-#include <caf/optional.hpp>
-
 #include <optional>
 
 namespace vast {
 
 template <typename T>
-std::optional<T> to_std(const T* ptr) {
+std::optional<T> to_optional(const T* ptr) {
   if (ptr)
     return *ptr;
   return std::nullopt;

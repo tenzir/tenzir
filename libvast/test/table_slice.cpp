@@ -403,7 +403,7 @@ TEST(roundtrip) {
   table_slice slice_copy;
   caf::byte_buffer buf;
   caf::binary_serializer sink{nullptr, buf};
-  CHECK_EQUAL(inspect(sink, slice), true);
+  CHECK(inspect(sink, slice));
   CHECK_EQUAL(detail::legacy_deserialize(buf, slice_copy), true);
   CHECK_EQUAL(slice_copy.offset(), 42u);
   CHECK_EQUAL(slice, slice_copy);

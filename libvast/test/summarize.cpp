@@ -55,7 +55,7 @@ table_slice make_testdata(table_slice_encoding encoding
     auto time = vast::time{std::chrono::seconds(1258329600 + i)};
     auto ip = address::v4(0xC0A80101); // 192, 168, 1, 1
     auto port = count{443};
-    // We inject a gap here at index 1 to make sure that we test both the slow -
+    // We inject a gap here at index 1 to make sure that we test both the slow-
     // and fast-paths for aggregation_function::add(...).
     auto sum = i == 2 ? data{caf::none} : data{real{1. * i}};
     auto sum_null = caf::none;
@@ -120,7 +120,6 @@ TEST(summarize Zeek conn log) {
   const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
-  MESSAGE(summarized_slice);
   // NOTE: I calculated this data ahead of time using jq, so it can safely be
   // used for comparison here. As an example, here's how to calculate the
   // grouped sums of the duration values using jq:
@@ -130,12 +129,12 @@ TEST(summarize Zeek conn log) {
   //     | map(.duration)
   //     | add'
   //
-  // The same can be repeated for the other values, using add to calculatethe
-  // sum, and min and max to calculate the min and max values respectively.The
-  // rounding functions by trimming the last 16 characters from the
-  // timestamp string before grouping.
+  // The same can be repeated for the other values, using add to calculate the
+  // sum, and min and max to calculate the min and max values respectively. The
+  // rounding functions by trimming the last 16 characters from the timestamp
+  // string before grouping.
   //
-  // Alternatively, this data can be calculated directly from the zeek log with :
+  // Alternatively, this data can be calculated directly from the zeek log with:
   //
   //   cat libvast_test/artifacts/logs/zeek/conn.log
   //     | zeek-cut -D "%Y-%m-%d" ts duration

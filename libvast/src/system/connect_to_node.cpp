@@ -43,7 +43,6 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id.data());
   auto timeout = node_connection_timeout(opts);
-
   endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "vast.endpoint", defaults::system::endpoint.data());

@@ -12,9 +12,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/hash/hash.hpp"
 
-#include <caf/error.hpp>
-#include <caf/sec.hpp>
-
 #include <cstddef>
 #include <utility>
 #include <vector>

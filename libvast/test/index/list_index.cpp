@@ -64,7 +64,7 @@ TEST(list) {
                                                                         "00");
   MESSAGE("serialization");
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), true);
+  CHECK(detail::serialize(buf, idx));
   list_index idx2{container_type};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   x = "foo";

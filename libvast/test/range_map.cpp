@@ -184,7 +184,7 @@ TEST(range_map serialization) {
   x.insert(80, 90, 'b');
   x.insert(20, 30, 'c');
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, x), true);
+  CHECK(detail::serialize(buf, x));
   CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_EQUAL(y.size(), 3u);
   auto i = y.lookup(50);

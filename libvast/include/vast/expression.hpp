@@ -99,7 +99,7 @@ bool operator<(const type_extractor& x, const type_extractor& y);
 template <class Inspector>
 auto inspect(Inspector& f, type_extractor& x) {
   return f.object(x)
-    .pretty_name("vast.type_extractor")
+    .pretty_name("type_extractor")
     .fields(f.field("type", x.type));
 }
 

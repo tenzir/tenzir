@@ -95,7 +95,6 @@ bool operator<(const qualified_record_field& x,
 }
 
 bool inspect(caf::binary_serializer& f, qualified_record_field& x) {
-  static_assert(!caf::serializer::is_loading);
   std::string layout_name = std::string{x.layout_name_};
   legacy_type field_type = x.field_.type.to_legacy_type();
   return detail::apply_all(f, layout_name, x.field_.name, field_type);
@@ -103,7 +102,6 @@ bool inspect(caf::binary_serializer& f, qualified_record_field& x) {
 
 bool inspect(caf::deserializer& f, qualified_record_field& x) {
   static_assert(caf::deserializer::is_loading);
-  // Need to switch logic below when this changes to bool with CAF 0.18.
   // This overload exists for backwards compatibility. In some cases, we used
   // to serialize qualified record fields using CAF. Back then, the qualified
   // record field had these three members:
@@ -121,7 +119,6 @@ bool inspect(caf::deserializer& f, qualified_record_field& x) {
 }
 
 bool inspect(detail::legacy_deserializer& f, qualified_record_field& x) {
-  static_assert(detail::legacy_deserializer::is_loading);
   std::string layout_name = {};
   std::string field_name = {};
   legacy_type field_type = {};

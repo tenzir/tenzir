@@ -64,7 +64,7 @@ TEST(real with custom binner) {
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
   MESSAGE("serialization");
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), true);
+  CHECK(detail::serialize(buf, idx));
   auto idx2 = index_type{type{real_type{}}, opts};
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::not_equal, make_data_view(4711.14));
@@ -133,7 +133,7 @@ TEST(time) {
   CHECK(to_string(unbox(eighteen)) == "000101");
   MESSAGE("serialization");
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), true);
+  CHECK(detail::serialize(buf, idx));
   arithmetic_index<vast::time> idx2{type{time_type{}}, opts};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   eighteen = idx2.lookup(relational_operator::greater_equal,

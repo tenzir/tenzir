@@ -76,7 +76,7 @@ TEST(serialization) {
   std::string str = "foobarbaz";
   auto x = chunk::make(std::move(str));
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, x), true);
+  CHECK(detail::serialize(buf, x));
   chunk_ptr y;
   CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_NOT_EQUAL(y, nullptr);
@@ -86,7 +86,7 @@ TEST(serialization) {
 TEST(nullptr serialization) {
   auto x = chunk_ptr{};
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, x), true);
+  CHECK(detail::serialize(buf, x));
   chunk_ptr y;
   CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_EQUAL(y, nullptr);
@@ -95,7 +95,7 @@ TEST(nullptr serialization) {
 TEST(empty serialization) {
   auto x = chunk::make_empty();
   caf::byte_buffer buf;
-  CHECK_EQUAL(detail::serialize(buf, x), true);
+  CHECK(detail::serialize(buf, x));
   chunk_ptr y;
   CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_NOT_EQUAL(y, nullptr);

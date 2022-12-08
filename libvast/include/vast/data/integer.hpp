@@ -11,7 +11,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/hash/uniquely_represented.hpp"
-#include "vast/logger.hpp"
 
 #include <cstdint>
 

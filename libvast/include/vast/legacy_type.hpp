@@ -371,7 +371,6 @@ public:
     }
     VAST_ASSERT(!name.empty());
     auto tid = type_id<Derived>();
-    // VAST_WARN("inspekt legacy konkret type {}", name);
     return f.object(x).pretty_name(name).fields(
       f.field("type-id", tid), f.field("name", x.name_),
       f.field("attributes", x.attributes_));
