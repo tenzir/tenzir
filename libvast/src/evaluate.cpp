@@ -20,6 +20,7 @@
 #include <arrow/record_batch.h>
 
 #include <cstddef>
+#include <regex>
 #include <span>
 
 namespace vast {
@@ -252,6 +253,41 @@ struct column_evaluator<Op, LhsType, caf::none_t> {
            [[maybe_unused]] caf::none_t rhs,
            [[maybe_unused]] const ids& selection) noexcept {
     return ids{offset + array.length(), false};
+  }
+};
+
+// Speed up string and pattern comparisons by instantiating the regex object
+// less often.
+template <relational_operator Op>
+  requires(Op == relational_operator::equal
+           || Op == relational_operator::not_equal)
+struct column_evaluator<Op, string_type, view<pattern>> {
+  static ids evaluate(string_type type, id offset, const arrow::Array& array,
+                      view<pattern> rhs, const ids& selection) noexcept {
+    ids result{};
+    auto re = std::regex{std::string{rhs.string()}};
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      const auto row = detail::narrow_cast<int64_t>(id - offset);
+      // TODO: Instead of this in the loop, do selection &= array.null_bitmap
+      // outside of it.
+      if (array.IsNull(row))
+        continue;
+      result.append(false, id - result.size());
+      const auto value = value_at(type, array, row);
+      if constexpr (Op == relational_operator::equal) {
+        if (std::regex_match(value.begin(), value.end(), re))
+          result.append_bit(true);
+      } else if constexpr (Op == relational_operator::not_equal) {
+        if (!std::regex_match(value.begin(), value.end(), re))
+          result.append_bit(true);
+      } else {
+        static_assert(detail::always_false_v<decltype(Op)>,
+                      "unexpected relational operator");
+      }
+    }
+    result.append(false, offset + array.length() - result.size());
+    return result;
   }
 };
 
