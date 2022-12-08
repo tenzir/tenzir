@@ -116,7 +116,6 @@ TEST(status endpoint) {
   self->send(handler, vast::atom::http_request_v, status_endpoint.endpoint_id,
              std::move(request));
   run();
-
   CHECK_EQUAL(response->error_, caf::error{});
   CHECK(!response->body_.empty());
   auto padded_string = simdjson::padded_string{response->body_};
