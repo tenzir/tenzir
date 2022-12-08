@@ -112,7 +112,7 @@ public:
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
   // See also ae9dbed.
   std::unordered_map<vast::type, detail::flat_map<uuid, partition_synopsis_ptr>>
-    synopses = {};
+    synopses_per_type = {};
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;

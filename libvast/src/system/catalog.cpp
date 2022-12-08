@@ -59,22 +59,22 @@ void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
                  const std::pair<uuid, partition_synopsis_ptr>& rhs) {
                 return lhs.first < rhs.first;
               });
-    synopses[type] = decltype(synopses)::value_type::second_type::make_unsafe(
+    synopses_per_type[type] = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
       std::move(flat_data));
   }
 }
 
 void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
   update_unprunable_fields(*ps);
-  synopses[ps->schema][partition] = std::move(ps);
+  synopses_per_type[ps->schema][partition] = std::move(ps);
 }
 
 void catalog_state::erase(const uuid& partition) {
-  for (auto& [type, uuid_synopsis_map] : synopses) {
+  for (auto& [type, uuid_synopsis_map] : synopses_per_type) {
     auto erased = uuid_synopsis_map.erase(partition);
     if (erased) {
       if (uuid_synopsis_map.empty()) {
-        synopses.erase(type);
+        synopses_per_type.erase(type);
       }
       return;
     }
@@ -86,7 +86,7 @@ catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
   auto total_candidates = std::map<type, catalog_result>{};
   auto pruned = prune(expr, unprunable_fields);
-  for (const auto& [type, _] : synopses) {
+  for (const auto& [type, _] : synopses_per_type) {
     auto resolved = resolve(taxonomies, pruned, type);
     if (!resolved) {
       return resolved.error();
@@ -113,8 +113,8 @@ catalog_state::lookup(const expression& expr) const {
 catalog_result
 catalog_state::lookup_impl(const expression& expr, const type& schema) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
-  auto synopsis_map_per_type_it = synopses.find(schema);
-  VAST_ASSERT(synopsis_map_per_type_it != synopses.end());
+  auto synopsis_map_per_type_it = synopses_per_type.find(schema);
+  VAST_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
   const auto& partition_synopses = synopsis_map_per_type_it->second;
   // The partition UUIDs must be sorted, otherwise the invariants of the
   // inplace union and intersection algorithms are violated, leading to
@@ -241,7 +241,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         }
         VAST_DEBUG("{} checked {} partitions for predicate {} and got {} "
                    "results",
-                   detail::pretty_type_name(this), synopses.size(), x,
+                   detail::pretty_type_name(this), synopses_per_type.size(), x,
                    result.partition_infos.size());
         // Some calling paths require the result to be sorted.
         VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
@@ -419,7 +419,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
 
 size_t catalog_state::memusage() const {
   size_t result = 0;
-  for (const auto& [type, id_synopsis_map] : synopses)
+  for (const auto& [type, id_synopsis_map] : synopses_per_type)
     for (const auto& [id, synopsis] : id_synopsis_map) {
       result += synopsis->memusage();
     }
@@ -634,8 +634,8 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     },
     [self](atom::get) -> std::vector<partition_synopsis_pair> {
       std::vector<partition_synopsis_pair> result;
-      result.reserve(self->state.synopses.size());
-      for (const auto& [type, id_synopsis_map] : self->state.synopses) {
+      result.reserve(self->state.synopses_per_type.size());
+      for (const auto& [type, id_synopsis_map] : self->state.synopses_per_type) {
         for (const auto& [id, synopsis] : id_synopsis_map) {
           result.push_back({id, synopsis});
         }
@@ -746,11 +746,11 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [self](atom::status, status_verbosity v) {
       record result;
       result["memory-usage"] = count{self->state.memusage()};
-      result["num-partitions"] = count{self->state.synopses.size()};
+      result["num-partitions"] = count{self->state.synopses_per_type.size()};
       if (v >= status_verbosity::detailed) {
         auto partitions = list{};
-        partitions.reserve(self->state.synopses.size());
-        for (const auto& [type, id_synopsis_map] : self->state.synopses) {
+        partitions.reserve(self->state.synopses_per_type.size());
+        for (const auto& [type, id_synopsis_map] : self->state.synopses_per_type) {
           for (const auto& [id, synopsis] : id_synopsis_map) {
             VAST_ASSERT(synopsis);
             auto partition = record{
@@ -789,7 +789,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       auto num_partitions_and_events_per_schema_and_version
         = detail::stable_map<std::pair<std::string_view, count>,
                              std::pair<count, count>>{};
-      for (const auto& [type, id_synopsis_map] : self->state.synopses) {
+      for (const auto& [type, id_synopsis_map] : self->state.synopses_per_type) {
         for (const auto& [id, synopsis] : id_synopsis_map) {
           VAST_ASSERT(synopsis);
           auto& [num_partitions, num_events]
