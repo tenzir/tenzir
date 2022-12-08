@@ -48,6 +48,25 @@ By default, VAST automatically publishes a Zeek event `VAST::data` to the topic
 `vast/data/`. Use `--event` and `--topic` to set these options to different
 values.
 
+### Arrow
+
+VAST supports [reading](/docs/use/ingest#arrow) and writing  data in the
+[`Arrow IPC`](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc)
+columnar format, suitable for efficient handling of large data sets. It is
+used by VAST's python bindings to efficiently transfer data to be used with
+data analysis tools like [pandas](https://pandas.pydata.org/).
+Since Arrow IPC is self-contained and includes the full schema, it can be
+used to transfer data between VAST nodes, even if the target node is not aware
+of the underlying schema.
+
+:::note
+VAST makes use of Arrow
+[extension types](https://arrow.apache.org/docs/format/Columnar.html#extension-types)
+to properly describe domain-specific domain-specific concepts like ip addresses
+or subnets. Our python bindings come with the required tooling, so you can
+work with native types instead of relying on error-prone string representations.
+:::
+
 ### PCAP
 
 VAST supports [reading](/docs/use/ingest#pcap) and writing

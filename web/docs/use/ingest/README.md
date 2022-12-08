@@ -105,6 +105,23 @@ correspond to the CSV header field names.
 For a real-world example of ingesting CSV, take a look a the section covering
 [argus](#argus) below.
 
+### Arrow
+
+The `import arrow` command imports
+[`Arrow IPC`](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc)
+data. Since Arrow IPC carries the schema alongside the data, `import arrow` is
+self-contained and does not require an additional schema. 
+Our importer handles multiple, concatenated IPC streams, and is the dual to the
+associated output [format](/docs/use/query#arrow).
+
+:::note Recommendation
+`vast -e <node-1> export arrow <query> | vast -e <node-2> import arrow`
+transfers all data matching the given query from `node-1` to `node-2`,
+creating an identical copy with the exception of operational meta data,
+i.e. `#import_time`.
+:::
+
+
 ### Zeek
 
 The `import zeek` command consumes [Zeek](https://zeek.org) logs in
