@@ -408,10 +408,10 @@ TEST(identity partition pipeline via the index) {
     = vast::make_pipeline_operator("identity", vast::record{});
   REQUIRE_NOERROR(identity_operator);
   pipeline->add_operator(std::move(*identity_operator));
-  auto rp3 = self->request(
-    index, caf::infinite, vast::atom::apply_v, pipeline,
-    std::unordered_map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
-    vast::system::keep_original_partition::yes);
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
+                           std::unordered_map<vast::uuid, vast::type>{
+                             {partition_uuid, partition_type}},
+                           vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
     [=](const std::vector<vast::partition_info>& infos) {
@@ -428,10 +428,10 @@ TEST(identity partition pipeline via the index) {
               [](const caf::error& e) {
                 REQUIRE_SUCCESS(e);
               });
-  auto rp5 = self->request(
-    index, caf::infinite, vast::atom::apply_v, pipeline,
-    std::unordered_map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
-    vast::system::keep_original_partition::no);
+  auto rp5 = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
+                           std::unordered_map<vast::uuid, vast::type>{
+                             {partition_uuid, partition_type}},
+                           vast::system::keep_original_partition::no);
   run();
   rp5.receive(
     [=](const std::vector<vast::partition_info>& infos) {
@@ -505,10 +505,10 @@ TEST(query after transform) {
     = vast::make_pipeline_operator("rename", rename_settings);
   REQUIRE_NOERROR(rename_operator);
   pipeline->add_operator(std::move(*rename_operator));
-  auto rp3 = self->request(
-    index, caf::infinite, vast::atom::apply_v, pipeline,
-    std::unordered_map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
-    vast::system::keep_original_partition::no);
+  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
+                           std::unordered_map<vast::uuid, vast::type>{
+                             {partition_uuid, partition_type}},
+                           vast::system::keep_original_partition::no);
   run();
   rp3.receive(
     [=](const std::vector<vast::partition_info>& infos) {

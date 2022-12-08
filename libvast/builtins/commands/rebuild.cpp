@@ -415,8 +415,8 @@ struct rebuilder_state {
       ->request(catalog, caf::infinite, atom::candidates_v,
                 std::move(query_context))
       .then(
-        [this, finish](
-          std::unordered_map<type, system::catalog_result>& catalog_result) mutable {
+        [this, finish](std::unordered_map<type, system::catalog_result>&
+                         catalog_result) mutable {
           for (auto& [type, result] : catalog_result) {
             if (!run->options.all) {
               std::erase_if(

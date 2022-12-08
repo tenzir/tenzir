@@ -213,9 +213,8 @@ using catalog_actor = typed_actor_fwd<
   // Reinitialize the catalog from a set of partition synopses. Used at
   // startup, so the map is expected to be huge and we use a shared_ptr
   // to be sure it's not accidentally copied.
-  caf::replies_to<
-    atom::merge,
-    std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>>::with<atom::ok>,
+  caf::replies_to<atom::merge, std::shared_ptr<std::unordered_map<
+                                 uuid, partition_synopsis_ptr>>>::with<atom::ok>,
   // Merge a single partition synopsis.
   caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with<atom::ok>,
   // Merge a set of partition synopsis.

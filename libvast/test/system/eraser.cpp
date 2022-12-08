@@ -164,7 +164,8 @@ TEST(eraser on mock INDEX) {
   expect((atom::resolve, vast::expression), from(aut).to(index));
   expect((std::unordered_map<vast::type, vast::system::catalog_result>),
          from(index).to(aut));
-  expect((atom::apply, vast::pipeline_ptr, std::unordered_map<vast::uuid, vast::type>,
+  expect((atom::apply, vast::pipeline_ptr,
+          std::unordered_map<vast::uuid, vast::type>,
           vast::system::keep_original_partition),
          from(aut).to(index));
   // The mock index doesn't do any internal messaging but just

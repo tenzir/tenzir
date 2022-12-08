@@ -84,8 +84,8 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
   for (const auto& cand : candidates) {
     auto it = std::find(partitions.begin(), partitions.end(), cand);
     if (it != partitions.end()) {
-      it->priority
-        += query_state_it->second.query_contexts_per_type.begin()->second.priority;
+      it->priority += query_state_it->second.query_contexts_per_type.begin()
+                        ->second.priority;
       it->queries.push_back(qid);
       VAST_ASSERT(!detail::contains(inactive_partitions, cand),
                   "A partition must not be active and inactive at the same "
@@ -95,8 +95,8 @@ query_queue::insert(query_state&& query_state, std::vector<uuid>&& candidates) {
     it
       = std::find(inactive_partitions.begin(), inactive_partitions.end(), cand);
     if (it != inactive_partitions.end()) {
-      it->priority
-        += query_state_it->second.query_contexts_per_type.begin()->second.priority;
+      it->priority += query_state_it->second.query_contexts_per_type.begin()
+                        ->second.priority;
       it->queries.push_back(qid);
       partitions.push_back(std::move(*it));
 

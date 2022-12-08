@@ -67,8 +67,8 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::keep_original_partition) -> std::vector<partition_info> {
       FAIL("no mock implementation available");
     },
-    [=](atom::resolve,
-        vast::expression) -> std::unordered_map<vast::type, system::catalog_result> {
+    [=](atom::resolve, vast::expression)
+      -> std::unordered_map<vast::type, system::catalog_result> {
       FAIL("no mock implementation available");
     },
     [=](atom::evaluate,

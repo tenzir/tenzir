@@ -212,7 +212,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             vast::atom::candidates_v, std::move(query_context));
     run();
     rp.receive(
-      [&](std::unordered_map<vast::type, vast::system::catalog_result>& candidates) {
+      [&](std::unordered_map<vast::type, vast::system::catalog_result>&
+            candidates) {
         for (const auto& [key, candidate] : candidates) {
           for (const auto& partition : candidate.partition_infos) {
             result.emplace_back(partition.uuid);

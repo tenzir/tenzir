@@ -465,7 +465,8 @@ caf::error index_state::load_from_disk() {
   auto partitions = std::vector<uuid>{};
   auto oversized_partitions = std::vector<uuid>{};
   auto synopsis_files = std::vector<uuid>{};
-  auto synopses = std::make_shared<std::unordered_map<uuid, partition_synopsis_ptr>>();
+  auto synopses
+    = std::make_shared<std::unordered_map<uuid, partition_synopsis_ptr>>();
   for (const auto& entry : dir_iter) {
     const auto stem = entry.path().stem();
     vast::uuid partition_uuid{};
@@ -1039,14 +1040,11 @@ auto get_query_counters(const query_queue& pending_queries) {
   auto result = query_counters{};
   for (const auto& [_, q] : pending_queries.queries()) {
     auto first_context_entry = q.query_contexts_per_type.begin()->second;
-    if (first_context_entry.priority
-        == query_context::priority::low)
+    if (first_context_entry.priority == query_context::priority::low)
       result.num_low_prio++;
-    else if (first_context_entry.priority
-             == query_context::priority::normal)
+    else if (first_context_entry.priority == query_context::priority::normal)
       result.num_normal_prio++;
-    else if (first_context_entry.priority
-             == query_context::priority::high)
+    else if (first_context_entry.priority == query_context::priority::high)
       result.num_high_prio++;
     else
       result.num_custom_prio++;
@@ -1838,7 +1836,8 @@ index(index_actor::stateful_pointer<index_state> self,
       auto old_partition_id_vec = std::vector<uuid>{};
       auto query_contexts = query_state::type_query_context_map{};
       {
-        auto corrected_old_partitions_per_type = std::unordered_map<uuid, type>{};
+        auto corrected_old_partitions_per_type
+          = std::unordered_map<uuid, type>{};
         for (const auto& [id, type] : old_partitions_per_type) {
           if (self->state.partitions_in_transformation.insert(id).second) {
             corrected_old_partitions_per_type[id] = old_partitions_per_type[id];

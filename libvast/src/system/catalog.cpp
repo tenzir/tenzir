@@ -44,7 +44,8 @@
 #include <type_traits>
 
 namespace vast::system {
-void catalog_state::create_from(std::unordered_map<uuid, partition_synopsis_ptr>&& ps) {
+void catalog_state::create_from(
+  std::unordered_map<uuid, partition_synopsis_ptr>&& ps) {
   std::unordered_map<vast::type,
                      std::vector<std::pair<uuid, partition_synopsis_ptr>>>
     flat_data_map;
@@ -59,8 +60,9 @@ void catalog_state::create_from(std::unordered_map<uuid, partition_synopsis_ptr>
                  const std::pair<uuid, partition_synopsis_ptr>& rhs) {
                 return lhs.first < rhs.first;
               });
-    synopses_per_type[type] = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
-      std::move(flat_data));
+    synopses_per_type[type]
+      = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
+        std::move(flat_data));
   }
 }
 
@@ -614,9 +616,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                        atom::telemetry_v);
   }
   return {
-    [self](
-      atom::merge,
-      std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps) -> atom::ok {
+    [self](atom::merge,
+           std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps)
+      -> atom::ok {
       self->state.create_from(std::move(*ps));
       return atom::ok_v;
     },
@@ -635,7 +637,8 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [self](atom::get) -> std::vector<partition_synopsis_pair> {
       std::vector<partition_synopsis_pair> result;
       result.reserve(self->state.synopses_per_type.size());
-      for (const auto& [type, id_synopsis_map] : self->state.synopses_per_type) {
+      for (const auto& [type, id_synopsis_map] :
+           self->state.synopses_per_type) {
         for (const auto& [id, synopsis] : id_synopsis_map) {
           result.push_back({id, synopsis});
         }
@@ -725,13 +728,14 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                           });
       auto id_str = fmt::to_string(query_context.id);
       duration runtime = std::chrono::steady_clock::now() - start;
-      self->send(self->state.accountant, atom::metrics_v, "catalog.lookup.runtime", runtime,
+      self->send(self->state.accountant, atom::metrics_v,
+                 "catalog.lookup.runtime", runtime,
                  metrics_metadata{
                    {"query", id_str},
                    {"issuer", query_context.issuer},
                  });
-      self->send(self->state.accountant, atom::metrics_v, "catalog.lookup.candidates",
-                 total_candidate_amount,
+      self->send(self->state.accountant, atom::metrics_v,
+                 "catalog.lookup.candidates", total_candidate_amount,
                  metrics_metadata{
                    {"query", std::move(id_str)},
                    {"issuer", query_context.issuer},
@@ -750,7 +754,8 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       if (v >= status_verbosity::detailed) {
         auto partitions = list{};
         partitions.reserve(self->state.synopses_per_type.size());
-        for (const auto& [type, id_synopsis_map] : self->state.synopses_per_type) {
+        for (const auto& [type, id_synopsis_map] :
+             self->state.synopses_per_type) {
           for (const auto& [id, synopsis] : id_synopsis_map) {
             VAST_ASSERT(synopsis);
             auto partition = record{
@@ -789,7 +794,8 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       auto num_partitions_and_events_per_schema_and_version
         = detail::stable_map<std::pair<std::string_view, count>,
                              std::pair<count, count>>{};
-      for (const auto& [type, id_synopsis_map] : self->state.synopses_per_type) {
+      for (const auto& [type, id_synopsis_map] :
+           self->state.synopses_per_type) {
         for (const auto& [id, synopsis] : id_synopsis_map) {
           VAST_ASSERT(synopsis);
           auto& [num_partitions, num_events]
