@@ -469,13 +469,11 @@ tests:
       - command: -N import zeek
         input: data/zeek/dns.log.gz
       - command: -N explore --by='id.orig_h' --after=1s --before=0s 'zeek.dns.query == "survey.112.2o7.net"'
-  Heterogenous JSONL import:
+  Heterogeneous JSONL import:
     tags: [import, json, sysmon]
     steps:
       - command: -N import json
         input: data/json/sysmon.json
-      - command: -N status --detailed
-        transformation: jq '.index.statistics.layouts | del(."vast.metrics")'
       - command: -N import suricata
         input: data/suricata/eve.json
       - command: -N export json '"®" in :string'
