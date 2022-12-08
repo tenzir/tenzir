@@ -19,11 +19,11 @@
 namespace vast {
 
 struct query_state {
-  using query_contexts = std::map<vast::type, vast::query_context>;
+  using type_query_context_map = std::map<vast::type, vast::query_context>;
   static constexpr bool use_deep_to_string_formatter = true;
 
   /// The query expression for each schema.
-  query_contexts schema_query_context;
+  type_query_context_map schema_query_context;
 
   /// The query client.
   system::receiver_actor<atom::done> client = {};

@@ -1546,7 +1546,7 @@ index(index_actor::stateful_pointer<index_state> self,
       std::vector<uuid> candidates;
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
-      std::map<vast::type, vast::query_context> query_contexts;
+      query_state::type_query_context_map query_contexts;
       for (const auto& [active_partition_type, active_partition] :
            self->state.active_partitions) {
         candidates.push_back(active_partition.id);
@@ -1835,7 +1835,7 @@ index(index_actor::stateful_pointer<index_state> self,
         return true;
       });
       auto old_partition_id_vec = std::vector<uuid>{};
-      auto query_contexts = query_state::query_contexts{};
+      auto query_contexts = query_state::query_context_per_type{};
       {
         auto corrected_old_partitions_per_type = std::map<uuid, type>{};
         for (const auto& [id, type] : old_partitions_per_type) {
