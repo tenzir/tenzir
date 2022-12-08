@@ -1972,7 +1972,7 @@ index(index_actor::stateful_pointer<index_state> self,
                               });
                         }
                       },
-                      [self, rp](caf::error e) mutable {
+                      [self, rp](caf::error& e) mutable {
                         VAST_WARN("{} failed to finalize partition transformer "
                                   "output: {}",
                                   *self, e);
