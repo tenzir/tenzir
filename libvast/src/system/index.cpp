@@ -1038,13 +1038,14 @@ struct query_counters {
 auto get_query_counters(const query_queue& pending_queries) {
   auto result = query_counters{};
   for (const auto& [_, q] : pending_queries.queries()) {
-    if (q.query_contexts_per_type.begin()->second.priority
+    auto first_context_entry = q.query_contexts_per_type.begin()->second;
+    if (first_context_entry.priority
         == query_context::priority::low)
       result.num_low_prio++;
-    else if (q.query_contexts_per_type.begin()->second.priority
+    else if (first_context_entry.priority
              == query_context::priority::normal)
       result.num_normal_prio++;
-    else if (q.query_contexts_per_type.begin()->second.priority
+    else if (first_context_entry.priority
              == query_context::priority::high)
       result.num_high_prio++;
     else
