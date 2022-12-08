@@ -228,7 +228,7 @@ using catalog_actor = typed_actor_fwd<
   // Atomatically replace a set of partititon synopses with another.
   caf::replies_to<atom::replace, std::vector<uuid>,
                   std::vector<augmented_partition_synopsis>>::with<atom::ok>,
-  // Return the candidate partitions for a query.
+  // Return the candidate partitions per type for a query.
   caf::replies_to<atom::candidates, vast::query_context>::with< //
     std::map<type, catalog_result>>,
   // Internal telemetry loop.
@@ -281,7 +281,7 @@ using index_actor = typed_actor_fwd<
                  partition_creation_listener_actor, send_initial_dbstate>,
   // Evaluates a query, ie. sends matching events to the caller.
   caf::replies_to<atom::evaluate, query_context>::with<query_cursor>,
-  // Resolves a query to its candidate partitions.
+  // Resolves a query to its candidate partitions per type.
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
   caf::replies_to<atom::resolve,

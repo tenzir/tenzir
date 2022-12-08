@@ -93,7 +93,7 @@
 //                                                                 |
 //     query_id,                                                   |
 //     scheduled,                                                  |
-//     remaining                                    [uuid]         |
+//     remaining                            [uuid, query_context]  |
 //   <-----------  (creates query state)  <------------------------/
 //                            |
 //                            |  query_id, n_taste

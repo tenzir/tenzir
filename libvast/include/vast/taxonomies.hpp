@@ -139,7 +139,7 @@ caf::expected<expression> resolve(const taxonomies& t, const expression& e,
 /// replacement expressions containing only concrete field names.
 /// @param t The set of taxonomies to apply.
 /// @param e The original expression.
-/// @param single_type [TBD]
+/// @param single_type A type in the database.
 /// @returns The sustitute expression.
 caf::expected<expression> resolve(const taxonomies& t, const expression& e,
                                   const vast::type& single_type);

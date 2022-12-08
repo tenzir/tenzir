@@ -163,7 +163,7 @@ struct active_partition_state {
   // Vector of flush listeners.
   std::vector<flush_listener_actor> flush_listeners = {};
 
-  // Taxonomies for querying.
+  // Taxonomies for resolving expressions during a query.
   std::shared_ptr<vast::taxonomies> taxonomies = {};
 };
 
@@ -189,7 +189,7 @@ pack_full(const active_partition_state::serialization_data& x,
 /// @param store_header A binary blob that allows reconstructing the store
 ///                     plugin when reading this partition from disk.
 /// @param index_config The meta-index configuration of the false-positives
-/// @param taxonomies [TBD]
+/// @param taxonomies The taxonomies for resolving expressions during a query.
 /// rates for the types and fields.
 // TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(

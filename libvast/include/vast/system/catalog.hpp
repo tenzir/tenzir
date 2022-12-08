@@ -110,7 +110,7 @@ public:
   /// An actor handle to the accountant.
   accountant_actor accountant = {};
 
-  /// Maps a partition ID to the synopses for that partition.
+  /// For each type, maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
   // See also ae9dbed.
