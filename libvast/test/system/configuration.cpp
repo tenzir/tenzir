@@ -65,9 +65,23 @@ struct fixture {
 
   void env(std::string_view key, std::string_view value) {
     auto result = detail::setenv(key, value);
+    env_variables.emplace_back(key);
     REQUIRE_EQUAL(result, caf::none);
   }
 
+  ~fixture() {
+    // Clean up fixture-only environment variables so they don't get leaked
+    // to other test fixtures.
+    for (const auto& key : env_variables) {
+      auto unset = detail::unsetenv(key);
+      if (unset != caf::no_error) {
+        VAST_TRACE(unset);
+      }
+      VAST_ASSERT(unset == caf::no_error);
+    }
+  }
+
+  std::vector<std::string> env_variables;
   system::configuration cfg;
 };
 
