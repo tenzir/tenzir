@@ -987,8 +987,8 @@ void index_state::schedule_lookups() {
         }
       };
       const auto& context_it
-        = it->second.schema_query_context.find(partition_type);
-      if (context_it == it->second.schema_query_context.end()) {
+        = it->second.query_contexts_per_type.find(partition_type);
+      if (context_it == it->second.query_contexts_per_type.end()) {
         VAST_WARN("{} failed to evaluate query {} for partition {}: query "
                   "context for schema is already unvailable",
                   *self, qid, next->partition);
@@ -1038,13 +1038,13 @@ struct query_counters {
 auto get_query_counters(const query_queue& pending_queries) {
   auto result = query_counters{};
   for (const auto& [_, q] : pending_queries.queries()) {
-    if (q.schema_query_context.begin()->second.priority
+    if (q.query_contexts_per_type.begin()->second.priority
         == query_context::priority::low)
       result.num_low_prio++;
-    else if (q.schema_query_context.begin()->second.priority
+    else if (q.query_contexts_per_type.begin()->second.priority
              == query_context::priority::normal)
       result.num_normal_prio++;
-    else if (q.schema_query_context.begin()->second.priority
+    else if (q.query_contexts_per_type.begin()->second.priority
              == query_context::priority::high)
       result.num_high_prio++;
     else
@@ -1592,7 +1592,7 @@ index(index_actor::stateful_pointer<index_state> self,
             auto scheduled
               = std::min(num_candidates, self->state.taste_partitions);
             if (auto err = self->state.pending_queries.insert(
-                  query_state{.schema_query_context = query_contexts,
+                  query_state{.query_contexts_per_type = query_contexts,
                               .client = client,
                               .candidate_partitions = num_candidates,
                               .requested_partitions = scheduled},
@@ -1835,7 +1835,7 @@ index(index_actor::stateful_pointer<index_state> self,
         return true;
       });
       auto old_partition_id_vec = std::vector<uuid>{};
-      auto query_contexts = query_state::query_context_per_type{};
+      auto query_contexts = query_state::type_query_context_map{};
       {
         auto corrected_old_partitions_per_type = std::map<uuid, type>{};
         for (const auto& [id, type] : old_partitions_per_type) {
@@ -1887,7 +1887,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto input_size
         = detail::narrow_cast<uint32_t>(old_partitions_per_type.size());
       auto err = self->state.pending_queries.insert(
-        query_state{.schema_query_context = query_contexts,
+        query_state{.query_contexts_per_type = query_contexts,
                     .client = caf::actor_cast<receiver_actor<atom::done>>(
                       partition_transfomer),
                     .candidate_partitions = input_size,

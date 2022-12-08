@@ -65,7 +65,7 @@ query_context make_random_query_context() {
 uuid make_insert(query_queue& q, std::vector<uuid>&& candidates) {
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
-  REQUIRE_SUCCESS(q.insert(query_state{.schema_query_context
+  REQUIRE_SUCCESS(q.insert(query_state{.query_contexts_per_type
                                        = {{vast::type{}, query_context}},
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
@@ -80,7 +80,7 @@ uuid make_insert(query_queue& q, std::vector<uuid>&& candidates,
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
   query_context.priority = priority;
-  REQUIRE_SUCCESS(q.insert(query_state{.schema_query_context
+  REQUIRE_SUCCESS(q.insert(query_state{.query_contexts_per_type
                                        = {{vast::type{}, query_context}},
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,

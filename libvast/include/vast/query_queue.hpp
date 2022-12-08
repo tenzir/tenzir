@@ -23,7 +23,7 @@ struct query_state {
   static constexpr bool use_deep_to_string_formatter = true;
 
   /// The query expression for each schema.
-  type_query_context_map schema_query_context;
+  type_query_context_map query_contexts_per_type;
 
   /// The query client.
   system::receiver_actor<atom::done> client = {};
@@ -42,15 +42,15 @@ struct query_state {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.schema_query_context,
+    return f(caf::meta::type_name("query_state"), x.query_contexts_per_type,
              x.client, x.candidate_partitions, x.requested_partitions,
              x.scheduled_partitions, x.completed_partitions);
   }
 
   std::size_t memusage() const {
     auto total_query_context_memusage
-      = std::accumulate(schema_query_context.begin(),
-                        schema_query_context.end(), 0,
+      = std::accumulate(query_contexts_per_type.begin(),
+                        query_contexts_per_type.end(), 0,
                         [](auto value, const auto& schema_context_entry) {
                           return value + schema_context_entry.second.memusage();
                         });
