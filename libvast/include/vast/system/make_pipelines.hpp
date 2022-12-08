@@ -34,11 +34,21 @@ enum class pipelines_location {
 caf::expected<std::vector<pipeline>>
 make_pipelines(pipelines_location location, const caf::settings& settings);
 
-/// Validates the passed `caf::settings` and creates the transform of the given
-/// name.
+/// Validates the passed `caf::settings` and creates the named pipeline defined
+/// in the passed pipelines configuration.
+/// @param name The name of the created pipeline
+/// @param event_types The event types to be operated on by the pipeline. An
+///        empty vector implies all possible event types.
+/// @param pipelines The converted YAML configuration containing the pipeline
+/// definitions.
 caf::expected<pipeline_ptr>
 make_pipeline(const std::string& name,
               const std::vector<std::string>& event_types,
               const caf::settings& pipelines);
+
+/// Parse and validate a series of pipeline operators, and add them to the given
+/// pipeline.
+caf::error parse_pipeline_operators(pipeline& pipeline,
+                                    const caf::config_value::list& operators);
 
 } // namespace vast::system

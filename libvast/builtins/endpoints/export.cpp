@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/format/json.hpp"
+#include "vast/system/make_pipelines.hpp"
 
 #include <vast/command.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -267,6 +268,8 @@ struct export_helper_state {
   system::index_actor index_ = {};
   export_parameters params_ = {};
   size_t events_ = 0;
+  size_t limit_ = std::string::npos;
+  std::optional<pipeline_executor> pipeline_ = {};
   std::optional<system::query_cursor> cursor_ = std::nullopt;
   std::vector<table_slice> results_ = {};
   http_request request_;
@@ -345,18 +348,6 @@ std::string format_result_typed(const std::vector<table_slice>& slices,
     auto writer
       = vast::format::json::writer{std::move(ostream), formatting_options};
     events.insert({vast::type{type}, std::move(writer)});
-    // auto& schema = schemas[type];
-    // schema = "[";
-    // auto record = caf::get<vast::record_type>(type);
-    // bool first = true;
-    // for (auto const& leaf : record.leaves()) {
-    //   if (!first)
-    //     schema += ", ";
-    //   schema += fmt::format(R"_({{"name": "{}", "type": "{:-a}"}})_",
-    //                         leaf.field.name, leaf.field.type);
-    //   first = false;
-    // }
-    // schema += "]";
     auto json_schema = to_json(data);
     VAST_ASSERT_CHEAP(json_schema); // Should never fail for `data`
     schemas[type] = *json_schema;
@@ -410,10 +401,12 @@ struct export_multiplexer_state {
 export_helper_actor::behavior_type
 export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
               system::index_actor index, export_parameters&& params,
+              std::optional<pipeline_executor>&& executor,
               http_request&& request) {
   self->state.index_ = std::move(index);
   self->state.request_ = std::move(request);
   self->state.params_ = std::move(params);
+  self->state.pipeline_ = std::move(executor);
   auto query
     = vast::query_context::make_extract("api", self, self->state.params_.expr);
   self->request(self->state.index_, caf::infinite, atom::evaluate_v, query)
@@ -429,16 +422,28 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
   return {
     // Index-facing API
     [self](vast::table_slice& slice) {
-      if (self->state.params_.limit_ <= self->state.events_)
-        return;
-      auto remaining = self->state.params_limit_ - self->state.events_;
-      if (slice.rows() > remaining)
-        slice = head(std::move(slice), remaining);
-      if (auto err = writer.write(slice)) {
-        self->quit(std::move(err));
-        return;
+      std::vector<table_slice> slices;
+      if (self->state.pipeline_) {
+        self->state.pipeline_->add(std::move(slice));
+        auto transformed = self->state.pipeline_->finish();
+        if (!transformed) {
+          VAST_ERROR("failed to apply pipeline: {}", transformed.error());
+          return;
+        }
+        slices = std::move(*transformed);
+      } else {
+        slices.emplace_back(std::move(slice));
       }
-      self->state.events_ += std::min<size_t>(slice.rows(), remaining);
+      for (auto& slice : slices) {
+        if (self->state.params_.limit <= self->state.events_)
+          return;
+        auto remaining = self->state.params_.limit - self->state.events_;
+        if (slice.rows() < remaining)
+          self->state.results_.push_back(slice);
+        else
+          self->state.results_.push_back(head(std::move(slice), remaining));
+        self->state.events_ += std::min<size_t>(slice.rows(), remaining);
+      }
     },
     [self](atom::done) {
       bool remaining_partitions = self->state.cursor_->candidate_partitions
@@ -518,9 +523,41 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         VAST_ASSERT(caf::holds_alternative<bool>(param));
         params.format_opts.numeric_durations = caf::get<bool>(param);
       }
+      auto pipeline_executor = std::optional<vast::pipeline_executor>{};
+      if (rq.params.contains("pipeline")) {
+        // {"steps": []}
+        auto data = from_json(caf::get<std::string>(rq.params.at("pipeline")));
+        if (!data)
+          return rq.response->abort(400, "couldn't parse pipeline "
+                                         "definition\n");
+        if (!caf::holds_alternative<record>(*data))
+          return rq.response->abort(400, "expected json object for parameter "
+                                         "'pipeline'\n");
+        auto& record = caf::get<vast::record>(*data);
+        if (!record.contains("steps"))
+          return rq.response->abort(400, "missing 'steps'\n");
+        auto settings = caf::config_value{};
+        auto error = convert(record.at("steps"), settings);
+        if (error)
+          return rq.response->abort(400, "couldn't convert pipeline "
+                                         "definition\n");
+        if (!caf::holds_alternative<caf::config_value::list>(settings))
+          return rq.response->abort(400, "expected a list of steps\n");
+        auto& steps = caf::get<caf::config_value::list>(settings);
+        // TODO: get name and types from json data
+        auto pipeline
+          = vast::pipeline{"rest-adhoc-pipeline", std::vector<std::string>{}};
+        error = system::parse_pipeline_operators(pipeline, steps);
+        if (error)
+          return rq.response->abort(400, "couldn't convert pipeline "
+                                         "definition\n");
+        auto pipelines = std::vector<vast::pipeline>{};
+        pipelines.emplace_back(std::move(pipeline));
+        pipeline_executor = vast::pipeline_executor{std::move(pipelines)};
+      }
       // TODO: Abort the request after some time limit has passed.
       auto exporter = self->spawn(export_helper, self->state.index_,
-                                  std::move(params), std::move(rq));
+                                  std::move(params), std::move(pipeline_executor), std::move(rq));
     },
   };
 }
@@ -554,6 +591,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     static auto common_parameters = vast::record_type{
       {"expression", vast::string_type{}},
       {"limit", vast::count_type{}},
+      {"pipeline", vast::string_type{}},
       {"flatten", vast::bool_type{}},
       {"omit-nulls", vast::bool_type{}},
       {"numeric-durations", vast::bool_type{}},
