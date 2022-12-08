@@ -107,20 +107,20 @@ For a real-world example of ingesting CSV, take a look a the section covering
 
 ### Arrow
 
-The `import arrow` command imports
-[`Arrow IPC`](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc)
-data. Since Arrow IPC carries the schema alongside the data, `import arrow` is
-self-contained and does not require an additional schema. 
-Our importer handles multiple, concatenated IPC streams, and is the dual to the
-associated output [format](/docs/use/query#arrow).
+The `import arrow` command imports [`Arrow IPC`][arrow-ipc] data. Since this
+format carries the schema alongside the data, `import arrow` is self-contained
+and does not require an additional schema. You can import multiple,
+concatenated IPC streams. The `import arrow` command is the dual to [`export
+arrow`](/docs/use/query#arrow).
 
-:::note Recommendation
+[arrow-ipc]: https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc
+
+:::tip
 `vast -e <node-1> export arrow <query> | vast -e <node-2> import arrow`
 transfers all data matching the given query from `node-1` to `node-2`,
 creating an identical copy with the exception of operational meta data,
-i.e. `#import_time`.
+e.g., `#import_time`.
 :::
-
 
 ### Zeek
 
