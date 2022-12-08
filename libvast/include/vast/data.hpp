@@ -283,6 +283,11 @@ record strip(const record& xs);
 /// Prints data as JSON.
 /// @param x The data instance.
 /// @returns The JSON representation of *x*, or an error.
+caf::expected<data> from_json(std::string_view x);
+
+/// Prints data as JSON.
+/// @param x The data instance.
+/// @returns The JSON representation of *x*, or an error.
 caf::expected<std::string> to_json(const data& x);
 
 // -- YAML -------------------------------------------------------------
