@@ -44,8 +44,6 @@ namespace {
 
 constexpr size_t num_partitions = 4;
 constexpr size_t num_events_per_parttion = 25;
-constexpr uint32_t taste_count = 4;
-constexpr size_t num_query_supervisors = 1;
 
 const vast::time epoch;
 
@@ -137,11 +135,6 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");
-    index = self->spawn(system::index, system::accountant_actor{}, fs,
-                        system::archive_actor{}, catalog_act, index_dir,
-                        defaults::system::store_backend, slice_size,
-                        vast::duration{}, num_partitions, taste_count,
-                        num_query_supervisors, index_dir, vast::index_config{});
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -182,10 +175,6 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       CHECK_EQUAL(p3.range.to, epoch + 99s);
     }
     MESSAGE("run test");
-  }
-
-  ~fixture() {
-    anon_send_exit(index, caf::exit_reason::user_shutdown);
   }
 
   auto slice(size_t first, size_t last) const {
@@ -287,9 +276,6 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   // Our unit-under-test.
   catalog_actor catalog_act;
-
-  // Index for registering types.
-  index_actor index;
 
   // Partition IDs.
   std::vector<uuid> ids;
@@ -471,45 +457,6 @@ TEST(catalog messages) {
     [](const caf::error&) {
       // nop
     });
-}
-
-TEST(catalog taxonomies) {
-  /*MESSAGE("setting a taxonomy");
-  auto c1 = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
-                          {"bar", {"", {"a.b@r", "b.baR"}, {}}}}};
-  auto t1 = taxonomies{c1, models_map{}};
-  self->send(catalog_act, atom::put_v, t1);
-  run();
-  MESSAGE("collecting some types");
-  const vast::type la = vast::type{
-    "a",
-    vast::record_type{
-      {"fo0", vast::string_type{}},
-    },
-  };
-  auto slices_a = std::vector{make_data(la, "bogus")};
-  const vast::type lx = vast::type{
-    "x",
-    vast::record_type{
-      {"foe", vast::count_type{}},
-    },
-  };
-  auto slices_x = std::vector{make_data(lx, 1u)};
-  vast::detail::spawn_container_source(sys, std::move(slices_a), index);
-  vast::detail::spawn_container_source(sys, std::move(slices_x), index);
-  run();
-  MESSAGE("resolving an expression");
-  auto exp = unbox(to<expression>("foo == 1"));
-  auto ref = unbox(to<expression>("x.foe == 1"));
-  self->send(catalog_act, atom::resolve_v, exp);
-  run();
-  expression result;
-  self->receive(
-    [&](expression r) {
-      result = r;
-    },
-    error_handler());
-  CHECK_EQUAL(result, ref);*/
 }
 
 FIXTURE_SCOPE_END()
