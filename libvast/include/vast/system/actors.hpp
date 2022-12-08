@@ -215,7 +215,7 @@ using catalog_actor = typed_actor_fwd<
   // to be sure it's not accidentally copied.
   caf::replies_to<
     atom::merge,
-    std::shared_ptr<std::map<uuid, partition_synopsis_ptr>>>::with<atom::ok>,
+    std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>>::with<atom::ok>,
   // Merge a single partition synopsis.
   caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with<atom::ok>,
   // Merge a set of partition synopsis.
@@ -230,7 +230,7 @@ using catalog_actor = typed_actor_fwd<
                   std::vector<augmented_partition_synopsis>>::with<atom::ok>,
   // Return the candidate partitions per type for a query.
   caf::replies_to<atom::candidates, vast::query_context>::with< //
-    std::map<type, catalog_result>>,
+    std::unordered_map<type, catalog_result>>,
   // Internal telemetry loop.
   caf::reacts_to<atom::telemetry>,
   // Retrieves all known types.
@@ -285,7 +285,7 @@ using index_actor = typed_actor_fwd<
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
   caf::replies_to<atom::resolve,
-                  expression>::with<std::map<type, catalog_result>>,
+                  expression>::with<std::unordered_map<type, catalog_result>>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<atom::query, uuid, uint32_t>,
   // Erases the given partition from the INDEX.
@@ -298,7 +298,7 @@ using index_actor = typed_actor_fwd<
   // erased, returns the nil uuid. When keep_original_partition is no: does an
   // in-place pipeline keeping the old ids, and makes a new partition
   // preserving the old one(s).
-  caf::replies_to<atom::apply, pipeline_ptr, std::map<uuid, type>,
+  caf::replies_to<atom::apply, pipeline_ptr, std::unordered_map<uuid, type>,
                   keep_original_partition>::with<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
   caf::reacts_to<atom::flush>>
@@ -544,7 +544,7 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 // so so we add these as `UNSAFE_MESSAGE_TYPE` to assure caf that they will
 // never be sent over the network.
 #define vast_uuid_synopsis_map                                                 \
-  std::map<vast::uuid, vast::partition_synopsis_ptr>
+  std::unordered_map<vast::uuid, vast::partition_synopsis_ptr>
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)

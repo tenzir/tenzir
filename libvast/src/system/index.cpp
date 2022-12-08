@@ -465,7 +465,7 @@ caf::error index_state::load_from_disk() {
   auto partitions = std::vector<uuid>{};
   auto oversized_partitions = std::vector<uuid>{};
   auto synopsis_files = std::vector<uuid>{};
-  auto synopses = std::make_shared<std::map<uuid, partition_synopsis_ptr>>();
+  auto synopses = std::make_shared<std::unordered_map<uuid, partition_synopsis_ptr>>();
   for (const auto& entry : dir_iter) {
     const auto stem = entry.path().stem();
     vast::uuid partition_uuid{};
@@ -1562,7 +1562,7 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [=, candidates = std::move(candidates),
            query_contexts = std::move(query_contexts)](
-            std::map<type, catalog_result>& catalog_results) mutable {
+            std::unordered_map<type, catalog_result>& catalog_results) mutable {
             const auto initial_candidates = candidates;
             for (const auto& [type, catalog_result] : catalog_results) {
               query_contexts[type] = query_context;
@@ -1609,7 +1609,7 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::resolve, vast::expression& expr)
-      -> caf::result<std::map<type, catalog_result>> {
+      -> caf::result<std::unordered_map<type, catalog_result>> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = vast::uuid::random();
       auto type_set = vast::type_set{};
@@ -1814,7 +1814,7 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::apply, pipeline_ptr pipeline,
-           std::map<uuid, type> old_partitions_per_type,
+           std::unordered_map<uuid, type> old_partitions_per_type,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
       const auto current_sender = self->current_sender();
@@ -1838,7 +1838,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto old_partition_id_vec = std::vector<uuid>{};
       auto query_contexts = query_state::type_query_context_map{};
       {
-        auto corrected_old_partitions_per_type = std::map<uuid, type>{};
+        auto corrected_old_partitions_per_type = std::unordered_map<uuid, type>{};
         for (const auto& [id, type] : old_partitions_per_type) {
           if (self->state.partitions_in_transformation.insert(id).second) {
             corrected_old_partitions_per_type[id] = old_partitions_per_type[id];

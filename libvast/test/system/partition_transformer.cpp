@@ -410,7 +410,7 @@ TEST(identity partition pipeline via the index) {
   pipeline->add_operator(std::move(*identity_operator));
   auto rp3 = self->request(
     index, caf::infinite, vast::atom::apply_v, pipeline,
-    std::map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
+    std::unordered_map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
     vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
@@ -430,7 +430,7 @@ TEST(identity partition pipeline via the index) {
               });
   auto rp5 = self->request(
     index, caf::infinite, vast::atom::apply_v, pipeline,
-    std::map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
+    std::unordered_map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
     vast::system::keep_original_partition::no);
   run();
   rp5.receive(
@@ -482,7 +482,7 @@ TEST(query after transform) {
   auto events = size_t{0ull};
   run();
   rp1.receive(
-    [&](std::map<vast::type, vast::system::catalog_result> crs) {
+    [&](std::unordered_map<vast::type, vast::system::catalog_result> crs) {
       REQUIRE_EQUAL(crs.size(), 1ull);
       auto& partition = crs.begin()->second.partition_infos.front();
       partition_uuid = partition.uuid;
@@ -507,7 +507,7 @@ TEST(query after transform) {
   pipeline->add_operator(std::move(*rename_operator));
   auto rp3 = self->request(
     index, caf::infinite, vast::atom::apply_v, pipeline,
-    std::map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
+    std::unordered_map<vast::uuid, vast::type>{{partition_uuid, partition_type}},
     vast::system::keep_original_partition::no);
   run();
   rp3.receive(
@@ -611,7 +611,7 @@ TEST(select pipeline with an empty result set) {
   pipeline->add_operator(std::move(*identity_operator));
   auto rp2 = self->request(
     index, caf::infinite, vast::atom::apply_v, pipeline,
-    std::map<vast::uuid, vast::type>{{partition_uuid, vast::type{}}},
+    std::unordered_map<vast::uuid, vast::type>{{partition_uuid, vast::type{}}},
     vast::system::keep_original_partition::no);
   run();
   rp2.receive(

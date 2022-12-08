@@ -60,7 +60,7 @@ public:
 
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the catalog state at startup.
-  void create_from(std::map<uuid, partition_synopsis_ptr>&&);
+  void create_from(std::unordered_map<uuid, partition_synopsis_ptr>&&);
 
   /// Add a new partition synopsis.
   void merge(const uuid& partition, partition_synopsis_ptr);
@@ -71,7 +71,7 @@ public:
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.
-  [[nodiscard]] caf::expected<std::map<type, catalog_result>>
+  [[nodiscard]] caf::expected<std::unordered_map<type, catalog_result>>
   lookup(const expression& expr) const;
 
   [[nodiscard]] catalog_result

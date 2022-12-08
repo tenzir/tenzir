@@ -44,7 +44,7 @@
 #include <type_traits>
 
 namespace vast::system {
-void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
+void catalog_state::create_from(std::unordered_map<uuid, partition_synopsis_ptr>&& ps) {
   std::unordered_map<vast::type,
                      std::vector<std::pair<uuid, partition_synopsis_ptr>>>
     flat_data_map;
@@ -81,10 +81,10 @@ void catalog_state::erase(const uuid& partition) {
   }
 }
 
-caf::expected<std::map<type, catalog_result>>
+caf::expected<std::unordered_map<type, catalog_result>>
 catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
-  auto total_candidates = std::map<type, catalog_result>{};
+  auto total_candidates = std::unordered_map<type, catalog_result>{};
   auto pruned = prune(expr, unprunable_fields);
   for (const auto& [type, _] : synopses_per_type) {
     auto resolved = resolve(taxonomies, pruned, type);
@@ -616,7 +616,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
   return {
     [self](
       atom::merge,
-      std::shared_ptr<std::map<uuid, partition_synopsis_ptr>>& ps) -> atom::ok {
+      std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps) -> atom::ok {
       self->state.create_from(std::move(*ps));
       return atom::ok_v;
     },
@@ -702,7 +702,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return self->state.taxonomies;
     },
     [self](atom::candidates, const vast::query_context& query_context)
-      -> caf::result<std::map<type, catalog_result>> {
+      -> caf::result<std::unordered_map<type, catalog_result>> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
       bool has_expression = query_context.expr != vast::expression{};
       bool has_ids = !query_context.ids.empty();

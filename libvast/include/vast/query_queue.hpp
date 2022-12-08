@@ -19,7 +19,7 @@
 namespace vast {
 
 struct query_state {
-  using type_query_context_map = std::map<vast::type, vast::query_context>;
+  using type_query_context_map = std::unordered_map<vast::type, vast::query_context>;
   static constexpr bool use_deep_to_string_formatter = true;
 
   /// The query expression for each schema.

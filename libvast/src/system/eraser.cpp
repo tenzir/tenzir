@@ -84,7 +84,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
           [self, transform,
-           rp](std::map<type, catalog_result>& result) mutable {
+           rp](std::unordered_map<type, catalog_result>& result) mutable {
             for (const auto& [_, partition_info] : result) {
               VAST_DEBUG("{} resolved query {} to {} partitions", *self,
                          self->state.query_,
@@ -95,7 +95,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
               }
               // TODO: Test if the candidate is a false positive before applying
               // the transform to avoid unnecessary noise.
-              auto partitions = std::map<uuid, type>{};
+              auto partitions = std::unordered_map<uuid, type>{};
               for (const auto& info : partition_info.partition_infos) {
                 partitions[info.uuid] = info.schema;
               }

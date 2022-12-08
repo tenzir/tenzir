@@ -212,7 +212,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             vast::atom::candidates_v, std::move(query_context));
     run();
     rp.receive(
-      [&](std::map<vast::type, vast::system::catalog_result>& candidates) {
+      [&](std::unordered_map<vast::type, vast::system::catalog_result>& candidates) {
         for (const auto& [key, candidate] : candidates) {
           for (const auto& partition : candidate.partition_infos) {
             result.emplace_back(partition.uuid);
@@ -237,7 +237,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             query_context);
     run();
     rp.receive(
-      [&](std::map<type, catalog_result> candidates) {
+      [&](std::unordered_map<type, catalog_result> candidates) {
         for (const auto& [key, candidate] : candidates) {
           for (const auto& partition : candidate.partition_infos) {
             result.emplace_back(partition.uuid);
@@ -438,7 +438,7 @@ TEST(catalog messages) {
                                      atom::candidates_v, query_context);
   run();
   expr_response.receive(
-    [this](std::map<type, catalog_result>& candidates) {
+    [this](std::unordered_map<type, catalog_result>& candidates) {
       auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
       std::vector<uuid> actual;
       for (const auto& [key, candidate] : candidates) {
@@ -464,7 +464,7 @@ TEST(catalog messages) {
                                         atom::candidates_v, query_context);
   run();
   neither_response.receive(
-    [](const std::map<type, catalog_result>&) {
+    [](const std::unordered_map<type, catalog_result>&) {
       FAIL("expected an error");
     },
     [](const caf::error&) {

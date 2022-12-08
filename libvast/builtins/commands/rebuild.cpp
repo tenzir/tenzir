@@ -416,7 +416,7 @@ struct rebuilder_state {
                 std::move(query_context))
       .then(
         [this, finish](
-          std::map<type, system::catalog_result>& catalog_result) mutable {
+          std::unordered_map<type, system::catalog_result>& catalog_result) mutable {
           for (auto& [type, result] : catalog_result) {
             if (!run->options.all) {
               std::erase_if(
@@ -634,7 +634,7 @@ struct rebuilder_state {
               [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time < rhs.max_import_time;
               });
-    auto current_run_partition_ids = std::map<uuid, type>{};
+    auto current_run_partition_ids = std::unordered_map<uuid, type>{};
     for (const auto& partition : current_run_partitions) {
       current_run_partition_ids[partition.uuid] = partition.schema;
     }
