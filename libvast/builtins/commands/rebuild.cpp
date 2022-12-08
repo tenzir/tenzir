@@ -425,10 +425,11 @@ struct rebuilder_state {
                 });
               if (result.partition_infos.empty()) {
                 catalog_result.erase(type);
+                if (catalog_result.empty()) {
+                  return finish({}, true);
+                }
               }
             }
-            if (result.partition_infos.empty())
-              return finish({}, true);
             if (run->options.undersized) {
               std::erase_if(
                 result.partition_infos, [&](const partition_info& partition) {
@@ -448,9 +449,13 @@ struct rebuilder_state {
                 result.partition_infos.begin()
                   + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
                 result.partition_infos.end());
+              if (result.partition_infos.empty()) {
+                catalog_result.erase(type);
+                if (catalog_result.empty()) {
+                  return finish({});
+                }
+              }
             }
-            if (result.partition_infos.empty())
-              return finish({});
             run->statistics.num_total = result.partition_infos.size();
 
             run->statistics.num_heterogeneous
