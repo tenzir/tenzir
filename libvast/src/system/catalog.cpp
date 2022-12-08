@@ -82,45 +82,6 @@ void catalog_state::erase(const uuid& partition) {
 }
 
 caf::expected<std::map<type, catalog_result>>
-catalog_state::generate_candidates(
-  const vast::query_context& query_context) const {
-  bool has_expression = query_context.expr != vast::expression{};
-  bool has_ids = !query_context.ids.empty();
-  if (has_ids)
-    return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                 "not to have ids");
-  if (!has_expression)
-    return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                 "to have an expression");
-  auto start = std::chrono::steady_clock::now();
-  auto result = lookup(query_context.expr);
-  if (!result) {
-    return result.error();
-  }
-  auto total_candidate_amount
-    = std::accumulate(result->begin(), result->end(), size_t{0},
-                      [](auto i, const auto& cat_result) {
-                        return std::move(i)
-                               + cat_result.second.partition_infos.size();
-                      });
-  auto id_str = fmt::to_string(query_context.id);
-  duration runtime = std::chrono::steady_clock::now() - start;
-  self->send(accountant, atom::metrics_v, "catalog.lookup.runtime", runtime,
-             metrics_metadata{
-               {"query", id_str},
-               {"issuer", query_context.issuer},
-             });
-  self->send(accountant, atom::metrics_v, "catalog.lookup.candidates",
-             total_candidate_amount,
-             metrics_metadata{
-               {"query", std::move(id_str)},
-               {"issuer", query_context.issuer},
-             });
-
-  return result;
-}
-
-caf::expected<std::map<type, catalog_result>>
 catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
   auto total_candidates = std::map<type, catalog_result>{};
@@ -743,7 +704,40 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [self](atom::candidates, const vast::query_context& query_context)
       -> caf::result<std::map<type, catalog_result>> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
-      return self->state.generate_candidates(query_context);
+      bool has_expression = query_context.expr != vast::expression{};
+      bool has_ids = !query_context.ids.empty();
+      if (has_ids)
+        return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                     "not to have ids");
+      if (!has_expression)
+        return caf::make_error(ec::invalid_argument, "catalog expects queries "
+                                                     "to have an expression");
+      auto start = std::chrono::steady_clock::now();
+      auto result = self->state.lookup(query_context.expr);
+      if (!result) {
+        return result.error();
+      }
+      auto total_candidate_amount
+        = std::accumulate(result->begin(), result->end(), size_t{0},
+                          [](auto i, const auto& cat_result) {
+                            return std::move(i)
+                                   + cat_result.second.partition_infos.size();
+                          });
+      auto id_str = fmt::to_string(query_context.id);
+      duration runtime = std::chrono::steady_clock::now() - start;
+      self->send(self->state.accountant, atom::metrics_v, "catalog.lookup.runtime", runtime,
+                 metrics_metadata{
+                   {"query", id_str},
+                   {"issuer", query_context.issuer},
+                 });
+      self->send(self->state.accountant, atom::metrics_v, "catalog.lookup.candidates",
+                 total_candidate_amount,
+                 metrics_metadata{
+                   {"query", std::move(id_str)},
+                   {"issuer", query_context.issuer},
+                 });
+
+      return result;
     },
     [self](atom::resolve,
            const expression& e) -> caf::result<vast::expression> {
