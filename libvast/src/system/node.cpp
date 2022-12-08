@@ -284,6 +284,13 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
 } // namespace
 
 caf::message status_command(const invocation& inv, caf::actor_system&) {
+  if (caf::get_or(inv.options, "vast.node", false)) {
+    return caf::make_message(caf::make_error( //
+      ec::invalid_configuration,
+      "unable to execute status command when spawning a "
+      "node locally instead of connecting to one; please "
+      "unset the option vast.node"));
+  }
   auto self = this_node;
   auto verbosity = status_verbosity::info;
   if (caf::get_or(inv.options, "vast.status.detailed", false))
