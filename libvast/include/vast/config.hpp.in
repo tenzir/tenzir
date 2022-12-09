@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
+#include <utility>
 
 #cmakedefine01 VAST_ENABLE_ASAN
 #cmakedefine01 VAST_ENABLE_ASSERTIONS
@@ -34,7 +36,13 @@ extern const char* tweak;
 
 /// The version number of the VAST partition format. Bump this whenever making
 /// changes that require partitions to be rebuilt.
-extern const uint64_t partition_version;
+extern const uint64_t current_partition_version;
+
+/// Returns the minimum and (if it exists) the maximum versions of VAST that
+/// supported a given partition version.
+std::pair<std::string_view, std::optional<std::string_view>>
+supported_vast_versions_for_partition_version(
+  uint64_t partition_version) noexcept;
 
 namespace build {
 

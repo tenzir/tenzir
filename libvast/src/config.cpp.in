@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/config.hpp"
+#include "vast/die.hpp"
 
 namespace vast::version {
 
@@ -15,7 +16,22 @@ const char* major = "@VAST_VERSION_MAJOR@";
 const char* minor = "@VAST_VERSION_MINOR@";
 const char* patch = "@VAST_VERSION_PATCH@";
 const char* tweak = "@VAST_VERSION_TWEAK@";
-const uint64_t partition_version = @VAST_PARTITION_VERSION@;
+const uint64_t current_partition_version = @VAST_PARTITION_VERSION@;
+
+std::pair<std::string_view, std::optional<std::string_view>>
+supported_vast_versions_for_partition_version(
+  uint64_t partition_version) noexcept {
+  switch (partition_version) {
+    case 0:
+      return {"VAST v1.0", "VAST v2.4"};
+    case 1:
+      return {"VAST v2.2", std::nullopt};
+    case 2:
+      return {"VAST v2.4", std::nullopt};
+    default:
+      die("unexpected partition version");
+  }
+}
 
 namespace build {
 

@@ -21,7 +21,7 @@ partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
   events = std::exchange(that.events, {});
   min_import_time = std::exchange(that.min_import_time, time::max());
   max_import_time = std::exchange(that.max_import_time, time::min());
-  version = std::exchange(that.version, version::partition_version);
+  version = std::exchange(that.version, version::current_partition_version);
   schema = std::exchange(that.schema, {});
   type_synopses_ = std::exchange(that.type_synopses_, {});
   field_synopses_ = std::exchange(that.field_synopses_, {});
@@ -35,7 +35,7 @@ partition_synopsis::operator=(partition_synopsis&& that) noexcept {
     events = std::exchange(that.events, {});
     min_import_time = std::exchange(that.min_import_time, time::max());
     max_import_time = std::exchange(that.max_import_time, time::min());
-    version = std::exchange(that.version, version::partition_version);
+    version = std::exchange(that.version, version::current_partition_version);
     schema = std::exchange(that.schema, {});
     type_synopses_ = std::exchange(that.type_synopses_, {});
     field_synopses_ = std::exchange(that.field_synopses_, {});

@@ -628,7 +628,8 @@ caf::error index_state::load_from_disk() {
   //  partition versions more freely.
   const auto num_outdated = std::count_if(
     synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
-      return id_and_synopsis.second->version < version::partition_version;
+      return id_and_synopsis.second->version
+             < version::current_partition_version;
     });
   if (num_outdated > 0) {
     VAST_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
@@ -696,9 +697,7 @@ caf::error index_state::load_from_disk() {
                       std::move(query_context));
       },
       [this](caf::error& err) {
-        VAST_ERROR("{} could not load catalog state from disk, shutting "
-                   "down with error {}",
-                   *self, err);
+        VAST_ERROR("{} failed to load catalog state from disk: {}", *self, err);
         self->send_exit(self, std::move(err));
       });
 
