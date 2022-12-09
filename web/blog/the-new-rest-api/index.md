@@ -1,26 +1,44 @@
 ---
-sidebar_position: 0
-sidebar_label: REST API
+draft: true
+title: The New REST API
+authors: [lava, mavam]
+date: 2022-12-15
+image: /img/rest-api-deployment-single.light.png
+tags: [frontend, rest, api, architecture]
 ---
 
-# REST API
+As of [v2.4](vast-v2.4), VAST comes officially with a new `web`
+[plugin][plugins] that provides a [REST API][rest-api]. The [API
+documentation](/api) describes the available endpoints also provides an
+[OpenAPI](https://spec.openapis.org/oas/latest.html) spec for download. This
+blog post shows how we built the API and what you can do with it.
 
-VAST provides a REST API to interact with a server node. The `web`
-[plugin](/docs/understand/architecture/plugins) implements the API as a
-dedicated component that can run in multiple ways.
+[rest-api]: /docs/use/integrate/rest-api
+[plugins]: /docs/understand/architecture/plugins
+[actors]: /docs/understand/architecture/actor-model
 
-:::tip API Documentation
-At [https://vast.io/api](/api) you can find documentation of the API routes and
-an [OpenAPI Specification](https://spec.openapis.org/oas/latest.html).
+<!--truncate-->
 
-Please note that we consider v0 still experimental and therefore do not provide
-stability guarantees.
-:::
+Two architectural features of VAST made it really easy to design the REST API:
 
-## Deployment Modes
+1. [Plugins][plugins]
+2. [Actors][actors]
 
-There exist two ways to run the `web` plugin: either as a separate process or
-embedded inside a VAST server node:
+First, VAST's plugin system offers a flexible extension mechanism to add
+additional functionality without bloating the core. Specifically, we chose
+[RESTinio](https://github.com/Stiffstream/restinio) as C++ library that
+implements an asynchronous HTTP and WebSocket server. Along with it comes a
+dependency on Boost ASIO. We deem it acceptable to have this dependency of the
+`web` plugin, but would feel less comfortable with adding dependencies to the
+VAST core, which we try to keep as lean as possible.
+
+Second, the [actor model architecture][actors] of VAST makes it easy to
+integrate new "microservices" into the system. The `web` plugin is a *component
+plugin* that provides a new actor with a typed messaging interface. It neatly
+fits into the existing architecture and thereby inherits the flexible
+distribution and scaling properties. Concretely, there exist two ways to run the
+REST API actor: either as a separate process or embedded inside a VAST server
+node:
 
 ![REST API - Single Deployment](/img/rest-api-deployment-single.light.png#gh-light-mode-only)
 ![REST API - Single Deployment](/img/rest-api-deployment-single.dark.png#gh-dark-mode-only)
@@ -30,7 +48,9 @@ respect to deployment, fault isolation, and scaling. An embedded setup offers
 higher throughput and lower latency between the REST API and the other VAST
 components.
 
-To run the REST API as dedicated process, use the `web server` command:
+The REST API is also a *command plugin* and exposes the—you guessed it—`web`
+command. To run the REST API as dedicated process, spin up a VAST node as
+follows:
 
 ```bash
 vast web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
@@ -49,8 +69,9 @@ with the `--certfile` and `--keyfile` arguments.
 ## Authentication
 
 Clients must authenticate all requests with a valid token. The token is a short
-string that clients put in the `X-VAST-Token` request header. You can generate a
-valid token on the command line:
+string that clients put in the `X-VAST-Token` request header.
+
+You can generate a valid token on the command line as follows:
 
 ```bash
 vast web generate-token
@@ -133,17 +154,21 @@ Pass `--mode=mtls` to start the REST API in server mode:
 vast web server --mode=mtls
 ```
 
-## Scaling
+## Usage Examples
 
-There are two ways to scale the REST API, shall it be the bottleneck. You can
-either spawn more REST API actors within VAST and expose them at different
-ports, or you can spawn more dedicated web server processes:
+Now that you know how we put the REST API together, let's look at some
+end-to-end examples. We built the REST API for two reasons::
 
-![REST API - Multiple Deployments](/img/rest-api-deployment-multiple.light.png#gh-light-mode-only)
-![REST API - Multiple Deployments](/img/rest-api-deployment-multiple.dark.png#gh-dark-mode-only)
+1. Enable third parties to integrate with VAST
+2. Develop our own web frontend
 
-We do not anticipate that the web frontend will be on the critical path, since
-the web server itself performs very little work. But we get this form of scaling
-"for free" as a byproduct of VAST's [actor model
-architecture](/docs/understand/architecture/actor-model), which is why we
-mentioned it here.
+We'll conclude this blog post with few examples that show how you can use the
+REST API.
+
+:::caution TODO
+Showcase `/status`, `/export` and `/query` route.
+:::
+
+As always, if you have any question on usage, swing by our [community
+Slack](http://slack.tenzir.com). Missing routes? Let us know so that we know
+what to prioritize. Now happy curling! :curling_stone:
