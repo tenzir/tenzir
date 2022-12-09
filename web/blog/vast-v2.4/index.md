@@ -1,9 +1,8 @@
 ---
-draft: true
 title: VAST v2.4
 description: Open Storage
 authors: dominiklohmann
-date: 2022-11-24
+date: 2022-12-09
 tags: [release, frontend, feather, parquet, docker, python, arrow]
 ---
 
