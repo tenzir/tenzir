@@ -608,10 +608,10 @@ jobs:
             cxx: clang++
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
             cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
-      exclude:
+      #exclude:
         # Don't run on MacOS for PRs that are explicitly labeled as 'fast-ci'
         # since GitHub only provides fast runners for Ubuntu and Windows
-        - {vast: {os: ${{ contains(github.event.pull_request.labels.*.name, 'fast-ci') && 'macos-latest' || '' }} }}
+      #  - {vast: {os: ${{ contains(github.event.pull_request.labels.*.name, 'fast-ci') && 'macos-latest' || '' }} } }
     env:
       BUILD_DIR: build
       CC: ${{ matrix.vast.cc }}
@@ -845,7 +845,7 @@ jobs:
           # instruction as of Arrow 10.0.0.
           - {setup: {os: macos-latest}, plugin: {name: Broker}}
           - {setup: {os: macos-latest}, plugin: {name: Parquet}}
-          - {setup: {os: ${{ contains(github.event.pull_request.labels.*.name, 'fast-ci') && 'macos-latest' || '' }} }}
+          - {setup: {os: "${{ contains(github.event.pull_request.labels.*.name, 'fast-ci') && 'macos-latest' || 'asdf' }}" }}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
