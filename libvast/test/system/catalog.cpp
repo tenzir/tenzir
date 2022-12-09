@@ -288,10 +288,10 @@ TEST(attribute extractor - type) {
   CHECK_EQUAL(lookup("#type == \"foo\""), foo);
   CHECK_EQUAL(lookup("#type == \"bar\""), empty());
   CHECK_EQUAL(lookup("#type != \"foo\""), foobar);
-  CHECK_EQUAL(lookup("#type ~ /f.o/"), foo);
-  CHECK_EQUAL(lookup("#type ~ /f.*/"), ids);
-  CHECK_EQUAL(lookup("#type ~ /x/"), empty());
-  CHECK_EQUAL(lookup("#type !~ /x/"), ids);
+  CHECK_EQUAL(lookup("#type == /f.o/"), foo);
+  CHECK_EQUAL(lookup("#type == /f.*/"), ids);
+  CHECK_EQUAL(lookup("#type == /x/"), empty());
+  CHECK_EQUAL(lookup("#type != /x/"), ids);
 }
 
 // Test the import timestamp meta extractor. Half the test data was set to

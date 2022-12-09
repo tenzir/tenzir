@@ -307,8 +307,8 @@ tests:
       - command: -N import suricata '#type != "suricata.stats" && event_type != "flow"'
         input: data/suricata/eve.json
       - command: -N export ascii 'src_ip == 147.32.84.165'
-      - command: -N export csv '#type ~ /suricata.*/'
-      - command: -N export zeek '#type ~ /suricata.alert/'
+      - command: -N export csv '#type == /suricata.*/'
+      - command: -N export zeek '#type == /suricata.alert/'
       - command: -N export json --omit-nulls
 
   Node suricata rrdata:
@@ -371,9 +371,9 @@ tests:
         input: data/pcap/zeek/packet_filter.log.gz
       - command: -N import zeek
         input: data/pcap/zeek/ssh.log.gz
-      - command: -N pivot --format=zeek zeek.conn '#type ~ /suricata.*/ && dest_ip == 72.247.178.18'
+      - command: -N pivot --format=zeek zeek.conn '#type == /suricata.*/ && dest_ip == 72.247.178.18'
         transformation: awk '!/^#(open|close)/'
-      - command: -N pivot zeek.conn '#type ~ /zeek.http/ && method == "GET"'
+      - command: -N pivot zeek.conn '#type == /zeek.http/ && method == "GET"'
         transformation: awk '!/^#(open|close)/'
 
   Taxonomy queries:
@@ -482,7 +482,8 @@ tests:
         transformation: jq -ec '.'
       - command: -N export json '#type ni "suricata"'
         transformation: jq -ec '.'
-
+      - command: -N export json 'ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/'
+        transformation: jq -ec '.'
   # Testing the #import_time meta extractor is a bit tricky and requires
   # sleeping. If this turns out to be a flaky test, increase durations and
   # queries respectively.
@@ -533,7 +534,7 @@ tests:
       - command: flush
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: count '#type ~ /suricata.*/'
+      - command: count '#type == /suricata.*/'
   Example config file:
     tags: [import-export, zeek]
     fixture: ExampleConfigFileTester

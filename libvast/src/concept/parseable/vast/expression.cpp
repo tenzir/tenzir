@@ -134,9 +134,7 @@ static auto make_predicate_parser() {
     | field ->* to_field_extractor
     ;
   auto operation
-    = "~"_p   ->* [] { return relational_operator::match; }
-    | "!~"_p  ->* [] { return relational_operator::not_match; }
-    | "=="_p  ->* [] { return relational_operator::equal; }
+    = "=="_p  ->* [] { return relational_operator::equal; }
     | "!="_p  ->* [] { return relational_operator::not_equal; }
     | "<="_p  ->* [] { return relational_operator::less_equal; }
     | "<"_p   ->* [] { return relational_operator::less; }

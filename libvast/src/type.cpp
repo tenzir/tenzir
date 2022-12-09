@@ -1304,40 +1304,7 @@ bool congruent(const data& x, const type& y) noexcept {
 
 bool compatible(const type& lhs, relational_operator op,
                 const type& rhs) noexcept {
-  auto string_and_pattern = [](auto& x, auto& y) {
-    return (caf::holds_alternative<string_type>(x)
-            && caf::holds_alternative<pattern_type>(y))
-           || (caf::holds_alternative<pattern_type>(x)
-               && caf::holds_alternative<string_type>(y));
-  };
-  switch (op) {
-    case relational_operator::match:
-    case relational_operator::not_match:
-      return string_and_pattern(lhs, rhs);
-    case relational_operator::equal:
-    case relational_operator::not_equal:
-      return !lhs || !rhs || string_and_pattern(lhs, rhs)
-             || congruent(lhs, rhs);
-    case relational_operator::less:
-    case relational_operator::less_equal:
-    case relational_operator::greater:
-    case relational_operator::greater_equal:
-      return congruent(lhs, rhs);
-    case relational_operator::in:
-    case relational_operator::not_in:
-      if (caf::holds_alternative<string_type>(lhs))
-        return caf::holds_alternative<string_type>(rhs) || is_container(rhs);
-      else if (caf::holds_alternative<address_type>(lhs)
-               || caf::holds_alternative<subnet_type>(lhs))
-        return caf::holds_alternative<subnet_type>(rhs) || is_container(rhs);
-      else
-        return is_container(rhs);
-    case relational_operator::ni:
-      return compatible(rhs, relational_operator::in, lhs);
-    case relational_operator::not_ni:
-      return compatible(rhs, relational_operator::not_in, lhs);
-  }
-  __builtin_unreachable();
+  return compatible(lhs, op, rhs.construct());
 }
 
 bool compatible(const type& lhs, relational_operator op,
@@ -1349,9 +1316,6 @@ bool compatible(const type& lhs, relational_operator op,
                && caf::holds_alternative<std::string>(y));
   };
   switch (op) {
-    case relational_operator::match:
-    case relational_operator::not_match:
-      return string_and_pattern(lhs, rhs);
     case relational_operator::equal:
     case relational_operator::not_equal:
       return !lhs || caf::holds_alternative<caf::none_t>(rhs)

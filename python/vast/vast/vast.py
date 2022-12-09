@@ -137,7 +137,7 @@ class VAST:
     async def count(*args, **kwargs) -> int:
         """
         Executes the VAST count command and return the response number.
-        Examples: `count()`, `count("#type ~ /suricata.alert/", estimate=True)`.
+        Examples: `count()`, `count("#type == /suricata.alert/", estimate=True)`.
         """
         proc = await CLI().count(*args, **kwargs).exec()
         stdout, stderr = await proc.communicate()

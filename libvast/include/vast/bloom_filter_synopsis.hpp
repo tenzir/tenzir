@@ -54,6 +54,10 @@ public:
         // are non-nil.
         if (caf::holds_alternative<view<caf::none_t>>(rhs))
           return {};
+        if constexpr (std::is_same_v<T, std::string>) {
+          if (caf::holds_alternative<view<pattern>>(rhs))
+            return {};
+        }
         if (!caf::holds_alternative<view<T>>(rhs))
           return false;
         return bloom_filter_.lookup(caf::get<view<T>>(rhs));
