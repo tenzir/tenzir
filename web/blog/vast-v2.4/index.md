@@ -103,7 +103,7 @@ use VAST's security-specific data types. For example, when running a query, IP
 addresses, subnets, and patterns automatically convert to the Python-native
 types, as opposed to remaining binary blobs or sheer strings.
 
-::note Not yet on PyPI
+:::note Not yet on PyPI
 VAST's new Python bindings are not yet on PyPI, as they are still heavily under
 development. If you're too eager and cannot wait, go [check out the source
 code][python-code].
