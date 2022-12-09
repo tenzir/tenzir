@@ -198,7 +198,7 @@ public:
     }
 
     builder& builder_;
-    const size_t offset_; // where we started in the builder buffer
+    size_t offset_;       // where we started in the builder buffer
     size_t size_;         // number of elements or size in bytes
   };
 
@@ -441,7 +441,7 @@ private:
   }
 
   std::vector<value_type>& buffer_;
-  const size_t offset_;
+  size_t offset_;
 };
 
 // -- helper functions to encode common types ---------------------------------
