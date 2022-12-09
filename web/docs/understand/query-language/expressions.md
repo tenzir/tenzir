@@ -146,19 +146,16 @@ types because an alias is a strict refinement of an existing type.
 
 #### Meta Extractor
 
-Meta extractors have the forms `#E` where `E` is from the fixed set of tokens
-`type`, `field`, and `import_time`. They work on the event metadata (e.g., their
-schema) instead of the value domain.
+Meta extractors have the form `#extractor`. They work on the event metadata
+(e.g., their schema) instead of the value domain.
 
 - `#type`: on the event name in a schema
-- `#field`: matches on the field names of a record
 - `#import_time`: matches on the ingestion time when event arrived at the server
 
 ##### Examples
 
 - `#type == "zeek.conn"`: events of type `zeek.conn`
 - `"suricata" in #type`: events that have `suricata` in their type name
-- `#field == "community_id"`: events that have a field with name `community_id`
 - `#import_time > 1 hour ago`: events that have been imported within the last
   hour
 

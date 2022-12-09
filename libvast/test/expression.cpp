@@ -45,11 +45,11 @@ expression to_expr(T&& x) {
 
 struct fixture {
   fixture() {
-    // expr0 := !(x.y.z <= 42 && #foo == T)
+    // expr0 := !(x.y.z <= 42 && #type == "foo")
     auto p0 = predicate{field_extractor{"x.y.z"},
                         relational_operator::less_equal, data{integer{42}}};
-    auto p1 = predicate{meta_extractor{meta_extractor::field},
-                        relational_operator::equal, data{true}};
+    auto p1 = predicate{meta_extractor{meta_extractor::type},
+                        relational_operator::equal, data{"foo"}};
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
     // expr0 || :real > 4.2
@@ -79,9 +79,9 @@ TEST(construction) {
   CHECK_EQUAL(get<data>(p0->rhs), integer{42});
   auto p1 = caf::get_if<predicate>(&c->at(1));
   REQUIRE(p1);
-  CHECK_EQUAL(get<meta_extractor>(p1->lhs).kind, meta_extractor::field);
+  CHECK_EQUAL(get<meta_extractor>(p1->lhs).kind, meta_extractor::type);
   CHECK_EQUAL(p1->op, relational_operator::equal);
-  CHECK(get<data>(p1->rhs) == data{true});
+  CHECK(get<data>(p1->rhs) == data{"foo"});
 }
 
 TEST(serialization) {
@@ -248,22 +248,6 @@ TEST(validation - meta extractor) {
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
   expr = to<expression>("#type == zeek.conn");
-  REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
-  MESSAGE("#field");
-  expr = to<expression>("#field == \"id.orig_h\"");
-  REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("#field == \"orig\"");
-  REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("#field == /orig/");
-  REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
-  expr = to<expression>("#field ni \"orig\"");
-  REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
-  expr = to<expression>("\"orig\" in #field");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
 }

@@ -339,30 +339,6 @@ bool evaluate_meta_extractor(const table_slice& slice,
       }
       die("unreachable");
     }
-    case meta_extractor::kind::field: {
-      const auto* s = caf::get_if<std::string>(&rhs);
-      if (!s) {
-        VAST_WARN("#field can only compare with string");
-        return false;
-      }
-      auto result = false;
-      auto neg = is_negated(op);
-      for (const auto& layout_rt = caf::get<record_type>(slice.layout());
-           const auto& [field, index] : layout_rt.leaves()) {
-        const auto fqn
-          = fmt::format("{}.{}", slice.layout().name(), layout_rt.key(index));
-        // This is essentially s->ends_with(fqn), except that it also checks
-        // the dot separators correctly (modulo quoting).
-        const auto [fqn_mismatch, s_mismatch]
-          = std::mismatch(fqn.rbegin(), fqn.rend(), s->rbegin(), s->rend());
-        if (s_mismatch == s->rend()
-            && (fqn_mismatch == fqn.rend() || *fqn_mismatch == '.')) {
-          result = true;
-          break;
-        }
-      }
-      return neg != result;
-    }
     case meta_extractor::kind::import_time: {
       switch (op) {
 #define VAST_EVAL_DISPATCH(op)                                                 \
