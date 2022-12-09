@@ -109,8 +109,6 @@ development. If you're too eager and cannot wait, go [check out the source
 code][python-code].
 :::
 
-FIXME: Show example of how to use an Arrow Table exported via VAST.
-
 [python-code]: https://github.com/tenzir/vast/tree/v2.4.0/python
 
 ## Other Noteworthy Changes
