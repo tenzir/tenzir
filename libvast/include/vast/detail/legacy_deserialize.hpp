@@ -301,12 +301,10 @@ public:
       x = {};
       return false;
     }
-
     if (!is_set) {
       x = {};
       return true;
     }
-
     T v;
     if (!apply(v))
       return false;
@@ -318,9 +316,12 @@ public:
     uint8_t type_tag = 0;
     if (!apply(type_tag))
       return false;
-
     auto& variant = x.get_data();
-
+    //  CAF 0.17 caf::config_value has different types in the underlying
+    //  caf::variant: type_list<integer, boolean, real, atom, timespan, uri,
+    //  string, list, dictionary>
+    // Since currently the integer is at index 1, boolean at index 2, real at
+    // index 3 we need to
     switch (type_tag) {
       case 0: {
         caf::config_value::integer integer;
@@ -344,7 +345,6 @@ public:
         return true;
       }
     }
-
     return apply(type_tag, variant);
   }
 

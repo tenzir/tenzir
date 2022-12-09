@@ -219,7 +219,7 @@ else ()
     set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
     target_compile_options(
       libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-      -Wno-unknown-warning-option)
+                        -Wno-unknown-warning-option)
     if (VAST_ENABLE_OPENSSL)
       if (NOT TARGET libcaf_openssl)
         string(
