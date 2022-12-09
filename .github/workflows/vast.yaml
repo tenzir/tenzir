@@ -608,10 +608,10 @@ jobs:
             cxx: clang++
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
             cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
-      exclude:
-        # Don't run on MacOS for PRs that are explicitly labeled as 'fast-ci'
-        # since GitHub only provides fast runners for Ubuntu and Windows
-       - {vast: {os: "${{ contains(github.event.pull_request.labels.*.name, 'fast-ci') && 'macos-latest' || '' }}" }}
+        exclude:
+          # Don't run on MacOS for PRs that are explicitly labeled as 'fast-ci'
+          # since GitHub only provides fast runners for Ubuntu and Windows
+          - {vast: {os: "${{ contains(github.event.pull_request.labels.*.name, 'fast-ci') && 'macos-latest' || '' }}" }}
     env:
       BUILD_DIR: build
       CC: ${{ matrix.vast.cc }}
