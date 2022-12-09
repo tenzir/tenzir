@@ -592,7 +592,7 @@ jobs:
     strategy:
       matrix:
         vast:
-          - os: ${{ contains(github.event.pull_request.labels.*.name, 'fast-ci') && 'ubuntu-20.04' || 'fast-ci' }}
+          - os: ${{ contains(github.event.pull_request.labels.*.name, 'fast-ci') && 'fast-ci' || 'ubuntu-20.04' }}
             container: debian:bullseye-slim
             name: Debian
             compiler: GCC
