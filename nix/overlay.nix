@@ -91,8 +91,6 @@ in
         # link time optimizaitons in VAST, we need to make sure that type definitions that
         # are parsed in both projects are the same, otherwise the compiler will complain
         # at the optimization stage.
-        # TODO: Remove when updating to CAF 0.18.
-        + lib.optionalString isStatic " -std=c++17";
       # https://github.com/NixOS/nixpkgs/issues/130963
       NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
       preCheck = ''
