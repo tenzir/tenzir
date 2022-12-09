@@ -146,9 +146,8 @@ types because an alias is a strict refinement of an existing type.
 
 #### Meta Extractor
 
-Meta extractors have the forms `#E` where `E` is from the fixed set of tokens
-`type`,  and `import_time`. They work on the event metadata (e.g., their
-schema) instead of the value domain.
+Meta extractors have the form `#extractor`. They work on the event metadata
+(e.g., their schema) instead of the value domain.
 
 - `#type`: on the event name in a schema
 - `#import_time`: matches on the ingestion time when event arrived at the server
