@@ -209,20 +209,17 @@ else ()
     add_subdirectory(aux/caf)
     set(CMAKE_CXX_STANDARD ${ORIGINAL_CXX_STANDARD})
     VASTSystemizeTarget(libcaf_core)
-    set_target_properties(libcaf_core PROPERTIES EXPORT_NAME
-                                                                    core)
+    set_target_properties(libcaf_core PROPERTIES EXPORT_NAME core)
     target_compile_features(libcaf_core INTERFACE cxx_std_17)
     target_compile_options(
       libcaf_core
       PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
               -Wno-unknown-warning-option)
     VASTSystemizeTarget(libcaf_io)
-    set_target_properties(libcaf_io PROPERTIES EXPORT_NAME
-                                                                  io)
+    set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
     target_compile_options(
-      libcaf_io
-      PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-              -Wno-unknown-warning-option)
+      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
+      -Wno-unknown-warning-option)
     if (VAST_ENABLE_OPENSSL)
       if (NOT TARGET libcaf_openssl)
         string(
@@ -240,8 +237,7 @@ else ()
           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
       VASTSystemizeTarget(libcaf_openssl)
-      set_target_properties(libcaf_openssl
-                            PROPERTIES EXPORT_NAME openssl)
+      set_target_properties(libcaf_openssl PROPERTIES EXPORT_NAME openssl)
       # Fix deprecation warnings for OpenSSL >= 3.0.
       target_compile_options(
         libcaf_openssl

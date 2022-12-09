@@ -86,7 +86,7 @@ in
       # is a required argument, and it has to be passed explicitly instead.
       src = lib.callPackageWith source final.fetchFromGitHub { inherit (source) sha256; };
       inherit (source) version;
-      NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer"
+      NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer";
         # Building statically implies using -flto. Since we produce a final binary with
         # link time optimizaitons in VAST, we need to make sure that type definitions that
         # are parsed in both projects are the same, otherwise the compiler will complain
