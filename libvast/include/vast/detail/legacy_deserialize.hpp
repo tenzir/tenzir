@@ -320,8 +320,8 @@ public:
     //  CAF 0.17 caf::config_value has different types in the underlying
     //  caf::variant: type_list<integer, boolean, real, atom, timespan, uri,
     //  string, list, dictionary>
-    // Since currently the integer is at index 1, boolean at index 2, real at
-    // index 3 we need to
+    // Since for current variant the integer is at index 1, boolean at index 2,
+    // real at index 3 we need to map these accordingly
     switch (type_tag) {
       case 0: {
         caf::config_value::integer integer;

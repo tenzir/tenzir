@@ -345,3 +345,92 @@ TEST(string_synopsis) {
   REQUIRE(ldes(buf, ss2));
   CHECK_EQUAL(*ss, *ss2);
 }
+
+namespace {
+struct custom {
+  friend bool inspect(auto& inspector, custom& in) {
+    return inspector.apply(in.x) && inspector.apply(in.y);
+  }
+
+  std::string x;
+  std::size_t y{0u};
+};
+
+} // namespace
+
+TEST(caf_optional) {
+  caf::byte_buffer serialization_output;
+  caf::binary_serializer s{nullptr, serialization_output};
+  auto in = caf::optional<custom>{custom{"test str", 221}};
+  REQUIRE(s.apply(in));
+  auto out = caf::optional<custom>{};
+  REQUIRE(ldes(serialization_output, out));
+  REQUIRE_EQUAL(in->x, out->x);
+  REQUIRE_EQUAL(in->y, out->y);
+  // The empty optional should be also deserialized as empty one.
+  in.reset();
+  serialization_output.clear();
+  caf::binary_serializer s2{nullptr, serialization_output};
+  REQUIRE(s2.apply(in));
+  // the out contains a set optional now so it should be reassigned to empty one
+  // after deserialization
+  CHECK(ldes(serialization_output, out));
+  CHECK(!out);
+}
+
+TEST(caf_config_value integer) {
+  caf::config_value::integer in{362};
+  // in legacy caf::config_value the integer was at index 0 in the underlying
+  // variant
+  auto legacy_integer_index = std::uint8_t{0u};
+  caf::byte_buffer serialization_output;
+  caf::binary_serializer s{nullptr, serialization_output};
+  REQUIRE(s.apply(legacy_integer_index) && s.apply(in));
+  caf::config_value out;
+  REQUIRE(ldes(serialization_output, out));
+  auto out_as_integer = get_as<caf::config_value::integer>(out);
+  REQUIRE_NOERROR(out_as_integer);
+  CHECK_EQUAL(in, *out_as_integer);
+}
+
+TEST(caf_config_value boolean) {
+  caf::config_value::boolean in{true};
+  // in legacy caf::config_value the boolean was at index 1 in the underlying
+  // variant
+  auto legacy_boolean_index = std::uint8_t{1u};
+  caf::byte_buffer serialization_output;
+  caf::binary_serializer s{nullptr, serialization_output};
+  REQUIRE(s.apply(legacy_boolean_index) && s.apply(in));
+  caf::config_value out;
+  REQUIRE(ldes(serialization_output, out));
+  auto out_as_boolean = get_as<caf::config_value::boolean>(out);
+  REQUIRE_NOERROR(out_as_boolean);
+  CHECK_EQUAL(in, *out_as_boolean);
+}
+
+TEST(caf_config_value real) {
+  caf::config_value::real in{6459.0};
+  // in legacy caf::config_value the real was at index 2 in the underlying
+  // variant
+  auto legacy_real_index = std::uint8_t{2u};
+  caf::byte_buffer serialization_output;
+  caf::binary_serializer s{nullptr, serialization_output};
+  REQUIRE(s.apply(legacy_real_index) && s.apply(in));
+  caf::config_value out;
+  REQUIRE(ldes(serialization_output, out));
+  auto out_as_real = get_as<caf::config_value::real>(out);
+  REQUIRE_NOERROR(out_as_real);
+  CHECK_EQUAL(in, *out_as_real);
+}
+
+TEST(caf_config_value string) {
+  // in legacy caf::config_value the string was at the same index as in the
+  // current config_value
+  caf::config_value in{caf::config_value::string{"example_str"}};
+  caf::byte_buffer serialization_output;
+  caf::binary_serializer s{nullptr, serialization_output};
+  REQUIRE(s.apply(in));
+  caf::config_value out;
+  REQUIRE(ldes(serialization_output, out));
+  CHECK_EQUAL(in, out);
+}
