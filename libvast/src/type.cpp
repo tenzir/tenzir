@@ -789,6 +789,80 @@ data type::construct() const noexcept {
   return *this ? caf::visit(f, *this) : data{};
 }
 
+data type::to_definition() const noexcept {
+  VAST_ASSERT(*this);
+  // Utility function for adding the attributes to a type definition, if
+  // required.
+  auto attributes_enriched_definition
+    = [&](data type_definition) noexcept -> data {
+    auto attributes_definition = record::vector_type{};
+    for (const auto& [key, value] : attributes(recurse::no)) {
+      if (value.empty())
+        attributes_definition.emplace_back(std::string{key}, caf::none);
+      else
+        attributes_definition.emplace_back(std::string{key},
+                                           std::string{value});
+    }
+    if (attributes_definition.empty())
+      return type_definition;
+    return record{
+      {"type", std::move(type_definition)},
+      {"attributes", record::make_unsafe(std::move(attributes_definition))},
+    };
+  };
+  // Check if there is an alias, and if there is then visit then one first.
+  for (const auto& alias : aliases()) {
+    auto definition = attributes_enriched_definition(alias.to_definition());
+    const auto name = this->name();
+    if (name.empty())
+      return definition;
+    return record{
+      {std::string{name}, std::move(definition)},
+    };
+  }
+  // At this point we've gone through all named aliases, but the last innermost
+  // type may still have attributes.
+  VAST_ASSERT(name().empty());
+  auto make_type_definition = detail::overload{
+    [](const basic_type auto& self) noexcept -> data {
+      return fmt::to_string(self);
+    },
+    [](const enumeration_type& self) noexcept -> data {
+      auto definition = list{};
+      for (const auto& field : self.fields())
+        definition.push_back(std::string{field.name});
+      return record{
+        {"enum", std::move(definition)},
+      };
+    },
+    [](const list_type& self) noexcept -> data {
+      return record{
+        {"list", self.value_type().to_definition()},
+      };
+    },
+    [](const map_type& self) noexcept -> data {
+      return record{
+        {"map",
+         record{
+           {"key", self.key_type().to_definition()},
+           {"value", self.value_type().to_definition()},
+         }},
+      };
+    },
+    [](const record_type& self) noexcept -> data {
+      auto definition = list{};
+      definition.reserve(self.num_fields());
+      for (const auto& [name, type] : self.fields())
+        definition.push_back(record{{std::string{name}, type.to_definition()}});
+      return record{
+        {"record", std::move(definition)},
+      };
+    },
+  };
+  return attributes_enriched_definition(
+    caf::visit(make_type_definition, *this));
+}
+
 type type::from_arrow(const arrow::DataType& other) noexcept {
   auto f = detail::overload{
     []<class T>(const T&) noexcept -> type {
@@ -2000,16 +2074,17 @@ std::shared_ptr<arrow::StructArray> subnet_type::array_type::storage() const {
 
 // -- enumeration_type --------------------------------------------------------
 
-enumeration_type::enumeration_type(
-  const enumeration_type& other) noexcept = default;
+enumeration_type::enumeration_type(const enumeration_type& other) noexcept
+  = default;
 
 enumeration_type&
-enumeration_type::operator=(const enumeration_type& rhs) noexcept = default;
+enumeration_type::operator=(const enumeration_type& rhs) noexcept
+  = default;
 
 enumeration_type::enumeration_type(enumeration_type&& other) noexcept = default;
 
-enumeration_type&
-enumeration_type::operator=(enumeration_type&& other) noexcept = default;
+enumeration_type& enumeration_type::operator=(enumeration_type&& other) noexcept
+  = default;
 
 enumeration_type::~enumeration_type() noexcept = default;
 
@@ -3246,36 +3321,37 @@ int sum_type_access<arrow::DataType>::index_from_type(
   // The first-stage O(1) lookup table from arrow::DataType id to the sum type
   // variant index defined by the type list. Returns unknown_id if the DataType
   // is not in the type list, and extension_id if the type is an extension type.
-  static const auto table = []<class... Ts, int... Indices>(
-    caf::detail::type_list<Ts...>,
-    std::integer_sequence<int, Indices...>) noexcept {
-    std::array<int, arrow::Type::type::MAX_ID> tbl{};
-    tbl.fill(unknown_id);
-    (static_cast<void>(tbl[Ts::type_id] = arrow::is_extension_type<Ts>::value
-                                            ? extension_id
-                                            : Indices),
-     ...);
-    return tbl;
-  }
-  (sum_type_access<arrow::DataType>::types{},
-   std::make_integer_sequence<int, caf::detail::tl_size<types>::value>());
+  static const auto table =
+    []<class... Ts, int... Indices>(
+      caf::detail::type_list<Ts...>,
+      std::integer_sequence<int, Indices...>) noexcept {
+      std::array<int, arrow::Type::type::MAX_ID> tbl{};
+      tbl.fill(unknown_id);
+      (static_cast<void>(tbl[Ts::type_id] = arrow::is_extension_type<Ts>::value
+                                              ? extension_id
+                                              : Indices),
+       ...);
+      return tbl;
+    }(sum_type_access<arrow::DataType>::types{},
+      std::make_integer_sequence<int, caf::detail::tl_size<types>::value>());
   // The second-stage O(n) lookup table for extension types that identifies the
   // types by their unique identifier string.
-  static const auto extension_table = []<class... Ts, int... Indices>(
-    caf::detail::type_list<Ts...>, std::integer_sequence<int, Indices...>) {
-    std::array<std::pair<std::string_view, int>,
-               detail::tl_size<extension_types>::value>
-      tbl{};
-    (static_cast<void>(
-       tbl[Indices]
-       = {Ts::name, detail::tl_index_of<sum_type_access<arrow::DataType>::types,
-                                        Ts>::value}),
-     ...);
-    return tbl;
-  }
-  (extension_types{},
-   std::make_integer_sequence<int,
-                              caf::detail::tl_size<extension_types>::value>());
+  static const auto extension_table =
+    []<class... Ts, int... Indices>(caf::detail::type_list<Ts...>,
+                                    std::integer_sequence<int, Indices...>) {
+      std::array<std::pair<std::string_view, int>,
+                 detail::tl_size<extension_types>::value>
+        tbl{};
+      (static_cast<void>(
+         tbl[Indices]
+         = {Ts::name,
+            detail::tl_index_of<sum_type_access<arrow::DataType>::types,
+                                Ts>::value}),
+       ...);
+      return tbl;
+    }(extension_types{},
+      std::make_integer_sequence<
+        int, caf::detail::tl_size<extension_types>::value>());
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
   auto result = table[x.id()];
   VAST_ASSERT(result != unknown_id,
