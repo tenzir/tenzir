@@ -28,10 +28,11 @@ caf::error add(const message& msg, table_slice_builder& builder) {
   if (!result)
     return caf::make_error(ec::parse_error, //
                            fmt::format("failed to add first 7 message fields"));
-  // TODO: implement extension transposition.
-  if (!builder.add(make_data_view("dummy")))
-    return caf::make_error(ec::parse_error, //
-                           fmt::format("failed to add extension field"));
+  for (const auto& [_, value] : msg.extension)
+    // TODO: infer actual types instead of keeping everything as string.
+    if (!builder.add(make_data_view(value)))
+      return caf::make_error(ec::parse_error, //
+                             fmt::format("failed to add extension field"));
   return caf::none;
 }
 

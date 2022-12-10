@@ -42,16 +42,6 @@ public:
     : super(options) {
     if (in != nullptr)
       reset(std::move(in));
-    cef_type_ = type{"cef.event", record_type{
-                                    {"cef_version", count_type{}},
-                                    {"device_vendor", string_type{}},
-                                    {"device_product", string_type{}},
-                                    {"device_version", string_type{}},
-                                    {"signature_id", string_type{}},
-                                    {"name", string_type{}},
-                                    {"severity", string_type{}},
-                                    {"extension", string_type{}},
-                                  }};
   }
 
   reader(const reader&) = delete;
@@ -89,12 +79,6 @@ protected:
     VAST_ASSERT(max_events > 0);
     VAST_ASSERT(max_slice_size > 0);
     VAST_ASSERT(lines_ != nullptr);
-    if (builder_ == nullptr) {
-      VAST_ASSERT(caf::holds_alternative<record_type>(cef_type_));
-      if (!reset_builder(cef_type_))
-        return caf::make_error(ec::parse_error, //
-                               "unable to create builder for CEF type");
-    }
     size_t produced = 0;
     while (produced < max_events) {
       if (lines_->done())
@@ -121,6 +105,17 @@ protected:
       auto msg = to<message>(std::string_view{line});
       if (!msg)
         return msg.error();
+      // TODO: Resetting the builder for every line is highly inefficient. For
+      // heterogeneous CEF, we have no other way. We could add a flag that skips
+      // the check after the first record. Or we could skip the check if the
+      // user provided a custom schema.
+      auto schema = to<type>(*msg);
+      if (!schema)
+        return schema.error();
+      cef_type_ = std::move(*schema);
+      if (!reset_builder(cef_type_))
+        return caf::make_error(ec::parse_error, //
+                               "unable to create builder for CEF type");
       if (auto err = add(*msg, *builder_)) {
         VAST_WARN("{} failed to parse line {}: {} ({})",
                   detail::pretty_type_name(this), lines_->line_number(), line,
