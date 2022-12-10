@@ -14,6 +14,7 @@
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -36,20 +37,19 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
   if (!pipelines)
     return pipelines.error();
   VAST_DEBUG("{} parsed {} pipelines for source", *self, pipelines->size());
-  auto [accountant, importer, type_registry]
+  auto [accountant, importer, catalog]
     = self->state.registry
-        .find<accountant_actor, importer_actor, type_registry_actor>();
+        .find<accountant_actor, importer_actor, catalog_actor>();
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
-  if (!type_registry)
-    return caf::make_error(ec::missing_component, "type-registry");
+  if (!catalog)
+    return caf::make_error(ec::missing_component, "catalog");
   const auto format = std::string{args.inv.name()};
-  auto src_result
-    = make_source(self->system(), format, args.inv,
-                  caf::actor_cast<accountant_actor>(accountant),
-                  caf::actor_cast<type_registry_actor>(type_registry),
-                  caf::actor_cast<importer_actor>(importer),
-                  std::move(*pipelines), true);
+  auto src_result = make_source(self->system(), format, args.inv,
+                                caf::actor_cast<accountant_actor>(accountant),
+                                caf::actor_cast<catalog_actor>(catalog),
+                                caf::actor_cast<importer_actor>(importer),
+                                std::move(*pipelines), true);
   if (!src_result)
     return src_result.error();
   auto src = *src_result;

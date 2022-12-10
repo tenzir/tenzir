@@ -14,6 +14,7 @@
 #include <vast/system/node_control.hpp>
 #include <vast/system/spawn_or_connect_to_node.hpp>
 #include <vast/taxonomies.hpp>
+#include <vast/uuid.hpp>
 
 namespace vast::plugins::show {
 
@@ -32,15 +33,15 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
     = std::holds_alternative<system::node_actor>(node_opt)
         ? std::get<system::node_actor>(node_opt)
         : std::get<scope_linked<system::node_actor>>(node_opt).get();
-  // Get the type-registry actor.
+  // Get the catalog actor.
   auto components
-    = system::get_node_components<system::type_registry_actor>(self, node);
+    = system::get_node_components<system::catalog_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
-  auto [type_registry] = std::move(*components);
+  auto [catalog] = std::move(*components);
   // show!
   auto command_result = caf::message{caf::none};
-  self->request(type_registry, caf::infinite, atom::get_v, atom::taxonomies_v)
+  self->request(catalog, caf::infinite, atom::get_v, atom::taxonomies_v)
     .receive(
       [&](taxonomies& taxonomies) mutable {
         auto result = list{};
@@ -100,7 +101,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
         command_result = caf::make_message(
           caf::make_error(ec::unspecified, fmt::format("'show' failed to get "
                                                        "taxonomies from "
-                                                       "type-registry: {}",
+                                                       "catalog: {}",
                                                        std::move(err))));
       });
   return command_result;

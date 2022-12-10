@@ -47,7 +47,7 @@ struct datagram_source_state : source_state {
 /// @param reader The reader instance.
 /// @param table_slice_size The maximum size for a table slice.
 /// @param max_events The optional maximum amount of events to import.
-/// @param type_registry The actor handle for the type-registry component.
+/// @param catalog The catalog for the type-registry component.
 /// @param local_module Additional local modules to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
@@ -55,7 +55,7 @@ caf::behavior datagram_source(
   caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
   uint16_t udp_listening_port, format::reader_ptr reader,
   size_t table_slice_size, std::optional<size_t> max_events,
-  const type_registry_actor& type_registry, vast::module local_module,
+  const catalog_actor& catalog, vast::module local_module,
   std::string type_filter, accountant_actor accountant,
   std::vector<pipeline>&& pipelines);
 

@@ -109,8 +109,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
         });
     return result;
   };
-  std::list components = {"type-registry", "catalog", "archive",     "index",
-                          "importer",      "eraser",  "disk-monitor"};
+  std::list components
+    = {"catalog", "archive", "index", "importer", "eraser", "disk-monitor"};
   for (auto& c : components) {
     if (auto err = spawn_component(c)) {
       VAST_ERROR("node failed to spawn {}: {}", c, err);

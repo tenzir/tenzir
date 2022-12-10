@@ -14,6 +14,7 @@
 #include "vast/test/data.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/attach_stream_sink.hpp>
 #include <caf/exit_reason.hpp>
@@ -87,7 +88,7 @@ TEST(zeek conn source) {
   auto& mm = sys.middleman();
   mpx.provide_datagram_servant(8080, hdl);
   auto src = mm.spawn_broker(datagram_source, uint16_t{8080}, std::move(reader),
-                             100u, std::nullopt, type_registry_actor{},
+                             100u, std::nullopt, catalog_actor{},
                              vast::module{}, std::string{}, accountant_actor{},
                              std::vector<pipeline>{});
   run();

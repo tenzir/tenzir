@@ -97,12 +97,10 @@ struct importer_state {
 /// @param store A handle to the global STORE (ARCHIVE).
 /// @param index A handle to the INDEX.
 /// @param batch_size The initial number of IDs to request when replenishing.
-/// @param type_registry A handle to the type-registry module.
 /// @param input_transformations The input transformations to apply.
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, const store_builder_actor& store,
-         index_actor index, const type_registry_actor& type_registry,
-         std::vector<pipeline>&& input_pipelines = {});
+         index_actor index, std::vector<pipeline>&& input_pipelines = {});
 
 } // namespace vast::system

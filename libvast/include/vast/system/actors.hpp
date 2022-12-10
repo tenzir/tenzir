@@ -231,7 +231,22 @@ using catalog_actor = typed_actor_fwd<
   // Return the candidate partitions for a query.
   caf::replies_to<atom::candidates, vast::query_context>::with<catalog_result>,
   // Internal telemetry loop.
-  caf::reacts_to<atom::telemetry>>
+  caf::reacts_to<atom::telemetry>,
+  // Retrieves all known types.
+  caf::replies_to<atom::get, atom::type>::with<type_set>,
+  // Registers the given taxonomies.
+  caf::reacts_to<atom::put, taxonomies>,
+  // Registers a given layout.
+  caf::reacts_to<atom::put, vast::type>,
+  // Retrieves the known taxonomies.
+  caf::replies_to<atom::get, atom::taxonomies>::with< //
+    taxonomies>,
+  // Loads the taxonomies on disk.
+  caf::replies_to<atom::load>::with< //
+    atom::ok>,
+  // Resolves an expression in terms of the known taxonomies.
+  caf::replies_to<atom::resolve, expression>::with< //
+    expression>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -303,32 +318,6 @@ using archive_actor = typed_actor_fwd<
   caf::reacts_to<atom::telemetry>>
   // Conform to the protocol of the STORE BUILDER actor.
   ::extend_with<store_builder_actor>::unwrap;
-
-/// The TYPE REGISTRY actor interface.
-using type_registry_actor = typed_actor_fwd<
-  // The internal telemetry loop of the TYPE REGISTRY.
-  caf::reacts_to<atom::telemetry>,
-  // Retrieves all known types.
-  caf::replies_to<atom::get>::with<type_set>,
-  // Registers the given taxonomies.
-  caf::reacts_to<atom::put, taxonomies>,
-  // Registers a given layout.
-  caf::reacts_to<atom::put, vast::type>,
-  // Retrieves the known taxonomies.
-  caf::replies_to<atom::get, atom::taxonomies>::with< //
-    taxonomies>,
-  // Loads the taxonomies on disk.
-  caf::replies_to<atom::load>::with< //
-    atom::ok>,
-  // Resolves an expression in terms of the known taxonomies.
-  caf::replies_to<atom::resolve, expression>::with< //
-    expression>,
-  // Registers the TYPE REGISTRY with the ACCOUNTANT.
-  caf::reacts_to<atom::set, accountant_actor>>
-  // Conform to the procotol of the STREAM SINK actor for table slices,
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the procotol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
 
 /// The DISK MONITOR actor interface.
 using disk_monitor_actor = typed_actor_fwd<
@@ -547,7 +536,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))
   VAST_ADD_TYPE_ID(
     (vast::system::stream_sink_actor<vast::table_slice, std::string>))
-  VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
 

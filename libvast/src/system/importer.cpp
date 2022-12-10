@@ -187,8 +187,7 @@ void importer_state::send_report() {
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, const store_builder_actor& store,
-         index_actor index, const type_registry_actor& type_registry,
-         std::vector<pipeline>&& input_transformations) {
+         index_actor index, std::vector<pipeline>&& input_transformations) {
   VAST_TRACE_SCOPE("importer {} {}", VAST_ARG(self->id()), VAST_ARG(dir));
   for (const auto& x : input_transformations)
     VAST_VERBOSE("{} loaded import transformation {}", *self, x.name());
@@ -222,16 +221,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     return importer_actor::behavior_type::make_empty_behavior();
   }
   self->state.stage->add_outbound_path(self->state.transformer);
-  if (type_registry)
-    self
-      ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(type_registry))
-      .then([](const caf::outbound_stream_slot<table_slice>&) {},
-            [self](caf::error& error) {
-              VAST_ERROR("failed to connect type registry to the importer: {}",
-                         error);
-              self->quit(std::move(error));
-            });
   if (store)
     self
       ->request(self->state.transformer, caf::infinite,

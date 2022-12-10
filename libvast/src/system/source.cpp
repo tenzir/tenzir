@@ -51,12 +51,12 @@ void send_to_accountant(caf::scheduled_actor* self, accountant_actor accountant,
 }
 } // namespace
 
-void source_state::initialize(const type_registry_actor& type_registry,
+void source_state::initialize(const catalog_actor& catalog,
                               std::string type_filter) {
   // Figure out which modules we need.
-  if (type_registry) {
+  if (catalog) {
     auto blocking = caf::scoped_actor{self->system()};
-    blocking->request(type_registry, caf::infinite, atom::get_v)
+    blocking->request(catalog, caf::infinite, atom::get_v, atom::type_v)
       .receive(
         [=, this](const type_set& types) {
           auto prefix_then_dot = [](std::string_view name,
@@ -69,7 +69,7 @@ void source_state::initialize(const type_registry_actor& type_registry,
                    && (name_mismatch == name.end() || *name_mismatch == '.');
           };
           // First, merge and de-duplicate the local module with types from the
-          // type-registry.
+          // catalog's type-registry.
           auto merged_module = module{};
           for (const auto& type : local_module)
             if (prefix_then_dot(type.name(), type_filter))
@@ -155,7 +155,7 @@ void source_state::filter_and_push(
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
-       const type_registry_actor& type_registry, vast::module local_module,
+       const catalog_actor& catalog, vast::module local_module,
        std::string type_filter, accountant_actor accountant,
        std::vector<pipeline>&& pipelines) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(*self));
@@ -178,7 +178,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   }
   // Register with the accountant.
   self->send(self->state.accountant, atom::announce_v, self->state.name);
-  self->state.initialize(type_registry, std::move(type_filter));
+  self->state.initialize(catalog, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
     self->state.done = true;

@@ -93,10 +93,10 @@ public:
   std::tuple<Handles...> find() const {
     auto normalize = [](std::string in) {
       // Remove the uninteresting parts of the name:
-      //   vast::system::type_registry_actor -> type_registry
+      //   vast::system::test_registry_actor -> test_registry
       in.erase(0, sizeof("vast::system::") - 1);
       in.erase(in.size() - (sizeof("_actor") - 1));
-      // Replace '_' with '-': type_registry -> type-registry
+      // Replace '_' with '-': test_registry -> test-registry
       std::replace(in.begin(), in.end(), '_', '-');
       return in;
     };

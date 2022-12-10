@@ -35,7 +35,6 @@
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/taxonomies.hpp"

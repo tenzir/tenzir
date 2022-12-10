@@ -138,7 +138,8 @@ TEST(query pruning with index config) {
     [](const caf::error& e) {
       REQUIRE_EQUAL(e, caf::no_error);
     });
-  auto catalog = self->spawn(vast::system::catalog, accountant);
+  auto catalog
+    = self->spawn(vast::system::catalog, accountant, directory / "types");
   auto rp2 = self->request(catalog, caf::infinite, vast::atom::merge_v, id, ps);
   run();
   rp2.receive(

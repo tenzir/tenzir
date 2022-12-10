@@ -49,7 +49,6 @@ bool push_to(caf::broadcast_downstream_manager<T>& manager,
   return false;
 }
 
-
 void store_or_fulfill(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
@@ -273,9 +272,8 @@ partition_transformer_actor::behavior_type partition_transformer(
     self,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  type_registry_actor type_registry, filesystem_actor fs,
-  pipeline_ptr transform, std::string partition_path_template,
-  std::string synopsis_path_template) {
+  catalog_actor catalog, filesystem_actor fs, pipeline_ptr transform,
+  std::string partition_path_template, std::string synopsis_path_template) {
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);
   self->state.synopsis_path_template = std::move(synopsis_path_template);
@@ -286,7 +284,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   self->state.index_opts = index_opts;
   self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
-  self->state.type_registry = std::move(type_registry);
+  self->state.catalog = std::move(catalog);
   // transform can be an aggregate transform here
   self->state.transform = std::move(transform);
   self->state.store_id = std::move(store_id);
@@ -327,7 +325,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       for (auto& slice : *transformed) {
         auto const& layout = slice.layout();
         // TODO: Technically we'd only need to send *new* layouts here.
-        self->send(self->state.type_registry, atom::put_v, layout);
+        self->send(self->state.catalog, atom::put_v, layout);
         auto& partition_data = self->state.create_or_get_partition(slice);
         if (!partition_data.synopsis) {
           partition_data.id = vast::uuid::random();
