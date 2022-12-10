@@ -8,6 +8,8 @@
 
 #include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/data.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
@@ -48,7 +50,19 @@ struct configuration {
       for (const auto& kvp : fields) {
         auto& entry = result.emplace_back();
         entry.first.name = kvp.first;
-        entry.first.type = type::infer(kvp.second);
+        // The config parsing never produces all possible alternatives of the
+        // data variant, e.g., addresses will be represented as strings. Because
+        // of that we need to re-parse the data if it's a string.
+        auto reparsed_value = [](auto value) {
+          const auto* str = caf::get_if<std::string>(&value);
+          if (!str)
+            return value;
+          auto result = to<data>(*str);
+          if (!result)
+            return value;
+          return std::move(*result);
+        }(kvp.second);
+        entry.first.type = type::infer(reparsed_value);
         VAST_ASSERT(entry.first.type);
         auto builder
           = entry.first.type.make_arrow_builder(arrow::default_memory_pool());
@@ -61,10 +75,10 @@ struct configuration {
           } else {
             for (int i = 0; i < length; ++i) {
               VAST_ASSERT(
-                caf::holds_alternative<type_to_data_t<Type>>(kvp.second));
+                caf::holds_alternative<type_to_data_t<Type>>(reparsed_value));
               const auto append_status = append_builder(
                 type, caf::get<type_to_arrow_builder_t<Type>>(*builder),
-                make_view(caf::get<type_to_data_t<Type>>(kvp.second)));
+                make_view(caf::get<type_to_data_t<Type>>(reparsed_value)));
               VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
             }
           }
