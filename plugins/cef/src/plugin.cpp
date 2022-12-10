@@ -165,23 +165,6 @@ class plugin final : public virtual reader_plugin {
     return "imports logs in Common Event Format (CEF)";
   }
 
-  [[nodiscard]] const char* reader_documentation() const override {
-    // TODO:
-    // - substantiate
-    // - add linke to canonical CEF reference
-    return R"__(The `import cef` parses ASCII input as [Common Event Format
-(CEF)][cef].
-
-Here's an example that reads file with one CEF log per line:
-
-```bash
-vast import cef < file.log
-```
-
-[cef]: link-to-cef
-)__";
-  }
-
   [[nodiscard]] caf::config_option_set
   reader_options(command::opts_builder&& opts) const override {
     // TODO: consider options
