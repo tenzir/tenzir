@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <vast/fwd.hpp>
+
 #include <caf/expected.hpp>
 
 #include <cstdint>
@@ -31,6 +33,12 @@ struct message {
 
 /// Converts a string view into a message.
 caf::error convert(std::string_view line, message& msg);
+
+/// Infers a schema from a message.
+/// @param msg The message to infer a schema from.
+/// @param schema The schema corresponding to *msg*.
+/// @returns The inferred schema.
+caf::error convert(const message& msg, type& schema);
 
 // Parses the CEF extension field as a sequence of key-value pairs for further
 // downstream processing.

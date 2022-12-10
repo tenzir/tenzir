@@ -13,6 +13,7 @@
 
 #include <vast/concept/convertible/to.hpp>
 #include <vast/test/test.hpp>
+#include <vast/type.hpp>
 
 #include <caf/test/dsl.hpp>
 #include <fmt/core.h>
@@ -31,6 +32,10 @@ auto to_extension(std::string_view str) {
 
 auto to_message(std::string_view str) {
   return unbox(to<plugins::cef::message>(str));
+}
+
+auto to_schema(const plugins::cef::message& msg) {
+  return unbox(to<type>(msg));
 }
 
 } // namespace
@@ -65,4 +70,20 @@ TEST(parse sample) {
   CHECK_EQUAL(msg.extension[0].second, "1");
   CHECK_EQUAL(msg.extension[28].first, "_cefVer");
   CHECK_EQUAL(msg.extension[28].second, "0.1");
+  auto schema = to_schema(msg);
+  CHECK_EQUAL(schema.name(), "cef.event");
+  const auto& record = caf::get<record_type>(schema);
+  REQUIRE_EQUAL(record.num_fields(), 8u);
+  CHECK_EQUAL(record.field(0).name, "cef_version");
+  CHECK_EQUAL(record.field(1).name, "device_vendor");
+  CHECK_EQUAL(record.field(2).name, "device_product");
+  CHECK_EQUAL(record.field(3).name, "device_version");
+  CHECK_EQUAL(record.field(4).name, "signature_id");
+  CHECK_EQUAL(record.field(5).name, "name");
+  CHECK_EQUAL(record.field(6).name, "severity");
+  CHECK_EQUAL(record.field(7).name, "extension");
+  auto ext = caf::get<record_type>(record.field(7).type);
+  REQUIRE_EQUAL(ext.num_fields(), msg.extension.size());
+  CHECK_EQUAL(ext.field(0).name, msg.extension[0].first);
+  CHECK_EQUAL(ext.field(28).name, msg.extension[28].first);
 }

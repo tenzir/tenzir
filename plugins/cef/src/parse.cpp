@@ -12,6 +12,7 @@
 #include <vast/detail/string.hpp>
 #include <vast/error.hpp>
 #include <vast/table_slice_builder.hpp>
+#include <vast/type.hpp>
 
 #include <fmt/core.h>
 
@@ -111,6 +112,29 @@ parse_extension(std::string_view extension) {
   auto value = splits[splits.size() - 1];
   result.emplace_back(key, unescape(value));
   return result;
+}
+
+caf::error convert(const message& msg, type& schema) {
+  static constexpr auto name = "cef.event";
+  // These fields are always present.
+  auto fields = std::vector<struct record_type::field>{
+    {"cef_version", count_type{}},     {"device_vendor", string_type{}},
+    {"device_product", string_type{}}, {"device_version", string_type{}},
+    {"signature_id", string_type{}},   {"name", string_type{}},
+    {"severity", string_type{}},
+  };
+  // Infer extension record, if present.
+  if (!msg.extension.empty()) {
+    std::vector<struct record_type::field> ext_fields;
+    ext_fields.reserve(msg.extension.size());
+    for (const auto& [key, value] : msg.extension) {
+      // FIXME: deduce type based on value.
+      ext_fields.emplace_back(std::string{key}, string_type{});
+    }
+    fields.emplace_back("extension", record_type{std::move(ext_fields)});
+  }
+  schema = type{name, record_type{std::move(fields)}};
+  return caf::none;
 }
 
 } // namespace vast::plugins::cef
