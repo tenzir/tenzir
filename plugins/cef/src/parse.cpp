@@ -9,6 +9,8 @@
 #include "cef/parse.hpp"
 
 #include <vast/concept/parseable/numeric.hpp>
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/data.hpp>
 #include <vast/detail/string.hpp>
 #include <vast/error.hpp>
 #include <vast/table_slice_builder.hpp>
@@ -128,8 +130,10 @@ caf::error convert(const message& msg, type& schema) {
     std::vector<struct record_type::field> ext_fields;
     ext_fields.reserve(msg.extension.size());
     for (const auto& [key, value] : msg.extension) {
-      // FIXME: deduce type based on value.
-      ext_fields.emplace_back(std::string{key}, string_type{});
+      if (auto x = to<data>(value))
+        ext_fields.emplace_back(std::string{key}, type::infer(*x));
+      else
+        ext_fields.emplace_back(std::string{key}, string_type{});
     }
     fields.emplace_back("extension", record_type{std::move(ext_fields)});
   }

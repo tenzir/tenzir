@@ -10,6 +10,8 @@
 
 #include "cef/parse.hpp"
 
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/data.hpp>
 #include <vast/error.hpp>
 #include <vast/table_slice_builder.hpp>
 
@@ -18,21 +20,33 @@
 namespace vast::plugins::cef {
 
 caf::error add(const message& msg, table_slice_builder& builder) {
-  auto result = builder.add(make_view(count{msg.cef_version}))
-                && builder.add(make_data_view(msg.device_vendor))
-                && builder.add(make_data_view(msg.device_product))
-                && builder.add(make_data_view(msg.device_version))
-                && builder.add(make_data_view(msg.signature_id))
-                && builder.add(make_data_view(msg.name))
-                && builder.add(make_data_view(msg.severity));
-  if (!result)
-    return caf::make_error(ec::parse_error, //
-                           fmt::format("failed to add first 7 message fields"));
-  for (const auto& [_, value] : msg.extension)
-    // TODO: infer actual types instead of keeping everything as string.
-    if (!builder.add(make_data_view(value)))
+  auto append = [&](const auto& x) -> caf::error {
+    if (!builder.add(make_data_view(x)))
       return caf::make_error(ec::parse_error, //
-                             fmt::format("failed to add extension field"));
+                             fmt::format("failed to add value: {}", x));
+    return caf::none;
+  };
+  // High-order helper function for the monadic caf::error::eval utility.
+  auto f = [&](const auto& x) {
+    return [&]() {
+      return append(x);
+    };
+  };
+  // Append first 7 fields.
+  if (auto err
+      = caf::error::eval(f(count{msg.cef_version}), f(msg.device_vendor),
+                         f(msg.device_product), f(msg.device_version),
+                         f(msg.signature_id), f(msg.name), f(msg.severity)))
+    return err;
+  // Append extension fields.
+  for (const auto& [_, value] : msg.extension) {
+    if (auto x = to<data>(value)) {
+      if (auto err = append(*x))
+        return err;
+    } else if (auto err = append(value)) {
+      return err;
+    }
+  }
   return caf::none;
 }
 
