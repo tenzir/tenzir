@@ -19,4 +19,8 @@ tests:
     steps:
       - command: import -b cef
         input: data/cef/cef.log
-      - command: export json 'version >= 0 && vendor == "ArcSight"'
+      - command: export json 'cef_version >= 0 && device_vendor == "Cynet"'
+      # There is one field in the example record that maps to an IP address.
+      # This query for an IP address literal makes sure that the type is
+      # properly inferred.
+      - command: export json '172.31.5.93'
