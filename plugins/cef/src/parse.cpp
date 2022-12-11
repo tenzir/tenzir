@@ -126,15 +126,17 @@ caf::error convert(const message& msg, type& schema) {
     {"severity", string_type{}},
   };
   // Infer extension record, if present.
+  static auto infer = [](const auto& value) -> type {
+    if (auto x = to<data>(value))
+      if (auto t = type::infer(*x))
+        return t;
+    return type{string_type{}};
+  };
   if (!msg.extension.empty()) {
     std::vector<struct record_type::field> ext_fields;
     ext_fields.reserve(msg.extension.size());
-    for (const auto& [key, value] : msg.extension) {
-      if (auto x = to<data>(value))
-        ext_fields.emplace_back(std::string{key}, type::infer(*x));
-      else
-        ext_fields.emplace_back(std::string{key}, string_type{});
-    }
+    for (const auto& [key, value] : msg.extension)
+      ext_fields.emplace_back(std::string{key}, infer(value));
     fields.emplace_back("extension", record_type{std::move(ext_fields)});
   }
   schema = type{name, record_type{std::move(fields)}};
