@@ -126,7 +126,7 @@ caf::error convert(const message& msg, type& schema) {
     {"severity", string_type{}},
   };
   // Infer extension record, if present.
-  static auto infer = [](const auto& value) -> type {
+  auto infer = [](const auto& value) -> type {
     if (auto x = to<data>(value))
       if (auto t = type::infer(*x))
         return t;
