@@ -15,8 +15,8 @@
 #include <vast/detail/line_range.hpp>
 #include <vast/detail/make_io_stream.hpp>
 #include <vast/error.hpp>
-#include <vast/format/reader.hpp>
 #include <vast/format/multi_layout_reader.hpp>
+#include <vast/format/reader.hpp>
 #include <vast/module.hpp>
 #include <vast/plugin.hpp>
 
@@ -37,7 +37,7 @@ public:
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
   explicit reader(const caf::settings& options, std::unique_ptr<std::istream> in
-                                       = nullptr)
+                                                = nullptr)
     : super(options) {
     if (in != nullptr)
       reset(std::move(in));
@@ -115,7 +115,7 @@ protected:
       auto msg = to<message_view>(std::string_view{line});
       if (!msg) {
         VAST_WARN("{} failed to parse CEF messge: {}",
-                   detail::pretty_type_name(this), msg.error());
+                  detail::pretty_type_name(this), msg.error());
         ++num_invalid_lines_;
         continue;
       }
