@@ -29,7 +29,6 @@
 
 namespace vast::plugins::cef {
 
-// TODO: consider moving into separate file.
 class reader : public format::multi_layout_reader {
 public:
   using super = multi_layout_reader;
@@ -165,9 +164,8 @@ class plugin final : public virtual reader_plugin {
   }
 
   [[nodiscard]] caf::config_option_set
-  reader_options(command::opts_builder&& opts) const override {
-    // TODO: consider options
-    return std::move(opts).add<bool>("tbd", "tbd").finish();
+  reader_options(command::opts_builder&&) const override {
+    return {};
   }
 
   [[nodiscard]] std::unique_ptr<format::reader>
