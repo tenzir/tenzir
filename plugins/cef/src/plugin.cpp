@@ -16,7 +16,7 @@
 #include <vast/detail/make_io_stream.hpp>
 #include <vast/error.hpp>
 #include <vast/format/reader.hpp>
-#include <vast/format/single_layout_reader.hpp>
+#include <vast/format/multi_layout_reader.hpp>
 #include <vast/module.hpp>
 #include <vast/plugin.hpp>
 
@@ -30,14 +30,14 @@
 namespace vast::plugins::cef {
 
 // TODO: consider moving into separate file.
-class reader : public format::single_layout_reader {
+class reader : public format::multi_layout_reader {
 public:
-  using super = single_layout_reader;
+  using super = multi_layout_reader;
 
   /// Constructs a CEF reader.
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
-  reader(const caf::settings& options, std::unique_ptr<std::istream> in
+  explicit reader(const caf::settings& options, std::unique_ptr<std::istream> in
                                        = nullptr)
     : super(options) {
     if (in != nullptr)
@@ -50,22 +50,19 @@ public:
   reader& operator=(reader&&) noexcept = default;
   ~reader() override = default;
 
-  void reset([[maybe_unused]] std::unique_ptr<std::istream> in) override {
+  void reset(std::unique_ptr<std::istream> in) override {
     VAST_ASSERT(in != nullptr);
     input_ = std::move(in);
     lines_ = std::make_unique<detail::line_range>(*input_);
   }
 
-  caf::error module(class module new_module) override {
-    // TODO: relax this check; congruency is too strong. Rather, the only thing
-    // that needs to be congruent is the general shape of the schema, with
-    // extensions including room for variability.
-    return replace_if_congruent({&cef_type_}, new_module);
+  caf::error module(class module) override {
+    // Not implemented.
+    return caf::none;
   }
 
   [[nodiscard]] class module module() const override {
     class module result {};
-    result.add(cef_type_);
     return result;
   }
 
@@ -74,12 +71,25 @@ public:
   }
 
 protected:
+  system::report status() const override {
+    using namespace std::string_literals;
+    uint64_t invalid_line = num_invalid_lines_;
+    if (num_invalid_lines_ > 0)
+      VAST_WARN("{} failed to parse {} of {} recent lines",
+                detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
+    num_invalid_lines_ = 0;
+    num_lines_ = 0;
+    return {.data = {
+              {name() + ".invalid-line"s, invalid_line},
+            }};
+  }
+
   caf::error
   read_impl(size_t max_events, size_t max_slice_size, consumer& cons) override {
     VAST_ASSERT(max_events > 0);
     VAST_ASSERT(max_slice_size > 0);
-    VAST_ASSERT(lines_ != nullptr);
     size_t produced = 0;
+    table_slice_builder_ptr bptr = nullptr;
     while (produced < max_events) {
       if (lines_->done())
         return finish(cons, caf::make_error(ec::end_of_input, "input "
@@ -95,49 +105,46 @@ protected:
                    lines_->line_number());
         return ec::stalled;
       }
-      const auto& line = lines_->get();
+      auto& line = lines_->get();
       ++num_lines_;
       if (line.empty()) {
+        // Ignore empty lines.
         VAST_DEBUG("{} ignores empty line at {}",
                    detail::pretty_type_name(this), lines_->line_number());
         continue;
       }
       auto msg = to<message>(std::string_view{line});
-      if (!msg)
-        return msg.error();
-      // TODO: Resetting the builder for every line is highly inefficient. For
-      // heterogeneous CEF, we have no other way. We could add a flag that skips
-      // the check after the first record. Or we could skip the check if the
-      // user provided a custom schema.
-      cef_type_ = infer(*msg);
-      if (!reset_builder(cef_type_))
-        return caf::make_error(ec::parse_error, //
-                               "unable to create builder for CEF type");
-      if (auto err = add(*msg, *builder_)) {
+      if (!msg) {
+        VAST_WARN("{} failed to parse CEF messge: {}",
+                   detail::pretty_type_name(this), msg.error());
+        ++num_invalid_lines_;
+        continue;
+      }
+      auto schema = infer(*msg);
+      bptr = builder(schema);
+      if (bptr == nullptr)
+        return caf::make_error(ec::parse_error, "unable to get a builder");
+      if (auto err = add(*msg, *bptr)) {
         VAST_WARN("{} failed to parse line {}: {} ({})",
                   detail::pretty_type_name(this), lines_->line_number(), line,
                   err);
         ++num_invalid_lines_;
-        // FIXME: make this more resilient to failures by resetting the builder
-        // here and continuing.
-        // continue;
-        return finish(cons, err);
+        continue;
       }
       produced++;
       batch_events_++;
-      if (builder_->rows() == max_slice_size)
-        if (auto err = finish(cons, caf::none))
+      if (bptr->rows() == max_slice_size)
+        if (auto err = finish(cons, bptr))
           return err;
     }
-    return finish(cons, caf::none);
+    return finish(cons);
   }
 
 private:
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
-  size_t num_invalid_lines_ = 0;
-  size_t num_lines_ = 0;
-  type cef_type_;
+  mutable size_t num_invalid_lines_ = 0;
+  mutable size_t num_lines_ = 0;
 };
 
 class plugin final : public virtual reader_plugin {
