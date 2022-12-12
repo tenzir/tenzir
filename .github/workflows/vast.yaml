@@ -825,6 +825,9 @@ jobs:
           - name: PCAP
             target: pcap
             path: plugins/pcap
+          - name: CEF
+            target: cef
+            path: plugins/cef
           - name: Web
             target: web
             path: plugins/web
