@@ -1,6 +1,7 @@
 ---
-title: VAST v2.5
-authors: dominiklohmann
+draft: true
+title: FIXME
+authors: [dominiklohmann, mavam]
 date: 2023-01-20
 tags: [release, cef]
 ---
