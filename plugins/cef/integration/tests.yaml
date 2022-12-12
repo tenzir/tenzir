@@ -18,9 +18,11 @@ tests:
     fixture: ServerTester
     steps:
       - command: import -b cef
-        input: data/cef/cef.log
+        input: data/cef/cynet.log
+      - command: import -b cef
+        input: data/cef/checkpoint.log
+      - command: import -b cef
+        input: data/cef/forcepoint.log
       - command: export json 'cef_version >= 0 && device_vendor == "Cynet"'
-      # There is one field in the example record that maps to an IP address.
-      # This query for an IP address literal makes sure that the type is
-      # properly inferred.
       - command: export json '172.31.5.93'
+      - command: export json 'act == /Accept|Bypass/'
