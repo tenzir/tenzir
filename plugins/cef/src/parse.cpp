@@ -96,6 +96,12 @@ parse_extension(std::string_view extension) {
   // where 'a b c' is the value from the previous key and 'k1`' is the key for
   // the next value.
   auto key = splits[0];
+  // Strip leading whitespace on first key. The spec says that trailing
+  // whitespace is considered part of the previous value, except for the last
+  // space that is split on.
+  for (size_t i = 0; i < key.size(); ++i)
+    if (key[i] != ' ')
+      key = key.substr(i);
   for (auto i = 1u; i < splits.size() - 1; ++i) {
     auto split = splits[i];
     auto j = split.rfind(' ');
