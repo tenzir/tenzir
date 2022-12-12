@@ -91,7 +91,7 @@ parse_extension(std::string_view extension) {
                                                         "key=value pair: {}",
                                                         extension));
   // Process intermediate 'k0=a b c k1=d e f' extensions. The algorithm splits
-  // on '='. The first split is the key and the last split is a value. All
+  // on '='. The first split is a key and the last split is a value. All
   // intermediate splits are "reversed" in that they have the pattern 'a b c k1'
   // where 'a b c' is the value from the previous key and 'k1`' is the key for
   // the next value.

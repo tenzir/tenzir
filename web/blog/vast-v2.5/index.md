@@ -94,7 +94,7 @@ vast export json 172.31.5.93 | jq
 
 :::note Syslog Header
 Sometimes CEF is prefixed with a syslog header. VAST currently only supports the
-"raw" form with the syslog header. We are working on support for *generic*
-formats, e.g., syslog, where the message can basically be any other existing
-format.
+"raw" form without the syslog header. We are working on support for composable
+*generic* formats, e.g., syslog, where the message can basically be any other
+existing format.
 :::
