@@ -36,9 +36,8 @@ caf::error convert(std::string_view line, message& msg);
 
 /// Infers a schema from a message.
 /// @param msg The message to infer a schema from.
-/// @param schema The schema corresponding to *msg*.
 /// @returns The inferred schema.
-caf::error convert(const message& msg, type& schema);
+type infer(const message& msg);
 
 // Parses the CEF extension field as a sequence of key-value pairs for further
 // downstream processing.

@@ -109,10 +109,7 @@ protected:
       // heterogeneous CEF, we have no other way. We could add a flag that skips
       // the check after the first record. Or we could skip the check if the
       // user provided a custom schema.
-      auto schema = to<type>(*msg);
-      if (!schema)
-        return schema.error();
-      cef_type_ = std::move(*schema);
+      cef_type_ = infer(*msg);
       if (!reset_builder(cef_type_))
         return caf::make_error(ec::parse_error, //
                                "unable to create builder for CEF type");

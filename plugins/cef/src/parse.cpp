@@ -116,7 +116,7 @@ parse_extension(std::string_view extension) {
   return result;
 }
 
-caf::error convert(const message& msg, type& schema) {
+type infer(const message& msg) {
   static constexpr auto name = "cef.event";
   // These fields are always present.
   auto fields = std::vector<struct record_type::field>{
@@ -126,7 +126,7 @@ caf::error convert(const message& msg, type& schema) {
     {"severity", string_type{}},
   };
   // Infer extension record, if present.
-  auto infer = [](const auto& value) -> type {
+  auto deduce = [](const auto& value) -> type {
     if (auto x = to<data>(value))
       if (auto t = type::infer(*x))
         return t;
@@ -136,11 +136,10 @@ caf::error convert(const message& msg, type& schema) {
     std::vector<struct record_type::field> ext_fields;
     ext_fields.reserve(msg.extension.size());
     for (const auto& [key, value] : msg.extension)
-      ext_fields.emplace_back(std::string{key}, infer(value));
+      ext_fields.emplace_back(std::string{key}, deduce(value));
     fields.emplace_back("extension", record_type{std::move(ext_fields)});
   }
-  schema = type{name, record_type{std::move(fields)}};
-  return caf::none;
+  return {name, record_type{std::move(fields)}};
 }
 
 } // namespace vast::plugins::cef

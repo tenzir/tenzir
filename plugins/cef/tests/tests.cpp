@@ -34,10 +34,6 @@ auto to_message(std::string_view str) {
   return unbox(to<plugins::cef::message>(str));
 }
 
-auto to_schema(const plugins::cef::message& msg) {
-  return unbox(to<type>(msg));
-}
-
 } // namespace
 
 TEST(parse extension with newlines) {
@@ -70,7 +66,7 @@ TEST(parse sample) {
   CHECK_EQUAL(msg.extension[0].second, "1");
   CHECK_EQUAL(msg.extension[28].first, "_cefVer");
   CHECK_EQUAL(msg.extension[28].second, "0.1");
-  auto schema = to_schema(msg);
+  auto schema = infer(msg);
   CHECK_EQUAL(schema.name(), "cef.event");
   const auto& record = caf::get<record_type>(schema);
   REQUIRE_EQUAL(record.num_fields(), 8u);
