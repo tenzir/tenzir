@@ -47,7 +47,7 @@
         leaveTo="transform scale-95 opacity-0"
       >
         <MenuItems
-          class="absolute w-56 mt-2 origin-top-right bg-white border border-gray-200 divide-y divide-gray-100 rounded-md shadow-lg outline-none"
+          class="absolute mt-2 origin-top-right bg-white border border-gray-200 divide-y divide-gray-100 rounded-md shadow-lg outline-none"
         >
           <div class="py-1">
             {#each items as item}

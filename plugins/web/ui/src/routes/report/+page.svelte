@@ -1,20 +1,59 @@
 <script lang="ts">
-  import MultiLine from '$lib/components/LayerCake/MultiLine/index.svelte';
-  import Query from '$lib/components/Query.svelte';
   import Menu from '$lib/components/Menu.svelte';
-  import { capitalizeFirstLetter } from '$lib/util/strings';
-  import Button from '$lib/components/Button.svelte';
-  import Authoring from '$lib/components/markdown/Authoring.svelte';
-  let possibleBlocks = ['bytes', 'text', 'query'] as const;
+  import { saveAs } from 'file-saver';
+  import MarkdownBlock from './MarkdownBlock.svelte';
+  import QueryBlock from './QueryBlock.svelte';
+  import { report } from './stores';
 
-  type Block = typeof possibleBlocks[number];
-  let visibleBlocks: Block[] = [];
-  let addAction = (block: Block) => () => {
-    visibleBlocks = [...visibleBlocks, block];
-  };
-  const handleExport = () => {
+  const handlePdfExport = () => {
     window.print();
   };
+
+  const handleJsonExport = () => {
+    // Create a blob of the data
+    let fileName = 'vast-report.json'; // TODO use the title of the report
+    var fileToSave = new Blob([JSON.stringify($report)], {
+      type: 'application/json'
+    });
+    saveAs(fileToSave, fileName);
+  };
+
+  const addBlock = (blockType: 'query' | 'markdown') => {
+    if (blockType === 'query') {
+      report.update((oldReport) => {
+        return {
+          ...oldReport,
+          blocks: [
+            ...oldReport.blocks,
+            {
+              category: 'query',
+              params: {
+                query: '',
+                title: ''
+              }
+            }
+          ]
+        };
+      });
+    } else {
+      report.update((oldReport) => {
+        return {
+          ...oldReport,
+          blocks: [
+            ...oldReport.blocks,
+            {
+              category: 'markdown',
+              params: {
+                title: '',
+                content: ''
+              }
+            }
+          ]
+        };
+      });
+    }
+  };
+  $: console.log($report);
 </script>
 
 <svelte:head>
@@ -25,32 +64,33 @@
 <div class="reporting-page p-2 m-2 text-sm text-left text-gray-600">
   <div class="flex justify-between my-4 mr-4">
     <div class="text-xl font-bold">Reports</div>
-
-    <Button onClick={handleExport}>Export</Button>
+    <Menu
+      description="Export"
+      items={[
+        { text: 'As JSON', onClick: handleJsonExport },
+        { text: 'As PDF', onClick: handlePdfExport }
+      ]}
+    />
   </div>
-  {#each visibleBlocks as block}
-    {#if block == 'bytes'}
-      <div class="text-l font-bold">Inbound vs Outbound Bytes</div>
-      <div class="m-10">
-        <MultiLine />
-      </div>
-    {:else if block == 'query'}
-      <div class="text-l font-bold">Query</div>
-      <div class="my-10">
-        <Query />
-      </div>
-    {:else}
-      <div class="text-l font-bold">Text</div>
-      <div class="my-10">
-        <Authoring />
-      </div>
-    {/if}
-  {/each}
+  <div>
+    {#each $report.blocks as block}
+      {#if block.category == 'query'}
+        <div class="m-10">
+          <QueryBlock parameters={block.params} />
+        </div>
+      {:else}
+        <div class="my-10">
+          <MarkdownBlock parameters={block.params} />
+        </div>
+      {/if}
+    {/each}
+  </div>
   <Menu
     description="Add Block"
-    items={possibleBlocks.map((block) => {
-      return { text: capitalizeFirstLetter(block), onClick: addAction(block) };
-    })}
+    items={[
+      { text: 'Query', onClick: () => addBlock('query') },
+      { text: 'Markdown', onClick: () => addBlock('markdown') }
+    ]}
   />
 </div>
 
