@@ -51,12 +51,14 @@ const config: PlaywrightTestConfig = {
       }
     },
 
-    {
-      name: 'firefox',
-      use: {
-        ...devices['Desktop Firefox']
-      }
-    },
+    // TODO: Enable testing with FireFox; this is currently disable because
+    // FireFox nightly refuses to run in CI as root in a container environment.
+    // {
+    //   name: 'firefox',
+    //   use: {
+    //     ...devices['Desktop Firefox']
+    //   }
+    // },
 
     {
       name: 'webkit',
@@ -100,7 +102,7 @@ const config: PlaywrightTestConfig = {
   webServer: [
     // start a vast node along with a web server
     {
-      command: `${process.env.VAST_STATIC_BIN} start '--commands="web server --mode=dev"'`,
+      command: `vast start '--commands="web server --mode=dev"'`,
       port: 42001 // this is not a port variable but playwright waits until this port has something
     },
     // start the frontend dev server

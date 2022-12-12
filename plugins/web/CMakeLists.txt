@@ -64,6 +64,8 @@ if (NOT VAST_ENABLE_WEB_UI)
   return()
 endif ()
 
+include(GNUInstallDirs)
+
 # The install dir of the UI root relative to the install prefix of VAST itself.
 set(ui_install_dir "${CMAKE_INSTALL_DATADIR}/vast/plugin/web/www")
 
@@ -144,5 +146,5 @@ endif ()
 
 install(
   DIRECTORY "${CMAKE_BINARY_DIR}/${ui_install_dir}/"
-  DESTINATION "${ui_install_dir}/"
+  DESTINATION "${ui_install_dir}"
   COMPONENT Runtime)
