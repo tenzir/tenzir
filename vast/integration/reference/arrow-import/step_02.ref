@@ -1,0 +1,52 @@
+    -- field metadata --
+    VAST:name:0: 'port'
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  ARROW:extension:metadata: 'vast.address'
+  ARROW:extension:metadata: 'vast.address'
+  ARROW:extension:name: 'vast.address'
+  ARROW:extension:name: 'vast.address'
+  VAST:attributes:0: '{ "index": "hash" }'
+  VAST:attributes:0: '{ "index": "hash" }'
+  VAST:attributes:0: '{ "index": "hash" }'
+  VAST:name:0: 'port'
+  VAST:name:0: 'port'
+  VAST:name:0: 'timestamp'
+  child 0, hostname: string
+  child 0, item: uint64
+  child 1, url: string
+  child 10, length: uint64
+  child 2, http_port: uint64
+  child 3, http_user_agent: string
+  child 4, http_content_type: string
+  child 5, http_method: string
+  child 6, http_refer: string
+  child 7, protocol: string
+  child 8, status: uint64
+  child 9, redirect: string
+-- schema metadata --
+VAST:name:0: 'suricata.http'
+community_id: string
+dest_ip: fixed_size_binary[16]
+dest_port: uint64
+done with all readers
+done with current reader, rows: 1
+event_type: string
+flow_id: uint64
+http: struct<hostname: string, url: string, http_port: uint64, http_user_agent: string, http_content_type: string, http_method: string, http_refer: string, protocol: string, status: uint64, redirect: string, length: uint64>
+in_iface: string
+open next reader
+open next reader
+pcap_cnt: uint64
+proto: string
+src_ip: fixed_size_binary[16]
+src_port: uint64
+timestamp: timestamp[ns]
+tx_id: uint64
+vlan: list<item: uint64>

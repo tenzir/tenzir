@@ -57,7 +57,6 @@ public:
   using super = multi_layout_reader;
 
   /// Constructs a JSON reader.
-  /// @param table_slice_type The ID for table slice type to build.
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
   reader(const caf::settings& options, std::unique_ptr<std::istream> in

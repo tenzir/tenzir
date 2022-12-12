@@ -53,6 +53,7 @@ make_reader(caf::settings options) {
 void factory_traits<format::reader>::initialize() {
   using namespace format;
   using fac = factory<reader>;
+  fac::add("arrow", make_reader<arrow::reader>);
   fac::add("csv", make_reader<csv::reader>);
   fac::add("json", make_reader<json::reader>);
   fac::add("suricata",

@@ -20,6 +20,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
@@ -39,7 +40,7 @@ using namespace vast;
 // Needed to initialize the table slice builder factories.
 FIXTURE_SCOPE(arrow_tests, fixtures::events)
 
-TEST(arrow batch) {
+TEST(arrow IPC write) {
   // Create a writer with a buffered output stream.
   format::arrow::writer writer;
   std::shared_ptr<arrow::io::BufferOutputStream> stream;
@@ -82,6 +83,27 @@ TEST(arrow batch) {
     ++slice_id;
   }
   CHECK_EQUAL(slice_id, zeek_conn_log.size());
+}
+
+TEST(arrow IPC read) {
+  auto stream
+    = arrow::io::BufferOutputStream::Create(1024, arrow::default_memory_pool())
+        .ValueOrDie();
+  format::arrow::writer writer;
+  writer.out(stream);
+  for (auto& slice : zeek_conn_log)
+    writer.write(slice);
+  auto data = stream->Finish().ValueOrDie()->ToString();
+  auto in = std::make_unique<std::istringstream>(std::string{data});
+  auto options = caf::settings{};
+  format::arrow::reader reader{options, std::move(in)};
+  auto slices = std::vector<table_slice>{};
+  auto add_slice = [&](table_slice slice) {
+    slices.emplace_back(std::move(slice));
+  };
+  reader.read(1 << 16, 1 << 16, add_slice);
+  CHECK_EQUAL(zeek_conn_log.size(), slices.size());
+  CHECK_EQUAL(zeek_conn_log, slices);
 }
 
 FIXTURE_SCOPE_END()
