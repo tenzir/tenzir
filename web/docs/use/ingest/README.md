@@ -454,6 +454,10 @@ vast export json 172.31.5.93 | jq
 }
 ```
 
+The [CEF specification][cef] pre-defines several extension field key names and
+data types for the corresponding values. VAST's parser does not enforce the
+strict definitions and instead tries to infer the type from the provided values.
+
 ### Argus
 
 [Argus](https://qosient.com/argus/index.shtml) is an open-source flow monitor
