@@ -54,18 +54,18 @@ caf::error convert(std::string_view line, message& msg) {
   auto fields = detail::split(line, "|", "\\", 8);
   if (fields.size() != 8)
     return caf::make_error(ec::parse_error, //
-                           fmt::format("need exactly 8 fields, got {}",
+                           fmt::format("need exactly 8 fields, got '{}'",
                                        fields.size()));
   // Field 0: Version
   auto i = fields[0].find(':');
   if (i == std::string_view::npos)
     return caf::make_error(ec::parse_error, //
-                           fmt::format("CEF version requires ':', got {}",
+                           fmt::format("CEF version requires ':', got '{}'",
                                        fields[0]));
   auto cef_version_str = fields[0].substr(i + 1);
   if (!parsers::u16(cef_version_str, msg.cef_version))
     return caf::make_error(ec::parse_error, //
-                           fmt::format("failed to parse CEF version, got {}",
+                           fmt::format("failed to parse CEF version, got '{}'",
                                        cef_version_str));
   // Fields 1-6.
   msg.device_vendor = fields[1];
