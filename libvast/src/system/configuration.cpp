@@ -20,6 +20,7 @@
 #include "vast/detail/installdirs.hpp"
 #include "vast/detail/load_contents.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
@@ -409,14 +410,7 @@ caf::error configuration::parse(int argc, char** argv) {
     if (parse_result == caf::pec::missing_argument)
       plugin_arg.append("[]");
     else if (parse_result == caf::pec::invalid_argument) {
-      auto name = plugin_arg.substr(0, plugin_arg.find_first_of('=')).substr(2);
-      fmt::print(stderr, "name {}\n", name);
-      auto arg = plugin_arg.substr(plugin_arg.find_first_of('=') + 1);
-      fmt::print(stderr, "arg {}\n", arg);
-      auto split_args = detail::split(arg, ",", "\\");
-      fmt::print(stderr, "split args {}\n", split_args);
-      plugin_arg
-        = fmt::format("--{}=[\"{}\"]", name, fmt::join(split_args, "\",\""));
+      plugin_arg = detail::convert_to_caf_compatible_list_arg(plugin_arg);
     }
   }
   auto [ec, it] = plugin_opts.parse(content, plugin_args);

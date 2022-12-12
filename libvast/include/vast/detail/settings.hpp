@@ -32,6 +32,16 @@ void merge_settings(const caf::settings& src, caf::settings& dst,
 caf::expected<uint64_t>
 get_bytesize(caf::settings opts, std::string_view key, uint64_t defval);
 
+/// @brief CAF 0.18 no longer supports comma separated values while parsing list
+/// configuration options. This function converts a comma separated list
+/// argument into one that is acceptable by CAF.
+/// @param comma_separated_list_arg command line argument with comma separated
+/// values (e.g. --plugins=web,pcap)
+/// @return command line argument which will be parsed as a list config_value by
+/// CAF. Returns empty for malformed input (e.g. lack of = in the input)
+std::string
+convert_to_caf_compatible_list_arg(const std::string& comma_separated_list_arg);
+
 /// @brief Tries to extract a list value from config_value and convert it into
 /// std::vector<T>.
 /// @tparam T expected type of the list values.
