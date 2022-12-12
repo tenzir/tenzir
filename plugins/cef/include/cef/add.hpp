@@ -17,11 +17,11 @@
 
 namespace vast::plugins::cef {
 
-struct message;
+struct message_view;
 
 /// Parses a line of ASCII as CEF message.
 /// @param msg The CEF message.
 /// @param builder The table slice builder to add the message to.
-caf::error add(const message& msg, table_slice_builder& builder);
+caf::error add(const message_view& msg, table_slice_builder& builder);
 
 } // namespace vast::plugins::cef

@@ -31,7 +31,7 @@ auto to_extension(std::string_view str) {
 }
 
 auto to_message(std::string_view str) {
-  return unbox(to<plugins::cef::message>(str));
+  return unbox(to<plugins::cef::message_view>(str));
 }
 
 } // namespace

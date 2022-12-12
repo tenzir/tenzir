@@ -19,7 +19,7 @@
 
 namespace vast::plugins::cef {
 
-caf::error add(const message& msg, table_slice_builder& builder) {
+caf::error add(const message_view& msg, table_slice_builder& builder) {
   auto append = [&](const auto& x) -> caf::error {
     if (!builder.add(make_data_view(x)))
       return caf::make_error(ec::parse_error, //

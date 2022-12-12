@@ -48,7 +48,7 @@ std::string unescape(std::string_view value) {
 
 } // namespace
 
-caf::error convert(std::string_view line, message& msg) {
+caf::error convert(std::string_view line, message_view& msg) {
   using namespace std::string_view_literals;
   // Pipes in the extension field do not need escaping.
   auto fields = detail::split(line, "|", "\\", 8);
@@ -124,7 +124,7 @@ parse_extension(std::string_view extension) {
   return result;
 }
 
-type infer(const message& msg) {
+type infer(const message_view& msg) {
   static constexpr auto name = "cef.event";
   // These fields are always present.
   auto fields = std::vector<struct record_type::field>{

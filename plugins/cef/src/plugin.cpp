@@ -112,7 +112,7 @@ protected:
                    detail::pretty_type_name(this), lines_->line_number());
         continue;
       }
-      auto msg = to<message>(std::string_view{line});
+      auto msg = to<message_view>(std::string_view{line});
       if (!msg) {
         VAST_WARN("{} failed to parse CEF messge: {}",
                    detail::pretty_type_name(this), msg.error());

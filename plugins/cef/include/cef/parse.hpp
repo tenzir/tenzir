@@ -20,7 +20,7 @@
 namespace vast::plugins::cef {
 
 /// A shallow representation a of a CEF message.
-struct message {
+struct message_view {
   uint16_t cef_version;
   std::string_view device_vendor;
   std::string_view device_product;
@@ -32,12 +32,12 @@ struct message {
 };
 
 /// Converts a string view into a message.
-caf::error convert(std::string_view line, message& msg);
+caf::error convert(std::string_view line, message_view& msg);
 
 /// Infers a schema from a message.
 /// @param msg The message to infer a schema from.
 /// @returns The inferred schema.
-type infer(const message& msg);
+type infer(const message_view& msg);
 
 /// Parses the CEF extension field as a sequence of key-value pairs for further
 /// downstream processing.
