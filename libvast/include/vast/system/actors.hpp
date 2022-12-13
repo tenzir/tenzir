@@ -292,11 +292,10 @@ using index_actor = typed_actor_fwd<
   // Erases the given set of partitions from the INDEX.
   caf::replies_to<atom::erase, std::vector<uuid>>::with<atom::done>,
   // Applies the given pipelineation to the partition.
-  // When keep_original_partition is yes: erases the existing partition and
-  // returns the synopsis of the new partition. If the partition is completely
-  // erased, returns the nil uuid. When keep_original_partition is no: does an
-  // in-place pipeline keeping the old ids, and makes a new partition
-  // preserving the old one(s).
+  // When keep_original_partition is yes: merges the transformed partitions with
+  // the original ones and returns the new partition infos. When
+  // keep_original_partition is no: does an in-place pipeline keeping the old
+  // ids, and makes new partitions preserving them.
   caf::replies_to<atom::apply, pipeline_ptr, std::vector<vast::partition_info>,
                   keep_original_partition>::with<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
