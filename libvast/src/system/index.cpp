@@ -1813,19 +1813,19 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::apply, pipeline_ptr pipeline,
-           std::unordered_map<uuid, type> old_partitions_per_type,
+           std::unordered_map<uuid, type> selected_partitions,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
       const auto current_sender = self->current_sender();
-      if (old_partitions_per_type.empty())
+      if (selected_partitions.empty())
         return caf::make_error(ec::invalid_argument, "no partitions given");
       VAST_DEBUG("{} applies a pipeline to partitions {}", *self,
-                 old_partitions_per_type);
+                 selected_partitions);
       if (!self->state.store_actor_plugin)
         return caf::make_error(ec::invalid_configuration,
                                "partition transforms are not supported for the "
                                "global archive");
-      std::erase_if(old_partitions_per_type, [&](const auto& entry) {
+      std::erase_if(selected_partitions, [&](const auto& entry) {
         const auto& [id, _] = entry;
         if (self->state.persisted_partitions.contains(id)) {
           return false;
@@ -1834,14 +1834,13 @@ index(index_actor::stateful_pointer<index_state> self,
                   pipeline->name());
         return true;
       });
-      auto old_partition_id_vec = std::vector<uuid>{};
+      auto selected_partition_ids = std::vector<uuid>{};
       auto query_contexts = query_state::type_query_context_map{};
       {
-        auto corrected_old_partitions_per_type
-          = std::unordered_map<uuid, type>{};
-        for (const auto& [id, type] : old_partitions_per_type) {
+        auto corrected_partitions = std::unordered_map<uuid, type>{};
+        for (const auto& [id, type] : selected_partitions) {
           if (self->state.partitions_in_transformation.insert(id).second) {
-            corrected_old_partitions_per_type[id] = old_partitions_per_type[id];
+            corrected_partitions[id] = selected_partitions[id];
           } else {
             // Getting overlapping partitions triggers a warning, and we
             // silently ignore the partition at the cost of the transformation
@@ -1854,9 +1853,9 @@ index(index_actor::stateful_pointer<index_state> self,
                       *self, pipeline->name(), id);
           }
         }
-        old_partitions_per_type = std::move(corrected_old_partitions_per_type);
+        selected_partitions = std::move(corrected_partitions);
       }
-      if (old_partitions_per_type.empty())
+      if (selected_partitions.empty())
         return std::vector<partition_info>{};
 
       auto store_id = std::string{self->state.store_actor_plugin->name()};
@@ -1881,25 +1880,25 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
 
-      for (const auto& [id, type] : old_partitions_per_type) {
-        old_partition_id_vec.emplace_back(id);
+      for (const auto& [id, type] : selected_partitions) {
+        selected_partition_ids.emplace_back(id);
         query_contexts[type] = query_context;
       }
       auto input_size
-        = detail::narrow_cast<uint32_t>(old_partitions_per_type.size());
+        = detail::narrow_cast<uint32_t>(selected_partitions.size());
       auto err = self->state.pending_queries.insert(
         query_state{.query_contexts_per_type = query_contexts,
                     .client = caf::actor_cast<receiver_actor<atom::done>>(
                       partition_transfomer),
                     .candidate_partitions = input_size,
                     .requested_partitions = input_size},
-        std::vector{old_partition_id_vec});
+        std::vector{selected_partition_ids});
       VAST_ASSERT(err == caf::none);
       self->state.schedule_lookups();
       auto marker_path = self->state.marker_path(transform_id);
       auto rp = self->make_response_promise<std::vector<partition_info>>();
       auto deliver
-        = [self, rp, old_partitions_per_type, marker_path](
+        = [self, rp, selected_partitions, marker_path](
             caf::expected<std::vector<partition_info>>&& result) mutable {
             // Erase errors don't matter too much here, leftover in-progress
             // transforms will be cleaned up on next startup.
@@ -1914,7 +1913,7 @@ index(index_actor::stateful_pointer<index_state> self,
                   VAST_DEBUG("{} failed to erase in-progress marker at {}: {}",
                              *self, marker_path, e);
                 });
-            for (const auto& [id, type] : old_partitions_per_type)
+            for (const auto& [id, type] : selected_partitions)
               self->state.partitions_in_transformation.erase(id);
             if (result)
               rp.deliver(std::move(*result));
@@ -1926,7 +1925,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
           [self, deliver,
-           old_partition_id_vec = std::move(old_partition_id_vec), keep,
+           old_partition_id_vec = std::move(selected_partition_ids), keep,
            marker_path](
             std::vector<augmented_partition_synopsis>& apsv) mutable {
             std::vector<uuid> new_partition_ids;
