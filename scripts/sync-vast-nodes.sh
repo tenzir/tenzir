@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 
-# Synchonizes two VAST instances 
-# uses`vast -e <source-vast> export arrow | vast -e <destionation-vast> import arrow`
-# repeatedly (every `k` seconds)
-# stores the last successful sync timestamp in a file and resumes from that timestamp if
-# the file already exists, otherwise it syncs all previous events.
+# A script to synchronize two VAST instances, possibly with an assoicated query
+# for selectively synchronizing based on specific properties or types
+#
+# Usage examples:
+#   sync-vast-nodes.sh "#type == \"suricata.alert\""  10 :42000 :42001 vast
+#   sync-vast-nodes.sh "" 10 :42000 :42001 vast
+#
+# Arguments
+#   query: e.g. "#type == \"suricata.alert\"" - mind the quotes; can be empty ""
+#   seconds - sync interval in seconds - default 5
+#   VAST endpoint of source - default :42000
+#   VAST endpoint of sink   - default :42001
+#   path to VAST binary     - default `vast` (must be in path)
 
 TS_FILE="last_queried.ts"
 
@@ -14,31 +22,31 @@ SOURCE_VAST_ENDPOINT=${3:-:42000}
 DESTINATION_VAST_ENDPOINT=${4:-:42001}
 VAST_BINARY="${5:-vast}"
 
-echo "syncing $SOURCE_VAST_ENDPOINT to $DESTINATION_VAST_ENDPOINT every $S seconds"
+>&2 echo "syncing $SOURCE_VAST_ENDPOINT to $DESTINATION_VAST_ENDPOINT every $S seconds"
 
 if [ -e $TS_FILE ]
 then
   PREVIOUS_TIMESTAMP=`cat $TS_FILE`
-  echo "reading start timestamp from file: $PREVIOUS_TIMESTAMP"
+  >&2 echo "reading start timestamp from file: $PREVIOUS_TIMESTAMP"
 else
   PREVIOUS_TIMESTAMP="1970-01-01T00:00:00+00:00"
-  echo "no previous sync time stamp starting from $PREVIOUS_TIMESTAMP"
+  >&2 echo "no previous sync time stamp starting from $PREVIOUS_TIMESTAMP"
 fi 
 
 while true; do
   TIMESTAMP=`date -Iseconds`
   if [ -z $Q ]
   then
-    QUERY="#import_time > $PREVIOUS_TIMESTAMP && #import_time <= $TIMESTAMP"
+    QUERY="#import_time >= $PREVIOUS_TIMESTAMP && #import_time < $TIMESTAMP"
   else
-    QUERY="$Q && #import_time > $PREVIOUS_TIMESTAMP && #import_time <= $TIMESTAMP"
+    QUERY="$Q && #import_time >= $PREVIOUS_TIMESTAMP && #import_time < $TIMESTAMP"
   fi
 
-  echo " processing time range: $PREVIOUS_TIMESTAMP < #import_time <= $TIMESTAMP"
+  >&2 echo " processing time range: $PREVIOUS_TIMESTAMP <= #import_time < $TIMESTAMP"
 
   # count events - only run sync when count != 0
-  EVENTS=`$VAST_BINARY -e $SOURCE_VAST_ENDPOINT count "$QUERY"`
-  echo "events to sync: $EVENTS"
+  EVENTS=`$VAST_BINARY -e $SOURCE_VAST_ENDPOINT count --estimate "$QUERY"`
+  >&2 echo "events to sync: $EVENTS"
   if [ $EVENTS -ne 0 ]
   then
     $VAST_BINARY -e $SOURCE_VAST_ENDPOINT export arrow "$QUERY" \
@@ -46,11 +54,11 @@ while true; do
     status=$?
     if [ $status -eq 0 ]
     then
-      echo "import succeeded"
-      echo $TIMESTAMP > $TS_FILE
+      >&2 echo "import succeeded"
+      >&2 echo $TIMESTAMP > $TS_FILE
       PREVIOUS_TIMESTAMP=$TIMESTAMP
     else
-      echo "import failed (code: $status)"
+      >&2 echo "import failed (code: $status)"
     fi
   fi
   sleep $S
