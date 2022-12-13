@@ -21,7 +21,7 @@ TEST(token validation) {
   auto serialized_state = state.save();
   REQUIRE_NOERROR(serialized_state);
   vast::plugins::web::authenticator_state recovered_state;
-  CHECK(!recovered_state.initialize_from(*serialized_state));
+  CHECK(recovered_state.initialize_from(*serialized_state), caf::error{});
   CHECK_EQUAL(state.authenticate(*token), true);
   CHECK_EQUAL(state.authenticate("Yog-Sothoth"), false);
 }

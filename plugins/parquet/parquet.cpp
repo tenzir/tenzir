@@ -10,6 +10,7 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/detail/base64.hpp>
+#include <vast/detail/inspection_common.hpp>
 #include <vast/plugin.hpp>
 #include <vast/store.hpp>
 
@@ -34,7 +35,7 @@ struct configuration {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f.apply(x.row_group_size) && f.apply(x.zstd_compression_level);
+    return detail::apply_all(f, x.row_group_size, x.zstd_compression_level);
   }
 
   static const record_type& layout() noexcept {
