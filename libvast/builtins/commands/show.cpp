@@ -179,11 +179,14 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
     self
       ->request(catalog, timeout, atom::candidates_v, std::move(query_context))
       .receive(
-        [&](const system::catalog_result& catalog_result) {
+        [&](const system::catalog_lookup_result& catalog_result) {
           auto types = type_set{};
-          for (const auto& partition : catalog_result.partitions) {
-            if (partition.schema)
-              types.insert(partition.schema);
+          for (const auto& [type, partitions] :
+               catalog_result.candidate_infos) {
+            for (const auto& partition_info : partitions.partition_infos) {
+              if (partition_info.schema)
+                types.insert(partition_info.schema);
+            }
           }
           auto types_definition = to_definition(types, filter);
           command_result->insert(command_result->end(),
