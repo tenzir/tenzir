@@ -83,10 +83,10 @@ void catalog_state::erase(const uuid& partition) {
   }
 }
 
-caf::expected<std::unordered_map<type, catalog_lookup_result>>
+caf::expected<catalog_lookup_result>
 catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
-  auto total_candidates = std::unordered_map<type, catalog_lookup_result>{};
+  auto total_candidates = catalog_lookup_result{};
   auto pruned = prune(expr, unprunable_fields);
   for (const auto& [type, _] : synopses_per_type) {
     auto resolved = resolve(taxonomies, pruned, type);
@@ -101,7 +101,7 @@ catalog_state::lookup(const expression& expr) const {
               [&](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time > rhs.max_import_time;
               });
-    total_candidates[type] = candidates_per_type;
+    total_candidates.candidate_infos[type] = candidates_per_type;
     auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
       system::stopwatch::now() - start);
     VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",
@@ -112,7 +112,7 @@ catalog_state::lookup(const expression& expr) const {
   return total_candidates;
 }
 
-catalog_lookup_result
+catalog_lookup_result::candidate_info
 catalog_state::lookup_impl(const expression& expr, const type& schema) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   auto synopsis_map_per_type_it = synopses_per_type.find(schema);
@@ -124,7 +124,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
   // ensure the post-condition of returning a sorted list. We currently
   // rely on `flat_map` already traversing them in the correct order, so
   // no separate sorting step is required.
-  catalog_lookup_result memoized_partitions = {};
+  auto memoized_partitions = catalog_lookup_result::candidate_info{};
   auto all_partitions = [&] {
     if (!memoized_partitions.partition_infos.empty()
         || partition_synopses.empty())
@@ -138,7 +138,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
     return memoized_partitions;
   };
   auto f = detail::overload{
-    [&](const conjunction& x) -> catalog_lookup_result {
+    [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
       VAST_ASSERT(!x.empty());
       auto i = x.begin();
       auto result = lookup_impl(*i, schema);
@@ -156,8 +156,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         }
       return result;
     },
-    [&](const disjunction& x) -> catalog_lookup_result {
-      catalog_lookup_result result;
+    [&](const disjunction& x) -> catalog_lookup_result::candidate_info {
+      catalog_lookup_result::candidate_info result;
       for (const auto& op : x) {
         // TODO: A disjunction means that we can restrict the lookup to the
         // set of partitions that are outside of the current result set.
@@ -172,7 +172,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
       }
       return result;
     },
-    [&](const negation&) -> catalog_lookup_result {
+    [&](const negation&) -> catalog_lookup_result::candidate_info {
       // We cannot handle negations, because a synopsis may return false
       // positives, and negating such a result may cause false
       // negatives.
@@ -180,7 +180,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
       // synopses, but it should be possible to handle time or bool synopses.
       return all_partitions();
     },
-    [&](const predicate& x) -> catalog_lookup_result {
+    [&](const predicate& x) -> catalog_lookup_result::candidate_info {
       // Performs a lookup on all *matching* synopses with operator and
       // data from the predicate of the expression. The match function
       // uses a qualified_record_field to determine whether the synopsis
@@ -188,7 +188,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
       auto search = [&](auto match) {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
         const auto& rhs = caf::get<data>(x.rhs);
-        catalog_lookup_result result;
+        catalog_lookup_result::candidate_info result;
         // dont iterate through all synopses, rewrite lookup_impl to use a
         // singular type all synopses loops -> relevant anymore? Use type as
         // synopses key
@@ -251,11 +251,12 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         return result;
       };
       auto extract_expr = detail::overload{
-        [&](const meta_extractor& lhs, const data& d) -> catalog_lookup_result {
+        [&](const meta_extractor& lhs,
+            const data& d) -> catalog_lookup_result::candidate_info {
           if (lhs.kind == meta_extractor::type) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
-            catalog_lookup_result result;
+            catalog_lookup_result::candidate_info result;
             for (const auto& [part_id, part_syn] : partition_synopses) {
               for (const auto& [fqf, _] : part_syn->field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
@@ -276,7 +277,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                                        result.partition_infos.end()));
             return result;
           } else if (lhs.kind == meta_extractor::import_time) {
-            catalog_lookup_result result;
+            catalog_lookup_result::candidate_info result;
             for (const auto& [part_id, part_syn] : partition_synopses) {
               VAST_ASSERT(part_syn->min_import_time
                             <= part_syn->max_import_time,
@@ -300,7 +301,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
           } else if (lhs.kind == meta_extractor::field) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
-            catalog_lookup_result result;
+            catalog_lookup_result::candidate_info result;
             const auto* s = caf::get_if<std::string>(&d);
             if (!s) {
               VAST_WARN("#field meta queries only support string "
@@ -340,7 +341,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
           return all_partitions();
         },
         [&](const field_extractor& lhs,
-            const data& d) -> catalog_lookup_result {
+            const data& d) -> catalog_lookup_result::candidate_info {
           auto pred = [&](const auto& field) {
             auto match_name = [&] {
               auto field_name = field.field_name();
@@ -370,7 +371,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
           };
           return search(pred);
         },
-        [&](const type_extractor& lhs, const data& d) -> catalog_lookup_result {
+        [&](const type_extractor& lhs,
+            const data& d) -> catalog_lookup_result::candidate_info {
           auto result = [&] {
             if (!lhs.type) {
               auto pred = [&](auto& field) {
@@ -400,7 +402,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
           }
           return result;
         },
-        [&](const auto&, const auto&) -> catalog_lookup_result {
+        [&](const auto&, const auto&) -> catalog_lookup_result::candidate_info {
           VAST_WARN("{} cannot process predicate: {}",
                     detail::pretty_type_name(this), x);
           return all_partitions();
@@ -408,7 +410,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
       };
       return caf::visit(extract_expr, x.lhs, x.rhs);
     },
-    [&](caf::none_t) -> catalog_lookup_result {
+    [&](caf::none_t) -> catalog_lookup_result::candidate_info {
       VAST_ERROR("{} received an empty expression",
                  detail::pretty_type_name(this));
       VAST_ASSERT(!"invalid expression");
@@ -706,7 +708,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return self->state.taxonomies;
     },
     [self](atom::candidates, const vast::query_context& query_context)
-      -> caf::result<std::unordered_map<type, catalog_lookup_result>> {
+      -> caf::result<catalog_lookup_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
       bool has_expression = query_context.expr != vast::expression{};
       bool has_ids = !query_context.ids.empty();
@@ -721,12 +723,11 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       if (!result) {
         return result.error();
       }
-      auto total_candidate_amount
-        = std::accumulate(result->begin(), result->end(), size_t{0},
-                          [](auto i, const auto& cat_result) {
-                            return std::move(i)
-                                   + cat_result.second.partition_infos.size();
-                          });
+      auto total_candidate_amount = std::accumulate(
+        result->candidate_infos.begin(), result->candidate_infos.end(),
+        size_t{0}, [](auto i, const auto& cat_result) {
+          return std::move(i) + cat_result.second.partition_infos.size();
+        });
       auto id_str = fmt::to_string(query_context.id);
       duration runtime = std::chrono::steady_clock::now() - start;
       self->send(self->state.accountant, atom::metrics_v,

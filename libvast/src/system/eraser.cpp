@@ -83,13 +83,12 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
-          [self, transform, rp](
-            std::unordered_map<type, catalog_lookup_result>& result) mutable {
-            for (const auto& [_, partition_info] : result) {
+          [self, transform, rp](catalog_lookup_result& result) mutable {
+            for (const auto& [_, partition_infos] : result.candidate_infos) {
               VAST_DEBUG("{} resolved query {} to {} partitions", *self,
                          self->state.query_,
-                         partition_info.partition_infos.size());
-              if (partition_info.partition_infos.empty()) {
+                         partition_infos.partition_infos.size());
+              if (partition_infos.partition_infos.empty()) {
                 rp.deliver(atom::ok_v);
                 continue;
               }
@@ -97,7 +96,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
               // the transform to avoid unnecessary noise.
               self
                 ->request(self->state.index_, caf::infinite, atom::apply_v,
-                          transform, partition_info.partition_infos,
+                          transform, partition_infos.partition_infos,
                           keep_original_partition::no)
                 .then(
                   [self, rp](const std::vector<vast::partition_info>&) mutable {

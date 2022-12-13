@@ -201,9 +201,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             vast::atom::candidates_v, std::move(query_context));
     run();
     rp.receive(
-      [&](std::unordered_map<vast::type, vast::system::catalog_lookup_result>&
-            candidates) {
-        for (const auto& [key, candidate] : candidates) {
+      [&](vast::system::catalog_lookup_result& candidates) {
+        for (const auto& [key, candidate] : candidates.candidate_infos) {
           for (const auto& partition : candidate.partition_infos) {
             result.emplace_back(partition.uuid);
           }
@@ -227,8 +226,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             query_context);
     run();
     rp.receive(
-      [&](std::unordered_map<type, catalog_lookup_result> candidates) {
-        for (const auto& [key, candidate] : candidates) {
+      [&](catalog_lookup_result& candidates) {
+        for (const auto& [key, candidate] : candidates.candidate_infos) {
           for (const auto& partition : candidate.partition_infos) {
             result.emplace_back(partition.uuid);
           }
@@ -425,10 +424,10 @@ TEST(catalog messages) {
                                      atom::candidates_v, query_context);
   run();
   expr_response.receive(
-    [this](std::unordered_map<type, catalog_lookup_result>& candidates) {
+    [this](catalog_lookup_result& candidates) {
       auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
       std::vector<uuid> actual;
-      for (const auto& [key, candidate] : candidates) {
+      for (const auto& [key, candidate] : candidates.candidate_infos) {
         for (const auto& part_info : candidate.partition_infos) {
           actual.emplace_back(part_info.uuid);
         }
@@ -451,7 +450,7 @@ TEST(catalog messages) {
                                         atom::candidates_v, query_context);
   run();
   neither_response.receive(
-    [](const std::unordered_map<type, catalog_lookup_result>&) {
+    [](catalog_lookup_result&) {
       FAIL("expected an error");
     },
     [](const caf::error&) {

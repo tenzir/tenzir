@@ -415,17 +415,16 @@ struct rebuilder_state {
       ->request(catalog, caf::infinite, atom::candidates_v,
                 std::move(query_context))
       .then(
-        [this, finish](std::unordered_map<type, system::catalog_lookup_result>&
-                         catalog_result) mutable {
-          for (auto& [type, result] : catalog_result) {
+        [this, finish](system::catalog_lookup_result& lookup_result) mutable {
+          for (auto& [type, result] : lookup_result.candidate_infos) {
             if (!run->options.all) {
               std::erase_if(
                 result.partition_infos, [&](const partition_info& partition) {
                   return partition.version >= version::partition_version;
                 });
               if (result.partition_infos.empty()) {
-                catalog_result.erase(type);
-                if (catalog_result.empty()) {
+                lookup_result.candidate_infos.erase(type);
+                if (lookup_result.candidate_infos.empty()) {
                   return finish({}, true);
                 }
               }
@@ -450,8 +449,8 @@ struct rebuilder_state {
                   + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
                 result.partition_infos.end());
               if (result.partition_infos.empty()) {
-                catalog_result.erase(type);
-                if (catalog_result.empty()) {
+                lookup_result.candidate_infos.erase(type);
+                if (lookup_result.candidate_infos.empty()) {
                   return finish({});
                 }
               }

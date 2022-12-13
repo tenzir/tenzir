@@ -1560,17 +1560,17 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [=, candidates = std::move(candidates),
            query_contexts = std::move(query_contexts)](
-            std::unordered_map<type, catalog_lookup_result>&
-              catalog_results) mutable {
+            catalog_lookup_result& lookup_results) mutable {
             const auto initial_candidates = candidates;
-            for (const auto& [type, catalog_result] : catalog_results) {
+            for (const auto& [type, lookup_result] :
+                 lookup_results.candidate_infos) {
               query_contexts[type] = query_context;
-              query_contexts[type].expr = catalog_result.exp;
+              query_contexts[type].expr = lookup_result.exp;
               VAST_DEBUG("{} got initial candidates {} for schema {} and from "
                          "catalog {}",
                          *self, candidates, type,
-                         catalog_result.partition_infos);
-              for (const auto& info : catalog_result.partition_infos) {
+                         lookup_result.partition_infos);
+              for (const auto& info : lookup_result.partition_infos) {
                 if (std::find(initial_candidates.begin(),
                               initial_candidates.end(), info.uuid)
                     == initial_candidates.end()) {
@@ -1607,8 +1607,8 @@ index(index_actor::stateful_pointer<index_state> self,
           });
       return rp;
     },
-    [self](atom::resolve, vast::expression& expr)
-      -> caf::result<std::unordered_map<type, catalog_lookup_result>> {
+    [self](atom::resolve,
+           vast::expression& expr) -> caf::result<catalog_lookup_result> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = vast::uuid::random();
       auto type_set = vast::type_set{};

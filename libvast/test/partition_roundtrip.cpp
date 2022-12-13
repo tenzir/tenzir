@@ -214,12 +214,10 @@ TEST(empty partition roundtrip) {
                            std::move(query_context));
   run();
   rp2.receive(
-    [&](
-      const std::unordered_map<vast::type, vast::system::catalog_lookup_result>&
-        candidates) {
-      REQUIRE_EQUAL(candidates.size(), 1ull);
+    [&](const vast::system::catalog_lookup_result& candidates) {
+      REQUIRE_EQUAL(candidates.candidate_infos.size(), 1ull);
       auto candidate_partition
-        = candidates.begin()->second.partition_infos.front();
+        = candidates.candidate_infos.begin()->second.partition_infos.front();
       CHECK_EQUAL(candidate_partition.uuid, state.data.id);
     },
     [=](const caf::error& err) {

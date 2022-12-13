@@ -484,10 +484,10 @@ TEST(query after transform) {
   auto events = size_t{0ull};
   run();
   rp1.receive(
-    [&](
-      std::unordered_map<vast::type, vast::system::catalog_lookup_result> crs) {
-      REQUIRE_EQUAL(crs.size(), 1ull);
-      auto& partition = crs.begin()->second.partition_infos.front();
+    [&](vast::system::catalog_lookup_result crs) {
+      REQUIRE_EQUAL(crs.candidate_infos.size(), 1ull);
+      auto& partition
+        = crs.candidate_infos.begin()->second.partition_infos.front();
       partition_uuid = partition.uuid;
       partition_type = partition.schema;
       events = partition.events;

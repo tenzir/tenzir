@@ -30,18 +30,28 @@ namespace vast::system {
 
 /// The result of a catalog query.
 struct catalog_lookup_result {
+  struct candidate_info {
+    expression exp;
+    std::vector<partition_info> partition_infos;
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, candidate_info& x) {
+      return f(caf::meta::type_name("vast.system.candidate_info"), x.exp,
+               x.partition_infos);
+    }
+  };
+
   enum {
     exact,
     probabilistic,
   } kind;
 
-  expression exp;
-  std::vector<partition_info> partition_infos;
+  std::unordered_map<type, candidate_info> candidate_infos;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, catalog_lookup_result& x) {
-    return f(caf::meta::type_name("vast.system.catalog_result"), x.kind, x.exp,
-             x.partition_infos);
+    return f(caf::meta::type_name("vast.system.catalog_lookup_result"), x.kind,
+             x.candidate_infos);
   }
 };
 
@@ -70,11 +80,11 @@ public:
 
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
-  /// @returns A vector of UUIDs representing candidate partitions.
-  [[nodiscard]] caf::expected<std::unordered_map<type, catalog_lookup_result>>
+  /// @returns A lookup result of candidate partitions categorized by type.
+  [[nodiscard]] caf::expected<catalog_lookup_result>
   lookup(const expression& expr) const;
 
-  [[nodiscard]] catalog_lookup_result
+  [[nodiscard]] catalog_lookup_result::candidate_info
   lookup_impl(const expression& expr, const type& schema) const;
 
   /// @returns A best-effort estimate of the amount of memory used for this

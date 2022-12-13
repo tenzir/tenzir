@@ -91,14 +91,14 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
         version::partition_version,
       }};
     },
-    [=](atom::resolve, vast::expression)
-      -> std::unordered_map<type, system::catalog_lookup_result> {
-      std::unordered_map<type, system::catalog_lookup_result> result;
+    [=](atom::resolve, vast::expression) -> system::catalog_lookup_result {
+      system::catalog_lookup_result result;
       for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i) {
-        auto catalog_result = system::catalog_lookup_result{};
-        catalog_result.partition_infos.emplace_back().uuid
+        auto lookup_result = system::catalog_lookup_result::candidate_info{};
+        lookup_result.partition_infos.emplace_back().uuid
           = vast::uuid::random();
-        result[vast::type{std::to_string(i), vast::type{}}] = catalog_result;
+        result.candidate_infos[vast::type{std::to_string(i), vast::type{}}]
+          = lookup_result;
       }
       return result;
     },
@@ -162,8 +162,7 @@ TEST(eraser on mock INDEX) {
   expect((atom::ping), from(aut).to(aut));
   expect((atom::run), from(aut).to(aut));
   expect((atom::resolve, vast::expression), from(aut).to(index));
-  expect((std::unordered_map<vast::type, vast::system::catalog_lookup_result>),
-         from(index).to(aut));
+  expect((vast::system::catalog_lookup_result), from(index).to(aut));
   expect((atom::apply, vast::pipeline_ptr, std::vector<vast::partition_info>,
           vast::system::keep_original_partition),
          from(aut).to(index));
