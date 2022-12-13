@@ -1825,7 +1825,7 @@ index(index_actor::stateful_pointer<index_state> self,
                                "partition transforms are not supported for the "
                                "global archive");
       std::erase_if(old_partitions_per_type, [&](const auto& entry) {
-        const auto& [id, type] = entry;
+        const auto& [id, _] = entry;
         if (self->state.persisted_partitions.contains(id)) {
           return false;
         }
