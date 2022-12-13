@@ -171,7 +171,7 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
       });
   return {
     // Index-facing API
-    [self](const vast::table_slice& slice) {
+    [self](vast::table_slice& slice) {
       if (self->state.limit_ <= self->state.events_)
         return;
       auto remaining = self->state.limit_ - self->state.events_;

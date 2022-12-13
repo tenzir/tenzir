@@ -12,6 +12,7 @@
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/detail/inspection_common.hpp>
 #include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/type.hpp>
@@ -28,7 +29,7 @@ struct configuration {
 
     template <class Inspector>
     friend auto inspect(Inspector& f, name_mapping& x) {
-      return f.apply(x.from) && f.apply(x.to);
+      return detail::apply_all(f, x.from, x.to);
     }
 
     static inline const record_type& layout() noexcept {
@@ -45,7 +46,7 @@ struct configuration {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f.apply(x.schemas) && f.apply(x.fields);
+    return detail::apply_all(f, x.schemas, x.fields);
   }
 
   static inline const record_type& layout() noexcept {
