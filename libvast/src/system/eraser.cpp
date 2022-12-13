@@ -95,13 +95,10 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
               }
               // TODO: Test if the candidate is a false positive before applying
               // the transform to avoid unnecessary noise.
-              auto partitions = std::unordered_map<uuid, type>{};
-              for (const auto& info : partition_info.partition_infos) {
-                partitions[info.uuid] = info.schema;
-              }
               self
                 ->request(self->state.index_, caf::infinite, atom::apply_v,
-                          transform, partitions, keep_original_partition::no)
+                          transform, partition_info.partition_infos,
+                          keep_original_partition::no)
                 .then(
                   [self, rp](const std::vector<vast::partition_info>&) mutable {
                     VAST_DEBUG("{} applied filter transform with query {}",

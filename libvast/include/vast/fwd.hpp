@@ -441,7 +441,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((std::vector<vast::partition_info>))
   VAST_ADD_TYPE_ID((std::unordered_map<vast::type, //
                                        vast::system::catalog_lookup_result>))
-  VAST_ADD_TYPE_ID((std::unordered_map<vast::uuid, vast::type>))
 
   VAST_ADD_TYPE_ID((vast::detail::framed<vast::table_slice>))
   VAST_ADD_TYPE_ID((std::vector<vast::detail::framed<vast::table_slice>>))

@@ -634,13 +634,9 @@ struct rebuilder_state {
               [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time < rhs.max_import_time;
               });
-    auto current_run_partition_ids = std::unordered_map<uuid, type>{};
-    for (const auto& partition : current_run_partitions) {
-      current_run_partition_ids[partition.uuid] = partition.schema;
-    }
     self
       ->request(index, caf::infinite, atom::apply_v, std::move(pipeline),
-                std::move(current_run_partition_ids),
+                std::move(current_run_partitions),
                 system::keep_original_partition::no)
       .then(
         [this, rp, current_run_events,
@@ -654,7 +650,7 @@ struct rebuilder_state {
             run->statistics.num_rebuilding -= num_partitions;
             if (is_heterogeneous)
               finish_heterogeneous();
-            // Pick up new work until we run out of remainig partitions.
+            // Pick up new work until we run out of remaining partitions.
             emit_telemetry();
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                         atom::rebuild_v);

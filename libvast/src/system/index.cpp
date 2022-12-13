@@ -1813,7 +1813,7 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::apply, pipeline_ptr pipeline,
-           std::unordered_map<uuid, type> selected_partitions,
+           std::vector<partition_info> selected_partitions,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
       const auto current_sender = self->current_sender();
@@ -1826,21 +1826,21 @@ index(index_actor::stateful_pointer<index_state> self,
                                "partition transforms are not supported for the "
                                "global archive");
       std::erase_if(selected_partitions, [&](const auto& entry) {
-        const auto& [id, _] = entry;
-        if (self->state.persisted_partitions.contains(id)) {
+        if (self->state.persisted_partitions.contains(entry.uuid)) {
           return false;
         }
-        VAST_WARN("{} skips unknown partition {} for pipeline {}", *self, id,
-                  pipeline->name());
+        VAST_WARN("{} skips unknown partition {} for pipeline {}", *self,
+                  entry.uuid, pipeline->name());
         return true;
       });
       auto selected_partition_ids = std::vector<uuid>{};
       auto query_contexts = query_state::type_query_context_map{};
       {
-        auto corrected_partitions = std::unordered_map<uuid, type>{};
-        for (const auto& [id, type] : selected_partitions) {
-          if (self->state.partitions_in_transformation.insert(id).second) {
-            corrected_partitions[id] = selected_partitions[id];
+        auto corrected_partitions = std::vector<partition_info>{};
+        for (const auto& partition : selected_partitions) {
+          if (self->state.partitions_in_transformation.insert(partition.uuid)
+                .second) {
+            corrected_partitions.emplace_back(partition);
           } else {
             // Getting overlapping partitions triggers a warning, and we
             // silently ignore the partition at the cost of the transformation
@@ -1850,7 +1850,7 @@ index(index_actor::stateful_pointer<index_state> self,
             // synchronize.
             VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
                       "because it is currently being transformed",
-                      *self, pipeline->name(), id);
+                      *self, pipeline->name(), partition.uuid);
           }
         }
         selected_partitions = std::move(corrected_partitions);
@@ -1880,9 +1880,9 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
 
-      for (const auto& [id, type] : selected_partitions) {
-        selected_partition_ids.emplace_back(id);
-        query_contexts[type] = query_context;
+      for (const auto& partition : selected_partitions) {
+        selected_partition_ids.emplace_back(partition.uuid);
+        query_contexts[partition.schema] = query_context;
       }
       auto input_size
         = detail::narrow_cast<uint32_t>(selected_partitions.size());
@@ -1913,8 +1913,8 @@ index(index_actor::stateful_pointer<index_state> self,
                   VAST_DEBUG("{} failed to erase in-progress marker at {}: {}",
                              *self, marker_path, e);
                 });
-            for (const auto& [id, type] : selected_partitions)
-              self->state.partitions_in_transformation.erase(id);
+            for (const auto& partition : selected_partitions)
+              self->state.partitions_in_transformation.erase(partition.uuid);
             if (result)
               rp.deliver(std::move(*result));
             else
