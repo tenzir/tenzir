@@ -59,8 +59,8 @@ public:
   /// Constructs a JSON reader.
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
-  reader(const caf::settings& options, std::unique_ptr<std::istream> in
-                                       = nullptr);
+  explicit reader(const caf::settings& options, std::unique_ptr<std::istream> in
+                                                = nullptr);
 
   void reset(std::unique_ptr<std::istream> in) override;
 
