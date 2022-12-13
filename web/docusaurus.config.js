@@ -224,6 +224,10 @@ const config = {
                 label: 'LinkedIn',
                 href: 'https://www.linkedin.com/company/tenzir',
               },
+              {
+                label: 'Newsletter',
+                to: '/newsletter',
+              },
             ],
           },
           {
