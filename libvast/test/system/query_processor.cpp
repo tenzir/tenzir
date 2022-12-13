@@ -68,7 +68,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
       FAIL("no mock implementation available");
     },
     [=](atom::resolve, vast::expression)
-      -> std::unordered_map<vast::type, system::catalog_result> {
+      -> std::unordered_map<vast::type, system::catalog_lookup_result> {
       FAIL("no mock implementation available");
     },
     [=](atom::evaluate,

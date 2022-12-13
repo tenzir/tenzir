@@ -354,7 +354,7 @@ struct component_state_map;
 struct data_point;
 struct index_state;
 struct measurement;
-struct catalog_result;
+struct catalog_lookup_result;
 struct metrics_metadata;
 struct node_state;
 struct passive_partition_state;
@@ -429,7 +429,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::system::report))
   VAST_ADD_TYPE_ID((vast::system::keep_original_partition))
   VAST_ADD_TYPE_ID((vast::system::status_verbosity))
-  VAST_ADD_TYPE_ID((vast::system::catalog_result))
+  VAST_ADD_TYPE_ID((vast::system::catalog_lookup_result))
 
   VAST_ADD_TYPE_ID((std::pair<std::string, vast::data>))
   VAST_ADD_TYPE_ID((std::vector<uint32_t>))
@@ -440,7 +440,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((std::vector<vast::uuid>))
   VAST_ADD_TYPE_ID((std::vector<vast::partition_info>))
   VAST_ADD_TYPE_ID((std::unordered_map<vast::type, //
-                                       vast::system::catalog_result>))
+                                       vast::system::catalog_lookup_result>))
   VAST_ADD_TYPE_ID((std::unordered_map<vast::uuid, vast::type>))
 
   VAST_ADD_TYPE_ID((vast::detail::framed<vast::table_slice>))

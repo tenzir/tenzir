@@ -29,7 +29,7 @@
 namespace vast::system {
 
 /// The result of a catalog query.
-struct catalog_result {
+struct catalog_lookup_result {
   enum {
     exact,
     probabilistic,
@@ -39,7 +39,7 @@ struct catalog_result {
   std::vector<partition_info> partition_infos;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, catalog_result& x) {
+  friend auto inspect(Inspector& f, catalog_lookup_result& x) {
     return f(caf::meta::type_name("vast.system.catalog_result"), x.kind, x.exp,
              x.partition_infos);
   }
@@ -71,10 +71,10 @@ public:
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.
-  [[nodiscard]] caf::expected<std::unordered_map<type, catalog_result>>
+  [[nodiscard]] caf::expected<std::unordered_map<type, catalog_lookup_result>>
   lookup(const expression& expr) const;
 
-  [[nodiscard]] catalog_result
+  [[nodiscard]] catalog_lookup_result
   lookup_impl(const expression& expr, const type& schema) const;
 
   /// @returns A best-effort estimate of the amount of memory used for this

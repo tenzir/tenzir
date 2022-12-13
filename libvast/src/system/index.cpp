@@ -1560,7 +1560,8 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [=, candidates = std::move(candidates),
            query_contexts = std::move(query_contexts)](
-            std::unordered_map<type, catalog_result>& catalog_results) mutable {
+            std::unordered_map<type, catalog_lookup_result>&
+              catalog_results) mutable {
             const auto initial_candidates = candidates;
             for (const auto& [type, catalog_result] : catalog_results) {
               query_contexts[type] = query_context;
@@ -1607,7 +1608,7 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::resolve, vast::expression& expr)
-      -> caf::result<std::unordered_map<type, catalog_result>> {
+      -> caf::result<std::unordered_map<type, catalog_lookup_result>> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = vast::uuid::random();
       auto type_set = vast::type_set{};

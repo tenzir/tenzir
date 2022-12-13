@@ -83,8 +83,8 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
-          [self, transform,
-           rp](std::unordered_map<type, catalog_result>& result) mutable {
+          [self, transform, rp](
+            std::unordered_map<type, catalog_lookup_result>& result) mutable {
             for (const auto& [_, partition_info] : result) {
               VAST_DEBUG("{} resolved query {} to {} partitions", *self,
                          self->state.query_,
