@@ -70,42 +70,6 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
       for (const auto& [_, ids] : state.type_ids())
         row_ids |= ids;
     }
-
-  } else if (ex.kind == meta_extractor::field) {
-    auto s = caf::get_if<std::string>(&x);
-    if (!s) {
-      VAST_WARN("{} #field meta queries only support string "
-                "comparisons",
-                *state.self);
-      return {};
-    }
-    auto neg = is_negated(op);
-    auto layout = *state.combined_layout();
-    // data s -> string, rhs in #field query
-    for (const auto& [field, offset] : layout.leaves()) {
-      const auto key = layout.key(offset);
-      const auto [s_mismatch, key_mismatch]
-        = std::mismatch(s->rbegin(), s->rend(), key.rbegin(), key.rend());
-      if (s_mismatch == s->rend()
-          && (key_mismatch == key.rend() || *key_mismatch == '.')) {
-        for (const auto& [layout_name, ids] : state.type_ids()) {
-          const auto [layout_name_mismatch, key_mismatch] = std::mismatch(
-            layout_name.begin(), layout_name.end(), key.begin(), key.end());
-          if (layout_name_mismatch == layout_name.end()
-              && (key_mismatch == key.end() || *key_mismatch == '.')) {
-            row_ids |= ids;
-          }
-        }
-      }
-    }
-    if (neg) {
-      auto partition_ids
-        = std::accumulate(state.type_ids().begin(), state.type_ids().end(),
-                          ids{}, [](ids acc, const auto& x) {
-                            return acc | x.second;
-                          });
-      row_ids = partition_ids ^ row_ids;
-    }
   } else {
     VAST_WARN("{} got unsupported attribute: {}", *state.self, ex.kind);
     return {};

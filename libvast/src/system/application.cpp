@@ -182,6 +182,9 @@ auto make_spawn_source_command() {
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("type,t", "filter event type based on prefix matching")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
+  spawn_source->add_subcommand("arrow",
+                               "creates a new Arrow IPC source inside the node",
+                               opts("?vast.spawn.source.arrow"));
   spawn_source->add_subcommand(
     "csv", "creates a new CSV source inside the node",
     opts("?vast.spawn.source.csv")
@@ -329,6 +332,7 @@ auto make_command_factory() {
     {"import test", import_command},
     {"import zeek", import_command},
     {"import zeek-json", import_command},
+    {"import arrow", import_command},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},
@@ -344,6 +348,7 @@ auto make_command_factory() {
     {"spawn sink csv", remote_command},
     {"spawn sink json", remote_command},
     {"spawn sink zeek", remote_command},
+    {"spawn source arrow", remote_command},
     {"spawn source csv", remote_command},
     {"spawn source json", remote_command},
     {"spawn source suricata", remote_command},
@@ -484,6 +489,8 @@ std::unique_ptr<command> make_import_command() {
                           opts("?vast.import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
                           opts("?vast.import.syslog"));
+  import_->add_subcommand("arrow", "import from an Arrow IPC stream",
+                          opts("?vast.import.arrow"));
   import_->add_subcommand(
     "test", "imports random data for testing or benchmarking",
     opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));

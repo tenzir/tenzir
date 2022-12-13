@@ -262,6 +262,10 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
   if (!caf::get_or(content(self->system().config()), "vast.enable-metrics",
                    false))
     return {};
+  // It doesn't make much sense to run the accountant for one-shot commands
+  // with a local database using `--node`, so this prevents spawning it.
+  if (caf::get_or(content(self->system().config()), "vast.node", false))
+    return {};
   const auto metrics_opts = caf::get_or(content(self->system().config()),
                                         "vast.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
@@ -385,6 +389,7 @@ auto make_component_factory() {
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
     {"spawn source", lift_component_factory<spawn_source>()},
+    {"spawn source arrow", lift_component_factory<spawn_source>()},
     {"spawn source csv", lift_component_factory<spawn_source>()},
     {"spawn source json", lift_component_factory<spawn_source>()},
     {"spawn source suricata", lift_component_factory<spawn_source>()},
@@ -431,6 +436,7 @@ auto make_command_factory() {
     {"spawn sink csv", node_state::spawn_command},
     {"spawn sink json", node_state::spawn_command},
     {"spawn sink zeek", node_state::spawn_command},
+    {"spawn source arrow", node_state::spawn_command},
     {"spawn source csv", node_state::spawn_command},
     {"spawn source json", node_state::spawn_command},
     {"spawn source suricata", node_state::spawn_command},

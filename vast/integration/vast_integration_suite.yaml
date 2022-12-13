@@ -250,12 +250,15 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: flush
+      - command: show schemas
       - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
       - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: count '#type == "zeek.conn"'
+      - command: flush
+      - command: show schemas --yaml
   Query Operators:
     tags: [server, operator]
     fixture: ServerTester
@@ -307,8 +310,8 @@ tests:
       - command: -N import suricata '#type != "suricata.stats" && event_type != "flow"'
         input: data/suricata/eve.json
       - command: -N export ascii 'src_ip == 147.32.84.165'
-      - command: -N export csv '#type ~ /suricata.*/'
-      - command: -N export zeek '#type ~ /suricata.alert/'
+      - command: -N export csv '#type == /suricata.*/'
+      - command: -N export zeek '#type == /suricata.alert/'
       - command: -N export json --omit-nulls
 
   Node suricata rrdata:
@@ -371,9 +374,9 @@ tests:
         input: data/pcap/zeek/packet_filter.log.gz
       - command: -N import zeek
         input: data/pcap/zeek/ssh.log.gz
-      - command: -N pivot --format=zeek zeek.conn '#type ~ /suricata.*/ && dest_ip == 72.247.178.18'
+      - command: -N pivot --format=zeek zeek.conn '#type == /suricata.*/ && dest_ip == 72.247.178.18'
         transformation: awk '!/^#(open|close)/'
-      - command: -N pivot zeek.conn '#type ~ /zeek.http/ && method == "GET"'
+      - command: -N pivot zeek.conn '#type == /zeek.http/ && method == "GET"'
         transformation: awk '!/^#(open|close)/'
 
   Taxonomy queries:
@@ -402,6 +405,7 @@ tests:
       - command: show concepts
         transformation: jq '.[] | select(.concept.name == "net.app") | .concept.fields | map(split(".")[0]) | unique'
       - command: show --yaml models
+      - command: show --yaml schemas
   Arrow Full Data Model:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
@@ -410,7 +414,7 @@ tests:
         input: data/json/all-types.json
       - command: -N export arrow '#type == "all_types"'
         transformation: python @./misc/scripts/print-arrow.py
-  Arrow:
+  Arrow Export:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
     steps:
@@ -420,6 +424,17 @@ tests:
         transformation: python @./misc/scripts/print-arrow.py
       - command: -N import --batch-encoding=arrow suricata
         input: data/suricata/eve.json
+      - command: -N export arrow '#type == "suricata.http"'
+        transformation: python @./misc/scripts/print-arrow.py
+  Arrow Import:
+    condition: version | jq -e '."Apache Arrow"'
+    tags: [import, arrow]
+    steps:
+      - command: -N import --batch-encoding=arrow arrow
+        # the input corresponds to conn.log.gz + eve.json (see above)
+        input: data/suricata/arrow_ipc.bin
+      - command: -N export -n 10 arrow '#type == "zeek.conn"'
+        transformation: python @./misc/scripts/print-arrow.py
       - command: -N export arrow '#type == "suricata.http"'
         transformation: python @./misc/scripts/print-arrow.py
   Import syslog:
@@ -480,7 +495,8 @@ tests:
         transformation: jq -ec '.'
       - command: -N export json '#type ni "suricata"'
         transformation: jq -ec '.'
-
+      - command: -N export json 'ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/'
+        transformation: jq -ec '.'
   # Testing the #import_time meta extractor is a bit tricky and requires
   # sleeping. If this turns out to be a flaky test, increase durations and
   # queries respectively.
@@ -531,7 +547,7 @@ tests:
       - command: flush
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: count '#type ~ /suricata.*/'
+      - command: count '#type == /suricata.*/'
   Example config file:
     tags: [import-export, zeek]
     fixture: ExampleConfigFileTester

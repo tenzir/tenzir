@@ -31,6 +31,24 @@ concurrency:
 
 env:
   CCACHE_MAXSIZE: "5G"
+  GCP_WORKLOAD_IDP: projects/1057156539039/locations/global/workloadIdentityPools/gh-actions-pool/providers/gh-actions-provider
+  GCP_SERVICE_ACCOUNT: github-actions@crucial-kayak-261816.iam.gserviceaccount.com
+
+# TODO: cherry-pick permissions
+permissions:
+  actions: write
+  checks: write
+  contents: write
+  deployments: write
+  id-token: write
+  issues: write
+  discussions: write
+  packages: write
+  pages: write
+  pull-requests: write
+  repository-projects: write
+  security-events: write
+  statuses: write
 
 jobs:
 
@@ -67,11 +85,13 @@ jobs:
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
         uses: rlespinasse/github-slug-action@v4
-      - name: Configure GCS Credentials
-        uses: google-github-actions/setup-gcloud@v0
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
         with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Configure GCloud Credentials
+        uses: google-github-actions/setup-gcloud@v1
       - name: Configure
         id: configure
         run: |
@@ -518,12 +538,15 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.9"
-      - name: Configure GCS Credentials
+      - name: Authenticate to Google Cloud
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v0
+        uses: google-github-actions/auth@v1
         with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Configure GCloud Credentials
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        uses: google-github-actions/setup-gcloud@v1
       - name: Upload Artifact to GCS (push)
         if: github.event_name == 'push'
         env:
@@ -733,12 +756,15 @@ jobs:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
           if-no-files-found: error
-      - name: Configure GCS Credentials
+      - name: Authenticate to Google Cloud
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v0
+        uses: google-github-actions/auth@v1
         with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Configure GCloud Credentials
+        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
+        uses: google-github-actions/setup-gcloud@v1
       - name: Upload Artifact to GCS
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
@@ -825,6 +851,9 @@ jobs:
           - name: PCAP
             target: pcap
             path: plugins/pcap
+          - name: CEF
+            target: cef
+            path: plugins/cef
           - name: Web
             target: web
             path: plugins/web
@@ -902,12 +931,15 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
-      - name: Configure GCS Credentials
+      - name: Authenticate to Google Cloud
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
-        uses: google-github-actions/setup-gcloud@v0
+        uses: google-github-actions/auth@v1
         with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Configure GCloud Credentials
+        if: ${{ needs.configure.outputs.run-vast == 'false' }}
+        uses: google-github-actions/setup-gcloud@v1
       - name: Download VAST
         if: ${{ needs.configure.outputs.run-vast == 'false' }}
         run: |

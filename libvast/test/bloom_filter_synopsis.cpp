@@ -41,10 +41,10 @@ TEST(bloom filter synopsis) {
   x.add(make_data_view(integer{2}));
   auto verify = verifier{&x};
   MESSAGE("{0, 1, 2}");
-  verify(make_data_view(integer{0}), {N, N, N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(integer{1}), {N, N, N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(integer{2}), {N, N, N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(integer{42}), {N, N, N, N, N, N, F, N, N, N, N, N});
+  verify(make_data_view(integer{0}), {N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(integer{1}), {N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(integer{2}), {N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(integer{42}), {N, N, N, N, F, N, N, N, N, N});
 }
 
 TEST(bloom filter synopsis - wrong lookup type) {

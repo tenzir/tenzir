@@ -27,12 +27,9 @@
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/io/middleman.hpp>
+#include <caf/openssl/all.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-
-#if VAST_ENABLE_OPENSSL
-#  include <caf/openssl/all.hpp>
-#endif
 
 using namespace caf;
 
@@ -62,13 +59,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   VAST_INFO("client connects to VAST node at {}", endpoint_str);
   auto result = [&]() -> caf::expected<node_actor> {
     if (self->system().has_openssl_manager()) {
-#if VAST_ENABLE_OPENSSL
       return openssl::remote_actor<node_actor>(
         self->system(), node_endpoint.host, node_endpoint.port->number());
-#else
-      return caf::make_error(ec::unspecified, "not compiled with OpenSSL "
-                                              "support");
-#endif
     }
     auto& mm = self->system().middleman();
     return mm.remote_actor<node_actor>(node_endpoint.host,

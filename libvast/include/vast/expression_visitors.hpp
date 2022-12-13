@@ -139,13 +139,9 @@ struct type_resolver {
       return expression{}; // did not resolve
     if (connective.size() == 1)
       return {std::move(connective[0])}; // hoist expression
-    if (op_ == relational_operator::not_equal
-        || op_ == relational_operator::not_match
-        || op_ == relational_operator::not_in
-        || op_ == relational_operator::not_ni)
+    if (is_negated(op_))
       return {conjunction{std::move(connective)}};
-    else
-      return {disjunction{std::move(connective)}};
+    return {disjunction{std::move(connective)}};
   }
 
   relational_operator op_;

@@ -90,9 +90,14 @@ public:
     switch (op) {
       default:
         return {};
-      case relational_operator::equal:
+      case relational_operator::equal: {
+        if constexpr (std::is_same_v<view_type, view<std::string>>) {
+          if (caf::holds_alternative<view<pattern>>(rhs))
+            return {};
+        }
         // TODO: Switch to tsl::robin_set here for heterogeneous lookup.
         return data_.count(materialize(caf::get<view_type>(rhs)));
+      }
       case relational_operator::in: {
         if (auto xs = caf::get_if<view<list>>(&rhs)) {
           for (auto x : **xs)

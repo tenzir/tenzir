@@ -57,9 +57,9 @@ tests:
         input: data/pcap/zeek/ssh.log.gz
       - command: -N import pcap
         input: data/pcap/example.pcap.gz
-      - command: -N pivot --format=zeek zeek.conn '#type ~ /suricata.*/ && dest_ip == 72.247.178.18'
+      - command: -N pivot --format=zeek zeek.conn '#type == /suricata.*/ && dest_ip == 72.247.178.18'
         transformation: awk '!/^#(open|close)/'
-      - command: -N pivot zeek.conn '#type ~ /zeek.http/ && method == "GET"'
+      - command: -N pivot zeek.conn '#type == /zeek.http/ && method == "GET"'
         transformation: awk '!/^#(open|close)/'
       - command: -N pivot --format=pcap pcap.packet 'dest_ip == 72.247.178.18'
         transformation: tcpdump -n -tt -r -

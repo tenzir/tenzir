@@ -128,15 +128,12 @@ static auto make_predicate_parser() {
   auto operand
     = (parsers::data >> !(field_char | '.')) ->* to_data_operand
     | "#type"_p  ->* [] { return meta_extractor{meta_extractor::type}; }
-    | "#field"_p ->* [] { return meta_extractor{meta_extractor::field}; }
     | "#import_time"_p ->* [] { return meta_extractor{meta_extractor::import_time}; }
     | ':' >> parsers::legacy_type ->* to_type_extractor
     | field ->* to_field_extractor
     ;
   auto operation
-    = "~"_p   ->* [] { return relational_operator::match; }
-    | "!~"_p  ->* [] { return relational_operator::not_match; }
-    | "=="_p  ->* [] { return relational_operator::equal; }
+    = "=="_p  ->* [] { return relational_operator::equal; }
     | "!="_p  ->* [] { return relational_operator::not_equal; }
     | "<="_p  ->* [] { return relational_operator::less_equal; }
     | "<"_p   ->* [] { return relational_operator::less; }

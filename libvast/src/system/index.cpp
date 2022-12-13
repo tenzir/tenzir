@@ -1921,11 +1921,14 @@ index(index_actor::stateful_pointer<index_state> self,
           };
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
+      // TODO: With CAF 0.19 it will no longer be needed to keep
+      // partition_transformer alive in the lambda as the promise kept in the
+      // state will keep the actor alive
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
           [self, deliver,
            old_partition_id_vec = std::move(selected_partition_ids), keep,
-           marker_path](
+           marker_path, rp, partition_transfomer](
             std::vector<augmented_partition_synopsis>& apsv) mutable {
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
@@ -2032,10 +2035,11 @@ index(index_actor::stateful_pointer<index_state> self,
                               });
                         }
                       },
-                      [self](const caf::error& e) {
+                      [self, rp](caf::error& e) mutable {
                         VAST_WARN("{} failed to finalize partition transformer "
                                   "output: {}",
                                   *self, e);
+                        rp.deliver(std::move(e));
                       });
                 },
                 [deliver](const caf::error& e) mutable {

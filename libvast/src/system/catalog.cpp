@@ -276,7 +276,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
                                        result.partition_infos.end()));
             return result;
-          } else if (lhs.kind == meta_extractor::import_time) {
+          }
+          if (lhs.kind == meta_extractor::import_time) {
             catalog_lookup_result::candidate_info result;
             for (const auto& [part_id, part_syn] : partition_synopses) {
               VAST_ASSERT(part_syn->min_import_time
@@ -298,45 +299,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
                                        result.partition_infos.end()));
             return result;
-          } else if (lhs.kind == meta_extractor::field) {
-            // We don't have to look into the synopses for type queries, just
-            // at the layout names.
-            catalog_lookup_result::candidate_info result;
-            const auto* s = caf::get_if<std::string>(&d);
-            if (!s) {
-              VAST_WARN("#field meta queries only support string "
-                        "comparisons");
-            } else {
-              for (const auto& [part_id, part_syn] : partition_synopses) {
-                // Compare the desired field name with each field in the
-                // partition.
-                auto matching = [&](const auto& part_syn) {
-                  for (const auto& [field, _] : part_syn->field_synopses_) {
-                    VAST_ASSERT(!field.is_standalone_type());
-                    auto rt = record_type{{field.field_name(), field.type()}};
-                    for ([[maybe_unused]] const auto& offset :
-                         rt.resolve_key_suffix(*s, field.layout_name()))
-                      return true;
-                  }
-                  return false;
-                }(part_syn);
-                // Only insert the partition if both sides are equal, i.e. the
-                // operator is "positive" and matching is true, or both are
-                // negative.
-                if (!is_negated(x.op) == matching) {
-                  result.exp = expr;
-                  result.partition_infos.emplace_back(part_id, part_syn->events,
-                                                      part_syn->max_import_time,
-                                                      part_syn->schema,
-                                                      part_syn->version);
-                }
-              }
-            }
-            VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                       result.partition_infos.end()));
-            return result;
           }
-          VAST_WARN("{} cannot process attribute extractor: {}",
+          VAST_WARN("{} cannot process meta extractor: {}",
                     detail::pretty_type_name(this), lhs.kind);
           return all_partitions();
         },

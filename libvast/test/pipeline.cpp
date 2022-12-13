@@ -10,6 +10,9 @@
 
 #include "vast/pipeline.hpp"
 
+#include "vast/address.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/test.hpp"
@@ -50,6 +53,16 @@ const auto testresult_layout2 = vast::type{
   vast::record_type{
     {"uid", vast::string_type{}},
     {"index", vast::integer_type{}},
+  },
+};
+
+const auto testdata_layout3 = vast::type{
+  "testdata",
+  vast::record_type{
+    {"orig_addr", vast::address_type{}},
+    {"orig_port", vast::integer_type{}},
+    {"dest_addr", vast::address_type{}},
+    {"non_anon_addr", vast::address_type{}},
   },
 };
 
@@ -124,6 +137,21 @@ struct pipelines_fixture {
     return {builder->finish(), builder2->finish(), builder3->finish()};
   }
 
+  /// Creates a table slice with three IP address and one port column.
+  static vast::table_slice
+  make_pseudonymize_testdata(const std::string& orig_ip,
+                             const std::string& dest_ip,
+                             const std::string& non_anon_ip) {
+    auto builder = vast::factory<vast::table_slice_builder>::make(
+      vast::defaults::import::table_slice_type, testdata_layout3);
+    REQUIRE(builder);
+    REQUIRE(builder->add(*vast::to<vast::address>(orig_ip),
+                         vast::integer{40002},
+                         *vast::to<vast::address>(dest_ip),
+                         *vast::to<vast::address>(non_anon_ip)));
+    return builder->finish();
+  }
+
   const vast::pipeline_operator_plugin* rename_plugin
     = vast::plugins::find<vast::pipeline_operator_plugin>("rename");
 };
@@ -191,7 +219,8 @@ TEST(select operator) {
 TEST(replace operator) {
   auto slice = make_pipelines_testdata();
   auto replace_operator = unbox(vast::make_pipeline_operator(
-    "replace", {{"fields", vast::record{{"uid", "xxx"}}}}));
+    "replace",
+    {{"fields", vast::record{{"uid", "xxx"}, {"desc", "1.2.3.4"}}}}));
   auto add_failed
     = replace_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
@@ -203,14 +232,20 @@ TEST(replace operator) {
   CHECK_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(0).name,
     "uid");
+  CHECK_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(1).name,
+    "desc");
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
+  CHECK_EQUAL(table_slice.at(0, 1),
+              vast::data_view{unbox(vast::to<vast::address>("1.2.3.4"))});
 }
 
 TEST(extend operator) {
   auto slice = make_pipelines_testdata();
   auto replace_operator = unbox(vast::make_pipeline_operator(
-    "extend", {{"fields", vast::record{{"secret", "xxx"}}}}));
+    "extend",
+    {{"fields", vast::record{{"secret", "xxx"}, {"ip", "1.2.3.4"}}}}));
   auto add_failed
     = replace_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
@@ -218,12 +253,17 @@ TEST(extend operator) {
   REQUIRE_EQUAL(replaced.size(), 1ull);
   REQUIRE_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
-    4ull);
+    5ull);
   CHECK_EQUAL(
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(3).name,
     "secret");
+  CHECK_EQUAL(
+    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(4).name,
+    "ip");
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(table_slice.at(0, 3), vast::data_view{"xxx"sv});
+  CHECK_EQUAL(table_slice.at(0, 4),
+              vast::data_view{unbox(vast::to<vast::address>("1.2.3.4"))});
 }
 
 TEST(where operator) {
@@ -282,19 +322,153 @@ TEST(where operator) {
   CHECK_EQUAL(selected5->size(), 0ull);
 }
 
-TEST(anonymize operator) {
+TEST(hash operator) {
   auto slice = make_pipelines_testdata();
   auto hash_operator = unbox(vast::make_pipeline_operator(
     "hash", {{"field", "uid"}, {"out", "hashed_uid"}}));
   auto add_failed = hash_operator->add(slice.layout(), to_record_batch(slice));
   REQUIRE(!add_failed);
-  auto anonymized = unbox(hash_operator->finish());
-  REQUIRE_EQUAL(anonymized.size(), 1ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).num_fields(),
-                4ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(anonymized)).field(1).name,
+  auto hashed = unbox(hash_operator->finish());
+  REQUIRE_EQUAL(hashed.size(), 1ull);
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(hashed)).num_fields(), 4ull);
+  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(hashed)).field(1).name,
                 "hashed_uid");
   // TODO: not sure how we can check that the data was correctly hashed.
+}
+
+TEST(pseudonymize - invalid seed) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  REQUIRE_ERROR(vast::make_pipeline_operator(
+    "pseudonymize", {{"method", "crypto-pan"},
+                     {"seed", "foobar"},
+                     {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+}
+
+TEST(pseudonymize - seed but no fields) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  REQUIRE_ERROR(vast::make_pipeline_operator("pseudonymize", {{"seed", "1"}}));
+}
+
+TEST(pseudonymize - fields but no seed) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  REQUIRE_ERROR(vast::make_pipeline_operator(
+    "pseudonymize", {{"fields", vast::list{"orig_addr", "dest_addr"}}}));
+}
+
+TEST(pseudonymize - seed and fields but no method) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  REQUIRE_ERROR(vast::make_pipeline_operator(
+    "pseudonymize",
+    {{"seed", "deadbee"}, {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+}
+
+TEST(pseudonymize - seed input too short and odd amount of chars) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  auto pseudonymize_op = unbox(vast::make_pipeline_operator(
+    "pseudonymize", {{"method", "crypto-pan"},
+                     {"seed", "deadbee"},
+                     {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+  auto pseudonymize_failed
+    = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!pseudonymize_failed);
+  auto pseudonymized = unbox(pseudonymize_op->finish());
+  auto pseudonymized_values
+    = caf::get<vast::record_type>(layout(pseudonymized));
+  const auto table_slice = as_table_slice(pseudonymized);
+  REQUIRE_EQUAL(table_slice.at(0, 0),
+                vast::data_view(*vast::to<vast::address>("20.251.116.68")));
+  REQUIRE_EQUAL(table_slice.at(0, 1), vast::data_view(vast::integer(40002)));
+  REQUIRE_EQUAL(table_slice.at(0, 2),
+                vast::data_view(*vast::to<vast::address>("72.57.233.231")));
+  REQUIRE_EQUAL(table_slice.at(0, 3),
+                vast::data_view(*vast::to<vast::address>("0.0.0.0")));
+}
+
+TEST(pseudonymize - seed input too long) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  auto pseudonymize_op = unbox(vast::make_pipeline_operator(
+    "pseudonymize",
+    {{"method", "crypto-pan"},
+     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c96"
+              "8be5de53836e8009ab3a605435bea0c385bea18485d8b0a1103d"
+              "6590bdf48c968be5de53836e"},
+     {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+  auto pseudonymize_failed
+    = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!pseudonymize_failed);
+  auto pseudonymized = unbox(pseudonymize_op->finish());
+  auto pseudonymized_values
+    = caf::get<vast::record_type>(layout(pseudonymized));
+  const auto table_slice = as_table_slice(pseudonymized);
+  REQUIRE_EQUAL(table_slice.at(0, 0),
+                vast::data_view(*vast::to<vast::address>("117.8.135.123")));
+  REQUIRE_EQUAL(table_slice.at(0, 1), vast::data_view(vast::integer(40002)));
+  REQUIRE_EQUAL(table_slice.at(0, 2),
+                vast::data_view(*vast::to<vast::address>("55.21.62.136")));
+  REQUIRE_EQUAL(table_slice.at(0, 3),
+                vast::data_view(*vast::to<vast::address>("0.0.0.0")));
+}
+
+TEST(pseudonymize - IPv4 address batch pseudonymizing) {
+  auto slice
+    = make_pseudonymize_testdata("123.123.123.123", "8.8.8.8", "0.0.0.0");
+  auto pseudonymize_op = unbox(vast::make_pipeline_operator(
+    "pseudonymize", {{"method", "crypto-pan"},
+                     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf4"
+                              "8c96"
+                              "8be5de53836e"},
+                     {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+  auto pseudonymize_failed
+    = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!pseudonymize_failed);
+  auto pseudonymized = unbox(pseudonymize_op->finish());
+  auto pseudonymized_values
+    = caf::get<vast::record_type>(layout(pseudonymized));
+  const auto table_slice = as_table_slice(pseudonymized);
+  REQUIRE_EQUAL(table_slice.at(0, 0),
+                vast::data_view(*vast::to<vast::address>("117.8.135.123")));
+  REQUIRE_EQUAL(table_slice.at(0, 1), vast::data_view(vast::integer(40002)));
+  REQUIRE_EQUAL(table_slice.at(0, 2),
+                vast::data_view(*vast::to<vast::address>("55.21.62.136")));
+  REQUIRE_EQUAL(table_slice.at(0, 3),
+                vast::data_view(*vast::to<vast::address>("0.0.0.0")));
+}
+
+TEST(pseudonymize - IPv6 address batch pseudonymizing) {
+  auto slice
+    = make_pseudonymize_testdata("2a02:0db8:85a3:0000:0000:8a2e:0370:7344",
+                                 "fc00::", "2a02:db8:85a3::8a2e:370:7344");
+  auto pseudonymize_op = unbox(vast::make_pipeline_operator(
+    "pseudonymize", {{"method", "crypto-pan"},
+                     {"seed", "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf4"
+                              "8c96"
+                              "8be5de53836e"},
+                     {"fields", vast::list{"orig_addr", "dest_addr"}}}));
+  auto pseudonymize_failed
+    = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
+  REQUIRE(!pseudonymize_failed);
+  auto pseudonymized = unbox(pseudonymize_op->finish());
+  auto pseudonymized_values
+    = caf::get<vast::record_type>(layout(pseudonymized));
+  const auto table_slice = as_table_slice(pseudonymized);
+  REQUIRE_EQUAL(table_slice.at(0, 0),
+                vast::data_view(*vast::to<vast::address>("1482:f447:75b3:f1f9:"
+                                                         "fbdf:622e:34f:"
+                                                         "ff7b")));
+  REQUIRE_EQUAL(table_slice.at(0, 1), vast::data_view(vast::integer(40002)));
+  REQUIRE_EQUAL(table_slice.at(0, 2),
+                vast::data_view(*vast::to<vast::address>("f33c:8ca3:ef0f:e019:"
+                                                         "e7ff:f1e3:f91f:"
+                                                         "f800")));
+  REQUIRE_EQUAL(table_slice.at(0, 3),
+                vast::data_view(*vast::to<vast::address>("2a02:db8:85a3::8a2e:"
+                                                         "370:7344")));
 }
 
 TEST(pipeline with multiple steps) {
