@@ -1808,6 +1808,11 @@ file-saver@^2.0.5:
   resolved "https://registry.yarnpkg.com/file-saver/-/file-saver-2.0.5.tgz#d61cfe2ce059f414d899e9dd6d4107ee25670c38"
   integrity sha512-P9bmyZ3h/PRG+Nzga+rbdI4OEpNDzAVyy74uVO9ATgzLK6VtAsYybF/+TOCvrc0MO793d6+42lLyZTw7/ArVzA==
 
+filepond@^4.30.4:
+  version "4.30.4"
+  resolved "https://registry.yarnpkg.com/filepond/-/filepond-4.30.4.tgz#036d87d9b0ab27d19fb5e302eae799df90e094e4"
+  integrity sha512-FCwsMvG9iiEs6uobdDrTaKsCgsqys0NuLgPPD8n37AYVYBiiDkrPkk9MSIU5rT2FahYcL1bScYI9huIPtlzqyA==
+
 fill-range@^7.0.1:
   version "7.0.1"
   resolved "https://registry.yarnpkg.com/fill-range/-/fill-range-7.0.1.tgz#1919a6a7c75fe38b2c7c77e5198535da9acdda40"
@@ -3291,6 +3296,11 @@ svelte-check@^2.10.2:
     svelte-preprocess "^4.0.0"
     typescript "*"
 
+svelte-filepond@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/svelte-filepond/-/svelte-filepond-0.2.0.tgz#30626b2205b916da33f998d33429e069cfd433a9"
+  integrity sha512-0VxMWgyZSFnApJ0gWT43OvNQ7hpAZI4InrHRQZCe+pw5ZtLiBS4+XZxpX84sOv1wHN6Jhrw1h/0nw+9+4neyuw==
+
 svelte-headless-table@^0.15.1:
   version "0.15.3"
   resolved "https://registry.yarnpkg.com/svelte-headless-table/-/svelte-headless-table-0.15.3.tgz#5690d5beb15ea06cab8c8945d094a84062f855c9"
@@ -3304,6 +3314,11 @@ svelte-hmr@^0.15.1:
   version "0.15.1"
   resolved "https://registry.yarnpkg.com/svelte-hmr/-/svelte-hmr-0.15.1.tgz#d11d878a0bbb12ec1cba030f580cd2049f4ec86b"
   integrity sha512-BiKB4RZ8YSwRKCNVdNxK/GfY+r4Kjgp9jCLEy0DuqAKfmQtpL38cQK3afdpjw4sqSs4PLi3jIPJIFp259NkZtA==
+
+svelte-inline-input@^1.2.1:
+  version "1.2.1"
+  resolved "https://registry.yarnpkg.com/svelte-inline-input/-/svelte-inline-input-1.2.1.tgz#0bc960da5a41e4746c73431c9066b27c52976f42"
+  integrity sha512-1GMIOJFCdy/TV1+KADo5EpZYhS47Tlj8yOPX/Tahvfytuh7shT8t4ARka1fByuz9SrNQwEmXwkrsq7T/Cg4mVA==
 
 svelte-keyed@^1.1.5:
   version "1.1.6"

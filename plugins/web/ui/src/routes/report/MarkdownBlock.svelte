@@ -5,6 +5,7 @@
   import gfm from '@bytemd/plugin-gfm';
   import highlight from '@bytemd/plugin-highlight';
   import mermaid from '@bytemd/plugin-mermaid';
+  import BlockHeader from './BlockHeader.svelte';
 
   let showEditor = true;
 
@@ -21,14 +22,15 @@
 </script>
 
 <div>
-  <span>{parameters.title}</span>
+  <BlockHeader bind:title={parameters.title} onClick={() => handleSaveOrEdit()} />
 
   {#if showEditor}
     <Editor bind:value={parameters.content} {plugins} />
-    <Button onClick={handleSaveOrEdit}>Save</Button>
+    <div class="py-2">
+      <Button onClick={handleSaveOrEdit}>Save</Button>
+    </div>
   {/if}
   {#if !showEditor}
     <Viewer bind:value={parameters.content} {plugins} />
-    <Button onClick={handleSaveOrEdit}>Edit</Button>
   {/if}
 </div>
