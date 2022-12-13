@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <vast/data.hpp>
 #include <vast/fwd.hpp>
 
 #include <caf/expected.hpp>
@@ -28,7 +29,7 @@ struct message_view {
   std::string_view signature_id;
   std::string_view name;
   std::string_view severity;
-  std::vector<std::pair<std::string_view, std::string>> extension;
+  record extension;
 };
 
 /// Converts a string view into a message.
@@ -43,7 +44,6 @@ type infer(const message_view& msg);
 /// downstream processing.
 /// @param extension The string value of the extension field.
 /// @returns A vector of key-value pairs with properly unescaped values.
-caf::expected<std::vector<std::pair<std::string_view, std::string>>>
-parse_extension(std::string_view extension);
+caf::expected<record> parse_extension(std::string_view extension);
 
 } // namespace vast::plugins::cef

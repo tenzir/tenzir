@@ -40,12 +40,8 @@ caf::error add(const message_view& msg, table_slice_builder& builder) {
     return err;
   // Append extension fields.
   for (const auto& [_, value] : msg.extension) {
-    if (auto x = to<data>(value)) {
-      if (auto err = append(*x))
-        return err;
-    } else if (auto err = append(value)) {
+    if (auto err = append(value))
       return err;
-    }
   }
   return caf::none;
 }

@@ -40,16 +40,16 @@ TEST(parse extension with newlines) {
   constexpr auto extension_with_linebreaks = R"__(foo=a\nb\rc bar=a\\\nb)__";
   auto kvps = to_extension(extension_with_linebreaks);
   REQUIRE_EQUAL(kvps.size(), 2u);
-  CHECK_EQUAL(kvps[0].second, "a\nb\nc"); // \r unescapes to \n.
-  CHECK_EQUAL(kvps[1].second, "a\\\nb");
+  CHECK_EQUAL(kvps["foo"], "a\nb\nc"); // \r unescapes to \n.
+  CHECK_EQUAL(kvps["bar"], "a\\\nb");
 }
 
 TEST(parse extension equal signs) {
   constexpr auto extension_with_equal_sign = R"__(foo=\=\=\= bar=a \= b)__";
   auto kvps = to_extension(extension_with_equal_sign);
   REQUIRE_EQUAL(kvps.size(), 2u);
-  CHECK_EQUAL(kvps[0].second, "==="); // \r unescapes to \n.
-  CHECK_EQUAL(kvps[1].second, "a = b");
+  CHECK_EQUAL(kvps["foo"], "==="); // \r unescapes to \n.
+  CHECK_EQUAL(kvps["bar"], "a = b");
 }
 
 TEST(parse sample) {
@@ -62,10 +62,8 @@ TEST(parse sample) {
   CHECK_EQUAL(msg.name, "Agent [test] type [testalertng] started");
   CHECK_EQUAL(msg.severity, "Low");
   REQUIRE_EQUAL(msg.extension.size(), 29u);
-  CHECK_EQUAL(msg.extension[0].first, "eventId");
-  CHECK_EQUAL(msg.extension[0].second, "1");
-  CHECK_EQUAL(msg.extension[28].first, "_cefVer");
-  CHECK_EQUAL(msg.extension[28].second, "0.1");
+  CHECK_EQUAL(msg.extension["eventId"], 1u);
+  CHECK_EQUAL(msg.extension["_cefVer"], 0.1);
   auto schema = infer(msg);
   CHECK_EQUAL(schema.name(), "cef.event");
   const auto& record = caf::get<record_type>(schema);
@@ -80,6 +78,6 @@ TEST(parse sample) {
   CHECK_EQUAL(record.field(7).name, "extension");
   auto ext = caf::get<record_type>(record.field(7).type);
   REQUIRE_EQUAL(ext.num_fields(), msg.extension.size());
-  CHECK_EQUAL(ext.field(0).name, msg.extension[0].first);
-  CHECK_EQUAL(ext.field(28).name, msg.extension[28].first);
+  CHECK_EQUAL(ext.field(0).name, as_vector(msg.extension)[0].first);
+  CHECK_EQUAL(ext.field(28).name, as_vector(msg.extension)[28].first);
 }

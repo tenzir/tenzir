@@ -82,9 +82,8 @@ caf::error convert(std::string_view line, message_view& msg) {
   return caf::none;
 }
 
-caf::expected<std::vector<std::pair<std::string_view, std::string>>>
-parse_extension(std::string_view extension) {
-  std::vector<std::pair<std::string_view, std::string>> result;
+caf::expected<record> parse_extension(std::string_view extension) {
+  record result;
   auto splits = detail::split(extension, "=", "\\");
   if (splits.size() < 2)
     return caf::make_error(ec::parse_error, fmt::format("need at least one "
@@ -104,6 +103,13 @@ parse_extension(std::string_view extension) {
       key = key.substr(i);
       break;
     }
+  // Converts a raw, unescaped string to a data instance.
+  auto to_data = [](std::string_view str) -> data {
+    auto unescaped = unescape(str);
+    if (auto x = to<data>(unescaped))
+      return std::move(*x);
+    return unescaped;
+  };
   for (auto i = 1u; i < splits.size() - 1; ++i) {
     auto split = splits[i];
     auto j = split.rfind(' ');
@@ -116,11 +122,11 @@ parse_extension(std::string_view extension) {
         ec::parse_error,
         fmt::format("empty value in 'key= value=key' extension: {}", split));
     auto value = split.substr(0, j);
-    result.emplace_back(key, unescape(value));
+    result.emplace(std::string{key}, to_data(value));
     key = split.substr(j + 1); // next key
   }
   auto value = splits[splits.size() - 1];
-  result.emplace_back(key, unescape(value));
+  result.emplace(std::string{key}, to_data(value));
   return result;
 }
 
@@ -134,10 +140,9 @@ type infer(const message_view& msg) {
     {"severity", string_type{}},
   };
   // Infer extension record, if present.
-  auto deduce = [](const auto& value) -> type {
-    if (auto x = to<data>(value))
-      if (auto t = type::infer(*x))
-        return t;
+  auto deduce = [](const data& value) -> type {
+    if (auto t = type::infer(value))
+      return t;
     return type{string_type{}};
   };
   if (!msg.extension.empty()) {
