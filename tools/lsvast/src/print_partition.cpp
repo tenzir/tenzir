@@ -19,10 +19,10 @@
 #include <vast/type.hpp>
 #include <vast/value_index_factory.hpp>
 
+#include <caf/expected.hpp>
 #include <fmt/ranges.h>
 
 #include <iostream>
-#include <optional>
 
 #include "lsvast.hpp"
 #include "util.hpp"
@@ -31,22 +31,24 @@ namespace lsvast {
 
 namespace {
 
-std::optional<vast::record_type>
+caf::expected<vast::record_type>
 get_partition_schema(const vast::fbs::partition::LegacyPartition& partition) {
   if (auto layout = partition.combined_layout_caf_0_17()) {
     vast::legacy_record_type intermediate;
-    auto err = vast::fbs::deserialize_bytes(layout, intermediate);
-    if (err)
-      fmt::print(stderr, "Err during combined layout deserialization {}", err);
+    if (auto err = vast::fbs::deserialize_bytes(layout, intermediate))
+      return caf::make_error(vast::ec::parse_error,
+                             fmt::format("failed to deserialize combined "
+                                         "layout (CAF 0.17): {}",
+                                         err));
     return caf::get<vast::record_type>(
       vast::type::from_legacy_type(intermediate));
   }
   if (auto schema = partition.schema()) {
     auto chunk = vast::chunk::copy(vast::as_bytes(*schema));
-    auto type = vast::type{std::move(chunk)};
-    return *caf::get_if<vast::record_type>(&type);
+    return caf::get<vast::record_type>(vast::type{std::move(chunk)});
   }
-  return {};
+  return caf::make_error(vast::ec::parse_error, "unable to extract schema from "
+                                                "partition");
 }
 
 caf::expected<vast::value_index_ptr> deserialize_value_index(
@@ -60,19 +62,17 @@ caf::expected<vast::value_index_ptr> deserialize_value_index(
   if (auto data = index_data.caf_0_18_data()) {
     auto data_view = vast::as_bytes(*data);
     auto index_data = vast::chunk::make(data_view, []() noexcept {});
-
     auto bytes = vast::as_bytes(*index_data);
     caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
     vast::value_index_ptr state_ptr;
     if (!sink.apply(state_ptr) || !state_ptr)
-      return caf::make_error(vast::ec::parse_error,
-                             "Failed to CAF deserialize value "
-                             "index");
+      return caf::make_error(vast::ec::parse_error, "failed to deserialize "
+                                                    "value index using CAF");
     return state_ptr;
   }
-  return caf::make_error(vast::ec::parse_error,
-                         "No data found in LegacyValueIndex "
-                         "fbs");
+  return caf::make_error(vast::ec::parse_error, "failed to deserialize value "
+                                                "index: FlatBuffers table did "
+                                                "not contain data field");
 }
 
 } // namespace
@@ -196,8 +196,11 @@ void print_partition_legacy(
   fmt::print("{}Column Indexes\n", indent);
   auto schema = get_partition_schema(*partition);
   if (!schema) {
-    fmt::print(stderr, "Unable to extract schema from partition. Aborting "
-                       "partition print");
+    fmt::print(stderr,
+               "failed to extract schema from partition with error {}. "
+               "Aborting "
+               "partition print",
+               schema.error());
     return;
   }
   if (auto const* indexes = partition->indexes()) {

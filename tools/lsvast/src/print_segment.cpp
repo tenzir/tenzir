@@ -35,8 +35,10 @@ print_segment_contents(indentation&, const options&, vast::chunk_ptr chunk) {
   auto writer = vast::format::json::writer{
     std::make_unique<std::stringstream>(), settings};
   for (const auto& slice : *segment)
-    if (auto err = writer.write(slice))
-      fmt::print(stderr, "Err during segment slice write {}", err);
+    if (auto err = writer.write(slice)) {
+      fmt::print(stderr, "!! failed to write segment slice: {}", err);
+      exit(1);
+    }
   writer.flush();
   auto& out = static_cast<std::stringstream&>(writer.out());
   fmt::print("{}\n", out.str());
