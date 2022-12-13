@@ -1879,7 +1879,6 @@ index(index_actor::stateful_pointer<index_state> self,
       query_context.priority = query_context::priority::high;
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
-
       for (const auto& partition : selected_partitions) {
         selected_partition_ids.emplace_back(partition.uuid);
         query_contexts[partition.schema] = query_context;
