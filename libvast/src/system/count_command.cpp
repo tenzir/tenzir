@@ -17,7 +17,6 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/read_query.hpp"
-#include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/start_command.hpp"
 
@@ -28,7 +27,7 @@
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>
-#include <iostream>
+#include <csignal>
 
 using namespace caf;
 using namespace std::chrono_literals;
@@ -49,14 +48,17 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
     = system::spawn_or_connect_to_node(self, options, content(sys.config()));
   if (auto err = std::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  const auto& node = std::holds_alternative<node_actor>(node_opt)
-                       ? std::get<node_actor>(node_opt)
-                       : std::get<scope_linked<node_actor>>(node_opt).get();
+  auto local_node = !std::holds_alternative<node_actor>(node_opt);
+  const auto& node = local_node
+                       ? std::get<scope_linked<node_actor>>(node_opt).get()
+                       : std::get<node_actor>(node_opt);
   VAST_ASSERT(node != nullptr);
-  // Start signal monitor.
-  std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
+  if (local_node) {
+    // Register as the termination handler.
+    auto signal_reflector
+      = sys.registry().get<signal_reflector_actor>("signal-reflector");
+    self->send(signal_reflector, atom::subscribe_v);
+  }
   // Spawn COUNTER at the node.
   caf::actor cnt;
   auto args = invocation{options, "spawn counter", {*query}};
@@ -83,7 +85,19 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
     // Loop until false.
     (counting)
     // Message handlers.
-    ([&](uint64_t x) { result += x; }, [&](atom::done) { counting = false; });
+    (
+      [&](uint64_t x) {
+        result += x;
+      },
+      [&](atom::done) {
+        counting = false;
+      },
+      [&](atom::signal, int signal) {
+        VAST_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
+                   ::strsignal(signal));
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        counting = false;
+      });
   std::cout << result << std::endl;
   return {};
 }

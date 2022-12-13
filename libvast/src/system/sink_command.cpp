@@ -24,7 +24,6 @@
 #include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/uuid.hpp"
 
@@ -80,14 +79,11 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = std::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  const auto& node = std::holds_alternative<node_actor>(node_opt)
-                       ? std::get<node_actor>(node_opt)
-                       : std::get<scope_linked<node_actor>>(node_opt).get();
+  auto local_node = !std::holds_alternative<node_actor>(node_opt);
+  const auto& node = local_node
+                       ? std::get<scope_linked<node_actor>>(node_opt).get()
+                       : std::get<node_actor>(node_opt);
   VAST_ASSERT(node != nullptr);
-  // Start signal monitor.
-  std::thread sig_mon_thread;
-  auto signal_guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   VAST_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
@@ -133,6 +129,12 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
     else
       VAST_ERROR("{} was unable parse timeout option {} as duration: {}",
                  inv.full_name, *timeout_str, timeout.error());
+  }
+  if (local_node) {
+    // Register as the termination handler.
+    auto signal_reflector
+      = sys.registry().get<signal_reflector_actor>("signal-reflector");
+    self->send(signal_reflector, atom::subscribe_v);
   }
   // Start the receive-loop.
   auto waiting_for_final_report = false;
@@ -213,10 +215,9 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
       },
       [&](atom::signal, int signal) {
         VAST_DEBUG("{} got {}", inv.full_name, ::strsignal(signal));
-        if (signal == SIGINT || signal == SIGTERM) {
-          self->send_exit(exporter, caf::exit_reason::user_shutdown);
-          self->send_exit(snk, caf::exit_reason::user_shutdown);
-        }
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        self->send_exit(exporter, caf::exit_reason::user_shutdown);
+        self->send_exit(snk, caf::exit_reason::user_shutdown);
       })
     .until([&] {
       return stop;

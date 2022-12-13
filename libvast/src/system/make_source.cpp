@@ -26,7 +26,6 @@
 #include "vast/module.hpp"
 #include "vast/optional.hpp"
 #include "vast/system/datagram_source.hpp"
-#include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/uuid.hpp"
 

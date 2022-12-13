@@ -17,7 +17,6 @@
 #include "vast/system/make_sink.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
-#include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 
 #include <caf/event_based_actor.hpp>
@@ -56,14 +55,17 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = std::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  const auto& node = std::holds_alternative<node_actor>(node_opt)
-                       ? std::get<node_actor>(node_opt)
-                       : std::get<scope_linked<node_actor>>(node_opt).get();
+  auto local_node = !std::holds_alternative<node_actor>(node_opt);
+  const auto& node = local_node
+                       ? std::get<scope_linked<node_actor>>(node_opt).get()
+                       : std::get<node_actor>(node_opt);
   VAST_ASSERT(node != nullptr);
-  // Start signal monitor.
-  std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
+  if (local_node) {
+    // Register as the termination handler.
+    auto signal_reflector
+      = sys.registry().get<signal_reflector_actor>("signal-reflector");
+    self->send(signal_reflector, atom::subscribe_v);
+  }
   // Spawn exporter at the node.
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   VAST_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
@@ -129,11 +131,12 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
       [&](atom::signal, int signal) {
         VAST_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
                    ::strsignal(signal));
-        if (signal == SIGINT || signal == SIGTERM) {
-          stop = true;
-        }
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        stop = true;
       })
-    .until([&] { return stop; });
+    .until([&] {
+      return stop;
+    });
   if (err)
     return caf::make_message(std::move(err));
   return {};

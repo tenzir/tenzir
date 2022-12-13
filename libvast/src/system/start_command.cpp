@@ -21,7 +21,6 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/application.hpp"
-#include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_node.hpp"
 #include "vast/systemd.hpp"
 
@@ -84,10 +83,10 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(bound_port.error()));
   auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
   VAST_INFO("VAST ({}) is listening on {}", version::version, listen_addr);
-  // Start signal monitor.
-  std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
+  // Register as the termination handler.
+  auto signal_reflector
+    = sys.registry().get<signal_reflector_actor>("signal-reflector");
+  self->send(signal_reflector, atom::subscribe_v);
   // Notify the service manager if it expects an update.
   if (auto error = systemd::notify_ready())
     return caf::make_message(std::move(error));
@@ -141,10 +140,8 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
       },
       [&](atom::signal, int signal) {
         VAST_DEBUG("{} got {}", *self, ::strsignal(signal));
-        if (signal == SIGINT || signal == SIGTERM)
-          self->send_exit(node, caf::exit_reason::user_shutdown);
-        else
-          self->send(node, atom::signal_v, signal);
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        self->send_exit(node, caf::exit_reason::user_shutdown);
       })
     .until([&] {
       return stop;

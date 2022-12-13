@@ -16,7 +16,6 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/signal_monitor.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
