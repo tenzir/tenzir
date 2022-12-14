@@ -13,7 +13,6 @@
 #endif
 
 #include "vast/span.hpp"
-#include "vast/test/type_ids.hpp"
 
 #include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/detail/stringification_inspector.hpp>
@@ -24,27 +23,9 @@
 #include <optional>
 #include <set>
 #include <string>
-#include <string_view>
 
 // Work around missing namespace qualification in CAF header.
 using ::caf::term;
-
-namespace caf {
-
-template <>
-struct inspector_access<std::string_view> {
-  static auto apply(detail::stringification_inspector& f, std::string_view& x) {
-    auto str = std::string{x};
-    return f.apply(str);
-  }
-
-  static bool
-  save_field(detail::stringification_inspector&, string_view, auto&, auto&) {
-    return true;
-  }
-};
-
-} // namespace caf
 
 namespace vast::test::detail {
 

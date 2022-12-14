@@ -61,7 +61,7 @@ template <concrete_type T>
 auto check_column(const table_slice& slice, int c, const T& t,
                   const std::vector<data>& ref) {
   for (size_t r = 0; r < ref.size(); ++r)
-    CAF_CHECK_EQUAL(slice.at(r, c, type{t}), make_view(ref[r]));
+    CHECK_EQUAL(materialize(slice.at(r, c, type{t})), ref[r]);
 }
 
 count operator"" _c(unsigned long long int x) {
@@ -416,9 +416,9 @@ TEST(single column - list of integers) {
   list list2{10_i, 20_i};
   auto slice = make_slice(layout, list1, caf::none, list2);
   REQUIRE_EQUAL(slice.rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), make_view(list2));
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), list1);
+  CHECK(!slice.at(1, 0, t));
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(2, 0, t)), list2);
   CHECK_ROUNDTRIP(slice);
   record_batch_roundtrip(slice);
 }
@@ -546,8 +546,8 @@ TEST(single column - list of record) {
   list list1{record{{"a", "123"}}, caf::none};
   auto slice = make_slice(layout, list1, caf::none);
   REQUIRE_EQUAL(slice.rows(), 2u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), std::nullopt);
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), list1);
+  CHECK(!slice.at(1, 0, t));
   CHECK_ROUNDTRIP(slice);
   record_batch_roundtrip(slice);
 }
@@ -559,9 +559,9 @@ TEST(single column - list of strings) {
   list list2{"a"s, "b"s, "c"s};
   auto slice = make_slice(layout, list1, list2, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(list2));
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), list1);
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(1, 0, t)), list2);
+  CHECK(!slice.at(2, 0, t));
   CHECK_ROUNDTRIP(slice);
   record_batch_roundtrip(slice);
 }
@@ -579,9 +579,9 @@ TEST(single column - list of list of integers) {
   list list2{list11, list12};
   auto slice = make_slice(layout, caf::none, list1, list2);
   REQUIRE_EQUAL(slice.rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0, llt), std::nullopt);
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, llt), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, llt), make_view(list2));
+  CHECK(!slice.at(0, 0, llt));
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(1, 0, llt)), list1);
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(2, 0, llt)), list2);
   CHECK_ROUNDTRIP(slice);
   record_batch_roundtrip(slice);
 }
@@ -593,9 +593,9 @@ TEST(single column - map) {
   map map2{{"a"s, 0_c}, {"b"s, {}}, {"c", 2_c}};
   auto slice = make_slice(layout, map1, map2, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(map1));
-  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), make_view(map2));
-  CHECK_VARIANT_EQUAL(slice.at(2, 0, t), std::nullopt);
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), map1);
+  CHECK_VARIANT_EQUAL(materialize(*slice.at(1, 0, t)), map2);
+  CHECK(!slice.at(2, 0, t));
   CHECK_ROUNDTRIP(slice);
   record_batch_roundtrip(slice);
 }

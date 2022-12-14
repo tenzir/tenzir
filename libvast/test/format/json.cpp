@@ -93,9 +93,9 @@ TEST(json to data) {
     std::integral_constant<
       int, caf::detail::tl_index_of<data::types, real>::value>());
   CHECK(std::abs(r - real{4.2}) < 0.000001);
-  CHECK_EQUAL(slice.at(0, 3), data{integer{-1337}});
-  CHECK_EQUAL(slice.at(0, 4), data{std::string{"0123456789®\r\n"}});
-  CHECK_EQUAL(slice.at(0, 5), data{std::string{"42.42"}});
+  CHECK_EQUAL(materialize(slice.at(0, 3)), integer{-1337});
+  CHECK_EQUAL(materialize(slice.at(0, 4)), "0123456789®\r\n");
+  CHECK_EQUAL(materialize(slice.at(0, 5)), "42.42");
   std::array<std::uint8_t, 4> addr1{147, 32, 84, 165};
   CHECK(slice.at(0, 6) == data{address::v4(std::span{addr1})});
   std::array<std::uint8_t, 4> addr2{192, 168, 0, 1};

@@ -204,7 +204,7 @@ TEST(replace operator) {
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(0).name,
     "uid");
   const auto table_slice = as_table_slice(replaced);
-  CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
+  CHECK_EQUAL(materialize(table_slice.at(0, 0)), "xxx");
 }
 
 TEST(extend operator) {
@@ -223,7 +223,7 @@ TEST(extend operator) {
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(3).name,
     "secret");
   const auto table_slice = as_table_slice(replaced);
-  CHECK_EQUAL(table_slice.at(0, 3), vast::data_view{"xxx"sv});
+  CHECK_EQUAL(materialize(table_slice.at(0, 3)), "xxx");
 }
 
 TEST(where operator) {
@@ -314,7 +314,7 @@ TEST(pipeline with multiple steps) {
   CHECK_EQUAL(
     caf::get<vast::record_type>((*transformed)[0].layout()).field(0).name, "ui"
                                                                            "d");
-  CHECK_EQUAL(((*transformed)[0]).at(0, 0), vast::data_view{"xxx"sv});
+  CHECK_EQUAL(materialize((*transformed)[0].at(0, 0)), "xxx");
   auto wrong_layout = vast::type{"stub", testdata_layout};
   wrong_layout.assign_metadata(vast::type{"foo", vast::type{}});
   auto builder = vast::factory<vast::table_slice_builder>::make(
@@ -338,9 +338,9 @@ TEST(pipeline with multiple steps) {
   CHECK_EQUAL(
     caf::get<vast::record_type>((*not_transformed)[0].layout()).field(2).name,
     "index");
-  CHECK_EQUAL((*not_transformed)[0].at(0, 0), vast::data_view{"asdf"sv});
-  CHECK_EQUAL((*not_transformed)[0].at(0, 1), vast::data_view{"jklo"sv});
-  CHECK_EQUAL((*not_transformed)[0].at(0, 2), vast::data{vast::integer{23}});
+  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 0)), "asdf");
+  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 1)), "jklo");
+  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), vast::integer{23});
 }
 
 TEST(pipeline rename layout) {

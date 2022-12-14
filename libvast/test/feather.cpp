@@ -54,7 +54,8 @@ auto compare_table_slices(const table_slice& left, const table_slice& right) {
   // CHECK_EQUAL(left.offset(), right.offset());
   for (size_t col = 0; col < left.columns(); ++col) {
     for (size_t row = 0; row < left.rows(); ++row) {
-      CHECK_VARIANT_EQUAL(left.at(row, col), right.at(row, col));
+      CHECK_EQUAL(materialize(left.at(row, col)),
+                  materialize(right.at(row, col)));
     }
   }
 }

@@ -76,8 +76,9 @@ TEST(column view) {
     CHECK_EQUAL(cview.index(), column);
     CHECK_EQUAL(cview.size(), sut.rows());
     for (size_t row = 0; row < cview.size(); ++row)
-      CHECK_EQUAL(cview[row],
-                  sut.at(row, column, flat_layout.field(column).type));
+      CHECK_EQUAL(
+        materialize(cview[row]),
+        materialize(sut.at(row, column, flat_layout.field(column).type)));
   }
 }
 
@@ -90,8 +91,9 @@ TEST(row view) {
     CHECK_EQUAL(rview.index(), row);
     CHECK_EQUAL(rview.size(), sut.columns());
     for (size_t column = 0; column < rview.size(); ++column)
-      CHECK_EQUAL(rview[column],
-                  sut.at(row, column, flat_layout.field(column).type));
+      CHECK_EQUAL(
+        materialize(rview[column]),
+        materialize(sut.at(row, column, flat_layout.field(column).type)));
   }
 }
 

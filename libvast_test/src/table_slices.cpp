@@ -207,7 +207,7 @@ void table_slices::test_add() {
   for (size_t row = 0; row < slice.rows(); ++row)
     for (size_t col = 0; col < slice.columns(); ++col) {
       MESSAGE("checking value at (" << row << ',' << col << ')');
-      CHECK_EQUAL(slice.at(row, col), at(row, col));
+      CHECK_EQUAL(materialize(slice.at(row, col)), materialize(at(row, col)));
     }
 }
 
