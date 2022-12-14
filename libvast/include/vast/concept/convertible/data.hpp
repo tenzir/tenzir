@@ -91,16 +91,13 @@ caf::error insert_to_map(To& dst, typename To::key_type&& key,
 // clang-format on
 
 template <class... Args>
-// TODO in future CAF. Maybe it will be allowed to change the context of
-// caf::error instead of creating a new object
+// TODO CAF 0.19. Check if context of the
+// caf::error can be mutated instead of creating a new object
 [[nodiscard]] caf::error
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
   if (!in)
     return std::move(in);
-  if (in.category() != caf::type_id_v<vast::ec>) {
-    VAST_WARN("Prepend got non vast error: {}. Returning original error", in);
-    return std::move(in);
-  }
+  VAST_ASSERT(in.category() == caf::type_id_v<vast::ec>);
   auto hdl = caf::message_handler{
     [&, f = fmt::format("{}{{}}", fstring)](std::string& s) {
       return caf::make_message(fmt::format(

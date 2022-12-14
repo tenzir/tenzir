@@ -12,6 +12,7 @@
 
 #include "vast/bits.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/iterator.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/raise_error.hpp"
@@ -188,7 +189,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bitvector& b) {
-    return f.apply(b.blocks_) && f.apply(b.size_);
+    return detail::apply_all(f, b.blocks_, b.size_);
   }
 
   friend auto

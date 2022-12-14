@@ -12,6 +12,7 @@
 
 #include "vast/concept/printable/print.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/range.hpp"
@@ -51,7 +52,7 @@ struct legacy_attribute : detail::totally_ordered<legacy_attribute> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, legacy_attribute& a) -> bool {
-    return f.apply(a.key) && f.apply(a.value);
+    return detail::apply_all(f, a.key, a.value);
   }
 
   std::string key;
