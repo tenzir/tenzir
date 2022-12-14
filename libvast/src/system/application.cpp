@@ -314,7 +314,7 @@ auto make_version_command() {
 
 auto make_command_factory() {
   // When updating this list, remember to update its counterpart in node.cpp as
-  // well iff necessary
+  // well if necessary
   // clang-format off
   auto result = command::factory{
     {"count", count_command},
