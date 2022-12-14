@@ -9,6 +9,8 @@
 #include "vast/config.hpp"
 #include "vast/die.hpp"
 
+#include <array>
+
 namespace vast::version {
 
 const char* version = "@VAST_VERSION_TAG@";
