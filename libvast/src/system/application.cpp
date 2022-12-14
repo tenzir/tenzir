@@ -16,6 +16,7 @@
 #include "vast/plugin.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
+#include "vast/system/exec_command.hpp"
 #include "vast/system/explore_command.hpp"
 #include "vast/system/import_command.hpp"
 #include "vast/system/infer_command.hpp"
@@ -52,6 +53,13 @@ auto make_count_command() {
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<bool>("estimate,e", "estimate an upper bound by "
                                "skipping candidate checks"));
+}
+
+auto make_exec_command() {
+  return std::make_unique<command>(
+    "exec", "execute a pipeline",
+    opts("?vast.exec")
+      .add<std::string>("pipeline", "pipeline string"));
 }
 
 auto make_explore_command() {
@@ -310,6 +318,7 @@ auto make_command_factory() {
   // clang-format off
   auto result = command::factory{
     {"count", count_command},
+    {"exec", exec_command},
     {"explore", explore_command},
     {"export ascii", make_writer_command("ascii")},
     {"export csv", make_writer_command("csv")},
@@ -425,6 +434,7 @@ auto make_root_command(std::string_view path) {
   ob = add_index_opts(std::move(ob));
   auto root = std::make_unique<command>(path, "", std::move(ob));
   root->add_subcommand(make_count_command());
+  root->add_subcommand(make_exec_command());
   root->add_subcommand(make_explore_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
