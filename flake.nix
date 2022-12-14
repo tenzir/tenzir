@@ -46,13 +46,15 @@
       apps.stream-image = {
         type = "app";
         program = "${pkgs.dockerTools.streamLayeredImage {
-          name = "tenzir/vast";
+          name = "tenzir/vast-slim";
           tag = "latest";
           config = let
             vast-dir = "/var/lib/vast";
           in {
             Entrypoint = [ "${self.packages.${system}."vast-static"}/bin/vast" ];
             Env = [
+              # When changing these, make sure to also update the entries in the
+              # Dockerfile.
               "VAST_ENDPOINT=0.0.0.0:42000"
               "VAST_DB_DIRECTORY=${vast-dir}"
               "VAST_LOG_FILE=/var/log/vast/server.log"
