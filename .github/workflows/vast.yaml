@@ -471,18 +471,8 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-vast-nix == 'true' }}
-    name: VAST (Nix, ${{ matrix.nix.target }})
+    name: VAST (Nix)
     runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        nix:
-          # We keep this single entry matrix so we can add a non-static
-          # variation without much hassle in the future.
-          - target: "vast"
-            build-options: >-
-              -DVAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
-              -DVAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
-              -DCPACK_PACKAGE_FILE_NAME:STRING="vast-${{ needs.configure.outputs.build-version }}"
     env:
       BUILD_DIR: build
     steps:
@@ -502,18 +492,20 @@ jobs:
       - name: Build Static Packages
         id: build_static_packages
         env:
-          STATIC_BINARY_TARGET: ${{ matrix.nix.target }}
+          STATIC_BINARY_TARGET: vast
           VAST_BUILD_VERSION: ${{ needs.configure.outputs.build-version }}
           VAST_BUILD_VERSION_SHORT: ${{ needs.configure.outputs.build-version-short }}
         run: |
           STORE_PATH=$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
-            ${{ matrix.nix.build-options }})
+            -DVAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF \
+            -DVAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF \
+            -DCPACK_PACKAGE_FILE_NAME:STRING="vast-${VAST_BUILD_VERSION}")
           echo "store_path=${STORE_PATH}" >> $GITHUB_OUTPUT
       - name: Get Artifact Names
         id: get_artifact_names
         run: |
-          TAR_GZ=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.tar.gz")
-          DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.deb")
+          TAR_GZ=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "vast.*.tar.gz")
+          DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "vast.*.deb")
           echo "tar_gz=${TAR_GZ}" >> $GITHUB_OUTPUT
           echo "deb=${DEB}" >> $GITHUB_OUTPUT
       - name: Run Integration Tests
@@ -526,19 +518,19 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: "vast-integration-test-nix-static-${{ matrix.nix.target }}"
+          name: "vast-integration-test-nix-static-vast"
           path: "vast-integration-test"
           if-no-files-found: error
       - name: Upload Tarball to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ matrix.nix.target }}.tar.gz"
+          name: "vast.tar.gz"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
           if-no-files-found: error
       - name: Upload Debian Package to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ matrix.nix.target }}.deb"
+          name: "vast.deb"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
           if-no-files-found: error
       - name: Setup Python
@@ -561,8 +553,8 @@ jobs:
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.deb"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.deb"
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
         env:
@@ -570,8 +562,8 @@ jobs:
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_gz }}" | cut -d"-" -f2)
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.deb"
+          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.deb"
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete Release Assets
@@ -584,7 +576,7 @@ jobs:
           fail-if-no-assets: false
           # only delete assets when `tag` refers to a release
           fail-if-no-release: true
-          assets: "${{ matrix.nix.target }}-linux-static.tar.gz"
+          assets: "vast-linux-static.tar.gz"
       - name: Upload Release Tarball
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
@@ -596,7 +588,7 @@ jobs:
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
           # for a build of the latest release.
-          asset_name: "${{ matrix.nix.target }}-linux-static.tar.gz"
+          asset_name: "vast-linux-static.tar.gz"
           asset_content_type: application/gzip
       - name: Upload Debian Release Package
         if: github.event_name == 'release'
@@ -609,7 +601,7 @@ jobs:
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb
           # for a build of the latest release.
-          asset_name: "${{ matrix.nix.target }}-linux-static.deb"
+          asset_name: "vast-linux-static.deb"
           asset_content_type: application/vnd.debian.binary-package
 
   docker-vast-slim:
