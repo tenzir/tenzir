@@ -134,7 +134,7 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     }
     return state_ptr;
   }
-  if (auto ext_index = index_fbs.external_container_idx_caf_0_17()) {
+  if (auto ext_index = index_fbs.caf_0_17_external_container_idx()) {
     auto uncompressed_data = uncompress(container.get_raw(ext_index));
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
@@ -145,7 +145,7 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     }
     return state_ptr;
   }
-  if (auto ext_index = index_fbs.external_container_idx_caf_0_18()) {
+  if (auto ext_index = index_fbs.caf_0_18_external_container_idx()) {
     auto uncompressed_data = uncompress(container.get_raw(ext_index));
     auto bytes = as_bytes(*uncompressed_data);
     caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};

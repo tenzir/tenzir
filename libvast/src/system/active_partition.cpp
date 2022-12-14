@@ -260,7 +260,7 @@ pack_full(const active_partition_state::serialization_data& x,
     if (chunk)
       vbuilder.add_decompressed_size(chunk->size());
     if (external_idx > 0)
-      vbuilder.add_external_container_idx_caf_0_18(external_idx);
+      vbuilder.add_caf_0_18_external_container_idx(external_idx);
     else
       vbuilder.add_caf_0_18_data(data);
     auto vindex = vbuilder.Finish();

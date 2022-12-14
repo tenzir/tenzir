@@ -235,9 +235,9 @@ void print_partition_legacy(
           size_string = print_bytesize(valid_data->size(), options.format);
         }
         auto valid_container_idx
-          = legacy_index->external_container_idx_caf_0_17() > 0
-              ? legacy_index->external_container_idx_caf_0_17()
-              : legacy_index->external_container_idx_caf_0_18();
+          = legacy_index->caf_0_17_external_container_idx() > 0
+              ? legacy_index->caf_0_17_external_container_idx()
+              : legacy_index->caf_0_18_external_container_idx();
         if (valid_container_idx) {
           if (valid_data)
             fmt::print("!! index {} has both inline and external data\n", name);

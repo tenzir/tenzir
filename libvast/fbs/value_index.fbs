@@ -6,6 +6,7 @@ namespace vast.fbs.value_index.detail;
 
 table LegacyValueIndex {
   /// A value index serialized using CAF 0.17's binary serializer.
+  /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
   caf_0_17_data: [ubyte];
 
   /// The size of the value index before compression. A value of zero indicates
@@ -17,11 +18,12 @@ table LegacyValueIndex {
   /// because we can't distinguish `0` from "Field doesn't exist", but that's fine
   /// here because the partition itself will always occupy index 0 of the external
   /// container.
-  external_container_idx_caf_0_17: ulong;
+  /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
+  caf_0_17_external_container_idx: ulong;
 
   caf_0_18_data: [ubyte];
 
-  external_container_idx_caf_0_18: ulong;
+  caf_0_18_external_container_idx: ulong;
 }
 
 table ValueIndexBase {
