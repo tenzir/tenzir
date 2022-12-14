@@ -146,6 +146,9 @@ std::vector<std::string_view> split(std::string_view str, std::string_view sep,
                                     size_t max_splits = -1,
                                     bool include_sep = false);
 
+
+std::string_view trim(std::string_view str);
+
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.
 /// @returns a vector of strings with the split elements.

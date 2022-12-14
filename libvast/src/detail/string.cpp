@@ -153,6 +153,15 @@ std::vector<std::string_view> split(std::string_view str, std::string_view sep,
   return pos;
 }
 
+std::string_view trim(std::string_view str) {
+  auto not_space = [](char c) {
+    return std::isspace(c) == 0;
+  };
+  auto begin = std::find_if(str.begin(), str.end(), not_space);
+  auto end = std::find_if(str.rbegin(), str.rend(), not_space).base();
+  return {begin, end};
+}
+
 std::vector<std::string> to_strings(const std::vector<std::string_view>& v) {
   std::vector<std::string> strs;
   strs.resize(v.size());
