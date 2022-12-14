@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/system/exec_command.hpp"
+#include "vast/command.hpp"
 
 #include "vast/command.hpp"
 #include "vast/system/make_pipelines.hpp"
