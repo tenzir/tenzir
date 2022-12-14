@@ -249,7 +249,6 @@ private:
       x = chunk::make_empty();
       return true;
     }
-
     auto buffer = std::make_unique<chunk::value_type[]>(size);
     const auto data = buffer.get();
     for (auto i = 0; i < size; ++i)
@@ -257,7 +256,6 @@ private:
         x = nullptr;
         return false;
       }
-
     x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
       static_cast<void>(buffer);
     });
@@ -271,7 +269,6 @@ private:
       return f.apply(chunk::invalid_size);
     if (!f.apply(narrow<int64_t>(x->size())))
       return false;
-
     for (auto byte : *x)
       if (!f.apply(byte))
         return false;

@@ -118,9 +118,8 @@ public:
       x.bits_.shrink_to_fit();
       return true;
     };
-
     return f.object(x)
-      .pretty_name("bloom_filter")
+      .pretty_name("vast.bloom-filter")
       .on_load(load_callback)
       .fields(f.field("hasher", x.hasher_), f.field("bits", x.bits_));
   }

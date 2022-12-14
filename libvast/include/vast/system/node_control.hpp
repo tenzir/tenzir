@@ -46,7 +46,7 @@ get_node_components(caf::scoped_actor& self, const node_actor& node) {
   auto normalize = [](caf::string_view in) {
     // Remove the uninteresting parts of the name:
     //   vast::system::type_registry_actor -> type_registry
-    auto str = std::string{in.data()};
+    auto str = std::string{in.data(), in.data() + in.size()};
     str.erase(0, sizeof("vast::system::") - 1);
     str.erase(str.size() - (sizeof("_actor") - 1));
     // Replace '_' with '-': type_registry -> type-registry

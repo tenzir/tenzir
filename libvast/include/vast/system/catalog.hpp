@@ -103,7 +103,8 @@ struct catalog_result {
   friend auto inspect(Inspector& f, kind& x) {
     return detail::inspect_enum(f, x);
   }
-  kind kind{kind::exact};
+
+  enum kind kind{kind::exact};
   std::vector<partition_info> partitions;
 
   template <class Inspector>

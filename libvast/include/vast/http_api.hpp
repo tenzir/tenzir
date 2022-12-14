@@ -82,7 +82,6 @@ struct rest_endpoint {
         = params ? caf::get<record_type>(params) : std::optional<record_type>{};
       return true;
     };
-
     return f.object(e)
       .pretty_name("vast.rest_endpoint")
       .on_load(cb)

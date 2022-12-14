@@ -62,7 +62,7 @@ serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
   caf::byte_buffer buf;
   caf::binary_serializer source(nullptr, buf);
   if (!source.apply(x))
-    return caf::make_error(ec::serialization_error, "Cannot serialize bytes");
+    return caf::make_error(ec::serialization_error, "failed to serialize bytes");
   return builder.CreateVector(reinterpret_cast<const Byte*>(buf.data()),
                               buf.size());
 }
