@@ -138,3 +138,43 @@ using a pluggable *writer* for a given output format, e.g., JSON, CSV, or PCAP.
 This component is not yet implemented. Until then, the [SINK](#SINK)
 performs both output formatting and subsequent I/O.
 :::
+
+## Component Interaction
+
+This section provides examples of how the different compentents interact.
+
+### Ingestion
+
+Sending data to VAST (aka *ingesting*) involves spinning up a VAST client
+that parses and ships the data to a [VAST server](/docs/use/run):
+
+![Ingest process](/img/ingest.light.png#gh-light-mode-only)
+![Ingest process](/img/ingest.dark.png#gh-dark-mode-only)
+
+VAST first acquires data through a *carrier* that represents the data transport
+medium. This typically involves I/O and has the effect of slicing the data into
+chunks of bytes. Thereafter, the *format* determines how to parse the bytes into
+structured events. On the VAST server, a partition builder (1) creates
+sketches for accelerating querying, and (2) creates a *store* instance by
+transforming the in-memory Arrow representation into an on-disk format, e.g.,
+Parquet.
+
+Loading and parsing take place in a separate VAST client to facilitate
+horizontal scaling. The `import` command creates a client for precisly this
+task.
+
+At the server, there exists one partition builder per schema. After a
+partition builder has reached a maximum number of events or reached a timeout,
+it sends the partition to the catalog to register it.
+
+:::note Lakehouse Architecture
+VAST uses open standards for data in motion ([Arrow](https://arrow.apache.org))
+and data at rest ([Parquet](https://parquet.apache.org/)). You only ETL data
+once to a destination of your choice. In that sense, VAST resembles a [lakehouse
+architecture][lakehouse-paper]. Think of the above pipeline as a chain of
+independently operating microservices, each of which can be scaled
+independently. The [actor
+model](/docs/understand/architecture/actor-model/) architecture of
+VAST enables this naturally.
+[lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf
+:::
