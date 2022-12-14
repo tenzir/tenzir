@@ -30,6 +30,29 @@ type suricata.component.app_proto = record {
   app_proto: string
 }
 
+type suricata.component.ja3 = record {
+      hash: string #index=hash,
+      string: string,
+}
+
+type suricata.component.quic_extensions = record {
+  name: string,
+  type: count,
+  values: list<string>,
+}
+
+type suricata.quic = suricata.component.common + record {
+  quic: record {
+    version: count,
+    sni: string,
+    ua: string,
+    ja3: suricata.component.ja3,
+    ja3s: suricata.component.ja3,
+    cyu: list<suricata.component.ja3>,
+    extensions: list<suricata.component.quic_extensions>,
+  }
+}
+
 type suricata.alert = suricata.component.common + record {
   alert: record {
     app_proto: string,
@@ -711,14 +734,8 @@ type suricata.tls = suricata.component.common + record {
     issuerdn: string,
     serial: string,
     fingerprint: string,
-    ja3: record {
-      hash: string #index=hash,
-      string: string
-    },
-    ja3s: record {
-      hash: string #index=hash,
-      string: string
-    },
+    ja3: suricata.component.ja3,
+    ja3s: suricata.component.ja3,
     notbefore: time,
     notafter: time
   }
