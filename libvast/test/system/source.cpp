@@ -14,11 +14,11 @@
 
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/system/catalog.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/data.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/attach_stream_sink.hpp>
 
