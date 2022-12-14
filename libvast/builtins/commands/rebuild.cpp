@@ -419,7 +419,7 @@ struct rebuilder_state {
           if (!run->options.all) {
             std::erase_if(
               result.partitions, [&](const partition_info& partition) {
-                return partition.version >= version::partition_version;
+                return partition.version >= version::current_partition_version;
               });
           }
           if (result.partitions.empty())
@@ -580,7 +580,8 @@ struct rebuilder_state {
     // oversized or not of the latest partition version.
     const auto skip_rebuild
       = run->options.undersized && current_run_partitions.size() == 1
-        && current_run_partitions[0].version == version::partition_version
+        && current_run_partitions[0].version
+             == version::current_partition_version
         && current_run_partitions[0].events <= max_partition_size;
     if (skip_rebuild) {
       VAST_DEBUG("{} skips rebuilding of undersized partition {} because no "

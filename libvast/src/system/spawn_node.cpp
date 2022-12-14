@@ -10,7 +10,6 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
-#include "vast/db_version.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/pid_file.hpp"
 #include "vast/logger.hpp"
@@ -54,20 +53,6 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
                              fmt::format("unable to create db-directory {}: {}",
                                          abs_dir, err.message()));
   }
-  // Write VERSION file if it doesnt exist yet. Note that an empty db dir
-  // often already exists before the node is initialized, e.g., when the log
-  // output is written into the same directory.
-  if (auto err = initialize_db_version(abs_dir))
-    return err;
-  if (const auto version = read_db_version(abs_dir);
-      version != db_version::latest) {
-    VAST_INFO("Cannot start VAST, breaking changes detected in the database "
-              "directory");
-    auto reasons = describe_breaking_changes_since(version);
-    return caf::make_error(
-      ec::breaking_change,
-      "breaking changes in the current database directory:", reasons);
-  }
   if (const auto is_writable = ::access(abs_dir.c_str(), W_OK) == 0;
       !is_writable)
     return caf::make_error(
@@ -78,6 +63,14 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   VAST_DEBUG("node acquires PID lock {}", pid_file.string());
   if (auto err = detail::acquire_pid_file(pid_file))
     return err;
+  // Remove old VERSION file if it exists. This can be removed once the minimum
+  // partition version is >= 3.
+  {
+    auto err = std::error_code{};
+    std::filesystem::remove(abs_dir / "VERSION", err);
+    if (err)
+      VAST_WARN("failed to remove outdated VERSION file: {}", err.message());
+  }
   // Spawn the node.
   VAST_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to system::node.

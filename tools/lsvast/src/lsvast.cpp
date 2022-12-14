@@ -42,16 +42,8 @@ caf::expected<Kind> classify(const std::filesystem::path& path) {
   if (err)
     return caf::make_error(vast::ec::filesystem_error,
                            "Invalid path: " + path.string(), err.message());
-  if (is_directory) {
-    auto version_file = path / "VERSION";
-    auto is_regular_file = std::filesystem::is_regular_file(version_file, err);
-    if (err)
-      return caf::make_error(vast::ec::filesystem_error,
-                             "Invalid path: " + version_file.string(),
-                             err.message());
-    if (is_regular_file)
-      return Kind::DatabaseDir;
-  }
+  if (is_directory)
+    return Kind::DatabaseDir;
   const auto is_regular_file = std::filesystem::is_regular_file(path, err);
   if (err)
     return caf::make_error(vast::ec::filesystem_error,

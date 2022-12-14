@@ -88,7 +88,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
         0ull,
         vast::time::min(),
         vast::type{},
-        version::partition_version,
+        version::current_partition_version,
       }};
     },
     [=](atom::resolve, vast::expression) -> system::catalog_result {
