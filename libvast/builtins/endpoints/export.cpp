@@ -540,7 +540,7 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         auto error = convert(record.at("steps"), settings);
         if (error)
           return rq.response->abort(400, "couldn't convert pipeline "
-                                         "definition\n");
+                                         "definition to caf::settings\n");
         if (!caf::holds_alternative<caf::config_value::list>(settings))
           return rq.response->abort(400, "expected a list of steps\n");
         auto& steps = caf::get<caf::config_value::list>(settings);

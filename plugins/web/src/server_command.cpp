@@ -137,8 +137,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         auto maybe_content_type
           = header.opt_value_of(restinio::http_field_t::content_type);
         if (maybe_content_type == "application/x-www-form-urlencoded") {
-          query_params
-            = parse_query_params(response->request()->header().query());
+          query_params = parse_query_params(body);
           if (!query_params)
             return response->abort(400, fmt::format("failed to parse query "
                                                     "parameters: "
@@ -158,18 +157,20 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
-          auto restinio_name
-            = restinio::string_view_t{name.data(), name.size()};
-          auto maybe_param = query_params->get_param(restinio_name);
-          if (!maybe_param)
-            maybe_param = route_params.get_param(restinio_name);
-          if (!maybe_param && body_params.has_value())
-            if (auto maybe_string = body_params->at_key(restinio_name);
-                maybe_string.is_string())
-              maybe_param = std::string_view{maybe_string.get_c_str()};
+          // TODO: Warn and/or return an error if the same parameter
+          // is passed using multiple methods.
+          auto maybe_param = std::optional<std::string>{};
+          if (auto query_param = query_params->get_param(name))
+            maybe_param = std::string{*query_param};
+          if (auto route_param = route_params.get_param(name))
+            maybe_param = std::string{*route_param};
+          if (body_params.has_value())
+            if (auto maybe_value = body_params->at_key(name);
+                maybe_value.error() != simdjson::NO_SUCH_FIELD)
+              maybe_param = simdjson::minify(maybe_value.value());
           if (!maybe_param)
             continue;
-          auto string_value = std::string{*maybe_param};
+          auto string_value = *maybe_param;
           auto typed_value
             = caf::visit(
               detail::overload{
@@ -192,11 +193,9 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                 },
               },
               leaf.field.type);
-          if (!typed_value) {
-            response->abort(422, fmt::format("failed to parse parameter '{}'\n",
-                                             name));
-            return;
-          }
+          if (!typed_value)
+            return response->abort(
+              422, fmt::format("failed to parse parameter '{}'\n", name));
           params[name] = std::move(*typed_value);
         }
       }
