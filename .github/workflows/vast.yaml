@@ -68,7 +68,8 @@ jobs:
       vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
-      run-docker: ${{ steps.configure.outputs.run-docker }}
+      run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
+      run-docker-vast-slim: ${{ steps.configure.outputs.run-docker-vast-slim }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
@@ -157,7 +158,8 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]] || ! is_unchanged .github/workflows/vast.yaml; then
             echo "run-changelog=true" >> $GITHUB_OUTPUT
             echo "run-vast-io=true" >> $GITHUB_OUTPUT
-            echo "run-docker=true" >> $GITHUB_OUTPUT
+            echo "run-docker-vast=true" >> $GITHUB_OUTPUT
+            echo "run-docker-vast-slim=true" >> $GITHUB_OUTPUT
             echo "run-docker-compose=true" >> $GITHUB_OUTPUT
             echo "run-vast-nix=true" >> $GITHUB_OUTPUT
             echo "run-vast=true" >> $GITHUB_OUTPUT
@@ -203,13 +205,13 @@ jobs:
             run_docker_compose=true
           fi
           echo "run-docker-compose=${run_docker_compose}" >> $GITHUB_OUTPUT
-          run_docker=${run_docker_compose}
+          run_docker_vast=${run_docker_compose}
           if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_docker=false
+            run_docker_vast=false
           elif ${run_vast_io}; then
-            run_docker=true
+            run_docker_vast=true
           fi
-          echo "run-docker=${run_docker}" >> $GITHUB_OUTPUT
+          echo "run-docker-vast=${run_docker_vast}" >> $GITHUB_OUTPUT
           run_vast_nix=${run_vast}
           if ${run_vast_plugins}; then
             run_vast_nix=true
@@ -219,6 +221,11 @@ jobs:
             run_vast_nix=true
           fi
           echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
+          run_docker_vast_slim="${run_vast_nix}"
+          elif [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+            run_docker_vast_slim='false'
+          fi
+          echo "run-docker-vast-slim=${run_docker_vast_slim}" >> $GITHUB_OUTPUT
 
   changelog:
     name: Changelog
@@ -259,7 +266,7 @@ jobs:
     needs:
       - configure
       - changelog
-      - docker
+      - docker-vast
     if: ${{ needs.configure.outputs.run-vast-io == 'true' }}
     name: vast.io
     runs-on: ubuntu-20.04
@@ -310,11 +317,11 @@ jobs:
           user_name: tenzir-bot
           user_email: engineering@tenzir.com
 
-  docker:
+  docker-vast:
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-docker == 'true' }}
-    name: Docker
+    if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
+    name: Docker (tenzir/vast)
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -392,7 +399,7 @@ jobs:
 
   docker-compose:
     needs:
-      - docker
+      - docker-vast
       - configure
     if: ${{ needs.configure.outputs.run-docker-compose == 'true' }}
     name: Docker Compose
@@ -432,7 +439,7 @@ jobs:
 
   example-notebooks:
     needs:
-      - docker
+      - docker-vast
       - configure
     if: ${{ needs.configure.outputs.run-example-notebooks == 'true' }}
     name: Build Example Notebooks
@@ -604,6 +611,70 @@ jobs:
           # for a build of the latest release.
           asset_name: "${{ matrix.nix.target }}-linux-static.deb"
           asset_content_type: application/vnd.debian.binary-package
+
+  docker-vast-slim:
+    needs:
+      - configure
+    if: needs.configure.outputs.run-docker-vast-slim == 'true'
+    name: Docker (tenzir/vast-slim)
+    runs-on: ubuntu-20.04
+    env:
+      BUILD_DIR: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Install Nix
+        uses: cachix/install-nix-action@v18
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v12
+        with:
+          name: vast
+          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: tenzir-bot
+          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+      - name: Build Docker Image
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          nix run github:tenzir/vast/topic/flake-docker-image#stream-image | docker load
+      - name: Upload Docker Image
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          images=('tenzir/vast-slim')
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            registries=('ghcr.io/')
+            tags=("${{ needs.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            registries=('' 'ghcr.io/')
+            tags=('latest' "${{ github.sha }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            registries=('' 'ghcr.io/')
+            tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
+          else
+            2>& echo "unexpected github.event_name '${GITHUB_EVENT_NAME}'"
+            exit 1
+          fi
+          for registry in "${registries[@]}"; do
+            for image in "${images[@]}"; do
+              for tag in "${tags[@]}"; do
+                docker tag "${image}:latest" "${registry}${image}:${tag}"
+                docker push "${registry}${image}:${tag}"
+              done
+            done
+          done
 
   vast:
     needs:
@@ -1091,7 +1162,8 @@ jobs:
       - configure
       - changelog
       - vast-io
-      - docker
+      - docker-vast
+      - docker-vast-slim
       # We currently have a transient error on TheHive init script (sc-39576)
       # - docker-compose
       - example-notebooks
