@@ -58,8 +58,8 @@ auto make_count_command() {
 auto make_exec_command() {
   return std::make_unique<command>(
     "exec", "execute a pipeline",
-    opts("?vast.exec")
-      .add<std::string>("pipeline", "pipeline string"));
+    opts("?vast.exec"), true);
+      //.add<std::string>("pipeline", "pipeline string"));
 }
 
 auto make_explore_command() {
