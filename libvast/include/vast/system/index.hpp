@@ -36,6 +36,9 @@
 
 namespace vast::system {
 
+// 7 Returns the store path for a given partition id.
+std::filesystem::path store_path_for_partition(const uuid& id);
+
 /// The transformer replaces the old partition with the new one or keeps it
 /// depending on the value of keep_original_partition.
 enum class keep_original_partition : bool {
@@ -330,9 +333,6 @@ struct index_state {
   std::vector<partition_creation_listener_actor> partition_creation_listeners
     = {};
 
-  /// Actor handle of the store actor.
-  archive_actor global_store = {};
-
   /// Plugin responsible for spawning new partition-local stores.
   const vast::store_actor_plugin* store_actor_plugin = {};
 
@@ -359,7 +359,6 @@ struct index_state {
 /// @param accountant The accountant actor.
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
-/// @param archive The legacy archive actor. To be removed eventually (tm).
 /// @param catalog The catalog actor.
 /// @param dir The directory of the index.
 /// @param store_backend The store backend to use for new partitions.
@@ -379,11 +378,10 @@ struct index_state {
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
-      archive_actor archive, catalog_actor catalog,
-      const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, duration active_partition_timeout,
-      size_t max_inmem_partitions, size_t taste_partitions,
-      size_t max_concurrent_partition_lookups,
+      catalog_actor catalog, const std::filesystem::path& dir,
+      std::string store_backend, size_t partition_capacity,
+      duration active_partition_timeout, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config);
 
 } // namespace vast::system

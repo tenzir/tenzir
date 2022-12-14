@@ -15,6 +15,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/fbs/flatbuffer_container.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/legacy_type.hpp"
@@ -337,7 +338,6 @@ TEST(partition with multiple types) {
 TEST(identity partition pipeline via the index) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
-  auto archive = vast::system::archive_actor{};
   auto catalog
     = self->spawn(vast::system::catalog, accountant, directory / "types");
   const auto partition_capacity = 8;
@@ -346,12 +346,11 @@ TEST(identity partition pipeline via the index) {
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
   const auto index_config = vast::index_config{};
-  auto index
-    = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
-                  index_dir, vast::defaults::system::store_backend,
-                  partition_capacity, active_partition_timeout,
-                  in_mem_partitions, taste_count, num_query_supervisors,
-                  index_dir, index_config);
+  auto index = self->spawn(vast::system::index, accountant, filesystem, catalog,
+                           index_dir, vast::defaults::system::store_backend,
+                           partition_capacity, active_partition_timeout,
+                           in_mem_partitions, taste_count,
+                           num_query_supervisors, index_dir, index_config);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   // Get one of the partitions that were persisted.
@@ -439,7 +438,6 @@ TEST(identity partition pipeline via the index) {
 TEST(query after transform) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
-  auto archive = vast::system::archive_actor{};
   auto catalog
     = self->spawn(vast::system::catalog, accountant, directory / "types");
   const auto partition_capacity = vast::defaults::system::max_partition_size;
@@ -453,12 +451,11 @@ TEST(query after transform) {
       .create_partition_index = false,
     }},
   };
-  auto index
-    = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
-                  index_dir, vast::defaults::system::store_backend,
-                  partition_capacity, active_partition_timeout,
-                  in_mem_partitions, taste_count, num_query_supervisors,
-                  index_dir, index_config);
+  auto index = self->spawn(vast::system::index, accountant, filesystem, catalog,
+                           index_dir, vast::defaults::system::store_backend,
+                           partition_capacity, active_partition_timeout,
+                           in_mem_partitions, taste_count,
+                           num_query_supervisors, index_dir, index_config);
   vast::detail::spawn_container_source(sys, zeek_conn_log, index);
   run();
   // Persist the partition to disk
@@ -552,7 +549,6 @@ TEST(query after transform) {
 TEST(select pipeline with an empty result set) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
-  auto archive = vast::system::archive_actor{};
   auto catalog
     = self->spawn(vast::system::catalog, accountant, directory / "types");
   const auto partition_capacity = 8;
@@ -561,7 +557,7 @@ TEST(select pipeline with an empty result set) {
   const auto taste_count = 1;
   const auto num_query_supervisors = 10;
   auto index
-    = self->spawn(vast::system::index, accountant, filesystem, archive, catalog,
+    = self->spawn(vast::system::index, accountant, filesystem, catalog,
                   index_dir, vast::defaults::system::store_backend,
                   partition_capacity, active_partition_timeout,
                   in_mem_partitions, taste_count, num_query_supervisors,

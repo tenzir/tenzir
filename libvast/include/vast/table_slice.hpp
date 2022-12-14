@@ -299,9 +299,9 @@ private:
   chunk_ptr chunk_ = {};
 
   /// The offset of the table slice within its ID space.
-  /// @note Assigned by the importer on import and the archive on export and as
-  /// such not part of the FlatBuffers table. Binary representations of a table
-  /// slice do not contain the offset.
+  /// @note Assigned by the importer on import and and as such not part of the
+  /// FlatBuffers table. Binary representations of a table slice do not contain
+  /// the offset.
   id offset_ = invalid_id;
 
   /// A pointer to the table slice state. As long as the layout cannot be

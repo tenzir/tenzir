@@ -108,9 +108,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto index_dir = directory / "index";
     catalog = self->spawn(system::catalog, system::accountant_actor{},
                           directory / "types");
-    index = self->spawn(system::index, system::accountant_actor{}, fs,
-                        system::archive_actor{}, catalog, index_dir,
-                        defaults::system::store_backend, slice_size,
+    index = self->spawn(system::index, system::accountant_actor{}, fs, catalog,
+                        index_dir, defaults::system::store_backend, slice_size,
                         vast::duration{}, in_mem_partitions, taste_count,
                         num_query_supervisors, index_dir, vast::index_config{});
   }
@@ -263,11 +262,10 @@ TEST(oversized partition recovery) {
   auto catalog = self->spawn(system::catalog, system::accountant_actor{},
                              directory / "types");
   auto index
-    = self->spawn(system::index, system::accountant_actor{}, fs,
-                  system::archive_actor{}, catalog, index_dir,
-                  defaults::system::store_backend, 1000u, vast::duration{},
-                  in_mem_partitions, taste_count, num_query_supervisors,
-                  index_dir, vast::index_config{});
+    = self->spawn(system::index, system::accountant_actor{}, fs, catalog,
+                  index_dir, defaults::system::store_backend, 1000u,
+                  vast::duration{}, in_mem_partitions, taste_count,
+                  num_query_supervisors, index_dir, vast::index_config{});
   run();
   MESSAGE("query everything");
   auto [query_id, hits, scheduled]

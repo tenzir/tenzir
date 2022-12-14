@@ -44,12 +44,6 @@ command::opts_builder add_index_opts(command::opts_builder ob) {
     .add<size_t>("max-queries,q", "maximum number of concurrent queries");
 }
 
-command::opts_builder add_archive_opts(command::opts_builder ob) {
-  return std::move(ob)
-    .add<size_t>("segments,s", "number of cached segments")
-    .add<size_t>("max-segment-size,m", "maximum segment size in MB");
-}
-
 auto make_count_command() {
   return std::make_unique<command>(
     "count", "count hits for a query without exporting data",
@@ -250,8 +244,6 @@ auto make_spawn_command() {
                                          opts("?vast.spawn"));
   spawn->add_subcommand("accountant", "spawns the accountant",
                         opts("?vast.spawn.accountant"), false);
-  spawn->add_subcommand("archive", "creates a new archive",
-                        add_archive_opts(opts("?vast.spawn.archive")), false);
   spawn->add_subcommand(
     "explorer", "creates a new explorer",
     opts("?vast.spawn.explorer")
@@ -338,7 +330,6 @@ auto make_command_factory() {
     {"pivot", pivot_command},
     {"send", remote_command},
     {"spawn accountant", remote_command},
-    {"spawn archive", remote_command},
     {"spawn eraser", remote_command},
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
@@ -431,7 +422,6 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("connection-timeout", "the timeout for connecting to "
                                                 "a VAST server (default: 10s)");
   ob = add_index_opts(std::move(ob));
-  ob = add_archive_opts(std::move(ob));
   auto root = std::make_unique<command>(path, "", std::move(ob));
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_explore_command());

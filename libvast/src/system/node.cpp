@@ -40,7 +40,6 @@
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/system/shutdown.hpp"
-#include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_catalog.hpp"
 #include "vast/system/spawn_counter.hpp"
@@ -87,7 +86,7 @@ auto make_error_msg(ec code, std::string msg) {
 /// A list of components that are essential for importing and exporting data
 /// from the node.
 std::set<const char*> core_components = {
-  "accountant", "archive", "catalog", "filesystem", "importer", "index",
+  "accountant", "catalog", "filesystem", "importer", "index",
 };
 
 bool is_core_component(std::string_view type) {
@@ -110,8 +109,8 @@ bool is_singleton(std::string_view type) {
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
   const char* singletons[]
-    = {"accountant", "archive",  "disk-monitor", "eraser",
-       "filesystem", "importer", "index",        "catalog"};
+    = {"accountant", "disk-monitor", "eraser", "filesystem",
+       "importer",   "index",        "catalog"};
   auto pred = [&](const char* x) {
     return x == type;
   };
@@ -372,7 +371,6 @@ node_state::component_factory_fun lift_component_factory() {
 auto make_component_factory() {
   auto result = node_state::named_component_factory{
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
-    {"spawn archive", lift_component_factory<spawn_archive>()},
     {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
     {"spawn eraser", lift_component_factory<spawn_eraser>()},
@@ -416,7 +414,6 @@ auto make_command_factory() {
     {"kill", kill_command},
     {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
-    {"spawn archive", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
     {"spawn eraser", node_state::spawn_command},
@@ -612,10 +609,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     caf::actor filesystem_handle;
     // The components listed here need to be terminated in sequential order.
     // The importer needs to shut down first because it might still have
-    // buffered data. The index uses the archive for querying. The filesystem
-    // is needed by all others for the persisting logic.
+    // buffered data. The filesystem is needed by all others for the persisting
+    // logic.
     auto shutdown_sequence = std::initializer_list<const char*>{
-      "importer", "index", "archive", "catalog", "accountant", "filesystem",
+      "importer", "index", "catalog", "accountant", "filesystem",
     };
     // Make sure that these remain in sync.
     VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);

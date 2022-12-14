@@ -148,7 +148,7 @@ using default_active_store_actor = typed_actor_fwd<
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
   caf::replies_to<atom::query, query_context>::with<uint64_t>,
-  // Delete the whole partition from disk and from the archive
+  // Delete the whole partition from disk.
   caf::replies_to<atom::erase>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
@@ -306,18 +306,6 @@ using index_actor = typed_actor_fwd<
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
-
-/// The ARCHIVE actor interface.
-using archive_actor = typed_actor_fwd<
-  // Registers the ARCHIVE with the ACCOUNTANT.
-  caf::reacts_to<atom::set, accountant_actor>,
-  // INTERNAL: Handles a query for the given ids, and sends the table slices
-  // back to the client.
-  caf::reacts_to<atom::internal, atom::resume>,
-  // The internal telemetry loop of the ARCHIVE.
-  caf::reacts_to<atom::telemetry>>
-  // Conform to the protocol of the STORE BUILDER actor.
-  ::extend_with<store_builder_actor>::unwrap;
 
 /// The DISK MONITOR actor interface.
 using disk_monitor_actor = typed_actor_fwd<
@@ -515,7 +503,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))
   VAST_ADD_TYPE_ID((vast::system::active_partition_actor))
   VAST_ADD_TYPE_ID((vast::system::analyzer_plugin_actor))
-  VAST_ADD_TYPE_ID((vast::system::archive_actor))
   VAST_ADD_TYPE_ID((vast::system::catalog_actor))
   VAST_ADD_TYPE_ID((vast::system::default_active_store_actor))
   VAST_ADD_TYPE_ID((vast::system::default_passive_store_actor))

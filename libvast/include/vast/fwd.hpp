@@ -123,8 +123,6 @@ class port;
 class real_type;
 class record_type;
 class segment;
-class segment_builder;
-class segment_store;
 class string_type;
 class subnet;
 class subnet_type;
