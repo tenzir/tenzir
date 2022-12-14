@@ -178,12 +178,6 @@ PackageLicenseConcluded: BSD-3-Clause
 PackageLicenseComments: Usually bundled with operating system.
 
 SPDXID: SPDXRef-Package
-PackageName: Broker
-PackageHomePage: https://github.com/zeek/broker
-PackageLicenseConcluded: BSD-3-Clause
-PackageVersion: 1.4
-
-SPDXID: SPDXRef-Package
 PackageName: xxHash
 PackageHomePage: https://github.com/Cyan4973/xxHash
 PackageLicenseConcluded: BSD-2-Clause
