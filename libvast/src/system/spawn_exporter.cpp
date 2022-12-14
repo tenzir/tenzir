@@ -13,7 +13,6 @@
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/catalog.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"

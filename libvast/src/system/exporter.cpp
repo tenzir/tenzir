@@ -23,7 +23,6 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/query_context.hpp"
-#include "vast/system/catalog.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"

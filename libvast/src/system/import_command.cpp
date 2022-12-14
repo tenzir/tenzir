@@ -15,13 +15,13 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/catalog.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/transformer.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/make_message.hpp>
 #include <caf/settings.hpp>

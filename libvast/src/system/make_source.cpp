@@ -25,10 +25,10 @@
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
 #include "vast/optional.hpp"
-#include "vast/system/catalog.hpp"
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>

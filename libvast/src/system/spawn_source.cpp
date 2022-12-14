@@ -11,10 +11,10 @@
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/catalog.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
