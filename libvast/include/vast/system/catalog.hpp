@@ -48,6 +48,18 @@ struct catalog_lookup_result {
 
   std::unordered_map<type, candidate_info> candidate_infos;
 
+  [[nodiscard]] bool empty() const noexcept {
+    return candidate_infos.empty();
+  }
+
+  [[nodiscard]] size_t size() const noexcept {
+    size_t num_candidates = 0;
+    for (const auto& [type, cand_info] : candidate_infos) {
+      num_candidates += cand_info.partition_infos.size();
+    }
+    return num_candidates;
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector& f, catalog_lookup_result& x) {
     return f(caf::meta::type_name("vast.system.catalog_lookup_result"), x.kind,

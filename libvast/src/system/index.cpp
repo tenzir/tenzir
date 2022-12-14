@@ -924,8 +924,7 @@ void index_state::schedule_lookups() {
                next->queries);
     // 2. Acquire the actor for the selected partition, potentially materializing
     //    it from its persisted state.
-    auto acquire =
-      [&](const uuid& partition_id) -> std::pair<vast::type, partition_actor> {
+    auto acquire = [&](const uuid& partition_id) -> partition_actor {
       // We need to first check whether the ID is the active partition or one
       // of our unpersisted ones. Only then can we dispatch to our LRU cache.
       partition_actor part;
@@ -934,27 +933,24 @@ void index_state::schedule_lookups() {
         if (active_partition.actor != nullptr
             && active_partition.id == partition_id) {
           part = active_partition.actor;
-          partition_type = type;
           break;
         }
       }
       if (!part) {
         if (auto it = unpersisted.find(partition_id); it != unpersisted.end()) {
-          partition_type = it->second.first;
           part = it->second.second;
         } else if (auto it = persisted_partitions.find(partition_id);
                    it != persisted_partitions.end()) {
           auto inmem_part = inmem_partitions.get_or_load(partition_id);
           part = inmem_part;
-          partition_type = it->second;
         }
       }
       if (!part)
         VAST_WARN("{} failed to load partition {} that was part of a query",
                   *self, partition_id);
-      return std::pair<vast::type, partition_actor>{partition_type, part};
+      return part;
     };
-    auto [partition_type, partition_actor] = acquire(next->partition);
+    auto partition_actor = acquire(next->partition);
     if (!partition_actor) {
       // We need to mark failed partitions as completed to avoid clients going
       // out of sync.
@@ -988,7 +984,7 @@ void index_state::schedule_lookups() {
         }
       };
       const auto& context_it
-        = it->second.query_contexts_per_type.find(partition_type);
+        = it->second.query_contexts_per_type.find(next->schema);
       if (context_it == it->second.query_contexts_per_type.end()) {
         VAST_WARN("{} failed to evaluate query {} for partition {}: query "
                   "context for schema is already unvailable",
@@ -1542,17 +1538,17 @@ index(index_actor::stateful_pointer<index_state> self,
         auto& [_, ids] = *it;
         ids.emplace(query_context.id);
       }
-      std::vector<uuid> candidates;
+      std::vector<std::pair<uuid, type>> candidates;
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
       query_state::type_query_context_map query_contexts;
       for (const auto& [active_partition_type, active_partition] :
            self->state.active_partitions) {
-        candidates.push_back(active_partition.id);
+        candidates.emplace_back(active_partition.id, active_partition_type);
         query_contexts[active_partition_type] = query_context;
       }
-      for (const auto& [id, _] : self->state.unpersisted)
-        candidates.push_back(id);
+      for (const auto& [id, schema_actor_pair] : self->state.unpersisted)
+        candidates.emplace_back(id, schema_actor_pair.first);
       auto rp = self->make_response_promise<query_cursor>();
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
@@ -1561,7 +1557,13 @@ index(index_actor::stateful_pointer<index_state> self,
           [=, candidates = std::move(candidates),
            query_contexts = std::move(query_contexts)](
             catalog_lookup_result& lookup_results) mutable {
-            const auto initial_candidates = candidates;
+            for (auto& [id, schema] : candidates) {
+              // TODO: only emplace if not present yet.
+              lookup_results.candidate_infos[schema]
+                .partition_infos.emplace_back(id, 0u, time{}, schema,
+                                              version::partition_version);
+            }
+            // const auto initial_candidates = candidates;
             for (const auto& [type, lookup_result] :
                  lookup_results.candidate_infos) {
               query_contexts[type] = query_context;
@@ -1570,14 +1572,15 @@ index(index_actor::stateful_pointer<index_state> self,
                          "catalog {}",
                          *self, candidates, type,
                          lookup_result.partition_infos);
-              for (const auto& info : lookup_result.partition_infos) {
-                if (std::find(initial_candidates.begin(),
-                              initial_candidates.end(), info.uuid)
-                    == initial_candidates.end()) {
-                  candidates.push_back(info.uuid);
-                }
-              }
             }
+            //  for (const auto& info : lookup_result.partition_infos) {
+            //    if (std::find(initial_candidates.begin(),
+            //                  initial_candidates.end(), info.uuid)
+            //        == initial_candidates.end()) {
+            //      candidates.push_back(info.uuid);
+            //    }
+            //  }
+            //}
             // Allows the client to query further results after initial taste.
             auto query_id = query_context.id;
             auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
@@ -1596,7 +1599,7 @@ index(index_actor::stateful_pointer<index_state> self,
                               .client = client,
                               .candidate_partitions = num_candidates,
                               .requested_partitions = scheduled},
-                  std::move(candidates)))
+                  std::move(lookup_results)))
               rp.deliver(err);
             rp.deliver(query_cursor{query_id, num_candidates, scheduled});
             self->state.schedule_lookups();
@@ -1885,14 +1888,15 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       auto input_size
         = detail::narrow_cast<uint32_t>(selected_partitions.size());
-      auto err = self->state.pending_queries.insert(
-        query_state{.query_contexts_per_type = query_contexts,
-                    .client = caf::actor_cast<receiver_actor<atom::done>>(
-                      partition_transfomer),
-                    .candidate_partitions = input_size,
-                    .requested_partitions = input_size},
-        std::vector{selected_partition_ids});
-      VAST_ASSERT(err == caf::none);
+      // TODO: Adapt.
+      // auto err = self->state.pending_queries.insert(
+      //  query_state{.query_contexts_per_type = query_contexts,
+      //              .client = caf::actor_cast<receiver_actor<atom::done>>(
+      //                partition_transfomer),
+      //              .candidate_partitions = input_size,
+      //              .requested_partitions = input_size},
+      //  std::vector{selected_partition_ids});
+      // VAST_ASSERT(err == caf::none);
       self->state.schedule_lookups();
       auto marker_path = self->state.marker_path(transform_id);
       auto rp = self->make_response_promise<std::vector<partition_info>>();

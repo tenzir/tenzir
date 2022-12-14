@@ -64,15 +64,17 @@ public:
   /// The entry type for the `partitions` lists. Maps a partition ID
   /// to a list of query IDs.
   struct entry {
-    entry(uuid partition_id, uint64_t priority, std::vector<uuid> queries,
-          bool erased)
+    entry(uuid partition_id, type schema, uint64_t priority,
+          std::vector<uuid> queries, bool erased)
       : partition{std::move(partition_id)},
+        schema{std::move(schema)},
         priority{priority},
         queries{std::move(queries)},
         erased{erased} {
     }
 
     uuid partition;
+    type schema;
     uint64_t priority = 0;
     std::vector<uuid> queries;
     bool erased = false;
@@ -110,7 +112,7 @@ public:
 
   /// Inserts a new query into the queue.
   [[nodiscard]] caf::error
-  insert(query_state&& query_state, std::vector<uuid>&& candidates);
+  insert(query_state&& query_state, system::catalog_lookup_result&& candidates);
 
   /// Activates an inactive query.
   [[nodiscard]] caf::error activate(const uuid& qid, uint32_t num_partitions);
