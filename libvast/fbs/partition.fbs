@@ -58,7 +58,7 @@ table LegacyPartition {
   /// A store identifier and header information.
   store: detail.StoreHeader;
 
-  /// Schema of a partition
+  /// The schema of a partition.
   schema: [ubyte] (nested_flatbuffer: "vast.fbs.Type");
 }
 
