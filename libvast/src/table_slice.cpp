@@ -23,7 +23,6 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/msgpack_table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
@@ -51,28 +50,12 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     // Check whether the handlers for all other table slice encodings are
     // noexcept-specified. When adding a new encoding, add it here as well.
     std::is_nothrow_invocable<Visitor>,
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v1&>,
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v2&>,
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>,
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v1&>>) {
+    std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v2&>>) {
   if (!x)
     return std::invoke(std::forward<Visitor>(visitor));
   switch (x->table_slice_type()) {
     case fbs::table_slice::TableSlice::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
-    case fbs::table_slice::TableSlice::arrow_v0:
-      return std::invoke(std::forward<Visitor>(visitor),
-                         *x->table_slice_as_arrow_v0());
-    case fbs::table_slice::TableSlice::msgpack_v0:
-      return std::invoke(std::forward<Visitor>(visitor),
-                         *x->table_slice_as_msgpack_v0());
-    case fbs::table_slice::TableSlice::arrow_v1:
-      return std::invoke(std::forward<Visitor>(visitor),
-                         *x->table_slice_as_arrow_v1());
-    case fbs::table_slice::TableSlice::msgpack_v1:
-      return std::invoke(std::forward<Visitor>(visitor),
-                         *x->table_slice_as_msgpack_v1());
     case fbs::table_slice::TableSlice::arrow_v2:
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_arrow_v2());
@@ -119,23 +102,7 @@ table_slice_encoding builder_id(enum table_slice_encoding encoding) {
 template <class Slice, class State>
 constexpr auto&
 state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
-  using slice_type = std::decay_t<Slice>;
-  if constexpr (std::is_same_v<slice_type, fbs::table_slice::arrow::v0>) {
-    return std::forward<State>(state).arrow_v0;
-  } else if constexpr (std::is_same_v<slice_type,
-                                      fbs::table_slice::msgpack::v0>) {
-    return std::forward<State>(state).msgpack_v0;
-  } else if constexpr (std::is_same_v<slice_type, fbs::table_slice::arrow::v1>) {
-    return std::forward<State>(state).arrow_v1;
-  } else if constexpr (std::is_same_v<slice_type,
-                                      fbs::table_slice::msgpack::v1>) {
-    return std::forward<State>(state).msgpack_v1;
-  } else if constexpr (std::is_same_v<slice_type, fbs::table_slice::arrow::v2>) {
-    return std::forward<State>(state).arrow_v2;
-  } else {
-    static_assert(detail::always_false_v<slice_type>, "cannot access table "
-                                                      "slice state");
-  }
+  return std::forward<State>(state).arrow_v2;
 }
 
 } // namespace
@@ -234,21 +201,6 @@ table_slice table_slice::unshare() const noexcept {
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
   if (!lhs.chunk_ && !rhs.chunk_)
     return true;
-  if (lhs.encoding() == table_slice_encoding::msgpack
-      || rhs.encoding() == table_slice_encoding::msgpack) {
-    // Check whether the slices have different sizes or layouts.
-    if (lhs.rows() != rhs.rows() || lhs.columns() != rhs.columns()
-        || lhs.layout() != lhs.layout())
-      return false;
-    // Check whether the slices contain different data.
-    auto flat_layout = flatten(caf::get<record_type>(lhs.layout()));
-    for (size_t row = 0; row < lhs.rows(); ++row)
-      for (size_t col = 0; col < flat_layout.num_fields(); ++col)
-        if (lhs.at(row, col, flat_layout.field(col).type)
-            != rhs.at(row, col, flat_layout.field(col).type))
-          return false;
-    return true;
-  }
   constexpr auto check_metadata = true;
   return to_record_batch(lhs)->Equals(*to_record_batch(rhs), check_metadata);
 }
@@ -423,22 +375,8 @@ std::shared_ptr<arrow::RecordBatch> to_record_batch(const table_slice& slice) {
       //                 == table_slice_encoding::arrow) { ... }
       constexpr auto encoding
         = std::decay_t<decltype(*state(encoded, slice.state_))>::encoding;
-      if constexpr (encoding == table_slice_encoding::arrow) {
-        // If we have a record batch, but it is from an older table slice
-        // encoding, we must still rebuild the table slice. Otherwise, creating
-        // a new table slice from the returned record batch leads to undefined
-        // behavior.
-        if (!state(encoded, slice.state_)->is_latest_version) {
-          const auto& legacy = state(encoded, slice.state_)->record_batch();
-          return convert_record_batch(legacy,
-                                      state(encoded, slice.state_)->layout());
-        }
-        return state(encoded, slice.state_)->record_batch();
-      } else {
-        // Rebuild the slice as an Arrow-encoded table slice.
-        auto copy = rebuild(slice, table_slice_encoding::arrow);
-        return to_record_batch(copy);
-      }
+      static_assert(encoding == table_slice_encoding::arrow);
+      return state(encoded, slice.state_)->record_batch();
     },
   };
   return visit(f, as_flatbuffer(slice.chunk_));
@@ -452,35 +390,6 @@ std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
 }
 
 // -- operations ---------------------------------------------------------------
-
-table_slice
-rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
-  auto f = detail::overload{
-    [&]() noexcept -> table_slice {
-      return {};
-    },
-    [&](const auto& encoded) noexcept -> table_slice {
-      if (encoding == state(encoded, slice.state_)->encoding
-          && state(encoded, slice.state_)->is_latest_version)
-        return std::move(slice);
-      auto builder = factory<table_slice_builder>::make(builder_id(encoding),
-                                                        slice.layout());
-      if (!builder)
-        return table_slice{};
-      auto flat_layout = flatten(caf::get<record_type>(slice.layout()));
-      for (table_slice::size_type row = 0; row < slice.rows(); ++row)
-        for (table_slice::size_type column = 0;
-             column < flat_layout.num_fields(); ++column)
-          if (!builder->add(
-                slice.at(row, column, flat_layout.field(column).type)))
-            return {};
-      auto result = builder->finish();
-      result.offset(slice.offset());
-      return result;
-    },
-  };
-  return visit(f, as_flatbuffer(slice.chunk_));
-}
 
 void select(std::vector<table_slice>& result, const table_slice& slice,
             const ids& selection) {

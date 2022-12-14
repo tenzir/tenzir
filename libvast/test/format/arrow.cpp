@@ -76,7 +76,7 @@ TEST(arrow IPC write) {
   std::shared_ptr<arrow::RecordBatch> batch;
   while (reader->ReadNext(&batch).ok() && batch != nullptr) {
     REQUIRE_LESS(slice_id, zeek_conn_log.size());
-    auto slice = rebuild(zeek_conn_log[slice_id], table_slice_encoding::arrow);
+    auto slice = zeek_conn_log[slice_id];
     CHECK_EQUAL(detail::narrow<size_t>(batch->num_rows()), slice.rows());
     CHECK(batch->schema()->Equals(*arrow_schema));
     CHECK_EQUAL(slice, zeek_conn_log[slice_id]);

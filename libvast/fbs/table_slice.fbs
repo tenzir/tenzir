@@ -3,77 +3,9 @@ include "type.fbs";
 namespace vast.fbs.table_slice.arrow;
 
 /// A table slice encoded with Apache Arrow.
-table v0 {
-  /// The schema of the data.
-  /// TODO: The schema is already included in the record batch, but it cannot be
-  /// mapped 1-to-1 to VAST types. This can be resolved by using extension types
-  /// for Arrow. Additionally, this is currently CAF binary; make this a
-  /// separarate table.
-  layout: [ubyte];
-
-  /// The Arrow Schema containing the Record Batch layout.
-  schema: [ubyte];
-
-  /// The Arrow Recod Batch containing all data.
-  record_batch: [ubyte];
-}
-
-/// A table slice encoded with Apache Arrow.
-table v1 {
-  /// The schema of the data.
-  /// TODO: The schema is already included in the record batch, but it cannot be
-  /// mapped 1-to-1 to VAST types. This can be resolved by using extension types
-  /// for Arrow. Additionally, this is currently CAF binary; make this a
-  /// separarate table.
-  layout: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
-
-  /// The Arrow Schema containing the Record Batch layout.
-  schema: [ubyte];
-
-  /// The Arrow Recod Batch containing all data.
-  record_batch: [ubyte];
-
-  /// A timestamp assigned on import, representing nanoseconds since the UNIX
-  /// epoch.
-  import_time: long;
-}
-
-/// A table slice encoded with Apache Arrow.
 table v2 {
   /// The Arrow IPC data.
   arrow_ipc: [ubyte];
-
-  /// A timestamp assigned on import, representing nanoseconds since the UNIX
-  /// epoch.
-  import_time: long;
-}
-
-namespace vast.fbs.table_slice.msgpack;
-
-/// A table slice encoded with MessagePack.
-table v0 {
-  /// The schema of the data.
-  /// TODO: currently CAF binary; make this a separate table.
-  layout: [ubyte];
-
-  /// Offsets from the beginning of the buffer to each row.
-  offset_table: [ulong];
-
-  /// The buffer that contains the MessagePack data.
-  data: [ubyte];
-}
-
-/// A table slice encoded with MessagePack.
-table v1 {
-  /// The schema of the data.
-  /// TODO: currently CAF binary; make this a separate table.
-  layout: [ubyte] (required, nested_flatbuffer: "vast.fbs.Type");
-
-  /// Offsets from the beginning of the buffer to each row.
-  offset_table: [ulong];
-
-  /// The buffer that contains the MessagePack data.
-  data: [ubyte];
 
   /// A timestamp assigned on import, representing nanoseconds since the UNIX
   /// epoch.
@@ -84,11 +16,7 @@ namespace vast.fbs.table_slice;
 
 /// The union of all possible table slice encoding and version combinations.
 union TableSlice {
-  arrow.v0,
-  msgpack.v0,
-  arrow.v1,
-  msgpack.v1,
-  arrow.v2,
+  arrow.v2 (id: 4),
 }
 
 namespace vast.fbs;
