@@ -18,19 +18,25 @@ const char* patch = "@VAST_VERSION_PATCH@";
 const char* tweak = "@VAST_VERSION_TWEAK@";
 const uint64_t current_partition_version = @VAST_PARTITION_VERSION@;
 
-std::pair<std::string_view, std::optional<std::string_view>>
-supported_vast_versions_for_partition_version(
-  uint64_t partition_version) noexcept {
-  switch (partition_version) {
-    case 0:
-      return {"VAST v1.0", "VAST v2.4"};
-    case 1:
-      return {"VAST v2.2", std::nullopt};
-    case 2:
-      return {"VAST v2.4", std::nullopt};
-    default:
-      die("unexpected partition version");
-  }
+supported_versions
+support_for_partition_version(uint64_t partition_version) noexcept {
+  static constexpr auto table
+    = std::array<supported_versions, @VAST_PARTITION_VERSION@ +1>{
+      // Partition version 0 was introduced implicitly; it's used when no
+      // partition version was specified.
+      supported_versions{"VAST v1.0", "VAST v2.4"},
+      // Alongside partition version 1 we introduced homogeneous partitions and
+      // the rebuilder, and required table slices to be of the arrow.v2 encoding
+      // in their FlatBuffers table.
+      supported_versions{"VAST v2.2", std::nullopt},
+      // Partition version 2 was introduced along the removal of the ability to
+      // write new segment stores, switching all stores to be Feather or
+      // Parquet.
+      supported_versions{"VAST v2.4", std::nullopt},
+    };
+  if (partition_version >= table.size())
+    die("unsupported partition version");
+  return table[partition_version];
 }
 
 namespace build {

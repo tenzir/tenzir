@@ -545,10 +545,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       -> caf::result<atom::ok> {
       auto unsupported_partitions = std::vector<uuid>{};
       for (const auto& [uuid, synopsis] : *ps) {
-        auto [min, max]
-          = version::supported_vast_versions_for_partition_version(
-            synopsis->version);
-        if (max)
+        auto supported
+          = version::support_for_partition_version(synopsis->version);
+        if (supported.end_of_life)
           unsupported_partitions.push_back(uuid);
       }
       if (!unsupported_partitions.empty()) {
@@ -559,9 +558,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                       "partitions, or delete them from the database directory: "
                       "{}",
                       *self,
-                      version::supported_vast_versions_for_partition_version(
+                      version::support_for_partition_version(
                         version::current_partition_version)
-                        .first,
+                        .introduced,
                       fmt::join(unsupported_partitions, ", ")));
       }
       self->state.create_from(std::move(*ps));
