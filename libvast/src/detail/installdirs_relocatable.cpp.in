@@ -1,0 +1,63 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include "vast/detail/assert.hpp"
+#include "vast/detail/installdirs.hpp"
+#include "vast/detail/process.hpp"
+#include "vast/detail/string.hpp"
+
+namespace vast::detail {
+
+namespace {
+
+std::filesystem::path install_libdir() {
+  return detail::objectpath()->parent_path();
+}
+
+/// Returns the install prefix and a possible suffix for the current library
+/// location. The suffix is only applied to archive, library, and binary
+/// directories for multi-config generators.
+std::pair<std::filesystem::path, std::filesystem::path>
+install_prefix_and_suffix() {
+  auto prefix_from_libdir = [](const auto& libdir) {
+    auto err = std::error_code{};
+    auto prefix = libdir / "@VAST_LIBDIR_TO_PREFIX@";
+    prefix = std::filesystem::canonical(prefix, err);
+    VAST_ASSERT(!err);
+    return prefix;
+  };
+  const auto libdir = install_libdir();
+  if (std::string_view configuration_types = "@CMAKE_CONFIGURATION_TYPES@";
+      !configuration_types.empty())
+    for (const auto& configuration_type :
+         detail::split(configuration_types, ";"))
+      if (libdir.filename() == configuration_type)
+        return {prefix_from_libdir(libdir.parent_path()), libdir.filename()};
+  return {prefix_from_libdir(libdir), {}};
+}
+
+} // namespace
+
+std::filesystem::path install_datadir() {
+  const auto [prefix, _] = install_prefix_and_suffix();
+  return prefix / "@CMAKE_INSTALL_DATADIR@/vast";
+}
+
+std::filesystem::path install_configdir() {
+  const auto [prefix, _] = install_prefix_and_suffix();
+  if (prefix == "/usr")
+    return "/etc/vast";
+  return prefix / "@CMAKE_INSTALL_SYSCONFDIR@/vast";
+}
+
+std::filesystem::path install_plugindir() {
+  const auto [prefix, suffix] = install_prefix_and_suffix();
+  return prefix / "@CMAKE_INSTALL_LIBDIR@/vast/plugins" / suffix;
+}
+
+} // namespace vast::detail
