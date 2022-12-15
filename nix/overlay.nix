@@ -138,10 +138,6 @@ in
          substituteInPlace configure.ac --replace "-lgcc_s" ""
     '' else old.postPatch;
   });
-  zeek-broker = (final.callPackage ./zeek-broker { inherit stdenv; }).overrideAttrs (old: {
-    # https://github.com/NixOS/nixpkgs/issues/130963
-    NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
-  });
   vast-source = inputs.nix-filter.lib.filter {
     root = ./..;
     include = [

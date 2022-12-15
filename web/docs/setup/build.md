@@ -41,7 +41,6 @@ dependencies and versions.
 ||[yarn](https://yarnpkg.com)||Required for building the web frontend.|
 ||[libpcap](https://www.tcpdump.org)||Required for PCAP import, export, and pivoting to and from PCAP traces.|
 ||[restinio](https://stiffstream.com/en/products/restinio.html)||Required for providing a REST API|
-||[broker](https://github.com/zeek/broker)||Required to build the Broker plugin.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libvast.|
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for VAST.|
 
