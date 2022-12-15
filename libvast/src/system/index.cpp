@@ -575,7 +575,7 @@ caf::error index_state::load_from_disk() {
     auto direct_synopsis_path = dir.string() + "/{:l}.mdx";
     auto transformer
       = self->spawn(partition_transformer, store_id, synopsis_opts, index_opts,
-                    accountant, type_registry, filesystem, pipeline,
+                    accountant, catalog, filesystem, pipeline,
                     direct_store_path, direct_synopsis_path);
     auto index = static_cast<index_actor>(self);
     auto store_path = dir / ".." / store_path_for_partition(id);
@@ -628,7 +628,8 @@ caf::error index_state::load_from_disk() {
   //  partition versions more freely.
   const auto num_outdated = std::count_if(
     synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
-      return id_and_synopsis.second->version < version::partition_version;
+      return id_and_synopsis.second->version
+             < version::current_partition_version;
     });
   if (num_outdated > 0) {
     VAST_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
@@ -696,9 +697,7 @@ caf::error index_state::load_from_disk() {
                       std::move(query_context));
       },
       [this](caf::error& err) {
-        VAST_ERROR("{} could not load catalog state from disk, shutting "
-                   "down with error {}",
-                   *self, err);
+        VAST_ERROR("{} failed to load catalog state from disk: {}", *self, err);
         self->send_exit(self, std::move(err));
       });
 
@@ -807,6 +806,12 @@ index_state::create_active_partition(const type& schema) {
   stage->out().set_filter(active_partition->second.stream_slot, schema);
   active_partition->second.capacity = partition_capacity;
   active_partition->second.id = id;
+  self->request(catalog, caf::infinite, atom::put_v, schema)
+    .then([]() {},
+          [this](const caf::error& error) {
+            VAST_WARN("{} failed to register type with catalog: {}", *self,
+                      error);
+          });
   VAST_DEBUG("{} created new partition {}", *self, id);
   return active_partition;
 }
@@ -1195,10 +1200,10 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
       archive_actor archive, catalog_actor catalog,
-      type_registry_actor type_registry, const std::filesystem::path& dir,
-      std::string store_backend, size_t partition_capacity,
-      duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t max_concurrent_partition_lookups,
+      const std::filesystem::path& dir, std::string store_backend,
+      size_t partition_capacity, duration active_partition_timeout,
+      size_t max_inmem_partitions, size_t taste_partitions,
+      size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
   VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
@@ -1219,7 +1224,6 @@ index(index_actor::stateful_pointer<index_state> self,
   // Set members.
   self->state.self = self;
   self->state.global_store = std::move(archive);
-  self->state.type_registry = std::move(type_registry);
   self->state.accept_queries = true;
   self->state.max_concurrent_partition_lookups
     = max_concurrent_partition_lookups;
@@ -1806,13 +1810,11 @@ index(index_actor::stateful_pointer<index_state> self,
         = self->state.transformer_partition_path_template();
       auto partition_synopsis_path_template
         = self->state.transformer_partition_synopsis_path_template();
-      partition_transformer_actor partition_transfomer
-        = self->spawn(system::partition_transformer, store_id,
-                      self->state.synopsis_opts, self->state.index_opts,
-                      self->state.accountant, self->state.type_registry,
-                      self->state.filesystem, pipeline,
-                      std::move(partition_path_template),
-                      std::move(partition_synopsis_path_template));
+      partition_transformer_actor partition_transfomer = self->spawn(
+        system::partition_transformer, store_id, self->state.synopsis_opts,
+        self->state.index_opts, self->state.accountant, self->state.catalog,
+        self->state.filesystem, pipeline, std::move(partition_path_template),
+        std::move(partition_synopsis_path_template));
       // match_everything == '"" in #type'
       static const auto match_everything
         = vast::predicate{meta_extractor{meta_extractor::type},
@@ -1861,9 +1863,12 @@ index(index_actor::stateful_pointer<index_state> self,
           };
       // TODO: Implement some kind of monadic composition instead of these
       // nested requests.
+      // TODO: With CAF 0.19 it will no longer be needed to keep
+      // partition_transformer alive in the lambda as the promise kept in the
+      // state will keep the actor alive
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
-          [self, deliver, old_partition_ids, keep, marker_path,
+          [self, deliver, old_partition_ids, keep, marker_path, rp,
            partition_transfomer](
             std::vector<augmented_partition_synopsis>& apsv) mutable {
             std::vector<uuid> new_partition_ids;
@@ -1969,10 +1974,11 @@ index(index_actor::stateful_pointer<index_state> self,
                               });
                         }
                       },
-                      [self](const caf::error& e) {
+                      [self, rp](caf::error& e) mutable {
                         VAST_WARN("{} failed to finalize partition transformer "
                                   "output: {}",
                                   *self, e);
+                        rp.deliver(std::move(e));
                       });
                 },
                 [deliver](const caf::error& e) mutable {

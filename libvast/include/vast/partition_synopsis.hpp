@@ -65,7 +65,7 @@ struct partition_synopsis final : public caf::ref_counted {
   time max_import_time = time::min();
 
   /// The version number of this partition.
-  uint64_t version = version::partition_version;
+  uint64_t version = version::current_partition_version;
 
   /// The schema of this partition. This is only set for partition synopses with
   /// a version >= 1, because they are guaranteed to be homogenous.

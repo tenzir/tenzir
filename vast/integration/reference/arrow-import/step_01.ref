@@ -1,0 +1,41 @@
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  -- field metadata --
+  ARROW:extension:metadata: 'vast.address'
+  ARROW:extension:metadata: 'vast.address'
+  ARROW:extension:name: 'vast.address'
+  ARROW:extension:name: 'vast.address'
+  VAST:attributes:0: '{ "index": "hash" }'
+  VAST:name:0: 'port'
+  VAST:name:0: 'port'
+  VAST:name:0: 'timestamp'
+  child 0, item: string
+-- schema metadata --
+VAST:name:0: 'zeek.conn'
+conn_state: string
+done with all readers
+done with current reader, rows: 10
+duration: duration[ns]
+history: string
+id.orig_h: fixed_size_binary[16]
+id.orig_p: uint64
+id.resp_h: fixed_size_binary[16]
+id.resp_p: uint64
+local_orig: bool
+missed_bytes: uint64
+open next reader
+open next reader
+orig_bytes: uint64
+orig_ip_bytes: uint64
+orig_pkts: uint64
+proto: string
+resp_bytes: uint64
+resp_ip_bytes: uint64
+resp_pkts: uint64
+service: string
+ts: timestamp[ns]
+tunnel_parents: list<item: string>
+uid: string

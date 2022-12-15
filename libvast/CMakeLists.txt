@@ -156,10 +156,6 @@ endfunction ()
 
 # TODO: Require CAF to be installed.
 
-option(VAST_ENABLE_OPENSSL "Encrypt network communication" ON)
-add_feature_info("VAST_ENABLE_OPENSSL" VAST_ENABLE_OPENSSL
-                 "encrypt network communication.")
-
 if (VAST_ENABLE_DEVELOPER_MODE
     AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt"
     AND NOT CAF_ROOT_DIR)
@@ -176,21 +172,13 @@ if (NOT VAST_ENABLE_BUNDLED_CAF)
   provide_find_module(CAF)
   find_package(
     CAF EXACT
-    COMPONENTS core io test
+    COMPONENTS core io test openssl
     REQUIRED)
   if (NOT ${CAF_VERSION_MINOR} EQUAL 18)
     message(FATAL_ERROR "Failed to find CAF with 0.18.x version. Found version: ${CAF_VERSION}")
   endif()
   string(APPEND VAST_FIND_DEPENDENCY_LIST
          "\nfind_package(CAF ${CAF_VERSION} COMPONENTS core io test openssl REQUIRED)")
-  if (VAST_ENABLE_OPENSSL)
-    find_package(
-      CAF 0.18.6 EXACT
-      COMPONENTS openssl
-      REQUIRED)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(CAF 0.18.6 EXACT COMPONENTS openssl REQUIRED)")
-  endif ()
 else ()
   # Use bundled CAF.
   if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt")
@@ -204,7 +192,7 @@ else ()
     set(CAF_ENABLE_EXAMPLES OFF)
     set(CAF_ENABLE_TESTING OFF)
     set(CAF_ENABLE_TOOLS OFF)
-    set(CAF_ENABLE_OPENSSL ${VAST_ENABLE_OPENSSL})
+    set(CAF_ENABLE_OPENSSL ON)
     # add_subdirectory aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
     # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
     set(ORIGINAL_CXX_STANDARD ${CMAKE_CXX_STANDARD})
@@ -221,33 +209,31 @@ else ()
     VASTSystemizeTarget(libcaf_io)
     set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
     target_compile_options(
-      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-                        -Wno-unknown-warning-option)
-    if (VAST_ENABLE_OPENSSL)
-      if (NOT TARGET libcaf_openssl)
-        string(
-          JOIN
-          " "
-          err_message
-          "Unable to find the bundled CAF's OpenSSL module; consider"
-          "disabling VAST_ENABLE_OPENSSL or set OPENSSL_ROOT_DIR to the"
-          "install prefix of your OpenSSL installation.")
-        message(FATAL_ERROR "${err_message}")
-      endif ()
-      target_include_directories(
-        libcaf_openssl
-        PUBLIC
-          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
-          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-      VASTSystemizeTarget(libcaf_openssl)
-      set_target_properties(libcaf_openssl PROPERTIES EXPORT_NAME openssl)
-      # Fix deprecation warnings for OpenSSL >= 3.0.
-      target_compile_options(
-        libcaf_openssl
-        PRIVATE
-          $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
-          $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
+      libcaf_io
+      PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
+              -Wno-unknown-warning-option)
+    if (NOT TARGET libcaf_openssl)
+      string(
+        JOIN " " err_message
+        "Unable to find the bundled CAF's OpenSSL module; consider setting "
+        "OPENSSL_ROOT_DIR to the install prefix of your OpenSSL installation.")
+      message(FATAL_ERROR "${err_message}")
     endif ()
+    target_include_directories(
+      libcaf_openssl
+      PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    VASTSystemizeTarget(libcaf_openssl)
+    set_target_properties(libcaf_openssl
+                          PROPERTIES EXPORT_NAME openssl)
+    # Fix deprecation warnings for OpenSSL >= 3.0.
+    target_compile_options(
+      libcaf_openssl
+      PRIVATE
+        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
+    add_library(libcaf_test INTERFACE)
     target_link_libraries(libcaf_test INTERFACE CAF::core)
     target_include_directories(
       libcaf_test
@@ -340,10 +326,7 @@ if (BUILD_SHARED_LIBS)
 endif ()
 
 # Link against CAF.
-target_link_libraries(libvast PUBLIC CAF::core CAF::io)
-if (VAST_ENABLE_OPENSSL)
-  target_link_libraries(libvast PUBLIC CAF::openssl)
-endif ()
+target_link_libraries(libvast PUBLIC CAF::core CAF::io CAF::openssl)
 if (VAST_ENABLE_BUNDLED_CAF)
   # Figure out whether we point to a build directory or a prefix.
   if (NOT caf_dir)
@@ -356,6 +339,12 @@ endif ()
 
 # Link against libvast-fbs.
 target_link_libraries(libvast PUBLIC libvast-fbs)
+
+# Link against OpenSSL
+find_package(OpenSSL REQUIRED)
+target_link_libraries(libvast PUBLIC OpenSSL::SSL)
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(OpenSSL REQUIRED)")
+dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)

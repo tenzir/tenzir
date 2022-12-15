@@ -1,9 +1,8 @@
 ---
-draft: true
 title: VAST v2.4
 description: Open Storage
 authors: dominiklohmann
-date: 2022-11-24
+date: 2022-12-09
 tags: [release, frontend, feather, parquet, docker, python, arrow]
 ---
 
@@ -84,9 +83,7 @@ Fundamentally, the API serves two purposes:
 The frontend UI currently displays a status page for the installed VAST node.
 
 <!--- this weird markup is to render a border around the image --->
-<kbd>
-<img src="./vast-ui-experimental.png" alt="UI showing a status page">
-</kbd>
+![UI showing a status page](vast-ui-experimental.jpg)
 
 We have some exciting features planned for both of these. Stay tuned!
 
@@ -106,13 +103,11 @@ use VAST's security-specific data types. For example, when running a query, IP
 addresses, subnets, and patterns automatically convert to the Python-native
 types, as opposed to remaining binary blobs or sheer strings.
 
-::note Not yet on PyPI
+:::note Not yet on PyPI
 VAST's new Python bindings are not yet on PyPI, as they are still heavily under
 development. If you're too eager and cannot wait, go [check out the source
 code][python-code].
 :::
-
-FIXME: Show example of how to use an Arrow Table exported via VAST.
 
 [python-code]: https://github.com/tenzir/vast/tree/v2.4.0/python
 

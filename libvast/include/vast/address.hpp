@@ -35,6 +35,8 @@ public:
   static constexpr std::array<byte_type, 12> v4_mapped_prefix
     = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
 
+  static inline constexpr auto pseudonymization_seed_array_size = size_t{32};
+
   /// Address family.
   enum family { ipv4, ipv6 };
 
@@ -85,6 +87,14 @@ public:
     }
     return result;
   }
+
+  /// Construct a pseudonymized address using the Crypto-PAn algorithm.
+  /// @param original The address to be pseudonymized.
+  /// @param seed 256-bit seed for the cipher and padding.
+  /// @returns A copy of the `original` address with pseudonymized bytes.
+  static address pseudonymize(
+    const address& original,
+    const std::array<byte_type, pseudonymization_seed_array_size>& seed);
 
   /// Default-constructs an (invalid) address.
   constexpr address() {

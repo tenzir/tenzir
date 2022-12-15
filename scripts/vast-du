@@ -4,31 +4,31 @@
 
 # Usage examples:
 #   vast-du -N import zeek -r libvast_test/artifacts/logs/zeek/conn.log
-#	vast-du -N export ascii '#type ~ /zeek.*/'
+#   vast-du -N export ascii '#type == /zeek.*/'
 
 set -e
 
 if ! command -v vast >/dev/null 2>&1; then
-	echo "vast not found"
-	exit 1
+  echo "vast not found"
+  exit 1
 fi
 
 if command -v gdu >/dev/null 2>&1; then
-	DU="gdu"
+  DU="gdu"
 else
-	DU="du"
+  DU="du"
 fi
 
 # Run vast and filter for rate and latency results
 vast "${@}" 2>&1 >/dev/null | grep "rate\|latency"
 # Query vast for average node throughput rate
 if [[ "$*" == *import* ]]; then
-	vast -N export json '#type == "vast.metrics" && key == "node_throughput.rate"' 2>/dev/null \
-		| jq -rs 'map(.value | tonumber) | sort as $rates | $rates
-			| "node throughput: min: \(first)" 
-							+ " max: \(last)"
-							+ "	mean: \(add / ($rates | length) | round)"
-							+ " median: \(nth($rates | length / 2 | floor))"'
+  vast -N export json '#type == "vast.metrics" && key == "node_throughput.rate"' 2>/dev/null \
+    | jq -rs 'map(.value | tonumber) | sort as $rates | $rates
+      | "node throughput: min: \(first)" 
+              + " max: \(last)"
+              + "  mean: \(add / ($rates | length) | round)"
+              + " median: \(nth($rates | length / 2 | floor))"'
 fi
 # Print archive and index disk usage
 ${DU} -csb vast.db/archive vast.db/index

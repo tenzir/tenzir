@@ -28,6 +28,7 @@
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
@@ -60,7 +61,7 @@ void send_to_source(caf::actor& source, Args&&... args) {
 caf::expected<caf::actor>
 make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
-            type_registry_actor type_registry,
+            catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
             std::vector<pipeline>&& pipelines, bool detached) {
   if (!importer)
@@ -144,7 +145,7 @@ make_source(caf::actor_system& sys, const std::string& format,
         return sys.spawn<caf::detached>(source,
                                         std::forward<decltype(args)>(args)...);
       return sys.spawn(source, std::forward<decltype(args)>(args)...);
-    }(std::move(*reader), slice_size, max_events, std::move(type_registry),
+    }(std::move(*reader), slice_size, max_events, std::move(catalog),
       std::move(local_module), std::move(type_filter), std::move(accountant),
       std::move(pipelines));
   VAST_ASSERT(src);

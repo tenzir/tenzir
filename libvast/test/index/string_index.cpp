@@ -89,8 +89,6 @@ TEST(string) {
   CHECK_EQUAL(to_string(unbox(result)), "0100010000");
   result = idx.lookup(relational_operator::ni, make_data_view("rge"));
   CHECK_EQUAL(to_string(unbox(result)), "0000000010");
-  result = idx.lookup(relational_operator::match, make_data_view("foo"));
-  CHECK(!result);
   auto xs = list{"foo", "bar", "baz"};
   result = idx.lookup(relational_operator::in, make_data_view(xs));
   CHECK_EQUAL(to_string(unbox(result)), "1111110000");

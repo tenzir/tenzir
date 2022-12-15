@@ -276,8 +276,6 @@ TEST(evaluate) {
       };
   check_eval("#type == \"zeek.conn\"", {{0, 8}});
   check_eval("#type != \"zeek.conn\"", {});
-  check_eval("#field == \"orig_pkts\"", {{0, 8}});
-  check_eval("#field != \"orig_pkts\"", {});
 }
 
 TEST(project column flat index) {

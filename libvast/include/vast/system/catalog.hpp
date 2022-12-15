@@ -12,13 +12,10 @@
 
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/inspection_common.hpp"
-#include "vast/detail/range_map.hpp"
-#include "vast/fbs/index.hpp"
-#include "vast/fbs/partition.hpp"
-#include "vast/ids.hpp"
+#include "vast/module.hpp"
 #include "vast/partition_synopsis.hpp"
-#include "vast/synopsis.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/taxonomies.hpp"
 #include "vast/time_synopsis.hpp"
 #include "vast/uuid.hpp"
 
@@ -74,6 +71,21 @@ public:
   /// Update the list of fields that should not be touched by the pruner.
   void update_unprunable_fields(const partition_synopsis& ps);
 
+  /// Create the path that the catalog's type registry is persisted at on disk.
+  [[nodiscard]] std::filesystem::path type_registry_filename() const;
+
+  /// Save the type-registry to disk.
+  [[nodiscard]] caf::error save_type_registry_to_disk() const;
+
+  /// Load the type-registry from disk.
+  caf::error load_type_registry_from_disk();
+
+  /// Store a new layout in the registry.
+  void insert(vast::type layout);
+
+  /// Get a list of known types from the registry.
+  [[nodiscard]] type_set types() const;
+
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.
@@ -90,6 +102,11 @@ public:
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;
+
+  std::map<std::string, type_set> type_data = {};
+  vast::module configuration_module = {};
+  vast::taxonomies taxonomies = {};
+  std::filesystem::path type_registry_dir = {};
 };
 
 /// The result of a catalog query.
@@ -120,8 +137,9 @@ struct catalog_result {
 /// data. The CATALOG may return false positives but never false negatives.
 /// @param self The actor handle.
 /// @param accountant An actor handle to the accountant.
+/// @param type_reg_dir the folder for the type registry.
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant);
+        accountant_actor accountant, const std::filesystem::path& type_reg_dir);
 
 } // namespace vast::system

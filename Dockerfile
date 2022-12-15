@@ -95,7 +95,6 @@ RUN apt-get update && \
       libcaf-core0.17 \
       libcaf-io0.17 \
       libcaf-openssl0.17 \
-      libbroker2 \
       libc++1 \
       libc++abi1 \
       libflatbuffers1 \

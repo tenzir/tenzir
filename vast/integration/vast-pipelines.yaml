@@ -31,6 +31,13 @@ vast:
             - alert.category
             - timestamp
             - alert.action
+    pseudonymize_ips:
+      - pseudonymize:
+          method: crypto-pan
+          seed: 8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c968be5de53836e
+          fields:
+            - src_ip
+            - dest_ip
 
   pipeline-triggers:
     import:
@@ -48,6 +55,10 @@ vast:
         location: server
 
       - pipeline: remove_flow
+        events: [suricata.dns]
+        location: server
+
+      - pipeline: pseudonymize_ips
         events: [suricata.dns]
         location: server
 

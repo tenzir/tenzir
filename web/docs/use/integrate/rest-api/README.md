@@ -22,8 +22,8 @@ stability guarantees.
 There exist two ways to run the `web` plugin: either as a separate process or
 embedded inside a VAST server node:
 
-![REST API - Single Deployment](rest-api-deployment-single.light.png#gh-light-mode-only)
-![REST API - Single Deployment](rest-api-deployment-single.dark.png#gh-dark-mode-only)
+![REST API - Single Deployment](/img/rest-api-deployment-single.light.png#gh-light-mode-only)
+![REST API - Single Deployment](/img/rest-api-deployment-single.dark.png#gh-dark-mode-only)
 
 Running the REST API as dedicated process gives you more flexibility with
 respect to deployment, fault isolation, and scaling. An embedded setup offers
@@ -36,23 +36,21 @@ To run the REST API as dedicated process, use the `web server` command:
 vast web server --certfile=/path/to/server.certificate --keyfile=/path/to/private.key
 ```
 
-The server will only accept TLS requests by default. To allow clients to connect
-successfully, you need to pass a valid certificate and corresponding private key
-with the `--certfile` and `--keyfile` arguments.
-
 To run the server within the main VAST process, use a `start` command:
 
 ```bash
 vast start --commands="web server [...]"
 ```
 
+The server will only accept TLS requests by default. To allow clients to connect
+successfully, you need to pass a valid certificate and corresponding private key
+with the `--certfile` and `--keyfile` arguments.
+
 ## Authentication
 
-All requests must be authenticated by a valid authentication token,
-which is a short string that must be sent in the `X-VAST-Token` request
-header.
-
-You can generate a valid token on the command line as follows:
+Clients must authenticate all requests with a valid token. The token is a short
+string that clients put in the `X-VAST-Token` request header. You can generate a
+valid token on the command line:
 
 ```bash
 vast web generate-token
@@ -72,8 +70,8 @@ different use case.
 
 The developer mode bypasses encryption and authentication token verification.
 
-![REST API - Developer Mode](rest-api-developer-mode.light.png#gh-light-mode-only)
-![REST API - Developer Mode](rest-api-developer-mode.dark.png#gh-dark-mode-only)
+![REST API - Developer Mode](/img/rest-api-developer-mode.light.png#gh-light-mode-only)
+![REST API - Developer Mode](/img/rest-api-developer-mode.dark.png#gh-dark-mode-only)
 
 Pass `--mode=dev` to start the REST API in developer mode:
 
@@ -85,10 +83,11 @@ vast web server --mode=dev
 
 The server mode reflects the "traditional" mode of operation where VAST binds to
 a network interface. This mode only accepts HTTPS connections and requires a
-valid authentication token for every request.
+valid authentication token for every request. This is the default mode of
+operation.
 
-![REST API - Server Mode](rest-api-server-mode.light.png#gh-light-mode-only)
-![REST API - Server Mode](rest-api-server-mode.dark.png#gh-dark-mode-only)
+![REST API - Server Mode](/img/rest-api-server-mode.light.png#gh-light-mode-only)
+![REST API - Server Mode](/img/rest-api-server-mode.dark.png#gh-dark-mode-only)
 
 Pass `--mode=server` to start the REST API in server mode:
 
@@ -96,18 +95,14 @@ Pass `--mode=server` to start the REST API in server mode:
 vast web server --mode=server
 ```
 
-:::info
-VAST defaults to this mode if you do not provide a specific mode via `--mode`.
-:::
-
 ### Upstream TLS Mode
 
 The upstream TLS mode is suitable when VAST sits upstream of a separate
 TLS terminator that is running on the same machine. This kind of setup
 is commonly encountered when running nginx as a reverse proxy.
 
-![REST API - TLS Upstream Mode](rest-api-tls-upstream-mode.light.png#gh-light-mode-only)
-![REST API - TLS Upstream Mode](rest-api-tls-upstream-mode.dark.png#gh-dark-mode-only)
+![REST API - TLS Upstream Mode](/img/rest-api-tls-upstream-mode.light.png#gh-light-mode-only)
+![REST API - TLS Upstream Mode](/img/rest-api-tls-upstream-mode.dark.png#gh-dark-mode-only)
 
 VAST only listens on localhost addresses, accepts plain HTTP but still
 checks authentication tokens.
@@ -129,8 +124,8 @@ VAST only accepts HTTPS requests, requires TLS client certificates for incoming
 connections, and requires valid authentication tokens for any authenticated
 endpoints.
 
-![REST API - Mutual TLS Mode](rest-api-mutual-tls-mode.light.png#gh-light-mode-only)
-![REST API - Mutual TLS Mode](rest-api-mutual-tls-mode.dark.png#gh-dark-mode-only)
+![REST API - Mutual TLS Mode](/img/rest-api-mutual-tls-mode.light.png#gh-light-mode-only)
+![REST API - Mutual TLS Mode](/img/rest-api-mutual-tls-mode.dark.png#gh-dark-mode-only)
 
 Pass `--mode=mtls` to start the REST API in server mode:
 
@@ -144,8 +139,8 @@ There are two ways to scale the REST API, shall it be the bottleneck. You can
 either spawn more REST API actors within VAST and expose them at different
 ports, or you can spawn more dedicated web server processes:
 
-![REST API - Multiple Deployments](rest-api-deployment-multiple.light.png#gh-light-mode-only)
-![REST API - Multiple Deployments](rest-api-deployment-multiple.dark.png#gh-dark-mode-only)
+![REST API - Multiple Deployments](/img/rest-api-deployment-multiple.light.png#gh-light-mode-only)
+![REST API - Multiple Deployments](/img/rest-api-deployment-multiple.dark.png#gh-dark-mode-only)
 
 We do not anticipate that the web frontend will be on the critical path, since
 the web server itself performs very little work. But we get this form of scaling

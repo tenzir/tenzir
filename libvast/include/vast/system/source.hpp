@@ -101,8 +101,7 @@ struct source_state {
   // -- utility functions -----------------------------------------------------
 
   /// Initializes the state.
-  void
-  initialize(const type_registry_actor& type_registry, std::string type_filter);
+  void initialize(const catalog_actor& catalog, std::string type_filter);
 
   void send_report();
 
@@ -116,7 +115,7 @@ struct source_state {
 /// @param reader The reader instance.
 /// @param table_slice_size The maximum size for a table slice.
 /// @param max_events The optional maximum amount of events to import.
-/// @param type_registry The actor handle for the type-registry component.
+/// @param catalog The actor handle for the catalog component.
 /// @param local_module Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
 /// @param accountant_actor The actor handle for the accountant component.
@@ -124,7 +123,7 @@ struct source_state {
 caf::behavior
 source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
        size_t table_slice_size, std::optional<size_t> max_events,
-       const type_registry_actor& type_registry, vast::module local_module,
+       const catalog_actor& catalog, vast::module local_module,
        std::string type_filter, accountant_actor accountant,
        std::vector<pipeline>&& input_pipelines);
 

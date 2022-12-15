@@ -288,17 +288,6 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
       },
       x, y);
   };
-  auto eval_match = [](const auto& x, const auto& y) {
-    return caf::visit(detail::overload{
-                        [](const auto&, const auto&) {
-                          return false;
-                        },
-                        [](const std::string& lhs, const pattern& rhs) {
-                          return rhs.match(lhs);
-                        },
-                      },
-                      x, y);
-  };
   auto eval_in = [](const auto& x, const auto& y) {
     return caf::visit(detail::overload{
                         [](const auto&, const auto&) {
@@ -327,10 +316,6 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
     default:
       VAST_ASSERT(!"missing case");
       return false;
-    case relational_operator::match:
-      return eval_match(lhs, rhs);
-    case relational_operator::not_match:
-      return !eval_match(lhs, rhs);
     case relational_operator::in:
       return eval_in(lhs, rhs);
     case relational_operator::not_in:

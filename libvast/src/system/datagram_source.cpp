@@ -41,7 +41,7 @@ caf::behavior datagram_source(
   caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
   uint16_t udp_listening_port, format::reader_ptr reader,
   size_t table_slice_size, std::optional<size_t> max_events,
-  const type_registry_actor& type_registry, vast::module local_module,
+  const catalog_actor& catalog, vast::module local_module,
   std::string type_filter, accountant_actor accountant,
   std::vector<pipeline>&& pipelines) {
   self->state.transformer
@@ -70,7 +70,7 @@ caf::behavior datagram_source(
   self->state.done = false;
   // Register with the accountant.
   self->send(self->state.accountant, atom::announce_v, self->state.name);
-  self->state.initialize(type_registry, std::move(type_filter));
+  self->state.initialize(catalog, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
     self->state.done = true;

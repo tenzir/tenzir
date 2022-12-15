@@ -203,7 +203,6 @@ TEST(evaluation) {
 TEST(evaluation - pattern matching) {
   CHECK(evaluate(pattern{"f.*o"}, relational_operator::equal, "foo"));
   CHECK(evaluate("foo", relational_operator::equal, pattern{"f.*o"}));
-  CHECK(evaluate("foo", relational_operator::match, pattern{"f.*o"}));
 }
 
 TEST(serialization) {

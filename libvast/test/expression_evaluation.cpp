@@ -55,13 +55,6 @@ TEST(evaluation - meta extractor - #type) {
   CHECK_EQUAL(ids, make_ids({{0, zeek_conn_log_slice.rows()}}));
 }
 
-TEST(evaluation - meta extractor - #field) {
-  auto expr = make_expr("#field == \"a.b.c\"");
-  auto ids = evaluate(expr, zeek_conn_log_slice, {});
-  CHECK_EQUAL(ids.size(), zeek_conn_log_slice.rows());
-  CHECK(all<0>(ids));
-}
-
 TEST(evaluation - type extractor - count) {
   // head -n 108 conn.log | grep '\t350\t' | wc -l
   auto expr = make_conn_expr(":count == 350");

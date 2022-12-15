@@ -302,15 +302,6 @@ validator::operator()(const meta_extractor& ex, const data& d) {
                            "type meta extractor requires string or pattern "
                            "operand",
                            "#type", op_, d);
-  if (ex.kind == meta_extractor::field) {
-    if (!caf::holds_alternative<std::string>(d)
-        || op_ != relational_operator::equal)
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("field attribute extractor only "
-                                         "supports string equality operations: "
-                                         "#field {} {}",
-                                         op_, d));
-  }
   if (ex.kind == meta_extractor::import_time) {
     if (!caf::holds_alternative<time>(d)
         || !(op_ == relational_operator::less
@@ -406,8 +397,8 @@ caf::expected<expression> type_resolver::operator()(const predicate& p) {
 
 caf::expected<expression>
 type_resolver::operator()(const meta_extractor& ex, const data& d) {
-  // We're leaving all attributes alone, because both #type and #field operate
-  // at a different granularity.
+  // We're leaving all attributes alone, because both #type and #import_time
+  // operate at a different granularity.
   return predicate{ex, op_, d};
 }
 
@@ -460,10 +451,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
     return expression{}; // did not resolve
   if (connective.size() == 1)
     return {std::move(connective[0])};
-  if (op_ == relational_operator::not_equal
-      || op_ == relational_operator::not_match
-      || op_ == relational_operator::not_in
-      || op_ == relational_operator::not_ni)
+  if (is_negated(op_))
     return {conjunction{std::move(connective)}};
   return {disjunction{std::move(connective)}};
 }

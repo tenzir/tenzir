@@ -196,7 +196,8 @@ TEST(empty partition roundtrip) {
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
   CHECK_EQUAL(ps->events, state.data.events);
   auto catalog
-    = self->spawn(vast::system::catalog, vast::system::accountant_actor{});
+    = self->spawn(vast::system::catalog, vast::system::accountant_actor{},
+                  directory / "types");
   auto rp = self->request(catalog, caf::infinite, vast::atom::merge_v,
                           recovered_state.id, ps);
   run();
@@ -293,31 +294,30 @@ TEST(full partition roundtrip) {
       },
     };
   };
-  auto test_expression
-    = [&](const vast::expression& expression, size_t expected_hits) {
-        uint64_t tally = 0;
-        auto result = std::make_shared<uint64_t>();
-        auto dummy = self->spawn(dummy_client, result);
-        auto rp = self->request(
-          readonly_partition, caf::infinite, vast::atom::query_v,
-          vast::query_context::make_count(
-            "test", dummy, vast::count_query_context::mode::estimate,
-            expression));
-        run();
-        rp.receive(
-          [&tally](uint64_t x) {
-            tally = x;
-          },
-          [](caf::error& e) {
-            REQUIRE_EQUAL(e, caf::error{});
-          });
-        run();
-        self->send_exit(dummy, caf::exit_reason::user_shutdown);
-        run();
-        CHECK_EQUAL(*result, expected_hits);
-        CHECK_EQUAL(tally, expected_hits);
-        return true;
-      };
+  auto test_expression = [&](const vast::expression& expression,
+                             size_t expected_hits) {
+    uint64_t tally = 0;
+    auto result = std::make_shared<uint64_t>();
+    auto dummy = self->spawn(dummy_client, result);
+    auto rp = self->request(
+      readonly_partition, caf::infinite, vast::atom::query_v,
+      vast::query_context::make_count(
+        "test", dummy, vast::count_query_context::mode::estimate, expression));
+    run();
+    rp.receive(
+      [&tally](uint64_t x) {
+        tally = x;
+      },
+      [](caf::error& e) {
+        REQUIRE_EQUAL(e, caf::error{});
+      });
+    run();
+    self->send_exit(dummy, caf::exit_reason::user_shutdown);
+    run();
+    CHECK_EQUAL(*result, expected_hits);
+    CHECK_EQUAL(tally, expected_hits);
+    return true;
+  };
   auto x_equals_zero = vast::expression{
     vast::predicate{vast::field_extractor{"x"},
                     vast::relational_operator::equal, vast::data{0u}}};

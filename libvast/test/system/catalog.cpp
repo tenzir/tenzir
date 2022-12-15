@@ -15,11 +15,14 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/query_context.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/index.hpp"
+#include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
@@ -41,6 +44,8 @@ namespace {
 
 constexpr size_t num_partitions = 4;
 constexpr size_t num_events_per_parttion = 25;
+constexpr uint32_t taste_count = 4;
+constexpr size_t num_query_supervisors = 1;
 
 const vast::time epoch;
 
@@ -57,6 +62,14 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
   result.min_import_time = ts.import_time();
   result.max_import_time = ts.import_time();
   return result;
+}
+
+template <class... Ts>
+vast::table_slice make_data(const vast::type& layout, Ts&&... ts) {
+  auto builder = factory<table_slice_builder>::make(
+    defaults::import::table_slice_type, layout);
+  REQUIRE(builder->add(std::forward<Ts>(ts)...));
+  return builder->finish();
 }
 
 // Builds a chain of events that are 1s apart, where consecutive chunks of
@@ -120,7 +133,15 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     factory<synopsis>::initialize();
     MESSAGE("register table_slice_builder factory");
     factory<table_slice_builder>::initialize();
-    meta_idx = self->spawn(catalog, accountant_actor{});
+    auto index_dir = directory / "index";
+    auto fs = self->spawn(system::posix_filesystem, directory,
+                          system::accountant_actor{});
+    catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");
+    index = self->spawn(system::index, system::accountant_actor{}, fs,
+                        system::archive_actor{}, catalog_act, index_dir,
+                        defaults::system::store_backend, slice_size,
+                        vast::duration{}, num_partitions, taste_count,
+                        num_query_supervisors, index_dir, vast::index_config{});
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -143,7 +164,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
           caf::get<vast::time>(unbox(to<data>("2015-01-02"))));
       auto ps = caf::make_copy_on_write<partition_synopsis>(
         make_partition_synopsis(part.slice));
-      merge(meta_idx, part.id, ps);
+      merge(catalog_act, part.id, ps);
     }
     MESSAGE("verify generated timestamps");
     {
@@ -161,6 +182,10 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       CHECK_EQUAL(p3.range.to, epoch + 99s);
     }
     MESSAGE("run test");
+  }
+
+  ~fixture() {
+    anon_send_exit(index, caf::exit_reason::user_shutdown);
   }
 
   auto slice(size_t first, size_t last) const {
@@ -183,8 +208,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     std::vector<uuid> result;
     auto query_context = vast::query_context::make_extract(
       "test", self, unbox(to<expression>(expr)));
-    auto rp = self->request(meta_idx, caf::infinite, vast::atom::candidates_v,
-                            std::move(query_context));
+    auto rp = self->request(catalog_act, caf::infinite,
+                            vast::atom::candidates_v, std::move(query_context));
     run();
     rp.receive(
       [&](catalog_result mdx_result) {
@@ -227,11 +252,11 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
   }
 
   auto lookup(expression expr) {
-    return lookup(meta_idx, std::move(expr));
+    return lookup(catalog_act, std::move(expr));
   }
 
   auto lookup(std::string_view expr) {
-    return lookup(meta_idx, expr);
+    return lookup(catalog_act, expr);
   }
 
   void merge(catalog_actor& meta_idx, const vast::uuid& id,
@@ -252,11 +277,14 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     q += " && :timestamp <= 1970-01-01+";
     q += hhmmss_to;
     q += ".0";
-    return lookup(meta_idx, q);
+    return lookup(catalog_act, q);
   }
 
   // Our unit-under-test.
-  catalog_actor meta_idx;
+  catalog_actor catalog_act;
+
+  // Index for registering types.
+  index_actor index;
 
   // Partition IDs.
   std::vector<uuid> ids;
@@ -288,10 +316,10 @@ TEST(attribute extractor - type) {
   CHECK_EQUAL(lookup("#type == \"foo\""), foo);
   CHECK_EQUAL(lookup("#type == \"bar\""), empty());
   CHECK_EQUAL(lookup("#type != \"foo\""), foobar);
-  CHECK_EQUAL(lookup("#type ~ /f.o/"), foo);
-  CHECK_EQUAL(lookup("#type ~ /f.*/"), ids);
-  CHECK_EQUAL(lookup("#type ~ /x/"), empty());
-  CHECK_EQUAL(lookup("#type !~ /x/"), ids);
+  CHECK_EQUAL(lookup("#type == /f.o/"), foo);
+  CHECK_EQUAL(lookup("#type == /f.*/"), ids);
+  CHECK_EQUAL(lookup("#type == /x/"), empty());
+  CHECK_EQUAL(lookup("#type != /x/"), ids);
 }
 
 // Test the import timestamp meta extractor. Half the test data was set to
@@ -332,7 +360,7 @@ TEST(catalog with bool synopsis) {
   MESSAGE("generate slice data and add it to the catalog");
   // FIXME: do we have to replace the catalog from the fixture with a new
   // one for this test?
-  auto meta_idx = self->spawn(catalog, accountant_actor{});
+  auto meta_idx = self->spawn(catalog, accountant_actor{}, directory / "types");
   auto layout = type{
     "test",
     record_type{
@@ -402,8 +430,8 @@ TEST(catalog messages) {
   auto query_context
     = query_context::make_count("test", system::receiver_actor<uint64_t>{},
                                 count_query_context::estimate, expr);
-  auto expr_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
+  auto expr_response = self->request(catalog_act, caf::infinite,
+                                     atom::candidates_v, query_context);
   run();
   expr_response.receive(
     [this](catalog_result& candidates) {
@@ -421,8 +449,8 @@ TEST(catalog messages) {
   // Sending NEITHER an expression nor ids should return an error.
   query_context.expr = vast::expression{};
   query_context.ids = vast::ids{};
-  auto neither_response
-    = self->request(meta_idx, caf::infinite, atom::candidates_v, query_context);
+  auto neither_response = self->request(catalog_act, caf::infinite,
+                                        atom::candidates_v, query_context);
   run();
   neither_response.receive(
     [](const catalog_result&) {
@@ -431,6 +459,45 @@ TEST(catalog messages) {
     [](const caf::error&) {
       // nop
     });
+}
+
+TEST(catalog taxonomies) {
+  MESSAGE("setting a taxonomy");
+  auto c1 = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
+                          {"bar", {"", {"a.b@r", "b.baR"}, {}}}}};
+  auto t1 = taxonomies{c1, models_map{}};
+  self->send(catalog_act, atom::put_v, t1);
+  run();
+  MESSAGE("collecting some types");
+  const vast::type la = vast::type{
+    "a",
+    vast::record_type{
+      {"fo0", vast::string_type{}},
+    },
+  };
+  auto slices_a = std::vector{make_data(la, "bogus")};
+  const vast::type lx = vast::type{
+    "x",
+    vast::record_type{
+      {"foe", vast::count_type{}},
+    },
+  };
+  auto slices_x = std::vector{make_data(lx, 1u)};
+  vast::detail::spawn_container_source(sys, std::move(slices_a), index);
+  vast::detail::spawn_container_source(sys, std::move(slices_x), index);
+  run();
+  MESSAGE("resolving an expression");
+  auto exp = unbox(to<expression>("foo == 1"));
+  auto ref = unbox(to<expression>("x.foe == 1"));
+  self->send(catalog_act, atom::resolve_v, exp);
+  run();
+  expression result;
+  self->receive(
+    [&](expression r) {
+      result = r;
+    },
+    error_handler());
+  CHECK_EQUAL(result, ref);
 }
 
 FIXTURE_SCOPE_END()

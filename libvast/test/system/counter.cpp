@@ -72,7 +72,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     archive = self->spawn(system::archive, directory / "archive",
                           defaults::system::segments,
                           defaults::system::max_segment_size);
-    catalog = self->spawn(system::catalog, system::accountant_actor{});
+    catalog = self->spawn(system::catalog, system::accountant_actor{},
+                          directory / "types");
     client = sys.spawn(mock_client);
     run();
   }
@@ -84,11 +85,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   system::filesystem_actor fs;
   system::index_actor index;
-  system::catalog_actor catalog;
   system::archive_actor archive;
   // Type registry should only be used for partition transforms, so it's
   // safe to pass a nullptr in this test.
-  system::type_registry_actor type_registry = {};
+  system::catalog_actor catalog = {};
   caf::actor client;
 };
 
@@ -98,11 +98,11 @@ FIXTURE_SCOPE(counter_tests, fixture)
 
 TEST(count IP point query with partition - local stores) {
   auto indexdir = directory / "index";
-  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
-                           archive, catalog, type_registry, indexdir,
-                           defaults::system::store_backend,
-                           defaults::import::table_slice_size, duration{}, 100,
-                           3, 1, indexdir, vast::index_config{});
+  auto index
+    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
+                  catalog, indexdir, defaults::system::store_backend,
+                  defaults::import::table_slice_size, duration{}, 100, 3, 1,
+                  indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
   detail::spawn_container_source(sys, take(zeek_conn_log_full, 4), index);
   MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
@@ -127,11 +127,11 @@ TEST(count IP point query with partition - local stores) {
 TEST(count meta extractor import time 1) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index";
-  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
-                           archive, catalog, type_registry, indexdir,
-                           defaults::system::store_backend,
-                           defaults::import::table_slice_size, duration{}, 100,
-                           3, 1, indexdir, vast::index_config{});
+  auto index
+    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
+                  catalog, indexdir, defaults::system::store_backend,
+                  defaults::import::table_slice_size, duration{}, 100, 3, 1,
+                  indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
   auto slices = take(zeek_conn_log_full, 4);
   for (auto& slice : slices) {
@@ -164,11 +164,11 @@ TEST(count meta extractor import time 1) {
 TEST(count meta extractor import time 2) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index";
-  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
-                           archive, catalog, type_registry, indexdir,
-                           defaults::system::store_backend,
-                           defaults::import::table_slice_size, duration{}, 100,
-                           3, 1, indexdir, vast::index_config{});
+  auto index
+    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
+                  catalog, indexdir, defaults::system::store_backend,
+                  defaults::import::table_slice_size, duration{}, 100, 3, 1,
+                  indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
   auto slices = take(zeek_conn_log_full, 4);
   for (auto& slice : slices) {

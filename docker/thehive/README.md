@@ -28,7 +28,7 @@ If you have VAST instance running locally already or you don't plan on using the
 Cortex VAST Analyzer, run the default configuration:
 
 ```bash
-docker compose up -f thehive.yaml --build
+docker compose -f thehive.yaml up --build
 ```
 
 You can also use the `VAST_ENDPOINT` environment variable to target a remote
