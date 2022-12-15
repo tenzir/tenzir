@@ -131,7 +131,7 @@ jobs:
             vast_tag="${build_version}"
             vast_container_ref="${{ github.sha }}"
           fi
-          cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}
+          cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}"
           for plugin in $(ls plugins); do
             var="VAST_PLUGIN_${plugin^^}_REVISION"
             value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"

@@ -121,7 +121,7 @@ struct catalog_result {
     return detail::inspect_enum(f, x);
   }
 
-  enum kind kind{kind::exact};
+  enum kind kind { kind::exact };
   std::vector<partition_info> partitions;
 
   template <class Inspector>
