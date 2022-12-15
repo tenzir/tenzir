@@ -31,8 +31,8 @@ type suricata.component.app_proto = record {
 }
 
 type suricata.component.ja3 = record {
-      hash: string #index=hash,
-      string: string,
+  hash: string #index=hash,
+  string: string,
 }
 
 type suricata.component.quic_extensions = record {
