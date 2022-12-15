@@ -65,7 +65,7 @@ docker compose run --no-TTY vast import --blocking suricata \
 
 # Check whether we imported the right amount of data.
 num_imported="$(docker compose run --interactive=false vast count)"
-num_imported_expected="18493"
+num_imported_expected="18494"
 [[ "${num_imported}" == "${num_imported_expected}" ]]
 
 # Print logs for easier debugging in case something went wrong.
