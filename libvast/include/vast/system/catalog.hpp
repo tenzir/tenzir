@@ -53,11 +53,11 @@ struct catalog_lookup_result {
   }
 
   [[nodiscard]] size_t size() const noexcept {
-    size_t num_candidates = 0;
-    for (const auto& [type, cand_info] : candidate_infos) {
-      num_candidates += cand_info.partition_infos.size();
-    }
-    return num_candidates;
+    return std::accumulate(candidate_infos.begin(), candidate_infos.end(),
+                           size_t{0}, [](auto i, const auto& cat_result) {
+                             return std::move(i)
+                                    + cat_result.second.partition_infos.size();
+                           });
   }
 
   template <class Inspector>

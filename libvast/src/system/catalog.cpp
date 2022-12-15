@@ -687,11 +687,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       if (!result) {
         return result.error();
       }
-      auto total_candidate_amount = std::accumulate(
-        result->candidate_infos.begin(), result->candidate_infos.end(),
-        size_t{0}, [](auto i, const auto& cat_result) {
-          return std::move(i) + cat_result.second.partition_infos.size();
-        });
+      auto total_candidate_amount = result->size();
       auto id_str = fmt::to_string(query_context.id);
       duration runtime = std::chrono::steady_clock::now() - start;
       self->send(self->state.accountant, atom::metrics_v,
