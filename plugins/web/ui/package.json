@@ -38,5 +38,6 @@
   "type": "module",
   "dependencies": {
     "@sveltestack/svelte-query": "^1.6.0"
-  }
+  },
+  "packageManager": "yarn@3.3.0"
 }
