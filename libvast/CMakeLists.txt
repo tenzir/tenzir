@@ -175,11 +175,14 @@ if (NOT VAST_ENABLE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   provide_find_module(CAF)
   find_package(
-    CAF 0.18.6 EXACT
+    CAF EXACT
     COMPONENTS core io test
     REQUIRED)
+  if (NOT ${CAF_VERSION_MINOR} EQUAL 18)
+    message(FATAL_ERROR "Failed to find CAF with 0.18.x version. Found version: ${CAF_VERSION}")
+  endif()
   string(APPEND VAST_FIND_DEPENDENCY_LIST
-         "\nfind_package(CAF 0.18.6 EXACT COMPONENTS core io test REQUIRED)")
+         "\nfind_package(CAF ${CAF_VERSION} COMPONENTS core io test openssl REQUIRED)")
   if (VAST_ENABLE_OPENSSL)
     find_package(
       CAF 0.18.6 EXACT

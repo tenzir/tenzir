@@ -111,7 +111,7 @@ jobs:
             vast_tag="${build_version}"
             vast_container_ref="${{ github.sha }}"
           fi
-          cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag} -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON"
+          cmake_version_args="-DVAST_VERSION_TAG:STRING=${vast_tag}
           for plugin in $(ls plugins); do
             var="VAST_PLUGIN_${plugin^^}_REVISION"
             value="g$(git rev-list --abbrev-commit --abbrev=10 -1 "${vast_tag}" -- "plugins/${plugin}")"
@@ -599,7 +599,7 @@ jobs:
             cc: gcc-10
             cxx: g++-10
             dependencies-script-path: scripts/debian/install-dev-dependencies.sh
-            cmake-extra-flags:
+            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
           - os: macos-latest
             container: null
             name: macOS
