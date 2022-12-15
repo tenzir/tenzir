@@ -564,13 +564,11 @@ function (VASTRegisterPlugin)
 
     # Install the plugin library to <libdir>/vast/plugins, and also configure
     # the library output directory accordingly.
-    if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-      set_target_properties(
-        ${PLUGIN_TARGET}-shared
-        PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-                   "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
-                   OUTPUT_NAME "vast-plugin-${PLUGIN_TARGET}")
-    endif ()
+    set_target_properties(
+      ${PLUGIN_TARGET}-shared
+      PROPERTIES LIBRARY_OUTPUT_DIRECTORY
+                 "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
+                 OUTPUT_NAME "vast-plugin-${PLUGIN_TARGET}")
     install(
       TARGETS ${PLUGIN_TARGET}-shared
       DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins"
