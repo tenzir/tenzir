@@ -56,6 +56,11 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
   switch (x->table_slice_type()) {
     case fbs::table_slice::TableSlice::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
+    case fbs::table_slice::TableSlice::msgpack_v0:
+    case fbs::table_slice::TableSlice::msgpack_v1:
+    case fbs::table_slice::TableSlice::arrow_v0:
+    case fbs::table_slice::TableSlice::arrow_v1:
+      die("outdated table slice encoding");
     case fbs::table_slice::TableSlice::arrow_v2:
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_arrow_v2());

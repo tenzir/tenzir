@@ -14,9 +14,23 @@ table v2 {
 
 namespace vast.fbs.table_slice;
 
+// TODO: Deprecating members of unions in order for them to be skipped in code
+// generation is a feature that's too new for the FlatBuffers version used in
+// our Dockerfile. If we had it, the TableSlice union would just be this:
+//
+//   union TableSlice { arrow.v2 (id: 4), }
+//
+// Because that doesn't compile with our targeted minimum version of flatc we
+// instead use this empty stub table.
+table Stub {}
+
 /// The union of all possible table slice encoding and version combinations.
 union TableSlice {
-  arrow.v2 (id: 4),
+  arrow.v0: Stub,
+  msgpack.v0: Stub,
+  arrow.v1: Stub,
+  msgpack.v1: Stub,
+  arrow.v2,
 }
 
 namespace vast.fbs;
