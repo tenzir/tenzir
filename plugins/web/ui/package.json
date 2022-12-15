@@ -16,7 +16,6 @@
     "@neoconfetti/svelte": "^1.0.0",
     "@playwright/test": "^1.28.1",
     "@rgossiaux/svelte-headlessui": "^1.0.2",
-    "@sveltejs/adapter-auto": "next",
     "@sveltejs/adapter-static": "1.0.0-next.44",
     "@sveltejs/kit": "next",
     "@types/cookie": "^0.5.1",
