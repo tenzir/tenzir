@@ -641,7 +641,7 @@ jobs:
       - name: Build Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |
-          nix run .#stream-image | docker load
+          nix run .#stream-static-image | docker load
       - name: Upload Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |

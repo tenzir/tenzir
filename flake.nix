@@ -43,7 +43,7 @@
       };
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       apps.vast-static = flake-utils.lib.mkApp { drv = packages.vast-static; };
-      apps.stream-image = {
+      apps.stream-static-image = {
         type = "app";
         program = "${pkgs.dockerTools.streamLayeredImage {
           name = "tenzir/vast-slim";
@@ -52,6 +52,7 @@
             vast-dir = "/var/lib/vast";
           in {
             Entrypoint = [ "${self.packages.${system}."vast-static"}/bin/vast" ];
+            CMD = [ "--help" ];
             Env = [
               # When changing these, make sure to also update the entries in the
               # Dockerfile.
