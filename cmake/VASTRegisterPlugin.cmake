@@ -517,7 +517,10 @@ function (VASTRegisterPlugin)
     if (NOT PLUGIN_REVISION)
       set(PLUGIN_REVISION \"${VAST_PLUGIN_REVISION_FALLBACK}\")
     endif ()
-    set(VAST_PLUGIN_VERSION \"v${PROJECT_VERSION}-\${PLUGIN_REVISION}\")
+    set(VAST_PLUGIN_VERSION \"v${PROJECT_VERSION}\")
+    if (PLUGIN_REVISION)
+      string(APPEND VAST_PLUGIN_VERSION \"-\${PLUGIN_REVISION}\")
+    endif ()
     configure_file(\"${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in\"
                   \"${CMAKE_CURRENT_BINARY_DIR}/config.cpp\" @ONLY)")
   set_source_files_properties(
