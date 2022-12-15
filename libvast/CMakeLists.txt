@@ -233,7 +233,6 @@ else ()
       PRIVATE
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
         $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
-    add_library(libcaf_test INTERFACE)
     target_link_libraries(libcaf_test INTERFACE CAF::core)
     target_include_directories(
       libcaf_test
