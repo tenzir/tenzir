@@ -1257,7 +1257,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.catalog = std::move(catalog);
-  self->request(self->state.catalog, caf::infinite, atom::load_v)
+  self->request(self->state.catalog, caf::infinite, atom::get_v, atom::taxonomies_v)
     .await(
       [self](vast::taxonomies& taxonomies) {
         self->state.taxonomies

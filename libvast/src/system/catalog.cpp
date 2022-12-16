@@ -572,6 +572,14 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     self->quit(std::move(err));
     return catalog_actor::behavior_type::make_empty_behavior();
   }
+  self->request(static_cast<catalog_actor>(self), caf::infinite, atom::load_v)
+    .await([](atom::ok) {},
+           [](caf::error& err) {
+             VAST_WARN("catalog failed to load taxonomy "
+                       "definitions: {}",
+                       std::move(err));
+             // TODO: Shutdown when failing?
+           });
   // Load loaded schema types from the singleton.
   // TODO: Move to the load handler and re-parse the files.
   if (const auto* module = vast::event_types::get())
@@ -650,7 +658,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         self->state.merge(aps.uuid, aps.synopsis);
       return atom::ok_v;
     },
-    [self](atom::load) -> caf::result<vast::taxonomies> {
+    [self](atom::load) -> caf::result<atom::ok> {
       VAST_DEBUG("{} loads taxonomies", *self);
       std::error_code err{};
       auto dirs = get_module_dirs(self->system().config());
@@ -687,9 +695,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
           }
         }
       }
-      self->state.taxonomies
-        = taxonomies{std::move(concepts), std::move(models)};
-      return self->state.taxonomies;
+      return atom::ok_v;
     },
     [self](atom::candidates, const vast::query_context& query_context)
       -> caf::result<catalog_lookup_result> {
