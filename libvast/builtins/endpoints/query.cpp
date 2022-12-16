@@ -41,14 +41,15 @@ static auto const* SPEC_V0 = R"_(
     responses:
       200:
         description: Success.
-        content: application/json
-        schema:
-          type: object
-          example:
-            id: c91019bf-21fe-4999-8323-4d28aeb111ab
-          properties:
-            id:
-              type: string
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                id: c91019bf-21fe-4999-8323-4d28aeb111ab
+              properties:
+                id:
+                  type: string
       401:
         description: Not authenticated.
       422:
@@ -76,22 +77,24 @@ static auto const* SPEC_V0 = R"_(
     responses:
       200:
         description: Success.
-        content: application/json
-        schema:
-          type: object
-          properties:
-            position:
-              type: integer
-              description: The total number of events that has been returned by previous calls to this endpoint.
-            events:
-              type: array
-              items: object
-              description: The returned events.
-          example:
-            position: 20
-            events:
-              - {"ts": "2009-11-18T22:11:04.011822", "uid": "iKxhjl8i1n3", "id.orig_h": "192.168.1.103"}
-              - {"ts": "2009-11-18T22:13:38.992072", "uid": "wsB2v2jcIXa", "id.orig_h": "192.168.1.103"}
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                position:
+                  type: integer
+                  description: The total number of events that has been returned by previous calls to this endpoint.
+                events:
+                  type: array
+                  items:
+                    type: object
+                  description: The returned events.
+              example:
+                position: 20
+                events:
+                  - {"ts": "2009-11-18T22:11:04.011822", "uid": "iKxhjl8i1n3", "id.orig_h": "192.168.1.103"}
+                  - {"ts": "2009-11-18T22:13:38.992072", "uid": "wsB2v2jcIXa", "id.orig_h": "192.168.1.103"}
       401:
         description: Not authenticated.
       422:

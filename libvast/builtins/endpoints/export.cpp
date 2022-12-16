@@ -36,16 +36,16 @@ static auto const* SPEC_V0 = R"_(
         name: expression
         schema:
           type: string
+          default: A query matching every event.
         required: true
-        default: A query matching every event.
         description: The query expression to execute.
         example: ":addr in 10.42.0.0/16"
       - in: query
         name: limit
         schema:
           type: integer
+          default: 50
         required: false
-        default: 50
         description: Maximum number of returned events.
         example: 3
       - in: query
@@ -62,25 +62,25 @@ static auto const* SPEC_V0 = R"_(
       - in: query
         name: flatten
         schema:
-          type: bool
+          type: boolean
+          default: false
         required: false
-        default: false
         description: Flatten nested elements in the response data.
         example: false
       - in: query
         name: omit-nulls
         schema:
-          type: bool
+          type: boolean
+          default: false
         required: false
-        default: false
         description: Omit null elements in the response data.
         example: false
       - in: query
         name: numeric-durations
         schema:
-          type: bool
+          type: boolean
+          default: false
         required: false
-        default: false
         description: Render durations as numeric values.
         example: false
     responses:
@@ -97,7 +97,8 @@ static auto const* SPEC_V0 = R"_(
                     type: string
                   events:
                     type: array
-                    items: object
+                    items:
+                      type: object
                 example:
                   version: v2.3.0-169-ge42a9652e5-dirty
                   num_events: 3
@@ -120,16 +121,15 @@ static auto const* SPEC_V0 = R"_(
         application/json:
           schema:
             type: object
+            required: ["expression"]
             properties:
               expression:
-                required: false
                 type: string
                 description: The query expression to execute.
                 example: ":addr in 10.42.0.0/16"
                 default: A query matching every event.
               limit:
                 type: integer
-                required: false
                 default: 50
                 description: Maximum number of returned events
                 example: 3
@@ -142,20 +142,17 @@ static auto const* SPEC_V0 = R"_(
                       type: object
                 description: A JSON object describing a pipeline to be applied on the exported data.
               omit-nulls:
-                type: bool
+                type: boolean
                 description: Omit null elements in the response data.
-                required: false
                 default: false
                 example: false
               numeric-durations:
-                type: bool
-                required: false
+                type: boolean
                 default: false
                 description: Render durations as numeric values.
                 example: false
               flatten:
-                type: bool
-                required: false
+                type: boolean
                 default: true
                 description: Flatten nested elements in the response data.
                 example: false
@@ -173,7 +170,8 @@ static auto const* SPEC_V0 = R"_(
                     type: string
                   events:
                     type: array
-                    items: object
+                    items:
+                      type: object
                 example:
                   version: v2.3.0-169-ge42a9652e5-dirty
                   events:
@@ -200,21 +198,21 @@ static auto const* SPEC_V0 = R"_(
         application/json:
           schema:
             type: object
+            required: ["expression"]
             properties:
               expression:
-                required: false
                 type: string
                 description: The query expression to execute.
                 example: ":addr in 10.42.0.0/16"
                 default: A query matching every event.
               limit:
                 type: integer
-                required: false
                 default: 50
                 description: Maximum number of returned events
                 example: 3
               pipeline:
                 type: object
+                required: ["steps"]
                 properties:
                   steps:
                     type: array
@@ -222,20 +220,17 @@ static auto const* SPEC_V0 = R"_(
                       type: object
                 description: A JSON object describing a pipeline to be applied on the exported data.
               omit-nulls:
-                type: bool
+                type: boolean
                 description: Omit null elements in the response data.
-                required: false
                 default: false
                 example: false
               numeric-durations:
-                type: bool
-                required: false
+                type: boolean
                 default: false
                 description: Render durations as numeric values.
                 example: false
               flatten:
-                type: bool
-                required: false
+                type: boolean
                 default: true
                 description: Flatten nested elements in the response data.
                 example: false
@@ -269,7 +264,8 @@ static auto const* SPEC_V0 = R"_(
                                 type: string
                         data:
                           type: array
-                          items: object
+                          items:
+                            type: object
 
                 example:
                   version: v2.3.0-169-ge42a9652e5-dirty

@@ -25,7 +25,7 @@ auto specification_command(const vast::invocation&, caf::actor_system&)
     {"info",
      record{
        {"title", "VAST Rest API"},
-       {"version", "0.1"},
+       {"version", "\"0.1\""},
        {"description", R"_(
 This API can be used to interact with a VAST Node in a RESTful manner.
 
