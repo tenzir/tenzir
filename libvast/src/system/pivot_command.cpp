@@ -136,7 +136,7 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     .until([&] { return stop; });
   if (err)
     return caf::make_message(std::move(err));
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

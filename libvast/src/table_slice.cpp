@@ -332,7 +332,10 @@ time table_slice::import_time() const noexcept {
 }
 
 void table_slice::import_time(time import_time) noexcept {
-  VAST_ASSERT(chunk_->unique());
+  if (!chunk_->unique()) {
+    VAST_WARN("setting import timestamp on a shared table slice incurs a copy");
+    chunk_ = chunk::copy(*chunk_);
+  }
   auto f = detail::overload{
     []() noexcept {
       die("cannot assign import time to invalid table slice");

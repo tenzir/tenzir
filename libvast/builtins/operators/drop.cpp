@@ -9,6 +9,7 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/detail/inspection_common.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
@@ -33,7 +34,7 @@ struct configuration {
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.fields);
+    return detail::apply_all(f, x.fields, x.schemas);
   }
 
   /// Enable parsing from a record via convertible.

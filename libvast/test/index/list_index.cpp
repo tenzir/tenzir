@@ -63,8 +63,8 @@ TEST(list) {
     to_string(*idx.lookup(relational_operator::ni, make_data_view(x))), "000000"
                                                                         "00");
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK(detail::serialize(buf, idx));
   list_index idx2{container_type};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   x = "foo";

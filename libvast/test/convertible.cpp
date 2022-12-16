@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <caf/meta/type_name.hpp>
-
 #include <iterator>
 #define SUITE convertible
 
@@ -33,7 +31,7 @@ struct X {
 
   template <class Inspector>
   friend auto inspect(Inspector& fun, X& x) {
-    return fun(x.value);
+    return fun.apply(x.value);
   }
 
   inline static const record_type& layout() noexcept {
@@ -155,7 +153,7 @@ struct MultiMember {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, MultiMember& a) {
-    return f(a.x, a.y, a.z);
+    return vast::detail::apply_all(f, a.x, a.y, a.z);
   }
 
   inline static const record_type& layout() noexcept {
@@ -183,7 +181,7 @@ struct Nest {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, Nest& b) {
-    return f(b.inner);
+    return f.apply(b.inner);
   }
 
   inline static const record_type& layout() noexcept {
@@ -208,7 +206,7 @@ struct Complex {
     std::vector<count> d;
 
     friend auto inspect(auto& f, b_t& x) {
-      return f(x.c, x.d);
+      return vast::detail::apply_all(f, x.c, x.d);
     }
   } b;
   struct e_t {
@@ -216,13 +214,13 @@ struct Complex {
     std::optional<count> g;
 
     friend auto inspect(auto& f, e_t& x) {
-      return f(x.f, x.g);
+      return vast::detail::apply_all(f, x.f, x.g);
     }
   } e;
   bool h;
 
   friend auto inspect(auto& f, Complex& x) {
-    return f(x.a, x.b, x.e, x.h);
+    return vast::detail::apply_all(f, x.a, x.b, x.e, x.h);
   }
 
   inline static const record_type& layout() noexcept {
@@ -261,7 +259,7 @@ struct Enum {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, Enum& x) {
-    return f(x.value);
+    return f.apply(x.value);
   }
 
   inline static const record_type& layout() noexcept {
@@ -303,7 +301,7 @@ struct EC {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, EC& x) {
-    return f(x.value);
+    return f.apply(x.value);
   }
 
   inline static const record_type& layout() noexcept {
@@ -326,7 +324,7 @@ struct StdOpt {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, StdOpt& c) {
-    return f(c.value);
+    return f.apply(c.value);
   }
 
   inline static const record_type& layout() noexcept {
@@ -342,7 +340,7 @@ struct CafOpt {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, CafOpt& c) {
-    return f(c.value);
+    return f.apply(c.value);
   }
 
   inline static const record_type& layout() noexcept {
@@ -387,7 +385,7 @@ struct Vec {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, Vec& e) {
-    return f(e.xs);
+    return f.apply(e.xs);
   }
 
   inline static const record_type& layout() noexcept {
@@ -415,7 +413,7 @@ struct VecS {
 
   template <class Inspector>
   friend auto inspect(Inspector& fun, VecS& f) {
-    return fun(f.xs);
+    return fun.apply(f.xs);
   }
 
   inline static const record_type& layout() noexcept {
@@ -521,7 +519,7 @@ struct iList {
 
   template <class Inspector>
   friend auto inspect(Inspector& fun, iList& x) {
-    return fun(caf::meta::type_name("iList"), x.value);
+    return fun.apply(x.value);
   }
 
   inline static const record_type& layout() noexcept {
@@ -591,8 +589,8 @@ struct OptVec {
   caf::optional<uint64_t> ou = 0;
 
   template <class Inspector>
-  friend typename Inspector::result_type inspect(Inspector& f, OptVec& x) {
-    return f(x.ovs, x.ou);
+  friend auto inspect(Inspector& f, OptVec& x) {
+    return vast::detail::apply_all(f, x.ovs, x.ou);
   }
 
   inline static const record_type& layout() noexcept {
@@ -611,7 +609,7 @@ struct SMap {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, SMap& x) {
-    return f(x.xs);
+    return f.apply(x.xs);
   }
 
   inline static const record_type& layout() noexcept {

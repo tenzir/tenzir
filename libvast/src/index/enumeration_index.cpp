@@ -14,6 +14,7 @@
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
 
+#include <caf/binary_serializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
@@ -25,30 +26,13 @@ enumeration_index::enumeration_index(vast::type t, caf::settings opts)
   // nop
 }
 
-caf::error enumeration_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval(
-    [&] {
-      return value_index::serialize(sink);
-    },
-    [&] {
-      return sink(index_);
-    });
-}
-
-caf::error enumeration_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval(
-    [&] {
-      return value_index::deserialize(source);
-    },
-    [&] {
-      return source(index_);
-    });
-}
-
-bool enumeration_index::deserialize(detail::legacy_deserializer& source) {
-  if (!value_index::deserialize(source))
-    return false;
-  return source(index_);
+bool enumeration_index::inspect_impl(supported_inspectors& inspector) {
+  return value_index::inspect_impl(inspector)
+         && std::visit(
+           [this](auto visitor) {
+             return visitor.get().apply(index_);
+           },
+           inspector);
 }
 
 bool enumeration_index::append_impl(data_view x, id pos) {

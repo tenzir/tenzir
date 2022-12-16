@@ -1,7 +1,6 @@
 *.md
 */*/.git*
 .clangd/
-/libvast/aux/caf
 /libvast/aux/robin-map
 CMakeUserPresets.json
 build/

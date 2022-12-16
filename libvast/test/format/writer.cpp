@@ -15,8 +15,6 @@
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
-#include <caf/streambuf.hpp>
-
 using namespace vast;
 using namespace std::string_literals;
 
@@ -39,16 +37,15 @@ auto last_zeek_http_log_line_json = R"__({"ts": "2009-11-19T07:17:28.829955", "u
 template <class Writer>
 std::vector<std::string>
 generate(const std::vector<table_slice>& xs, caf::settings options = {}) {
-  std::string str;
-  caf::containerbuf<std::string> sb{str};
-  auto out = std::make_unique<std::ostream>(&sb);
+  auto out = std::make_unique<std::stringstream>();
+  auto& stream = *out;
   Writer writer{std::move(out), options};
   for (const auto& x : xs)
     if (auto err = writer.write(x))
       FAIL("failed to write event");
   writer.flush();
-  REQUIRE(!str.empty());
-  auto lines = detail::to_strings(detail::split(str, "\n"));
+  REQUIRE(!stream.str().empty());
+  auto lines = detail::to_strings(detail::split(stream.str(), "\n"));
   REQUIRE(!lines.empty());
   return lines;
 }

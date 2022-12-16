@@ -17,7 +17,6 @@ apt-get -y --no-install-recommends install \
     gnupg2 gnupg-agent\
     jq \
     libasio-dev \
-    libcaf-dev \
     libflatbuffers-dev \
     libfmt-dev \
     libhttp-parser-dev \

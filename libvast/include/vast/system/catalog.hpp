@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/flat_map.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/module.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/actors.hpp"
@@ -110,17 +111,24 @@ public:
 
 /// The result of a catalog query.
 struct catalog_result {
-  enum {
+  enum kind {
     exact,
     probabilistic,
-  } kind;
+  };
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, kind& x) {
+    return detail::inspect_enum(f, x);
+  }
+
+  enum kind kind { kind::exact };
   std::vector<partition_info> partitions;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, catalog_result& x) {
-    return f(caf::meta::type_name("vast.system.catalog_result"), x.kind,
-             x.partitions);
+    return f.object(x)
+      .pretty_name("vast.system.catalog_result")
+      .fields(f.field("kind", x.kind), f.field("partitions", x.partitions));
   }
 };
 

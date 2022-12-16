@@ -33,7 +33,7 @@ struct configuration {
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.expression);
+    return f.apply(x.expression);
   }
 
   /// Enable parsing from a record via convertible.

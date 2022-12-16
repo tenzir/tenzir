@@ -236,9 +236,9 @@ TEST(replace operator) {
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(1).name,
     "desc");
   const auto table_slice = as_table_slice(replaced);
-  CHECK_EQUAL(table_slice.at(0, 0), vast::data_view{"xxx"sv});
-  CHECK_EQUAL(table_slice.at(0, 1),
-              vast::data_view{unbox(vast::to<vast::address>("1.2.3.4"))});
+  CHECK_EQUAL(materialize(table_slice.at(0, 0)), "xxx");
+  CHECK_EQUAL(materialize(table_slice.at(0, 1)),
+              unbox(vast::to<vast::address>("1.2.3.4")));
 }
 
 TEST(extend operator) {
@@ -261,9 +261,9 @@ TEST(extend operator) {
     caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(4).name,
     "ip");
   const auto table_slice = as_table_slice(replaced);
-  CHECK_EQUAL(table_slice.at(0, 3), vast::data_view{"xxx"sv});
-  CHECK_EQUAL(table_slice.at(0, 4),
-              vast::data_view{unbox(vast::to<vast::address>("1.2.3.4"))});
+  CHECK_EQUAL(materialize(table_slice.at(0, 3)), "xxx");
+  CHECK_EQUAL(materialize(table_slice.at(0, 4)),
+              unbox(vast::to<vast::address>("1.2.3.4")));
 }
 
 TEST(where operator) {
@@ -380,13 +380,13 @@ TEST(pseudonymize - seed input too short and odd amount of chars) {
   auto pseudonymized_values
     = caf::get<vast::record_type>(layout(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
-  REQUIRE_EQUAL(table_slice.at(0, 0),
-                vast::data_view(*vast::to<vast::address>("20.251.116.68")));
-  REQUIRE_EQUAL(table_slice.at(0, 1), vast::data_view(vast::integer(40002)));
-  REQUIRE_EQUAL(table_slice.at(0, 2),
-                vast::data_view(*vast::to<vast::address>("72.57.233.231")));
-  REQUIRE_EQUAL(table_slice.at(0, 3),
-                vast::data_view(*vast::to<vast::address>("0.0.0.0")));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
+                *vast::to<vast::address>("20.251.116.68"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
+                *vast::to<vast::address>("72.57.233.231"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
+                *vast::to<vast::address>("0.0.0.0"));
 }
 
 TEST(pseudonymize - seed input too long) {
@@ -406,13 +406,13 @@ TEST(pseudonymize - seed input too long) {
   auto pseudonymized_values
     = caf::get<vast::record_type>(layout(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
-  REQUIRE_EQUAL(table_slice.at(0, 0),
-                vast::data_view(*vast::to<vast::address>("117.8.135.123")));
-  REQUIRE_EQUAL(table_slice.at(0, 1), vast::data_view(vast::integer(40002)));
-  REQUIRE_EQUAL(table_slice.at(0, 2),
-                vast::data_view(*vast::to<vast::address>("55.21.62.136")));
-  REQUIRE_EQUAL(table_slice.at(0, 3),
-                vast::data_view(*vast::to<vast::address>("0.0.0.0")));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
+                *vast::to<vast::address>("117.8.135.123"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
+                *vast::to<vast::address>("55.21.62.136"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
+                *vast::to<vast::address>("0.0.0.0"));
 }
 
 TEST(pseudonymize - IPv4 address batch pseudonymizing) {
@@ -431,13 +431,13 @@ TEST(pseudonymize - IPv4 address batch pseudonymizing) {
   auto pseudonymized_values
     = caf::get<vast::record_type>(layout(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
-  REQUIRE_EQUAL(table_slice.at(0, 0),
-                vast::data_view(*vast::to<vast::address>("117.8.135.123")));
-  REQUIRE_EQUAL(table_slice.at(0, 1), vast::data_view(vast::integer(40002)));
-  REQUIRE_EQUAL(table_slice.at(0, 2),
-                vast::data_view(*vast::to<vast::address>("55.21.62.136")));
-  REQUIRE_EQUAL(table_slice.at(0, 3),
-                vast::data_view(*vast::to<vast::address>("0.0.0.0")));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
+                *vast::to<vast::address>("117.8.135.123"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
+                *vast::to<vast::address>("55.21.62.136"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
+                *vast::to<vast::address>("0.0.0.0"));
 }
 
 TEST(pseudonymize - IPv6 address batch pseudonymizing) {
@@ -457,18 +457,18 @@ TEST(pseudonymize - IPv6 address batch pseudonymizing) {
   auto pseudonymized_values
     = caf::get<vast::record_type>(layout(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
-  REQUIRE_EQUAL(table_slice.at(0, 0),
-                vast::data_view(*vast::to<vast::address>("1482:f447:75b3:f1f9:"
-                                                         "fbdf:622e:34f:"
-                                                         "ff7b")));
-  REQUIRE_EQUAL(table_slice.at(0, 1), vast::data_view(vast::integer(40002)));
-  REQUIRE_EQUAL(table_slice.at(0, 2),
-                vast::data_view(*vast::to<vast::address>("f33c:8ca3:ef0f:e019:"
-                                                         "e7ff:f1e3:f91f:"
-                                                         "f800")));
-  REQUIRE_EQUAL(table_slice.at(0, 3),
-                vast::data_view(*vast::to<vast::address>("2a02:db8:85a3::8a2e:"
-                                                         "370:7344")));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
+                *vast::to<vast::address>("1482:f447:75b3:f1f9:"
+                                         "fbdf:622e:34f:"
+                                         "ff7b"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
+                *vast::to<vast::address>("f33c:8ca3:ef0f:e019:"
+                                         "e7ff:f1e3:f91f:"
+                                         "f800"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
+                *vast::to<vast::address>("2a02:db8:85a3::8a2e:"
+                                         "370:7344"));
 }
 
 TEST(pipeline with multiple steps) {
@@ -488,7 +488,7 @@ TEST(pipeline with multiple steps) {
   CHECK_EQUAL(
     caf::get<vast::record_type>((*transformed)[0].layout()).field(0).name, "ui"
                                                                            "d");
-  CHECK_EQUAL(((*transformed)[0]).at(0, 0), vast::data_view{"xxx"sv});
+  CHECK_EQUAL(materialize((*transformed)[0].at(0, 0)), "xxx");
   auto wrong_layout = vast::type{"stub", testdata_layout};
   wrong_layout.assign_metadata(vast::type{"foo", vast::type{}});
   auto builder = vast::factory<vast::table_slice_builder>::make(
@@ -512,9 +512,9 @@ TEST(pipeline with multiple steps) {
   CHECK_EQUAL(
     caf::get<vast::record_type>((*not_transformed)[0].layout()).field(2).name,
     "index");
-  CHECK_EQUAL((*not_transformed)[0].at(0, 0), vast::data_view{"asdf"sv});
-  CHECK_EQUAL((*not_transformed)[0].at(0, 1), vast::data_view{"jklo"sv});
-  CHECK_EQUAL((*not_transformed)[0].at(0, 2), vast::data{vast::integer{23}});
+  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 0)), "asdf");
+  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 1)), "jklo");
+  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), vast::integer{23});
 }
 
 TEST(pipeline rename layout) {

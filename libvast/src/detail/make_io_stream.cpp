@@ -82,13 +82,14 @@ make_input_stream(const std::string& input,
 
 caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const caf::settings& options) {
-  auto input = get_or(options, "vast.import.read", defaults::import::read);
+  auto input
+    = get_or(options, "vast.import.read", defaults::import::read.data());
   auto uds = get_or(options, "vast.import.uds", false);
   auto fifo = get_or(options, "vast.import.fifo", false);
   const auto pt = uds ? std::filesystem::file_type::socket
                       : (fifo ? std::filesystem::file_type::fifo
                               : std::filesystem::file_type::regular);
-  return make_input_stream(input, pt);
+  return make_input_stream(std::string{input}, pt);
 }
 
 caf::expected<std::unique_ptr<std::ostream>>
@@ -132,13 +133,14 @@ make_output_stream(const std::string& output,
 
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const caf::settings& options) {
-  auto output = get_or(options, "vast.export.write", defaults::export_::write);
+  auto output
+    = get_or(options, "vast.export.write", defaults::export_::write.data());
   auto uds = get_or(options, "vast.export.uds", false);
   auto fifo = get_or(options, "vast.export.fifo", false);
   const auto pt = uds ? std::filesystem::file_type::socket
                       : (fifo ? std::filesystem::file_type::fifo
                               : std::filesystem::file_type::regular);
-  return make_output_stream(output, pt);
+  return make_output_stream(std::string{output}, pt);
 }
 
 } // namespace vast::detail

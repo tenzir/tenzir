@@ -91,7 +91,7 @@ public:
     };
     consumer_impl g{f};
     if (auto err = read_impl(max_events, max_slice_size, g))
-      return {err, g.produced};
+      return {std::move(err), g.produced};
     return {caf::none, g.produced};
   }
 

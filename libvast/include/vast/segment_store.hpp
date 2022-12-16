@@ -44,7 +44,7 @@ public:
     ids xs_;
     std::vector<uuid> candidates_;
     uuid_iterator first_ = candidates_.begin();
-    caf::expected<std::vector<table_slice>> buffer_{caf::no_error};
+    caf::expected<std::vector<table_slice>> buffer_{caf::error{}};
     std::vector<table_slice>::iterator it_;
   };
 

@@ -52,8 +52,8 @@ class builder {
 public:
   struct empty {
     template <class Inspector>
-    friend auto inspect(Inspector& f, empty&) {
-      return f(caf::meta::type_name("vast.msgpack.builder.empty"));
+    friend auto inspect(Inspector&, empty&) {
+      return true;
     }
   };
 
@@ -123,8 +123,10 @@ public:
 
     template <class Inspector>
     friend auto inspect(Inspector& f, proxy& x) {
-      return f(caf::meta::type_name("vast.msgpack.builder.proxy"), x.builder_,
-               x.offset_, x.size_);
+      return f.object(x)
+        .pretty_name("vast.msgpack.builder.proxy")
+        .fields(f.field("builder", x.builder_), f.field("offset", x.offset_),
+                f.field("size", x.size_));
     }
 
   private:
@@ -196,7 +198,7 @@ public:
     }
 
     builder& builder_;
-    const size_t offset_; // where we started in the builder buffer
+    size_t offset_;       // where we started in the builder buffer
     size_t size_;         // number of elements or size in bytes
   };
 
@@ -321,8 +323,9 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, builder& x) {
-    return f(caf::meta::type_name("vast.msgpack.builder"), x.buffer_,
-             x.offset_);
+    return f.object(x)
+      .pretty_name("vast.msgpack.builder")
+      .fields(f.field("buffer", x.buffer_), f.field("offset", x.offset_));
   }
 
 private:
@@ -438,7 +441,7 @@ private:
   }
 
   std::vector<value_type>& buffer_;
-  const size_t offset_;
+  size_t offset_;
 };
 
 // -- helper functions to encode common types ---------------------------------

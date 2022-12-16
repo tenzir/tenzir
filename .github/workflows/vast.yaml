@@ -622,7 +622,7 @@ jobs:
             cc: gcc-10
             cxx: g++-10
             dependencies-script-path: scripts/debian/install-dev-dependencies.sh
-            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF
+            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
           - os: macos-latest
             container: null
             name: macOS

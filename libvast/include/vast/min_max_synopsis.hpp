@@ -8,13 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
-
-#include <caf/deserializer.hpp>
-#include <caf/optional.hpp>
-#include <caf/serializer.hpp>
-#include <caf/sum_type.hpp>
 
 namespace vast {
 
@@ -80,15 +74,12 @@ public:
     return sizeof(min_max_synopsis);
   }
 
-  caf::error inspect(supported_inspectors& inspector) override {
-    return std::visit(detail::overload{[this](auto inspector) {
-                        return inspector(min_, max_);
-                      }},
-                      inspector);
-  }
-
-  bool deserialize(vast::detail::legacy_deserializer& source) override {
-    return source(min_, max_);
+  bool inspect_impl(supported_inspectors& inspector) override {
+    return std::visit(
+      [this](auto inspector) {
+        return inspector.get().apply(min_) && inspector.get().apply(max_);
+      },
+      inspector);
   }
 
   [[nodiscard]] T min() const noexcept {

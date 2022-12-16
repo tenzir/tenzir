@@ -53,7 +53,7 @@ caf::expected<table_slice> segment_store::lookup::next() {
 caf::expected<std::vector<table_slice>>
 segment_store::lookup::handle_segment() {
   if (first_ == candidates_.end())
-    return caf::no_error;
+    return caf::error{};
   auto& cand = *first_++;
   if (cand == store_.builder_.id()) {
     VAST_DEBUG("{} looks into the active segment {}",
@@ -295,7 +295,7 @@ caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
   });
   for (auto cand = candidates.begin(); cand != candidates.end(); ++cand) {
     auto& id = *cand;
-    caf::expected<std::vector<table_slice>> slices{caf::no_error};
+    caf::expected<std::vector<table_slice>> slices{caf::error{}};
     if (id == builder_.id()) {
       VAST_DEBUG("{} looks into the active segment {}",
                  detail::pretty_type_name(this), id);

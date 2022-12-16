@@ -46,15 +46,15 @@ TEST(printable) {
 TEST(parseable) {
   port x;
   CHECK(parsers::port("42/?"s, x));
-  CHECK(x == port{42, port_type::unknown});
+  CHECK((x == port{42, port_type::unknown}));
   CHECK(parsers::port("7/icmp"s, x));
-  CHECK(x == port{7, port_type::icmp});
+  CHECK((x == port{7, port_type::icmp}));
   CHECK(parsers::port("22/tcp"s, x));
-  CHECK(x == port{22, port_type::tcp});
+  CHECK((x == port{22, port_type::tcp}));
   CHECK(parsers::port("53/udp"s, x));
-  CHECK(x == port{53, port_type::udp});
+  CHECK((x == port{53, port_type::udp}));
   CHECK(parsers::port("7/icmp6"s, x));
-  CHECK(x == port{7, port_type::icmp6});
+  CHECK((x == port{7, port_type::icmp6}));
   CHECK(parsers::port("80/sctp"s, x));
-  CHECK(x == port{80, port_type::sctp});
+  CHECK((x == port{80, port_type::sctp}));
 }

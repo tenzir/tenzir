@@ -185,17 +185,6 @@ if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
     COMPONENT Development)
 endif ()
 
-# -- silence policy-related warnings -------------------------------------------
-
-# TODO: When updating to CAF 0.18, this should no longer be needed.
-if (POLICY CMP0048)
-  unset(PROJECT_VERSION)
-  unset(PROJECT_VERSION_MAJOR)
-  unset(PROJECT_VERSION_MINOR)
-  unset(PROJECT_VERSION_PATCH)
-  unset(PROJECT_VERSION_TWEAK)
-endif ()
-
 # -- internal target -----------------------------------------------------------
 
 # Create the internal target that is used for option/property propagation.

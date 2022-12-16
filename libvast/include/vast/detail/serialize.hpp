@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/detail/inspection_common.hpp"
+
 #include <caf/binary_serializer.hpp>
 #include <caf/error.hpp>
 
@@ -20,11 +22,10 @@ namespace vast::detail {
 /// @param xs The objects to serialize.
 /// @returns The status of the operation.
 /// @relates detail::deserialize
-template <class Byte, class... Ts>
-caf::error serialize(std::vector<Byte>& buffer, Ts&&... xs) {
-  static_assert(sizeof(Byte) == 1, "can only serialize into byte vectors");
+template <class... Ts>
+auto serialize(caf::byte_buffer& buffer, Ts&&... xs) {
   caf::binary_serializer serializer{nullptr, buffer};
-  return serializer(xs...);
+  return apply_all(serializer, std::forward<Ts>(xs)...);
 }
 
 } // namespace vast::detail

@@ -49,8 +49,8 @@ TEST(serialization) {
   REQUIRE(!builder.add(slice));
   auto x = builder.finish();
   chunk_ptr chk;
-  std::vector<char> buf;
-  REQUIRE_EQUAL(detail::serialize(buf, x.chunk()), caf::none);
+  caf::byte_buffer buf;
+  REQUIRE(detail::serialize(buf, x.chunk()));
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, chk), true);
   REQUIRE_NOT_EQUAL(chk, nullptr);
   auto y = segment::make(std::move(chk));
