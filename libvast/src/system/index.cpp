@@ -1534,7 +1534,18 @@ index(index_actor::stateful_pointer<index_state> self,
                 candidates.push_back(midx_candidate.uuid);
             // Allows the client to query further results after initial taste.
             auto query_id = query_context.id;
-            auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
+            auto client = caf::visit(
+              detail::overload{
+                [&](count_query_context& count) {
+                  return caf::actor_cast<receiver_actor<atom::done>>(
+                    count.sink);
+                },
+                [&](extract_query_context& extract) {
+                  return caf::actor_cast<receiver_actor<atom::done>>(
+                    extract.sink);
+                },
+              },
+              query_context.cmd);
             if (candidates.empty()) {
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          *self);
@@ -1543,8 +1554,10 @@ index(index_actor::stateful_pointer<index_state> self,
               return;
             }
             auto num_candidates = detail::narrow<uint32_t>(candidates.size());
-            auto scheduled
-              = std::min(num_candidates, self->state.taste_partitions);
+            auto taste_size = query_context.taste
+                                ? *query_context.taste
+                                : self->state.taste_partitions;
+            auto scheduled = std::min(num_candidates, taste_size);
             if (auto err = self->state.pending_queries.insert(
                   query_state{.query_context = query_context,
                               .client = client,
