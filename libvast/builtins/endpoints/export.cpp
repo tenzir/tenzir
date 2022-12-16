@@ -340,22 +340,26 @@ std::string format_result_typed(const std::vector<table_slice>& slices,
   std::unordered_map<vast::type, vast::format::json::writer> events;
   std::unordered_map<vast::type, std::string> schemas;
   for (auto const& type : all_types) {
+    auto data = type.to_definition();
     auto ostream = std::make_unique<std::stringstream>();
     auto writer
       = vast::format::json::writer{std::move(ostream), formatting_options};
     events.insert({vast::type{type}, std::move(writer)});
-    auto& schema = schemas[type];
-    schema = "[";
-    auto record = caf::get<vast::record_type>(type);
-    bool first = true;
-    for (auto const& leaf : record.leaves()) {
-      if (!first)
-        schema += ", ";
-      schema += fmt::format(R"_({{"name": "{}", "type": "{:-a}"}})_",
-                            leaf.field.name, leaf.field.type);
-      first = false;
-    }
-    schema += "]";
+    // auto& schema = schemas[type];
+    // schema = "[";
+    // auto record = caf::get<vast::record_type>(type);
+    // bool first = true;
+    // for (auto const& leaf : record.leaves()) {
+    //   if (!first)
+    //     schema += ", ";
+    //   schema += fmt::format(R"_({{"name": "{}", "type": "{:-a}"}})_",
+    //                         leaf.field.name, leaf.field.type);
+    //   first = false;
+    // }
+    // schema += "]";
+    auto json_schema = to_json(data);
+    VAST_ASSERT_CHEAP(json_schema); // Should never fail for `data`
+    schemas[type] = *json_schema;
   }
   for (auto const& slice : slices) {
     auto& writer = events.at(slice.layout());
