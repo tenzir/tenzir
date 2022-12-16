@@ -1,85 +1,88 @@
 [
   {
     "name": "zeek.conn",
-    "schema": {
-      "zeek.conn": {
-        "record": [
-          {
-            "ts": {
-              "timestamp": "time"
-            }
-          },
-          {
-            "uid": {
-              "type": "string",
-              "attributes": {
-                "index": "hash"
-              }
-            }
-          },
-          {
-            "id.orig_h": "addr"
-          },
-          {
-            "id.orig_p": {
-              "port": "count"
-            }
-          },
-          {
-            "id.resp_h": "addr"
-          },
-          {
-            "id.resp_p": {
-              "port": "count"
-            }
-          },
-          {
-            "proto": "string"
-          },
-          {
-            "service": "string"
-          },
-          {
-            "duration": "duration"
-          },
-          {
-            "orig_bytes": "count"
-          },
-          {
-            "resp_bytes": "count"
-          },
-          {
-            "conn_state": "string"
-          },
-          {
-            "local_orig": "bool"
-          },
-          {
-            "missed_bytes": "count"
-          },
-          {
-            "history": "string"
-          },
-          {
-            "orig_pkts": "count"
-          },
-          {
-            "orig_ip_bytes": "count"
-          },
-          {
-            "resp_pkts": "count"
-          },
-          {
-            "resp_ip_bytes": "count"
-          },
-          {
-            "tunnel_parents": {
-              "list": "string"
-            }
-          }
-        ]
+    "schema": [
+      {
+        "name": "ts",
+        "type": "timestamp"
+      },
+      {
+        "name": "uid",
+        "type": "string"
+      },
+      {
+        "name": "id.orig_h",
+        "type": "addr"
+      },
+      {
+        "name": "id.orig_p",
+        "type": "port"
+      },
+      {
+        "name": "id.resp_h",
+        "type": "addr"
+      },
+      {
+        "name": "id.resp_p",
+        "type": "port"
+      },
+      {
+        "name": "proto",
+        "type": "string"
+      },
+      {
+        "name": "service",
+        "type": "string"
+      },
+      {
+        "name": "duration",
+        "type": "duration"
+      },
+      {
+        "name": "orig_bytes",
+        "type": "count"
+      },
+      {
+        "name": "resp_bytes",
+        "type": "count"
+      },
+      {
+        "name": "conn_state",
+        "type": "string"
+      },
+      {
+        "name": "local_orig",
+        "type": "bool"
+      },
+      {
+        "name": "missed_bytes",
+        "type": "count"
+      },
+      {
+        "name": "history",
+        "type": "string"
+      },
+      {
+        "name": "orig_pkts",
+        "type": "count"
+      },
+      {
+        "name": "orig_ip_bytes",
+        "type": "count"
+      },
+      {
+        "name": "resp_pkts",
+        "type": "count"
+      },
+      {
+        "name": "resp_ip_bytes",
+        "type": "count"
+      },
+      {
+        "name": "tunnel_parents",
+        "type": "list<string>"
       }
-    },
+    ],
     "data": [
       {
         "ts": "2009-11-18T08:00:21.486539",

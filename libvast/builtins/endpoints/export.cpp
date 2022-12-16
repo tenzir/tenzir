@@ -46,8 +46,19 @@ static auto const* SPEC_V0 = R"_(
           type: integer
         required: false
         default: 50
-        description: Maximum number of returned events
+        description: Maximum number of returned events.
         example: 3
+      - in: query
+        name: pipeline
+        schema:
+          type: object
+          properties:
+            steps:
+              type: array
+              items:
+                type: object
+        required: false
+        description: A JSON description of a pipeline to be applied to the exported data.
       - in: query
         name: flatten
         schema:
@@ -111,9 +122,43 @@ static auto const* SPEC_V0 = R"_(
             type: object
             properties:
               expression:
+                required: false
                 type: string
+                description: The query expression to execute.
+                example: ":addr in 10.42.0.0/16"
+                default: A query matching every event.
               limit:
                 type: integer
+                required: false
+                default: 50
+                description: Maximum number of returned events
+                example: 3
+              pipeline:
+                type: object
+                properties:
+                  steps:
+                    type: array
+                    items:
+                      type: object
+                description: A JSON object describing a pipeline to be applied on the exported data.
+              omit-nulls:
+                type: bool
+                description: Omit null elements in the response data.
+                required: false
+                default: false
+                example: false
+              numeric-durations:
+                type: bool
+                required: false
+                default: false
+                description: Render durations as numeric values.
+                example: false
+              flatten:
+                type: bool
+                required: false
+                default: true
+                description: Flatten nested elements in the response data.
+                example: false
     responses:
       200:
         description: The result data.
@@ -143,8 +188,11 @@ static auto const* SPEC_V0 = R"_(
 
 /export/with-schemas:
   post:
-    summary: Export data together with schema information.
-    description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
+    summary: Export data with schema information
+    description: >
+      Export data from VAST according to a query.
+      The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
+      The data is returned grouped by schema.
     requestBody:
       description: Request parameters
       required: false
@@ -165,6 +213,14 @@ static auto const* SPEC_V0 = R"_(
                 default: 50
                 description: Maximum number of returned events
                 example: 3
+              pipeline:
+                type: object
+                properties:
+                  steps:
+                    type: array
+                    items:
+                      type: object
+                description: A JSON object describing a pipeline to be applied on the exported data.
               omit-nulls:
                 type: bool
                 description: Omit null elements in the response data.
@@ -321,10 +377,9 @@ std::string format_result_flat(const std::vector<table_slice>& slices,
 //   "events": [
 //      {
 //        "name": "zeek.conn",
-//        "schema": [{"name": "_path", "type": "string"}, {"name": "uid", "type": "string"}, ...]
+//        "schema": [{"name": "_path", "type": "string"}, {"name": "uid", "type": "string"}, ...],
 //        "data": [
-//          {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null,
-//          "up_since": null},
+//          {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null},
 //          {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null},
 //          {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null}
 //        ],
@@ -348,9 +403,18 @@ std::string format_result_typed(const std::vector<table_slice>& slices,
     auto writer
       = vast::format::json::writer{std::move(ostream), formatting_options};
     events.insert({vast::type{type}, std::move(writer)});
-    auto json_schema = to_json(data);
-    VAST_ASSERT_CHEAP(json_schema); // Should never fail for `data`
-    schemas[type] = *json_schema;
+    auto& schema = schemas[type];
+    schema = "[";
+    auto record = caf::get<vast::record_type>(type);
+    bool first = true;
+    for (auto const& leaf : record.leaves()) {
+      if (!first)
+        schema += ", ";
+      schema += fmt::format(R"_({{"name": "{}", "type": "{:-a}"}})_",
+                            leaf.field.name, leaf.field.type);
+      first = false;
+    }
+    schema += "]";
   }
   for (auto const& slice : slices) {
     auto& writer = events.at(slice.layout());
@@ -422,28 +486,15 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
   return {
     // Index-facing API
     [self](vast::table_slice& slice) {
-      std::vector<table_slice> slices;
-      if (self->state.pipeline_) {
-        self->state.pipeline_->add(std::move(slice));
-        auto transformed = self->state.pipeline_->finish();
-        if (!transformed) {
-          VAST_ERROR("failed to apply pipeline: {}", transformed.error());
-          return;
-        }
-        slices = std::move(*transformed);
-      } else {
-        slices.emplace_back(std::move(slice));
-      }
-      for (auto& slice : slices) {
-        if (self->state.params_.limit <= self->state.events_)
-          return;
-        auto remaining = self->state.params_.limit - self->state.events_;
-        if (slice.rows() < remaining)
-          self->state.results_.push_back(slice);
-        else
-          self->state.results_.push_back(head(std::move(slice), remaining));
-        self->state.events_ += std::min<size_t>(slice.rows(), remaining);
-      }
+      if (self->state.params_.limit <= self->state.events_)
+        return;
+      auto remaining = self->state.params_.limit - self->state.events_;
+      self->state.events_ += std::min<size_t>(slice.rows(), remaining);
+      if (slice.rows() < remaining)
+        self->state.results_.emplace_back(std::move(slice));
+      else
+        self->state.results_.emplace_back(
+          head(std::move(slice), remaining));
     },
     [self](atom::done) {
       bool remaining_partitions = self->state.cursor_->candidate_partitions
@@ -455,9 +506,21 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
         self->send(self->state.index_, atom::query_v, self->state.cursor_->id,
                    next_batch_size);
       } else {
+        std::vector<table_slice> slices;
+        if (self->state.pipeline_) {
+          for (auto&& slice : std::exchange(self->state.results_, {}))
+            self->state.pipeline_->add(std::move(slice));
+          auto transformed = self->state.pipeline_->finish();
+          if (!transformed)
+            return self->state.request_.response->abort(
+              500,
+              fmt::format("failed to apply pipeline: {}", transformed.error()));
+          slices = std::move(*transformed);
+        } else {
+          slices = std::move(self->state.results_);
+        }
         auto response_body
-          = format_results(std::exchange(self->state.results_, {}),
-                           self->state.params_.format_opts);
+          = format_results(slices, self->state.params_.format_opts);
         self->state.request_.response->append(response_body);
         self->state.request_.response.reset();
       }
@@ -525,7 +588,6 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       }
       auto pipeline_executor = std::optional<vast::pipeline_executor>{};
       if (rq.params.contains("pipeline")) {
-        // {"steps": []}
         auto data = from_json(caf::get<std::string>(rq.params.at("pipeline")));
         if (!data)
           return rq.response->abort(400, "couldn't parse pipeline "
