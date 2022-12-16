@@ -35,8 +35,43 @@ paths:
             type: integer
           required: false
           default: 50
-          description: Maximum number of returned events
+          description: Maximum number of returned events.
           example: 3
+        - in: query
+          name: pipeline
+          schema:
+            type: object
+            properties:
+              steps:
+                type: array
+                items:
+                  type: object
+          required: false
+          description: A JSON description of a pipeline to be applied to the exported data.
+        - in: query
+          name: flatten
+          schema:
+            type: bool
+          required: false
+          default: false
+          description: Flatten nested elements in the response data.
+          example: false
+        - in: query
+          name: omit-nulls
+          schema:
+            type: bool
+          required: false
+          default: false
+          description: Omit null elements in the response data.
+          example: false
+        - in: query
+          name: numeric-durations
+          schema:
+            type: bool
+          required: false
+          default: false
+          description: Render durations as numeric values.
+          example: false
       responses:
         200:
           description: The result data.
@@ -75,9 +110,43 @@ paths:
               type: object
               properties:
                 expression:
+                  required: false
                   type: string
+                  description: The query expression to execute.
+                  example: :addr in 10.42.0.0/16
+                  default: A query matching every event.
                 limit:
                   type: integer
+                  required: false
+                  default: 50
+                  description: Maximum number of returned events
+                  example: 3
+                pipeline:
+                  type: object
+                  properties:
+                    steps:
+                      type: array
+                      items:
+                        type: object
+                  description: A JSON object describing a pipeline to be applied on the exported data.
+                omit-nulls:
+                  type: bool
+                  description: Omit null elements in the response data.
+                  required: false
+                  default: false
+                  example: false
+                numeric-durations:
+                  type: bool
+                  required: false
+                  default: false
+                  description: Render durations as numeric values.
+                  example: false
+                flatten:
+                  type: bool
+                  required: false
+                  default: true
+                  description: Flatten nested elements in the response data.
+                  example: false
       responses:
         200:
           description: The result data.
@@ -104,6 +173,56 @@ paths:
           description: Not authenticated.
         422:
           description: Invalid query string or invalid limit.
+  /export/with-schema:
+    post:
+      summary: Export data with schema information
+      description: "Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language) The data is returned grouped by schema.\n"
+      requestBody:
+        description: Request parameters
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expression:
+                  required: false
+                  type: string
+                  description: The query expression to execute.
+                  example: :addr in 10.42.0.0/16
+                  default: A query matching every event.
+                limit:
+                  type: integer
+                  required: false
+                  default: 50
+                  description: Maximum number of returned events
+                  example: 3
+                pipeline:
+                  type: object
+                  properties:
+                    steps:
+                      type: array
+                      items:
+                        type: object
+                  description: A JSON object describing a pipeline to be applied on the exported data.
+                omit-nulls:
+                  type: bool
+                  description: Omit null elements in the response data.
+                  required: false
+                  default: false
+                  example: false
+                numeric-durations:
+                  type: bool
+                  required: false
+                  default: false
+                  description: Render durations as numeric values.
+                  example: false
+                flatten:
+                  type: bool
+                  required: false
+                  default: true
+                  description: Flatten nested elements in the response data.
+                  example: false
   /query/new:
     post:
       summary: Create new query
