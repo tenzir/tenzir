@@ -10,5 +10,7 @@ suricata.http: 1
 suricata.http: 1
 suricata.netflow: 1
 suricata.netflow: 1
+suricata.quic: 1
+suricata.quic: 1
 suricata.stats: 1
 suricata.stats: 1

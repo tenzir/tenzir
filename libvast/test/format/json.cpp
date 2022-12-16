@@ -6,11 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/format/json.hpp"
-
-#include "vast/format/json/suricata_selector.hpp"
-
 #define SUITE format
+
+#include "vast/format/json.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
