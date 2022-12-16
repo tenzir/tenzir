@@ -468,8 +468,9 @@ endif ()
 
 # Configure options-dependent code files.
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs_relocatable.cpp.in"
-                 "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs_relocatable.cpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
 else ()
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
                  "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
