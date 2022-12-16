@@ -30,11 +30,16 @@ TEST(segment store queries) {
   REQUIRE_EQUAL(slices[0].rows(), 8462u);
   REQUIRE_EQUAL(slices[0].columns(), 20u);
 
-  CHECK_EQUAL(materialize(slices[0].at(0, 1)), unbox(to<data>("\"Pii6cUUq1v4\"")));
-  CHECK_EQUAL(materialize(slices[0].at(0, 19)), unbox(to<data>("[]")));
-  CHECK_EQUAL(materialize(slices[0].at(1, 4)), unbox(to<data>("192.168.1.255")));
-  CHECK_EQUAL(materialize(slices[0].at(2, 9)), unbox(to<data>("350")));
-  CHECK_EQUAL(materialize(slices[0].at(3, 14)), unbox(to<data>("\"D\"")));
+  CHECK_EQUAL(materialize(slices[0].at(0, 1)), //
+              unbox(to<data>("\"Pii6cUUq1v4\"")));
+  CHECK_EQUAL(materialize(slices[0].at(0, 19)), //
+              unbox(to<data>("[]")));
+  CHECK_EQUAL(materialize(slices[0].at(1, 4)), //
+              unbox(to<data>("192.168.1.255")));
+  CHECK_EQUAL(materialize(slices[0].at(2, 9)), //
+              unbox(to<data>("350")));
+  CHECK_EQUAL(materialize(slices[0].at(3, 14)), //
+              unbox(to<data>("\"D\"")));
 }
 
 } // namespace vast
