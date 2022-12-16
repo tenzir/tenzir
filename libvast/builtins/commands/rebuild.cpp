@@ -418,10 +418,11 @@ struct rebuilder_state {
         [this, finish](system::catalog_lookup_result& lookup_result) mutable {
           for (auto& [type, result] : lookup_result.candidate_infos) {
             if (!run->options.all) {
-              std::erase_if(
-                result.partition_infos, [&](const partition_info& partition) {
-                  return partition.version >= version::partition_version;
-                });
+              std::erase_if(result.partition_infos,
+                            [&](const partition_info& partition) {
+                              return partition.version
+                                     >= version::current_partition_version;
+                            });
               if (result.partition_infos.empty()) {
                 lookup_result.candidate_infos.erase(type);
                 if (lookup_result.candidate_infos.empty()) {
@@ -596,7 +597,8 @@ struct rebuilder_state {
     // oversized or not of the latest partition version.
     const auto skip_rebuild
       = run->options.undersized && current_run_partitions.size() == 1
-        && current_run_partitions[0].version == version::partition_version
+        && current_run_partitions[0].version
+             == version::current_partition_version
         && current_run_partitions[0].events <= max_partition_size;
     if (skip_rebuild) {
       VAST_DEBUG("{} skips rebuilding of undersized partition {} because no "

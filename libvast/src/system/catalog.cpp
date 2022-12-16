@@ -585,7 +585,27 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
   return {
     [self](atom::merge,
            std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps)
-      -> atom::ok {
+      -> caf::result<atom::ok> {
+      auto unsupported_partitions = std::vector<uuid>{};
+      for (const auto& [uuid, synopsis] : *ps) {
+        auto supported
+          = version::support_for_partition_version(synopsis->version);
+        if (supported.end_of_life)
+          unsupported_partitions.push_back(uuid);
+      }
+      if (!unsupported_partitions.empty()) {
+        return caf::make_error(
+          ec::version_error,
+          fmt::format("{} cannot load unsupported partitions; please run 'vast "
+                      "rebuild' with at least {} to rebuild the following "
+                      "partitions, or delete them from the database directory: "
+                      "{}",
+                      *self,
+                      version::support_for_partition_version(
+                        version::current_partition_version)
+                        .introduced,
+                      fmt::join(unsupported_partitions, ", ")));
+      }
       self->state.create_from(std::move(*ps));
       return atom::ok_v;
     },

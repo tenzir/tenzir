@@ -13,8 +13,7 @@ usage() {
   echo
   echo 'options:'
   echo "    -h,--help               print this message"
-  echo "       --with-plugin=<path> add <path> to the list of bundled plugins (pcap and"
-  echo "                            broker are enabled automatically)"
+  echo "       --with-plugin=<path> add <path> to the list of bundled plugins"
   echo "    -D<CMake option>        options starting with "-D" are passed to CMake"
   echo
 }
@@ -33,7 +32,6 @@ log "rev is ${vast_rev}"
 cmakeFlags=""
 # Enable the bundled plugins by default.
 plugins=(
-  "${toplevel}/plugins/broker"
   "${toplevel}/plugins/parquet"
   "${toplevel}/plugins/pcap"
   "${toplevel}/plugins/sigma"

@@ -51,7 +51,7 @@ system::catalog_lookup_result cands(uint32_t start, uint32_t end) {
   for (auto i = start; i < end; ++i) {
     auto id = xs[i];
     result.candidate_infos[vast::type{}].partition_infos.emplace_back(
-      id, 0u, time{}, vast::type{}, version::partition_version);
+      id, 0u, time{}, vast::type{}, version::current_partition_version);
   }
   return result;
 }
