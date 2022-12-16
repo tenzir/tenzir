@@ -70,6 +70,12 @@ auto parse_query_params(std::string_view text)
   }
 }
 
+std::string
+format_api_route(const rest_endpoint& endpoint, std::string_view prefix) {
+  return fmt::format("/api/v{}{}{}", static_cast<uint8_t>(endpoint.version),
+                     prefix, endpoint.path);
+}
+
 struct request_dispatcher_state {
   request_dispatcher_state() = default;
 
@@ -214,9 +220,7 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                  const server_config& config, vast::rest_endpoint endpoint,
                  system::rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
-  auto path
-    = fmt::format("/api/v{}{}{}", static_cast<uint8_t>(endpoint.version),
-                  prefix, endpoint.path);
+  auto path = format_api_route(endpoint, prefix);
   VAST_VERBOSE("setting up route {}", path);
   // The handler just injects the request into the actor system, the
   // actual processing starts in the request_dispatcher.
@@ -297,6 +301,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   VAST_ASSERT_CHEAP(dispatcher);
   // Set up API routes from plugins.
   std::vector<system::rest_handler_actor> handlers;
+  std::vector<std::string> api_routes;
   for (auto const* rest_plugin : plugins::get<rest_endpoint_plugin>()) {
     auto prefix = rest_plugin->prefix();
     if (!prefix.empty() && prefix[0] != '/') {
@@ -309,6 +314,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         VAST_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;
       }
+      api_routes.push_back(format_api_route(endpoint, rest_plugin->prefix()));
       handlers.push_back(handler);
       setup_route(self, router, rest_plugin->prefix(), dispatcher,
                   *server_config, std::move(endpoint), handler);
@@ -318,7 +324,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   router->non_matched_request_handler([](auto req) {
     VAST_VERBOSE("404 not found: {}", req->header().path());
     return req->create_response(restinio::status_not_found())
-      .set_body("404 not found")
+      .set_body("404 not found\n")
       .done();
   });
   router->http_get(
@@ -333,9 +339,17 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     VAST_VERBOSE("using {} as document root", *server_config->webroot);
     router->http_get(
       "/:path(.*)", restinio::path2regex::options_t{}.strict(true),
-      [webroot = *server_config->webroot](auto req, auto /*params*/) {
+      [webroot = *server_config->webroot, api_routes](auto req,
+                                                      auto /*params*/) {
         auto ec = std::error_code{};
         auto http_path = req->header().path();
+        // Catch the common mistake of sending a GET request to a POST endpoint.
+        if (http_path.starts_with("/api")
+            && std::find(api_routes.begin(), api_routes.end(), http_path)
+                 != api_routes.end())
+          return req->create_response(restinio::status_not_found())
+            .set_body("invalid request method\n")
+            .done();
         auto path = std::filesystem::path{std::string{http_path}};
         VAST_DEBUG("serving static file {}", http_path);
         auto normalized_path
@@ -349,7 +363,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
           normalized_path.replace_extension("html");
         if (!exists(normalized_path))
           return req->create_response(restinio::status_not_found())
-            .set_body("404 not found")
+            .set_body("404 not found\n")
             .done();
         auto extension = normalized_path.extension().string();
         auto sf = restinio::sendfile(normalized_path);

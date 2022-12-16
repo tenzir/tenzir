@@ -556,8 +556,9 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         pipeline_executor = vast::pipeline_executor{std::move(pipelines)};
       }
       // TODO: Abort the request after some time limit has passed.
-      auto exporter = self->spawn(export_helper, self->state.index_,
-                                  std::move(params), std::move(pipeline_executor), std::move(rq));
+      auto exporter
+        = self->spawn(export_helper, self->state.index_, std::move(params),
+                      std::move(pipeline_executor), std::move(rq));
     },
   };
 }
