@@ -60,22 +60,22 @@ public:
   /// @pre *chunk* must hold a valid *Table*.
   [[nodiscard]] static caf::expected<flatbuffer>
   make(chunk_ptr&& chunk, enum verify verify = verify_default) noexcept
-    requires(Type == flatbuffer_type::root) {
+    requires(Type == flatbuffer_type::root)
+  {
     if (!chunk)
-      return caf::make_error(ec::logic_error,
-                             fmt::format("failed to read {} from a nullptr",
-                                         Table::GetFullyQualifiedName()));
+      return caf::make_error(ec::logic_error, fmt::format("failed to read {} "
+                                                          "from a nullptr",
+                                                          qualified_name()));
     if (chunk->size() == 0)
-      return caf::make_error(
-        ec::logic_error, fmt::format("failed to read {} from an empty chunk",
-                                     Table::GetFullyQualifiedName()));
+      return caf::make_error(ec::logic_error, fmt::format("failed to read {} "
+                                                          "from an empty chunk",
+                                                          qualified_name()));
     if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE)
       return caf::make_error(
-        ec::format_error,
-        fmt::format("failed to read {} because its size {} "
-                    "exceeds the maximum allowed size of {}",
-                    Table::GetFullyQualifiedName(), chunk->size(),
-                    FLATBUFFERS_MAX_BUFFER_SIZE));
+        ec::format_error, fmt::format("failed to read {} because its size {} "
+                                      "exceeds the maximum allowed size of {}",
+                                      qualified_name(), chunk->size(),
+                                      FLATBUFFERS_MAX_BUFFER_SIZE));
     if (verify == verify::yes) {
       const auto* const data = reinterpret_cast<const uint8_t*>(chunk->data());
       auto verifier = flatbuffers::Verifier{data, chunk->size()};
@@ -83,14 +83,14 @@ public:
         return caf::make_error(ec::format_error,
                                fmt::format("failed to read {} because its "
                                            "verification failed",
-                                           Table::GetFullyQualifiedName()));
+                                           qualified_name()));
 #if defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
       VAST_ASSERT(verifier.GetComputedSize() >= chunk->size());
       if (verifier.GetComputedSize() > chunk->size())
         return caf::make_error(
           ec::format_error,
           fmt::format("failed to read {} because of {} unexpected excess bytes",
-                      Table::GetFullyQualifiedName(),
+                      qualified_name(),
                       verifier.GetComputedSize() - chunk->size()));
 #endif // defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
     }
@@ -117,7 +117,8 @@ public:
   flatbuffer(flatbuffers::FlatBufferBuilder& builder,
              flatbuffers::Offset<Table> offset,
              const char* file_identifier) noexcept
-    requires(Type == flatbuffer_type::root) {
+    requires(Type == flatbuffer_type::root)
+  {
     builder.Finish(offset, file_identifier);
     auto chunk = chunk::make(builder.Release());
     VAST_ASSERT(chunk);
@@ -220,27 +221,37 @@ public:
 
   // -- concepts --------------------------------------------------------------
 
+  consteval static auto qualified_name() noexcept -> std::string_view {
+    return std::string_view{Table::GetFullyQualifiedName()};
+  }
+
   template <class Inspector>
-  friend auto inspect(Inspector& f, flatbuffer& x) ->
-    typename Inspector::result_type {
+  friend auto inspect(Inspector& f, flatbuffer& x) -> bool {
     // When serializing, we decompose the FlatBuffers table into the chunk it
     // lives in and the offset of the table pointer inside it, and when
     // deserializing we put it all back together.
     auto table_offset = x.chunk_ ? reinterpret_cast<const std::byte*>(x.table_)
                                      - x.chunk_->data()
                                  : 0;
-    auto load_callback = caf::meta::load_callback([&]() noexcept -> caf::error {
+    auto load_callback = [&]() noexcept {
       if (x.chunk_)
         x.table_
           = reinterpret_cast<const Table*>(x.chunk_->data() + table_offset);
-      return caf::none;
-    });
-    return f(caf::meta::type_name(Table::GetFullyQualifiedName()), x.chunk_,
-             table_offset, std::move(load_callback));
+      return true;
+    };
+    const auto name = qualified_name();
+    return f
+      .object(x)
+      // TODO CAF 0.19 just pass string_view to pretty name as caf::string_view
+      // is removed or obsolete
+      .pretty_name(caf::string_view{name.data(), name.size()})
+      .on_load(load_callback)
+      .fields(f.field("chunk", x.chunk_),
+              f.field("table-offset", table_offset));
   }
 
-  friend auto
-  inspect(caf::detail::stringification_inspector& f, flatbuffer& x) {
+  friend auto inspect(caf::detail::stringification_inspector& f, flatbuffer& x)
+    -> bool {
     auto str = fmt::to_string(x);
     return f(str);
   }
@@ -251,7 +262,8 @@ private:
   /// Constructs a ref-counted FlatBuffers root table that shares the
   /// lifetime with the chunk it's constructed from.
   /// @pre *chunk* must hold a valid *Table*.
-  flatbuffer(chunk_ptr chunk) noexcept requires(Type == flatbuffer_type::root)
+  flatbuffer(chunk_ptr chunk) noexcept
+    requires(Type == flatbuffer_type::root)
     : chunk_{std::move(chunk)},
       table_{flatbuffers::GetRoot<Table>(chunk_->data())} {
     // nop
@@ -287,7 +299,7 @@ struct fmt::formatter<vast::flatbuffer<Table, Type>> {
   auto
   format(const vast::flatbuffer<Table, Type>& flatbuffer, FormatContext& ctx)
     -> decltype(ctx.out()) {
-    return fmt::format_to(ctx.out(), "{}({})", Table::GetFullyQualifiedName(),
+    return fmt::format_to(ctx.out(), "{}({})", flatbuffer.qualified_name(),
                           fmt::ptr(flatbuffer.table_));
   }
 };

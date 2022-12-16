@@ -14,15 +14,19 @@
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
+#include <caf/binary_serializer.hpp>
+#include <caf/detail/stringification_inspector.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/settings.hpp>
 
 #include <memory>
+#include <variant>
 
 namespace vast {
 
@@ -34,9 +38,14 @@ using value_index_ptr = std::unique_ptr<value_index>;
 /// and an explit query for nil, e.g., `x != 42 || x == nil`.
 class value_index {
 public:
+  using supported_inspectors
+    = std::variant<std::reference_wrapper<caf::binary_deserializer>,
+                   std::reference_wrapper<caf::binary_serializer>,
+                   std::reference_wrapper<caf::detail::stringification_inspector>,
+                   std::reference_wrapper<detail::legacy_deserializer>>;
   value_index(vast::type x, caf::settings opts);
 
-  virtual ~value_index();
+  virtual ~value_index() noexcept = default;
 
   using size_type = typename ids::size_type;
 
@@ -79,11 +88,7 @@ public:
 
   // -- persistence -----------------------------------------------------------
 
-  virtual caf::error serialize(caf::serializer& sink) const;
-
-  virtual caf::error deserialize(caf::deserializer& source);
-
-  virtual bool deserialize(detail::legacy_deserializer& source);
+  virtual bool inspect_impl(supported_inspectors& inspector);
 
   friend flatbuffers::Offset<fbs::ValueIndex>
   pack(flatbuffers::FlatBufferBuilder& builder, const value_index_ptr& value);
@@ -115,25 +120,78 @@ private:
   const caf::settings opts_; ///< Runtime context with additional parameters.
 };
 
-/// @relates value_index
-caf::error inspect(caf::serializer& sink, const value_index& x);
-
-/// @relates value_index
-caf::error inspect(caf::deserializer& source, value_index& x);
-
-/// @relates value_index
-bool inspect(detail::legacy_deserializer& source, value_index& x);
-
-/// @relates value_index
-caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
-
-/// @relates value_index
-caf::error inspect(caf::deserializer& source, value_index_ptr& x);
-
-/// @relates value_index
-bool inspect(detail::legacy_deserializer& source, value_index_ptr& x);
-
 /// Serialize the value index into a chunk.
 vast::chunk_ptr chunkify(const value_index_ptr& idx);
+
+/// helper function implemented in cpp as the factory<value_index> can't be used
+/// in deserialize function below (factory must include value_index.hpp)
+value_index_ptr make_value_index(const type& t, caf::settings opts);
+
+bool deserialize(auto& source, value_index_ptr& x) {
+  legacy_type lt;
+  if (!source.apply(lt))
+    return false;
+  if (caf::holds_alternative<legacy_none_type>(lt)) {
+    x = nullptr;
+    return true;
+  }
+  caf::settings opts;
+  if (!source.apply(opts))
+    return false;
+  x = make_value_index(type::from_legacy_type(lt), std::move(opts));
+  if (x == nullptr) {
+    VAST_WARN("failed to construct value index");
+    return false;
+  }
+  value_index::supported_inspectors i{std::ref(source)};
+  return x->inspect_impl(i);
+}
+
+bool serialize(auto& sink, value_index_ptr& x) {
+  auto lt = legacy_type{};
+  if (x == nullptr)
+    return sink.apply(lt);
+  lt = x->type().to_legacy_type();
+  auto err = caf::error::eval(
+    [&] {
+      if (!sink.apply(lt)) {
+        auto err = sink.get_error();
+        return err ? err
+                   : caf::make_error(ec::serialization_error,
+                                     "Apply for legacy type "
+                                     "failed");
+      }
+      if (!sink.apply(x->options()) && !sink.get_error())
+        return caf::make_error(ec::serialization_error,
+                               "Apply for value_index_ptr options failed");
+      return sink.get_error();
+    },
+    [&] {
+      value_index::supported_inspectors i{std::ref(sink)};
+      if (!x->inspect_impl(i) && !sink.get_error())
+        return caf::make_error(ec::serialization_error,
+                               "serialize for value_index_ptr failed");
+      return sink.get_error();
+    });
+  if (err) {
+    VAST_WARN("Error during value_index_ptr serialization, {}", err);
+    return false;
+  }
+  return true;
+}
+
+bool inspect(auto& inspector, value_index& x) {
+  value_index::supported_inspectors i{std::ref(inspector)};
+  return x.inspect_impl(i);
+}
+
+template <class Inspector>
+bool inspect(Inspector& inspector, value_index_ptr& ptr) {
+  if constexpr (Inspector::is_loading) {
+    return deserialize(inspector, ptr);
+  } else {
+    return serialize(inspector, ptr);
+  }
+}
 
 } // namespace vast

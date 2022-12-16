@@ -86,13 +86,11 @@ in
       # is a required argument, and it has to be passed explicitly instead.
       src = lib.callPackageWith source final.fetchFromGitHub { inherit (source) sha256; };
       inherit (source) version;
-      NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer"
+      NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer";
         # Building statically implies using -flto. Since we produce a final binary with
         # link time optimizaitons in VAST, we need to make sure that type definitions that
         # are parsed in both projects are the same, otherwise the compiler will complain
         # at the optimization stage.
-        # TODO: Remove when updating to CAF 0.18.
-        + lib.optionalString isStatic " -std=c++17";
       # https://github.com/NixOS/nixpkgs/issues/130963
       NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
       preCheck = ''
@@ -137,10 +135,6 @@ in
     postPatch = if isStatic then ''
          substituteInPlace configure.ac --replace "-lgcc_s" ""
     '' else old.postPatch;
-  });
-  zeek-broker = (final.callPackage ./zeek-broker { inherit stdenv; }).overrideAttrs (old: {
-    # https://github.com/NixOS/nixpkgs/issues/130963
-    NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
   });
   vast-source = inputs.nix-filter.lib.filter {
     root = ./..;

@@ -26,6 +26,7 @@
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
 
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/optional.hpp>
 #include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>

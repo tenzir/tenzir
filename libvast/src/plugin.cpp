@@ -191,10 +191,10 @@ const std::vector<plugin_ptr>& get() noexcept {
   return get_mutable();
 }
 
-std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
+std::vector<std::pair<plugin_type_id_block, void (*)()>>&
 get_static_type_id_blocks() noexcept {
-  static auto result = std::vector<
-    std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>{};
+  static auto result
+    = std::vector<std::pair<plugin_type_id_block, void (*)()>>{};
   return result;
 }
 

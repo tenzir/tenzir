@@ -64,8 +64,8 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
                    "not be spawned");
     return ec::no_error;
   }
-  const auto db_dir
-    = caf::get_or(opts, "vast.db-directory", defaults::system::db_directory);
+  const auto db_dir = caf::get_or(opts, "vast.db-directory",
+                                  defaults::system::db_directory.data());
   const auto db_dir_path = std::filesystem::path{db_dir};
   std::error_code err{};
   const auto db_dir_abs = std::filesystem::absolute(db_dir_path, err);

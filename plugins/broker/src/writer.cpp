@@ -174,7 +174,7 @@ caf::error writer::write(const table_slice& slice) {
 }
 
 caf::expected<void> writer::flush() {
-  return caf::no_error;
+  return {};
 }
 
 const char* writer::name() const {

@@ -157,7 +157,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     });
   if (err)
     return caf::make_message(std::move(err));
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

@@ -27,7 +27,6 @@
 #include <caf/actor.hpp>
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
-#include <caf/meta/type_name.hpp>
 #include <caf/typed_response_promise.hpp>
 
 #include <queue>
@@ -46,12 +45,22 @@ enum class keep_original_partition : bool {
   no = false,
 };
 
+template <class Inspector>
+auto inspect(Inspector& f, keep_original_partition& x) {
+  return detail::inspect_enum(f, x);
+}
+
 // New partition creation listeners will be sent the initial state of the
 // whole database if they set this to 'yes'.
 enum class send_initial_dbstate : bool {
   yes = true,
   no = false,
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, send_initial_dbstate& x) {
+  return detail::inspect_enum(f, x);
+}
 
 /// Helper class used to route table slice columns to the correct indexer
 /// in the CAF stream stage.
@@ -103,8 +112,11 @@ struct active_partition_info {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, active_partition_info& x) {
-    return f(caf::meta::type_name("active_partition_info"), x.actor,
-             x.stream_slot, x.capacity, x.id, x.spawn_time);
+    return f.object(x)
+      .pretty_name("active_partition_info")
+      .fields(f.field("actor", x.actor), f.field("stream-slot", x.stream_slot),
+              f.field("capacity", x.capacity), f.field("id", x.id),
+              f.field("spawn-time", x.spawn_time));
   }
 };
 

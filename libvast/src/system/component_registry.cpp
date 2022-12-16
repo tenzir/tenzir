@@ -33,7 +33,7 @@ caf::expected<component_registry::component>
 component_registry::remove(const std::string& label) {
   auto i = components_.find(label);
   if (i == components_.end())
-    return caf::no_error;
+    return {caf::error{}};
   auto result = std::move(i->second);
   components_.erase(i);
   return result;
@@ -48,7 +48,7 @@ component_registry::remove(const caf::actor& comp) {
       return result;
     }
   }
-  return caf::no_error;
+  return {caf::error{}};
 }
 
 const std::string*

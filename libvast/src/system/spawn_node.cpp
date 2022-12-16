@@ -33,9 +33,9 @@ caf::expected<scope_linked<node_actor>>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   using namespace std::string_literals;
   // Fetch values from config.
-  auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
+  auto id = get_or(opts, "vast.node-id", defaults::system::node_id.data());
   auto db_dir
-    = get_or(opts, "vast.db-directory", defaults::system::db_directory);
+    = get_or(opts, "vast.db-directory", defaults::system::db_directory.data());
   auto detach_components = caf::get_or(opts, "vast.detach-components",
                                        defaults::system::detach_components);
   std::error_code err{};

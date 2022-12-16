@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
 
 namespace vast {
@@ -31,9 +30,7 @@ public:
 
   [[nodiscard]] size_t memusage() const override;
 
-  caf::error inspect(supported_inspectors& inspector) override;
-
-  bool deserialize(vast::detail::legacy_deserializer& source) override;
+  bool inspect_impl(supported_inspectors& inspector) override;
 
   bool any_true();
 

@@ -126,13 +126,14 @@ TEST(parseable) {
   CHECK_EQUAL(t, legacy_none_type{}.name("timestamp"));
   MESSAGE("enum");
   CHECK(parsers::legacy_type("enum{foo, bar, baz}", t));
-  CHECK(t == legacy_enumeration_type{{"foo", "bar", "baz"}});
+  CHECK((t == legacy_enumeration_type{{"foo", "bar", "baz"}}));
   MESSAGE("container");
   CHECK(parsers::legacy_type("list<real>", t));
   CHECK(t == legacy_type{legacy_list_type{legacy_real_type{}}});
   CHECK(parsers::legacy_type("map<count, bool>", t));
   CHECK(
-    t == legacy_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}});
+    (t
+     == legacy_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}}));
   MESSAGE("record");
   auto str = R"__(record{"a b": addr, b: bool})__"sv;
   CHECK(parsers::legacy_type(str, t));

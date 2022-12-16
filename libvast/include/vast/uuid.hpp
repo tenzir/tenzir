@@ -13,9 +13,9 @@
 #include "vast/hash/hash.hpp"
 #include "vast/hash/uniquely_represented.hpp"
 
+#include <caf/detail/stringification_inspector.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
-#include <caf/meta/hex_formatted.hpp>
 #include <fmt/format.h>
 
 #include <array>
@@ -74,7 +74,11 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, uuid& x) {
-    return f(caf::meta::hex_formatted(), x.id_);
+    return f.apply(x.id_);
+  }
+
+  friend auto inspect(caf::detail::stringification_inspector& f, uuid& x) {
+    return f.apply(fmt::to_string(x));
   }
 
 private:

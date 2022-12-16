@@ -37,8 +37,6 @@
 #include <restinio/websocket/websocket.hpp>
 
 // Needed to forward incoming requests to the request_dispatcher
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
-  std::shared_ptr<vast::plugins::web::restinio_response>)
 
 namespace vast::plugins::web {
 

@@ -622,7 +622,7 @@ jobs:
             cc: gcc-10
             cxx: g++-10
             dependencies-script-path: scripts/debian/install-dev-dependencies.sh
-            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF
+            cmake-extra-flags: -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON
           - os: macos-latest
             container: null
             name: macOS
@@ -837,11 +837,6 @@ jobs:
             target: example-pipeline-operator
             path: examples/plugins/pipeline_operator
             debian-dependencies:
-          - name: Broker
-            target: broker
-            path: plugins/broker
-            debian-dependencies:
-              - libbroker-dev
           - name: Sigma
             target: sigma
             path: plugins/sigma
@@ -868,7 +863,6 @@ jobs:
           # building it on macOS, and disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
           # instruction as of Arrow 10.0.0.
-          - {setup: {os: macos-latest}, plugin: {name: Broker}}
           - {setup: {os: macos-latest}, plugin: {name: Parquet}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"

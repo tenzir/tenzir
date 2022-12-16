@@ -69,7 +69,7 @@ TEST(evaluation - type extractor - string + duration) {
   REQUIRE_EQUAL(rank(ids), 1u);
   auto id = select(ids, 1);
   REQUIRE_EQUAL(id, 97u);
-  CHECK_EQUAL(zeek_conn_log_slice.at(id, 1), make_data_view("jM8ATYNKqZg"));
+  CHECK_EQUAL(materialize(zeek_conn_log_slice.at(id, 1)), "jM8ATYNKqZg");
 }
 
 TEST(evaluation - field extractor - orig_h + proto) {
@@ -78,7 +78,7 @@ TEST(evaluation - field extractor - orig_h + proto) {
   auto ids = evaluate(expr, zeek_conn_log_slice, {});
   REQUIRE_EQUAL(rank(ids), 10u);
   auto last = select(ids, -1);
-  CHECK_EQUAL(zeek_conn_log_slice.at(last, 1), make_data_view("WfzxgFx2lWb"));
+  CHECK_EQUAL(materialize(zeek_conn_log_slice.at(last, 1)), "WfzxgFx2lWb");
 }
 
 TEST(evaluation - field extractor - service + orig_h) {

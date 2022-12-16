@@ -71,13 +71,93 @@ void deliver_error_to_deferred_requests(passive_partition_state& state,
   for (auto&& [expr, rp] : std::exchange(state.deferred_evaluations, {})) {
     // Because of a deficiency in the typed_response_promise API, we must
     // access the underlying response_promise to deliver the error.
-    caf::response_promise& untyped_rp = rp;
-    untyped_rp.deliver(static_cast<partition_actor>(state.self), err);
+    rp.deliver(err);
   }
   for (auto&& rp : std::exchange(state.deferred_erasures, {})) {
-    caf::response_promise& untyped_rp = rp;
-    untyped_rp.deliver(static_cast<partition_actor>(state.self), err);
+    rp.deliver(err);
   }
+}
+
+caf::expected<vast::record_type>
+unpack_schema(const fbs::partition::LegacyPartition& partition) {
+  if (auto const* data = partition.combined_layout_caf_0_17()) {
+    auto lrt = legacy_record_type{};
+    if (auto error = fbs::deserialize_bytes(data, lrt))
+      return error;
+    return caf::get<record_type>(type::from_legacy_type(lrt));
+  }
+  if (auto const* data = partition.schema()) {
+    auto chunk = chunk::copy(as_bytes(*data));
+    auto t = type{std::move(chunk)};
+    auto* layout = caf::get_if<record_type>(&t);
+    if (!layout)
+      return caf::make_error(ec::format_error, "schema field contained "
+                                               "unexpected type");
+    return std::move(*layout);
+  }
+  return caf::make_error(ec::format_error, "missing 'layouts' field in "
+                                           "partition flatbuffer");
+}
+
+value_index_ptr
+unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
+                   const fbs::flatbuffer_container& container) {
+  // If an external idx was specified, the data is not stored inline in
+  // the flatbuffer but in a separate segment of this file.
+  auto uncompress = [&index_fbs]<class T>(T&& index_data) {
+    auto data_view = as_bytes(std::forward<T>(index_data));
+    auto uncompressed_data
+      = index_fbs.decompressed_size() != 0
+          ? chunk::decompress(data_view, index_fbs.decompressed_size())
+          : chunk::make(data_view, []() noexcept {});
+    VAST_ASSERT(uncompressed_data);
+    return uncompressed_data;
+  };
+  if (auto* data = index_fbs.caf_0_18_data()) {
+    auto uncompressed_data = uncompress(*data);
+    auto bytes = as_bytes(*uncompressed_data);
+    caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
+    value_index_ptr state_ptr;
+    if (!sink.apply(state_ptr) || !state_ptr) {
+      VAST_ERROR("failed to deserialize value index using CAF 0.18");
+      return {};
+    }
+    return state_ptr;
+  }
+  if (auto* data = index_fbs.caf_0_17_data()) {
+    auto uncompressed_data = uncompress(*data);
+    detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
+    value_index_ptr state_ptr;
+    if (!sink(state_ptr) || !state_ptr) {
+      VAST_ERROR("failed to deserialize value index using CAF 0.17");
+      return {};
+    }
+    return state_ptr;
+  }
+  if (auto ext_index = index_fbs.caf_0_17_external_container_idx()) {
+    auto uncompressed_data = uncompress(container.get_raw(ext_index));
+    detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
+    value_index_ptr state_ptr;
+    if (!sink(state_ptr) || !state_ptr) {
+      VAST_ERROR("failed to deserialize value index with CAF 0.17 external "
+                 "container idx");
+      return {};
+    }
+    return state_ptr;
+  }
+  if (auto ext_index = index_fbs.caf_0_18_external_container_idx()) {
+    auto uncompressed_data = uncompress(container.get_raw(ext_index));
+    auto bytes = as_bytes(*uncompressed_data);
+    caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
+    value_index_ptr state_ptr;
+    if (!sink.apply(state_ptr) || !state_ptr) {
+      VAST_ERROR("failed to deserialize value index with CAF 0.18 external "
+                 "container idx");
+      return {};
+    }
+    return state_ptr;
+  }
+  return {};
 }
 
 } // namespace
@@ -86,38 +166,18 @@ void deliver_error_to_deferred_requests(passive_partition_state& state,
 indexer_actor passive_partition_state::indexer_at(size_t position) const {
   VAST_ASSERT(position < indexers.size());
   auto& indexer = indexers[position];
+  if (indexer)
+    return indexer;
   // Deserialize the value index and spawn a passive_indexer lazily when it is
   // requested for the first time.
-  if (!indexer) {
-    const auto* qualified_index = flatbuffer->indexes()->Get(position);
-    const auto* index = qualified_index->index();
-    auto data = index->data();
-    auto external_idx = index->external_container_idx();
-    if (!data && external_idx == 0)
-      return {};
-    VAST_ASSERT_CHEAP(data || external_idx > 0);
-    auto data_view = std::span<const std::byte>{};
-    if (external_idx == 0) {
-      data_view = as_bytes(*data);
-    } else {
-      // If an external idx was specified, the data is not stored inline in
-      // the flatbuffer but in a separate segment of this file.
-      data_view = as_bytes(container->get_raw(external_idx));
-    }
-    auto uncompressed_data
-      = index->decompressed_size() != 0
-          ? chunk::decompress(data_view, index->decompressed_size())
-          : chunk::make(data_view, []() noexcept {});
-    VAST_ASSERT(uncompressed_data);
-    detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
-    value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr) {
-      VAST_ERROR("{} failed to deserialize value index at {}", *self, position);
-      return {};
-    }
-    indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
+  const auto* qualified_index = flatbuffer->indexes()->Get(position);
+  if (auto value_index
+      = unpack_value_index(*qualified_index->index(), *container)) {
+    indexer = self->spawn(passive_indexer, id, std::move(value_index));
+    return indexer;
   }
-  return indexer;
+  VAST_ERROR("{} failed to deserialize value index at {}", *self, position);
+  return {};
 }
 
 const std::optional<vast::record_type>&
@@ -136,10 +196,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   if (!partition.uuid())
     return caf::make_error(ec::format_error, //
                            "missing 'uuid' field in partition flatbuffer");
-  auto const* combined_layout = partition.combined_layout();
-  if (!combined_layout)
-    return caf::make_error(ec::format_error, //
-                           "missing 'layouts' field in partition flatbuffer");
   auto const* store_header = partition.store();
   // If no store_id is set, use the global store for backwards compatibility.
   if (store_header && !store_header->id())
@@ -171,10 +227,10 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   state.events = partition.events();
   state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
-  legacy_record_type lrt{};
-  if (auto error = fbs::deserialize_bytes(combined_layout, lrt))
-    return error;
-  state.combined_layout_ = caf::get<record_type>(type::from_legacy_type(lrt));
+  if (auto schema = unpack_schema(partition))
+    state.combined_layout_ = std::move(*schema);
+  else
+    return schema.error();
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
   if (state.combined_layout_->num_fields() < indexes->size()) {

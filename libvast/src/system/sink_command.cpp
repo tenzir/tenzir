@@ -223,7 +223,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
     });
   if (err)
     return caf::make_message(std::move(err));
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

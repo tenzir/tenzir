@@ -75,7 +75,12 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
       return;
     }
     for (auto& t : *transformed)
-      self->anon_send(st.sink, std::move(t));
+      self->request(st.sink, caf::infinite, std::move(t))
+        .then([] {},
+              [self, sink = st.sink](const caf::error& e) {
+                VAST_WARN("request from exporter: {} to sink: {} failed {}",
+                          *self, sink, e);
+              });
   }
 }
 

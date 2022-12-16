@@ -27,7 +27,7 @@ dependencies and versions.
 |:-:|:-:|:-:|-|
 |✓|C++ Compiler|C++20 required|VAST is tested to compile with GCC >= 10.0 and Clang >= 13.0.|
 |✓|[CMake](https://cmake.org)|>= 3.19|Cross-platform tool for building, testing and packaging software.|
-|✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 0.17.6|Implementation of the actor model in C++. (Bundled as submodule.)|
+|✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 0.18.6|Implementation of the actor model in C++. (Bundled as submodule.)|
 |✓|[OpenSSL](https://www.openssl.org)||Utilities for secure networking and cryptography.|
 |✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 1.12.0|Memory-efficient cross-platform serialization library.|
 |✓|[Apache Arrow](https://arrow.apache.org)|>= 8.0.0|Required for in-memory data representation. Must be built with Compute, Zstd and Parquet enabled.|
@@ -41,7 +41,6 @@ dependencies and versions.
 ||[yarn](https://yarnpkg.com)||Required for building the web frontend.|
 ||[libpcap](https://www.tcpdump.org)||Required for PCAP import, export, and pivoting to and from PCAP traces.|
 ||[restinio](https://stiffstream.com/en/products/restinio.html)||Required for providing a REST API|
-||[broker](https://github.com/zeek/broker)||Required to build the Broker plugin.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libvast.|
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build manpage for VAST.|
 

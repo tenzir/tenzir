@@ -10,6 +10,7 @@
 
 #include "vast/bitmap_base.hpp"
 #include "vast/bitvector.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/word.hpp"
 
@@ -107,7 +108,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, wah_bitmap& bm) {
-    return f(bm.blocks_, bm.num_last_, bm.num_bits_);
+    return detail::apply_all(f, bm.blocks_, bm.num_last_, bm.num_bits_);
   }
 
   friend auto
