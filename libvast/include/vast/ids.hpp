@@ -12,23 +12,12 @@
 
 #include "vast/aliases.hpp"
 #include "vast/bitmap.hpp"
+#include "vast/id_range.hpp"
 
 namespace vast {
 
 /// A set of IDs.
 using ids = bitmap;
-
-/// An open interval of IDs.
-struct id_range {
-  id_range(id from, id to) : first(from), last(to) {
-    // nop
-  }
-  id_range(id id) : id_range(id, id + 1) {
-    // nop
-  }
-  id first{0u};
-  id last{0u};
-};
 
 /// Generates an ID set for the given ranges. For example,
 /// `make_ids({{10, 12}, {20, 22}})` will return an ID set containing the

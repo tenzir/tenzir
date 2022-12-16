@@ -11,8 +11,10 @@
 #include "vast/aliases.hpp"
 #include "vast/bits.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/generator.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/id_range.hpp"
 
 #include <caf/error.hpp>
 
@@ -490,6 +492,29 @@ template <bool Bit = true, class IDs>
 auto select(const IDs& ids) {
   using range_type = decltype(bit_range(ids));
   return select_range<Bit, range_type>(bit_range(ids));
+}
+
+/// Yields all contiguous ranges of *Bit* in *bitmap*.
+/// @param bitmap The bitmap.
+/// @returns A generator id ranges.
+template <bool Bit = true, class Bitmap>
+auto select_runs(const Bitmap& bitmap) -> detail::generator<id_range> {
+  auto rng = each(bitmap);
+  if (rng.value() != Bit)
+    rng.template select<Bit>();
+  while (true) {
+    if (rng.done())
+      co_return;
+    auto first = rng.get();
+    rng.template select<!Bit>();
+    if (rng.done()) {
+      co_yield {first, bitmap.size()};
+      co_return;
+    }
+    auto last = rng.get();
+    co_yield id_range{first, last};
+    rng.template select<Bit>();
+  }
 }
 
 /// Traverses the 1-bits of a bitmap in conjunction with an iterator range that
