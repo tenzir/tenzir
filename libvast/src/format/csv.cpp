@@ -24,6 +24,7 @@
 
 #include <caf/settings.hpp>
 
+#include <optional>
 #include <ostream>
 #include <string_view>
 #include <type_traits>
@@ -116,6 +117,33 @@ caf::error render(output_iterator& out, const view<data>& x) {
     x);
 }
 
+std::optional<char> handle_escaped_separator(char separator) {
+  switch (separator) {
+    case 't':
+      return '\t';
+    case 'n':
+      return '\n';
+  }
+  return {};
+}
+
+std::optional<char>
+get_separator_from_option_string(const std::string& option) {
+  if (option.empty())
+    return writer::defaults::separator;
+  if (option.size() == 1)
+    return option.front();
+  if (option.size() > 2 && option.starts_with('"') && option.ends_with('"')) {
+    const auto sub_str
+      = std::string_view{std::cbegin(option) + 1, std::cend(option) - 1};
+    if (sub_str.size() == 1)
+      return sub_str.front();
+    if (sub_str.size() == 2 && sub_str.front() == '\\')
+      return handle_escaped_separator(sub_str.back());
+  }
+  return {};
+}
+
 } // namespace
 
 writer::writer(ostream_ptr out, const caf::settings&) : super{std::move(out)} {
@@ -169,17 +197,17 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   using defaults = vast::defaults::import::csv;
   opt_.separator = defaults::separator[0];
   auto seperator_option
-    = get_or(options, "vast.import.csv.separator", defaults::separator);
-  if (seperator_option.size() != 1)
-    VAST_WARN("{} encountered invalid vast.import.csv.separator '{}'; must be "
-              "a single character",
-              detail::pretty_type_name(*this), seperator_option);
+    = get_or(options, "vast.import.csv.separator", defaults::separator.data());
+  if (auto separator = get_separator_from_option_string(seperator_option))
+    opt_.separator = *separator;
   else
-    opt_.separator = seperator_option[0];
-  opt_.set_separator
-    = get_or(options, "vast.import.csv.set_separator", defaults::set_separator);
-  opt_.kvp_separator
-    = get_or(options, "vast.import.csv.kvp_separator", defaults::kvp_separator);
+    VAST_WARN("{} unable to utilize vast.import.csv.separator '{}'. Using "
+              "default comma instead",
+              detail::pretty_type_name(*this), seperator_option);
+  opt_.set_separator = get_or(options, "vast.import.csv.set_separator",
+                              defaults::set_separator.data());
+  opt_.kvp_separator = get_or(options, "vast.import.csv.kvp_separator",
+                              defaults::kvp_separator.data());
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {

@@ -170,17 +170,19 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
       });
   return {
     // Index-facing API
-    [self](const vast::table_slice& slice) {
+    [self](vast::table_slice& slice) {
       if (self->state.limit_ <= self->state.events_)
         return;
       auto remaining = self->state.limit_ - self->state.events_;
       auto ostream = std::make_unique<std::stringstream>();
       auto writer
         = vast::format::json::writer{std::move(ostream), caf::settings{}};
-      if (slice.rows() < remaining)
-        writer.write(slice);
-      else
-        writer.write(truncate(slice, remaining));
+      if (slice.rows() > remaining)
+        slice = truncate(std::move(slice), remaining);
+      if (auto err = writer.write(slice)) {
+        self->quit(std::move(err));
+        return;
+      }
       self->state.events_ += std::min<size_t>(slice.rows(), remaining);
       self->state.stringified_events_
         += static_cast<std::stringstream&>(writer.out()).str();

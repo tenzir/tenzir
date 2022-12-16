@@ -21,7 +21,9 @@ struct type_set : detail::stable_set<type> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, type_set& x) {
-    return f(caf::meta::type_name("vast.type_set"), static_cast<super&>(x));
+    return f.object(x)
+      .pretty_name("vast.type_set")
+      .fields(f.field("value", static_cast<super&>(x)));
   }
 };
 

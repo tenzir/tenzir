@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/bitmap.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/expression.hpp"
 #include "vast/system/actors.hpp"
@@ -21,8 +22,6 @@ namespace vast {
 /// A count query to collect the number of hits for the expression.
 struct count_query_context {
   enum mode { estimate, exact };
-  system::receiver_actor<uint64_t> sink;
-  enum mode mode = {};
 
   friend bool
   operator==(const count_query_context& lhs, const count_query_context& rhs) {
@@ -30,9 +29,19 @@ struct count_query_context {
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, count_query_context& x) {
-    return f(caf::meta::type_name("vast.query.count"), x.sink, x.mode);
+  friend auto inspect(Inspector& f, mode& x) {
+    return detail::inspect_enum(f, x);
   }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, count_query_context& x) {
+    return f.object(x)
+      .pretty_name("vast.query.count")
+      .fields(f.field("sink", x.sink), f.field("mode", x.mode));
+  }
+
+  system::receiver_actor<uint64_t> sink;
+  enum mode mode = {};
 };
 
 /// An extract query to retrieve the events that match the expression.
@@ -46,7 +55,9 @@ struct extract_query_context {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, extract_query_context& x) {
-    return f(caf::meta::type_name("vast.query.extract"), x.sink);
+    return f.object(x)
+      .pretty_name("vast.query.extract")
+      .fields(f.field("sink", x.sink));
   }
 };
 
@@ -104,8 +115,11 @@ struct query_context {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_context& q) {
-    return f(caf::meta::type_name("vast.query"), q.id, q.cmd, q.expr, q.ids,
-             q.priority, q.issuer);
+    return f.object(q)
+      .pretty_name("vast.query")
+      .fields(f.field("id", q.id), f.field("cmd", q.cmd),
+              f.field("expr", q.expr), f.field("ids", q.ids),
+              f.field("priority", q.priority), f.field("issuer", q.issuer));
   }
 
   std::size_t memusage() const {

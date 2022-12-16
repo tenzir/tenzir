@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/hash/uniquely_represented.hpp"
 
@@ -26,6 +27,11 @@ enum class port_type : uint8_t {
   sctp = 132,
   unknown = 255,
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, port_type& x) {
+  return detail::inspect_enum(f, x);
+}
 
 /// A transport-layer port.
 class port : detail::totally_ordered<port> {
@@ -61,7 +67,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, port& x) {
-    return f(x.data_);
+    return f.apply(x.data_);
   }
 
 private:

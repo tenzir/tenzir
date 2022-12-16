@@ -179,7 +179,7 @@ private:
 
   std::vector<std::vector<vast::data>> test_data;
 
-  std::vector<char> buf;
+  caf::byte_buffer buf;
 };
 
 } // namespace fixtures

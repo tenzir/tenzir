@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/defaults.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/type.hpp"
 
 #include <string>
@@ -29,7 +30,8 @@ struct index_config {
 
     template <class Inspector>
     friend auto inspect(Inspector& f, rule& x) {
-      return f(x.targets, x.fp_rate, x.create_partition_index);
+      return detail::apply_all(f, x.targets, x.fp_rate,
+                               x.create_partition_index);
     }
 
     static inline const record_type& layout() noexcept {
@@ -47,7 +49,7 @@ struct index_config {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, index_config& x) {
-    return f(x.rules, x.default_fp_rate);
+    return detail::apply_all(f, x.rules, x.default_fp_rate);
   }
 
   static inline const record_type& layout() noexcept {

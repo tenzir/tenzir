@@ -213,14 +213,14 @@ TEST(delete pipeline / persist before done) {
       // TODO: Implement a new pipeline operator that deletes
       // whole events, as opposed to specific fields.
       CHECK_EQUAL(partition_legacy->events(), events);
-      vast::legacy_record_type intermediate;
-      REQUIRE(!vast::fbs::deserialize_bytes(partition_legacy->combined_layout(),
-                                            intermediate));
-      auto combined_layout = vast::type::from_legacy_type(intermediate);
-      REQUIRE(caf::holds_alternative<vast::record_type>(combined_layout));
+
+      auto schema_chunk
+        = vast::chunk::copy(vast::as_bytes(*partition_legacy->schema()));
+      auto schema = vast::type{std::move(schema_chunk)};
+      REQUIRE(caf::holds_alternative<vast::record_type>(schema));
       // Verify that the deleted column does not exist anymore.
-      const auto column = caf::get<vast::record_type>(combined_layout)
-                            .resolve_key("zeek.conn.uid");
+      const auto column
+        = caf::get<vast::record_type>(schema).resolve_key("zeek.conn.uid");
       CHECK(!column.has_value());
     },
     [](const caf::error& e) {
@@ -370,7 +370,7 @@ TEST(identity partition pipeline via the index) {
       REQUIRE_GREATER(partition_uuids->size(), 0ull);
       const auto* uuid_fb = *partition_uuids->begin();
       VAST_ASSERT(uuid_fb);
-      REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::no_error);
+      REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::error{});
     },
     [](const caf::error& e) {
       FAIL("unexpected error" << e);
@@ -584,7 +584,7 @@ TEST(select pipeline with an empty result set) {
       REQUIRE_GREATER(partition_uuids->size(), 0ull);
       const auto* uuid_fb = *partition_uuids->begin();
       VAST_ASSERT(uuid_fb);
-      REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::no_error);
+      REQUIRE_EQUAL(unpack(*uuid_fb, partition_uuid), caf::error{});
     },
     [](const caf::error& e) {
       FAIL("unexpected error" << e);

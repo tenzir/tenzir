@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/type_traits.hpp"
 
 #include <concepts>
@@ -85,17 +86,22 @@ concept floating_point = std::is_floating_point_v<T>;
 template <class T>
 concept arithmetic = std::is_arithmetic_v<T>;
 
-struct any_callable {
-  using result_type = void;
-  template <class... Ts>
-  void operator()(Ts&&...);
+struct example_inspector {
+  static constexpr bool is_loading = true;
+
+  detail::inspection_object<example_inspector> object(auto&);
+
+  bool apply(auto&);
+
+  template <class T>
+  detail::inspection_field<T> field(std::string_view, T&);
 };
 
 /// Inspectables
 template <class T>
-concept inspectable = requires(any_callable& i, T& x) {
-  {inspect(i, x)};
-};
+concept inspectable = requires(example_inspector& i, T& x) {
+                        { inspect(i, x) } -> std::same_as<bool>;
+                      };
 
 template <class C>
 concept insertable = requires(C& xs, typename C::value_type x) {

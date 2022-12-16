@@ -12,8 +12,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/time.hpp"
 
-#include <caf/meta/type_name.hpp>
-
 #include <chrono>
 #include <cmath>
 
@@ -49,7 +47,9 @@ struct measurement : public detail::addable<measurement> {
 
 template <class Inspector>
 auto inspect(Inspector& f, measurement& x) {
-  return f(caf::meta::type_name("measurement"), x.duration, x.events);
+  return f.object(x)
+    .pretty_name("measurement")
+    .fields(f.field("duration", x.duration), f.field("events", x.events));
 }
 
 struct timer {

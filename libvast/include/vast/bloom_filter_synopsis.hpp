@@ -9,13 +9,8 @@
 #pragma once
 
 #include "vast/bloom_filter.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/type.hpp"
-
-#include <caf/deserializer.hpp>
-#include <caf/optional.hpp>
-#include <caf/serializer.hpp>
 
 #include <optional>
 
@@ -89,15 +84,12 @@ public:
     return bloom_filter_.memusage();
   }
 
-  caf::error inspect(supported_inspectors& inspector) override {
-    return std::visit(detail::overload{[this](auto inspector) {
-                        return inspector(bloom_filter_);
-                      }},
-                      inspector);
-  }
-
-  bool deserialize(vast::detail::legacy_deserializer& source) override {
-    return source(bloom_filter_);
+  bool inspect_impl(supported_inspectors& inspector) override {
+    return std::visit(
+      [this](auto inspector) {
+        return inspector.get().apply(bloom_filter_);
+      },
+      inspector);
   }
 
   const bloom_filter<HashFunction>& filter() const {

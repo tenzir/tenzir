@@ -59,6 +59,8 @@ public:
     /// Adds a config option to the category.
     template <class T>
     opts_builder&& add(std::string_view name, std::string_view description) && {
+      static_assert(caf::detail::is_config_value_type_v<T>, "T is not a valid "
+                                                            "config option");
       xs_.add(caf::make_config_option<T>(category_, name, description));
       return std::move(*this);
     }
@@ -174,8 +176,10 @@ struct invocation {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, invocation& x) {
-    return f(caf::meta::type_name("invocation"), x.full_name, x.arguments,
-             x.options);
+    return f.object(x)
+      .pretty_name("invocation")
+      .fields(f.field("full-name", x.full_name),
+              f.field("arguments", x.arguments), f.field("options", x.options));
   }
 
   // -- mutators -------------------------------------------------------------

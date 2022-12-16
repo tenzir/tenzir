@@ -13,7 +13,6 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/type_set.hpp"
 
-#include <caf/meta/type_name.hpp>
 #include <fmt/format.h>
 
 #include <memory>
@@ -41,8 +40,9 @@ struct concept_ {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, concept_& c) {
-    return f(caf::meta::type_name("concept"), c.description, c.fields,
-             c.concepts);
+    return f.object(c).pretty_name("concept").fields(
+      f.field("description", c.description), f.field("fields", c.fields),
+      f.field("concepts", c.concepts));
   }
 
   inline static const record_type& layout() noexcept {
@@ -76,7 +76,9 @@ struct model {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, model& m) {
-    return f(caf::meta::type_name("model"), m.description, m.definition);
+    return f.object(m).pretty_name("model").fields(
+      f.field("description", m.description),
+      f.field("definition", m.definition));
   }
 
   inline static const record_type& layout() noexcept {
@@ -105,7 +107,9 @@ struct taxonomies {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, taxonomies& t) {
-    return f(caf::meta::type_name("taxonomies"), t.concepts, t.models);
+    return f.object(t)
+      .pretty_name("taxonomies")
+      .fields(f.field("concepts", t.concepts), f.field("models", t.models));
   }
 };
 

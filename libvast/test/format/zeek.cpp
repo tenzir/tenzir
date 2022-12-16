@@ -267,7 +267,7 @@ TEST(zeek data parsing) {
   CHECK(zeek_parse(type{list_type{integer_type{}}}, "49329", d));
   CHECK(d == list{integer{49329}});
   CHECK(zeek_parse(type{list_type{string_type{}}}, "49329,42", d));
-  CHECK(d == list{"49329", "42"});
+  CHECK((d == list{"49329", "42"}));
 }
 
 TEST(zeek reader - capture loss) {
@@ -314,7 +314,7 @@ TEST(zeek reader - custom module) {
   using reader_type = format::zeek::reader;
   reader_type reader{caf::settings{}, std::make_unique<std::istringstream>(
                                         std::string{conn_log_100_events})};
-  reader.module(mod);
+  CHECK(!reader.module(mod));
   std::vector<table_slice> slices;
   auto add_slice
     = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };

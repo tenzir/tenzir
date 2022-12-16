@@ -336,7 +336,9 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, object& x) {
-    return f(caf::meta::type_name("vast.msgpack.object"), x.format_, x.data_);
+    return f.object(x)
+      .pretty_name("vast.msgpack.object")
+      .fields(f.field("format", x.format_), f.field("data", x.data_));
   }
 
 private:
@@ -371,8 +373,10 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, array_view& x) {
-    return f(caf::meta::type_name("vast.msgpack.array_view"), x.format_,
-             x.size_, x.data_);
+    return f.object(x)
+      .pretty_name("vast.msgpack.array_view")
+      .fields(f.field("format", x.format_), f.field("size", x.size_),
+              f.field("data", x.data_));
   }
 
 private:
@@ -406,8 +410,10 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, ext_view& x) {
-    return f(caf::meta::type_name("vast.msgpack.ext_view"), x.format_, x.type_,
-             x.data_);
+    return f.object(x)
+      .pretty_name("vast.msgpack.ext_view")
+      .fields(f.field("format", x.format_), f.field("type", x.type_),
+              f.field("data", x.data_));
   }
 
 private:
@@ -635,8 +641,9 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, overlay& x) {
-    return f(caf::meta::type_name("vast.msgpack.overlay"), x.buffer_,
-             x.position_);
+    return f.object(x)
+      .pretty_name("vast.msgpack.overlay")
+      .fields(f.field("buffer", x.buffer_), f.field("position", x.position_));
   }
 
 private:

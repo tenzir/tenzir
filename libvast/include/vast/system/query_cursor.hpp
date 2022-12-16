@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/inspection_common.hpp"
 #include "vast/uuid.hpp"
 
 #include <cstdint>
@@ -28,7 +29,8 @@ struct query_cursor {
   uint32_t scheduled_partitions = {};
 
   friend auto inspect(auto& f, query_cursor& x) {
-    return f(x.id, x.candidate_partitions, x.scheduled_partitions);
+    return detail::apply_all(f, x.id, x.candidate_partitions,
+                             x.scheduled_partitions);
   }
 };
 

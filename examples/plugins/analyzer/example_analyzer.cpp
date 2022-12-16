@@ -8,6 +8,7 @@
 
 #include <vast/concept/printable/vast/integer.hpp>
 #include <vast/data.hpp>
+#include <vast/detail/inspection_common.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
@@ -62,9 +63,8 @@ struct example_actor_state {
 
   /// Support CAF type-inspection.
   template <class Inspector>
-  friend typename Inspector::result_type
-  inspect(Inspector& f, example_actor_state& x) {
-    return f(x.max_events, x.done);
+  friend bool inspect(Inspector& f, example_actor_state& x) {
+    return detail::apply_all(f, x.max_events, x.done);
   }
 };
 
@@ -177,7 +177,7 @@ public:
     auto example_command
       = [](const invocation&, caf::actor_system&) -> caf::message {
       std::cout << "Hello, world!" << std::endl;
-      return caf::none;
+      return {};
     };
     auto factory = command::factory{
       {"example", example_command},

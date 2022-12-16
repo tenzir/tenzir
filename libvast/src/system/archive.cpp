@@ -217,7 +217,7 @@ archive(archive_actor::stateful_pointer<archive_state> self,
                    request.query_context.cmd);
       } else {
         // We didn't get a slice from the segment store.
-        if (slice.error() != caf::no_error) {
+        if (slice.error()) {
           VAST_ERROR("{} failed to retrieve slice: {}", *self, slice.error());
           self->state.active_promise.deliver(slice.error());
         } else {
@@ -254,12 +254,12 @@ archive(archive_actor::stateful_pointer<archive_state> self,
       namespace defs = defaults::system;
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
-    [self](atom::erase, const ids& xs) {
+    [self](atom::erase, const ids& xs) -> caf::result<uint64_t> {
       auto num_erased = self->state.store->erase(xs);
       if (!num_erased)
         VAST_ERROR("{} failed to erase events: {}", *self,
                    render(num_erased.error()));
-      return num_erased;
+      return detail::narrow_cast<uint64_t>(*num_erased);
     },
   };
 }

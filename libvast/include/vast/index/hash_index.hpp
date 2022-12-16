@@ -23,6 +23,7 @@
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
 
+#include <caf/binary_serializer.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/expected.hpp>
 #include <caf/serializer.hpp>
@@ -93,35 +94,18 @@ public:
     : value_index{std::move(t), std::move(opts)} {
   }
 
-  caf::error serialize(caf::serializer& sink) const override {
-    // Prune unneeded seeds.
-    decltype(seeds_) non_null_seeds;
-    for (auto& [k, v] : seeds_)
-      if (v > 0)
-        non_null_seeds.emplace(k, v);
-    return caf::error::eval(
-      [&] {
-        return value_index::serialize(sink);
-      },
-      [&] {
-        return sink(digests_, non_null_seeds);
-      });
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return caf::error::eval(
-      [&] {
-        return value_index::deserialize(source);
-      },
-      [&] {
-        return source(digests_, seeds_);
-      });
-  }
-
-  bool deserialize(detail::legacy_deserializer& source) override {
-    if (!value_index::deserialize(source))
-      return false;
-    return source(digests_, seeds_);
+  bool inspect_impl(supported_inspectors& inspector) override {
+    return value_index::inspect_impl(inspector)
+           && std::visit(
+             [this]<class Inspector>(
+               std::reference_wrapper<Inspector> visitor) {
+               if constexpr (Inspector::is_loading) {
+                 return this->deserialize(visitor.get());
+               } else {
+                 return this->serialize(visitor.get());
+               }
+             },
+             inspector);
   }
 
   const std::vector<digest_type>& digests() const {
@@ -129,6 +113,20 @@ public:
   }
 
 private:
+  bool serialize(auto& serializer) {
+    // Prune unneeded seeds.
+    decltype(seeds_) non_null_seeds;
+    for (auto& [k, v] : seeds_)
+      if (v > 0)
+        non_null_seeds.emplace(k, v);
+
+    return serializer.apply(digests_) && serializer.apply(non_null_seeds);
+  }
+
+  bool deserialize(auto& deserializer) {
+    return deserializer.apply(digests_) && deserializer.apply(seeds_);
+  }
+
   struct key {
     friend bool operator==(key x, digest_type y) {
       return std::memcmp(x.bytes.data(), y.data(), y.size()) == 0;

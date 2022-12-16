@@ -66,9 +66,6 @@ template <>
 struct use_deep_to_string_formatter<caf::actor_control_block> : std::true_type {
 };
 
-template <>
-struct use_deep_to_string_formatter<caf::duration> : std::true_type {};
-
 template <class... Sigs>
 struct use_deep_to_string_formatter<caf::typed_actor<Sigs...>>
   : std::true_type {};

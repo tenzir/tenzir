@@ -13,8 +13,6 @@
 #include "vast/detail/stack_vector.hpp"
 #include "vast/hash/hash.hpp"
 
-#include <caf/meta/type_name.hpp>
-
 #include <compare>
 #include <cstddef>
 #include <span>
@@ -27,9 +25,10 @@ struct offset : detail::stack_vector<size_t, 64> {
   using super::super;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, offset& x) ->
-    typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.offset"), static_cast<super&>(x));
+  friend auto inspect(Inspector& f, offset& x) {
+    return f.object(x)
+      .pretty_name("vast.offset")
+      .fields(f.field("value", static_cast<super&>(x)));
   }
 
   friend std::strong_ordering

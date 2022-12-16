@@ -10,6 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/inspection_common.hpp"
+
 #include <cstdint>
 
 namespace vast {
@@ -21,6 +23,11 @@ enum class query_options : uint32_t {
   continuous = 0x02,
   low_priority = 0x04
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, query_options& x) {
+  return detail::inspect_enum(f, x);
+}
 
 /// Concatenates two query options.
 constexpr query_options

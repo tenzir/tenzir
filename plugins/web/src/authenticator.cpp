@@ -113,8 +113,8 @@ bool authenticator_state::authenticate(token_t x) const {
 
 caf::expected<authenticator_actor>
 get_authenticator(caf::scoped_actor& self, system::node_actor node,
-                  caf::duration timeout) {
-  auto maybe_authenticator = caf::expected<caf::actor>{caf::no_error};
+                  caf::timespan timeout) {
+  auto maybe_authenticator = caf::expected<caf::actor>{caf::error{}};
   self->request(node, timeout, atom::get_v, atom::type_v, "web")
     .receive(
       [&](std::vector<caf::actor>& actors) {

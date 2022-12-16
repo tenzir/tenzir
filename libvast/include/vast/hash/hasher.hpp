@@ -12,8 +12,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/hash/hash.hpp"
 
-#include <caf/sec.hpp>
-
 #include <cstddef>
 #include <utility>
 #include <vector>
@@ -52,20 +50,20 @@ public:
   // -- concepts -------------------------------------------------------------
 
   template <class Inspector>
-  friend typename Inspector::result_type inspect(Inspector& f, hasher& x) {
+  friend auto inspect(Inspector& f, hasher& x) {
     uint32_t k;
-    if constexpr (Inspector::reads_state) {
+    if constexpr (!Inspector::is_loading) {
       k = static_cast<uint32_t>(x.size());
-      return f(k);
+      return f.apply(k);
     } else {
-      static_assert(Inspector::writes_state);
-      auto cb = [&]() -> caf::error {
+      static_assert(Inspector::is_loading);
+      auto cb = [&]() {
         if (k == 0)
-          return caf::sec::invalid_argument;
+          return false;
         x.digests_.resize(k);
-        return caf::none;
+        return true;
       };
-      return f(k, caf::meta::load_callback(cb));
+      return f.object(x).on_load(cb).fields(f.field("value", k));
     }
   }
 
@@ -110,8 +108,10 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, simple_hasher& x) {
-    return f(caf::meta::type_name("simple_hasher"), static_cast<super&>(x),
-             x.seeds_);
+    return f.object(x)
+      .pretty_name("simple_hasher")
+      .fields(f.field("value", static_cast<super&>(x)),
+              f.field("seeds", x.seeds_));
   }
 
 private:
@@ -157,8 +157,10 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, double_hasher& x) {
-    return f(caf::meta::type_name("double_hasher"), static_cast<super&>(x),
-             x.seed1_, x.seed2_);
+    return f.object(x)
+      .pretty_name("double_hasher")
+      .fields(f.field("value", static_cast<super&>(x)),
+              f.field("seed1", x.seed1_), f.field("seed2", x.seed2_));
   }
 
 private:

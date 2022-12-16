@@ -19,6 +19,7 @@
 #include <vast/type.hpp>
 #include <vast/value_index_factory.hpp>
 
+#include <caf/expected.hpp>
 #include <fmt/ranges.h>
 
 #include <iostream>
@@ -27,6 +28,54 @@
 #include "util.hpp"
 
 namespace lsvast {
+
+namespace {
+
+caf::expected<vast::record_type>
+get_partition_schema(const vast::fbs::partition::LegacyPartition& partition) {
+  if (auto layout = partition.combined_layout_caf_0_17()) {
+    vast::legacy_record_type intermediate;
+    if (auto err = vast::fbs::deserialize_bytes(layout, intermediate))
+      return caf::make_error(vast::ec::parse_error,
+                             fmt::format("failed to deserialize combined "
+                                         "layout (CAF 0.17): {}",
+                                         err));
+    return caf::get<vast::record_type>(
+      vast::type::from_legacy_type(intermediate));
+  }
+  if (auto schema = partition.schema()) {
+    auto chunk = vast::chunk::copy(vast::as_bytes(*schema));
+    return caf::get<vast::record_type>(vast::type{std::move(chunk)});
+  }
+  return caf::make_error(vast::ec::parse_error, "unable to extract schema from "
+                                                "partition");
+}
+
+caf::expected<vast::value_index_ptr> deserialize_value_index(
+  const vast::fbs::value_index::detail::LegacyValueIndex& index_data) {
+  if (auto data = index_data.caf_0_17_data()) {
+    vast::value_index_ptr state_ptr;
+    if (auto error = vast::fbs::deserialize_bytes(data, state_ptr))
+      return error;
+    return state_ptr;
+  }
+  if (auto data = index_data.caf_0_18_data()) {
+    auto data_view = vast::as_bytes(*data);
+    auto index_data = vast::chunk::make(data_view, []() noexcept {});
+    auto bytes = vast::as_bytes(*index_data);
+    caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
+    vast::value_index_ptr state_ptr;
+    if (!sink.apply(state_ptr) || !state_ptr)
+      return caf::make_error(vast::ec::parse_error, "failed to deserialize "
+                                                    "value index using CAF");
+    return state_ptr;
+  }
+  return caf::make_error(vast::ec::parse_error, "failed to deserialize value "
+                                                "index: FlatBuffers table did "
+                                                "not contain data field");
+}
+
+} // namespace
 
 template <size_t N>
 void print_hash_index_(const vast::hash_index<N>& idx, indentation& indent,
@@ -127,9 +176,12 @@ void print_partition_legacy(
       fmt::print("{}{}: ", indent, fqf.name());
       if (auto opaque = column_synopsis->opaque_synopsis()) {
         fmt::print("opaque_synopsis");
-        if (options.format.print_bytesizes)
-          fmt::print(" ({})",
-                     print_bytesize(opaque->data()->size(), options.format));
+        if (options.format.print_bytesizes) {
+          const auto size = opaque->caf_0_17_data()
+                              ? opaque->caf_0_17_data()->size()
+                              : opaque->caf_0_18_data()->size();
+          fmt::print(" ({})", print_bytesize(size, options.format));
+        }
       } else if (auto bs = column_synopsis->bool_synopsis()) {
         fmt::print("bool_synopis {} {}", bs->any_true(), bs->any_false());
       } else if (auto ts = column_synopsis->time_synopsis()) {
@@ -142,19 +194,24 @@ void print_partition_legacy(
   }
   // Print column indices.
   fmt::print("{}Column Indexes\n", indent);
-  vast::legacy_record_type intermediate;
-  vast::fbs::deserialize_bytes(partition->combined_layout(), intermediate);
-  auto combined_layout
-    = caf::get<vast::record_type>(vast::type::from_legacy_type(intermediate));
+  auto schema = get_partition_schema(*partition);
+  if (!schema) {
+    fmt::print(stderr,
+               "failed to extract schema from partition with error {}. "
+               "Aborting "
+               "partition print",
+               schema.error());
+    return;
+  }
   if (auto const* indexes = partition->indexes()) {
-    if (indexes->size() != combined_layout.num_fields()) {
+    if (indexes->size() != schema->num_fields()) {
       fmt::print("{}!! wrong number of fields\n", indent);
       return;
     }
     auto const& expand_indexes = options.partition.expand_indexes;
     indented_scope _(indent);
     for (size_t i = 0; i < indexes->size(); ++i) {
-      auto field = combined_layout.field(i);
+      auto field = schema->field(i);
       auto name = field.name;
       auto const* index = indexes->Get(i);
       if (!index) {
@@ -169,16 +226,23 @@ void print_partition_legacy(
       }
       if (options.format.print_bytesizes) {
         auto size_string = std::string{};
-        if (!legacy_index->data())
+        auto valid_data = legacy_index->caf_0_17_data()
+                            ? legacy_index->caf_0_17_data()
+                            : legacy_index->caf_0_18_data();
+        if (!valid_data)
           size_string = "null";
-        else
-          size_string
-            = print_bytesize(legacy_index->data()->size(), options.format);
-        if (legacy_index->external_container_idx() > 0) {
-          if (legacy_index->data())
+        else {
+          size_string = print_bytesize(valid_data->size(), options.format);
+        }
+        auto valid_container_idx
+          = legacy_index->caf_0_17_external_container_idx() > 0
+              ? legacy_index->caf_0_17_external_container_idx()
+              : legacy_index->caf_0_18_external_container_idx();
+        if (valid_container_idx) {
+          if (valid_data)
             fmt::print("!! index {} has both inline and external data\n", name);
-          size_string = fmt::format("in external chunk {}",
-                                    legacy_index->external_container_idx());
+          size_string
+            = fmt::format("in external chunk {}", valid_container_idx);
         } else
           size_string += " inline";
 
@@ -190,20 +254,19 @@ void print_partition_legacy(
           != expand_indexes.end();
       if (expand) {
         vast::factory_traits<vast::value_index>::initialize();
-        vast::value_index_ptr state_ptr;
-        if (auto error
-            = vast::fbs::deserialize_bytes(index->index()->data(), state_ptr)) {
-          fmt::print("!! failed to deserialize index: {}\n", error);
+        auto state_ptr = deserialize_value_index(*index->index());
+        if (!state_ptr) {
+          fmt::print("!! failed to deserialize index: {}\n", state_ptr.error());
           continue;
         }
-        const auto& type = state_ptr->type();
+        const auto& type = (*state_ptr)->type();
         fmt::print("{}- type: {}\n", indent, type);
-        fmt::print("{}- options: {}\n", indent, state_ptr->options());
+        fmt::print("{}- options: {}\n", indent, (*state_ptr)->options());
         // Print even more detailed information for hash indices.
         using namespace std::string_literals;
         if (auto index = type.attribute("index"))
           if (*index == "hash")
-            print_hash_index(state_ptr, indent, options);
+            print_hash_index(*state_ptr, indent, options);
       }
     }
   }

@@ -467,8 +467,8 @@ caf::error reader::parse_header() {
 }
 
 writer::writer(const caf::settings& options) {
-  auto output
-    = get_or(options, "vast.export.write", vast::defaults::export_::write);
+  auto output = get_or(options, "vast.export.write",
+                       vast::defaults::export_::write.data());
   if (output != "-")
     dir_ = std::filesystem::path{std::move(output)};
   show_timestamp_tags_
@@ -642,7 +642,7 @@ caf::expected<void> writer::flush() {
   for (auto& kvp : writers_)
     if (auto res = kvp.second->flush(); !res)
       return res.error();
-  return caf::no_error;
+  return {};
 }
 
 const char* writer::name() const {

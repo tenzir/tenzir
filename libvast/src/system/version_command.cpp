@@ -80,7 +80,7 @@ caf::message
 version_command([[maybe_unused]] const invocation& inv, caf::actor_system&) {
   VAST_TRACE_SCOPE("{}", inv);
   print_version();
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

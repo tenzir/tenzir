@@ -198,17 +198,20 @@ void render_parse_error(const command& cmd, const invocation& inv,
   }
 }
 
-auto generate_default_value_for_argument_type(std::string_view type_name) {
+auto generate_default_value_for_argument_type(std::string_view type_name)
+  -> std::string_view {
   if (type_name.starts_with("uint") || type_name.starts_with("int")
       || type_name.starts_with("long")) {
     return "0";
-  } else if (type_name == "timespan") {
+  } else if (type_name.find("timespan") != std::string_view::npos) {
     return "0s";
-  } else if (type_name.starts_with("list")) {
+  } else if (type_name.starts_with("std::vector")) {
     return "[]";
+  } else if (type_name.starts_with("dictionary")) {
+    return "{}";
   }
-  VAST_ASSERT(false && "option has type with no default value support");
-  return "";
+  die(fmt::format("option has type '{}' with no default value support",
+                  type_name));
 }
 
 void sanitize_long_form_argument(std::string& argument,
@@ -228,6 +231,17 @@ void sanitize_long_form_argument(std::string& argument,
         = generate_default_value_for_argument_type(option_type.data());
       argument.append(options_type_default_val);
     }
+  } else if (state == caf::pec::invalid_argument) {
+    constexpr auto arg_prefix = std::string_view{"--"};
+    const auto name = argument.substr(0, argument.find_first_of('='))
+                        .substr(arg_prefix.length());
+    const auto long_name = cmd.options.cli_long_name_lookup(name);
+    if (!long_name)
+      return;
+    const auto caf_type_name = long_name->type_name();
+    const auto type_name = std::string_view{caf_type_name.data()};
+    if (type_name.starts_with("std::vector"))
+      argument = detail::convert_to_caf_compatible_list_arg(argument);
   }
 }
 
@@ -348,7 +362,7 @@ parse(const command& root, command::argument_iterator first,
   }
   if (get_or(result.options, "help", false)) {
     helptext(*target, std::cout);
-    return caf::no_error;
+    return {caf::error{}};
   }
   return result;
 }

@@ -68,7 +68,7 @@ TEST(subnet) {
   subnet s;
   CHECK(p(f, l, s));
   CHECK(f == l);
-  CHECK(s == subnet{*to<address>("192.168.0.0"), 24});
+  CHECK((s == subnet{*to<address>("192.168.0.0"), 24}));
   CHECK(s.network().is_v4());
   MESSAGE("IPv6");
   str = "beef::cafe/40";
@@ -76,6 +76,6 @@ TEST(subnet) {
   l = str.end();
   CHECK(p(f, l, s));
   CHECK(f == l);
-  CHECK(s == subnet{*to<address>("beef::cafe"), 40});
+  CHECK((s == subnet{*to<address>("beef::cafe"), 40}));
   CHECK(s.network().is_v6());
 }

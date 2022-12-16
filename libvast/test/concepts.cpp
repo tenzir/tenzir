@@ -55,7 +55,7 @@ struct inspect_friend {
   bool value;
   template <class Inspector>
   friend auto inspect(Inspector& f, inspect_friend& x) {
-    return f(x);
+    return f.apply(x);
   }
 };
 
@@ -65,7 +65,7 @@ struct inspect_free {
 
 template <class I>
 auto inspect(I& i, inspect_free& x) {
-  return i(x);
+  return i.apply(x);
 }
 
 TEST(inspectable) {

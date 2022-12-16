@@ -33,8 +33,11 @@ struct data_point {
   metrics_metadata metadata = {};
 
   template <class Inspector>
-  friend typename Inspector::result_type inspect(Inspector& f, data_point& s) {
-    return f(caf::meta::type_name("data_point"), s.key, s.value);
+  friend auto inspect(Inspector& f, data_point& s) {
+    return f.object(s)
+      .pretty_name("data_point")
+      .fields(f.field("key", s.key), f.field("value", s.value),
+              f.field("metadata", s.metadata));
   }
 };
 
@@ -43,8 +46,9 @@ struct report {
   metrics_metadata metadata = {};
 
   template <class Inspector>
-  friend typename Inspector::result_type inspect(Inspector& f, report& x) {
-    return f(caf::meta::type_name("report"), x.data, x.metadata);
+  friend auto inspect(Inspector& f, report& x) {
+    return f.object(x).pretty_name("report").fields(
+      f.field("data", x.data), f.field("metadata", x.metadata));
   }
 };
 
@@ -54,9 +58,11 @@ struct performance_sample {
   metrics_metadata metadata = {};
 
   template <class Inspector>
-  friend typename Inspector::result_type
-  inspect(Inspector& f, performance_sample& s) {
-    return f(caf::meta::type_name("performance_sample"), s.key, s.value);
+  friend auto inspect(Inspector& f, performance_sample& s) {
+    return f.object(s)
+      .pretty_name("performance_sample")
+      .fields(f.field("key", s.key), f.field("value", s.value),
+              f.field("metadata", s.metadata));
   }
 };
 
@@ -65,9 +71,10 @@ struct performance_report {
   metrics_metadata metadata = {};
 
   template <class Inspector>
-  friend typename Inspector::result_type
-  inspect(Inspector& f, performance_report& x) {
-    return f(caf::meta::type_name("performance_report"), x.data, x.metadata);
+  friend auto inspect(Inspector& f, performance_report& x) {
+    return f.object(x)
+      .pretty_name("performance_report")
+      .fields(f.field("data", x.data), f.field("metadata", x.metadata));
   }
 };
 
