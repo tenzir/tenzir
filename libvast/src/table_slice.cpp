@@ -564,17 +564,33 @@ select(const table_slice& slice, expression expr, const ids& hints) {
 table_slice truncate(table_slice slice, size_t num_rows) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   VAST_ASSERT(num_rows > 0);
+  if (num_rows == slice.rows())
+    return slice;
   auto rb = to_record_batch(slice);
-  return table_slice{rb->Slice(0, detail::narrow_cast<int64_t>(num_rows))};
+  auto head = table_slice{rb->Slice(0, detail::narrow_cast<int64_t>(num_rows)),
+                          slice.layout()};
+  head.offset(slice.offset());
+  head.import_time(slice.import_time());
+  return head;
 }
 
 std::pair<table_slice, table_slice>
-split(table_slice slice, size_t partition_point) {
+split(const table_slice& slice, size_t partition_point) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  if (partition_point == 0)
+    return {{}, slice};
+  if (partition_point == slice.rows())
+    return {slice, {}};
   auto rb = to_record_batch(slice);
   auto pp = detail::narrow_cast<int64_t>(partition_point);
   auto rows = detail::narrow_cast<int64_t>(slice.rows());
-  return {table_slice{rb->Slice(0, pp)}, table_slice{rb->Slice(pp, rows - pp)}};
+  auto head = table_slice{rb->Slice(0, pp), slice.layout()};
+  head.offset(slice.offset());
+  head.import_time(slice.import_time());
+  auto tail = table_slice{rb->Slice(pp, rows - pp), slice.layout()};
+  tail.offset(slice.offset() + pp);
+  tail.import_time(slice.import_time());
+  return {head, tail};
 }
 
 uint64_t rows(const std::vector<table_slice>& slices) {
