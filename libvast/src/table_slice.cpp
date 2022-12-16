@@ -402,6 +402,131 @@ std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
 void select(std::vector<table_slice>& result, const table_slice& slice,
             const ids& selection) {
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
+table_slice join(std::vector<table_slice> slices) {
+  slices.erase(std::remove_if(slices.begin(), slices.end(),
+                              [](const auto& slice) {
+                                return slice.encoding()
+                                       == table_slice_encoding::none;
+                              }),
+               slices.end());
+  if (slices.empty())
+    return {};
+  if (slices.size() == 1)
+    return std::move(slices[0]);
+  auto schema = slices[0].layout();
+  VAST_ASSERT(std::all_of(slices.begin(), slices.end(),
+                          [&](const auto& slice) {
+                            return slice.layout() == schema;
+                          }),
+              "join requires slices to be homogeneous");
+  auto builder = caf::get<record_type>(schema).make_arrow_builder(
+    arrow::default_memory_pool());
+  auto arrow_schema = schema.to_arrow_schema();
+  const auto resize_result
+    = builder->Resize(detail::narrow_cast<int64_t>(rows(slices)));
+  VAST_ASSERT(resize_result.ok(), resize_result.ToString().c_str());
+  const auto append_columns
+    = [&](const auto& self, const record_type& schema,
+          const type_to_arrow_array_t<record_type>& array,
+          type_to_arrow_builder_t<record_type>& builder) noexcept -> void {
+    // NTOE: Passing nullptr for the valid_bytes parameter has the undocumented
+    // special meaning of all appenbded entries being valid. The Arrow unit
+    // tests do the same thing in a few places; if this ever starts to cause
+    // issues, we can create a vector<uint8_t> with desired_batch_size entries
+    // of the value 1, call .data() on that and pass it in here instead.
+    const auto append_status
+      = builder.AppendValues(array.length(), /*valid_bytes*/ nullptr);
+    VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
+    for (auto field_index = 0; field_index < array.num_fields();
+         ++field_index) {
+      const auto field_type = schema.field(field_index).type;
+      const auto& field_array = *array.field(field_index);
+      auto& field_builder = *builder.field_builder(field_index);
+      const auto append_column = detail::overload{
+        [&](const record_type& concrete_field_type) noexcept {
+          const auto& concrete_field_array
+            = caf::get<type_to_arrow_array_t<record_type>>(field_array);
+          auto& concrete_field_builder
+            = caf::get<type_to_arrow_builder_t<record_type>>(field_builder);
+          self(self, concrete_field_type, concrete_field_array,
+               concrete_field_builder);
+        },
+        [&]<concrete_type Type>(
+          [[maybe_unused]] const Type& concrete_field_type) noexcept {
+          const auto& concrete_field_array
+            = caf::get<type_to_arrow_array_t<Type>>(field_array);
+          auto& concrete_field_builder
+            = caf::get<type_to_arrow_builder_t<Type>>(field_builder);
+          constexpr auto can_use_array_slice_api
+            = basic_type<Type> && //
+              !arrow::is_extension_type<type_to_arrow_type_t<Type>>::value;
+          if constexpr (can_use_array_slice_api) {
+            const auto append_array_slice_result
+              = concrete_field_builder.AppendArraySlice(
+                *concrete_field_array.data(), 0, array.length());
+            VAST_ASSERT_CHEAP(append_array_slice_result.ok(),
+                              append_array_slice_result.ToString().c_str());
+          } else {
+            // For complex types and extension types we cannot use the
+            // AppendArraySlice API, so we need to take a slight detour by
+            // manually appending column by column. This is almost exactly
+            // what AppendArraySlice does under the hood, but since it's just
+            // not implemented for extension types we need to do some extra
+            // work here.
+            const auto& concrete_field_array_storage
+              = [&]() noexcept -> const type_to_arrow_array_storage_t<Type>& {
+              // For extension types we need to additionally unwrap
+              // the inner storage array.
+              if constexpr (arrow::is_extension_type<
+                              type_to_arrow_type_t<Type>>::value)
+                return static_cast<const type_to_arrow_array_storage_t<Type>&>(
+                  *concrete_field_array.storage());
+              else
+                return concrete_field_array;
+            }();
+            const auto reserve_result
+              = concrete_field_builder.Reserve(array.length());
+            VAST_ASSERT_CHEAP(reserve_result.ok(),
+                              reserve_result.ToString().c_str());
+            for (auto row = 0; row < array.length(); ++row) {
+              if (concrete_field_array_storage.IsNull(row)) {
+                const auto append_null_result
+                  = concrete_field_builder.AppendNull();
+                VAST_ASSERT(append_null_result.ok(),
+                            append_null_result.ToString().c_str());
+                continue;
+              }
+              const auto append_builder_result
+                = append_builder(concrete_field_type, concrete_field_builder,
+                                 value_at(concrete_field_type,
+                                          concrete_field_array_storage, row));
+              VAST_ASSERT(append_builder_result.ok(),
+                          append_builder_result.ToString().c_str());
+            }
+          }
+        },
+      };
+      caf::visit(append_column, field_type);
+    }
+  };
+  for (const auto& slice : slices) {
+    auto batch = to_record_batch(slice);
+    append_columns(append_columns, caf::get<record_type>(schema),
+                   *batch->ToStructArray().ValueOrDie(), *builder);
+  }
+  const auto rows = builder->length();
+  if (rows == 0)
+    return {};
+  const auto array = builder->Finish().ValueOrDie();
+  auto batch = arrow::RecordBatch::Make(
+    std::move(arrow_schema), rows,
+    caf::get<type_to_arrow_array_t<record_type>>(*array).fields());
+  auto result = table_slice{batch, schema};
+  result.offset(slices[0].offset());
+  result.import_time(slices[0].import_time());
+  return result;
+}
+
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   auto xs_ids = make_ids({{offset, offset + slice.rows()}});
   auto intersection = selection & xs_ids;

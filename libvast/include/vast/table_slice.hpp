@@ -314,6 +314,10 @@ private:
 
 // -- operations ---------------------------------------------------------------
 
+/// Joins all slices in the given range.
+/// @param slices The input table slices.
+table_slice join(std::vector<table_slice> slices);
+
 /// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice`
 /// into multiple slices if `selection` produces gaps.
 /// @param slice The input table slice.
