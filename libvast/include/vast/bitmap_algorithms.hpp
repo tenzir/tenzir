@@ -177,49 +177,65 @@ auto nary_eval(Iterator begin, Iterator end, Operation op) {
 
 template <class LHS, class RHS>
 auto binary_and(const LHS& lhs, const RHS& rhs) {
-  auto op = [](auto x, auto y) { return x & y; };
+  auto op = [](auto x, auto y) {
+    return x & y;
+  };
   return binary_eval<false, false>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
 auto binary_or(const LHS& lhs, const RHS& rhs) {
-  auto op = [](auto x, auto y) { return x | y; };
+  auto op = [](auto x, auto y) {
+    return x | y;
+  };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
 auto binary_xor(const LHS& lhs, const RHS& rhs) {
-  auto op = [](auto x, auto y) { return x ^ y; };
+  auto op = [](auto x, auto y) {
+    return x ^ y;
+  };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
 auto binary_nand(const LHS& lhs, const RHS& rhs) {
-  auto op = [](auto x, auto y) { return x & ~y; };
+  auto op = [](auto x, auto y) {
+    return x & ~y;
+  };
   return binary_eval<true, false>(lhs, rhs, op);
 }
 
 template <class LHS, class RHS>
 auto binary_nor(const LHS& lhs, const RHS& rhs) {
-  auto op = [](auto x, auto y) { return x | ~y; };
+  auto op = [](auto x, auto y) {
+    return x | ~y;
+  };
   return binary_eval<true, true>(lhs, rhs, op);
 }
 
 template <class Iterator>
 auto nary_and(Iterator begin, Iterator end) {
-  auto op = [](auto x, auto y) { return x & y; };
+  auto op = [](auto x, auto y) {
+    return x & y;
+  };
   return nary_eval(begin, end, op);
 }
 
 template <class Iterator>
 auto nary_or(Iterator begin, Iterator end) {
-  auto op = [](auto x, auto y) { return x | y; };
+  auto op = [](auto x, auto y) {
+    return x | y;
+  };
   return nary_eval(begin, end, op);
 }
 
 template <class Iterator>
 auto nary_xor(Iterator begin, Iterator end) {
-  auto op = [](auto x, auto y) { return x ^ y; };
+  auto op = [](auto x, auto y) {
+    return x ^ y;
+  };
   return nary_eval(begin, end, op);
 }
 
@@ -298,8 +314,7 @@ public:
   /// Constructs an ID range from a bit range.
   /// @param rng The bit range.
   bitwise_range(BitRange rng)
-    : rng_{std::move(rng)},
-      i_{rng_.done() ? npos : 0} {
+    : rng_{std::move(rng)}, i_{rng_.done() ? npos : 0} {
     // nop
   }
 
@@ -408,8 +423,7 @@ public:
       return;
     }
     for (k -= remaining, i_ = npos, n_ += bits().size(), rng_.next();
-         !rng_.done();
-         n_ += bits().size(), rng_.next()) {
+         !rng_.done(); n_ += bits().size(), rng_.next()) {
       VAST_ASSERT(k > 0);
       if (k <= bits().size()) {
         i_ = select<Bit>(bits(), k);
@@ -529,13 +543,15 @@ auto select_runs(const Bitmap& bitmap) -> detail::generator<id_range> {
 /// @pre The range delimited by *begin* and *end* must be sorted in ascending
 ///      order.
 template <class Bitmap, class Iterator, class F, class G>
-caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
-  auto pred = [&](const auto& x, auto y) { return f(x).second <= y; };
+caf::error
+select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g) {
+  auto pred = [&](const auto& x, auto y) {
+    return f(x).second <= y;
+  };
   auto lower_bound = [&](Iterator first, Iterator last, auto x) {
     return std::lower_bound(first, last, x, pred);
   };
-  for (auto rng = select(bm);
-       rng && begin != end;
+  for (auto rng = select(bm); rng && begin != end;
        begin = lower_bound(begin, end, rng.get())) {
     // Get the current ID interval.
     auto [first, last] = f(*begin);
@@ -566,8 +582,8 @@ caf::error select_with(const Bitmap& bm, Iterator begin, Iterator end, F f, G g)
 /// @relates select
 template <bool Bit = true, class Bitmap>
 auto frame(const Bitmap& bm) {
-  auto result = std::make_pair(Bitmap::word_type::npos,
-                               Bitmap::word_type::npos);
+  auto result
+    = std::make_pair(Bitmap::word_type::npos, Bitmap::word_type::npos);
   auto n = typename Bitmap::size_type{0};
   auto rng = bit_range(bm);
   auto begin = rng.begin();
