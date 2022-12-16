@@ -52,8 +52,10 @@ TEST(arrow IPC write) {
   }
   writer.out(stream);
   // Write conn log slices (as record batches) to the stream.
-  for (auto& slice : zeek_conn_log)
-    writer.write(slice);
+  for (auto& slice : zeek_conn_log) {
+    auto err = writer.write(slice);
+    CHECK(!err);
+  }
 
   // closing the stream so we can start reading back the data.
   REQUIRE_OK(stream->Close());
@@ -76,7 +78,7 @@ TEST(arrow IPC write) {
   std::shared_ptr<arrow::RecordBatch> batch;
   while (reader->ReadNext(&batch).ok() && batch != nullptr) {
     REQUIRE_LESS(slice_id, zeek_conn_log.size());
-    auto slice = rebuild(zeek_conn_log[slice_id], table_slice_encoding::arrow);
+    auto slice = zeek_conn_log[slice_id];
     CHECK_EQUAL(detail::narrow<size_t>(batch->num_rows()), slice.rows());
     CHECK(batch->schema()->Equals(*arrow_schema));
     CHECK_EQUAL(slice, zeek_conn_log[slice_id]);
@@ -92,7 +94,8 @@ TEST(arrow IPC read) {
   format::arrow::writer writer;
   writer.out(stream);
   for (auto& slice : zeek_conn_log)
-    writer.write(slice);
+    if (auto err = writer.write(slice))
+      FAIL("failed to write zeek.conn log " << err);
   auto data = stream->Finish().ValueOrDie()->ToString();
   auto in = std::make_unique<std::istringstream>(std::string{data});
   auto options = caf::settings{};

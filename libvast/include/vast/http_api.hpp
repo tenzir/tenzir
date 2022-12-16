@@ -9,10 +9,10 @@
 #pragma once
 
 #include <vast/data.hpp>
+#include <vast/detail/inspection_common.hpp>
 #include <vast/type.hpp>
 
 #include <caf/actor_addr.hpp>
-#include <caf/meta/annotation.hpp>
 #include <caf/optional.hpp>
 
 #include <string>
@@ -39,6 +39,21 @@ enum class api_version : uint8_t {
   latest = v0,
 };
 
+template <class Inspector>
+auto inspect(Inspector& f, http_content_type& x) {
+  return detail::inspect_enum(f, x);
+}
+
+template <class Inspector>
+auto inspect(Inspector& f, http_method& x) {
+  return detail::inspect_enum(f, x);
+}
+
+template <class Inspector>
+auto inspect(Inspector& f, api_version& x) {
+  return detail::inspect_enum(f, x);
+}
+
 struct rest_endpoint {
   /// Arbitrary id for endpoint identification
   uint64_t endpoint_id = 0ull;
@@ -62,13 +77,18 @@ struct rest_endpoint {
   template <class Inspector>
   friend auto inspect(Inspector& f, rest_endpoint& e) {
     auto params = e.params ? type{*e.params} : type{};
-    return f(caf::meta::type_name("vast.rest_endpoint"), e.endpoint_id,
-             e.method, e.path, params, e.version, e.content_type,
-             caf::meta::load_callback([&]() -> caf::error {
-               e.params = params ? caf::get<record_type>(params)
-                                 : std::optional<record_type>{};
-               return caf::none;
-             }));
+    auto cb = [&] {
+      e.params
+        = params ? caf::get<record_type>(params) : std::optional<record_type>{};
+      return true;
+    };
+    return f.object(e)
+      .pretty_name("vast.rest_endpoint")
+      .on_load(cb)
+      .fields(f.field("endpoint-id", e.endpoint_id),
+              f.field("method", e.method), f.field("path", e.path),
+              f.field("params", params), f.field("version", e.version),
+              f.field("content-type", e.content_type));
   }
 };
 

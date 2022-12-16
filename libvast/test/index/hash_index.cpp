@@ -52,8 +52,8 @@ TEST(serialization) {
   REQUIRE(x.append(make_data_view("foo")));
   REQUIRE(x.append(make_data_view("bar")));
   REQUIRE(x.append(make_data_view("baz")));
-  std::vector<char> buf;
-  REQUIRE(detail::serialize(buf, x) == caf::none);
+  caf::byte_buffer buf;
+  REQUIRE(detail::serialize(buf, x));
   hash_index<1> y{type{string_type{}}};
   REQUIRE(detail::legacy_deserialize(buf, y));
   auto result = y.lookup(relational_operator::not_equal, make_data_view("bar"));

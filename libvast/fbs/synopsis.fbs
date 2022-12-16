@@ -4,7 +4,11 @@ namespace vast.fbs.synopsis;
 
 table LegacyOpaqueSynopsis {
   /// A synopsis serialized using the CAF 0.17 binary serializer.
-  data: [ubyte];
+  /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
+  caf_0_17_data: [ubyte];
+  
+  /// A synopsis serialized using the CAF 0.18 binary serializer.
+  caf_0_18_data: [ubyte];
 }
 
 struct TimeSynopsis {

@@ -252,7 +252,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, range_map& m) {
-    return f(m.map_);
+    return f.apply(m.map_);
   }
 
 private:

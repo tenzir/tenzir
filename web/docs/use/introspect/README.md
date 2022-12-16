@@ -55,7 +55,6 @@ vast status
     "CAF": "0.17.6",
     "VAST": "v2.4.0-rc2-97-g52d30f9834",
     "plugins": {
-      "broker": "v1.0.0-gfc9827be2d",
       "parquet": "v1.0.0-g027ba25701",
       "pcap": "v1.1.0-gfc9827be2d",
       "sigma": "v1.1.0-g128d0b45a3",

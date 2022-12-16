@@ -81,8 +81,7 @@ void source_state::initialize(const catalog_actor& catalog,
               if (caf::holds_alternative<record_type>(type))
                 merged_module.add(type);
           // Third, try to set the new module.
-          if (auto err = reader->module(std::move(merged_module));
-              err && err != caf::no_error)
+          if (auto err = reader->module(std::move(merged_module)))
             VAST_ERROR("{} source failed to set schema: {}", reader->name(),
                        err);
         },
@@ -96,8 +95,7 @@ void source_state::initialize(const catalog_actor& catalog,
     VAST_WARN("{} source failed to retrieve registered types and only "
               "considers types local to the import command",
               reader->name());
-    if (auto err = reader->module(std::move(local_module));
-        err && err != caf::no_error)
+    if (auto err = reader->module(std::move(local_module)))
       VAST_ERROR("{} source failed to set schema: {}", reader->name(), err);
   }
 }
@@ -318,8 +316,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     },
     [self](atom::put, class module module) -> caf::result<void> {
       VAST_DEBUG("{} received schema {}", *self, module);
-      if (auto err = self->state.reader->module(std::move(module));
-          err && err != caf::no_error)
+      if (auto err = self->state.reader->module(std::move(module)))
         return err;
       return caf::unit;
     },

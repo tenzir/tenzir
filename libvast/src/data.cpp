@@ -647,10 +647,6 @@ bool convert(const caf::config_value& x, data& y) {
       y = integer{value};
       return true;
     },
-    [&](caf::config_value::atom value) -> bool {
-      y = to_string(value);
-      return true;
-    },
     [&](const caf::uri& value) -> bool {
       y = to_string(value);
       return true;
@@ -676,7 +672,7 @@ bool convert(const caf::config_value& x, data& y) {
       return true;
     },
   };
-  return caf::visit(f, x);
+  return caf::visit(f, x.get_data());
 }
 
 record strip(const record& xs) {

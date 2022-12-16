@@ -77,10 +77,10 @@ TEST(introspection) {
 
 TEST(homogeneity) {
   CHECK(!bits8{0b10110000}.homogeneous());
-  CHECK(bits8{0b10110000, 4}.homogeneous());
-  CHECK(bits8{0b10111111, 6}.homogeneous());
-  CHECK(bits8{w8::all}.homogeneous());
-  CHECK(bits8{w8::none}.homogeneous());
+  CHECK((bits8{0b10110000, 4}.homogeneous()));
+  CHECK((bits8{0b10111111, 6}.homogeneous()));
+  CHECK((bits8{w8::all}.homogeneous()));
+  CHECK((bits8{w8::none}.homogeneous()));
 }
 
 TEST(slice) {

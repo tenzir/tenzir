@@ -27,24 +27,6 @@ template <class FlatBuffer>
 struct arrow_table_slice_state;
 
 template <>
-struct arrow_table_slice_state<fbs::table_slice::arrow::v0> {
-  /// The deserialized table layout.
-  type layout;
-
-  /// The deserialized Arrow Record Batch.
-  std::shared_ptr<arrow::RecordBatch> record_batch;
-};
-
-template <>
-struct arrow_table_slice_state<fbs::table_slice::arrow::v1> {
-  /// The deserialized table layout.
-  type layout;
-
-  /// The deserialized Arrow Record Batch.
-  std::shared_ptr<arrow::RecordBatch> record_batch;
-};
-
-template <>
 struct arrow_table_slice_state<fbs::table_slice::arrow::v2> {
   /// The deserialized table layout.
   type layout;
@@ -389,18 +371,6 @@ template <class FlatBuffer>
 arrow_table_slice(const FlatBuffer&) -> arrow_table_slice<FlatBuffer>;
 
 /// Extern template declarations for all Arrow encoding versions.
-extern template class arrow_table_slice<fbs::table_slice::arrow::v0>;
-extern template class arrow_table_slice<fbs::table_slice::arrow::v1>;
 extern template class arrow_table_slice<fbs::table_slice::arrow::v2>;
-
-// -- utility functions --------------------------------------------------------
-/// Converts a legacy (v0/v1) record batch to the new representation, re-using
-/// existing Arrow arrays to make this a cheap operation.
-/// @param legacy record batch structured according to v0 or v1 implementation.
-/// @param t layout of the type represented by this record batch.
-/// @note subnet structure changed in a way that array is built from scratch.
-std::shared_ptr<arrow::RecordBatch>
-convert_record_batch(const std::shared_ptr<arrow::RecordBatch>& legacy,
-                     const type& t);
 
 } // namespace vast

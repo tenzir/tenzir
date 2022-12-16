@@ -734,7 +734,7 @@ TEST(EWAH construction 3) {
     = "1000000000000000000000000000000110000000000000000000000000000001\n"
       "1001100110011001100110011001100010111111111111111111111111111111\n"
       "                             10000000000000000000000000110011001\n";
-  REQUIRE(to_block_string(bm), str);
+  REQUIRE_EQUAL(to_block_string(bm), str);
   REQUIRE(bm == make_ewah3());
 }
 
@@ -862,7 +862,7 @@ TEST(EWAH bitwise NAND) {
   auto str
     = "0000000000000000000000000000001100000000000000000000000000000000\n"
       "                       11000000000000000000000000000000000000000\n";
-  CHECK(to_block_string(bm2 - bm3), str);
+  CHECK_EQUAL(to_block_string(bm2 - bm3), str);
 }
 
 TEST(EWAH block append) {

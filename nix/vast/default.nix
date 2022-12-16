@@ -19,7 +19,6 @@
 , jemalloc
 , libunwind
 , xxHash
-, zeek-broker
 , python3
 , jq
 , tcpdump
@@ -79,7 +78,6 @@ stdenv.mkDerivation (rec {
     robin-map
     simdjson
     spdlog
-    zeek-broker
     restinio
   ];
   propagatedBuildInputs = [

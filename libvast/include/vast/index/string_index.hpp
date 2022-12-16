@@ -34,11 +34,7 @@ public:
   /// @param opts Runtime context for index parameterization.
   explicit string_index(vast::type t, caf::settings opts = {});
 
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
-
-  bool deserialize(detail::legacy_deserializer& source) override;
+  bool inspect_impl(supported_inspectors& inspector) override;
 
 private:
   /// The index which holds each character.

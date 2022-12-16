@@ -28,10 +28,10 @@ TEST(enumeration) {
   REQUIRE(idx.append(enumeration{0}));
   auto foo
     = idx.lookup(relational_operator::equal, make_data_view(enumeration{0}));
-  CHECK_NOERROR(foo);
+  REQUIRE_NOERROR(foo);
   CHECK_EQUAL(to_string(*foo), "1101");
   auto bar = idx.lookup(relational_operator::not_equal,
                         make_data_view(enumeration{0}));
-  CHECK_NOERROR(bar);
+  REQUIRE_NOERROR(bar);
   CHECK_EQUAL(to_string(*bar), "0010");
 }

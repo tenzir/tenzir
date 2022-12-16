@@ -30,7 +30,7 @@ namespace {
 
 // Baseline computed via `./community-id.py nmap_vsn.pcap` from the
 // repository https://github.com/corelight/community-id-spec.
-std::string_view community_ids[] = {
+std::string community_ids[] = {
   "1:S2JPnyxVrN68D+w4ZMxKNeyQoNI=", "1:S2JPnyxVrN68D+w4ZMxKNeyQoNI=",
   "1:holOOTgd0/2k/ojauB8VsMbd2pI=", "1:holOOTgd0/2k/ojauB8VsMbd2pI=",
   "1:Vzc86YWBMwkcA1dPNrPN6t5hvj4=", "1:QbjD7ZBgS/i6o4RS0ovLWNhArt0=",
@@ -102,7 +102,8 @@ TEST(PCAP read 1) {
   auto community_id_column
     = table_slice_column{slice, caf::get<record_type>(layout).flat_index(*idx)};
   for (size_t row = 0; row < 44; ++row)
-    CHECK_VARIANT_EQUAL(community_id_column[row], community_ids[row]);
+    CHECK_VARIANT_EQUAL(materialize(community_id_column[row]),
+                        community_ids[row]);
   MESSAGE("write out read packets");
   const auto file = std::filesystem::path{"vast-unit-test-nmap-vsn.pacp"};
   caf::put(settings, "vast.export.write", file.string());

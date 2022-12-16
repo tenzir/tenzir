@@ -115,7 +115,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, base& b) {
-    return f(b.values_);
+    return f.apply(b.values_);
   }
 
   friend bool operator==(const base& x, const base& y);

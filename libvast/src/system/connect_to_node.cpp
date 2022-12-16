@@ -38,12 +38,14 @@ namespace vast::system {
 caf::expected<node_actor>
 connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
-  auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
+  auto id = get_or(opts, "vast.node-id", defaults::system::node_id.data());
   auto timeout = node_connection_timeout(opts);
   endpoint node_endpoint;
-  auto endpoint_str = get_or(opts, "vast.endpoint", defaults::system::endpoint);
+  auto endpoint_str
+    = get_or(opts, "vast.endpoint", defaults::system::endpoint.data());
   if (!parsers::endpoint(endpoint_str, node_endpoint))
-    return caf::make_error(ec::parse_error, "invalid endpoint", endpoint_str);
+    return caf::make_error(ec::parse_error, "invalid endpoint",
+                           endpoint_str.data());
   // Default to port 42000/tcp if none is set.
   if (!node_endpoint.port)
     node_endpoint.port = port{defaults::system::endpoint_port, port_type::tcp};

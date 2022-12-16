@@ -37,7 +37,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
   self->state.idx = std::move(index);
   return {
     [self](caf::stream<table_slice_column> in)
-      -> caf::inbound_stream_slot<table_slice_column> {
+      -> caf::result<caf::inbound_stream_slot<table_slice_column>> {
       VAST_TRACE("{} got a new stream", *self);
       self->state.stream_initiated = true;
       auto result = caf::attach_stream_sink(

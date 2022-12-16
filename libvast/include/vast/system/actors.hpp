@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/atoms.hpp"
 
+#include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
 #include <caf/replies_to.hpp>
 
@@ -21,28 +22,21 @@
 #define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast_actors, type)
 
 // NOLINTNEXTLINE(cert-dcl58-cpp)
-namespace std::filesystem {
+namespace caf {
 
-// TODO: With CAF 0.18, drop this inspector that is—strictly speaking—undefined
-// behavior and replace it with a specialization of caf::inspector_access.
-template <class Inspector>
-typename Inspector::result_type
-inspect(Inspector& f, ::std::filesystem::path& x) {
-  auto str = x.string();
-  if constexpr (std::is_same_v<typename Inspector::result_type, void>) {
-    f(str);
-    if constexpr (Inspector::reads_state)
-      x = {str};
-    return;
-  } else {
-    auto result = f(str);
-    if constexpr (Inspector::reads_state)
+template <>
+struct inspector_access<std::filesystem::path> {
+  template <class Inspector>
+  static auto apply(Inspector& f, std::filesystem::path& x) {
+    auto str = x.string();
+    auto result = f.apply(str);
+    if constexpr (Inspector::is_loading)
       x = {str};
     return result;
   }
-}
+};
 
-} // namespace std::filesystem
+} // namespace caf
 
 namespace vast::system {
 

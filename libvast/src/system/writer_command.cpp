@@ -26,7 +26,7 @@ command::fun make_writer_command(std::string_view format) {
     auto snk = make_sink(sys, format, inv.options);
     if (!snk)
       return make_message(snk.error());
-    return caf::make_message(sink_command(inv, sys, std::move(*snk)));
+    return sink_command(inv, sys, std::move(*snk));
   };
 }
 

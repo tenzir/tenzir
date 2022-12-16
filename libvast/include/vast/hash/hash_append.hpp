@@ -10,11 +10,13 @@
 
 #include "vast/as_bytes.hpp"
 #include "vast/detail/bit.hpp"
+#include "vast/detail/inspection_common.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/hash/uniquely_hashable.hpp"
 
 #include <caf/detail/type_traits.hpp>
-#include <caf/meta/save_callback.hpp>
+#include <caf/variant.hpp>
 
 #include <array>
 #include <chrono>
@@ -62,12 +64,17 @@ void contiguous_container_hash_append(HashAlgorithm& h,
   hash_append(h, std::size(xs));
 }
 
+template <class HashAlgorithm>
+struct hash_inspector;
+
 } // namespace detail
 
 // -- Scalars -----------------------------------------------------------------
 
 template <class HashAlgorithm, class T>
-  requires(!uniquely_hashable<T, HashAlgorithm> && std::is_scalar_v<T>)
+  requires(!uniquely_hashable<T, HashAlgorithm> && std::is_scalar_v<T>
+           && !caf::detail::has_inspect_overload<
+              detail::hash_inspector<HashAlgorithm>, T>::value)
 void hash_append(HashAlgorithm& h, T x) noexcept {
   if constexpr (std::is_integral_v<
                   T> || std::is_pointer_v<T> || std::is_enum_v<T>) {
@@ -108,7 +115,9 @@ void hash_append(HashAlgorithm& h, std::chrono::time_point<Clock, Duration> t) {
 // -- empty types -------------------------------------------------------------
 
 template <class HashAlgorithm, class T>
-  requires(std::is_empty_v<T>)
+  requires(std::is_empty_v<T>
+           && !caf::detail::has_inspect_overload<
+              detail::hash_inspector<HashAlgorithm>, T>::value)
 void hash_append(HashAlgorithm& h, T) noexcept {
   hash_append(h, 0);
 }
@@ -284,6 +293,16 @@ void hash_append(HashAlgorithm& h, const std::tuple<T...>& t) noexcept {
     t);
 }
 
+template <class HashAlgorithm, class... Args>
+void hash_append(HashAlgorithm& h, const caf::variant<Args...>& x) {
+  auto type_tag = static_cast<uint8_t>(x.index());
+  hash_append(h, type_tag);
+  auto f = [&](const auto& val) {
+    hash_append(h, val);
+  };
+  caf::visit(f, x);
+}
+
 // -- variadic ----------------------------------------------------------------
 
 template <class HashAlgorithm, class T0, class T1, class... Ts>
@@ -301,7 +320,7 @@ template <class HashAlgorithm>
 struct hash_inspector {
   using result_type = void;
 
-  static constexpr bool reads_state = true;
+  static constexpr bool is_loading = false;
 
   explicit hash_inspector(HashAlgorithm& h) : h_{h} {
   }
@@ -310,20 +329,30 @@ struct hash_inspector {
     // End of recursion.
   }
 
-  template <class F, class... Ts>
-  result_type operator()(caf::meta::save_callback_t<F> x, Ts&&... xs) const {
-    x.fun();
-    (*this)(std::forward<Ts>(xs)...);
+  template <class T>
+  auto object(const T&) {
+    return detail::inspection_object{*this};
+  }
+
+  template <class T>
+  auto field(std::string_view, T& value) {
+    return detail::inspection_field{value};
+  }
+
+  template <class T>
+  bool apply(T&& value) const {
+    (*this)(std::forward<T>(value));
+    return true;
+  }
+
+  template <class Getter, class Setter>
+  bool apply(Getter&& getter, Setter&&) {
+    auto&& val = std::forward<Getter>(getter)();
+    (*this)(val);
+    return true;
   }
 
   template <class T, class... Ts>
-    requires(caf::meta::is_annotation<T>::value)
-  result_type operator()(T&&, Ts&&... xs) const noexcept {
-    (*this)(std::forward<Ts>(xs)...); // Ignore annotation.
-  }
-
-  template <class T, class... Ts>
-    requires(!caf::meta::is_annotation<T>::value)
   result_type operator()(T&& x, Ts&&... xs) const noexcept {
     hash_append(h_, std::forward<T>(x));
     (*this)(std::forward<Ts>(xs)...);
@@ -331,13 +360,12 @@ struct hash_inspector {
 
   HashAlgorithm& h_;
 };
-
 } // namespace detail
 
 template <class HashAlgorithm, class T>
-  requires(
-    caf::detail::is_inspectable<detail::hash_inspector<HashAlgorithm>, T>::value
-    && !uniquely_hashable<T, HashAlgorithm>)
+  requires(caf::detail::has_inspect_overload<
+             detail::hash_inspector<HashAlgorithm>, T>::value
+           && !uniquely_hashable<T, HashAlgorithm>)
 void hash_append(HashAlgorithm& h, const T& x) noexcept {
   detail::hash_inspector<HashAlgorithm> f{h};
   inspect(f, const_cast<T&>(x));

@@ -62,7 +62,7 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
   auto args = invocation{options, "spawn counter", {*query}};
   VAST_DEBUG("{} spawns counter with parameters: {}",
              detail::pretty_type_name(inv.full_name), query);
-  caf::error err;
+  auto err = caf::error{};
   self->request(node, caf::infinite, atom::spawn_v, std::move(args))
     .receive(
       [&](caf::actor actor) {
@@ -85,7 +85,7 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
     // Message handlers.
     ([&](uint64_t x) { result += x; }, [&](atom::done) { counting = false; });
   std::cout << result << std::endl;
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

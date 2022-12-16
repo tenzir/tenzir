@@ -41,9 +41,14 @@ struct query_state {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.query_context, x.client,
-             x.candidate_partitions, x.requested_partitions,
-             x.scheduled_partitions, x.completed_partitions);
+    return f.object(x)
+      .pretty_name("query_state")
+      .fields(f.field("query-context", x.query_context),
+              f.field("client", x.client),
+              f.field("candidate-partitions", x.candidate_partitions),
+              f.field("requested-partitions", x.requested_partitions),
+              f.field("scheduled-partitions", x.scheduled_partitions),
+              f.field("completed-partitions", x.completed_partitions));
   }
 
   std::size_t memusage() const {
