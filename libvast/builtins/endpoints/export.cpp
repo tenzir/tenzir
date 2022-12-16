@@ -354,7 +354,8 @@ std::string format_result_flat(const std::vector<table_slice>& slices,
     = vast::format::json::writer{std::move(ostream), formatting_options};
   for (auto const& slice : slices) {
     num_events += slice.rows();
-    writer.write(slice);
+    if (auto error = writer.write(slice))
+      VAST_WARN("json writer failed to write table slice: {}", error);
   }
   auto data = static_cast<std::stringstream&>(writer.out()).str();
   // Remove line breaks since writer output is NDJSON, except for the
@@ -419,7 +420,8 @@ std::string format_result_typed(const std::vector<table_slice>& slices,
   for (auto const& slice : slices) {
     auto& writer = events.at(slice.layout());
     num_events += slice.rows();
-    writer.write(slice);
+    if (auto error = writer.write(slice))
+      VAST_WARN("json writer failed to write table slice: {}", error);
   }
   std::string events_stringified;
   for (auto& [type, writer] : events) {
@@ -509,7 +511,10 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
         std::vector<table_slice> slices;
         if (self->state.pipeline_) {
           for (auto&& slice : std::exchange(self->state.results_, {}))
-            self->state.pipeline_->add(std::move(slice));
+            if (auto error = self->state.pipeline_->add(std::move(slice))) {
+              VAST_WARN("{} failed to add slice to pipeline: {}", *self, error);
+              break; // Assume that `finish()` will also fail now.
+            }
           auto transformed = self->state.pipeline_->finish();
           if (!transformed)
             return self->state.request_.response->abort(
