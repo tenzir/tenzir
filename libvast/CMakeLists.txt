@@ -208,8 +208,12 @@ else ()
     target_compile_features(libcaf_core INTERFACE cxx_std_17)
     target_compile_options(
       libcaf_core
-      PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
-              -Wno-unknown-warning-option)
+      PRIVATE
+        -Wno-maybe-uninitialized
+        -Wno-unqualified-std-cast-call
+        -Wno-unknown-warning-option
+        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     VASTSystemizeTarget(libcaf_io)
     set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
     target_compile_options(
@@ -229,12 +233,6 @@ else ()
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     VASTSystemizeTarget(libcaf_openssl)
     set_target_properties(libcaf_openssl PROPERTIES EXPORT_NAME openssl)
-    # Fix deprecation warnings for OpenSSL >= 3.0.
-    target_compile_options(
-      libcaf_openssl
-      PRIVATE
-        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
-        $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
     VASTSystemizeTarget(libcaf_test)
     set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
     mark_as_advanced(caf_build_header_path)
@@ -467,8 +465,14 @@ if (VAST_ENABLE_BACKTRACE)
 endif ()
 
 # Configure options-dependent code files.
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs_relocatable.cpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
+else ()
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/detail/installdirs.cpp.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/src/detail/installdirs.cpp" @ONLY)
+endif ()
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/vast/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/include/vast/config.hpp")

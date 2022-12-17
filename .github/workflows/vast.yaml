@@ -68,7 +68,8 @@ jobs:
       vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
-      run-docker: ${{ steps.configure.outputs.run-docker }}
+      run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
+      run-docker-vast-slim: ${{ steps.configure.outputs.run-docker-vast-slim }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
@@ -157,7 +158,8 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]] || ! is_unchanged .github/workflows/vast.yaml; then
             echo "run-changelog=true" >> $GITHUB_OUTPUT
             echo "run-vast-io=true" >> $GITHUB_OUTPUT
-            echo "run-docker=true" >> $GITHUB_OUTPUT
+            echo "run-docker-vast=true" >> $GITHUB_OUTPUT
+            echo "run-docker-vast-slim=true" >> $GITHUB_OUTPUT
             echo "run-docker-compose=true" >> $GITHUB_OUTPUT
             echo "run-vast-nix=true" >> $GITHUB_OUTPUT
             echo "run-vast=true" >> $GITHUB_OUTPUT
@@ -203,13 +205,13 @@ jobs:
             run_docker_compose=true
           fi
           echo "run-docker-compose=${run_docker_compose}" >> $GITHUB_OUTPUT
-          run_docker=${run_docker_compose}
+          run_docker_vast=${run_docker_compose}
           if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_docker=false
+            run_docker_vast=false
           elif ${run_vast_io}; then
-            run_docker=true
+            run_docker_vast=true
           fi
-          echo "run-docker=${run_docker}" >> $GITHUB_OUTPUT
+          echo "run-docker-vast=${run_docker_vast}" >> $GITHUB_OUTPUT
           run_vast_nix=${run_vast}
           if ${run_vast_plugins}; then
             run_vast_nix=true
@@ -219,6 +221,11 @@ jobs:
             run_vast_nix=true
           fi
           echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
+          run_docker_vast_slim="${run_vast_nix}"
+          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+            run_docker_vast_slim='false'
+          fi
+          echo "run-docker-vast-slim=${run_docker_vast_slim}" >> $GITHUB_OUTPUT
 
   changelog:
     name: Changelog
@@ -259,7 +266,7 @@ jobs:
     needs:
       - configure
       - changelog
-      - docker
+      - docker-vast
     if: ${{ needs.configure.outputs.run-vast-io == 'true' }}
     name: vast.io
     runs-on: ubuntu-20.04
@@ -310,11 +317,11 @@ jobs:
           user_name: tenzir-bot
           user_email: engineering@tenzir.com
 
-  docker:
+  docker-vast:
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-docker == 'true' }}
-    name: Docker
+    if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
+    name: Docker (tenzir/vast)
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -392,7 +399,7 @@ jobs:
 
   docker-compose:
     needs:
-      - docker
+      - docker-vast
       - configure
     if: ${{ needs.configure.outputs.run-docker-compose == 'true' }}
     name: Docker Compose
@@ -432,7 +439,7 @@ jobs:
 
   example-notebooks:
     needs:
-      - docker
+      - docker-vast
       - configure
     if: ${{ needs.configure.outputs.run-example-notebooks == 'true' }}
     name: Build Example Notebooks
@@ -464,18 +471,8 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-vast-nix == 'true' }}
-    name: VAST (Nix, ${{ matrix.nix.target }})
+    name: VAST (Nix)
     runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        nix:
-          # We keep this single entry matrix so we can add a non-static
-          # variation without much hassle in the future.
-          - target: "vast"
-            build-options: >-
-              -DVAST_ENABLE_AVX_INSTRUCTIONS:BOOL=OFF
-              -DVAST_ENABLE_AVX2_INSTRUCTIONS:BOOL=OFF
-              -DCPACK_PACKAGE_FILE_NAME:STRING="vast-${{ needs.configure.outputs.build-version }}"
     env:
       BUILD_DIR: build
     steps:
@@ -495,43 +492,43 @@ jobs:
       - name: Build Static Packages
         id: build_static_packages
         env:
-          STATIC_BINARY_TARGET: ${{ matrix.nix.target }}
+          STATIC_BINARY_TARGET: vast
           VAST_BUILD_VERSION: ${{ needs.configure.outputs.build-version }}
           VAST_BUILD_VERSION_SHORT: ${{ needs.configure.outputs.build-version-short }}
         run: |
           STORE_PATH=$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
-            ${{ matrix.nix.build-options }})
+            -DCPACK_PACKAGE_FILE_NAME:STRING="vast-${VAST_BUILD_VERSION}")
           echo "store_path=${STORE_PATH}" >> $GITHUB_OUTPUT
       - name: Get Artifact Names
         id: get_artifact_names
         run: |
-          TAR_GZ=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.tar.gz")
-          DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "${{ matrix.nix.target }}.*.deb")
+          TAR_GZ=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "vast.*.tar.gz")
+          DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "vast.*.deb")
           echo "tar_gz=${TAR_GZ}" >> $GITHUB_OUTPUT
           echo "deb=${DEB}" >> $GITHUB_OUTPUT
       - name: Run Integration Tests
         run: |
           mkdir -p vast-integration-test
-          tar xf ./result/${{ steps.get_artifact_names.outputs.tar_gz }} --directory vast-integration-test
+          tar xf ./result-package/${{ steps.get_artifact_names.outputs.tar_gz }} --directory vast-integration-test
           nix shell --impure mach-nix#gen.python.coloredlogs.jsondiff.pyarrow.pyyaml.schema --command python vast/integration/integration.py --app \
             vast-integration-test/opt/vast/bin/vast
       - name: Upload Integration Test Logs on Failure
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: "vast-integration-test-nix-static-${{ matrix.nix.target }}"
+          name: "vast-integration-test-nix-static-vast"
           path: "vast-integration-test"
           if-no-files-found: error
       - name: Upload Tarball to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ matrix.nix.target }}.tar.gz"
+          name: "vast.tar.gz"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
           if-no-files-found: error
       - name: Upload Debian Package to Github
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ matrix.nix.target }}.deb"
+          name: "vast.deb"
           path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
           if-no-files-found: error
       - name: Setup Python
@@ -554,8 +551,8 @@ jobs:
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-static-latest.deb"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.deb"
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
         env:
@@ -563,8 +560,8 @@ jobs:
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
           VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_gz }}" | cut -d"-" -f2)
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.nix.target }}-${VERSION}-static-latest.deb"
+          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.deb"
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete Release Assets
@@ -577,7 +574,7 @@ jobs:
           fail-if-no-assets: false
           # only delete assets when `tag` refers to a release
           fail-if-no-release: true
-          assets: "${{ matrix.nix.target }}-linux-static.tar.gz"
+          assets: "vast-linux-static.tar.gz"
       - name: Upload Release Tarball
         if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
@@ -589,7 +586,7 @@ jobs:
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
           # for a build of the latest release.
-          asset_name: "${{ matrix.nix.target }}-linux-static.tar.gz"
+          asset_name: "vast-linux-static.tar.gz"
           asset_content_type: application/gzip
       - name: Upload Debian Release Package
         if: github.event_name == 'release'
@@ -602,8 +599,72 @@ jobs:
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb
           # for a build of the latest release.
-          asset_name: "${{ matrix.nix.target }}-linux-static.deb"
+          asset_name: "vast-linux-static.deb"
           asset_content_type: application/vnd.debian.binary-package
+
+  docker-vast-slim:
+    needs:
+      - configure
+    if: needs.configure.outputs.run-docker-vast-slim == 'true'
+    name: Docker (tenzir/vast-slim)
+    runs-on: ubuntu-20.04
+    env:
+      BUILD_DIR: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Install Nix
+        uses: cachix/install-nix-action@v18
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v12
+        with:
+          name: vast
+          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: tenzir-bot
+          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
+      - name: Build Docker Image
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          nix run .#stream-static-image | docker load
+      - name: Upload Docker Image
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          images=('tenzir/vast-slim')
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            registries=('ghcr.io/')
+            tags=("${{ needs.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            registries=('' 'ghcr.io/')
+            tags=('latest' "${{ github.sha }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            registries=('' 'ghcr.io/')
+            tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
+          else
+            2>& echo "unexpected github.event_name '${GITHUB_EVENT_NAME}'"
+            exit 1
+          fi
+          for registry in "${registries[@]}"; do
+            for image in "${images[@]}"; do
+              for tag in "${tags[@]}"; do
+                docker tag "${image}:latest" "${registry}${image}:${tag}"
+                docker push "${registry}${image}:${tag}"
+              done
+            done
+          done
 
   vast:
     needs:
@@ -811,7 +872,11 @@ jobs:
     needs:
       - vast
       - configure
-    if: ${{ needs.configure.outputs.run-vast-plugins == 'true' }}
+    if: >-
+      always() &&
+      needs.configure.outputs.run-vast-plugins == 'true' &&
+      !contains(join(needs.*.result, ','), 'failure') &&
+      !contains(join(needs.*.result, ','), 'cancelled')
     runs-on: ${{ matrix.setup.os }}
     container: ${{ matrix.setup.container }}
     strategy:
@@ -858,6 +923,15 @@ jobs:
             mac-dependencies:
               - asio
               - http-parser
+            post-install:
+              run: |
+                cd plugins/web/ui
+                yarn install --frozen-lockfile
+                yarn playwright install --with-deps
+                yarn playwright test
+              upload:
+                name: Playwright Report
+                path: plugins/web/ui/playwright-report
         exclude:
           # Disable the Broker plugin for macOS because we do not support
           # building it on macOS, and disable the Parquet plugin because trying
@@ -878,7 +952,6 @@ jobs:
       HOMEBREW_NO_ANALYTICS: 1
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       HOMEBREW_NO_AUTO_UPDATE: 1
-      DESTDIR: "${{ github.workspace }}"
     name: VAST Plugins (${{ matrix.plugin.name }}, ${{ matrix.setup.name }})
     steps:
       - name: Install Git (Debian)
@@ -976,9 +1049,6 @@ jobs:
         # support for easier plugin development.
         run: |
           cmake --build "$BUILD_DIR" --target integration
-      - name: Install
-        run: |
-          cmake --install "$BUILD_DIR"
       - name: Upload Integration Test Logs on Failure
         if: failure()
         uses: actions/upload-artifact@v3
@@ -989,6 +1059,18 @@ jobs:
       - name: Install
         run: |
           cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
+          echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
+      - name: Post-Install
+        if: ${{ matrix.plugin.post-install.run != '' }}
+        run: |
+          ${{ matrix.plugin.post-install.run }}
+      - name: Post-Install Upload
+        if: ${{ always() && matrix.plugin.post-install.upload != '' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.plugin.post-install.upload.name }}
+          path: ${{ matrix.plugin.post-install.upload.path }}
+          if-no-files-found: error
 
   python:
     needs:
@@ -1070,7 +1152,8 @@ jobs:
       - configure
       - changelog
       - vast-io
-      - docker
+      - docker-vast
+      - docker-vast-slim
       # We currently have a transient error on TheHive init script (sc-39576)
       # - docker-compose
       - example-notebooks

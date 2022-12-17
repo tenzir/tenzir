@@ -177,4 +177,57 @@ TEST(export endpoint) {
   }
 }
 
+TEST(query endpoint) {
+  auto const* plugin
+    = vast::plugins::find<vast::rest_endpoint_plugin>("api-query");
+  REQUIRE(plugin);
+  auto endpoints = plugin->rest_endpoints();
+  REQUIRE_EQUAL(endpoints.size(), 2ull);
+  auto const& query_new_endpoint = endpoints[0];
+  auto const& query_next_endpoint = endpoints[1];
+  auto handler = plugin->handler(self->system(), test_node);
+  auto response_new = std::make_shared<test_response>();
+  auto request_new = vast::http_request{
+    .params = {
+      {"expression", "#type == \"zeek.conn\""},
+    },
+    .response = response_new,
+  };
+  self->send(handler, vast::atom::http_request_v,
+             query_new_endpoint.endpoint_id, std::move(request_new));
+  run();
+  CHECK_EQUAL(response_new->error_, caf::error{});
+  CHECK(!response_new->body_.empty());
+  auto padded_string = simdjson::padded_string{response_new->body_};
+  simdjson::dom::parser parser;
+  simdjson::dom::element doc;
+  auto error = parser.parse(padded_string).get(doc);
+  CHECK(!error);
+  CHECK(!doc.is_null());
+  CHECK(!doc["id"].is_null());
+  auto const* id = doc["id"].get<const char*>().value();
+  auto response_next = std::make_shared<test_response>();
+  const auto NUM_EVENTS = vast::count{16};
+  auto request_next = vast::http_request{
+    .params = {
+      {"id", std::string{id}},
+      {"n", NUM_EVENTS},
+    },
+    .response = response_next,
+  };
+  self->send(handler, vast::atom::http_request_v,
+             query_next_endpoint.endpoint_id, std::move(request_next));
+  run();
+  CHECK_EQUAL(response_next->error_, caf::error{});
+  CHECK(!response_next->body_.empty());
+  VAST_INFO("{}", response_next->body_);
+  auto padded_string2 = simdjson::padded_string{response_next->body_};
+  simdjson::dom::parser parser2;
+  simdjson::dom::element doc2;
+  auto error2 = parser2.parse(padded_string2).get(doc2);
+  CHECK(!error2);
+  CHECK(!doc2.is_null());
+  CHECK(!doc2["events"].is_null());
+}
+
 FIXTURE_SCOPE_END()

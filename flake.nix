@@ -43,6 +43,33 @@
       };
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       apps.vast-static = flake-utils.lib.mkApp { drv = packages.vast-static; };
+      apps.stream-static-image = {
+        type = "app";
+        program = "${pkgs.dockerTools.streamLayeredImage {
+          name = "tenzir/vast-slim";
+          tag = "latest";
+          config = let
+            vast-dir = "/var/lib/vast";
+          in {
+            Entrypoint = [ "${self.packages.${system}."vast-static"}/bin/vast" ];
+            CMD = [ "--help" ];
+            Env = [
+              # When changing these, make sure to also update the entries in the
+              # Dockerfile.
+              "VAST_ENDPOINT=0.0.0.0:42000"
+              "VAST_DB_DIRECTORY=${vast-dir}"
+              "VAST_LOG_FILE=/var/log/vast/server.log"
+            ];
+            ExposedPorts = {
+              "42000/tcp" = {};
+            };
+            WorkingDir = "${vast-dir}";
+            Volumes = {
+              "${vast-dir}" = {};
+            };
+          };
+        }}";
+      };
       apps.default = apps.vast;
       devShell = import ./shell.nix { inherit pkgs; };
       hydraJobs = { inherit packages; } // (

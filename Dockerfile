@@ -77,6 +77,8 @@ CMD ["--help"]
 
 FROM python:3.10-slim-bullseye AS production
 
+# When changing these, make sure to also update the entries in the flake.nix
+# file.
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}" \
     VAST_DB_DIRECTORY="/var/lib/vast" \
