@@ -320,11 +320,12 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
 /// @param num_rows The number of rows to keep.
-/// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
-///          table slice of the first `num_rows` rows from `slice`.
-/// @pre `slice.encoding() != table_slice_encoding::none`
-/// @pre `num_rows > 0`
-table_slice truncate(table_slice slice, size_t num_rows);
+table_slice head(table_slice slice, size_t num_rows);
+
+/// Selects the last `num_rows` rows of `slice`.
+/// @param slice The input table slice.
+/// @param num_rows The number of rows to keep.
+table_slice tail(table_slice slice, size_t num_rows);
 
 /// Splits a table slice into two slices such that the first slice contains
 /// the rows `[0, partition_point)` and the second slice contains the rows

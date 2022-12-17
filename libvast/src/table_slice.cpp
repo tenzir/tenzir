@@ -561,14 +561,28 @@ select(const table_slice& slice, expression expr, const ids& hints) {
   }
 }
 
-table_slice truncate(table_slice slice, size_t num_rows) {
-  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  VAST_ASSERT(num_rows > 0);
-  if (num_rows == slice.rows())
+table_slice head(table_slice slice, size_t num_rows) {
+  if (slice.encoding() == table_slice_encoding::none)
+    return {};
+  if (num_rows >= slice.rows())
     return slice;
   auto rb = to_record_batch(slice);
   auto head = table_slice{rb->Slice(0, detail::narrow_cast<int64_t>(num_rows)),
                           slice.layout()};
+  head.offset(slice.offset());
+  head.import_time(slice.import_time());
+  return head;
+}
+
+table_slice tail(table_slice slice, size_t num_rows) {
+  if (slice.encoding() == table_slice_encoding::none)
+    return {};
+  if (num_rows >= slice.rows())
+    return slice;
+  auto rb = to_record_batch(slice);
+  auto head = table_slice{
+    rb->Slice(detail::narrow_cast<int64_t>(slice.rows() - num_rows)),
+    slice.layout()};
   head.offset(slice.offset());
   head.import_time(slice.import_time());
   return head;
@@ -579,18 +593,12 @@ split(const table_slice& slice, size_t partition_point) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   if (partition_point == 0)
     return {{}, slice};
-  if (partition_point == slice.rows())
+  if (partition_point >= slice.rows())
     return {slice, {}};
-  auto rb = to_record_batch(slice);
-  auto pp = detail::narrow_cast<int64_t>(partition_point);
-  auto rows = detail::narrow_cast<int64_t>(slice.rows());
-  auto head = table_slice{rb->Slice(0, pp), slice.layout()};
-  head.offset(slice.offset());
-  head.import_time(slice.import_time());
-  auto tail = table_slice{rb->Slice(pp, rows - pp), slice.layout()};
-  tail.offset(slice.offset() + pp);
-  tail.import_time(slice.import_time());
-  return {head, tail};
+  return {
+    head(slice, partition_point),
+    tail(slice, slice.rows() - partition_point),
+  };
 }
 
 uint64_t rows(const std::vector<table_slice>& slices) {

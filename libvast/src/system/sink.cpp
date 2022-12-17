@@ -109,7 +109,7 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
           return reached_max_events();
         }
         if (slice.rows() > remaining)
-          slice = truncate(std::move(slice), remaining);
+          slice = head(std::move(slice), remaining);
         // Handle events.
         if (auto err = self->state.writer->write(slice)) {
           VAST_ERROR("{} {}", *self, render(err));

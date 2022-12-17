@@ -178,12 +178,12 @@ TEST(truncate) {
   REQUIRE_EQUAL(sut.rows(), 8u);
   sut.offset(100);
   auto truncated_events = [&](size_t num_rows) {
-    auto sub_slice = truncate(sut, num_rows);
+    auto sub_slice = head(sut, num_rows);
     if (sub_slice.rows() != num_rows)
       FAIL("expected " << num_rows << " rows, got " << sub_slice.rows());
     return make_data(sub_slice);
   };
-  auto sub_slice = truncate(sut, 8);
+  auto sub_slice = head(sut, 8);
   CHECK_EQUAL(sub_slice, sut);
   CHECK_EQUAL(truncated_events(7), make_data(sut, 0, 7));
   CHECK_EQUAL(truncated_events(6), make_data(sut, 0, 6));
@@ -281,7 +281,7 @@ TEST(evaluate) {
 }
 
 TEST(project column flat index) {
-  auto sut = truncate(zeek_conn_log[0], 3);
+  auto sut = head(zeek_conn_log[0], 3);
   auto proj = project(sut, time_type{}, 0, string_type{}, 6);
   CHECK(proj);
   CHECK(proj.begin() != proj.end());
