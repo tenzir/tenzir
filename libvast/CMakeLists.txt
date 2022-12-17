@@ -251,15 +251,8 @@ if (VAST_ENABLE_JOURNALD_LOGGING)
 endif ()
 
 # Link against fmt.
-target_compile_definitions(
-  libvast
-  PUBLIC
-    # Forbid unsafe duration_cast usage.
-    FMT_SAFE_DURATION_CAST
-    # Make fmt::internal an alias for fmt::detail. Remove when requiring fmt >= 7.
-    FMT_USE_INTERNAL)
-find_package(fmt 5.2.1 REQUIRED)
-string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(fmt 5.2.1 REQUIRED)")
+find_package(fmt 7.1.3 REQUIRED)
+string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(fmt 7.1.3 REQUIRED)")
 target_link_libraries(libvast PUBLIC fmt::fmt)
 dependency_summary("fmt" fmt::fmt "Dependencies")
 
