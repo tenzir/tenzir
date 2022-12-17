@@ -10,6 +10,8 @@
 #include <vast/chunk.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/data.hpp>
+#include <vast/detail/collect.hpp>
+#include <vast/detail/generator.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/fwd.hpp>
@@ -20,10 +22,14 @@
 #include <arrow/io/file.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/feather.h>
+#include <arrow/ipc/reader.h>
 #include <arrow/table.h>
+#include <arrow/util/iterator.h>
 #include <arrow/util/key_value_metadata.h>
 
 namespace vast::plugins::feather {
+
+namespace {
 
 /// Configuration for the Feather plugin.
 struct configuration {
@@ -43,8 +49,6 @@ struct configuration {
     return result;
   }
 };
-
-namespace {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
   return value_at(time_type{}, *time_col, time_col->length() - 1);
@@ -92,60 +96,89 @@ auto wrap_record_batch(const table_slice& slice)
   return new_rb;
 }
 
+/// Decode an Arrow IPC stream incrementally.
+auto decode_ipc_stream(chunk_ptr chunk)
+  -> detail::generator<std::shared_ptr<arrow::RecordBatch>> {
+  auto reader
+    = arrow::ipc::RecordBatchFileReader::Open(as_arrow_file(std::move(chunk)))
+        .ValueOrDie();
+  auto generator = reader->GetRecordBatchGenerator().ValueOrDie();
+  while (true) {
+    auto next = generator();
+    if (!next.is_finished())
+      next.Wait();
+    VAST_ASSERT(next.is_finished());
+    auto result = next.MoveResult().ValueOrDie();
+    if (arrow::IsIterationEnd(result))
+      co_return;
+    co_yield std::move(result);
+  }
+}
+
 class passive_feather_store final : public passive_store {
   [[nodiscard]] caf::error load(chunk_ptr chunk) override {
-    auto file = as_arrow_file(std::move(chunk));
-    const auto options = arrow::ipc::IpcReadOptions::Defaults();
-    auto reader = arrow::ipc::feather::Reader::Open(file, options);
-    if (!reader.ok())
-      return caf::make_error(ec::system_error, reader.status().ToString());
-    auto table = std::shared_ptr<arrow::Table>{};
-    const auto read_status = reader.MoveValueUnsafe()->Read(&table);
-    if (!read_status.ok())
-      return caf::make_error(ec::system_error, read_status.ToString());
-
-    table_ = std::move(table);
-    auto arrow_field = table_->schema()->GetFieldByName("event");
-    if (!arrow_field) {
-      return caf::make_error(ec::format_error, "schema does not have mandatory "
-                                               "'event' column");
-    }
-    schema_ = type::from_arrow(*arrow_field);
-    if (!schema_)
-      return caf::make_error(ec::format_error,
-                             "Arrow schema incompatible with VAST type: {}",
-                             arrow_field->ToString(true));
-    num_events_ = table_->num_rows();
+    // See arrow::ipc::internal::kArrowMagicBytes in
+    // arrow/ipc/metadata_internal.h.
+    static constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
+    if (chunk->size() < arrow_magic_bytes.length()
+        || std::memcmp(chunk->data(), arrow_magic_bytes.data(),
+                       arrow_magic_bytes.size())
+             != 0)
+      return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
+                                               "Arrow IPC file");
+    remaining_slices_generator_ = decode_ipc_stream(std::move(chunk));
+    remaining_slices_iterator_ = remaining_slices_generator_.begin();
     return {};
   }
 
   [[nodiscard]] detail::generator<table_slice> slices() const override {
     auto offset = id{};
-    for (auto rb : arrow::TableBatchReader(*table_)) {
-      VAST_ASSERT(rb.ok(), rb.status().ToString().c_str());
-      auto time_col = rb.ValueUnsafe()->GetColumnByName("import_time");
-      auto unwrapped_rb = unwrap_record_batch(rb.MoveValueUnsafe());
-      auto slice = table_slice{unwrapped_rb, schema_};
-      slice.offset(offset);
-      offset += slice.rows();
-      slice.import_time(derive_import_time(time_col));
-      co_yield std::move(slice);
+    auto i = size_t{};
+    while (true) {
+      if (i < cached_slices_.size()) {
+        VAST_ASSERT(offset == cached_slices_[i].offset());
+      } else if (remaining_slices_iterator_
+                 != remaining_slices_generator_.end()) {
+        auto batch = std::move(*remaining_slices_iterator_);
+        VAST_ASSERT(batch);
+        ++remaining_slices_iterator_;
+        auto import_time_column = batch->GetColumnByName("import_time");
+        auto slice = cached_slices_.empty()
+                       ? table_slice{unwrap_record_batch(batch)}
+                       : table_slice{unwrap_record_batch(batch),
+                                     cached_slices_[0].layout()};
+        slice.offset(offset);
+        slice.import_time(derive_import_time(import_time_column));
+        cached_slices_.push_back(std::move(slice));
+      } else {
+        co_return;
+      }
+      co_yield cached_slices_[i];
+      offset += cached_slices_[i].rows();
+      ++i;
     }
-    VAST_ASSERT(offset == num_events_);
   }
 
   [[nodiscard]] uint64_t num_events() const override {
-    return num_events_;
+    if (cached_num_events_ == 0)
+      cached_num_events_ = rows(collect(slices()));
+    return cached_num_events_;
   }
 
   [[nodiscard]] type schema() const override {
-    return schema_;
+    for (const auto& slice : slices())
+      return slice.layout();
+    die("store must not be empty");
   }
 
 private:
-  type schema_ = {};
-  std::shared_ptr<arrow::Table> table_ = {};
-  uint64_t num_events_ = {};
+  detail::generator<std::shared_ptr<arrow::RecordBatch>>
+    remaining_slices_generator_ = {};
+  mutable uint64_t cached_num_events_ = {};
+  mutable std::vector<table_slice> cached_slices_ = {};
+  mutable detail::generator<std::shared_ptr<arrow::RecordBatch>>::iterator
+    remaining_slices_iterator_
+    = {};
 };
 
 class active_feather_store final : public active_store {
