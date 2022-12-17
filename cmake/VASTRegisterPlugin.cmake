@@ -412,6 +412,12 @@ function (VASTRegisterPlugin)
     VASTNormalizeInstallDirs()
   endif ()
 
+  # Enable compile commands for external plugins.
+  # Must be done before the targets are created for CMake >= 3.20.
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+  endif ()
+
   if (NOT PLUGIN_TARGET)
     message(
       FATAL_ERROR "TARGET must be specified in call to VASTRegisterPlugin")
