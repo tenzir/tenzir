@@ -393,7 +393,7 @@ std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
 
 // -- operations ---------------------------------------------------------------
 
-table_slice join(std::vector<table_slice> slices) {
+table_slice concatenate(std::vector<table_slice> slices) {
   slices.erase(std::remove_if(slices.begin(), slices.end(),
                               [](const auto& slice) {
                                 return slice.encoding()
@@ -409,7 +409,7 @@ table_slice join(std::vector<table_slice> slices) {
                           [&](const auto& slice) {
                             return slice.layout() == schema;
                           }),
-              "join requires slices to be homogeneous");
+              "concatenate requires slices to be homogeneous");
   auto builder = caf::get<record_type>(schema).make_arrow_builder(
     arrow::default_memory_pool());
   auto arrow_schema = schema.to_arrow_schema();
@@ -614,7 +614,7 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
   auto selected = collect(select(slice, std::move(expr), hints));
   if (selected.empty())
     return {};
-  return join(std::move(selected));
+  return concatenate(std::move(selected));
 }
 
 std::optional<table_slice>

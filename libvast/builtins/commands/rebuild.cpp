@@ -71,7 +71,7 @@ public:
       const auto remainder = desired_batch_size_ - buffered_rows;
       auto [head, tail] = split(slice, slice.rows() - remainder);
       buffer_.push_back(head);
-      auto result = join(std::exchange(buffer_, {}));
+      auto result = concatenate(std::exchange(buffer_, {}));
       results_.emplace_back(result.layout(), to_record_batch(result));
       buffer_.push_back(tail);
     }
@@ -80,7 +80,7 @@ public:
 
   caf::expected<std::vector<pipeline_batch>> finish() override {
     if (rows(buffer_) > 0) {
-      auto result = join(std::exchange(buffer_, {}));
+      auto result = concatenate(std::exchange(buffer_, {}));
       results_.emplace_back(result.layout(), to_record_batch(result));
     }
     return std::exchange(results_, {});
