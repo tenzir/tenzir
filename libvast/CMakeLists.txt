@@ -11,7 +11,7 @@ if (NOT VAST_ENABLE_BUNDLED_ROBIN_MAP)
   find_package(tsl-robin-map QUIET)
   if (tsl-robin-map_FOUND)
     string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(tsl-robin-map 0.6.2 REQUIRED)")
+           "\nfind_package(tsl-robin-map REQUIRED)")
     dependency_summary("robin-map" tsl::robin_map "Dependencies")
   endif ()
 endif ()
