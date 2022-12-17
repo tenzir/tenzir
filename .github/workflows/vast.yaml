@@ -509,7 +509,7 @@ jobs:
       - name: Run Integration Tests
         run: |
           mkdir -p vast-integration-test
-          tar xf ./result/${{ steps.get_artifact_names.outputs.tar_gz }} --directory vast-integration-test
+          tar xf ./result-package/${{ steps.get_artifact_names.outputs.tar_gz }} --directory vast-integration-test
           nix shell --impure mach-nix#gen.python.coloredlogs.jsondiff.pyarrow.pyyaml.schema --command python vast/integration/integration.py --app \
             vast-integration-test/opt/vast/bin/vast
       - name: Upload Integration Test Logs on Failure
