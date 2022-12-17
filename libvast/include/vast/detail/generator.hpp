@@ -235,7 +235,7 @@ public:
     return iterator{m_coroutine};
   }
 
-  internal::generator_sentinel end() noexcept {
+  internal::generator_sentinel end() const noexcept {
     return internal::generator_sentinel{};
   }
 
