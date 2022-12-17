@@ -222,7 +222,7 @@ jobs:
           fi
           echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
           run_docker_vast_slim="${run_vast_nix}"
-          elif [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
             run_docker_vast_slim='false'
           fi
           echo "run-docker-vast-slim=${run_docker_vast_slim}" >> $GITHUB_OUTPUT
@@ -875,8 +875,8 @@ jobs:
     if: >-
       always() &&
       needs.configure.outputs.run-vast-plugins == 'true' &&
-      needs.vast.result != 'failure' &&
-      needs.vast.result != 'cancelled'
+      !contains(join(needs.*.result, ','), 'failure') &&
+      !contains(join(needs.*.result, ','), 'cancelled')
     runs-on: ${{ matrix.setup.os }}
     container: ${{ matrix.setup.container }}
     strategy:
