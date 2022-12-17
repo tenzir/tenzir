@@ -127,22 +127,27 @@ namespace {
 std::pair<size_t, std::string>
 drain_buffer(std::deque<table_slice>& slices, size_t n) {
   auto written = size_t{0};
+  bool error_encountered = false;
   auto ostream = std::make_unique<std::stringstream>();
   auto writer = vast::format::json::writer{std::move(ostream), caf::settings{}};
   for (auto it = slices.begin(); it != slices.end(); ++it) {
     auto& slice = *it;
     if (slice.rows() < n) {
       written += slice.rows();
-      writer.write(slice);
+      if (auto error = writer.write(slice))
+        error_encountered = true;
     } else {
       auto [first, second] = split(slice, n);
       written += first.rows();
-      writer.write(first);
+      if (auto error = writer.write(first))
+        error_encountered = true;
       slice = second;
       slices.erase(slices.begin(), it);
       break;
     }
   }
+  if (error_encountered)
+    VAST_WARN("query endpoint encountered error writing json data");
   return {written, static_cast<std::stringstream&>(writer.out()).str()};
 }
 
