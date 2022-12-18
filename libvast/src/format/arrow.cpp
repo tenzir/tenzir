@@ -139,7 +139,15 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       // record batch with status `OK` and `nullptr` as data and re-initialize
       // the reader.
       if (batch->batch != nullptr) {
-        const auto slice = table_slice{batch->batch};
+        auto schema = type::from_arrow(*batch->batch->schema());
+        if (!schema) {
+          return caf::make_error(ec::format_error,
+                                 fmt::format("failed to read next record "
+                                             "batch: schema metadata is "
+                                             "incompatible with VAST"));
+          continue;
+        }
+        const auto slice = table_slice{batch->batch, schema};
         f(slice);
         produced += slice.rows();
         ++batch_events_;
