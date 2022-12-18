@@ -626,7 +626,7 @@ tests:
     steps:
       - command: -N import zeek
         input: data/zeek/conn.log.gz
-      - command: -N flush
+      - command: version
         transformation: "@./misc/scripts/break-sizelimit.sh"
       # We use an extra import step to trigger the repair because querying
       # directly would not wait for the repair step.
