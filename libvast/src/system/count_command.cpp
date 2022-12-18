@@ -42,17 +42,10 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
     = system::spawn_or_connect_to_node(self, options, content(sys.config()));
   if (auto err = std::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  auto local_node = !std::holds_alternative<node_actor>(node_opt);
-  const auto& node = local_node
-                       ? std::get<scope_linked<node_actor>>(node_opt).get()
-                       : std::get<node_actor>(node_opt);
+  const auto& node = std::holds_alternative<node_actor>(node_opt)
+                       ? std::get<node_actor>(node_opt)
+                       : std::get<scope_linked<node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
-  if (local_node) {
-    // Register as the termination handler.
-    auto signal_reflector
-      = sys.registry().get<signal_reflector_actor>("signal-reflector");
-    self->send(signal_reflector, atom::subscribe_v);
-  }
   // Spawn COUNTER at the node.
   caf::actor cnt;
   auto args = invocation{options, "spawn counter", {*query}};

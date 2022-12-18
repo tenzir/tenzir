@@ -72,10 +72,9 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = std::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  auto local_node = !std::holds_alternative<node_actor>(node_opt);
-  const auto& node = local_node
-                       ? std::get<scope_linked<node_actor>>(node_opt).get()
-                       : std::get<node_actor>(node_opt);
+  const auto& node = std::holds_alternative<node_actor>(node_opt)
+                       ? std::get<node_actor>(node_opt)
+                       : std::get<scope_linked<node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   VAST_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
@@ -122,12 +121,6 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
     else
       VAST_ERROR("{} was unable parse timeout option {} as duration: {}",
                  inv.full_name, *timeout_str, timeout.error());
-  }
-  if (local_node) {
-    // Register as the termination handler.
-    auto signal_reflector
-      = sys.registry().get<signal_reflector_actor>("signal-reflector");
-    self->send(signal_reflector, atom::subscribe_v);
   }
   // Start the receive-loop.
   auto waiting_for_final_report = false;

@@ -71,6 +71,10 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     if (err)
       VAST_WARN("failed to remove outdated VERSION file: {}", err.message());
   }
+  // Register self as the termination handler.
+  auto signal_reflector
+    = self->system().registry().get<signal_reflector_actor>("signal-reflector");
+  self->send(signal_reflector, atom::subscribe_v);
   // Spawn the node.
   VAST_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to system::node.
