@@ -98,35 +98,52 @@ auto wrap_record_batch(const table_slice& slice)
 
 /// Decode an Arrow IPC stream incrementally.
 auto decode_ipc_stream(chunk_ptr chunk)
-  -> detail::generator<std::shared_ptr<arrow::RecordBatch>> {
-  auto reader
-    = arrow::ipc::RecordBatchFileReader::Open(as_arrow_file(std::move(chunk)))
-        .ValueOrDie();
-  auto generator = reader->GetRecordBatchGenerator().ValueOrDie();
-  while (true) {
-    auto next = generator();
-    if (!next.is_finished())
-      next.Wait();
-    VAST_ASSERT(next.is_finished());
-    auto result = next.MoveResult().ValueOrDie();
-    if (arrow::IsIterationEnd(result))
-      co_return;
-    co_yield std::move(result);
-  }
+  -> caf::expected<detail::generator<std::shared_ptr<arrow::RecordBatch>>> {
+  // See arrow::ipc::internal::kArrowMagicBytes in
+  // arrow/ipc/metadata_internal.h.
+  static constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
+  if (chunk->size() < arrow_magic_bytes.length()
+      || std::memcmp(chunk->data(), arrow_magic_bytes.data(),
+                     arrow_magic_bytes.size())
+           != 0)
+    return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
+                                             "Arrow IPC file");
+  auto open_reader_result
+    = arrow::ipc::RecordBatchFileReader::Open(as_arrow_file(std::move(chunk)));
+  if (!open_reader_result.ok())
+    return caf::make_error(ec::format_error,
+                           fmt::format("failed to open reader: {}",
+                                       open_reader_result.status().ToString()));
+  auto reader = open_reader_result.MoveValueUnsafe();
+  auto get_generator_result = reader->GetRecordBatchGenerator();
+  if (!get_generator_result.ok())
+    return caf::make_error(
+      ec::format_error, fmt::format("failed to get batch generator: {}",
+                                    get_generator_result.status().ToString()));
+  auto generator = get_generator_result.MoveValueUnsafe();
+  return []([[maybe_unused]] auto reader, auto generator)
+           -> detail::generator<std::shared_ptr<arrow::RecordBatch>> {
+    while (true) {
+      auto next = generator();
+      if (!next.is_finished())
+        next.Wait();
+      VAST_ASSERT(next.is_finished());
+      auto result = next.MoveResult().ValueOrDie();
+      if (arrow::IsIterationEnd(result))
+        co_return;
+      co_yield std::move(result);
+    }
+  }(std::move(reader), std::move(generator));
 }
 
 class passive_feather_store final : public passive_store {
   [[nodiscard]] caf::error load(chunk_ptr chunk) override {
-    // See arrow::ipc::internal::kArrowMagicBytes in
-    // arrow/ipc/metadata_internal.h.
-    static constexpr auto arrow_magic_bytes = std::string_view{"ARROW1"};
-    if (chunk->size() < arrow_magic_bytes.length()
-        || std::memcmp(chunk->data(), arrow_magic_bytes.data(),
-                       arrow_magic_bytes.size())
-             != 0)
-      return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
-                                               "Arrow IPC file");
-    remaining_slices_generator_ = decode_ipc_stream(std::move(chunk));
+    auto decode_result = decode_ipc_stream(std::move(chunk));
+    if (!decode_result)
+      return caf::make_error(ec::format_error,
+                             fmt::format("failed to load feather store: {}",
+                                         decode_result.error()));
+    remaining_slices_generator_ = std::move(*decode_result);
     remaining_slices_iterator_ = remaining_slices_generator_.begin();
     return {};
   }
@@ -174,11 +191,11 @@ class passive_feather_store final : public passive_store {
 private:
   detail::generator<std::shared_ptr<arrow::RecordBatch>>
     remaining_slices_generator_ = {};
-  mutable uint64_t cached_num_events_ = {};
-  mutable std::vector<table_slice> cached_slices_ = {};
   mutable detail::generator<std::shared_ptr<arrow::RecordBatch>>::iterator
     remaining_slices_iterator_
     = {};
+  mutable uint64_t cached_num_events_ = {};
+  mutable std::vector<table_slice> cached_slices_ = {};
 };
 
 class active_feather_store final : public active_store {
