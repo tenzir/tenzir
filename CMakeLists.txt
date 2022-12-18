@@ -681,6 +681,9 @@ endif ()
 
 # -- caf -----------------------------------------------------------------------
 
+# The CAF dependency is loaded project-wide because both libvast and
+# libvast_test need it.
+
 find_package(OpenSSL REQUIRED)
 
 function (VASTSystemizeTarget tgt)
