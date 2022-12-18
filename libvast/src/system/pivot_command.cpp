@@ -8,9 +8,7 @@
 
 #include "vast/system/pivot_command.hpp"
 
-#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
@@ -19,11 +17,9 @@
 #include "vast/system/read_query.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 
-#include <caf/event_based_actor.hpp>
+#include <caf/error.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 #include <csignal>
 #include <string>

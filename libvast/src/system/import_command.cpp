@@ -9,9 +9,7 @@
 #include "vast/system/import_command.hpp"
 
 #include "vast/command.hpp"
-#include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
@@ -19,7 +17,6 @@
 #include "vast/system/make_source.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/transformer.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/make_message.hpp>

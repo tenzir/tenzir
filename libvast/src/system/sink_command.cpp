@@ -13,7 +13,6 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -25,17 +24,11 @@
 #include "vast/system/read_query.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/uuid.hpp"
 
-#include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 #include <csignal>
-#include <iostream>
-#include <memory>
 #include <string>
 
 using namespace std::chrono_literals;

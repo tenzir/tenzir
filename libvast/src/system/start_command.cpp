@@ -13,7 +13,6 @@
 #include "vast/command.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/config.hpp"
-#include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/endpoint.hpp"
@@ -31,7 +30,6 @@
 #include <caf/settings.hpp>
 
 #include <csignal>
-#include <thread>
 
 namespace vast::system {
 

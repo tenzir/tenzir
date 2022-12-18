@@ -10,26 +10,20 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/start_command.hpp"
 
 #include <caf/actor.hpp>
-#include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-#include <caf/stateful_actor.hpp>
 
 #include <chrono>
 #include <csignal>
 
-using namespace caf;
 using namespace std::chrono_literals;
 
 namespace vast::system {
