@@ -6,19 +6,18 @@ that you [set up a server](/docs/use/run) listening at `localhost:42000`.
 
 ## Choose an import format
 
-The [format](/docs/understand/formats) defines the encoding of data. Text
-formats include [JSON](/docs/understand/formats/json),
-[CSV](/docs/understand/formats/csv), or tool-specific data encodings like
-[Zeek](/docs/understand/formats/csv).
-Examples for binary formats are [PCAP](/docs/understand/formats/csv) and
-[NetFlow](/docs/understand/formats/netflow).
-
-The `import` command reads data from file or standard input and takes a
-concrete format as sub-command:
+Use the `import` command to ingest data from standard input or file:
 
 ```bash
 vast import [options] <format> [options] [expr]
 ```
+
+The [format](/docs/understand/formats) defines the encoding of data. Text
+formats include [JSON](/docs/understand/formats/json),
+[CSV](/docs/understand/formats/csv), or tool-specific data encodings like
+[Zeek](/docs/understand/formats/zeek). Examples for binary formats are
+[PCAP](/docs/understand/formats/pcap) and
+[NetFlow](/docs/understand/formats/netflow).
 
 For example, to import a file in JSON, use the `json` format:
 
@@ -26,28 +25,25 @@ For example, to import a file in JSON, use the `json` format:
 vast import json < data.json
 ```
 
-To see a list of available import formats, run `vast import help`. To see the
-help for a specific format, run `vast import <format> help`.
-
 ## Discard events from a data source
 
 To reduce the volume of a data source or to filter out unwanted content, you can
 provide a filter expression to the `import` command.
 
 For example, you might want to import [Suricata EVE
-JSON](/docs/understand/formats/suricata), but skip over all events of type
-`suricata.stats`:
+JSON](/docs/understand/formats/suricata), but skip over all `suricata.stats`
+events:
 
 ```bash
 vast import suricata '#type != "suricata.stats"' < path/to/eve.json
 ```
 
 See the [query language documentation](/docs/understand/query-language/) to
-learn more about how to express filters.
+learn more about how to write filter expressions.
 
 ## Infer a schema automatically
 
-:::note Auto-inference underway
+:::caution Auto-inference coming soon
 Writing a schema will be optional in the future. For example, only when you want
 to tune the data semantics. Take a look at the [corresponding roadmap
 item](https://github.com/tenzir/public-roadmap/issues/5) to better understand
@@ -57,14 +53,36 @@ when this capability lands in VAST.
 The `infer` command attempts to deduce a schema, given a sample of data. For
 example, consider this JSON data:
 
-import MissingDocumentation from '@site/presets/MissingDocumentation.md';
+```json
+{
+  "timestamp": "2011-08-14T07:38:53.914038+0200",
+  "src_ip": "147.32.84.165",
+  "src_port": 138,
+  "dest_ip": "147.32.84.255",
+  "dest_port": 138,
+  "proto": "UDP"
+}
+```
 
-<MissingDocumentation/>
+To infer its schema, run:
 
-Run `head -1 data.json | vast infer` to print schema that you can paste into a
-module.
+```bash
+jq -c < data.json | head -1 | vast infer
+```
 
-<MissingDocumentation/>
+This prints:
+
+```
+type json = record {timestamp: time, src_ip: addr, src_port: int, dest_ip: addr, dest_port: int, proto: string}
+```
+
+:::caution YAML Modules coming soon
+We are currently reworking VAST's schema language. The available
+[introspection capabilities](/docs/use/introspect) already show the new schema
+style. Track the [corresponding roadmap
+item](https://github.com/tenzir/public-roadmap/issues/15) to see when this
+rewrite lands.
+:::
 
 The idea is that `infer` jump-starts the schema writing process by providing a
 reasonable blueprint. You still need to provide the right name for the type and
