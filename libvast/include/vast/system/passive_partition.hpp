@@ -68,9 +68,6 @@ struct passive_partition_state {
   /// Path of the underlying file for this partition.
   std::filesystem::path path;
 
-  /// Actor handle of the legacy archive.
-  store_actor archive = {};
-
   /// Uniquely identifies this partition.
   uuid id = {};
 
@@ -111,8 +108,7 @@ struct passive_partition_state {
   /// Actor handle of the filesystem.
   filesystem_actor filesystem = {};
 
-  /// The store to retrieve the data from. Either the legacy global archive or a
-  /// local component that holds the data for this partition.
+  /// The store to retrieve the data from.
   store_actor store = {};
 
   /// Actor handle of the node.
@@ -154,12 +150,11 @@ struct partition_chunk {
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
 /// @param accountant the accountant to send metrics to.
-/// @param archive The legacy archive to retrieve the events from.
 /// @param filesystem The actor handle of the filesystem actor.
 /// @param path The path where the partition flatbuffer can be found.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  accountant_actor accountant, store_actor archive, filesystem_actor filesystem,
+  accountant_actor accountant, filesystem_actor filesystem,
   const std::filesystem::path& path);
 
 } // namespace vast::system

@@ -204,8 +204,7 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   if (store_header && !store_header->data())
     return caf::make_error(ec::format_error, //
                            "missing 'data' field in partition store header");
-  state.store_id
-    = store_header ? store_header->id()->str() : std::string{"legacy_archive"};
+  state.store_id = store_header->id()->str();
   if (store_header && store_header->data())
     state.store_header = std::span{
       reinterpret_cast<const std::byte*>(store_header->data()->data()),
@@ -416,13 +415,12 @@ passive_partition_state::initialize_from_chunk(const vast::chunk_ptr& chunk) {
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  accountant_actor accountant, store_actor legacy_archive,
-  filesystem_actor filesystem, const std::filesystem::path& path) {
+  accountant_actor accountant, filesystem_actor filesystem,
+  const std::filesystem::path& path) {
   auto id_string = to_string(id);
   self->state.self = self;
   self->state.path = path;
   self->state.accountant = std::move(accountant);
-  self->state.archive = std::move(legacy_archive);
   self->state.filesystem = std::move(filesystem);
   self->state.name = "partition-" + id_string;
   VAST_TRACEPOINT(passive_partition_spawned, id_string.c_str());
@@ -494,31 +492,27 @@ partition_actor::behavior_type passive_partition(
           self->quit();
           return;
         }
-        if (self->state.store_id == "legacy_archive") {
-          self->state.store = self->state.archive;
-        } else {
-          const auto* plugin
-            = plugins::find<store_actor_plugin>(self->state.store_id);
-          if (!plugin) {
-            auto error = caf::make_error(ec::format_error,
-                                         "encountered unhandled store backend");
-            VAST_ERROR("{} encountered unknown store backend '{}'", *self,
-                       self->state.store_id);
-            self->quit(std::move(error));
-            return;
-          }
-          auto store
-            = plugin->make_store(self->state.accountant, self->state.filesystem,
-                                 self->state.store_header);
-          if (!store) {
-            VAST_ERROR("{} failed to spawn store: {}", *self, store.error());
-            self->quit(caf::make_error(ec::system_error, "failed to spawn "
-                                                         "store"));
-            return;
-          }
-          self->state.store = *store;
-          self->monitor(self->state.store);
+        const auto* plugin
+          = plugins::find<store_actor_plugin>(self->state.store_id);
+        if (!plugin) {
+          auto error = caf::make_error(ec::format_error,
+                                       "encountered unhandled store backend");
+          VAST_ERROR("{} encountered unknown store backend '{}'", *self,
+                     self->state.store_id);
+          self->quit(std::move(error));
+          return;
         }
+        auto store
+          = plugin->make_store(self->state.accountant, self->state.filesystem,
+                               self->state.store_header);
+        if (!store) {
+          VAST_ERROR("{} failed to spawn store: {}", *self, store.error());
+          self->quit(caf::make_error(ec::system_error, "failed to spawn "
+                                                       "store"));
+          return;
+        }
+        self->state.store = *store;
+        self->monitor(self->state.store);
         // Delegate all deferred evaluations now that we have the partition chunk.
         VAST_DEBUG("{} delegates {} deferred evaluations", *self,
                    self->state.deferred_evaluations.size());

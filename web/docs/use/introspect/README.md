@@ -16,10 +16,6 @@ vast status
 
 ```json
 {
-  "archive": {
-    "events": 0,
-    "memory-usage": 0
-  },
   "catalog": {
     "memory-usage": 0,
     "num-partitions": 0

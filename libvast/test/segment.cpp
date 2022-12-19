@@ -10,53 +10,36 @@
 
 #include "vast/segment.hpp"
 
-#include "vast/detail/legacy_deserialize.hpp"
-#include "vast/detail/serialize.hpp"
-#include "vast/ids.hpp"
-#include "vast/segment_builder.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/test/fixtures/events.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
+#include "vast/io/read.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
 
-using namespace vast;
+namespace vast {
 
-FIXTURE_SCOPE(segment_tests, fixtures::events)
+TEST(segment store queries) {
+  auto bytes = unbox(vast::io::read(VAST_TEST_PATH "artifacts/segment_stores/"
+                                                   "zeek.conn.store"));
+  auto chunk = chunk::make(std::move(bytes));
+  auto segment = unbox(segment::make(std::move(chunk)));
+  CHECK_EQUAL(segment.num_slices(), 1u);
+  auto slices = unbox(segment.lookup(make_ids({0, 6, 19, 21})));
+  REQUIRE_EQUAL(slices.size(), 1u);
+  REQUIRE_EQUAL(slices[0].rows(), 8462u);
+  REQUIRE_EQUAL(slices[0].columns(), 20u);
 
-TEST(construction and querying) {
-  segment_builder builder{1024};
-  for (auto& slice : zeek_conn_log)
-    if (auto err = builder.add(slice))
-      FAIL(err);
-  auto x = builder.finish();
-  CHECK_EQUAL(x.num_slices(), zeek_conn_log.size());
-  MESSAGE("lookup IDs for some segments");
-  auto slices = unbox(x.lookup(make_ids({0, 6, 19, 21})));
-  REQUIRE_EQUAL(slices.size(), 2u); // [0,8), [16,24)
-  CHECK_EQUAL(slices[0], zeek_conn_log[0]);
-  CHECK_EQUAL(slices[1], zeek_conn_log[2]);
-  auto y = segment::copy_without(x, make_ids({19, 21}));
-  REQUIRE_NOERROR(y);
-  auto slices2 = unbox(y->lookup(make_ids({0, 6, 19, 21})));
-  REQUIRE_EQUAL(slices2.size(), 1u); // [0,8)
-  CHECK_EQUAL(slices2[0], zeek_conn_log[0]);
+  CHECK_EQUAL(materialize(slices[0].at(0, 1)), //
+              unbox(to<data>("\"Pii6cUUq1v4\"")));
+  CHECK_EQUAL(materialize(slices[0].at(0, 19)), //
+              unbox(to<data>("[]")));
+  CHECK_EQUAL(materialize(slices[0].at(1, 4)), //
+              unbox(to<data>("192.168.1.255")));
+  CHECK_EQUAL(materialize(slices[0].at(2, 9)), //
+              unbox(to<data>("350")));
+  CHECK_EQUAL(materialize(slices[0].at(3, 14)), //
+              unbox(to<data>("\"D\"")));
 }
 
-TEST(serialization) {
-  segment_builder builder{1024};
-  auto slice = zeek_conn_log[0];
-  REQUIRE(!builder.add(slice));
-  auto x = builder.finish();
-  chunk_ptr chk;
-  caf::byte_buffer buf;
-  REQUIRE(detail::serialize(buf, x.chunk()));
-  REQUIRE_EQUAL(detail::legacy_deserialize(buf, chk), true);
-  REQUIRE_NOT_EQUAL(chk, nullptr);
-  auto y = segment::make(std::move(chk));
-  REQUIRE(y);
-  CHECK_EQUAL(x.ids(), y->ids());
-  CHECK_EQUAL(x.num_slices(), y->num_slices());
-}
-
-FIXTURE_SCOPE_END()
+} // namespace vast

@@ -137,11 +137,11 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");
-    index = self->spawn(system::index, system::accountant_actor{}, fs,
-                        system::archive_actor{}, catalog_act, index_dir,
-                        defaults::system::store_backend, slice_size,
-                        vast::duration{}, num_partitions, taste_count,
-                        num_query_supervisors, index_dir, vast::index_config{});
+    index
+      = self->spawn(system::index, system::accountant_actor{}, fs, catalog_act,
+                    index_dir, defaults::system::store_backend, slice_size,
+                    vast::duration{}, num_partitions, taste_count,
+                    num_query_supervisors, index_dir, vast::index_config{});
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());

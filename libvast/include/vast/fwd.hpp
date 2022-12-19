@@ -114,7 +114,6 @@ class legacy_type;
 class list_type;
 class map_type;
 class module;
-class msgpack_table_slice_builder;
 class null_bitmap;
 class passive_store;
 class pattern;
@@ -125,8 +124,6 @@ class port;
 class real_type;
 class record_type;
 class segment;
-class segment_builder;
-class segment_store;
 class string_type;
 class subnet;
 class subnet_type;
@@ -204,9 +201,6 @@ enum class table_slice_encoding : uint8_t;
 template <class>
 class arrow_table_slice;
 
-template <class>
-class msgpack_table_slice;
-
 inline constexpr size_t dynamic_extent = std::numeric_limits<size_t>::max();
 
 template <class... Types>
@@ -277,24 +271,11 @@ struct MultiLevelCoder;
 
 } // namespace coder
 
-namespace table_slice {
+namespace table_slice::arrow {
 
-namespace msgpack {
-
-struct v0;
-struct v1;
-
-} // namespace msgpack
-
-namespace arrow {
-
-struct v0;
-struct v1;
 struct v2;
 
-} // namespace arrow
-
-} // namespace table_slice
+} // namespace table_slice::arrow
 
 namespace value_index {
 

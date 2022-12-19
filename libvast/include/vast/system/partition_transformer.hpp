@@ -12,7 +12,6 @@
 
 #include "vast/detail/flat_map.hpp"
 #include "vast/index_statistics.hpp"
-#include "vast/segment_builder.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 

@@ -1,7 +1,3 @@
-{"path":["archive","events"],"type":"number"}
-{"path":["archive","memory-usage"],"type":"number"}
-{"path":["archive","segments","current","size"],"type":"number"}
-{"path":["archive","segments","current","uuid"],"type":"string"}
 {"path":["catalog","memory-usage"],"type":"number"}
 {"path":["catalog","num-partitions"],"type":"number"}
 {"path":["catalog","partitions",0,"id"],"type":"string"}

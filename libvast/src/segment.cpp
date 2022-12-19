@@ -22,7 +22,6 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/segment_builder.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
@@ -222,22 +221,6 @@ segment::segment(fbs::flatbuffer_container container)
   auto segment_chunk = container_->get_raw(0);
   // FIXME: Error handling
   flatbuffer_ = *flatbuffer<fbs::Segment>::make(std::move(segment_chunk));
-}
-
-caf::expected<segment>
-segment::copy_without(const vast::segment& segment, const vast::ids& xs) {
-  // TODO: Add a `segment::size` field so we can get a better upper bound on
-  // the segment size from the old segment.
-  segment_builder builder(defaults::system::max_segment_size, segment.id());
-  if (is_subset(segment.ids(), xs))
-    return builder.finish();
-  auto slices = segment.erase(xs);
-  if (!slices)
-    return slices.error();
-  for (auto&& slice : std::exchange(*slices, {}))
-    if (auto err = builder.add(std::move(slice)))
-      return err;
-  return builder.finish();
 }
 
 } // namespace vast

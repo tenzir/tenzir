@@ -24,7 +24,6 @@ node::node(std::string_view suite)
   test_node = self->spawn(system::node, "test", directory / "node",
                           system::detach_components::no);
   run();
-  spawn_component("archive");
   auto settings = caf::settings{};
   auto vast_settings = caf::settings{};
   // Don't run the catalog in a separate thread, otherwise it is

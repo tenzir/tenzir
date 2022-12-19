@@ -252,14 +252,6 @@ public:
 
   // -- operations -------------------------------------------------------------
 
-  /// Rebuilds a table slice with a given encoding if necessary.
-  /// @param slice The slice to rebuild.
-  /// @param encoding The encoding to convert to.
-  /// @note This function only rebuilds if necessary, i.e., the new encoding
-  /// is different from the existing one.
-  friend table_slice
-  rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept;
-
   /// Selects all rows in `slice` with event IDs in `selection` and appends
   /// produced table slices to `result`. Cuts `slice` into multiple slices if
   /// `selection` produces gaps.
@@ -303,9 +295,9 @@ private:
   chunk_ptr chunk_ = {};
 
   /// The offset of the table slice within its ID space.
-  /// @note Assigned by the importer on import and the archive on export and as
-  /// such not part of the FlatBuffers table. Binary representations of a table
-  /// slice do not contain the offset.
+  /// @note Assigned by the importer on import and and as such not part of the
+  /// FlatBuffers table. Binary representations of a table slice do not contain
+  /// the offset.
   id offset_ = invalid_id;
 
   /// A pointer to the table slice state. As long as the layout cannot be
@@ -313,11 +305,7 @@ private:
   /// expensive to deserialize the layout.
   union {
     const void* none = {};
-    const arrow_table_slice<fbs::table_slice::arrow::v0>* arrow_v0;
-    const arrow_table_slice<fbs::table_slice::arrow::v1>* arrow_v1;
     const arrow_table_slice<fbs::table_slice::arrow::v2>* arrow_v2;
-    const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
-    const msgpack_table_slice<fbs::table_slice::msgpack::v1>* msgpack_v1;
   } state_;
 
   /// The number of in-memory table slices.
