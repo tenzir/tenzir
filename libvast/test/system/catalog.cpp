@@ -44,8 +44,6 @@ namespace {
 
 constexpr size_t num_partitions = 4;
 constexpr size_t num_events_per_parttion = 25;
-constexpr size_t taste_count = 4;
-constexpr size_t num_query_supervisors = 1;
 
 const vast::time epoch;
 
