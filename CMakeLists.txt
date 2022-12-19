@@ -684,6 +684,7 @@ endif ()
 # The CAF dependency is loaded project-wide because both libvast and
 # libvast_test need it.
 
+# CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
 find_package(OpenSSL REQUIRED)
 
 function (VASTSystemizeTarget tgt)
