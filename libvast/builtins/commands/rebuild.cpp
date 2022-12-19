@@ -56,178 +56,41 @@ public:
   /// @param schema The schema of the input and output table slices.
   /// @param desired_batch_size The desired output batch size; guaranteed to be
   /// exactly matched for all but the last output batch.
-  rebatch_operator(type schema, int64_t desired_batch_size)
-    : schema_{std::move(schema)},
-      desired_batch_size_{desired_batch_size},
-      arrow_schema_{schema_.to_arrow_schema()},
-      builder_{caf::get<record_type>(schema_).make_arrow_builder(
-        arrow::default_memory_pool())} {
-    const auto resize_result = builder_->Resize(desired_batch_size_);
-    VAST_ASSERT(resize_result.ok(), resize_result.ToString().c_str());
+  rebatch_operator(type schema, size_t desired_batch_size)
+    : schema_{std::move(schema)}, desired_batch_size_{desired_batch_size} {
+    // nop
   }
 
   caf::error
   add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_ASSERT(schema == schema_);
-    VAST_ASSERT(builder_ != nullptr);
-    const auto batch_size = batch->num_rows();
-    if (builder_->length() == 0 && batch_size == desired_batch_size_) {
-      result_.push_back(batch);
-      return caf::none;
+    auto slice = table_slice{batch, std::move(schema)};
+    const auto buffered_rows = rows(buffer_) + slice.rows();
+    if (buffered_rows < desired_batch_size_) {
+      buffer_.push_back(std::move(slice));
+    } else {
+      const auto remainder = desired_batch_size_ - buffered_rows;
+      auto [head, tail] = split(slice, slice.rows() - remainder);
+      buffer_.push_back(head);
+      auto result = concatenate(std::exchange(buffer_, {}));
+      results_.emplace_back(result.layout(), to_record_batch(result));
+      buffer_.push_back(tail);
     }
-    for (auto offset = int64_t{}; offset < batch->num_rows();) {
-      const auto length = std::min(desired_batch_size_ - builder_->length(),
-                                   batch_size - offset);
-      append_slice_to_builder(batch, offset, length);
-      offset += length;
-      VAST_ASSERT(builder_->length() <= desired_batch_size_);
-      if (builder_->length() == desired_batch_size_)
-        finish_builder();
-    }
-    return caf::none;
+    return {};
   }
 
   caf::expected<std::vector<pipeline_batch>> finish() override {
-    if (builder_->length() > 0)
-      finish_builder();
-    auto result = std::vector<pipeline_batch>{};
-    result.reserve(result_.size());
-    for (auto&& batch : std::exchange(result_, {}))
-      result.emplace_back(schema_, std::move(batch));
-    return result;
+    if (rows(buffer_) > 0) {
+      auto result = concatenate(std::exchange(buffer_, {}));
+      results_.emplace_back(result.layout(), to_record_batch(result));
+    }
+    return std::exchange(results_, {});
   }
 
 private:
-  /// Appends a slice of a batch to the currently ongoing builder.
-  /// @param batch The record batch to partially rebuild.
-  /// @param offset The starting row inside the batch.
-  /// @param length THe length of the slice for our batch.
-  ///
-  /// @note You'd think we could call into Arrow here, but the underlying
-  /// functionality for merging arrays is neither generically implemented for
-  /// extension types, nor is it extensible by implementers of extension types.
-  /// If it was implemented, then this is how that would look like. We last
-  /// tested this against Arrow 9.0.0.
-  ///
-  ///   const auto array = batch->ToStructArray().ValueOrDie();
-  ///   const auto append_result = builder_->AppendArraySlice(
-  ///     *array->data(), offset, length);
-  ///   VAST_ASSERT(append_result.ok(), append_result.ToString().c_str());
-  ///
-  /// So what we do instead here is that we simply append the columns manually.
-  /// We don't go through the table slice builder API as that is a row-major
-  /// API and we want a column-major builder here.
-  void append_slice_to_builder(const std::shared_ptr<arrow::RecordBatch>& batch,
-                               int64_t offset, int64_t length) noexcept {
-    const auto append_columns
-      = [&](const auto& self, const record_type& schema,
-            const type_to_arrow_array_t<record_type>& array,
-            type_to_arrow_builder_t<record_type>& builder) noexcept -> void {
-      // Ideally we'd assert here that the array length is at least offset +
-      // length, but the array length may actually be less than that, because
-      // Arrow silently shortens nested Arrays with nulls at the end.
-      //
-      // NTOE: Passing nullptr for the valid_bytes parameter has the undocumented
-      // special meaning of all appenbded entries being valid. The Arrow unit
-      // tests do the same thing in a few places; if this ever starts to cause
-      // issues, we can create a vector<uint8_t> with desired_batch_size entries
-      // of the value 1, call .data() on that and pass it in here instead.
-      const auto append_status
-        = builder.AppendValues(length, /*valid_bytes*/ nullptr);
-      VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
-      for (auto field_index = 0; field_index < array.num_fields();
-           ++field_index) {
-        const auto field_type = schema.field(field_index).type;
-        const auto& field_array = *array.field(field_index);
-        auto& field_builder = *builder.field_builder(field_index);
-        const auto append_column = detail::overload{
-          [&](const record_type& concrete_field_type) noexcept {
-            const auto& concrete_field_array
-              = caf::get<type_to_arrow_array_t<record_type>>(field_array);
-            auto& concrete_field_builder
-              = caf::get<type_to_arrow_builder_t<record_type>>(field_builder);
-            self(self, concrete_field_type, concrete_field_array,
-                 concrete_field_builder);
-          },
-          [&]<concrete_type Type>(
-            [[maybe_unused]] const Type& concrete_field_type) noexcept {
-            const auto& concrete_field_array
-              = caf::get<type_to_arrow_array_t<Type>>(field_array);
-            auto& concrete_field_builder
-              = caf::get<type_to_arrow_builder_t<Type>>(field_builder);
-            constexpr auto can_use_array_slice_api
-              = basic_type<Type> && //
-                !arrow::is_extension_type<type_to_arrow_type_t<Type>>::value;
-            if constexpr (can_use_array_slice_api) {
-              const auto append_array_slice_result
-                = concrete_field_builder.AppendArraySlice(
-                  *concrete_field_array.data(), offset, length);
-              VAST_ASSERT_CHEAP(append_array_slice_result.ok(),
-                                append_array_slice_result.ToString().c_str());
-            } else {
-              // For complex types and extension types we cannot use the
-              // AppendArraySlice API, so we need to take a slight detour by
-              // manually appending column by column. This is almost exactly
-              // what AppendArraySlice does under the hood, but since it's just
-              // not implemented for extension types we need to do some extra
-              // work here.
-              const auto& concrete_field_array_storage
-                = [&]() noexcept -> const type_to_arrow_array_storage_t<Type>& {
-                // For extension types we need to additionally unwrap
-                // the inner storage array.
-                if constexpr (arrow::is_extension_type<
-                                type_to_arrow_type_t<Type>>::value)
-                  return static_cast<const type_to_arrow_array_storage_t<Type>&>(
-                    *concrete_field_array.storage());
-                else
-                  return concrete_field_array;
-              }();
-              const auto reserve_result
-                = concrete_field_builder.Reserve(length);
-              VAST_ASSERT_CHEAP(reserve_result.ok(),
-                                reserve_result.ToString().c_str());
-              for (auto row = offset; row < offset + length; ++row) {
-                if (concrete_field_array_storage.IsNull(row)) {
-                  const auto append_null_result
-                    = concrete_field_builder.AppendNull();
-                  VAST_ASSERT(append_null_result.ok(),
-                              append_null_result.ToString().c_str());
-                  continue;
-                }
-                const auto append_builder_result
-                  = append_builder(concrete_field_type, concrete_field_builder,
-                                   value_at(concrete_field_type,
-                                            concrete_field_array_storage, row));
-                VAST_ASSERT(append_builder_result.ok(),
-                            append_builder_result.ToString().c_str());
-              }
-            }
-          },
-        };
-        caf::visit(append_column, field_type);
-      }
-    };
-    append_columns(append_columns, caf::get<record_type>(schema_),
-                   *batch->ToStructArray().ValueOrDie(), *builder_);
-  }
-
-  /// Finishes the builder, storing the created optimally sized batch for later
-  /// retrieval.
-  void finish_builder() {
-    VAST_ASSERT(builder_->length() > 0);
-    const auto rows = builder_->length();
-    const auto array = builder_->Finish().ValueOrDie();
-    auto batch = arrow::RecordBatch::Make(
-      arrow_schema_, rows,
-      caf::get<type_to_arrow_array_t<record_type>>(*array).fields());
-    result_.push_back(std::move(batch));
-  }
-
   type schema_ = {};
-  int64_t desired_batch_size_ = {};
-  std::shared_ptr<arrow::Schema> arrow_schema_ = {};
-  std::shared_ptr<type_to_arrow_builder_t<record_type>> builder_ = {};
-  arrow::RecordBatchVector result_ = {};
+  size_t desired_batch_size_ = {};
+  std::vector<table_slice> buffer_ = {};
+  std::vector<pipeline_batch> results_ = {};
 };
 
 /// The threshold at which to consider a partition undersized, relative to the

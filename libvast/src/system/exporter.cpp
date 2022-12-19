@@ -190,7 +190,8 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
     return;
   }
   self->state.query_status.cached += selection_size;
-  select(self->state.results, slice, selection);
+  for (auto&& selected : select(slice, expression{}, selection))
+    self->state.results.push_back(std::move(selected));
   // Ship slices to connected SINKs.
   ship_results(self);
 }
