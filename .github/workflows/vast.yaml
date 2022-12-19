@@ -933,8 +933,7 @@ jobs:
                 name: Playwright Report
                 path: plugins/web/ui/playwright-report
         exclude:
-          # Disable the Broker plugin for macOS because we do not support
-          # building it on macOS, and disable the Parquet plugin because trying
+          # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
           # instruction as of Arrow 10.0.0.
           - {setup: {os: macos-latest}, plugin: {name: Parquet}}
