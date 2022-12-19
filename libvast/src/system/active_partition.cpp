@@ -261,9 +261,9 @@ pack_full(const active_partition_state::serialization_data& x,
     if (chunk)
       vbuilder.add_decompressed_size(chunk->size());
     if (external_idx > 0)
-      vbuilder.add_external_container_idx(external_idx);
+      vbuilder.add_caf_0_18_external_container_idx(external_idx);
     else
-      vbuilder.add_data(data);
+      vbuilder.add_caf_0_18_data(data);
     auto vindex = vbuilder.Finish();
     fbs::value_index::LegacyQualifiedValueIndexBuilder qbuilder(builder);
     qbuilder.add_field_name(fieldname);
@@ -273,12 +273,9 @@ pack_full(const active_partition_state::serialization_data& x,
   }
   auto indexes = builder.CreateVector(indices);
   // Serialize layout.
-  auto legacy_combined_layout
-    = caf::get<legacy_record_type>(type{combined_layout}.to_legacy_type());
-  auto combined_layout_offset
-    = fbs::serialize_bytes(builder, legacy_combined_layout);
-  if (!combined_layout_offset)
-    return combined_layout_offset.error();
+  auto schema_bytes = as_bytes(combined_layout);
+  auto schema_offset = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(schema_bytes.data()), schema_bytes.size());
   std::vector<flatbuffers::Offset<fbs::partition::detail::LegacyTypeIDs>> tids;
   for (const auto& kv : x.type_ids) {
     auto name = builder.CreateString(kv.first);
@@ -310,7 +307,7 @@ pack_full(const active_partition_state::serialization_data& x,
   legacy_builder.add_events(x.events);
   legacy_builder.add_indexes(indexes);
   legacy_builder.add_partition_synopsis(*maybe_ps);
-  legacy_builder.add_combined_layout(*combined_layout_offset);
+  legacy_builder.add_schema(schema_offset);
   legacy_builder.add_type_ids(type_ids);
   legacy_builder.add_store(store_header);
   auto partition_v0 = legacy_builder.Finish();
@@ -426,8 +423,9 @@ active_partition_actor::behavior_type active_partition(
       // We get an 'unreachable' error when the stream becomes unreachable
       // because the actor was destroyed; in this case the state was already
       // destroyed during `local_actor::on_exit()`.
-      if (err && err != caf::exit_reason::unreachable) {
-        VAST_ERROR("{} aborts with error: {}", *self, render(err));
+      if (err && err != caf::exit_reason::unreachable
+          && err != ec::end_of_input) {
+        VAST_ERROR("{} aborts with error: {}", *self, err);
         return;
       }
     },
@@ -501,9 +499,7 @@ active_partition_actor::behavior_type active_partition(
       -> caf::result<partition_synopsis_ptr> {
       VAST_DEBUG("{} got persist atom", *self);
       // Ensure that the response promise has not already been initialized.
-      VAST_ASSERT(
-        !static_cast<caf::response_promise&>(self->state.persistence_promise)
-           .source());
+      VAST_ASSERT(!self->state.persistence_promise.source());
       self->state.persist_path = part_dir;
       self->state.synopsis_path = synopsis_dir;
       self->state.persisted_indexers = 0;

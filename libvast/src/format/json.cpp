@@ -1040,7 +1040,8 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
           },
           [&](const record_type& rt) {
             if (element.is_object()) {
-              self(self, element.get_object().value(), rt, "");
+              auto err = self(self, element.get_object().value(), rt, "");
+              VAST_ASSERT(!err);
             } else {
               for (size_t i = 0; i < rt.num_leaves(); ++i) {
                 const auto added = builder.add(caf::none);
@@ -1053,7 +1054,8 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
               const auto added = builder.add(caf::none);
               VAST_ASSERT(added);
             } else {
-              add(element, field.type, builder);
+              auto err = add(element, field.type, builder);
+              VAST_ASSERT(!err);
             }
           },
         };

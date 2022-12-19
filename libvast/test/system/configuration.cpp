@@ -59,6 +59,14 @@ struct fixture {
   }
 
   template <class T>
+  std::vector<T> get_vec(std::string_view name) {
+    auto x = detail::unpack_config_list_to_vector<T>(cfg, name);
+    if (!x)
+      FAIL("failed to unpack " << name << " to vector");
+    return *x;
+  }
+
+  template <class T>
   bool holds_alternative(std::string_view name) {
     return caf::holds_alternative<T>(cfg, name);
   }
@@ -74,10 +82,10 @@ struct fixture {
     // to other test fixtures.
     for (const auto& key : env_variables) {
       auto unset = detail::unsetenv(key);
-      if (unset != caf::no_error) {
+      if (unset != caf::none) {
         VAST_TRACE(unset);
       }
-      VAST_ASSERT(unset == caf::no_error);
+      VAST_ASSERT(unset == caf::none);
     }
   }
 
@@ -94,16 +102,16 @@ TEST(environment key mangling and value parsing) {
   env("VAST_BARE_MODE", "true"); // bool parsed manually
   env("VAST_NODE", "true");      // bool parsed late (via automatic conversion)
   env("VAST_IMPORT__BATCH_SIZE", "42"); // numbers should not be strings
-  env("VAST_PLUGINS", "foo,bar");       // list parsed manually
-  env("VAST_INVALID", "foo,bar");       // list parsed late
+  env("VAST_PLUGINS", "[\"foo\",\"bar\"]"); // list parsed manually
+  env("VAST_INVALID", "[\"foo\",\"bar\"]"); // list parsed late
   parse();
   CHECK(!holds_alternative<std::string>("vast.endpoint"));
   CHECK(get<bool>("vast.bare-mode"));
   CHECK(get<bool>("vast.node"));
-  CHECK_EQUAL(get<size_t>("vast.import.batch-size"), 42u);
+  CHECK_EQUAL(get<caf::config_value::integer>("vast.import.batch-size"), 42);
   auto foo_bar = std::vector<std::string>{"foo", "bar"};
-  CHECK_EQUAL(get<std::vector<std::string>>("vast.plugins"), foo_bar);
-  CHECK_EQUAL(get<std::vector<std::string>>("vast.invalid"), foo_bar);
+  CHECK_EQUAL(get_vec<std::string>("vast.plugins"), foo_bar);
+  CHECK_EQUAL(get_vec<std::string>("vast.invalid"), foo_bar);
 }
 
 TEST(environment only) {
@@ -125,42 +133,42 @@ TEST(command line overrides environment) {
 
 TEST(command line no value for list generates empty list value) {
   parse("--plugins=");
-  CHECK(get<std::vector<std::string>>("vast.plugins").empty());
+  CHECK(get_vec<std::string>("vast.plugins").empty());
 }
 
 TEST(command line empty list value for list generates empty list value) {
   parse("--plugins=[]");
-  CHECK(get<std::vector<std::string>>("vast.plugins").empty());
+  CHECK(get_vec<std::string>("vast.plugins").empty());
 }
 
 TEST(environment key no value for plugin list generates empty list value) {
   env("VAST_PLUGINS", "");
   parse();
-  CHECK(get<std::vector<std::string>>("vast.plugins").empty());
+  CHECK(get_vec<std::string>("vast.plugins").empty());
 }
 
 TEST(environment key empty value for plugin list generates empty list value) {
   env("VAST_PLUGINS", "[]");
   parse();
-  CHECK(get<std::vector<std::string>>("vast.plugins").empty());
+  CHECK(get_vec<std::string>("vast.plugins").empty());
 }
 
 TEST(command line overrides environment even for plugins) {
-  env("VAST_PLUGINS", "plugin1");
-  parse("--plugins=[plugin2]");
-  CHECK_EQUAL(get<std::vector<std::string>>("vast.plugins"),
+  env("VAST_PLUGINS", "[\"plugin1\"]");
+  parse("--plugins=[\"plugin2\"]");
+  CHECK_EQUAL(get_vec<std::string>("vast.plugins"),
               std::vector<std::string>{"plugin2"});
 }
 
 TEST(command line no value for integer values generates default value) {
+  using cfg_int = caf::config_value::integer;
   parse(std::vector<std::string>{"start", "--disk-budget-check-interval="});
-  CHECK_EQUAL(get<size_t>("vast.start.disk-budget-check-interval"), size_t{0});
-
+  CHECK_EQUAL(get<cfg_int>("vast.start.disk-budget-check-interval"),
+              cfg_int{0});
   parse(std::vector<std::string>{"explore", "--max-events-query="});
-  CHECK_EQUAL(get<count>("vast.explore.max-events-query"), count{0});
-
+  CHECK_EQUAL(get<cfg_int>("vast.explore.max-events-query"), cfg_int{0});
   parse(std::vector<std::string>{"pivot", "--flush-interval="});
-  CHECK_EQUAL(get<size_t>("vast.pivot.flush-interval"), size_t{0});
+  CHECK_EQUAL(get<cfg_int>("vast.pivot.flush-interval"), cfg_int{0});
 }
 
 TEST(command line no value for timespan value generates default value) {

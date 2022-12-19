@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/detail/inspection_common.hpp"
+
 #include <cstdint>
 #include <string>
 
@@ -33,6 +35,11 @@ enum class arithmetic_operator : uint8_t {
 /// @relates arithmetic_operator
 std::string to_string(arithmetic_operator op) noexcept;
 
+template <class Inspector>
+auto inspect(Inspector& f, arithmetic_operator& x) {
+  return detail::inspect_enum(f, x);
+}
+
 /// A (binary) relational operator.
 enum class relational_operator : uint8_t {
   in,
@@ -50,6 +57,11 @@ enum class relational_operator : uint8_t {
 /// @relates relational_operator
 std::string to_string(relational_operator op) noexcept;
 
+template <class Inspector>
+auto inspect(Inspector& f, relational_operator& x) {
+  return detail::inspect_enum(f, x);
+}
+
 /// A boolean operator taking on the values AND, OR, and NOT.
 enum class bool_operator : uint8_t {
   logical_not,
@@ -59,6 +71,11 @@ enum class bool_operator : uint8_t {
 
 /// @relates bool_operator
 std::string to_string(bool_operator op) noexcept;
+
+template <class Inspector>
+auto inspect(Inspector& f, bool_operator& x) {
+  return detail::inspect_enum(f, x);
+}
 
 /// Tests wheter a relational operator is is_negated.
 /// For example, `!=` is is_negated, but `==` is not.

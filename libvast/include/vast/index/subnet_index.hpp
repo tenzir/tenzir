@@ -33,11 +33,7 @@ public:
 
   explicit subnet_index(vast::type t, caf::settings opts = {});
 
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
-
-  bool deserialize(detail::legacy_deserializer& source) override;
+  bool inspect_impl(supported_inspectors& inspector) override;
 
 private:
   bool append_impl(data_view x, id pos) override;

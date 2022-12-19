@@ -65,16 +65,18 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
 caf::expected<std::filesystem::path>
 resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs,
                     std::string_view name) {
+  auto plugin_file_name
+    = fmt::format("libvast-plugin-{}.{}", name, VAST_MACOS ? "dylib" : "so");
   for (const auto& dir : plugin_dirs) {
-    auto maybe_path = dir
-                      / fmt::format("libvast-plugin-{}.{}", name,
-                                    VAST_MACOS ? "dylib" : "so");
+    auto maybe_path = dir / plugin_file_name;
     auto ec = std::error_code{};
     if (std::filesystem::is_regular_file(maybe_path, ec))
       return maybe_path;
   }
-  return caf::make_error(ec::invalid_configuration,
-                         fmt::format("failed to find the {} plugin", name));
+  return caf::make_error(
+    ec::invalid_configuration,
+    fmt::format("failed to find the {} plugin as {} in [{}]", name,
+                plugin_file_name, fmt::join(plugin_dirs, ",  ")));
 }
 
 std::vector<std::filesystem::path> loaded_config_files_singleton = {};
@@ -191,10 +193,10 @@ const std::vector<plugin_ptr>& get() noexcept {
   return get_mutable();
 }
 
-std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
+std::vector<std::pair<plugin_type_id_block, void (*)()>>&
 get_static_type_id_blocks() noexcept {
-  static auto result = std::vector<
-    std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>{};
+  static auto result
+    = std::vector<std::pair<plugin_type_id_block, void (*)()>>{};
   return result;
 }
 

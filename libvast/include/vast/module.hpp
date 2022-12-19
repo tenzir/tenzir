@@ -13,7 +13,6 @@
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/concept/printable/string/string.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/type.hpp"
@@ -73,9 +72,10 @@ public:
   // -- CAF -------------------------------------------------------------------
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, module& x) ->
-    typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.schema"), x.types_);
+  friend auto inspect(Inspector& f, module& x) {
+    return f.object(x)
+      .pretty_name("vast.module")
+      .fields(f.field("types", x.types_));
   }
 
 private:

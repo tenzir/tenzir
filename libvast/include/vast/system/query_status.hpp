@@ -10,8 +10,6 @@
 
 #include "vast/time.hpp"
 
-#include <caf/meta/type_name.hpp>
-
 #include <cstddef>
 #include <cstdint>
 
@@ -32,8 +30,13 @@ struct query_status {
 
 template <class Inspector>
 auto inspect(Inspector& f, query_status& qs) {
-  return f(caf::meta::type_name("query_status"), qs.runtime, qs.expected,
-           qs.scheduled, qs.received, qs.processed, qs.shipped, qs.requested);
+  return f.object(qs)
+    .pretty_name("query_status")
+    .fields(f.field("runtime", qs.runtime), f.field("expected", qs.expected),
+            f.field("scheduled", qs.scheduled),
+            f.field("received", qs.received),
+            f.field("processed", qs.processed), f.field("shipped", qs.shipped),
+            f.field("requested", qs.requested));
 }
 
 } // namespace vast::system

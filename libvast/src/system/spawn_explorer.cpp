@@ -88,7 +88,7 @@ spawn_explorer(node_actor::stateful_pointer<node_state> self,
     = maybe_parse(caf::get_if<std::string>(&options, "vast.explore.before"));
   auto after
     = maybe_parse(caf::get_if<std::string>(&options, "vast.explore.after"));
-  auto by = to_std(caf::get_if<std::string>(&options, "vast.explore.by"));
+  auto by = to_optional(caf::get_if<std::string>(&options, "vast.explore.by"));
   explorer_state::event_limits limits{};
   limits.total = caf::get_or(options, "vast.explore.max-events",
                              defaults::explore::max_events);

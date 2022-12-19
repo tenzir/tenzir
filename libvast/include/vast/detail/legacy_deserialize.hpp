@@ -10,16 +10,16 @@
 
 #include "vast/as_bytes.hpp"
 #include "vast/detail/byte_swap.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
+#include <caf/config_value.hpp>
 #include <caf/detail/ieee_754.hpp>
 #include <caf/detail/network_order.hpp>
+#include <caf/detail/select_integer_type.hpp>
 #include <caf/detail/type_traits.hpp>
-#include <caf/detail/uri_impl.hpp>
-#include <caf/error.hpp>
 #include <caf/expected.hpp>
-#include <caf/meta/load_callback.hpp>
 
 #include <array>
 #include <cstddef>
@@ -30,14 +30,12 @@
 #include <span>
 #include <type_traits>
 #include <vector>
-
 namespace vast::detail {
 
 /// An inspector for CAF inspect
 class legacy_deserializer {
 public:
-  static constexpr bool reads_state = false;
-  static constexpr bool writes_state = true;
+  static constexpr bool is_loading = true;
   using result_type = bool;
 
   explicit legacy_deserializer(std::span<const std::byte> bytes)
@@ -49,6 +47,16 @@ public:
     return (apply(xs) && ...);
   }
 
+  template <class T>
+  auto object(const T&) {
+    return detail::inspection_object(*this);
+  }
+
+  template <class T>
+  auto field(std::string_view, T& value) {
+    return detail::inspection_field{value};
+  }
+
   inline result_type apply_raw(size_t num_bytes, void* storage) {
     if (num_bytes > bytes_.size())
       return false;
@@ -57,26 +65,15 @@ public:
     return true;
   }
 
-private:
   template <class T>
-    requires(caf::detail::is_inspectable<legacy_deserializer, T>::value)
+    requires requires(legacy_deserializer& f, T& x) {
+               requires !std::is_enum_v<T>;
+               {
+                 inspect(f, x)
+                 } -> std::same_as<legacy_deserializer::result_type>;
+             }
   result_type apply(T& x) {
     return inspect(*this, x);
-  }
-
-  template <class T>
-    requires(caf::meta::is_annotation<T>::value
-             && !caf::meta::is_load_callback<T>::value)
-  result_type apply(T&) {
-    // annotations are skipped
-    return true;
-  }
-
-  template <class T>
-    requires(caf::meta::is_load_callback<T>::value)
-  result_type apply(T& x) {
-    auto err = x.fun();
-    return static_cast<bool>(err == caf::none);
   }
 
   template <class T>
@@ -91,9 +88,6 @@ private:
   }
 
   template <class F, class S>
-    requires(
-      caf::detail::is_serializable<typename std::remove_const_t<F>>::value&&
-        caf::detail::is_serializable<S>::value)
   result_type apply(std::pair<F, S>& xs) {
     using t0 = typename std::remove_const_t<F>;
     if (!apply(const_cast<t0&>(xs.first)))
@@ -101,8 +95,8 @@ private:
     return apply(xs.second);
   }
 
-  inline result_type apply(caf::uri& x) {
-    auto impl = caf::make_counted<caf::detail::uri_impl>();
+  result_type apply(caf::uri& x) {
+    auto impl = caf::make_counted<caf::uri::impl_type>();
     if (!apply(*impl))
       return false;
     x = caf::uri{std::move(impl)};
@@ -216,8 +210,9 @@ private:
   }
 
   template <class T>
-    requires(caf::detail::is_iterable<T>::value
-             && !caf::detail::is_inspectable<legacy_deserializer, T>::value)
+    requires(
+      caf::detail::is_iterable<T>::value
+      && !caf::detail::has_inspect_overload<legacy_deserializer, T&>::value)
   result_type apply(T& xs) {
     return apply_sequence(xs);
   }
@@ -231,6 +226,128 @@ private:
     return true;
   }
 
+  template <class T, std::size_t N>
+  result_type apply(std::array<T, N>& x) {
+    for (T& v : x)
+      if (!apply(v))
+        return false;
+    return true;
+  }
+
+  template <class... Ts>
+  result_type apply(caf::variant<Ts...>& x) {
+    uint8_t type_tag = 0;
+    if (!apply(type_tag))
+      return false;
+    return apply(type_tag, x);
+  }
+
+  template <class... Ts>
+  result_type apply(uint8_t type_tag, caf::variant<Ts...>& x) {
+    using namespace caf;
+    using caf::detail::tl_at;
+    auto& f = *this;
+    switch (type_tag) {
+      default:
+        CAF_RAISE_ERROR("invalid type found");
+#define CAF_VARIANT_ASSIGN_CASE_IMPL(n)                                        \
+  case n: {                                                                    \
+    using tmp_t =                                                              \
+      typename caf::detail::tl_at<caf::detail::type_list<Ts...>,               \
+                                  ((n) < sizeof...(Ts) ? (n) : 0)>::type;      \
+    x = tmp_t{};                                                               \
+    return f(caf::get<tmp_t>(x));                                              \
+  }
+        CAF_VARIANT_ASSIGN_CASE_IMPL(0);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(1);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(2);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(3);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(4);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(5);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(6);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(7);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(8);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(9);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(10);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(11);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(12);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(13);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(14);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(15);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(16);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(17);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(18);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(19);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(20);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(21);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(22);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(23);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(24);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(25);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(26);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(27);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(28);
+        CAF_VARIANT_ASSIGN_CASE_IMPL(29);
+#undef CAF_VARIANT_ASSIGN_CASE_IMPL
+    }
+    return false;
+  }
+
+  template <class T>
+  result_type apply(caf::optional<T>& x) {
+    bool is_set = false;
+    if (!apply(is_set)) {
+      x = {};
+      return false;
+    }
+    if (!is_set) {
+      x = {};
+      return true;
+    }
+    T v;
+    if (!apply(v))
+      return false;
+    x = v;
+    return true;
+  }
+
+  result_type apply(caf::config_value& x) {
+    uint8_t type_tag = 0;
+    if (!apply(type_tag))
+      return false;
+    auto& variant = x.get_data();
+    //  CAF 0.17 caf::config_value has different types in the underlying
+    //  caf::variant: type_list<integer, boolean, real, atom, timespan, uri,
+    //  string, list, dictionary>
+    // Since for current variant the integer is at index 1, boolean at index 2,
+    // real at index 3 we need to map these accordingly
+    switch (type_tag) {
+      case 0: {
+        caf::config_value::integer integer;
+        if (!apply(integer))
+          return false;
+        x = integer;
+        return true;
+      }
+      case 1: {
+        caf::config_value::boolean boolean;
+        if (!apply(boolean))
+          return false;
+        x = boolean;
+        return true;
+      }
+      case 2: {
+        caf::config_value::real real;
+        if (!apply(real))
+          return false;
+        x = real;
+        return true;
+      }
+    }
+    return apply(type_tag, variant);
+  }
+
+private:
   template <class T>
   result_type apply_sequence(T& xs) {
     size_t size = 0;
@@ -244,14 +361,6 @@ private:
         return false;
       *it++ = std::move(tmp);
     }
-    return true;
-  }
-
-  template <class T, std::size_t N>
-  result_type apply(std::array<T, N>& x) {
-    for (T& v : x)
-      if (!apply(v))
-        return false;
     return true;
   }
 
@@ -297,8 +406,8 @@ private:
 /// @returns The status of the operation.
 /// @relates detail::serialize
 template <concepts::byte_container Buffer, class... Ts>
-  requires(!std::is_rvalue_reference_v<Ts> && ...)
-bool legacy_deserialize(const Buffer& buffer, Ts&... xs) {
+  requires(!std::is_rvalue_reference_v<Ts> && ...) bool
+legacy_deserialize(const Buffer& buffer, Ts&... xs) {
   legacy_deserializer f{as_bytes(buffer)};
   return f(xs...);
 }

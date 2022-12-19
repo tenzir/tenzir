@@ -125,9 +125,9 @@ caf::expected<module> infer_json(const std::string& input) {
   return result;
 }
 
-auto show(const module& module) {
+caf::message show(const module& module) {
   std::cout << fmt::to_string(module);
-  return caf::none;
+  return {};
 }
 
 } // namespace
@@ -161,7 +161,7 @@ infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
   VAST_INFO("{} failed to infer JSON: {}",
             detail::pretty_type_name(inv.full_name), render(schema.error()));
   // Failing to infer the input is not an error.
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

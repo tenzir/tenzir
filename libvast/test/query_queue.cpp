@@ -100,8 +100,8 @@ uuid make_insert(query_queue& q, system::catalog_lookup_result&& candidates,
 TEST(insert violating precondidtions) {
   query_queue q;
   REQUIRE(q.queries().empty());
-  CHECK_FAIL(q.insert(query_state{}, cands(0)));
-  CHECK_FAIL(q.insert(query_state{}, cands(5)));
+  REQUIRE(q.insert(query_state{}, cands(0)));
+  REQUIRE(q.insert(query_state{}, cands(5)));
   CHECK(q.queries().empty());
 }
 

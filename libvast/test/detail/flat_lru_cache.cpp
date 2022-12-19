@@ -11,8 +11,6 @@
 
 #include "vast/test/test.hpp"
 
-#include <caf/meta/type_name.hpp>
-
 #include <string>
 
 using std::literals::operator""sv;
@@ -30,7 +28,7 @@ struct kvp {
 
 template <class Inspector>
 auto inspect(Inspector& f, kvp& x) {
-  return f(caf::meta::type_name("kvp"), x.key, x.value);
+  return f.apply(x.key) && f.apply(x.value);
 }
 
 bool operator==(const kvp& x, const kvp& y) {

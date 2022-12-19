@@ -25,14 +25,14 @@ TEST(copying views) {
   CHECK_VARIANT_EQUAL(make_view(caf::none), caf::none);
   CHECK_VARIANT_EQUAL(make_view(true), true);
   CHECK_VARIANT_EQUAL(make_view(integer{42}), integer{42});
-  CHECK_VARIANT_EQUAL(make_view(42u), count(42u));
+  CHECK_VARIANT_EQUAL(materialize(make_view(42u)), count(42u));
   CHECK_VARIANT_EQUAL(make_view(4.2), real(4.2));
   MESSAGE("copying from temporary data");
-  CHECK_VARIANT_EQUAL(make_view(data{caf::none}), caf::none);
-  CHECK_VARIANT_EQUAL(make_view(data{true}), true);
-  CHECK_VARIANT_EQUAL(make_view(data{integer{42}}), integer{42});
-  CHECK_VARIANT_EQUAL(make_view(data{42u}), count(42u));
-  CHECK_VARIANT_EQUAL(make_view(data{4.2}), real(4.2));
+  CHECK_VARIANT_EQUAL(materialize(make_view(data{caf::none})), caf::none);
+  CHECK_VARIANT_EQUAL(materialize(make_view(data{true})), true);
+  CHECK_VARIANT_EQUAL(materialize(make_view(data{integer{42}})), integer{42});
+  CHECK_VARIANT_EQUAL(materialize(make_view(data{42u})), count(42u));
+  CHECK_VARIANT_EQUAL(materialize(make_view(data{4.2})), real(4.2));
 }
 
 TEST(string literal view) {
@@ -56,14 +56,14 @@ TEST(list view) {
   auto v = make_view(xs);
   REQUIRE_EQUAL(v->size(), xs.size());
   auto i = v->begin();
-  CHECK_EQUAL(*i, v->at(0));
-  CHECK_EQUAL(*i, make_data_view(integer{42}));
+  CHECK_EQUAL(materialize(*i), materialize(v->at(0)));
+  CHECK_EQUAL(materialize(*i), integer{42});
   ++i;
-  CHECK_EQUAL(*i, v->at(1));
-  CHECK_EQUAL(*i, make_data_view(true));
+  CHECK_EQUAL(materialize(*i), materialize(v->at(1)));
+  CHECK_EQUAL(materialize(*i), true);
   i += 2;
-  CHECK_EQUAL(*i, v->at(3));
-  CHECK_EQUAL(*i, make_data_view(4.2));
+  CHECK_EQUAL(materialize(*i), materialize(v->at(3)));
+  CHECK_EQUAL(materialize(*i), 4.2);
   ++i;
   CHECK_EQUAL(i, v->end());
   auto j = v->begin() + 1;
@@ -80,15 +80,15 @@ TEST(map view) {
   for (auto i = 0u; i < xs.size(); ++i) {
     auto [key, value] = v->at(i);
     auto& [expected_key, expected_value] = *std::next(xs.begin(), i);
-    CHECK_EQUAL(key, make_data_view(expected_key));
-    CHECK_EQUAL(value, make_data_view(expected_value));
+    CHECK_EQUAL(materialize(key), expected_key);
+    CHECK_EQUAL(materialize(value), expected_value);
   }
   MESSAGE("check iterator behavior");
   CHECK_EQUAL(std::next(v->begin(), 2), v->end());
   MESSAGE("check iterator value type");
   auto [key, value] = *v->begin();
-  CHECK_EQUAL(key, make_data_view(integer{42}));
-  CHECK_EQUAL(value, make_data_view(true));
+  CHECK_EQUAL(materialize(key), integer{42});
+  CHECK_EQUAL(materialize(value), true);
   MESSAGE("check conversion back to data");
   CHECK_EQUAL(xs, materialize(v));
 }
@@ -105,9 +105,9 @@ TEST(make_data_view) {
   REQUIRE(caf::holds_alternative<view<list>>(x));
   auto v = caf::get<view<list>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
-  CHECK_VARIANT_EQUAL(v->at(0), integer{42});
-  CHECK_VARIANT_EQUAL(v->at(1), true);
-  CHECK_VARIANT_EQUAL(v->at(2), "foo"sv);
+  CHECK_VARIANT_EQUAL(materialize(v->at(0)), integer{42});
+  CHECK_VARIANT_EQUAL(materialize(v->at(1)), true);
+  CHECK_VARIANT_EQUAL(materialize(v->at(2)), "foo");
   CHECK_EQUAL(xs, materialize(v));
 }
 

@@ -28,6 +28,8 @@
 #include "vast/view.hpp"
 
 #include <caf/attach_continuous_stream_source.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
+#include <caf/downstream.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -112,9 +114,8 @@ struct accountant_state_impl {
       return;
     auto slice = builder->finish();
     VAST_DEBUG("{} generated slice with {} rows", *self, slice.rows());
-
     slice_buffer.push(std::move(slice));
-    mgr->advance();
+    mgr->tick(self->clock().now());
   }
 
   void record_internally(const caf::actor_id actor_id, const std::string& key,

@@ -12,6 +12,7 @@
 
 #include "vast/detail/flat_map.hpp"
 #include "vast/expression.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/module.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/actors.hpp"
@@ -36,15 +37,19 @@ struct catalog_lookup_result {
 
     template <class Inspector>
     friend auto inspect(Inspector& f, candidate_info& x) {
-      return f(caf::meta::type_name("vast.system.candidate_info"), x.exp,
-               x.partition_infos);
+      return f.object(x)
+        .pretty_name("vast.system.catalog_result.candidate_info")
+        .fields(f.field("expression", x.exp),
+                f.field("partition-infos", x.partition_infos));
     }
   };
 
-  enum {
+  enum kind {
     exact,
     probabilistic,
-  } kind;
+  };
+
+  enum kind kind { kind::exact };
 
   std::unordered_map<type, candidate_info> candidate_infos;
 
@@ -61,9 +66,16 @@ struct catalog_lookup_result {
   }
 
   template <class Inspector>
+  friend auto inspect(Inspector& f, enum kind& x) {
+    return detail::inspect_enum(f, x);
+  }
+
+  template <class Inspector>
   friend auto inspect(Inspector& f, catalog_lookup_result& x) {
-    return f(caf::meta::type_name("vast.system.catalog_lookup_result"), x.kind,
-             x.candidate_infos);
+    return f.object(x)
+      .pretty_name("vast.system.catalog_lookup_result")
+      .fields(f.field("kind", x.kind),
+              f.field("candidate-infos", x.candidate_infos));
   }
 };
 

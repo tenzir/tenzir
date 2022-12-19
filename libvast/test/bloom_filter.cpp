@@ -44,8 +44,12 @@ struct almost_equal {
 
 } // namespace vast::test::detail
 
-#define CHECK_ALMOST_EQUAL(x, y, p)                                            \
-  CAF_CHECK_FUNC(vast::test::detail::almost_equal<(p)>, (x), (y))
+#define CHECK_ALMOST_EQUAL(x, y, precision)                                    \
+  do {                                                                         \
+    auto e = std::ilogb((y));                                                  \
+    auto th = std::fmod((y), std::ldexp(1, e - (precision)));                  \
+    CHECK_LESS_EQUAL(std::fabs((x) - (y)), th);                                \
+  } while (false)
 
 // Ground truth for the parameters stem from https://hur.st/bloomfilter.
 
@@ -139,12 +143,11 @@ TEST(simple_hasher) {
   CHECK_EQUAL(xs[0], 15516826743637085169ul);
   CHECK_EQUAL(xs[1], 1813822717707961023ul);
   MESSAGE("persistence");
-  std::vector<char> buf;
-  auto err = detail::serialize(buf, h);
-  REQUIRE_EQUAL(err, caf::none);
+  caf::byte_buffer buf;
+  CHECK(detail::serialize(buf, h));
+  REQUIRE(detail::serialize(buf, h));
   simple_hasher<xxh64> g;
-  bool err2 = detail::legacy_deserialize(buf, g);
-  REQUIRE_EQUAL(err2, true);
+  REQUIRE(detail::legacy_deserialize(buf, g));
   CHECK(h == g);
 }
 
@@ -158,9 +161,8 @@ TEST(double_hasher) {
   CHECK_EQUAL(xs[2], 8535038569602830417ul);
   CHECK_EQUAL(xs[3], 3408974221919105007ul);
   MESSAGE("persistence");
-  std::vector<char> buf;
-  auto err = detail::serialize(buf, h);
-  REQUIRE_EQUAL(err, caf::none);
+  caf::byte_buffer buf;
+  REQUIRE(detail::serialize(buf, h));
   double_hasher<xxh64> g;
   bool err2 = detail::legacy_deserialize(buf, g);
   REQUIRE_EQUAL(err2, true);
@@ -201,9 +203,8 @@ TEST(bloom filter - simple hasher and partitioning) {
   CHECK(x.lookup("foo"));
   CHECK(x.lookup(3.14));
   MESSAGE("persistence");
-  std::vector<char> buf;
-  auto err = detail::serialize(buf, x);
-  REQUIRE_EQUAL(err, caf::none);
+  caf::byte_buffer buf;
+  REQUIRE(detail::serialize(buf, x));
   bloom_filter<xxh64, simple_hasher, policy::partitioning::yes> y;
   bool err2 = detail::legacy_deserialize(buf, y);
   REQUIRE_EQUAL(err2, true);

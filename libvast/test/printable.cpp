@@ -52,7 +52,7 @@ TEST(signed integers) {
   CHECK_EQUAL(str, "42");
   MESSAGE("forced sign");
   str.clear();
-  CHECK(printers::integral<int, policy::force_sign>(str, i));
+  CHECK((printers::integral<int, policy::force_sign>(str, i)));
   CHECK_EQUAL(str, "+42");
   MESSAGE("negative sign");
   str.clear();
@@ -71,11 +71,11 @@ TEST(unsigned integers) {
 TEST(integral minimum digits) {
   std::string str;
   auto i = 0;
-  CHECK(printers::integral<int, policy::plain, 5>(str, i));
+  CHECK((printers::integral<int, policy::plain, 5>(str, i)));
   CHECK_EQUAL(str, "00000");
   str.clear();
   i = 42;
-  CHECK(printers::integral<int, policy::force_sign, 4>(str, i));
+  CHECK((printers::integral<int, policy::force_sign, 4>(str, i)));
   CHECK_EQUAL(str, "+0042");
 }
 
@@ -112,27 +112,27 @@ TEST(floating point) {
 
   d = 123456.1234567890123;
   str.clear();
-  CHECK(real_printer<double, 6>{}(str, d));
+  CHECK((real_printer<double, 6>{}(str, d)));
   CHECK_EQUAL(str, "123456.123457");
 
   d = 123456.8888;
   str.clear();
-  CHECK(real_printer<double, 0>{}(str, d));
+  CHECK((real_printer<double, 0>{}(str, d)));
   CHECK_EQUAL(str, "123457");
 
   d = 123456.1234567890123;
   str.clear();
-  CHECK(real_printer<double, 1>{}(str, d));
+  CHECK((real_printer<double, 1>{}(str, d)));
   CHECK_EQUAL(str, "123456.1");
 
   d = 123456.00123;
   str.clear();
-  CHECK(real_printer<double, 6>{}(str, d));
+  CHECK((real_printer<double, 6>{}(str, d)));
   CHECK_EQUAL(str, "123456.00123");
 
   d = 123456.123;
   str.clear();
-  CHECK(real_printer<double, 6, 6>{}(str, d));
+  CHECK((real_printer<double, 6, 6>{}(str, d)));
   CHECK_EQUAL(str, "123456.123000");
 }
 

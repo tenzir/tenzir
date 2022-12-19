@@ -204,7 +204,7 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(command_result.error()));
   if (auto err = print_definition(*command_result, as_yaml))
     return caf::make_message(std::move(err));
-  return caf::none;
+  return {};
 }
 
 class plugin final : public virtual command_plugin {

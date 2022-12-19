@@ -6,11 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/format/json.hpp"
-
-#include "vast/format/json/suricata_selector.hpp"
-
 #define SUITE format
+
+#include "vast/format/json.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
@@ -93,13 +91,13 @@ TEST(json to data) {
     std::integral_constant<
       int, caf::detail::tl_index_of<data::types, real>::value>());
   CHECK(std::abs(r - real{4.2}) < 0.000001);
-  CHECK_EQUAL(slice.at(0, 3), data{integer{-1337}});
-  CHECK_EQUAL(slice.at(0, 4), data{std::string{"0123456789®\r\n"}});
-  CHECK_EQUAL(slice.at(0, 5), data{std::string{"42.42"}});
+  CHECK_EQUAL(materialize(slice.at(0, 3)), integer{-1337});
+  CHECK_EQUAL(materialize(slice.at(0, 4)), "0123456789®\r\n");
+  CHECK_EQUAL(materialize(slice.at(0, 5)), "42.42");
   std::array<std::uint8_t, 4> addr1{147, 32, 84, 165};
   CHECK(slice.at(0, 6) == data{address::v4(std::span{addr1})});
   std::array<std::uint8_t, 4> addr2{192, 168, 0, 1};
-  CHECK(slice.at(0, 7) == data{subnet{address::v4(std::span{addr2}), 24}});
+  CHECK((slice.at(0, 7) == data{subnet{address::v4(std::span{addr2}), 24}}));
   CHECK(slice.at(0, 11) == data{enumeration{2}});
   const list lc
     = {data{count{0x3e7}}, data{count{19}}, data{count{5555}}, data{count{0}}};

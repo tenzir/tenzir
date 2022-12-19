@@ -28,8 +28,11 @@ struct configuration {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(caf::meta::type_name("vast.plugins.rest.configuration"),
-             x.bind_address, x.port, x.mode, x.certfile, x.keyfile, x.web_root);
+    return f.object(x)
+      .pretty_name("vast.plugins.rest.configuration")
+      .fields(f.field("bind-address", x.bind_address), f.field("port", x.port),
+              f.field("mode", x.mode), f.field("certfile", x.certfile),
+              f.field("keyfile", x.keyfile), f.field("web-root", x.web_root));
   }
 
   enum class server_mode {

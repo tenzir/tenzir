@@ -137,7 +137,7 @@ TEST(query pruning with index config) {
       ps = std::move(result);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      REQUIRE(!e);
     });
   auto catalog
     = self->spawn(vast::system::catalog, accountant, directory / "types");
@@ -148,14 +148,14 @@ TEST(query pruning with index config) {
       /* nop */
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      REQUIRE(!e);
     });
   // Check that the pruning works as expected. If it does, it will be
   // unnoticeable from the outside, so we have to access the internal
   // catalog state.
   auto& state
     = deref<
-        vast::system::catalog_actor::stateful_base<vast::system::catalog_state>>(
+        vast::system::catalog_actor::stateful_impl<vast::system::catalog_state>>(
         catalog)
         .state;
   auto& unprunable_fields = state.unprunable_fields;

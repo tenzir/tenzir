@@ -28,7 +28,9 @@
 #include "vast/uuid.hpp"
 
 #include <caf/config_value.hpp>
+#include <caf/detail/stream_stage_impl.hpp>
 #include <caf/settings.hpp>
+#include <caf/stream_stage_driver.hpp>
 
 #include <filesystem>
 #include <fstream>

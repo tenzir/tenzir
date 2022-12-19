@@ -12,6 +12,7 @@
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
 #include <vast/detail/fanout_counter.hpp>
+#include <vast/detail/inspection_common.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/fwd.hpp>
 #include <vast/partition_synopsis.hpp>
@@ -244,8 +245,9 @@ struct start_options {
   bool automatic = false;
 
   friend auto inspect(auto& f, start_options& x) {
-    return f(x.all, x.undersized, x.parallel, x.max_partitions, x.expression,
-             x.detached, x.automatic);
+    return detail::apply_all(f, x.all, x.undersized, x.parallel,
+                             x.max_partitions, x.expression, x.detached,
+                             x.automatic);
   }
 };
 
@@ -254,7 +256,7 @@ struct stop_options {
   bool detached = false;
 
   friend auto inspect(auto& f, stop_options& x) {
-    return f(x.detached);
+    return f.apply(x.detached);
   }
 };
 
@@ -395,7 +397,7 @@ struct rebuilder_state {
                     run->statistics.num_completed, run->statistics.num_results);
       }
       for (auto&& rp : std::exchange(run->stop_requests, {}))
-        static_cast<caf::response_promise&>(rp).deliver(caf::unit);
+        rp.deliver();
       run.reset();
       emit_telemetry();
       if (run->options.detached)
@@ -404,10 +406,10 @@ struct rebuilder_state {
         rp.deliver(std::move(err));
         return;
       }
-      static_cast<caf::response_promise&>(rp).deliver(caf::unit);
+      rp.deliver();
     };
     if (run->options.detached)
-      static_cast<caf::response_promise&>(rp).deliver(caf::unit);
+      rp.deliver();
     auto query_context
       = query_context::make_extract("rebuild", self, run->options.expression);
     query_context.id = uuid::random();
@@ -872,7 +874,7 @@ get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
         ? std::get<system::node_actor>(node_opt)
         : std::get<scope_linked<system::node_actor>>(node_opt).get();
   const auto timeout = system::node_connection_timeout(config);
-  auto result = caf::expected<caf::actor>{caf::no_error};
+  auto result = caf::expected<caf::actor>{caf::error{}};
   self->request(node, timeout, atom::get_v, atom::type_v, "rebuild")
     .receive(
       [&](std::vector<caf::actor>& actors) {
@@ -996,10 +998,10 @@ public:
         .add<bool>("detached,d", "exit immediately instead of waiting for the "
                                  "rebuild to finish")
         .add<std::string>("read,r", "path for reading the (optional) query")
-        .add<size_t>("max-partitions,n", "number of partitions to rebuild at "
-                                         "most (default: unlimited)")
-        .add<size_t>("parallel,j", "number of runs to start in parallel "
-                                   "(default: 1)"));
+        .add<int64_t>("max-partitions,n", "number of partitions to rebuild at "
+                                          "most (default: unlimited)")
+        .add<int64_t>("parallel,j", "number of runs to start in parallel "
+                                    "(default: 1)"));
     rebuild->add_subcommand("start",
                             "rebuilds outdated partitions matching the "
                             "(optional) query qexpression",

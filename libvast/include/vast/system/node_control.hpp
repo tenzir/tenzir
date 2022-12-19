@@ -31,7 +31,7 @@ namespace vast::system {
 
 /// Retrieves the node connection timeout as specified under the option
 /// `vast.connection-timeout` from the given settings.
-caf::duration node_connection_timeout(const caf::settings& options);
+caf::timespan node_connection_timeout(const caf::settings& options);
 
 caf::expected<caf::actor>
 spawn_at_node(caf::scoped_actor& self, const node_actor& node, invocation inv);
@@ -43,14 +43,15 @@ caf::expected<std::tuple<Actors...>>
 get_node_components(caf::scoped_actor& self, const node_actor& node) {
   using result_t = std::tuple<Actors...>;
   auto result = caf::expected{result_t{}};
-  auto normalize = [](std::string in) {
+  auto normalize = [](caf::string_view in) {
     // Remove the uninteresting parts of the name:
-    //   vast::system::test_registry_actor -> test_registry
-    in.erase(0, sizeof("vast::system::") - 1);
-    in.erase(in.size() - (sizeof("_actor") - 1));
-    // Replace '_' with '-': test_registry -> test-registry
-    std::replace(in.begin(), in.end(), '_', '-');
-    return in;
+    //   vast::system::type_registry_actor -> type_registry
+    auto str = std::string{in.data(), in.data() + in.size()};
+    str.erase(0, sizeof("vast::system::") - 1);
+    str.erase(str.size() - (sizeof("_actor") - 1));
+    // Replace '_' with '-': type_registry -> type-registry
+    std::replace(str.begin(), str.end(), '_', '-');
+    return str;
   };
   const auto timeout = node_connection_timeout(self->config().content);
   auto labels = std::vector<std::string>{

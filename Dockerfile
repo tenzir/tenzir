@@ -56,6 +56,7 @@ RUN cmake -B build -G Ninja \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
+      -D VAST_ENABLE_BUNDLED_CAF:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
     cmake --build build --parallel && \
@@ -76,6 +77,8 @@ CMD ["--help"]
 
 FROM python:3.10-slim-bullseye AS production
 
+# When changing these, make sure to also update the entries in the flake.nix
+# file.
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}" \
     VAST_DB_DIRECTORY="/var/lib/vast" \

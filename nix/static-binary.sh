@@ -30,13 +30,7 @@ vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 log "rev is ${vast_rev}"
 
 cmakeFlags=""
-# Enable the bundled plugins by default.
-plugins=(
-  "${toplevel}/plugins/parquet"
-  "${toplevel}/plugins/pcap"
-  "${toplevel}/plugins/sigma"
-  "${toplevel}/plugins/web"
-)
+declare -a extraPlugins
 
 while [ $# -ne 0 ]; do
   case "$1" in
@@ -58,7 +52,7 @@ while [ $# -ne 0 ]; do
       exit 1
       ;;
     --with-plugin=*)
-      plugins+=("$(realpath "${optarg}")")
+      extraPlugins+=("$(realpath "${optarg}")")
       ;;
   esac
   shift
@@ -73,19 +67,18 @@ plugin_version() {
 }
 
 # Get Plugin versions
-for plugin in "${plugins[@]}"; do
+for plugin in "${extraPlugins[@]}"; do
   cmakeFlags="${cmakeFlags} \"$(plugin_version ${plugin})\""
 done
 
 read -r -d '' exp <<EOF || true
 let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
-pkgs.pkgsStatic.vast.override {
+(pkgs.pkgsStatic.vast.override {
   versionOverride = "${desc}";
   versionShortOverride = "${desc_short}";
-  withPlugins = [ ${plugins[@]} ];
+  extraPlugins = [ ${extraPlugins[@]} ];
   extraCmakeFlags = [ ${cmakeFlags} ];
-  buildAsPackage = true;
-}
+}).package
 EOF
 
 log running "nix --print-build-logs build --print-out-paths --impure --expr  \'${exp}\'"

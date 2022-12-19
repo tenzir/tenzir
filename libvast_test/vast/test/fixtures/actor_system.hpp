@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/system/configuration.hpp"
@@ -65,15 +66,15 @@ struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
 
   template <class... Ts>
   auto serialize(const Ts&... xs) {
-    std::vector<char> buf;
+    caf::byte_buffer buf;
     caf::binary_serializer bs{sys.dummy_execution_unit(), buf};
-    if (auto err = bs(xs...))
-      FAIL("error during serialization: " << vast::render(err));
+    if (!vast::detail::apply_all(bs, xs...))
+      FAIL("error during serialization: ");
     return buf;
   }
 
   template <class... Ts>
-  void deserialize(const std::vector<char>& buf, Ts&... xs) {
+  void deserialize(const caf::byte_buffer& buf, Ts&... xs) {
     if (!(vast::detail::legacy_deserialize(buf, xs) && ...))
       FAIL("error during deserialization");
   }

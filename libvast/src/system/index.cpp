@@ -1346,12 +1346,12 @@ index(index_actor::stateful_pointer<index_state> self,
       // We get an 'unreachable' error when the stream becomes unreachable
       // during actor destruction; in this case we can't use `self->state`
       // anymore since it will already be destroyed.
-      VAST_DEBUG("index finalized streaming with error {}", render(err));
+      VAST_DEBUG("index finalized streaming with error {}", err);
       if (err && err != caf::exit_reason::unreachable) {
-        if (err != caf::exit_reason::user_shutdown)
-          VAST_ERROR("{} got a stream error: {}", *self, render(err));
-        else
-          VAST_DEBUG("{} got a user shutdown error: {}", *self, render(err));
+        if (err == caf::exit_reason::user_shutdown)
+          VAST_DEBUG("{} got a user shutdown error: {}", *self, err);
+        else if (err != ec::end_of_input)
+          VAST_ERROR("{} got a stream error: {}", *self, err);
         // We can shutdown now because we only get a single stream from the
         // importer.
         self->send_exit(self, err);
@@ -1592,7 +1592,18 @@ index(index_actor::stateful_pointer<index_state> self,
             }
             // Allows the client to query further results after initial taste.
             auto query_id = query_context.id;
-            auto client = caf::actor_cast<receiver_actor<atom::done>>(sender);
+            auto client = caf::visit(
+              detail::overload{
+                [&](count_query_context& count) {
+                  return caf::actor_cast<receiver_actor<atom::done>>(
+                    count.sink);
+                },
+                [&](extract_query_context& extract) {
+                  return caf::actor_cast<receiver_actor<atom::done>>(
+                    extract.sink);
+                },
+              },
+              query_context.cmd);
             if (lookup_result.empty()) {
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          *self);
@@ -1602,8 +1613,11 @@ index(index_actor::stateful_pointer<index_state> self,
             }
             auto num_candidates
               = detail::narrow<uint32_t>(lookup_result.size());
+            auto taste_size = query_context.taste
+                                ? *query_context.taste
+                                : self->state.taste_partitions;
             auto scheduled
-              = std::min(num_candidates, self->state.taste_partitions);
+              = std::min(num_candidates, taste_size);
             if (auto err = self->state.pending_queries.insert(
                   query_state{.query_contexts_per_type = query_contexts,
                               .client = client,
@@ -2079,7 +2093,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto counter = detail::make_fanout_counter(
         self->state.active_partitions.size(),
         [rp]() mutable {
-          static_cast<caf::response_promise&>(rp).deliver(caf::unit);
+          rp.deliver();
         },
         [rp](caf::error error) mutable {
           rp.deliver(std::move(error));

@@ -34,7 +34,7 @@ caf::message flush_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(components.error()));
   auto [index] = std::move(*components);
   // Flush!
-  auto result = caf::message{caf::none};
+  auto result = caf::message{};
   self->request(index, caf::infinite, atom::flush_v)
     .receive(
       []() {

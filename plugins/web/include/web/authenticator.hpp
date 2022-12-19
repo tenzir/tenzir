@@ -55,7 +55,7 @@ struct authenticator_state {
 
 caf::expected<authenticator_actor>
 get_authenticator(caf::scoped_actor&, system::node_actor node,
-                  caf::duration timeout);
+                  caf::timespan timeout);
 
 /// Spawns the AUTHENTICATOR.
 authenticator_actor::behavior_type

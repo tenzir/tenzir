@@ -62,7 +62,7 @@ class plugin final : public virtual command_plugin,
         .add<std::string>("keyfile", "path to TLS private key")
         .add<std::string>("root", "document root of the server")
         .add<std::string>("bind", "listen address of server")
-        .add<uint16_t>("port", "listen port"));
+        .add<int64_t>("port", "listen port"));
     rest_command->add_subcommand("generate-token", "generate auth token",
                                  command::opts("?plugins.web.token"));
     rest_command->add_subcommand("openapi", "print openAPI spec",
@@ -78,3 +78,5 @@ class plugin final : public virtual command_plugin,
 } // namespace vast::plugins::web
 
 VAST_REGISTER_PLUGIN(vast::plugins::web::plugin)
+VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_web_plugin_types,
+                                   vast_web_plugin_actors)

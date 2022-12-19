@@ -203,8 +203,8 @@ TEST(serializable) {
   bitvector<uint64_t> x, y;
   x.resize(1024, false);
   x[1000] = true;
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
+  caf::byte_buffer buf;
+  CHECK(detail::serialize(buf, x));
   CHECK_EQUAL(detail::legacy_deserialize(buf, y), true);
   REQUIRE_EQUAL(x, y);
   CHECK(y[1000]);

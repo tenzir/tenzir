@@ -162,7 +162,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     if (log_file == defaults::logger::log_file
         && vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
       std::filesystem::path log_dir = caf::get_or(
-        cfg_file, "vast.db-directory", defaults::system::db_directory);
+        cfg_file, "vast.db-directory", defaults::system::db_directory.data());
       std::error_code err{};
       if (!std::filesystem::exists(log_dir, err)) {
         const auto created_log_dir

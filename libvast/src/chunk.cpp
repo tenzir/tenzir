@@ -10,7 +10,6 @@
 
 #include "vast/arrow_compat.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
-#include "vast/detail/narrow.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/io/read.hpp"
@@ -39,9 +38,6 @@
 namespace vast {
 
 namespace {
-
-/// The size of an invalid chunk when serialized.
-inline constexpr auto invalid_chunk_size = int64_t{-1};
 
 class chunk_random_access_file final : public arrow::io::RandomAccessFile {
 public:
@@ -416,67 +412,6 @@ caf::error read(const std::filesystem::path& filename, chunk_ptr& x) {
     static_cast<void>(buffer);
   });
   return caf::none;
-}
-
-caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
-  using vast::detail::narrow;
-  if (x == nullptr)
-    return sink(invalid_chunk_size);
-  return caf::error::eval(
-    [&] {
-      return sink(narrow<int64_t>(x->size()));
-    },
-    [&] {
-      return sink.apply_raw(x->size(), const_cast<std::byte*>(x->data()));
-    });
-}
-
-caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
-  int64_t size = 0;
-  if (auto err = source(size))
-    return err;
-  if (size == invalid_chunk_size) {
-    x = nullptr;
-    return caf::none;
-  }
-  if (size == 0) {
-    x = chunk::make_empty();
-    return caf::none;
-  }
-  auto buffer = std::make_unique<chunk::value_type[]>(size);
-  const auto data = buffer.get();
-  if (auto err = source.apply_raw(size, data)) {
-    x = nullptr;
-    return err;
-  }
-  x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
-    static_cast<void>(buffer);
-  });
-  return caf::none;
-}
-
-bool inspect(detail::legacy_deserializer& source, chunk_ptr& x) {
-  int64_t size = 0;
-  if (!source(size))
-    return false;
-  if (size == invalid_chunk_size) {
-    x = nullptr;
-    return true;
-  }
-  if (size == 0) {
-    x = chunk::make_empty();
-    return true;
-  }
-  auto buffer = std::make_unique<chunk::value_type[]>(size);
-  const auto data = buffer.get();
-  if (!source.apply_raw(size, data)) {
-    x = nullptr;
-    return false;
-  }
-  x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
-    static_cast<void>(buffer);
-  });
-  return true;
 }
 
 // -- implementation details ---------------------------------------------------

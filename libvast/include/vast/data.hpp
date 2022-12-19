@@ -184,7 +184,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, data& x) {
-    return f(x.data_);
+    return f.apply(x.data_);
   }
 
   /// @endcond

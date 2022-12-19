@@ -16,6 +16,7 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/span.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -149,9 +150,9 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   const auto& synopsis_chunk = last_written_chunks.at(synopsis_path).front();
   auto* synopsis_fbs = vast::fbs::GetPartitionSynopsis(synopsis_chunk->data());
   vast::partition_synopsis synopsis;
-  unpack(*synopsis_fbs->partition_synopsis_as<
-           vast::fbs::partition_synopsis::LegacyPartitionSynopsis>(),
-         synopsis);
+  CHECK(!unpack(*synopsis_fbs->partition_synopsis_as<
+                  vast::fbs::partition_synopsis::LegacyPartitionSynopsis>(),
+                synopsis));
   CHECK_EQUAL(synopsis.events, 1u);
   CHECK_EQUAL(synopsis.schema, schema_);
   CHECK_EQUAL(synopsis.min_import_time, now);
@@ -182,7 +183,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   const auto* indexes = part_fb->indexes();
   REQUIRE_EQUAL(indexes->size(), 1u);
   CHECK_EQUAL(indexes->Get(0)->field_name()->str(), "y.x");
-  CHECK_EQUAL(indexes->Get(0)->index()->data(), nullptr);
+  CHECK_EQUAL(indexes->Get(0)->index()->caf_0_18_data(), nullptr);
 }
 
 TEST(Delegate query to store with all possible ids in partition when query is to
