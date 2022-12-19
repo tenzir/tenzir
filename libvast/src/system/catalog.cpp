@@ -457,7 +457,8 @@ caf::error catalog_state::load_type_registry_from_disk() {
                            fmt::format("failed to find directory {}: {}",
                                        type_registry_dir, err.message()));
   if (!dir_exists) {
-    VAST_DEBUG("{} found no directory {} to load from", *self, type_registry_dir);
+    VAST_DEBUG("{} found no directory {} to load from", *self,
+               type_registry_dir);
     return caf::none;
   }
   // Support the legacy CAF-serialized state, and delete it afterwards.
