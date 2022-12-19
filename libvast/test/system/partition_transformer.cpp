@@ -393,7 +393,8 @@ TEST(identity partition pipeline via the index) {
       const auto* range = partition_synopsis_legacy->id_range();
       fixtures::partition_synopsis_ptr ps
         = caf::make_copy_on_write<vast::partition_synopsis>();
-      unpack(*partition_synopsis_legacy, ps.unshared());
+      auto err = unpack(*partition_synopsis_legacy, ps.unshared());
+      REQUIRE_EQUAL(err, caf::none);
       partition_type = ps->schema;
       events = range->end() - range->begin();
     },
