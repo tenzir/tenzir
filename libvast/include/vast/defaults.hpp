@@ -233,15 +233,6 @@ inline constexpr size_t num_query_supervisors = 10;
 /// The store backend to use.
 inline constexpr const char* store_backend = "feather";
 
-/// Number of cached ARCHIVE segments.
-inline constexpr size_t segments = 10;
-
-/// Maximum size of ARCHIVE segments in MiB.
-inline constexpr size_t max_segment_size = 1'024;
-
-/// Number of initial IDs to request in the IMPORTER.
-inline constexpr size_t initially_requested_ids = 128;
-
 /// Rate at which telemetry data is sent to the ACCOUNTANT.
 inline constexpr std::chrono::milliseconds telemetry_rate
   = std::chrono::milliseconds{10000};

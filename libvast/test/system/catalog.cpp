@@ -44,6 +44,8 @@ namespace {
 
 constexpr size_t num_partitions = 4;
 constexpr size_t num_events_per_parttion = 25;
+constexpr size_t taste_count = 4;
+constexpr size_t num_query_supervisors = 1;
 
 const vast::time epoch;
 
@@ -131,7 +133,6 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     factory<synopsis>::initialize();
     MESSAGE("register table_slice_builder factory");
     factory<table_slice_builder>::initialize();
-    auto index_dir = directory / "index";
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");

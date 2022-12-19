@@ -55,15 +55,13 @@ struct fixture : fixture_base {
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     auto indexdir = directory / "index";
-    index = self->spawn(system::index, system::accountant_actor{}, fs,
-                        system::archive_actor{}, catalog, indexdir,
-                        defaults::system::store_backend, 10000, duration{}, 5,
-                        5, 1, indexdir, vast::index_config{});
+    index = self->spawn(system::index, system::accountant_actor{}, fs, catalog,
+                        indexdir, defaults::system::store_backend, 10000,
+                        duration{}, 5, 5, 1, indexdir, vast::index_config{});
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer",
-                           system::archive_actor{}, index,
+    importer = self->spawn(system::importer, directory / "importer", index,
                            std::vector<vast::pipeline>{});
   }
 

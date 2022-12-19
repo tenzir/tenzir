@@ -15,7 +15,6 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/system/archive.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/source.hpp"
 #include "vast/table_slice.hpp"
@@ -64,9 +63,8 @@ struct importer_fixture : Base {
     : Base(VAST_PP_STRINGIFY(SUITE)), slice_size(table_slice_size) {
     MESSAGE("spawn importer");
     auto dir = this->directory / "importer";
-    importer
-      = this->self->spawn(system::importer, dir, system::archive_actor{},
-                          system::index_actor{}, std::vector<vast::pipeline>{});
+    importer = this->self->spawn(system::importer, dir, system::index_actor{},
+                                 std::vector<vast::pipeline>{});
   }
 
   ~importer_fixture() {

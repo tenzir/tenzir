@@ -18,7 +18,6 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
@@ -64,14 +63,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
-    // Spawn INDEX and ARCHIVE, and a mock client.
+    // Spawn INDEX and a mock client.
     MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
     fs = self->spawn(vast::system::posix_filesystem, directory,
                      vast::system::accountant_actor{});
     auto indexdir = directory / "index";
-    archive = self->spawn(system::archive, directory / "archive",
-                          defaults::system::segments,
-                          defaults::system::max_segment_size);
     catalog = self->spawn(system::catalog, system::accountant_actor{},
                           directory / "types");
     client = sys.spawn(mock_client);
@@ -85,7 +81,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   system::filesystem_actor fs;
   system::index_actor index;
-  system::archive_actor archive;
   // Type registry should only be used for partition transforms, so it's
   // safe to pass a nullptr in this test.
   system::catalog_actor catalog = {};
@@ -98,11 +93,10 @@ FIXTURE_SCOPE(counter_tests, fixture)
 
 TEST(count IP point query with partition - local stores) {
   auto indexdir = directory / "index";
-  auto index
-    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                  catalog, indexdir, defaults::system::store_backend,
-                  defaults::import::table_slice_size, duration{}, 100, 3, 1,
-                  indexdir, vast::index_config{});
+  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
+                           catalog, indexdir, defaults::system::store_backend,
+                           defaults::import::table_slice_size, duration{}, 100,
+                           3, 1, indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
   detail::spawn_container_source(sys, take(zeek_conn_log_full, 4), index);
   MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
@@ -127,11 +121,10 @@ TEST(count IP point query with partition - local stores) {
 TEST(count meta extractor import time 1) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index";
-  auto index
-    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                  catalog, indexdir, defaults::system::store_backend,
-                  defaults::import::table_slice_size, duration{}, 100, 3, 1,
-                  indexdir, vast::index_config{});
+  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
+                           catalog, indexdir, defaults::system::store_backend,
+                           defaults::import::table_slice_size, duration{}, 100,
+                           3, 1, indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
   auto slices = take(zeek_conn_log_full, 4);
   for (auto& slice : slices) {
@@ -164,11 +157,10 @@ TEST(count meta extractor import time 1) {
 TEST(count meta extractor import time 2) {
   // Create an index with partition-local store backend.
   auto indexdir = directory / "index";
-  auto index
-    = self->spawn(system::index, system::accountant_actor{}, fs, archive,
-                  catalog, indexdir, defaults::system::store_backend,
-                  defaults::import::table_slice_size, duration{}, 100, 3, 1,
-                  indexdir, vast::index_config{});
+  auto index = self->spawn(system::index, system::accountant_actor{}, fs,
+                           catalog, indexdir, defaults::system::store_backend,
+                           defaults::import::table_slice_size, duration{}, 100,
+                           3, 1, indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
   auto slices = take(zeek_conn_log_full, 4);
   for (auto& slice : slices) {

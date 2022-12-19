@@ -23,8 +23,6 @@ namespace vast {
 enum class table_slice_encoding : uint8_t {
   none,         ///< No data is encoded; the table slice is empty or invalid.
   arrow,        ///< The table slice is encoded using the Apache Arrow format.
-  msgpack,      ///< The table slice is encoded using the MessagePack format
-                ///< (deprecated).
 };
 
 } // namespace vast
@@ -45,8 +43,6 @@ struct formatter<vast::table_slice_encoding> {
         return format_to(ctx.out(), "none");
       case vast::table_slice_encoding::arrow:
         return format_to(ctx.out(), "arrow");
-      case vast::table_slice_encoding::msgpack:
-        return format_to(ctx.out(), "msgpack");
     }
     vast::die("unreachable");
   }

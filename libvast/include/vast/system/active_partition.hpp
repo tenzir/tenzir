@@ -150,8 +150,7 @@ struct active_partition_state {
   /// with a serialized chunk.
   size_t persisted_indexers = {};
 
-  /// The store to retrieve the data from. Either the legacy global archive or a
-  /// local component that holds the data for this partition.
+  /// The store to retrieve the data from.
   store_actor store = {};
 
   /// Temporary storage for the serialized indexers of this partition, before

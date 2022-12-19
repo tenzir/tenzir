@@ -282,8 +282,7 @@ TEST(full partition roundtrip) {
   self->send_exit(partition, caf::exit_reason::user_shutdown);
   auto readonly_partition
     = sys.spawn(vast::system::passive_partition, partition_uuid,
-                vast::system::accountant_actor{}, vast::system::archive_actor{},
-                fs, persist_path);
+                vast::system::accountant_actor{}, fs, persist_path);
   REQUIRE(readonly_partition);
   run();
   // A minimal `partition_client_actor`that stores the results in a local

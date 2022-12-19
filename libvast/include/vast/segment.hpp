@@ -32,8 +32,6 @@ namespace vast {
 
 /// A sequence of table slices.
 class segment {
-  friend segment_builder;
-
 public:
   class iterator
     : public detail::iterator_facade<

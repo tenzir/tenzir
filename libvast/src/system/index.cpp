@@ -35,12 +35,13 @@
 #include "vast/fbs/partition_transform.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/flatbuffer.hpp"
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
-#include "vast/segment_store.hpp"
+#include "vast/segment.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/partition_transformer.hpp"
@@ -169,6 +170,11 @@ bool test_file_identifier(std::filesystem::path file, const char* identifier) {
 } // namespace
 
 namespace vast::system {
+
+std::filesystem::path store_path_for_partition(const uuid& id) {
+  auto store_filename = fmt::format("{:u}.store", id);
+  return std::filesystem::path{"archive"} / store_filename;
+}
 
 caf::error extract_partition_synopsis(
   const std::filesystem::path& partition_path,
@@ -302,7 +308,6 @@ partition_actor partition_factory::operator()(const uuid& id) const {
   VAST_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
   materializations_++;
   return state_.self->spawn(passive_partition, id, state_.accountant,
-                            static_cast<store_actor>(state_.global_store),
                             filesystem_, path);
 }
 
@@ -408,7 +413,6 @@ caf::error index_state::load_from_disk() {
             // statistics where already updated on-disk before VAST crashed or
             // not, which is hard to figure out here.
             auto partition = self->spawn(passive_partition, uuid, accountant,
-                                         static_cast<store_actor>(global_store),
                                          filesystem, path);
             self->request(partition, caf::infinite, atom::erase_v)
               .then(
@@ -778,13 +782,9 @@ index_state::create_active_partition(const type& schema) {
     = active_partitions.emplace(schema, active_partition_info{});
   VAST_ASSERT(inserted);
   VAST_ASSERT(active_partition != active_partitions.end());
-  // If we're using the global store, the importer already sends the table
-  // slices. (In the long run, this should probably be streamlined so that all
-  // data moves through the index. However, that requires some refactoring of
-  // the archive itself so it can handle multiple input streams.)
-  std::string store_name = {};
+  std::string store_name = store_actor_plugin->name();
+  ;
   chunk_ptr store_header = chunk::make_empty();
-  store_name = store_actor_plugin->name();
   auto builder_and_header
     = store_actor_plugin->make_store_builder(accountant, filesystem, id);
   if (!builder_and_header)
@@ -1215,11 +1215,10 @@ index_state::status(status_verbosity v) const {
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
-      archive_actor archive, catalog_actor catalog,
-      const std::filesystem::path& dir, std::string store_backend,
-      size_t partition_capacity, duration active_partition_timeout,
-      size_t max_inmem_partitions, size_t taste_partitions,
-      size_t max_concurrent_partition_lookups,
+      catalog_actor catalog, const std::filesystem::path& dir,
+      std::string store_backend, size_t partition_capacity,
+      duration active_partition_timeout, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
   VAST_TRACE_SCOPE("index {} {} {} {} {} {} {} {} {} {}", VAST_ARG(self->id()),
                    VAST_ARG(filesystem), VAST_ARG(dir),
@@ -1233,13 +1232,10 @@ index(index_actor::stateful_pointer<index_state> self,
                *self, dir, partition_capacity, max_inmem_partitions);
   self->state.index_opts["cardinality"] = partition_capacity;
   self->state.synopsis_opts = std::move(index_config);
-  // The global archive gets hard-coded special treatment for backwards
-  // compatibility.
   if (dir != catalog_dir)
     VAST_VERBOSE("{} uses {} for catalog data", *self, catalog_dir);
   // Set members.
   self->state.self = self;
-  self->state.global_store = std::move(archive);
   self->state.accept_queries = true;
   self->state.max_concurrent_partition_lookups
     = max_concurrent_partition_lookups;
@@ -1745,9 +1741,7 @@ index(index_actor::stateful_pointer<index_state> self,
                         [self, partition_id,
                          store_path](const caf::error& err) {
                           if (err == ec::no_such_file)
-                            VAST_DEBUG("{} failed to erase store {} at {}, "
-                                       "possibly because the data is in the "
-                                       "global archive: {}",
+                            VAST_DEBUG("{} failed to erase store {} at {}: {} ",
                                        *self, partition_id, store_path, err);
                           else
                             VAST_WARN("{} failed to erase store {} at {}: {}",
@@ -1849,10 +1843,7 @@ index(index_actor::stateful_pointer<index_state> self,
         return caf::make_error(ec::invalid_argument, "no partitions given");
       VAST_DEBUG("{} applies a pipeline to partitions {}", *self,
                  selected_partitions);
-      if (!self->state.store_actor_plugin)
-        return caf::make_error(ec::invalid_configuration,
-                               "partition transforms are not supported for the "
-                               "global archive");
+      VAST_ASSERT(self->state.store_actor_plugin);
       std::erase_if(selected_partitions, [&](const auto& entry) {
         if (self->state.persisted_partitions.contains(entry.uuid)) {
           return false;

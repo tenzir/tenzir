@@ -22,7 +22,6 @@
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"

@@ -529,7 +529,7 @@ struct hash<vast::data_view> {
     // The hash computation for `data` and `data_view` is subtly different when
     // not creating a view here: For `data_view` a hash of the contents of the
     // view is created (so that the same data compares equal whether it's
-    // stored in a default/msgpack/arrow view), but for `data` the hashing is
+    // stored in a default/arrow view), but for `data` the hashing is
     // forwarded to the actual container classes, which can define their own
     // hash functions.
     return (*this)(vast::make_view(x));
