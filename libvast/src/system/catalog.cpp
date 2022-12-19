@@ -525,6 +525,48 @@ caf::error catalog_state::load_type_registry_from_disk() {
   return caf::none;
 }
 
+caf::error catalog_state::load_taxonomies() {
+  VAST_DEBUG("{} loads taxonomies", *self);
+  std::error_code err{};
+  auto dirs = get_module_dirs(self->system().config());
+  concepts_map concepts;
+  models_map models;
+  for (const auto& dir : dirs) {
+    const auto dir_exists = std::filesystem::exists(dir, err);
+    if (err)
+      VAST_WARN("{} failed to open directory {}: {}", *self, dir,
+                err.message());
+    if (!dir_exists)
+      continue;
+    auto yamls = load_yaml_dir(dir);
+    if (!yamls)
+      return yamls.error();
+    for (auto& [file, yaml] : *yamls) {
+      VAST_DEBUG("{} extracts taxonomies from {}", *self, file.string());
+      if (auto err = convert(yaml, concepts, concepts_data_layout))
+        return caf::make_error(ec::parse_error,
+                               "failed to extract concepts from file",
+                               file.string(), err.context());
+      for (auto& [name, definition] : concepts)
+        VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
+                   definition.fields.size());
+      if (auto err = convert(yaml, models, models_data_layout))
+        return caf::make_error(ec::parse_error,
+                               "failed to extract models from file",
+                               file.string(), err.context());
+      for (auto& [name, definition] : models) {
+        VAST_DEBUG("{} extracted model {} with {} fields", *self, name,
+                   definition.definition.size());
+        VAST_TRACE("{} uses model mapping {} -> {}", *self, name,
+                   definition.definition);
+      }
+    }
+  }
+  taxonomies.concepts = std::move(concepts);
+  taxonomies.models = std::move(models);
+  return caf::none;
+}
+
 void catalog_state::insert(vast::type layout) {
   auto& old_layouts = type_data[std::string{layout.name()}];
   // Insert into the existing bucket.
@@ -572,14 +614,10 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     self->quit(std::move(err));
     return catalog_actor::behavior_type::make_empty_behavior();
   }
-  self->request(static_cast<catalog_actor>(self), caf::infinite, atom::load_v)
-    .await([](atom::ok) {},
-           [](caf::error& err) {
-             VAST_WARN("catalog failed to load taxonomy "
-                       "definitions: {}",
-                       std::move(err));
-             // TODO: Shutdown when failing?
-           });
+  if (auto err = self->state.load_taxonomies()) {
+    self->quit(std::move(err));
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
   // Load loaded schema types from the singleton.
   // TODO: Move to the load handler and re-parse the files.
   if (const auto* module = vast::event_types::get())
@@ -656,45 +694,6 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         self->state.erase(uuid);
       for (auto& aps : new_synopses)
         self->state.merge(aps.uuid, aps.synopsis);
-      return atom::ok_v;
-    },
-    [self](atom::load) -> caf::result<atom::ok> {
-      VAST_DEBUG("{} loads taxonomies", *self);
-      std::error_code err{};
-      auto dirs = get_module_dirs(self->system().config());
-      concepts_map concepts;
-      models_map models;
-      for (const auto& dir : dirs) {
-        const auto dir_exists = std::filesystem::exists(dir, err);
-        if (err)
-          VAST_WARN("{} failed to open directory {}: {}", *self, dir,
-                    err.message());
-        if (!dir_exists)
-          continue;
-        auto yamls = load_yaml_dir(dir);
-        if (!yamls)
-          return yamls.error();
-        for (auto& [file, yaml] : *yamls) {
-          VAST_DEBUG("{} extracts taxonomies from {}", *self, file.string());
-          if (auto err = convert(yaml, concepts, concepts_data_layout))
-            return caf::make_error(ec::parse_error,
-                                   "failed to extract concepts from file",
-                                   file.string(), err.context());
-          for (auto& [name, definition] : concepts)
-            VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
-                       definition.fields.size());
-          if (auto err = convert(yaml, models, models_data_layout))
-            return caf::make_error(ec::parse_error,
-                                   "failed to extract models from file",
-                                   file.string(), err.context());
-          for (auto& [name, definition] : models) {
-            VAST_DEBUG("{} extracted model {} with {} fields", *self, name,
-                       definition.definition.size());
-            VAST_TRACE("{} uses model mapping {} -> {}", *self, name,
-                       definition.definition);
-          }
-        }
-      }
       return atom::ok_v;
     },
     [self](atom::candidates, const vast::query_context& query_context)

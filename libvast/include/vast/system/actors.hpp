@@ -233,9 +233,6 @@ using catalog_actor = typed_actor_fwd<
   // Retrieves the known taxonomies.
   caf::replies_to<atom::get, atom::taxonomies>::with< //
     taxonomies>,
-  // Loads the taxonomies on disk.
-  caf::replies_to<atom::load>::with< //
-    atom::ok>,
   // Resolves an expression in terms of the known taxonomies.
   caf::replies_to<atom::resolve, expression>::with< //
     expression>>
