@@ -222,7 +222,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
              "uuids of maybe persisted partitions",
              state.persisted_partitions.size(), state.unpersisted.size());
   std::vector<flatbuffers::Offset<fbs::LegacyUUID>> partition_offsets;
-  for (const auto& [uuid, _] : state.persisted_partitions) {
+  for (const auto& uuid : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
       partition_offsets.push_back(*uuid_fb);
     else
@@ -549,7 +549,6 @@ caf::error index_state::load_from_disk() {
       }
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
-      persisted_partitions[partition_uuid] = ps->schema;
       stats.layouts[std::string{ps->schema.name()}].count += ps->events;
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
@@ -610,15 +609,13 @@ caf::error index_state::load_from_disk() {
     caf::scoped_actor blocking{self->system()};
     blocking->request(transformer, caf::infinite, atom::persist_v)
       .receive(
-        [&synopses, &stats,
-         this](std::vector<augmented_partition_synopsis> result) {
+        [&synopses, &stats](std::vector<augmented_partition_synopsis> result) {
           VAST_INFO("recovered {} corrupted partitions on startup",
                     result.size());
           for (auto&& x : std::exchange(result, {})) {
             VAST_VERBOSE("adding newly created partition {}", x.uuid);
             stats.layouts[std::string{x.synopsis->schema.name()}].count
               += x.synopsis->events;
-            persisted_partitions[x.uuid] = x.synopsis->schema;
             synopses->emplace(x.uuid, std::move(x.synopsis));
           }
         },
@@ -867,7 +864,6 @@ void index_state::decommission_active_partition(
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
-              persisted_partitions[id] = ps->schema;
               if (completion)
                 completion(caf::none);
             },
@@ -2021,8 +2017,8 @@ index(index_actor::stateful_pointer<index_state> self,
                                   // Update index statistics and list of
                                   // persisted partitions.
                                   for (auto const& aps : apsv) {
-                                    self->state.persisted_partitions[aps.uuid]
-                                      = aps.type;
+                                    self->state.persisted_partitions.emplace(
+                                      aps.uuid);
                                   }
                                   self->state.flush_to_disk();
                                   deliver(std::move(result));
@@ -2040,8 +2036,8 @@ index(index_actor::stateful_pointer<index_state> self,
                               [self, deliver, old_partition_ids, result,
                                apsv](atom::ok) mutable {
                                 for (auto const& aps : apsv) {
-                                  self->state.persisted_partitions[aps.uuid]
-                                    = aps.type;
+                                  self->state.persisted_partitions.emplace(
+                                    aps.uuid);
                                 }
                                 self->state.flush_to_disk();
                                 self

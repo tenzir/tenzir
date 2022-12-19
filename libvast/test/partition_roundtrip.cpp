@@ -71,13 +71,13 @@ TEST(index roundtrip) {
   // flatbuffer.
   state.unpersisted[vast::uuid::random()] = {};
   state.unpersisted[vast::uuid::random()] = {};
-  state.persisted_partitions[vast::uuid::random()] = {};
-  state.persisted_partitions[vast::uuid::random()] = {};
+  state.persisted_partitions.emplace(vast::uuid::random());
+  state.persisted_partitions.emplace(vast::uuid::random());
   std::set<vast::uuid> expected_uuids;
   for (auto& kv : state.unpersisted)
     expected_uuids.insert(kv.first);
   for (auto& persisted : state.persisted_partitions)
-    expected_uuids.insert(persisted.first);
+    expected_uuids.insert(persisted);
   // Add some fake statistics
   state.stats.layouts["zeek.conn"] = vast::layout_statistics{54931u};
   // Serialize the index.
