@@ -1257,7 +1257,9 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.catalog = std::move(catalog);
-  self->request(self->state.catalog, caf::infinite, atom::get_v, atom::taxonomies_v)
+  self
+    ->request(self->state.catalog, caf::infinite, atom::get_v,
+              atom::taxonomies_v)
     .await(
       [self](vast::taxonomies& taxonomies) {
         self->state.taxonomies
@@ -1616,8 +1618,7 @@ index(index_actor::stateful_pointer<index_state> self,
             auto taste_size = query_context.taste
                                 ? *query_context.taste
                                 : self->state.taste_partitions;
-            auto scheduled
-              = std::min(num_candidates, taste_size);
+            auto scheduled = std::min(num_candidates, taste_size);
             if (auto err = self->state.pending_queries.insert(
                   query_state{.query_contexts_per_type = query_contexts,
                               .client = client,

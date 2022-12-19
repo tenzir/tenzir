@@ -11,8 +11,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/flat_map.hpp"
-#include "vast/expression.hpp"
 #include "vast/detail/inspection_common.hpp"
+#include "vast/expression.hpp"
 #include "vast/module.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/actors.hpp"
