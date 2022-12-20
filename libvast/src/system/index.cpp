@@ -549,6 +549,7 @@ caf::error index_state::load_from_disk() {
       }
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
+      persisted_partitions.emplace(partition_uuid);
       stats.layouts[std::string{ps->schema.name()}].count += ps->events;
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
@@ -609,13 +610,15 @@ caf::error index_state::load_from_disk() {
     caf::scoped_actor blocking{self->system()};
     blocking->request(transformer, caf::infinite, atom::persist_v)
       .receive(
-        [&synopses, &stats](std::vector<augmented_partition_synopsis> result) {
+        [&synopses, &stats,
+         this](std::vector<augmented_partition_synopsis> result) {
           VAST_INFO("recovered {} corrupted partitions on startup",
                     result.size());
           for (auto&& x : std::exchange(result, {})) {
             VAST_VERBOSE("adding newly created partition {}", x.uuid);
             stats.layouts[std::string{x.synopsis->schema.name()}].count
               += x.synopsis->events;
+            persisted_partitions.emplace(x.uuid);
             synopses->emplace(x.uuid, std::move(x.synopsis));
           }
         },
@@ -864,6 +867,7 @@ void index_state::decommission_active_partition(
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
+              persisted_partitions.emplace(id);
               if (completion)
                 completion(caf::none);
             },
