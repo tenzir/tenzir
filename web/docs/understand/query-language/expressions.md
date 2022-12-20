@@ -168,7 +168,7 @@ The predicate parser deduces the type of `X` automatically in this case.
 
 For example, `6.6.6.6` is a valid predicate and expands to `:addr == 6.6.6.6`.
 This allows for quick type-based point queries, such as
-`(6.6.6.6 || 80/tcp) && "evil"`.
+`(6.6.6.6 || 10.0.0.0/8) && "evil"`.
 
 :::tip
 Value predicates of type `subnet` expand more broadly. Given a subnet
