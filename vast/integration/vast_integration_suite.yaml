@@ -505,10 +505,10 @@ tests:
   Import Time:
     tags: [import, json, suricata]
     steps:
-      - command: -N import suricata
+      - command: -N import suricata '#type == "suricata.stats"'
         input: data/suricata/eve.json
         transformation: sleep 5
-      - command: -N import suricata
+      - command: -N import suricata '#type == "suricata.stats"'
         input: data/suricata/eve.json
       - command: -N export json '#import_time < 5 seconds ago'
         transformation: jq -ec '.'
