@@ -1851,25 +1851,22 @@ index(index_actor::stateful_pointer<index_state> self,
                   entry.uuid, pipeline->name());
         return true;
       });
-      auto query_contexts = query_state::type_query_context_map{};
       auto corrected_partitions = catalog_lookup_result{};
-      {
-        for (const auto& partition : selected_partitions) {
-          if (self->state.partitions_in_transformation.insert(partition.uuid)
-                .second) {
-            corrected_partitions.candidate_infos[partition.schema]
-              .partition_infos.emplace_back(partition);
-          } else {
-            // Getting overlapping partitions triggers a warning, and we
-            // silently ignore the partition at the cost of the transformation
-            // being less efficient.
-            // TODO: Implement some synchronization mechanism for partition
-            // erasure so rebuild, compaction, and aging can properly
-            // synchronize.
-            VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
-                      "because it is currently being transformed",
-                      *self, pipeline->name(), partition.uuid);
-          }
+      for (const auto& partition : selected_partitions) {
+        if (self->state.partitions_in_transformation.insert(partition.uuid)
+              .second) {
+          corrected_partitions.candidate_infos[partition.schema]
+            .partition_infos.emplace_back(partition);
+        } else {
+          // Getting overlapping partitions triggers a warning, and we
+          // silently ignore the partition at the cost of the transformation
+          // being less efficient.
+          // TODO: Implement some synchronization mechanism for partition
+          // erasure so rebuild, compaction, and aging can properly
+          // synchronize.
+          VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
+                    "because it is currently being transformed",
+                    *self, pipeline->name(), partition.uuid);
         }
       }
       if (corrected_partitions.empty())
@@ -1895,6 +1892,7 @@ index(index_actor::stateful_pointer<index_state> self,
       query_context.priority = query_context::priority::high;
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
+      auto query_contexts = query_state::type_query_context_map{};
       for (const auto& [type, _] : corrected_partitions.candidate_infos) {
         query_contexts[type] = query_context;
       }
