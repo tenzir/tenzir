@@ -10,6 +10,7 @@
 
 #include "vast/bitmap_algorithms.hpp"
 
+#include "vast/detail/collect.hpp"
 #include "vast/ids.hpp"
 #include "vast/test/test.hpp"
 
@@ -42,4 +43,47 @@ TEST(bitwise_range select) {
   auto rng3 = each(bm);
   rng3.select(3);
   CHECK_EQUAL(rng3.get(), 100001ull);
+}
+
+TEST(select runs) {
+  auto bm = make_ids({{0, 1}, {50000, 50001}, {100000, 100003}});
+  {
+    auto ranges = detail::collect(select_runs(bm));
+    REQUIRE_EQUAL(ranges.size(), 3u);
+    CHECK_EQUAL(ranges[0].first, 0u);
+    CHECK_EQUAL(ranges[0].last, 1u);
+    CHECK_EQUAL(ranges[1].first, 50000u);
+    CHECK_EQUAL(ranges[1].last, 50001u);
+    CHECK_EQUAL(ranges[2].first, 100000u);
+    CHECK_EQUAL(ranges[2].last, 100003u);
+  }
+  {
+    auto ranges = detail::collect(select_runs<0>(bm));
+    REQUIRE_EQUAL(ranges.size(), 2u);
+    CHECK_EQUAL(ranges[0].first, 1u);
+    CHECK_EQUAL(ranges[0].last, 50000u);
+    CHECK_EQUAL(ranges[1].first, 50001u);
+    CHECK_EQUAL(ranges[1].last, 100000u);
+  }
+  bm.append_bit(false);
+  {
+    auto ranges = detail::collect(select_runs(bm));
+    REQUIRE_EQUAL(ranges.size(), 3u);
+    CHECK_EQUAL(ranges[0].first, 0u);
+    CHECK_EQUAL(ranges[0].last, 1u);
+    CHECK_EQUAL(ranges[1].first, 50000u);
+    CHECK_EQUAL(ranges[1].last, 50001u);
+    CHECK_EQUAL(ranges[2].first, 100000u);
+    CHECK_EQUAL(ranges[2].last, 100003u);
+  }
+  {
+    auto ranges = detail::collect(select_runs<0>(bm));
+    REQUIRE_EQUAL(ranges.size(), 3u);
+    CHECK_EQUAL(ranges[0].first, 1u);
+    CHECK_EQUAL(ranges[0].last, 50000u);
+    CHECK_EQUAL(ranges[1].first, 50001u);
+    CHECK_EQUAL(ranges[1].last, 100000u);
+    CHECK_EQUAL(ranges[2].first, 100003u);
+    CHECK_EQUAL(ranges[2].last, 100004u);
+  }
 }

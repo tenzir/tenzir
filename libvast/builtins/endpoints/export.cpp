@@ -178,7 +178,7 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
       auto writer
         = vast::format::json::writer{std::move(ostream), caf::settings{}};
       if (slice.rows() > remaining)
-        slice = truncate(std::move(slice), remaining);
+        slice = head(std::move(slice), remaining);
       if (auto err = writer.write(slice)) {
         self->quit(std::move(err));
         return;

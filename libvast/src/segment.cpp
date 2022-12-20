@@ -18,6 +18,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/error.hpp"
+#include "vast/expression.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
@@ -178,7 +179,8 @@ segment::erase(const vast::ids& xs) const {
     auto max_id = slice.offset() + slice.rows();
     if (keep_mask.size() < max_id)
       keep_mask.append_bits(true, max_id - keep_mask.size());
-    select(result, slice, keep_mask);
+    for (auto&& selected : select(slice, expression{}, keep_mask))
+      result.push_back(std::move(selected));
   }
   return result;
 }

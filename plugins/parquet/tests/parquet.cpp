@@ -13,6 +13,7 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/subnet.hpp>
+#include <vast/detail/collect.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/spawn_container_source.hpp>
 #include <vast/expression.hpp>
@@ -164,7 +165,7 @@ TEST(parquet store roundtrip) {
   auto results = query(*store, ids);
   run();
   CHECK_EQUAL(results.size(), 1ull);
-  auto expected_rows = select(xs[0], ids);
+  auto expected_rows = collect(select(xs[0], expression{}, ids));
   CHECK_EQUAL(results[0].rows(), expected_rows[0].rows());
 }
 

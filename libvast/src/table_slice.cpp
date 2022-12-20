@@ -14,6 +14,7 @@
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/collect.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/passthrough.hpp"
 #include "vast/detail/string.hpp"
@@ -92,13 +93,6 @@ verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
       chunk = {};
   }
   return std::move(chunk);
-}
-
-/// A helper utility for converting table slice encoding to the corresponding
-/// builder id.
-/// @param encoding The table slice encoding to map.
-table_slice_encoding builder_id(enum table_slice_encoding encoding) {
-  return encoding;
 }
 
 /// A helper utility for accessing the state of a table slice.
@@ -399,101 +393,212 @@ std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
 
 // -- operations ---------------------------------------------------------------
 
-void select(std::vector<table_slice>& result, const table_slice& slice,
-            const ids& selection) {
-  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
-  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  auto xs_ids = make_ids({{offset, offset + slice.rows()}});
-  auto intersection = selection & xs_ids;
-  auto intersection_rank = rank(intersection);
-  // Do no rows qualify?
-  if (intersection_rank == 0)
-    return;
-  // Do all rows qualify?
-  if (rank(xs_ids) == intersection_rank) {
-    result.emplace_back(slice);
-    return;
-  }
-  // Get the desired encoding, and the already serialized layout.
-  auto f = detail::overload{
-    []() noexcept -> table_slice_encoding {
-      die("cannot select from an invalid table slice");
-    },
-    [&](const auto& encoded) noexcept {
-      return builder_id(state(encoded, slice.state_)->encoding);
-    },
+table_slice concatenate(std::vector<table_slice> slices) {
+  slices.erase(std::remove_if(slices.begin(), slices.end(),
+                              [](const auto& slice) {
+                                return slice.encoding()
+                                       == table_slice_encoding::none;
+                              }),
+               slices.end());
+  if (slices.empty())
+    return {};
+  if (slices.size() == 1)
+    return std::move(slices[0]);
+  auto schema = slices[0].layout();
+  VAST_ASSERT(std::all_of(slices.begin(), slices.end(),
+                          [&](const auto& slice) {
+                            return slice.layout() == schema;
+                          }),
+              "concatenate requires slices to be homogeneous");
+  auto builder = caf::get<record_type>(schema).make_arrow_builder(
+    arrow::default_memory_pool());
+  auto arrow_schema = schema.to_arrow_schema();
+  const auto resize_result
+    = builder->Resize(detail::narrow_cast<int64_t>(rows(slices)));
+  VAST_ASSERT(resize_result.ok(), resize_result.ToString().c_str());
+  const auto append_columns
+    = [&](const auto& self, const record_type& schema,
+          const type_to_arrow_array_t<record_type>& array,
+          type_to_arrow_builder_t<record_type>& builder) noexcept -> void {
+    // NTOE: Passing nullptr for the valid_bytes parameter has the undocumented
+    // special meaning of all appenbded entries being valid. The Arrow unit
+    // tests do the same thing in a few places; if this ever starts to cause
+    // issues, we can create a vector<uint8_t> with desired_batch_size entries
+    // of the value 1, call .data() on that and pass it in here instead.
+    const auto append_status
+      = builder.AppendValues(array.length(), /*valid_bytes*/ nullptr);
+    VAST_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
+    for (auto field_index = 0; field_index < array.num_fields();
+         ++field_index) {
+      const auto field_type = schema.field(field_index).type;
+      const auto& field_array = *array.field(field_index);
+      auto& field_builder = *builder.field_builder(field_index);
+      const auto append_column = detail::overload{
+        [&](const record_type& concrete_field_type) noexcept {
+          const auto& concrete_field_array
+            = caf::get<type_to_arrow_array_t<record_type>>(field_array);
+          auto& concrete_field_builder
+            = caf::get<type_to_arrow_builder_t<record_type>>(field_builder);
+          self(self, concrete_field_type, concrete_field_array,
+               concrete_field_builder);
+        },
+        [&]<concrete_type Type>(
+          [[maybe_unused]] const Type& concrete_field_type) noexcept {
+          const auto& concrete_field_array
+            = caf::get<type_to_arrow_array_t<Type>>(field_array);
+          auto& concrete_field_builder
+            = caf::get<type_to_arrow_builder_t<Type>>(field_builder);
+          constexpr auto can_use_array_slice_api
+            = basic_type<Type> && //
+              !arrow::is_extension_type<type_to_arrow_type_t<Type>>::value;
+          if constexpr (can_use_array_slice_api) {
+            const auto append_array_slice_result
+              = concrete_field_builder.AppendArraySlice(
+                *concrete_field_array.data(), 0, array.length());
+            VAST_ASSERT_CHEAP(append_array_slice_result.ok(),
+                              append_array_slice_result.ToString().c_str());
+          } else {
+            // For complex types and extension types we cannot use the
+            // AppendArraySlice API, so we need to take a slight detour by
+            // manually appending column by column. This is almost exactly
+            // what AppendArraySlice does under the hood, but since it's just
+            // not implemented for extension types we need to do some extra
+            // work here.
+            const auto& concrete_field_array_storage
+              = [&]() noexcept -> const type_to_arrow_array_storage_t<Type>& {
+              // For extension types we need to additionally unwrap
+              // the inner storage array.
+              if constexpr (arrow::is_extension_type<
+                              type_to_arrow_type_t<Type>>::value)
+                return static_cast<const type_to_arrow_array_storage_t<Type>&>(
+                  *concrete_field_array.storage());
+              else
+                return concrete_field_array;
+            }();
+            const auto reserve_result
+              = concrete_field_builder.Reserve(array.length());
+            VAST_ASSERT_CHEAP(reserve_result.ok(),
+                              reserve_result.ToString().c_str());
+            for (auto row = 0; row < array.length(); ++row) {
+              if (concrete_field_array_storage.IsNull(row)) {
+                const auto append_null_result
+                  = concrete_field_builder.AppendNull();
+                VAST_ASSERT(append_null_result.ok(),
+                            append_null_result.ToString().c_str());
+                continue;
+              }
+              const auto append_builder_result
+                = append_builder(concrete_field_type, concrete_field_builder,
+                                 value_at(concrete_field_type,
+                                          concrete_field_array_storage, row));
+              VAST_ASSERT(append_builder_result.ok(),
+                          append_builder_result.ToString().c_str());
+            }
+          }
+        },
+      };
+      caf::visit(append_column, field_type);
+    }
   };
-  table_slice_encoding implementation_id
-    = visit(f, as_flatbuffer(slice.chunk_));
-  // Start slicing and dicing.
-  auto builder
-    = factory<table_slice_builder>::make(implementation_id, slice.layout());
-  if (builder == nullptr) {
-    VAST_ERROR("{} failed to get a table slice builder for {}", __func__,
-               implementation_id);
-    return;
+  for (const auto& slice : slices) {
+    auto batch = to_record_batch(slice);
+    append_columns(append_columns, caf::get<record_type>(schema),
+                   *batch->ToStructArray().ValueOrDie(), *builder);
   }
-  id last_offset = offset;
-  auto push_slice = [&] {
-    if (builder->rows() == 0)
-      return;
-    auto new_slice = builder->finish();
-    if (new_slice.encoding() == table_slice_encoding::none) {
-      VAST_WARN("{} got an empty slice", __func__);
-      return;
-    }
-    new_slice.offset(last_offset);
-    new_slice.import_time(slice.import_time());
-    result.emplace_back(std::move(new_slice));
-  };
-  auto flat_layout = flatten(caf::get<record_type>(slice.layout()));
-  auto last_id = last_offset - 1;
-  for (auto id : select(intersection)) {
-    // Finish last slice when hitting non-consecutive IDs.
-    if (last_id + 1 != id) {
-      push_slice();
-      last_offset = id;
-      last_id = id;
-    } else {
-      ++last_id;
-    }
-    VAST_ASSERT(id >= offset);
-    auto row = id - offset;
-    VAST_ASSERT(row < slice.rows());
-    for (size_t column = 0; column < flat_layout.num_fields(); ++column) {
-      auto cell_value = slice.at(row, column, flat_layout.field(column).type);
-      if (!builder->add(cell_value)) {
-        VAST_ERROR("{} failed to add data at column {} in row {} to the "
-                   "builder: {}",
-                   __func__, column, row, cell_value);
-        return;
-      }
-    }
-  }
-  push_slice();
-}
-
-std::vector<table_slice>
-select(const table_slice& slice, const ids& selection) {
-  std::vector<table_slice> result;
-  select(result, slice, selection);
+  const auto rows = builder->length();
+  if (rows == 0)
+    return {};
+  const auto array = builder->Finish().ValueOrDie();
+  auto batch = arrow::RecordBatch::Make(
+    std::move(arrow_schema), rows,
+    caf::get<type_to_arrow_array_t<record_type>>(*array).fields());
+  auto result = table_slice{batch, schema};
+  result.offset(slices[0].offset());
+  result.import_time(slices[0].import_time());
   return result;
 }
 
-table_slice truncate(table_slice slice, size_t num_rows) {
+detail::generator<table_slice>
+select(const table_slice& slice, expression expr, const ids& hints) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  VAST_ASSERT(num_rows > 0);
+  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
+  auto slice_ids = make_ids({{offset, offset + slice.rows()}});
+  auto selection = slice_ids;
+  if (!hints.empty())
+    selection &= hints;
+  // Do no rows qualify?
+  if (!any(selection))
+    co_return;
+  // Evaluate the filter expression.
+  if (!caf::holds_alternative<caf::none_t>(expr)) {
+    // Tailor the expression to the type; this is required for using the
+    // evaluate function, which expects field and type extractors to be resolved
+    // already.
+    auto tailored_expr = tailor(expr, slice.layout());
+    if (!tailored_expr)
+      co_return;
+    selection = evaluate(*tailored_expr, slice, selection);
+    // Do no rows qualify?
+    if (!any(selection))
+      co_return;
+  }
+  // Do all rows qualify?
+  if (rank(selection) == slice.rows()) {
+    co_yield slice;
+    co_return;
+  }
+  // Start slicing and dicing.
+  auto batch = to_record_batch(slice);
+  for (const auto [first, last] : select_runs(selection)) {
+    auto selected = table_slice{
+      batch->Slice(detail::narrow_cast<int64_t>(first - offset),
+                   detail::narrow_cast<int64_t>(last - first)),
+      slice.layout(),
+    };
+    selected.offset(offset + first);
+    selected.import_time(slice.import_time());
+    co_yield std::move(selected);
+  }
+}
+
+table_slice head(table_slice slice, size_t num_rows) {
+  if (slice.encoding() == table_slice_encoding::none)
+    return {};
+  if (num_rows >= slice.rows())
+    return slice;
   auto rb = to_record_batch(slice);
-  return table_slice{rb->Slice(0, detail::narrow_cast<int64_t>(num_rows))};
+  auto head = table_slice{rb->Slice(0, detail::narrow_cast<int64_t>(num_rows)),
+                          slice.layout()};
+  head.offset(slice.offset());
+  head.import_time(slice.import_time());
+  return head;
+}
+
+table_slice tail(table_slice slice, size_t num_rows) {
+  if (slice.encoding() == table_slice_encoding::none)
+    return {};
+  if (num_rows >= slice.rows())
+    return slice;
+  auto rb = to_record_batch(slice);
+  auto head = table_slice{
+    rb->Slice(detail::narrow_cast<int64_t>(slice.rows() - num_rows)),
+    slice.layout()};
+  head.offset(slice.offset());
+  head.import_time(slice.import_time());
+  return head;
 }
 
 std::pair<table_slice, table_slice>
-split(table_slice slice, size_t partition_point) {
+split(const table_slice& slice, size_t partition_point) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  auto rb = to_record_batch(slice);
-  auto pp = detail::narrow_cast<int64_t>(partition_point);
-  auto rows = detail::narrow_cast<int64_t>(slice.rows());
-  return {table_slice{rb->Slice(0, pp)}, table_slice{rb->Slice(pp, rows - pp)}};
+  if (partition_point == 0)
+    return {{}, slice};
+  if (partition_point >= slice.rows())
+    return {slice, {}};
+  return {
+    head(slice, partition_point),
+    tail(slice, slice.rows() - partition_point),
+  };
 }
 
 uint64_t rows(const std::vector<table_slice>& slices) {
@@ -506,68 +611,10 @@ uint64_t rows(const std::vector<table_slice>& slices) {
 std::optional<table_slice>
 filter(const table_slice& slice, expression expr, const ids& hints) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
-  auto slice_ids = make_ids({{offset, offset + slice.rows()}});
-  auto selection = slice_ids;
-  if (!hints.empty())
-    selection &= hints;
-  // Do no rows qualify?
-  if (!any(selection))
-    return std::nullopt;
-  // Evaluate the filter expression.
-  if (!caf::holds_alternative<caf::none_t>(expr)) {
-    // Tailor the expression to the type; this is required for using the
-    // evaluate function, which expects field and type extractors to be resolved
-    // already.
-    auto tailored_expr = tailor(expr, slice.layout());
-    if (!tailored_expr)
-      return {};
-    selection = evaluate(*tailored_expr, slice, selection);
-    // Do no rows qualify?
-    if (!any(selection))
-      return std::nullopt;
-  }
-  // Do all rows qualify?
-  if (rank(selection) == slice.rows())
-    return slice;
-  // Start slicing and dicing.
-  auto f = detail::overload{
-    []() noexcept -> table_slice_encoding {
-      die("cannot filter an invalid table slice");
-    },
-    [&](const auto& encoded) noexcept {
-      return builder_id(state(encoded, slice.state_)->encoding);
-    },
-  };
-  table_slice_encoding implementation_id
-    = visit(f, as_flatbuffer(slice.chunk_));
-  auto builder
-    = factory<table_slice_builder>::make(implementation_id, slice.layout());
-  VAST_ASSERT(builder);
-  const auto& layout = caf::get<record_type>(slice.layout());
-  const auto column_types = [&]() noexcept {
-    auto result = std::vector<type>{};
-    result.reserve(layout.num_leaves());
-    for (auto&& [field, _] : layout.leaves())
-      result.emplace_back(field.type);
-    return result;
-  }();
-  for (auto id : select(selection)) {
-    VAST_ASSERT(id >= offset);
-    auto row = id - offset;
-    VAST_ASSERT(row < slice.rows());
-    for (size_t column = 0; column < column_types.size(); ++column) {
-      auto cell_value = slice.at(row, column, column_types[column]);
-      auto ret = builder->add(cell_value);
-      VAST_ASSERT(ret);
-    }
-  }
-  VAST_ASSERT_CHEAP(builder->rows() != 0);
-  VAST_ASSERT_CHEAP(builder->rows() != slice.rows());
-  auto new_slice = builder->finish();
-  new_slice.import_time(slice.import_time());
-  VAST_ASSERT(new_slice.encoding() != table_slice_encoding::none);
-  return new_slice;
+  auto selected = collect(select(slice, std::move(expr), hints));
+  if (selected.empty())
+    return {};
+  return concatenate(std::move(selected));
 }
 
 std::optional<table_slice>

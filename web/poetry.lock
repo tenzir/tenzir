@@ -92,7 +92,7 @@ python-versions = "*"
 
 [[package]]
 name = "bash-kernel"
-version = "0.8.0"
+version = "0.9.0"
 description = "A bash kernel for Jupyter"
 category = "main"
 optional = false
@@ -230,7 +230,7 @@ python-versions = ">=3.5"
 
 [[package]]
 name = "ipykernel"
-version = "6.19.2"
+version = "6.19.3"
 description = "IPython Kernel for Jupyter"
 category = "main"
 optional = false
@@ -253,9 +253,7 @@ traitlets = ">=5.4.0"
 [package.extras]
 cov = ["coverage[toml]", "curio", "matplotlib", "pytest-cov", "trio"]
 docs = ["myst-parser", "pydata-sphinx-theme", "sphinx", "sphinxcontrib-github-alt"]
-lint = ["black (>=22.6.0)", "mdformat (>0.7)", "ruff (>=0.0.156)"]
 test = ["flaky", "ipyparallel", "pre-commit", "pytest (>=7.0)", "pytest-asyncio", "pytest-cov", "pytest-timeout"]
-typing = ["mypy (>=0.990)"]
 
 [[package]]
 name = "ipython"
@@ -1041,7 +1039,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "c40678263384b80d95404033393e5d9593c5d582aa6d1603119c53a1703984eb"
+content-hash = "3f3951864b75b5236956261d84bcb97b9deb61bc4202410e8b732dfecdbd5c11"
 
 [metadata.files]
 anyio = [
@@ -1092,8 +1090,8 @@ backcall = [
     {file = "backcall-0.2.0.tar.gz", hash = "sha256:5cbdbf27be5e7cfadb448baf0aa95508f91f2bbc6c6437cd9cd06e2a4c215e1e"},
 ]
 bash-kernel = [
-    {file = "bash_kernel-0.8.0-py2.py3-none-any.whl", hash = "sha256:0830a6eca2442d6878ed06766f0dc7076fc5f6913d316d49e314e53bd8502750"},
-    {file = "bash_kernel-0.8.0.tar.gz", hash = "sha256:4e525bd1a858a9668c1e911be61c72b02825ce9c553b1975a86b17c13824f4ba"},
+    {file = "bash_kernel-0.9.0-py2.py3-none-any.whl", hash = "sha256:95b9a6fc7a9b1ba90192a9bf20109b2af1ca073010db514dbc828aacdec6f8c6"},
+    {file = "bash_kernel-0.9.0.tar.gz", hash = "sha256:0423f0512ef6f83a654e1439a369718899a38f27948fe21b665b2df1dbf3a7c7"},
 ]
 beautifulsoup4 = [
     {file = "beautifulsoup4-4.11.1-py3-none-any.whl", hash = "sha256:58d5c3d29f5a36ffeb94f02f0d786cd53014cf9b3b3951d42e0080d8a9498d30"},
@@ -1222,8 +1220,8 @@ idna = [
     {file = "idna-3.4.tar.gz", hash = "sha256:814f528e8dead7d329833b91c5faa87d60bf71824cd12a7530b5526063d02cb4"},
 ]
 ipykernel = [
-    {file = "ipykernel-6.19.2-py3-none-any.whl", hash = "sha256:1374a55c57ca7a7286c3d8b15799cd76e1a2381b6b1fea99c494b955988926b6"},
-    {file = "ipykernel-6.19.2.tar.gz", hash = "sha256:1ab68d3d3654196266baa93990055413e167263ffbe4cfe834f871bcd3d3506d"},
+    {file = "ipykernel-6.19.3-py3-none-any.whl", hash = "sha256:67daadf01c461d23aaefe2f5670779866b9bde7269b7a02ae4ef5b37e1adbf8f"},
+    {file = "ipykernel-6.19.3.tar.gz", hash = "sha256:70953ffa209fefc7166d365d230b710d90cdc2d2ad56e535d4c775d46da07089"},
 ]
 ipython = [
     {file = "ipython-8.6.0-py3-none-any.whl", hash = "sha256:91ef03016bcf72dd17190f863476e7c799c6126ec7e8be97719d1bc9a78a59a4"},

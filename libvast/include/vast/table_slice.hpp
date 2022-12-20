@@ -252,37 +252,6 @@ public:
 
   // -- operations -------------------------------------------------------------
 
-  /// Selects all rows in `slice` with event IDs in `selection` and appends
-  /// produced table slices to `result`. Cuts `slice` into multiple slices if
-  /// `selection` produces gaps.
-  /// @param result The container for appending generated table slices.
-  /// @param slice The input table slice.
-  /// @param selection ID set for selecting events from `slice`.
-  /// @pre `slice.encoding() != table_slice_encoding::none`
-  friend void select(std::vector<table_slice>& result, const table_slice& slice,
-                     const ids& selection);
-
-  /// Produces a new table slice consisting only of events addressed in `hints`
-  /// that match the given expression. Does not preserve ids; use `select`
-  /// instead if the id mapping must be maintained.
-  /// @param slice The input table slice.
-  /// @param expr The expression to evaluate.
-  /// @param hints An ID set for pruning the events that need to be considered.
-  /// @returns a new table slice consisting only of events matching the given
-  ///          expression.
-  /// @pre `slice.encoding() != table_slice_encoding::none`
-  friend std::optional<table_slice>
-  filter(const table_slice& slice, expression expr, const ids& hints);
-
-  /// Counts the rows that match an expression.
-  /// @param slice The input table slice.
-  /// @param expr The expression to evaluate.
-  /// @param hints An ID set for pruning the events that need to be considered.
-  /// @returns the number of rows that are included in `hints` and match `expr`.
-  /// @pre `slice.encoding() != table_slice_encoding::none`
-  friend uint64_t count_matching(const table_slice& slice,
-                                 const expression& expr, const ids& hints);
-
 private:
   // -- implementation details -------------------------------------------------
 
@@ -314,23 +283,49 @@ private:
 
 // -- operations ---------------------------------------------------------------
 
+/// Concatenates all slices in the given range.
+/// @param slices The input table slices.
+table_slice concatenate(std::vector<table_slice> slices);
+
 /// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice`
 /// into multiple slices if `selection` produces gaps.
 /// @param slice The input table slice.
-/// @param selection ID set for selecting events from `slice`.
-/// @returns new table slices of the same implementation type as `slice` from
-///          `selection`.
+/// @param expr The filter expression.
+/// @param hints ID set for selecting events from `slice`.
 /// @pre `slice.encoding() != table_slice_encoding::none`
-std::vector<table_slice> select(const table_slice& slice, const ids& selection);
+detail::generator<table_slice>
+select(const table_slice& slice, expression expr, const ids& hints);
+
+/// Produces a new table slice consisting only of events addressed in `hints`
+/// that match the given expression. Does not preserve ids; use `select`
+/// instead if the id mapping must be maintained.
+/// @param slice The input table slice.
+/// @param expr The expression to evaluate.
+/// @param hints An ID set for pruning the events that need to be considered.
+/// @returns a new table slice consisting only of events matching the given
+///          expression.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+std::optional<table_slice>
+filter(const table_slice& slice, expression expr, const ids& hints);
+
+/// Counts the rows that match an expression.
+/// @param slice The input table slice.
+/// @param expr The expression to evaluate.
+/// @param hints An ID set for pruning the events that need to be considered.
+/// @returns the number of rows that are included in `hints` and match `expr`.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+uint64_t count_matching(const table_slice& slice, const expression& expr,
+                        const ids& hints);
 
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
 /// @param num_rows The number of rows to keep.
-/// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
-///          table slice of the first `num_rows` rows from `slice`.
-/// @pre `slice.encoding() != table_slice_encoding::none`
-/// @pre `num_rows > 0`
-table_slice truncate(table_slice slice, size_t num_rows);
+table_slice head(table_slice slice, size_t num_rows);
+
+/// Selects the last `num_rows` rows of `slice`.
+/// @param slice The input table slice.
+/// @param num_rows The number of rows to keep.
+table_slice tail(table_slice slice, size_t num_rows);
 
 /// Splits a table slice into two slices such that the first slice contains
 /// the rows `[0, partition_point)` and the second slice contains the rows
@@ -341,7 +336,7 @@ table_slice truncate(table_slice slice, size_t num_rows);
 ///          otherwise returns `slice` and an invalid tbale slice.
 /// @pre `slice.encoding() != table_slice_encoding::none`
 std::pair<table_slice, table_slice>
-split(table_slice slice, size_t partition_point);
+split(const table_slice& slice, size_t partition_point);
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
