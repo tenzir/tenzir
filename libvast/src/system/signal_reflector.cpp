@@ -17,12 +17,15 @@ namespace vast::system {
 
 namespace {
 
+std::atomic<bool> stop = false;
+
 void signal_listener(caf::blocking_actor* self,
                      const signal_reflector_actor& reflector, sigset_t sigset) {
   int signum = 0;
   sigwait(&sigset, &signum);
-  self->send<caf::message_priority::high>(reflector, atom::internal_v,
-                                          atom::signal_v, signum);
+  if (!stop)
+    self->send<caf::message_priority::high>(reflector, atom::internal_v,
+                                            atom::signal_v, signum);
 }
 
 } // namespace
@@ -41,8 +44,10 @@ signal_reflector_actor::behavior_type signal_reflector(
   self->set_exit_handler([=](const caf::exit_msg&) {
     // If we haven't got a signal yet we need to raise one to unblock the signal
     // listener.
-    if (!self->state.got_signal)
+    if (!self->state.got_signal) {
+      stop = true;
       kill(getpid(), SIGTERM);
+    }
     return self->quit();
   });
   self->spawn(signal_listener, self, sigset);
