@@ -182,4 +182,9 @@ TEST(command line no value for bool value generates default true value by CAF) {
   CHECK_EQUAL(get<bool>("vast.rebuild.all"), true);
 }
 
+TEST(command line parse caf settings correctly) {
+  parse(std::vector<std::string>{"start", "--caf.scheduler.max-threads=1"});
+  CHECK_EQUAL(get<caf::config_value::integer>("caf.scheduler.max-threads"), 1);
+}
+
 FIXTURE_SCOPE_END()
