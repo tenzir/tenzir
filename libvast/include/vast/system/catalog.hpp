@@ -12,6 +12,7 @@
 
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/inspection_common.hpp"
+#include "vast/expression.hpp"
 #include "vast/module.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/actors.hpp"
@@ -28,6 +29,56 @@
 
 namespace vast::system {
 
+/// The result of a catalog query.
+struct catalog_lookup_result {
+  struct candidate_info {
+    expression exp;
+    std::vector<partition_info> partition_infos;
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, candidate_info& x) {
+      return f.object(x)
+        .pretty_name("vast.system.catalog_result.candidate_info")
+        .fields(f.field("expression", x.exp),
+                f.field("partition-infos", x.partition_infos));
+    }
+  };
+
+  enum kind {
+    exact,
+    probabilistic,
+  };
+
+  enum kind kind { kind::exact };
+
+  std::unordered_map<type, candidate_info> candidate_infos;
+
+  [[nodiscard]] bool empty() const noexcept {
+    return candidate_infos.empty();
+  }
+
+  [[nodiscard]] size_t size() const noexcept {
+    return std::accumulate(candidate_infos.begin(), candidate_infos.end(),
+                           size_t{0}, [](auto i, const auto& cat_result) {
+                             return std::move(i)
+                                    + cat_result.second.partition_infos.size();
+                           });
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, enum kind& x) {
+    return detail::inspect_enum(f, x);
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, catalog_lookup_result& x) {
+    return f.object(x)
+      .pretty_name("vast.system.catalog_lookup_result")
+      .fields(f.field("kind", x.kind),
+              f.field("candidate-infos", x.candidate_infos));
+  }
+};
+
 /// The state of the CATALOG actor.
 struct catalog_state {
 public:
@@ -43,26 +94,22 @@ public:
 
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the catalog state at startup.
-  void create_from(std::map<uuid, partition_synopsis_ptr>&&);
+  void create_from(std::unordered_map<uuid, partition_synopsis_ptr>&&);
 
   /// Add a new partition synopsis.
   void merge(const uuid& partition, partition_synopsis_ptr);
-
-  /// Returns the partition synopsis for a specific partition.
-  /// Note that most callers will prefer to use `lookup()` instead.
-  /// @pre `partition` must be a valid key for this catalog.
-  partition_synopsis_ptr& at(const uuid& partition);
 
   /// Erase this partition from the catalog.
   void erase(const uuid& partition);
 
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
-  /// @returns A vector of UUIDs representing candidate partitions.
-  [[nodiscard]] catalog_result lookup(const expression& expr) const;
+  /// @returns A lookup result of candidate partitions categorized by type.
+  [[nodiscard]] caf::expected<catalog_lookup_result>
+  lookup(const expression& expr) const;
 
-  [[nodiscard]] std::vector<partition_info>
-  lookup_impl(const expression& expr) const;
+  [[nodiscard]] catalog_lookup_result::candidate_info
+  lookup_impl(const expression& expr, const type& schema) const;
 
   /// @returns A best-effort estimate of the amount of memory used for this
   /// catalog (in bytes).
@@ -80,6 +127,9 @@ public:
   /// Load the type-registry from disk.
   caf::error load_type_registry_from_disk();
 
+  /// Load taxonomies.
+  caf::error load_taxonomies();
+
   /// Store a new layout in the registry.
   void insert(vast::type layout);
 
@@ -94,11 +144,12 @@ public:
   /// An actor handle to the accountant.
   accountant_actor accountant = {};
 
-  /// Maps a partition ID to the synopses for that partition.
+  /// For each type, maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
   // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
   // See also ae9dbed.
-  detail::flat_map<uuid, partition_synopsis_ptr> synopses = {};
+  std::unordered_map<vast::type, detail::flat_map<uuid, partition_synopsis_ptr>>
+    synopses_per_type = {};
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;
@@ -107,29 +158,6 @@ public:
   vast::module configuration_module = {};
   vast::taxonomies taxonomies = {};
   std::filesystem::path type_registry_dir = {};
-};
-
-/// The result of a catalog query.
-struct catalog_result {
-  enum kind {
-    exact,
-    probabilistic,
-  };
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, kind& x) {
-    return detail::inspect_enum(f, x);
-  }
-
-  enum kind kind { kind::exact };
-  std::vector<partition_info> partitions;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, catalog_result& x) {
-    return f.object(x)
-      .pretty_name("vast.system.catalog_result")
-      .fields(f.field("kind", x.kind), f.field("partitions", x.partitions));
-  }
 };
 
 /// The CATALOG is the first index actor that queries hit. The result

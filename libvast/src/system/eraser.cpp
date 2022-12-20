@@ -83,33 +83,33 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       auto rp = self->make_response_promise<atom::ok>();
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
-          [self, transform, rp](catalog_result& result) mutable {
-            VAST_DEBUG("{} resolved query {} to {} partitions", *self,
-                       self->state.query_, result.partitions.size());
-            if (result.partitions.empty()) {
-              rp.deliver(atom::ok_v);
-              return;
+          [self, transform, rp](catalog_lookup_result& result) mutable {
+            for (const auto& [_, partition_infos] : result.candidate_infos) {
+              VAST_DEBUG("{} resolved query {} to {} partitions", *self,
+                         self->state.query_,
+                         partition_infos.partition_infos.size());
+              if (partition_infos.partition_infos.empty()) {
+                rp.deliver(atom::ok_v);
+                continue;
+              }
+              // TODO: Test if the candidate is a false positive before applying
+              // the transform to avoid unnecessary noise.
+              self
+                ->request(self->state.index_, caf::infinite, atom::apply_v,
+                          transform, partition_infos.partition_infos,
+                          keep_original_partition::no)
+                .then(
+                  [self, rp](const std::vector<vast::partition_info>&) mutable {
+                    VAST_DEBUG("{} applied filter transform with query {}",
+                               *self, self->state.query_);
+                    rp.deliver(atom::ok_v);
+                  },
+                  [self, rp](const caf::error& e) mutable {
+                    VAST_WARN("{} failed to apply filter query {}: {}", *self,
+                              self->state.query_, e);
+                    rp.deliver(e);
+                  });
             }
-            // TODO: Test if the candidate is a false positive before applying
-            // the transform to avoid unnecessary noise.
-            auto partition_ids = std::vector<uuid>{};
-            partition_ids.reserve(result.partitions.size());
-            for (const auto& partition : result.partitions)
-              partition_ids.push_back(partition.uuid);
-            self
-              ->request(self->state.index_, caf::infinite, atom::apply_v,
-                        transform, partition_ids, keep_original_partition::no)
-              .then(
-                [self, rp](const std::vector<partition_info>&) mutable {
-                  VAST_DEBUG("{} applied filter transform with query {}", *self,
-                             self->state.query_);
-                  rp.deliver(atom::ok_v);
-                },
-                [self, rp](const caf::error& e) mutable {
-                  VAST_WARN("{} failed to apply filter query {}: {}", *self,
-                            self->state.query_, e);
-                  rp.deliver(e);
-                });
           },
           [rp](const caf::error& e) mutable {
             VAST_ASSERT(false, caf::deep_to_string(e).c_str());

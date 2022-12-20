@@ -10,6 +10,7 @@
 
 #include "vast/system/partition_transformer.hpp"
 
+#include "caf/make_copy_on_write.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -379,6 +380,7 @@ TEST(identity partition pipeline via the index) {
                            index_dir / fmt::format("{}.mdx", partition_uuid));
   run();
   size_t events = 0;
+  vast::type partition_type{};
   rp2.receive(
     [&](vast::chunk_ptr& partition_synopsis_chunk) {
       REQUIRE(partition_synopsis_chunk);
@@ -389,6 +391,11 @@ TEST(identity partition pipeline via the index) {
       const auto* partition_synopsis_legacy
         = partition_synopsis->partition_synopsis_as_legacy();
       const auto* range = partition_synopsis_legacy->id_range();
+      fixtures::partition_synopsis_ptr ps
+        = caf::make_copy_on_write<vast::partition_synopsis>();
+      auto err = unpack(*partition_synopsis_legacy, ps.unshared());
+      REQUIRE_EQUAL(err, caf::none);
+      partition_type = ps->schema;
       events = range->end() - range->begin();
     },
     [](const caf::error& e) {
@@ -401,8 +408,12 @@ TEST(identity partition pipeline via the index) {
     = vast::make_pipeline_operator("identity", vast::record{});
   REQUIRE_NOERROR(identity_operator);
   pipeline->add_operator(std::move(*identity_operator));
+  std::vector<vast::partition_info> partition_infos;
+  auto& partition_info = partition_infos.emplace_back();
+  partition_info.uuid = partition_uuid;
+  partition_info.schema = partition_type;
   auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
-                           std::vector<vast::uuid>{partition_uuid},
+                           partition_infos,
                            vast::system::keep_original_partition::yes);
   run();
   rp3.receive(
@@ -420,9 +431,9 @@ TEST(identity partition pipeline via the index) {
               [](const caf::error& e) {
                 REQUIRE_SUCCESS(e);
               });
-  auto rp5 = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
-                           std::vector<vast::uuid>{partition_uuid},
-                           vast::system::keep_original_partition::no);
+  auto rp5
+    = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
+                    partition_infos, vast::system::keep_original_partition::no);
   run();
   rp5.receive(
     [=](const std::vector<vast::partition_info>& infos) {
@@ -467,13 +478,16 @@ TEST(query after transform) {
   auto rp1 = self->request(index, caf::infinite, vast::atom::resolve_v,
                            unbox(matching_expression));
   auto partition_uuid = vast::uuid{};
+  auto partition_type = vast::type{};
   auto events = size_t{0ull};
   run();
   rp1.receive(
-    [&](vast::system::catalog_result cr) {
-      REQUIRE_EQUAL(cr.partitions.size(), 1ull);
-      auto& partition = cr.partitions[0];
+    [&](vast::system::catalog_lookup_result crs) {
+      REQUIRE_EQUAL(crs.candidate_infos.size(), 1ull);
+      auto& partition
+        = crs.candidate_infos.begin()->second.partition_infos.front();
       partition_uuid = partition.uuid;
+      partition_type = partition.schema;
       events = partition.events;
     },
     [&](const caf::error& e) {
@@ -492,9 +506,13 @@ TEST(query after transform) {
     = vast::make_pipeline_operator("rename", rename_settings);
   REQUIRE_NOERROR(rename_operator);
   pipeline->add_operator(std::move(*rename_operator));
-  auto rp3 = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
-                           std::vector<vast::uuid>{partition_uuid},
-                           vast::system::keep_original_partition::no);
+  std::vector<vast::partition_info> partition_infos;
+  auto& partition_info = partition_infos.emplace_back();
+  partition_info.uuid = partition_uuid;
+  partition_info.schema = partition_type;
+  auto rp3
+    = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
+                    partition_infos, vast::system::keep_original_partition::no);
   run();
   rp3.receive(
     [=](const std::vector<vast::partition_info>& infos) {
@@ -594,9 +612,12 @@ TEST(select pipeline with an empty result set) {
     = vast::make_pipeline_operator("where", identity_operator_config);
   REQUIRE_NOERROR(identity_operator);
   pipeline->add_operator(std::move(*identity_operator));
-  auto rp2 = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
-                           std::vector<vast::uuid>{partition_uuid},
-                           vast::system::keep_original_partition::no);
+  std::vector<vast::partition_info> partition_infos;
+  auto& partition_info = partition_infos.emplace_back();
+  partition_info.uuid = partition_uuid;
+  auto rp2
+    = self->request(index, caf::infinite, vast::atom::apply_v, pipeline,
+                    partition_infos, vast::system::keep_original_partition::no);
   run();
   rp2.receive(
     [=](const std::vector<vast::partition_info>& infos) {

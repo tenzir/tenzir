@@ -20,6 +20,7 @@
 #include "vast/system/actors.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/taxonomies.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 #include "vast/time.hpp"
@@ -121,7 +122,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
     = sys.spawn(vast::system::active_partition, partition_id,
                 vast::system::accountant_actor{}, filesystem, caf::settings{},
                 index_config_, vast::system::store_actor{}, input_store_id,
-                partition_header);
+                partition_header, std::make_shared<vast::taxonomies>());
   REQUIRE(sut);
   auto builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, schema_);
@@ -193,7 +194,8 @@ TEST(Delegate query to store with all possible ids in partition when query is to
   auto sut = sys.spawn(vast::system::active_partition, vast::uuid::random(),
                        vast::system::accountant_actor{},
                        vast::system::filesystem_actor{}, caf::settings{},
-                       index_config_, store, "some-id", vast::chunk_ptr{});
+                       index_config_, store, "some-id", vast::chunk_ptr{},
+                       std::make_shared<vast::taxonomies>());
 
   REQUIRE(sut);
 

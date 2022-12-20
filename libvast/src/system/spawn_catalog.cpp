@@ -27,14 +27,6 @@ spawn_catalog(node_actor::stateful_pointer<node_state> self,
     = detached
         ? self->spawn<caf::detached>(catalog, accountant, args.dir / args.label)
         : self->spawn(catalog, accountant, args.dir / args.label);
-  self->request(handle, caf::infinite, atom::load_v)
-    .await([](atom::ok) {},
-           [](caf::error& err) {
-             VAST_WARN("catalog failed to load taxonomy "
-                       "definitions: {}",
-                       std::move(err));
-             // TODO: Shutdown when failing?
-           });
   VAST_VERBOSE("{} spawned the catalog", *self);
   return caf::actor_cast<caf::actor>(handle);
 }

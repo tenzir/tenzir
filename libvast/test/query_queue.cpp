@@ -10,6 +10,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/uuid.hpp"
 
 #define SUITE query_queue
@@ -43,15 +44,20 @@ std::vector<uuid> xs
 
 system::receiver_actor<atom::done> dummy_client = {};
 
-std::vector<uuid> cands(uint32_t num) {
-  if (num > xs.size())
-    FAIL("can't generate more than 16 candidates");
-  return std::vector<uuid>{xs.begin(), xs.begin() + num};
-}
-std::vector<uuid> cands(uint32_t start, uint32_t end) {
+system::catalog_lookup_result cands(uint32_t start, uint32_t end) {
   if (end > xs.size() || start > end)
     FAIL("can't generate more than 16 candidates");
-  return std::vector<uuid>{xs.begin() + start, xs.begin() + end};
+  system::catalog_lookup_result result{};
+  for (auto i = start; i < end; ++i) {
+    auto id = xs[i];
+    result.candidate_infos[vast::type{}].partition_infos.emplace_back(
+      id, 0u, time{}, vast::type{}, version::current_partition_version);
+  }
+  return result;
+}
+
+system::catalog_lookup_result cands(uint32_t num) {
+  return cands(0, num);
 }
 
 // We need to be able to generate queries with random query ids.
@@ -62,10 +68,11 @@ query_context make_random_query_context() {
   return result;
 }
 
-uuid make_insert(query_queue& q, std::vector<uuid>&& candidates) {
+uuid make_insert(query_queue& q, system::catalog_lookup_result&& candidates) {
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
-  REQUIRE_SUCCESS(q.insert(query_state{.query_context = query_context,
+  REQUIRE_SUCCESS(q.insert(query_state{.query_contexts_per_type
+                                       = {{vast::type{}, query_context}},
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
                                        .requested_partitions = cands_size},
@@ -73,13 +80,14 @@ uuid make_insert(query_queue& q, std::vector<uuid>&& candidates) {
   return query_context.id;
 }
 
-uuid make_insert(query_queue& q, std::vector<uuid>&& candidates,
+uuid make_insert(query_queue& q, system::catalog_lookup_result&& candidates,
                  uint32_t taste_size,
                  uint8_t priority = query_context::priority::normal) {
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
   query_context.priority = priority;
-  REQUIRE_SUCCESS(q.insert(query_state{.query_context = query_context,
+  REQUIRE_SUCCESS(q.insert(query_state{.query_contexts_per_type
+                                       = {{vast::type{}, query_context}},
                                        .client = dummy_client,
                                        .candidate_partitions = cands_size,
                                        .requested_partitions = taste_size},
@@ -99,10 +107,11 @@ TEST(insert violating precondidtions) {
 
 TEST(mark as erased) {
   query_queue q;
-  const auto candidates = cands(1);
-  make_insert(q, std::vector<uuid>{candidates}, candidates.size());
+  auto candidates = cands(1);
+  make_insert(q, decltype(candidates){candidates}, candidates.size());
   CHECK_EQUAL(q.queries().size(), 1u);
-  q.mark_partition_erased(candidates.front());
+  q.mark_partition_erased(
+    candidates.candidate_infos[vast::type{}].partition_infos.front().uuid);
   const auto out = unbox(q.next());
   CHECK(out.erased);
 }

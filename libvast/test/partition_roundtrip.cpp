@@ -69,15 +69,15 @@ TEST(index roundtrip) {
   vast::system::index_state state(/*self = */ nullptr);
   // Both unpersisted and persisted partitions should show up in the created
   // flatbuffer.
-  state.unpersisted[vast::uuid::random()] = nullptr;
-  state.unpersisted[vast::uuid::random()] = nullptr;
-  state.persisted_partitions.insert(vast::uuid::random());
-  state.persisted_partitions.insert(vast::uuid::random());
+  state.unpersisted[vast::uuid::random()] = {};
+  state.unpersisted[vast::uuid::random()] = {};
+  state.persisted_partitions.emplace(vast::uuid::random());
+  state.persisted_partitions.emplace(vast::uuid::random());
   std::set<vast::uuid> expected_uuids;
   for (auto& kv : state.unpersisted)
     expected_uuids.insert(kv.first);
-  for (auto& uuid : state.persisted_partitions)
-    expected_uuids.insert(uuid);
+  for (auto& persisted : state.persisted_partitions)
+    expected_uuids.insert(persisted);
   // Add some fake statistics
   state.stats.layouts["zeek.conn"] = vast::layout_statistics{54931u};
   // Serialize the index.
@@ -214,10 +214,11 @@ TEST(empty partition roundtrip) {
                            std::move(query_context));
   run();
   rp2.receive(
-    [&](const vast::system::catalog_result& result) {
-      const auto& candidates = result.partitions;
-      REQUIRE_EQUAL(candidates.size(), 1ull);
-      CHECK_EQUAL(candidates[0], state.data.id);
+    [&](const vast::system::catalog_lookup_result& candidates) {
+      REQUIRE_EQUAL(candidates.candidate_infos.size(), 1ull);
+      auto candidate_partition
+        = candidates.candidate_infos.begin()->second.partition_infos.front();
+      CHECK_EQUAL(candidate_partition.uuid, state.data.id);
     },
     [=](const caf::error& err) {
       FAIL(err);
@@ -242,7 +243,8 @@ TEST(full partition roundtrip) {
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
-                vast::index_config{}, store_builder, store_id, store_header);
+                vast::index_config{}, store_builder, store_id, store_header,
+                std::make_shared<vast::taxonomies>());
   run();
   REQUIRE(partition);
   // Add data to the partition.

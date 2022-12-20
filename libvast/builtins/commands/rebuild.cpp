@@ -280,42 +280,59 @@ struct rebuilder_state {
       ->request(catalog, caf::infinite, atom::candidates_v,
                 std::move(query_context))
       .then(
-        [this, finish](system::catalog_result& result) mutable {
-          if (!run->options.all) {
-            std::erase_if(
-              result.partitions, [&](const partition_info& partition) {
-                return partition.version >= version::current_partition_version;
-              });
-          }
-          if (result.partitions.empty())
-            return finish({}, true);
-          if (run->options.undersized)
-            std::erase_if(
-              result.partitions, [this](const partition_info& partition) {
-                return static_cast<bool>(partition.schema)
-                       && partition.events > detail::narrow_cast<size_t>(
-                            detail::narrow_cast<double>(max_partition_size)
-                            * undersized_threshold);
-              });
-          if (run->options.max_partitions < result.partitions.size()) {
-            std::stable_sort(result.partitions.begin(), result.partitions.end(),
-                             [](const auto& lhs, const auto& rhs) {
-                               return lhs.schema < rhs.schema;
-                             });
-            result.partitions.erase(
-              result.partitions.begin()
-                + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
-              result.partitions.end());
-          }
-          if (result.partitions.empty())
-            return finish({});
-          run->statistics.num_total = result.partitions.size();
-          run->statistics.num_heterogeneous
-            = std::count_if(result.partitions.begin(), result.partitions.end(),
-                            [](const partition_info& partition) {
-                              return !partition.schema;
+        [this, finish](system::catalog_lookup_result& lookup_result) mutable {
+          for (auto& [type, result] : lookup_result.candidate_infos) {
+            if (!run->options.all) {
+              std::erase_if(result.partition_infos,
+                            [&](const partition_info& partition) {
+                              return partition.version
+                                     >= version::current_partition_version;
                             });
-          run->remaining_partitions = std::move(result.partitions);
+              if (result.partition_infos.empty()) {
+                lookup_result.candidate_infos.erase(type);
+                if (lookup_result.candidate_infos.empty()) {
+                  return finish({}, true);
+                }
+              }
+            }
+            if (run->options.undersized) {
+              std::erase_if(
+                result.partition_infos, [&](const partition_info& partition) {
+                  return static_cast<bool>(partition.schema)
+                         && partition.events > detail::narrow_cast<size_t>(
+                              detail::narrow_cast<double>(max_partition_size)
+                              * undersized_threshold);
+                });
+            }
+            if (run->options.max_partitions < result.partition_infos.size()) {
+              std::stable_sort(result.partition_infos.begin(),
+                               result.partition_infos.end(),
+                               [](const auto& lhs, const auto& rhs) {
+                                 return lhs.schema < rhs.schema;
+                               });
+              result.partition_infos.erase(
+                result.partition_infos.begin()
+                  + detail::narrow_cast<ptrdiff_t>(run->options.max_partitions),
+                result.partition_infos.end());
+              if (result.partition_infos.empty()) {
+                lookup_result.candidate_infos.erase(type);
+                if (lookup_result.candidate_infos.empty()) {
+                  return finish({});
+                }
+              }
+            }
+            run->statistics.num_total = result.partition_infos.size();
+
+            run->statistics.num_heterogeneous
+              += std::count_if(result.partition_infos.begin(),
+                               result.partition_infos.end(),
+                               [](const partition_info& partition) {
+                                 return !partition.schema;
+                               });
+            run->remaining_partitions.insert(run->remaining_partitions.end(),
+                                             result.partition_infos.begin(),
+                                             result.partition_infos.end());
+          }
           auto counter = detail::make_fanout_counter(
             run->options.parallel,
             [finish]() mutable {
@@ -483,13 +500,9 @@ struct rebuilder_state {
               [](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time < rhs.max_import_time;
               });
-    auto current_run_partition_ids = std::vector<uuid>{};
-    current_run_partition_ids.reserve(current_run_partitions.size());
-    for (const auto& partition : current_run_partitions)
-      current_run_partition_ids.push_back(partition.uuid);
     self
       ->request(index, caf::infinite, atom::apply_v, std::move(pipeline),
-                std::move(current_run_partition_ids),
+                std::move(current_run_partitions),
                 system::keep_original_partition::no)
       .then(
         [this, rp, current_run_events,
@@ -503,7 +516,7 @@ struct rebuilder_state {
             run->statistics.num_rebuilding -= num_partitions;
             if (is_heterogeneous)
               finish_heterogeneous();
-            // Pick up new work until we run out of remainig partitions.
+            // Pick up new work until we run out of remaining partitions.
             emit_telemetry();
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                         atom::rebuild_v);

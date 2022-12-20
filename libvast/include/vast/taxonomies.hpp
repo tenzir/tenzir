@@ -139,6 +139,15 @@ caf::expected<expression> resolve(const taxonomies& t, const expression& e);
 caf::expected<expression> resolve(const taxonomies& t, const expression& e,
                                   const std::map<std::string, type_set>& seen);
 
+/// Substitutes concept and model identifiers in field extractors with
+/// replacement expressions containing only concrete field names.
+/// @param t The set of taxonomies to apply.
+/// @param e The original expression.
+/// @param single_type A type in the database.
+/// @returns The sustitute expression.
+caf::expected<expression> resolve(const taxonomies& t, const expression& e,
+                                  const vast::type& single_type);
+
 } // namespace vast
 
 namespace fmt {

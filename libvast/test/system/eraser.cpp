@@ -80,7 +80,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
         system::send_initial_dbstate) {
       FAIL("no mock implementation available");
     },
-    [=](atom::apply, pipeline_ptr, std::vector<uuid>,
+    [=](atom::apply, pipeline_ptr, std::vector<partition_info>,
         system::keep_original_partition) -> std::vector<partition_info> {
       return std::vector<partition_info>{partition_info{
         vast::uuid::nil(),
@@ -90,15 +90,16 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state>) {
         version::current_partition_version,
       }};
     },
-    [=](atom::resolve, vast::expression) -> system::catalog_result {
-      std::vector<vast::partition_info> result;
-      result.reserve(CANDIDATES_PER_MOCK_QUERY);
+    [=](atom::resolve, vast::expression) -> system::catalog_lookup_result {
+      system::catalog_lookup_result result;
       for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i) {
-        auto& partition = result.emplace_back();
-        partition.uuid = vast::uuid::random();
+        auto lookup_result = system::catalog_lookup_result::candidate_info{};
+        lookup_result.partition_infos.emplace_back().uuid
+          = vast::uuid::random();
+        result.candidate_infos[vast::type{std::to_string(i), vast::type{}}]
+          = lookup_result;
       }
-      return system::catalog_result{system::catalog_result::probabilistic,
-                                    std::move(result)};
+      return result;
     },
     [=](atom::evaluate,
         vast::query_context&) -> caf::result<system::query_cursor> {
@@ -160,8 +161,8 @@ TEST(eraser on mock INDEX) {
   expect((atom::ping), from(aut).to(aut));
   expect((atom::run), from(aut).to(aut));
   expect((atom::resolve, vast::expression), from(aut).to(index));
-  expect((system::catalog_result), from(index).to(aut));
-  expect((atom::apply, vast::pipeline_ptr, std::vector<vast::uuid>,
+  expect((vast::system::catalog_lookup_result), from(index).to(aut));
+  expect((atom::apply, vast::pipeline_ptr, std::vector<vast::partition_info>,
           vast::system::keep_original_partition),
          from(aut).to(index));
   // The mock index doesn't do any internal messaging but just

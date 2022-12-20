@@ -94,7 +94,7 @@
 //                                                                 |
 //     query_id,                                                   |
 //     scheduled,                                                  |
-//     remaining                                    [uuid]         |
+//     remaining                            [uuid, query_context]  |
 //   <-----------  (creates query state)  <------------------------/
 //                            |
 //                            |  query_id, n_taste
@@ -222,7 +222,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
              "uuids of maybe persisted partitions",
              state.persisted_partitions.size(), state.unpersisted.size());
   std::vector<flatbuffers::Offset<fbs::LegacyUUID>> partition_offsets;
-  for (auto uuid : state.persisted_partitions) {
+  for (const auto& uuid : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
       partition_offsets.push_back(*uuid_fb);
     else
@@ -300,9 +300,7 @@ filesystem_actor& partition_factory::filesystem() {
 
 partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
-  if (std::find(state_.persisted_partitions.begin(),
-                state_.persisted_partitions.end(), id)
-      == state_.persisted_partitions.end())
+  if (state_.persisted_partitions.find(id) == state_.persisted_partitions.end())
     VAST_WARN("{} did not find partition {} in it's internal state, but tries "
               "to load it regardless",
               *state_.self, id);
@@ -471,7 +469,8 @@ caf::error index_state::load_from_disk() {
   auto partitions = std::vector<uuid>{};
   auto oversized_partitions = std::vector<uuid>{};
   auto synopsis_files = std::vector<uuid>{};
-  auto synopses = std::make_shared<std::map<uuid, partition_synopsis_ptr>>();
+  auto synopses
+    = std::make_shared<std::unordered_map<uuid, partition_synopsis_ptr>>();
   for (const auto& entry : dir_iter) {
     const auto stem = entry.path().stem();
     vast::uuid partition_uuid{};
@@ -550,7 +549,7 @@ caf::error index_state::load_from_disk() {
       }
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
-      persisted_partitions.insert(partition_uuid);
+      persisted_partitions.emplace(partition_uuid);
       stats.layouts[std::string{ps->schema.name()}].count += ps->events;
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
@@ -619,7 +618,7 @@ caf::error index_state::load_from_disk() {
             VAST_VERBOSE("adding newly created partition {}", x.uuid);
             stats.layouts[std::string{x.synopsis->schema.name()}].count
               += x.synopsis->events;
-            persisted_partitions.insert(x.uuid);
+            persisted_partitions.emplace(x.uuid);
             synopses->emplace(x.uuid, std::move(x.synopsis));
           }
         },
@@ -776,6 +775,7 @@ bool i_partition_selector::operator()(const type& filter,
 
 caf::expected<std::unordered_map<type, active_partition_info>::iterator>
 index_state::create_active_partition(const type& schema) {
+  VAST_ASSERT(taxonomies);
   VAST_ASSERT(schema);
   auto id = uuid::random();
   const auto [active_partition, inserted]
@@ -800,7 +800,7 @@ index_state::create_active_partition(const type& schema) {
     = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
                   index_opts, synopsis_opts,
                   static_cast<store_actor>(active_partition->second.store),
-                  store_name, store_header);
+                  store_name, store_header, taxonomies);
   active_partition->second.stream_slot
     = stage->add_outbound_path(active_partition->second.actor);
   stage->out().set_filter(active_partition->second.stream_slot, schema);
@@ -822,6 +822,7 @@ void index_state::decommission_active_partition(
   VAST_ASSERT(active_partition != active_partitions.end());
   const auto id = active_partition->second.id;
   const auto actor = std::exchange(active_partition->second.actor, {});
+  const auto type = active_partition->first;
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
   stage->out().close(active_partition->second.stream_slot);
@@ -829,7 +830,7 @@ void index_state::decommission_active_partition(
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
   VAST_ASSERT(!unpersisted.contains(id));
-  unpersisted[id] = actor;
+  unpersisted[id] = {type, actor};
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
   const auto part_dir = partition_path(id);
@@ -866,7 +867,7 @@ void index_state::decommission_active_partition(
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
-              persisted_partitions.insert(id);
+              persisted_partitions.emplace(id);
               if (completion)
                 completion(caf::none);
             },
@@ -926,7 +927,8 @@ void index_state::schedule_lookups() {
       // We need to first check whether the ID is the active partition or one
       // of our unpersisted ones. Only then can we dispatch to our LRU cache.
       partition_actor part;
-      for (const auto& [_, active_partition] : active_partitions) {
+      vast::type partition_type{};
+      for (const auto& [type, active_partition] : active_partitions) {
         if (active_partition.actor != nullptr
             && active_partition.id == partition_id) {
           part = active_partition.actor;
@@ -934,11 +936,12 @@ void index_state::schedule_lookups() {
         }
       }
       if (!part) {
-        if (auto it = unpersisted.find(partition_id); it != unpersisted.end())
-          part = it->second;
-        else if (auto it = persisted_partitions.find(partition_id);
-                 it != persisted_partitions.end())
+        if (auto it = unpersisted.find(partition_id); it != unpersisted.end()) {
+          part = it->second.second;
+        } else if (auto it = persisted_partitions.find(partition_id);
+                   it != persisted_partitions.end()) {
           part = inmem_partitions.get_or_load(partition_id);
+        }
       }
       if (!part)
         VAST_WARN("{} failed to load partition {} that was part of a query",
@@ -978,12 +981,23 @@ void index_state::schedule_lookups() {
           schedule_lookups();
         }
       };
+      const auto& context_it
+        = it->second.query_contexts_per_type.find(next->schema);
+      if (context_it == it->second.query_contexts_per_type.end()) {
+        VAST_WARN("{} failed to evaluate query {} for partition {}: query "
+                  "context for schema is already unvailable",
+                  *self, qid, next->partition);
+        inmem_partitions.drop(next->partition);
+        handle_completion();
+        continue;
+      }
       self
         ->request(partition_actor, defaults::system::scheduler_timeout,
-                  atom::query_v, it->second.query_context)
+                  atom::query_v, context_it->second)
         .then(
           [this, handle_completion, qid, pid = next->partition](uint64_t n) {
-            VAST_DEBUG("{} received {} results for query {} from partition {}",
+            VAST_DEBUG("{} received {} results for query {} from partition "
+                       "{}",
                        *self, n, qid, pid);
             handle_completion();
           },
@@ -993,8 +1007,8 @@ void index_state::schedule_lookups() {
                       *self, qid, pid, err);
             // We don't know if this was a transient error or if the
             // partition/store is corrupted. However, the partition actor has
-            // possibly already exited so at least we have to clear it from the
-            // cache so that subsequent queries get a chance to respawn it
+            // possibly already exited so at least we have to clear it from
+            // the cache so that subsequent queries get a chance to respawn it
             // cleanly instead of trying to talk to the dead.
             inmem_partitions.drop(pid);
             handle_completion();
@@ -1019,11 +1033,12 @@ struct query_counters {
 auto get_query_counters(const query_queue& pending_queries) {
   auto result = query_counters{};
   for (const auto& [_, q] : pending_queries.queries()) {
-    if (q.query_context.priority == query_context::priority::low)
+    auto first_context_entry = q.query_contexts_per_type.begin()->second;
+    if (first_context_entry.priority == query_context::priority::low)
       result.num_low_prio++;
-    else if (q.query_context.priority == query_context::priority::normal)
+    else if (first_context_entry.priority == query_context::priority::normal)
       result.num_normal_prio++;
-    else if (q.query_context.priority == query_context::priority::high)
+    else if (first_context_entry.priority == query_context::priority::high)
       result.num_high_prio++;
     else
       result.num_custom_prio++;
@@ -1185,8 +1200,8 @@ index_state::status(status_verbosity v) const {
     auto& unpersisted
       = caf::get<list>(partitions.emplace("unpersisted", list{}).first->second);
     unpersisted.reserve(this->unpersisted.size());
-    for (const auto& [id, actor] : this->unpersisted)
-      partition_status(id, actor, unpersisted);
+    for (const auto& [id, actor_info] : this->unpersisted)
+      partition_status(id, actor_info.second, unpersisted);
     rs->content["partitions"] = std::move(partitions);
     // General state such as open streams.
   }
@@ -1237,6 +1252,20 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.catalog = std::move(catalog);
+  self
+    ->request(self->state.catalog, caf::infinite, atom::get_v,
+              atom::taxonomies_v)
+    .await(
+      [self](vast::taxonomies& taxonomies) {
+        self->state.taxonomies
+          = std::make_shared<vast::taxonomies>(std::move(taxonomies));
+      },
+      [](caf::error& err) {
+        VAST_WARN("catalog failed to load taxonomy "
+                  "definitions: {}",
+                  std::move(err));
+        // TODO: Shutdown when failing?
+      });
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
   self->state.markersdir = dir / "markers";
@@ -1356,7 +1385,7 @@ index(index_actor::stateful_pointer<index_state> self,
     std::vector<caf::actor> partitions;
     partitions.reserve(self->state.inmem_partitions.size() + 1);
     for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
-      partitions.push_back(caf::actor_cast<caf::actor>(part));
+      partitions.push_back(caf::actor_cast<caf::actor>(part.second));
     for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
       partitions.push_back(caf::actor_cast<caf::actor>(part));
     self->state.flush_to_disk();
@@ -1505,29 +1534,59 @@ index(index_actor::stateful_pointer<index_state> self,
         auto& [_, ids] = *it;
         ids.emplace(query_context.id);
       }
-      std::vector<uuid> candidates;
+      std::vector<std::pair<uuid, type>> candidates;
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
-      for (const auto& [_, active_partition] : self->state.active_partitions)
-        candidates.push_back(active_partition.id);
-      for (const auto& [id, _] : self->state.unpersisted)
-        candidates.push_back(id);
+      query_state::type_query_context_map query_contexts;
+      for (const auto& [active_partition_type, active_partition] :
+           self->state.active_partitions) {
+        candidates.emplace_back(active_partition.id, active_partition_type);
+        query_contexts[active_partition_type] = query_context;
+      }
+      for (const auto& [id, schema_actor_pair] : self->state.unpersisted)
+        candidates.emplace_back(id, schema_actor_pair.first);
       auto rp = self->make_response_promise<query_cursor>();
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,
                   query_context)
         .then(
-          [=, candidates
-              = std::move(candidates)](catalog_result& midx_result) mutable {
-            auto& midx_candidates = midx_result.partitions;
-            VAST_DEBUG("{} got initial candidates {} and from catalog {}",
-                       *self, candidates, midx_candidates);
-            for (const auto initial_candidates = candidates;
-                 const auto& midx_candidate : midx_candidates)
-              if (std::find(initial_candidates.begin(),
-                            initial_candidates.end(), midx_candidate)
-                  == initial_candidates.end())
-                candidates.push_back(midx_candidate.uuid);
+          [=, candidates = std::move(candidates),
+           query_contexts = std::move(query_contexts)](
+            catalog_lookup_result& lookup_result) mutable {
+            for (auto& [id, schema] : candidates) {
+              auto new_partition_info = partition_info{
+                id, 0u, time{}, schema, version::current_partition_version};
+              auto schema_candidate_infos_it
+                = lookup_result.candidate_infos.find(schema);
+              if (schema_candidate_infos_it
+                  == lookup_result.candidate_infos.end()) {
+                schema_candidate_infos_it
+                  = lookup_result.candidate_infos.insert(
+                    schema_candidate_infos_it, {schema, {}});
+                schema_candidate_infos_it->second.exp = query_context.expr;
+              }
+              const auto& schema_candidate_infos
+                = schema_candidate_infos_it->second.partition_infos;
+              if (std::find_if(
+                    schema_candidate_infos.begin(),
+                    schema_candidate_infos.end(),
+                    [&new_partition_info](const auto& partition_info) {
+                      return partition_info.uuid == new_partition_info.uuid;
+                    })
+                  == schema_candidate_infos.end()) {
+                lookup_result.candidate_infos[schema]
+                  .partition_infos.emplace_back(new_partition_info);
+              }
+            }
+            for (const auto& [type, lookup_result] :
+                 lookup_result.candidate_infos) {
+              query_contexts[type] = query_context;
+              query_contexts[type].expr = lookup_result.exp;
+              VAST_DEBUG("{} got initial candidates {} for schema {} and from "
+                         "catalog {}",
+                         *self, candidates, type,
+                         lookup_result.partition_infos);
+            }
             // Allows the client to query further results after initial taste.
             auto query_id = query_context.id;
             auto client = caf::visit(
@@ -1542,24 +1601,25 @@ index(index_actor::stateful_pointer<index_state> self,
                 },
               },
               query_context.cmd);
-            if (candidates.empty()) {
+            if (lookup_result.empty()) {
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          *self);
               rp.deliver(query_cursor{query_id, 0u, 0u});
               self->send(client, atom::done_v);
               return;
             }
-            auto num_candidates = detail::narrow<uint32_t>(candidates.size());
+            auto num_candidates
+              = detail::narrow<uint32_t>(lookup_result.size());
             auto taste_size = query_context.taste
                                 ? *query_context.taste
                                 : self->state.taste_partitions;
             auto scheduled = std::min(num_candidates, taste_size);
             if (auto err = self->state.pending_queries.insert(
-                  query_state{.query_context = query_context,
+                  query_state{.query_contexts_per_type = query_contexts,
                               .client = client,
                               .candidate_partitions = num_candidates,
                               .requested_partitions = scheduled},
-                  std::move(candidates)))
+                  std::move(lookup_result)))
               rp.deliver(err);
             rp.deliver(query_cursor{query_id, num_candidates, scheduled});
             self->state.schedule_lookups();
@@ -1571,9 +1631,13 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::resolve,
-           vast::expression& expr) -> caf::result<catalog_result> {
+           vast::expression& expr) -> caf::result<catalog_lookup_result> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = vast::uuid::random();
+      auto type_set = vast::type_set{};
+      for (const auto& [type, _] : self->state.active_partitions) {
+        type_set.insert(type);
+      }
       return self->delegate(self->state.catalog, atom::candidates_v,
                             std::move(query_context));
     },
@@ -1770,44 +1834,42 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::apply, pipeline_ptr pipeline,
-           std::vector<vast::uuid> old_partition_ids,
+           std::vector<partition_info> selected_partitions,
            keep_original_partition keep)
       -> caf::result<std::vector<partition_info>> {
       const auto current_sender = self->current_sender();
-      if (old_partition_ids.empty())
+      if (selected_partitions.empty())
         return caf::make_error(ec::invalid_argument, "no partitions given");
       VAST_DEBUG("{} applies a pipeline to partitions {}", *self,
-                 old_partition_ids);
+                 selected_partitions);
       VAST_ASSERT(self->state.store_actor_plugin);
-      std::erase_if(old_partition_ids, [&](uuid old_partition_id) {
-        if (self->state.persisted_partitions.contains(old_partition_id)) {
+      std::erase_if(selected_partitions, [&](const auto& entry) {
+        if (self->state.persisted_partitions.contains(entry.uuid)) {
           return false;
         }
         VAST_WARN("{} skips unknown partition {} for pipeline {}", *self,
-                  old_partition_id, pipeline->name());
+                  entry.uuid, pipeline->name());
         return true;
       });
-      {
-        auto corrected_old_partition_ids = std::vector<uuid>{};
-        corrected_old_partition_ids.reserve(old_partition_ids.size());
-        for (const auto& partition : old_partition_ids) {
-          if (self->state.partitions_in_transformation.insert(partition).second) {
-            corrected_old_partition_ids.push_back(partition);
-          } else {
-            // Getting overlapping partitions triggers a warning, and we
-            // silently ignore the partition at the cost of the transformation
-            // being less efficient.
-            // TODO: Implement some synchronization mechanism for partition
-            // erasure so rebuild, compaction, and aging can properly
-            // synchronize.
-            VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
-                      "because it is currently being transformed",
-                      *self, pipeline->name(), partition);
-          }
+      auto corrected_partitions = catalog_lookup_result{};
+      for (const auto& partition : selected_partitions) {
+        if (self->state.partitions_in_transformation.insert(partition.uuid)
+              .second) {
+          corrected_partitions.candidate_infos[partition.schema]
+            .partition_infos.emplace_back(partition);
+        } else {
+          // Getting overlapping partitions triggers a warning, and we
+          // silently ignore the partition at the cost of the transformation
+          // being less efficient.
+          // TODO: Implement some synchronization mechanism for partition
+          // erasure so rebuild, compaction, and aging can properly
+          // synchronize.
+          VAST_WARN("{} refuses to apply transformation '{}' to partition {} "
+                    "because it is currently being transformed",
+                    *self, pipeline->name(), partition.uuid);
         }
-        old_partition_ids = std::move(corrected_old_partition_ids);
       }
-      if (old_partition_ids.empty())
+      if (corrected_partitions.empty())
         return std::vector<partition_info>{};
       auto store_id = std::string{self->state.store_actor_plugin->name()};
       auto partition_path_template
@@ -1830,20 +1892,25 @@ index(index_actor::stateful_pointer<index_state> self,
       query_context.priority = query_context::priority::high;
       VAST_DEBUG("{} emplaces {} for pipeline {}", *self, query_context,
                  pipeline->name());
-      auto input_size = detail::narrow_cast<uint32_t>(old_partition_ids.size());
+      auto query_contexts = query_state::type_query_context_map{};
+      for (const auto& [type, _] : corrected_partitions.candidate_infos) {
+        query_contexts[type] = query_context;
+      }
+      auto input_size
+        = detail::narrow_cast<uint32_t>(corrected_partitions.size());
       auto err = self->state.pending_queries.insert(
-        query_state{.query_context = query_context,
+        query_state{.query_contexts_per_type = query_contexts,
                     .client = caf::actor_cast<receiver_actor<atom::done>>(
                       partition_transfomer),
                     .candidate_partitions = input_size,
                     .requested_partitions = input_size},
-        std::vector{old_partition_ids});
+        catalog_lookup_result{corrected_partitions});
       VAST_ASSERT(err == caf::none);
       self->state.schedule_lookups();
       auto marker_path = self->state.marker_path(transform_id);
       auto rp = self->make_response_promise<std::vector<partition_info>>();
       auto deliver
-        = [self, rp, old_partition_ids, marker_path](
+        = [self, rp, corrected_partitions, marker_path](
             caf::expected<std::vector<partition_info>>&& result) mutable {
             // Erase errors don't matter too much here, leftover in-progress
             // transforms will be cleaned up on next startup.
@@ -1858,8 +1925,12 @@ index(index_actor::stateful_pointer<index_state> self,
                   VAST_DEBUG("{} failed to erase in-progress marker at {}: {}",
                              *self, marker_path, e);
                 });
-            for (const auto& partition : old_partition_ids)
-              self->state.partitions_in_transformation.erase(partition);
+            for (const auto& [_, candidate_info] :
+                 corrected_partitions.candidate_infos) {
+              for (const auto& partition : candidate_info.partition_infos) {
+                self->state.partitions_in_transformation.erase(partition.uuid);
+              }
+            }
             if (result)
               rp.deliver(std::move(*result));
             else
@@ -1872,9 +1943,17 @@ index(index_actor::stateful_pointer<index_state> self,
       // state will keep the actor alive
       self->request(partition_transfomer, caf::infinite, atom::persist_v)
         .then(
-          [self, deliver, old_partition_ids, keep, marker_path, rp,
+          [self, deliver, corrected_partitions, keep, marker_path, rp,
            partition_transfomer](
             std::vector<augmented_partition_synopsis>& apsv) mutable {
+            std::vector<uuid> old_partition_ids;
+            old_partition_ids.reserve(corrected_partitions.size());
+            for (const auto& [_, candidate_info] :
+                 corrected_partitions.candidate_infos) {
+              for (const auto& partition : candidate_info.partition_infos) {
+                old_partition_ids.emplace_back(partition.uuid);
+              }
+            }
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
             for (auto const& aps : apsv)
@@ -1932,15 +2011,16 @@ index(index_actor::stateful_pointer<index_state> self,
                           if (!apsv.empty())
                             self
                               ->request(self->state.catalog, caf::infinite,
-                                        atom::merge_v, std::move(apsv))
+                                        atom::merge_v, apsv)
                               .then(
-                                [self, deliver, new_partition_ids,
-                                 result = std::move(result)](atom::ok) mutable {
+                                [self, deliver, result = std::move(result),
+                                 apsv](atom::ok) mutable {
                                   // Update index statistics and list of
                                   // persisted partitions.
-                                  self->state.persisted_partitions.insert(
-                                    new_partition_ids.begin(),
-                                    new_partition_ids.end());
+                                  for (auto const& aps : apsv) {
+                                    self->state.persisted_partitions.emplace(
+                                      aps.uuid);
+                                  }
                                   self->state.flush_to_disk();
                                   deliver(std::move(result));
                                 },
@@ -1952,14 +2032,14 @@ index(index_actor::stateful_pointer<index_state> self,
                         } else { // keep == keep_original_partition::no
                           self
                             ->request(self->state.catalog, caf::infinite,
-                                      atom::replace_v, old_partition_ids,
-                                      std::move(apsv))
+                                      atom::replace_v, old_partition_ids, apsv)
                             .then(
-                              [self, deliver, old_partition_ids,
-                               new_partition_ids, result](atom::ok) mutable {
-                                self->state.persisted_partitions.insert(
-                                  new_partition_ids.begin(),
-                                  new_partition_ids.end());
+                              [self, deliver, old_partition_ids, result,
+                               apsv](atom::ok) mutable {
+                                for (auto const& aps : apsv) {
+                                  self->state.persisted_partitions.emplace(
+                                    aps.uuid);
+                                }
                                 self->state.flush_to_disk();
                                 self
                                   ->request(static_cast<index_actor>(self),

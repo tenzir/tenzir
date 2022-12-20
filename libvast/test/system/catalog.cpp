@@ -44,8 +44,6 @@ namespace {
 
 constexpr size_t num_partitions = 4;
 constexpr size_t num_events_per_parttion = 25;
-constexpr uint32_t taste_count = 4;
-constexpr size_t num_query_supervisors = 1;
 
 const vast::time epoch;
 
@@ -133,15 +131,9 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     factory<synopsis>::initialize();
     MESSAGE("register table_slice_builder factory");
     factory<table_slice_builder>::initialize();
-    auto index_dir = directory / "index";
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");
-    index
-      = self->spawn(system::index, system::accountant_actor{}, fs, catalog_act,
-                    index_dir, defaults::system::store_backend, slice_size,
-                    vast::duration{}, num_partitions, taste_count,
-                    num_query_supervisors, index_dir, vast::index_config{});
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -184,10 +176,6 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     MESSAGE("run test");
   }
 
-  ~fixture() {
-    anon_send_exit(index, caf::exit_reason::user_shutdown);
-  }
-
   auto slice(size_t first, size_t last) const {
     std::vector<uuid> result;
     if (first < ids.size())
@@ -212,10 +200,12 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             vast::atom::candidates_v, std::move(query_context));
     run();
     rp.receive(
-      [&](catalog_result mdx_result) {
-        result.reserve(mdx_result.partitions.size());
-        for (const auto& partition : mdx_result.partitions)
-          result.push_back(partition.uuid);
+      [&](vast::system::catalog_lookup_result& candidates) {
+        for (const auto& [key, candidate] : candidates.candidate_infos) {
+          for (const auto& partition : candidate.partition_infos) {
+            result.emplace_back(partition.uuid);
+          }
+        }
       },
       [=](const caf::error& e) {
         FAIL(render(e));
@@ -235,10 +225,12 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
                             query_context);
     run();
     rp.receive(
-      [&](catalog_result candidates) {
-        result.reserve(candidates.partitions.size());
-        for (const auto& partition : candidates.partitions)
-          result.push_back(partition.uuid);
+      [&](catalog_lookup_result& candidates) {
+        for (const auto& [key, candidate] : candidates.candidate_infos) {
+          for (const auto& partition : candidate.partition_infos) {
+            result.emplace_back(partition.uuid);
+          }
+        }
       },
       [=](const caf::error& e) {
         FAIL(render(e));
@@ -282,9 +274,6 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   // Our unit-under-test.
   catalog_actor catalog_act;
-
-  // Index for registering types.
-  index_actor index;
 
   // Partition IDs.
   std::vector<uuid> ids;
@@ -434,13 +423,20 @@ TEST(catalog messages) {
                                      atom::candidates_v, query_context);
   run();
   expr_response.receive(
-    [this](catalog_result& candidates) {
+    [this](catalog_lookup_result& candidates) {
       auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
-      std::sort(candidates.partitions.begin(), candidates.partitions.end());
-      REQUIRE_EQUAL(candidates.partitions.size(), expected.size());
-      for (const auto& [partition, expected_uuid] :
-           detail::zip(candidates.partitions, expected))
-        CHECK_EQUAL(partition.uuid, expected_uuid);
+      std::vector<uuid> actual;
+      for (const auto& [key, candidate] : candidates.candidate_infos) {
+        for (const auto& part_info : candidate.partition_infos) {
+          actual.emplace_back(part_info.uuid);
+        }
+      }
+      std::sort(actual.begin(), actual.end());
+      REQUIRE_EQUAL(actual.size(), expected.size());
+      for (const auto& [actual_uuid, expected_uuid] :
+           detail::zip(actual, expected)) {
+        CHECK_EQUAL(actual_uuid, expected_uuid);
+      }
     },
     [](const caf::error& e) {
       auto msg = fmt::format("unexpected error {}", render(e));
@@ -453,51 +449,12 @@ TEST(catalog messages) {
                                         atom::candidates_v, query_context);
   run();
   neither_response.receive(
-    [](const catalog_result&) {
+    [](catalog_lookup_result&) {
       FAIL("expected an error");
     },
     [](const caf::error&) {
       // nop
     });
-}
-
-TEST(catalog taxonomies) {
-  MESSAGE("setting a taxonomy");
-  auto c1 = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
-                          {"bar", {"", {"a.b@r", "b.baR"}, {}}}}};
-  auto t1 = taxonomies{c1, models_map{}};
-  self->send(catalog_act, atom::put_v, t1);
-  run();
-  MESSAGE("collecting some types");
-  const vast::type la = vast::type{
-    "a",
-    vast::record_type{
-      {"fo0", vast::string_type{}},
-    },
-  };
-  auto slices_a = std::vector{make_data(la, "bogus")};
-  const vast::type lx = vast::type{
-    "x",
-    vast::record_type{
-      {"foe", vast::count_type{}},
-    },
-  };
-  auto slices_x = std::vector{make_data(lx, 1u)};
-  vast::detail::spawn_container_source(sys, std::move(slices_a), index);
-  vast::detail::spawn_container_source(sys, std::move(slices_x), index);
-  run();
-  MESSAGE("resolving an expression");
-  auto exp = unbox(to<expression>("foo == 1"));
-  auto ref = unbox(to<expression>("x.foe == 1"));
-  self->send(catalog_act, atom::resolve_v, exp);
-  run();
-  expression result;
-  self->receive(
-    [&](expression r) {
-      result = r;
-    },
-    error_handler());
-  CHECK_EQUAL(result, ref);
 }
 
 FIXTURE_SCOPE_END()

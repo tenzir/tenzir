@@ -207,9 +207,8 @@ using catalog_actor = typed_actor_fwd<
   // Reinitialize the catalog from a set of partition synopses. Used at
   // startup, so the map is expected to be huge and we use a shared_ptr
   // to be sure it's not accidentally copied.
-  caf::replies_to<
-    atom::merge,
-    std::shared_ptr<std::map<uuid, partition_synopsis_ptr>>>::with<atom::ok>,
+  caf::replies_to<atom::merge, std::shared_ptr<std::unordered_map<
+                                 uuid, partition_synopsis_ptr>>>::with<atom::ok>,
   // Merge a single partition synopsis.
   caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with<atom::ok>,
   // Merge a set of partition synopsis.
@@ -222,22 +221,18 @@ using catalog_actor = typed_actor_fwd<
   // Atomatically replace a set of partititon synopses with another.
   caf::replies_to<atom::replace, std::vector<uuid>,
                   std::vector<augmented_partition_synopsis>>::with<atom::ok>,
-  // Return the candidate partitions for a query.
-  caf::replies_to<atom::candidates, vast::query_context>::with<catalog_result>,
+  // Return the candidate partitions per type for a query.
+  caf::replies_to<atom::candidates, vast::query_context>::with< //
+    catalog_lookup_result>,
   // Internal telemetry loop.
   caf::reacts_to<atom::telemetry>,
   // Retrieves all known types.
   caf::replies_to<atom::get, atom::type>::with<type_set>,
-  // Registers the given taxonomies.
-  caf::reacts_to<atom::put, taxonomies>,
   // Registers a given layout.
   caf::reacts_to<atom::put, vast::type>,
   // Retrieves the known taxonomies.
   caf::replies_to<atom::get, atom::taxonomies>::with< //
     taxonomies>,
-  // Loads the taxonomies on disk.
-  caf::replies_to<atom::load>::with< //
-    atom::ok>,
   // Resolves an expression in terms of the known taxonomies.
   caf::replies_to<atom::resolve, expression>::with< //
     expression>>
@@ -276,10 +271,10 @@ using index_actor = typed_actor_fwd<
                  partition_creation_listener_actor, send_initial_dbstate>,
   // Evaluates a query, ie. sends matching events to the caller.
   caf::replies_to<atom::evaluate, query_context>::with<query_cursor>,
-  // Resolves a query to its candidate partitions.
+  // Resolves a query to its candidate partitions per type.
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
-  caf::replies_to<atom::resolve, expression>::with<catalog_result>,
+  caf::replies_to<atom::resolve, expression>::with<catalog_lookup_result>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<atom::query, uuid, uint32_t>,
   // Erases the given partition from the INDEX.
@@ -287,12 +282,11 @@ using index_actor = typed_actor_fwd<
   // Erases the given set of partitions from the INDEX.
   caf::replies_to<atom::erase, std::vector<uuid>>::with<atom::done>,
   // Applies the given pipelineation to the partition.
-  // When keep_original_partition is yes: erases the existing partition and
-  // returns the synopsis of the new partition. If the partition is completely
-  // erased, returns the nil uuid. When keep_original_partition is no: does an
-  // in-place pipeline keeping the old ids, and makes a new partition
-  // preserving the old one(s).
-  caf::replies_to<atom::apply, pipeline_ptr, std::vector<uuid>,
+  // When keep_original_partition is yes: merges the transformed partitions with
+  // the original ones and returns the new partition infos. When
+  // keep_original_partition is no: does an in-place pipeline keeping the old
+  // ids, and makes new partitions preserving them.
+  caf::replies_to<atom::apply, pipeline_ptr, std::vector<vast::partition_info>,
                   keep_original_partition>::with<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
   caf::reacts_to<atom::flush>>
@@ -525,7 +519,7 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 // so so we add these as `UNSAFE_MESSAGE_TYPE` to assure caf that they will
 // never be sent over the network.
 #define vast_uuid_synopsis_map                                                 \
-  std::map<vast::uuid, vast::partition_synopsis_ptr>
+  std::unordered_map<vast::uuid, vast::partition_synopsis_ptr>
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)

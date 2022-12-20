@@ -22,8 +22,6 @@ tests:
         input: data/pcap/vlan-double-tagging.pcap
       - command: -N count 'vlan.outer == 32'
       - command: -N count 'vlan.inner == 20 && 192.168.1.1'
-      - command: -N status --detailed
-        transformation: jq '.index.statistics | del(."catalog-bytes")'
 
   Manual 1:
     tags: [import, export, pcap]
@@ -41,8 +39,6 @@ tests:
         input: data/pcap/example.pcap.gz
       - command: -N export ascii ':addr in 192.168.168.0/24'
       - command: -N export pcap 'sport > 60000 && src !in 192.168.168.0/8'
-      - command: -N status --detailed
-        transformation: jq '.index.statistics | del(."catalog-bytes")'
 
   Pivot with PCAP:
     tags: [node, pivot, pcap]
