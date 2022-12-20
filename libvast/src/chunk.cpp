@@ -187,8 +187,8 @@ chunk::~chunk() noexcept {
   const auto* data = view_.data();
   const auto sz = view_.size();
   VAST_TRACEPOINT(chunk_delete, data, sz);
-  if (deleter_)
-    std::invoke(deleter_);
+  if (auto deleter = std::exchange(deleter_, {}))
+    std::invoke(std::move(deleter_));
 }
 
 // -- factory functions ------------------------------------------------------
