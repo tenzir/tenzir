@@ -200,7 +200,7 @@ tests:
     tags: [server, import, flush]
     fixture: ServerTester
     steps:
-      - command: import -b zeek
+      - command: import zeek
         input: data/zeek/conn.log.gz
       - command: status catalog
         transformation: jq -ec '.catalog."num-partitions"'

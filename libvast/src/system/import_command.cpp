@@ -91,7 +91,12 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
           stop = true;
         } else if (msg.source == src) {
           VAST_DEBUG("{} received DOWN from source", __PRETTY_FUNCTION__);
-          if (caf::get_or(inv.options, "vast.import.blocking", false))
+          // Wait for the ingest to complete. This must also be done when
+          // the index is in the same process because otherwise it can
+          // happen that the index gets an exit message before the first
+          // table slice arrives on the stream.
+          if (caf::get_or(inv.options, "vast.import.blocking", false)
+              || caf::get_or(inv.options, "vast.node", false))
             self->send(importer, atom::subscribe_v, atom::flush_v,
                        caf::actor_cast<flush_listener_actor>(self));
           else
@@ -115,6 +120,27 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     .until(stop);
   if (err)
     return caf::make_message(std::move(err));
+  // The flush listener based blocking mechanism is flawed and fails quite
+  // often. As a workaround we force a flush-to-disk of all data that is
+  // currently held in memory.
+  if (caf::get_or(inv.options, "vast.import.blocking", false)) {
+    auto components
+      = system::get_node_components<system::index_actor>(self, node);
+    if (!components)
+      return caf::make_message(std::move(components.error()));
+    auto [index] = std::move(*components);
+    // Flush!
+    auto result = caf::message{};
+    self->request(index, caf::infinite, atom::flush_v)
+      .receive(
+        []() {
+          // nop
+        },
+        [&](caf::error& err) {
+          result = caf::make_message(std::move(err));
+        });
+    return result;
+  }
   return {};
 }
 
