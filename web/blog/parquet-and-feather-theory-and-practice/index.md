@@ -3,7 +3,7 @@ title: "Parquet & Feather: Theory and Practice"
 authors:
   - dispanser
   - mavam
-date: 2022-10-24
+date: 2023-01-10
 image: image.jpg
 tags: [arrow, parquet, feather]
 ---
