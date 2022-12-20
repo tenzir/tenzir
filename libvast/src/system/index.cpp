@@ -868,6 +868,7 @@ void index_state::decommission_active_partition(
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
               persisted_partitions.emplace(id);
+              self->send_exit(actor, caf::exit_reason::normal);
               if (completion)
                 completion(caf::none);
             },
@@ -875,6 +876,8 @@ void index_state::decommission_active_partition(
               VAST_DEBUG("{} received error for request to persist partition "
                          "{} {}: {}",
                          *self, schema, id, err);
+              unpersisted.erase(id);
+              self->send_exit(actor, err);
               if (completion)
                 completion(err);
             });
@@ -882,6 +885,8 @@ void index_state::decommission_active_partition(
       [=, this](caf::error& err) {
         VAST_ERROR("{} failed to persist partition {} {} with error: {}", *self,
                    schema, id, err);
+        unpersisted.erase(id);
+        self->send_exit(actor, err);
         if (completion)
           completion(err);
       });
@@ -2075,6 +2080,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::flush) -> caf::result<void> {
+      VAST_DEBUG("{} got a flush request from {}", *self,
+                 self->current_sender());
       // If we've got nothing to flush we can just exit immediately.
       if (self->state.active_partitions.empty())
         return {};
