@@ -28,9 +28,7 @@ struct signal_reflector_state {
 };
 
 /// @param self The actor handle.
-/// @param sigset The set of signals to intercept.
 signal_reflector_actor::behavior_type signal_reflector(
-  signal_reflector_actor::stateful_pointer<signal_reflector_state> self,
-  sigset_t sigset);
+  signal_reflector_actor::stateful_pointer<signal_reflector_state> self);
 
 } // namespace vast::system

@@ -238,7 +238,16 @@ int main(int argc, char** argv) {
   auto sys = caf::actor_system{cfg};
   // The reflector scope variable cleans up the reflector on destruction.
   scope_linked<system::signal_reflector_actor> reflector{
-    sys.spawn<caf::detached>(system::signal_reflector, sigset)};
+    sys.spawn<caf::detached>(system::signal_reflector)};
+  std::atomic<bool> stop = false;
+  auto signal_monitoring_thread = std::jthread([&] {
+    int signum = 0;
+    sigwait(&sigset, &signum);
+    VAST_WARN("received signal {}", signum);
+    if (!stop)
+      caf::anon_send<caf::message_priority::high>(
+        reflector.get(), atom::internal_v, atom::signal_v, signum);
+  });
   // Put it into the actor registry so any actor can communicate with it.
   sys.registry().put("signal-reflector", reflector.get());
   auto run_error = caf::error{};
@@ -249,6 +258,11 @@ int main(int argc, char** argv) {
       run_error = std::move(err);
     }}(*result);
   sys.registry().erase("signal-reflector");
+  stop = true;
+  if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0)
+    VAST_ERROR("failed to cancel signal monitoring thread");
+  signal_monitoring_thread.join();
+  pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {
     system::render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;

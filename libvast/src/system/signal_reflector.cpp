@@ -11,24 +11,8 @@
 #include <caf/blocking_actor.hpp>
 
 #include <csignal>
-#include <unistd.h>
 
 namespace vast::system {
-
-namespace {
-
-std::atomic<bool> stop = false;
-
-void signal_listener(caf::blocking_actor* self,
-                     const signal_reflector_actor& reflector, sigset_t sigset) {
-  int signum = 0;
-  sigwait(&sigset, &signum);
-  if (!stop)
-    self->send<caf::message_priority::high>(reflector, atom::internal_v,
-                                            atom::signal_v, signum);
-}
-
-} // namespace
 
 sigset_t termsigset() {
   sigset_t sigset;
@@ -39,21 +23,9 @@ sigset_t termsigset() {
 }
 
 signal_reflector_actor::behavior_type signal_reflector(
-  signal_reflector_actor::stateful_pointer<signal_reflector_state> self,
-  sigset_t sigset) {
-  self->set_exit_handler([=](const caf::exit_msg&) {
-    // If we haven't got a signal yet we need to raise one to unblock the signal
-    // listener.
-    if (!self->state.got_signal) {
-      stop = true;
-      kill(getpid(), SIGTERM);
-    }
-    return self->quit();
-  });
-  self->spawn(signal_listener, self, sigset);
+  signal_reflector_actor::stateful_pointer<signal_reflector_state> self) {
   return {
     [self](atom::internal, atom::signal, int signum) {
-      self->state.got_signal = true;
       // Unblock the termination signals so a second signal leads to immediate
       // termination.
       auto sigset = termsigset();
@@ -65,7 +37,7 @@ signal_reflector_actor::behavior_type signal_reflector(
           std::signal(SIGABRT, SIG_DFL); // NOLINT
           std::terminate();
         }
-        __builtin_unreachable();
+        return;
       }
       std::cerr << "\rinitiating graceful shutdown... (repeat request to "
                    "terminate immediately)\n";
