@@ -1,11 +1,8 @@
 import json
 import ipaddress
-import os
 import pyarrow as pa
 
 import vast.utils.arrow as vua
-
-FILE_DIR = dir_path = os.path.dirname(os.path.realpath(__file__))
 
 
 def test_pattern_extension_type():
