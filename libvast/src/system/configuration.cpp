@@ -337,8 +337,6 @@ caf::error configuration::parse(int argc, char** argv) {
                                        is_vast_opt);
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
-  for (auto& arg : caf_args)
-    arg.erase(2, 4); // Strip --caf. prefix
   command_line.erase(caf_opt, command_line.end());
   // Do not use builtin config directories in "bare mode". We're checking this
   // here and putting directly into the actor_system_config because
