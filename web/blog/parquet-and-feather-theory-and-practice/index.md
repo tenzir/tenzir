@@ -49,7 +49,8 @@ Parquet is a separate project which precedes Arrow, and has its own data types, 
 
 VAST enumerations are represented as extension types wrapping an Arrow dictionary of strings backed by unsigned 8-bit integers. On read, these 8-bit index values become 32-bit values, which is not compatible with our extension type definition, so the extension type wrapping is lost.
 
-XXX: Insert Image here @mavam
+![Arrow Schema Conversion #width500](arrow-schema-conversion.light.png#gh-light-mode-only)
+![Arrow Schema Conversion #width500](arrow-schema-conversion.dark.png#gh-dark-mode-only)
 
 ### Extension Types inside Maps
 
