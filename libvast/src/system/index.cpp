@@ -940,8 +940,7 @@ void index_state::schedule_lookups() {
           part = it->second.second;
         } else if (auto it = persisted_partitions.find(partition_id);
                    it != persisted_partitions.end()) {
-          auto inmem_part = inmem_partitions.get_or_load(partition_id);
-          part = inmem_part;
+          part = inmem_partitions.get_or_load(partition_id);
         }
       }
       if (!part)
