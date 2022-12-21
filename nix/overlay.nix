@@ -9,20 +9,21 @@ let
 in
 {
   abseil-cpp = if !isStatic then prev.abseil-cpp else prev.abseil-cpp_202206;
-  arrow-cpp = (prev.arrow-cpp.override { 
-    enableShared = !isStatic;
-    enableS3 = !isStatic;
-    enableGcs = !isStatic;
+  arrow-cpp = if !isStatic then prev.arrow-cpp else
+  (prev.arrow-cpp.override {
+    enableShared = false;
+    enableS3 = false;
+    enableGcs = false;
   }).overrideAttrs (old: {
-    buildInputs = old.buildInputs ++ lib.optionals isStatic [ final.sqlite ];
-    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
+    buildInputs = old.buildInputs ++ [ final.sqlite ];
+    cmakeFlags = old.cmakeFlags ++ [
       # Needed for correct dependency resolution, should be the default...
       "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
       # Backtrace doesn't build in static mode, need to investigate.
       "-DARROW_WITH_BACKTRACE=OFF"
     ];
     doCheck = false;
-    doInstallCheck = !isStatic;
+    doInstallCheck = false;
   });
   flatbuffers = prev.flatbuffers.overrideAttrs(_: rec {
     version = "1.12.0";
@@ -163,7 +164,7 @@ in
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
   });
   vast-integration-test-deps = let
-    py3 = (final.python3.withPackages(ps: with ps; [
+    py3 = (prev.python3.withPackages(ps: with ps; [
       coloredlogs
       jsondiff
       pyarrow
