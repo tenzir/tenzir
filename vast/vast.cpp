@@ -239,7 +239,7 @@ int main(int argc, char** argv) {
   scope_linked<system::signal_reflector_actor> reflector{
     sys.spawn<caf::detached>(system::signal_reflector)};
   std::atomic<bool> stop = false;
-  auto signal_monitoring_thread = std::jthread([&] {
+  auto signal_monitoring_thread = std::thread([&] {
     int signum = 0;
     sigwait(&sigset, &signum);
     VAST_WARN("received signal {}", signum);
