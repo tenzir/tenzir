@@ -21,23 +21,6 @@
 
 #define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast_actors, type)
 
-// NOLINTNEXTLINE(cert-dcl58-cpp)
-namespace caf {
-
-template <>
-struct inspector_access<std::filesystem::path> {
-  template <class Inspector>
-  static auto apply(Inspector& f, std::filesystem::path& x) {
-    auto str = x.string();
-    auto result = f.apply(str);
-    if constexpr (Inspector::is_loading)
-      x = {str};
-    return result;
-  }
-};
-
-} // namespace caf
-
 namespace vast::system {
 
 /// Helper utility that enables extending typed actor forward declarations
