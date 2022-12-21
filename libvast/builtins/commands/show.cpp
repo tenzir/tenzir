@@ -129,7 +129,6 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
     = inv.full_name == "show" || inv.full_name == "show models";
   const auto show_schemas
     = inv.full_name == "show" || inv.full_name == "show schemas";
-  const auto timeout = system::node_connection_timeout(inv.options);
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
