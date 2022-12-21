@@ -926,20 +926,24 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
   endif ()
   install(
     CODE "
-    file(REMOVE_RECURSE \"${CMAKE_CURRENT_BINARY_DIR}/python\")
+    file(REMOVE_RECURSE \"\${CMAKE_INSTALL_PREFIX}/share/vast/python\")
+    file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/vast/python\")
     file(
-      COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python\"
-      DESTINATION \"${CMAKE_CURRENT_BINARY_DIR}/\")
+      COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
+      DESTINATION \"\${CMAKE_INSTALL_PREFIX}/share/vast/python\")
     execute_process(
       COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel
-      WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}/python\"
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/vast/python\"
       COMMAND_ERROR_IS_FATAL ANY)
-    file(GLOB VAST_PYTHON_WHL \"${CMAKE_CURRENT_BINARY_DIR}/python/dist/*.whl\")
+    file(
+      GLOB VAST_PYTHON_WHL
+      \"\${CMAKE_INSTALL_PREFIX}/share/vast/python/dist/*.whl\")
     execute_process(
       COMMAND \"${POETRY_PATH}\" run pip install
         ${VAST_POETRY_EXTRA_INSTALL_ARGS}
-        --prefix \"\${CMAKE_INSTALL_PREFIX}\" \"\${VAST_PYTHON_WHL}\"
-      WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}/python\"
+        --prefix \"\${CMAKE_INSTALL_PREFIX}\"
+        \"\${VAST_PYTHON_WHL}\"
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/share/vast/python\"
       COMMAND_ERROR_IS_FATAL ANY)"
     COMPONENT Runtime)
 endif ()
