@@ -521,7 +521,6 @@ caf::error index_state::load_from_disk() {
         if (auto error = extract_partition_synopsis(part_path, synopsis_path))
           return error;
       }
-    retry:
       auto chunk = chunk::mmap(synopsis_path);
       if (!chunk)
         return chunk.error();
@@ -534,19 +533,6 @@ caf::error index_state::load_from_disk() {
                                                  "version");
       const auto& synopsis_legacy
         = *ps_flatbuffer->partition_synopsis_as_legacy();
-      // Re-write old partition synopses that were created before the offset and
-      // id were saved.
-      if (!synopsis_legacy.id_range()) {
-        VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
-                     partition_uuid);
-        if (auto error = extract_partition_synopsis(part_path, synopsis_path))
-          return error;
-        // TODO: There is probably a good way to rewrite this without the jump,
-        // but in the meantime I defer to Knuth:
-        //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-goto)
-        goto retry;
-      }
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
       persisted_partitions.emplace(partition_uuid);

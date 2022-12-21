@@ -87,10 +87,6 @@ struct partition_synopsis final : public caf::ref_counted {
   unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis&,
          partition_synopsis&);
 
-  FRIEND_ATTRIBUTE_NODISCARD friend caf::error
-  unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
-         partition_synopsis& ps, uint64_t offset, uint64_t events);
-
 private:
   // Returns a raw pointer to a deep copy of this partition synopsis.
   // For use by the `caf::intrusive_cow_ptr`.

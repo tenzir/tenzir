@@ -266,10 +266,6 @@ unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
     return caf::make_error(ec::format_error, "missing partition synopsis");
   if (!x.type_ids())
     return caf::make_error(ec::format_error, "missing type_ids");
-  // The id_range was only added in VAST 2021.08.26, so we fill it
-  // from the data in the partition if it does not exist.
-  if (!x.partition_synopsis()->id_range())
-    return unpack(*x.partition_synopsis(), ps, x.offset(), x.events());
   return unpack(*x.partition_synopsis(), ps);
 }
 
