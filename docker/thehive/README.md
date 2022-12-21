@@ -3,25 +3,28 @@
 > **Warning** The TheHive and Cortex integrations are considered experimental
 > and subject to change without notice.
 
-## About the integration
+This integration brings together VAST and TheHive, supporting the following use
+cases:
 
-This integration makes it possible to load telemetry data from VAST into
-TheHive. There are two integration points:
-- A [Cortex Analyzer][cortex-analyzers-docs], that can be triggered to query
-  datapoints that match a given observable. Users can interact with the VAST
-  directly from TheHive UI.
-- An app that loads alerts from VAST into TheHive. The process is capable of
-  loading both stored and continuously incomming alerts from a running VAST
-  instance.
+1. Trigger a historical query to contextualize an observable through a [Cortex
+  Analyzer][cortex-analyzers-docs]. This integration spawns an historical query
+  directly from the TheHive UI.
+
+2. Forward alerts from VAST to TheHive. We provide a small "app" that loads is
+  capable of loading both stored and continuously incoming alerts from a running
+  VAST instance.
 
 ### The VAST Cortex Analyzer
 
 The analyzer can issue queries for observables with the following types:
-- ip: match all events that have a corresponding value in any field with the
+
+- **ip**: match all events that have a corresponding value in any field with the
   `:addr` type.
-- subnet: match all events that have a value in any field with the `:addr` type
+
+- **subnet**: match all events that have a value in any field with the `:addr` type
   that belongs to that subnet.
-- hash/domain: match all events that contain the associated strings.
+
+- **hash/domain**: match all events that contain the associated strings.
 
 > **Note** Queries issued to VAST have limit of 30 results. They are displayed
 > in plain JSON.
@@ -29,16 +32,18 @@ The analyzer can issue queries for observables with the following types:
 ### TheHive app
 
 The app performs both a historical and a continuous query on Suricata alerts.
-- for the historical query, the number of events is limited to 100 (this can be
+
+- For the historical query, the number of events is limited to 100 (this can be
   increased with the `BACKFILL_LIMIT` variable).
-- alerts are de-duplicated before being ingested into TheHive. Only alerts with
+
+- Alerts are de-duplicated before being ingested into TheHive. Only alerts with
   a unique start time / flow id pair are considered.
 
-> **Note** The app is currently only capable of processing Suricata alerts and
-> the conversion into TheHive entities is hardcoded. Our [vision][vision-page]
-> is to decouple the integrations by creating a unified Fabric capable of
-> abstracting away concepts such as alerts. This will be enabled in particular
-> by our current work on [pipelines][pipeline-page].
+> **Note** The app is currently only capable of processing Suricata alerts. The
+> conversion to TheHive entities is hardcoded. Our [vision][vision-page] is to
+> decouple the integrations by creating a unified Fabric capable of abstracting
+> away concepts such as alerts. This will be enabled in particular by our
+> current work on [pipelines][pipeline-page].
 
 [vision-page]: https://vast.io/docs/about/vision
 [pipeline-page]: https://github.com/tenzir/vast/pull/2577
@@ -48,15 +53,20 @@ The app performs both a historical and a continuous query on Suricata alerts.
 This directory contains the Docker Compose setup to run a preconfigured instance
 of TheHive with a VAST [Cortex Analyzer][cortex-analyzers-docs]. This stack can
 run with multiple levels of integration with the VAST service:
+
 - `thehive.yaml`: no dependency on the VAST Compose service.
+
 - `thehive.yaml` + `thehive.vast.yaml`: the analyzer can access the VAST Compose
   service.
+
 - `thehive.yaml` + `thehive.vast.yaml` + `thehive.app.yaml`: the app is relaying
   events between VAST and TheHive.
 
-By default, TheHive is exposed on `http://localhost:9000`. We create some
-default users for both TheHive and Cortex:
+By default, TheHive is exposed on `http://localhost:9000`. We create default
+users for both TheHive and Cortex:
+
 - `admin@thehive.local`/`secret`: organization management
+
 - `orgadmin@thehive.local`/`secret`: user and case management within the default
   (Tenzir) organization
 
@@ -91,9 +101,9 @@ docker compose \
 
 ## With the VAST app
 
-We provide a very basic integration script that listens on `suricata.alert`
-events and forwards them to TheHive. You can start it along the stack by
-running:
+We provide a basic integration script that listens on `suricata.alert` events
+and forwards them to TheHive. You can start it along the stack by running:
+
 ```bash
 # from the docker/compose directory
 export COMPOSE_FILE="vast.yaml"
