@@ -142,7 +142,6 @@ class wah_bitmap;
 
 struct rest_endpoint;
 struct attribute;
-struct augmented_partition_synopsis;
 struct count_query_context;
 struct legacy_address_type;
 struct legacy_alias_type;
@@ -436,7 +435,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
     (std::unordered_map<vast::uuid, vast::partition_synopsis_ptr>))
   VAST_ADD_TYPE_ID((std::unordered_map<vast::type, //
                                        vast::system::catalog_lookup_result>))
-  VAST_ADD_TYPE_ID((std::vector<vast::augmented_partition_synopsis>))
   VAST_ADD_TYPE_ID((std::map<vast::uuid, vast::partition_synopsis_ptr>))
   VAST_ADD_TYPE_ID(
     (std::shared_ptr<

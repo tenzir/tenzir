@@ -157,27 +157,24 @@ struct partition_info {
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_info& x) {
     return f.object(x)
-      .pretty_name("partition_info")
+      .pretty_name("vast.partition-info")
       .fields(f.field("uuid", x.uuid), f.field("events", x.events),
               f.field("max-import-time", x.max_import_time),
               f.field("schema", x.schema), f.field("version", x.version));
   }
 };
 
-/// A partition synopsis with some additional information.
-//  A `augmented_partition_synopsis` is only created for new
-//  partitions, so it can not be a heterogenous legacy partition
-//  but must have exactly one type.
-struct augmented_partition_synopsis {
-  vast::uuid uuid;
-  vast::type type;
-  partition_synopsis_ptr synopsis;
-};
-
 /// A partition synopsis and a uuid.
 struct partition_synopsis_pair {
   vast::uuid uuid;
   partition_synopsis_ptr synopsis;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, partition_synopsis_pair& x) {
+    return f.object(x)
+      .pretty_name("vast.partition-synopsis-pair")
+      .fields(f.field("uuid", x.uuid), f.field("synopsis", x.synopsis));
+  }
 };
 
 } // namespace vast

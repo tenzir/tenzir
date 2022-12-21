@@ -610,8 +610,7 @@ caf::error index_state::load_from_disk() {
     caf::scoped_actor blocking{self->system()};
     blocking->request(transformer, caf::infinite, atom::persist_v)
       .receive(
-        [&synopses, &stats,
-         this](std::vector<augmented_partition_synopsis> result) {
+        [&synopses, &stats, this](std::vector<partition_synopsis_pair> result) {
           VAST_INFO("recovered {} corrupted partitions on startup",
                     result.size());
           for (auto&& x : std::exchange(result, {})) {
@@ -1945,7 +1944,7 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [self, deliver, corrected_partitions, keep, marker_path, rp,
            partition_transfomer](
-            std::vector<augmented_partition_synopsis>& apsv) mutable {
+            std::vector<partition_synopsis_pair>& apsv) mutable {
             std::vector<uuid> old_partition_ids;
             old_partition_ids.reserve(corrected_partitions.size());
             for (const auto& [_, candidate_info] :
@@ -1956,8 +1955,8 @@ index(index_actor::stateful_pointer<index_state> self,
             }
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
-            for (auto const& aps : apsv)
-              new_partition_ids.push_back(aps.uuid);
+            for (auto const& [uuid, _] : apsv)
+              new_partition_ids.push_back(uuid);
             auto result = std::vector<partition_info>{};
             for (auto const& aps : apsv) {
               // If synopsis was null (ie. all events were deleted),
@@ -1965,8 +1964,11 @@ index(index_actor::stateful_pointer<index_state> self,
               // it in the result.
               VAST_ASSERT(aps.synopsis);
               auto info = partition_info{
-                aps.uuid, aps.synopsis->events,  aps.synopsis->max_import_time,
-                aps.type, aps.synopsis->version,
+                aps.uuid,
+                aps.synopsis->events,
+                aps.synopsis->max_import_time,
+                aps.synopsis->schema,
+                aps.synopsis->version,
               };
               // Update the index statistics. We only need to add the events of
               // the new partition here, the subtraction of the old events is
