@@ -25,3 +25,10 @@
   align-items: center;
   justify-content: center;
 }
+
+@media (min-width: 801px) {
+  .leftAligned {
+    margin-right: 100px;
+    margin-left: 100px;
+  }
+}
