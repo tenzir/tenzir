@@ -23,8 +23,8 @@ Use `show schemas` to display the layout of all types:
 vast show schemas --yaml
 ```
 
-In case you ingested [Suricata](/docs/understand/format/suricata) data, this may
-print:
+In case you ingested [Suricata](/docs/understand/formats/suricata) data, this
+may print:
 
 ```yaml
 - suricata.flow:
@@ -215,7 +215,7 @@ then render them on standard output:
 vast export [options] <format> [options] [expr]
 ```
 
-The [format](/docs/understand/format) defines how VAST renders the query
+The [format](/docs/understand/formats) defines how VAST renders the query
 results. Text formats include [JSON](/docs/understand/formats/json),
 [CSV](/docs/understand/formats/csv), or tool-specific data encodings like
 [Zeek](/docs/understand/formats/zeek). [PCAP](/docs/understand/formats/pcap) is
