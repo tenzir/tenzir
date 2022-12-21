@@ -19,7 +19,7 @@ const latestNonReleaseBlogPost = {
 };
 
 const latestReleaseBlogPost = {
-  title: 'VAST v2.4.1 Realeased',
+  title: 'VAST v2.4.1 Released',
   link: '/blog/vast-v2.4.1',
 };
 
