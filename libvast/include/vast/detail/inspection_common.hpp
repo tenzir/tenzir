@@ -48,17 +48,23 @@ public:
   }
 
   template <class Callback>
-    requires(Inspector::is_loading == true)
-  constexpr auto on_load(Callback&& callback) {
-    return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
-      inspector_, std::forward<Callback>(callback)};
+  constexpr decltype(auto) on_load(Callback&& callback) {
+    if constexpr (Inspector::is_loading) {
+      return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
+        inspector_, std::forward<Callback>(callback)};
+    } else {
+      return *this;
+    }
   }
 
   template <class Callback>
-    requires(Inspector::is_loading == false)
-  constexpr auto on_save(Callback&& callback) {
-    return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
-      inspector_, std::forward<Callback>(callback)};
+  constexpr decltype(auto) on_save(Callback&& callback) {
+    if constexpr (!Inspector::is_loading) {
+      return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
+        inspector_, std::forward<Callback>(callback)};
+    } else {
+      return *this;
+    }
   }
 
 private:
