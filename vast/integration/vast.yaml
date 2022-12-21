@@ -1,7 +1,8 @@
 caf:
   logger:
-    file-verbosity: trace
-    component-blacklist: []
+    file:
+      excluded-components: []
+      verbosity: trace
 vast:
   endpoint: '127.0.0.1:42000'
   plugins: []
