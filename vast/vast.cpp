@@ -26,10 +26,9 @@
 
 #include <csignal>
 #include <cstdlib>
-#include <filesystem>
 #include <iostream>
-#include <string>
-#include <vector>
+#include <string_view>
+#include <thread>
 
 namespace {
 
