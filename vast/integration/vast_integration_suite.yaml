@@ -213,7 +213,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       # We use the `null` export format since timeouts are always racy; we
       # cannot reliably make a 0 second timeout return 0 events.
       - command: export --timeout=0s null 'resp_h == 192.168.1.104'
@@ -226,7 +225,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: export ascii 'resp_h == 192.168.1.104'
       # import some more to make sure accounting data is in the system.
       - command: import -b --batch-size=10 zeek
@@ -249,7 +247,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: show schemas
       - command: import -b zeek
         input: data/zeek/dns.log.gz
@@ -257,7 +254,6 @@ tests:
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
       - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: count '#type == "zeek.conn"'
-      - command: flush
       - command: show schemas --yaml
   Query Operators:
     tags: [server, operator]
@@ -279,7 +275,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: export ascii 'fe80::5074:1b53:7e7:ad4d || 169.254.225.22'
       - command: export ascii '"OrfTtuI5G4e" || fe80::5074:1b53:7e7:ad4d'
   Node Type Query:
@@ -294,7 +289,6 @@ tests:
     steps:
       - command: import -b -n 20 zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: export ascii '#type == "zeek.conn"'
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
@@ -385,7 +379,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/pcap/zeek/conn.log.gz
-      - command: flush
       - command: import -b suricata
         input: data/pcap/suricata/eve.json.gz
       - command: count "net.src.ip == 192.168.168.100"
@@ -449,7 +442,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: explore --after=3min 'uid == "Yaix3QBP3Xg"'
       - command: explore --format=ascii --after=3min 'uid == "Yaix3QBP3Xg"'
   # The first queries are stress tests for the deduplication: The query
@@ -531,7 +523,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: version
         transformation: sleep 15
@@ -555,20 +546,17 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: export ascii 'net.app !in ["dns", "ftp", "http", "ssl"]'
   # The `DiskMonitorTester` is set up to run every second and to delete all
   # partitions on disk. We first import the complete zeek dataset with 8462
-  # events, then flush, and then wait some to give the disk monitor enough time
-  # to run. After that, all events from the first import should have been
-  # erased.
+  # events, and then wait some to give the disk monitor enough time to run.
+  # After that, all events from the first import should have been erased.
   Disk monitor:
     tags: [disk-quota]
     fixture: DiskMonitorTester
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: version
         transformation: sleep 4
       - command: count '#type == /zeek.*/'
@@ -578,7 +566,6 @@ tests:
     steps:
       - command: --config=@./vast-pipelines.yaml import -b suricata
         input: data/suricata/eve.json
-      - command: flush
       - command: export json '#type == "suricata.http"'
       - command: export json '#type == "suricata.netflow"'
       - command: export json '#type == "suricata.dns"'
@@ -599,7 +586,6 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: flush
       - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export --timeout=0ms json
@@ -655,10 +641,8 @@ tests:
     steps:
       - command: import --blocking suricata
         input: data/suricata/eve.json
-      - command: flush
       - command: import --blocking suricata
         input: data/suricata/eve.json
-      - command: flush
       - command: status --detailed catalog
         transformation: jq '.catalog.partitions | length'
       - command: export arrow
