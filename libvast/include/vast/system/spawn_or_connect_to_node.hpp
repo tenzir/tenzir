@@ -20,6 +20,9 @@ namespace vast::system {
 
 /// Either spawns a new VAST node or connects to a server, depending on the
 /// configuration.
+/// `self` should be equipped to handle (atom::signal, int)
+/// messages to orchestrate a graceful termination if it runs
+/// a receive-while/until loop after this call.
 std::variant<caf::error, node_actor, scope_linked<node_actor>>
 spawn_or_connect_to_node(caf::scoped_actor& self, const caf::settings& opts,
                          const caf::settings& node_opts);
