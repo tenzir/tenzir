@@ -289,28 +289,4 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
   return unpack_(*x.synopses(), ps);
 }
 
-// This overload is for supporting the transition from VAST 2021.07.29
-// to 2021.08.26, where the `id_range` field was added to partition
-// synopsis. It can be removed once these versions are unsupported.
-caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
-                  partition_synopsis& ps, uint64_t offset, uint64_t events) {
-  // We should not end up in this overload when an id range already exists.
-  VAST_ASSERT(!x.id_range());
-  ps.offset = offset;
-  ps.events = events;
-  if (x.import_time_range()) {
-    ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
-    ps.max_import_time = time{} + duration{x.import_time_range()->end()};
-  } else {
-    ps.min_import_time = time{};
-    ps.max_import_time = time{};
-  }
-  ps.version = x.version();
-  if (const auto* schema = x.schema())
-    ps.schema = type{chunk::copy(as_bytes(*schema))};
-  if (!x.synopses())
-    return caf::make_error(ec::format_error, "missing synopses");
-  return unpack_(*x.synopses(), ps);
-}
-
 } // namespace vast
