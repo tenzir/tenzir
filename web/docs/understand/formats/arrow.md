@@ -48,12 +48,13 @@ with pa.ipc.new_stream(sink, batch.schema) as writer:
 You can import the output of this script into VAST as follows:
 
 ```bash
-python generate.py | vast import arrow --name=foo
+python generate.py | vast import arrow
 ```
 
-In the generator script, the schema did not have a name. But in VAST all schemas
-must have a name, so we need to pass a schema name via `--name` that provides a
-name for the corresponding record.
+:::caution Limited Compatibility
+VAST can currently only import Arrow data that it also exported. We are working
+on support for processing arbitrary Arrow data.
+:::
 
 ## Output
 
