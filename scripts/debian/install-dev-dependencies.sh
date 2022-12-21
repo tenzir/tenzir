@@ -53,4 +53,4 @@ apt-get update
 apt-get -y install yarn
 
 # Poetry
-curl -sSL https://install.python-poetry.org | python3 -
+wget -O - https://install.python-poetry.org | python3 -
