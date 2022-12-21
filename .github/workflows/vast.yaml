@@ -496,7 +496,7 @@ jobs:
           VAST_BUILD_VERSION: ${{ needs.configure.outputs.build-version }}
           VAST_BUILD_VERSION_SHORT: ${{ needs.configure.outputs.build-version-short }}
         run: |
-          STORE_PATH=$(nix develop .#staticShell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
+          STORE_PATH=$(nix develop .#static-shell -c ./nix/static-binary.sh  ${{ github.event.inputs.arguments }} \
             -DCPACK_PACKAGE_FILE_NAME:STRING="vast-${VAST_BUILD_VERSION}")
           echo "store_path=${STORE_PATH}" >> $GITHUB_OUTPUT
       - name: Get Artifact Names
@@ -510,7 +510,7 @@ jobs:
         run: |
           mkdir -p vast-integration-test
           tar xf ./result-package/${{ steps.get_artifact_names.outputs.tar_gz }} --directory vast-integration-test
-          nix shell --impure mach-nix#gen.python.coloredlogs.jsondiff.pyarrow.pyyaml.schema --command python vast/integration/integration.py --app \
+          nix develop .#vast-integration-test-shell --command python vast/integration/integration.py --app \
             vast-integration-test/opt/vast/bin/vast
       - name: Upload Integration Test Logs on Failure
         if: failure()

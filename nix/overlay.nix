@@ -162,6 +162,15 @@ in
     # https://github.com/NixOS/nixpkgs/issues/130963
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
   });
+  vast-integration-test-deps = let
+    py3 = (final.python3.withPackages(ps: with ps; [
+      coloredlogs
+      jsondiff
+      pyarrow
+      pyyaml
+      schema
+    ]));
+  in [ py3 final.jq final.tcpdump ];
   speeve = final.buildGoModule rec {
     pname = "speeve";
     version  = "0.1.3";
