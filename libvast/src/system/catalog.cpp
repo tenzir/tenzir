@@ -662,10 +662,11 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       self->state.merge(partition, std::move(synopsis));
       return atom::ok_v;
     },
-    [self](atom::merge,
-           std::vector<augmented_partition_synopsis> v) -> atom::ok {
-      for (auto& aps : v)
-        self->state.merge(aps.uuid, aps.synopsis);
+    [self](
+      atom::merge,
+      std::vector<partition_synopsis_pair>& partition_synopses) -> atom::ok {
+      for (auto& [uuid, partition_synopsis] : partition_synopses)
+        self->state.merge(uuid, partition_synopsis);
       return atom::ok_v;
     },
     [self](atom::get) -> std::vector<partition_synopsis_pair> {
@@ -689,12 +690,12 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       self->state.erase(partition);
       return atom::ok_v;
     },
-    [self](atom::replace, std::vector<uuid> old_uuids,
-           std::vector<augmented_partition_synopsis> new_synopses) -> atom::ok {
+    [self](atom::replace, const std::vector<uuid>& old_uuids,
+           std::vector<partition_synopsis_pair>& new_synopses) -> atom::ok {
       for (auto const& uuid : old_uuids)
         self->state.erase(uuid);
-      for (auto& aps : new_synopses)
-        self->state.merge(aps.uuid, aps.synopsis);
+      for (auto& [uuid, partition_synopsis] : new_synopses)
+        self->state.merge(uuid, std::move(partition_synopsis));
       return atom::ok_v;
     },
     [self](atom::candidates, const vast::query_context& query_context)

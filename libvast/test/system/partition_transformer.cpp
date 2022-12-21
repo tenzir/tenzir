@@ -99,11 +99,11 @@ TEST(identity pipeline / done before persist) {
   auto synopsis = vast::partition_synopsis_ptr{nullptr};
   auto uuid = vast::uuid::nil();
   rp.receive(
-    [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
+    [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       REQUIRE_EQUAL(apsv.size(), 1ull);
       auto& aps = apsv.front();
       CHECK_EQUAL(aps.synopsis->events, 20ull);
-      CHECK_EQUAL(aps.type.name(), "zeek.conn");
+      CHECK_EQUAL(aps.synopsis->schema.name(), "zeek.conn");
       uuid = aps.uuid;
       synopsis = aps.synopsis;
     },
@@ -182,7 +182,7 @@ TEST(delete pipeline / persist before done) {
   auto synopsis = vast::partition_synopsis_ptr{nullptr};
   auto uuid = vast::uuid::nil();
   rp.receive(
-    [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
+    [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       REQUIRE_EQUAL(apsv.size(), 1ull);
       auto& aps = apsv.front();
       REQUIRE(aps.synopsis);
@@ -287,10 +287,10 @@ TEST(partition with multiple types) {
   auto uuids = std::vector<vast::uuid>{};
   auto stats = vast::index_statistics{};
   rp.receive(
-    [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
+    [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       CHECK_EQUAL(apsv.size(), 3ull);
       for (auto& aps : apsv) {
-        stats.layouts[std::string{aps.type.name()}].count
+        stats.layouts[std::string{aps.synopsis->schema.name()}].count
           += aps.synopsis->events;
         uuids.push_back(aps.uuid);
         synopses.push_back(aps.synopsis);
@@ -668,11 +668,11 @@ TEST(exceeded partition size) {
   auto uuids = std::vector<vast::uuid>{};
   auto stats = vast::index_statistics{};
   rp.receive(
-    [&](std::vector<vast::augmented_partition_synopsis>& apsv) {
+    [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       // We expect to receive 2 partitions with 4 events each.
       CHECK_EQUAL(apsv.size(), 2ull);
       for (auto& aps : apsv) {
-        stats.layouts[std::string{aps.type.name()}].count
+        stats.layouts[std::string{aps.synopsis->schema.name()}].count
           += aps.synopsis->events;
       }
       CHECK_EQUAL(stats.layouts["suricata.dns"].count, 8ull);

@@ -213,14 +213,14 @@ using catalog_actor = typed_actor_fwd<
   caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with<atom::ok>,
   // Merge a set of partition synopsis.
   caf::replies_to<atom::merge,
-                  std::vector<augmented_partition_synopsis>>::with<atom::ok>,
+                  std::vector<partition_synopsis_pair>>::with<atom::ok>,
   // Get *ALL* partition synopses stored in the catalog.
   caf::replies_to<atom::get>::with<std::vector<partition_synopsis_pair>>,
   // Erase a single partition synopsis.
   caf::replies_to<atom::erase, uuid>::with<atom::ok>,
   // Atomatically replace a set of partititon synopses with another.
   caf::replies_to<atom::replace, std::vector<uuid>,
-                  std::vector<augmented_partition_synopsis>>::with<atom::ok>,
+                  std::vector<partition_synopsis_pair>>::with<atom::ok>,
   // Return the candidate partitions per type for a query.
   caf::replies_to<atom::candidates, vast::query_context>::with< //
     catalog_lookup_result>,
@@ -339,7 +339,7 @@ using filesystem_actor = typed_actor_fwd<
 using partition_transformer_actor = typed_actor_fwd<
   // Persist the transformed partitions and return the generated
   // partition synopses.
-  caf::replies_to<atom::persist>::with<std::vector<augmented_partition_synopsis>>,
+  caf::replies_to<atom::persist>::with<std::vector<partition_synopsis_pair>>,
   // INTERNAL: Continuation handler for `atom::done`.
   caf::reacts_to<atom::internal, atom::resume, atom::done>>
   // extract_query_context API
@@ -523,9 +523,6 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::partition_synopsis_pair>)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::augmented_partition_synopsis)
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::vector<vast::augmented_partition_synopsis>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::pipeline_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::http_request)
 #undef vast_uuid_synopsis_map
