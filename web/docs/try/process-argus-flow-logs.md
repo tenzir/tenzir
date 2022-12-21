@@ -2,16 +2,15 @@
 description: Open Source flow monitor
 ---
 
-# Argus
+# Process Argus Flow Logs
 
 [Argus](https://qosient.com/argus/index.shtml) is an open-source flow monitor
 that computes a variety of connection statistics.
 
-The UNIX tool `argus` processes either PCAP or NetFlow data and generates binary
-output. The companion utility `ra` transforms this binary output into a textual
-form that VAST can parse.
-
-## Input
+The UNIX tool `argus` processes either [PCAP](/docs/understand/formats/pcap) or
+[NetFlow](/docs/understand/formats/netflow) data and generates binary output.
+The companion utility `ra` transforms this binary output into a textual form
+that VAST can parse.
 
 Ingesting Argus data involves the following steps:
 
@@ -19,7 +18,7 @@ Ingesting Argus data involves the following steps:
 2. Convert the binary Argus data into CSV with `ra`
 3. Pipe the `ra` output to `vast`
 
-### Read network data
+## Read network data
 
 To read a PCAP file, pass a file via `-r`:
 
@@ -30,7 +29,7 @@ argus -r trace
 To read from standard input, use `-r -`. Similarly, to write to standard
 output, use `-w -`.
 
-### Convert Argus to CSV
+## Convert Argus to CSV
 
 Converting `argus` output to CSV requires the following flags:
 
@@ -73,11 +72,11 @@ StartTime,Flgs,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,TotPkts,TotBytes,State,SrcP
 09-11-18+09:01:33.914414, e        ,udp,192.168.1.1,626,   ->,224.0.0.1,626,1,75,REQ,1,0,0.000000,-0.000000
 ```
 
-### Ingest Argus CSV
+## Ingest Argus CSV output
 
-Since VAST has [CSV support](csv), ingesting Argus CSV output only requires an
-adequate schema. VAST already ships with an argus schema containing a type
-`argus.record` that covers all fields from the `ra` man page.
+Since VAST has [CSV support](/docs/understand/formats/csv), ingesting Argus CSV
+output only requires an adequate schema. VAST already ships with an argus schema
+containing a type `argus.record` that covers all fields from the `ra` man page.
 
 The following command imports a file `argus.csv`:
 
