@@ -10,10 +10,6 @@
   overflow: hidden;
 }
 
-.vastLogo {
-  width: 400px;
-}
-
 @media screen and (max-width: 996px) {
   .heroBanner {
     padding: 2rem;
@@ -30,5 +26,9 @@
   .leftAligned {
     margin-right: 100px;
     margin-left: 100px;
+  }
+
+  .vastLogo {
+    width: 400px;
   }
 }
