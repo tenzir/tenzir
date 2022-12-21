@@ -169,12 +169,13 @@ it sends the partition to the catalog to register it.
 
 :::note Lakehouse Architecture
 VAST uses open standards for data in motion ([Arrow](https://arrow.apache.org))
-and data at rest ([Parquet](https://parquet.apache.org/)). You only ETL data
-once to a destination of your choice. In that sense, VAST resembles a [lakehouse
-architecture][lakehouse-paper]. Think of the above pipeline as a chain of
-independently operating microservices, each of which can be scaled
-independently. The [actor
-model](/docs/understand/architecture/actor-model/) architecture of
-VAST enables this naturally.
+and data at rest ([Feather][feather] & [Parquet](https://parquet.apache.org/)).
+You only ETL data once to a destination of your choice. In that sense, VAST
+resembles a [lakehouse architecture][lakehouse-paper]. Think of the above
+pipeline as a chain of independently operating microservices, each of which can
+be scaled independently. The [actor
+model](/docs/understand/architecture/actor-model/) architecture of VAST enables
+this naturally.
+[feather]: https://arrow.apache.org/docs/python/feather.html
 [lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf
 :::
