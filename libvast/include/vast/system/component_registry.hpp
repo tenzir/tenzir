@@ -15,7 +15,6 @@
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/expected.hpp>
-#include <caf/meta/type_name.hpp>
 #include <caf/optional.hpp>
 
 #include <cstdint>
@@ -93,15 +92,15 @@ public:
   std::tuple<Handles...> find() const {
     auto normalize = [](std::string in) {
       // Remove the uninteresting parts of the name:
-      //   vast::system::type_registry_actor -> type_registry
+      //   vast::system::test_registry_actor -> test_registry
       in.erase(0, sizeof("vast::system::") - 1);
       in.erase(in.size() - (sizeof("_actor") - 1));
-      // Replace '_' with '-': type_registry -> type-registry
+      // Replace '_' with '-': test_registry -> test-registry
       std::replace(in.begin(), in.end(), '_', '-');
       return in;
     };
-    auto labels = std::array<std::string, sizeof...(Handles)>{
-      normalize(caf::type_name_by_id<caf::type_id<Handles>::value>::value)...};
+    auto labels = std::array<std::string, sizeof...(Handles)>{normalize(
+      caf::type_name_by_id<caf::type_id<Handles>::value>::value.data())...};
     auto components = std::apply(
       [this](auto&&... labels) -> std::array<caf::actor, sizeof...(Handles)> {
         auto find_component = [this](auto&& label) -> caf::actor {
@@ -135,7 +134,9 @@ public:
   /// @relates registry
   template <class Inspector>
   friend auto inspect(Inspector& f, component_registry& x) {
-    return f(caf::meta::type_name("component_registry"), x.components_);
+    return f.object(x)
+      .pretty_name("component_registry")
+      .fields(f.field("components", x.components_));
   }
 
 private:

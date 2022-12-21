@@ -167,14 +167,12 @@ When configuring the VAST build, you need to tell CMake the path to the plugin
 source directory. The CMake variable `VAST_PLUGINS` holds a comma-separated
 list of paths to plugin directories.
 
-To test that VAST loads the plugin properly, you need to enable it via the
-configuration or the command line first. Use `vast --plugins=example version`
-and look into the `plugins`. A key-value pair with your plugin name and version
-should exist in the output.
+To test that VAST loads the plugin properly, you can use `vast
+--plugins=example version` and look into the `plugins`. A key-value pair with
+your plugin name and version should exist in the output.
 
-To enable all bundled plugins, i.e., plugins built this way alongside VAST, run
-with `--plugins=bundled` or add `bundled` to the list of enabled plugins in your
-`vast.yaml` configuration file.
+Refer to the [plugin loading](/docs/setup/configure#load-plugins) section of
+the documentation to find out how to explicitly de-/activate plugins.
 
 ### Building against an installed VAST
 
@@ -198,9 +196,6 @@ cmake --install build
 # Run plugin-specific integration tests against the installed VAST.
 cmake --build build --target integration
 ```
-
-To enable all installed plugins, run VAST with `--plugins=all` or add `all` to
-the list of enabled plugins in your `vast.yaml` configuration file.
 
 ## Add unit and integration tests
 

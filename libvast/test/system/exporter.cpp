@@ -14,10 +14,10 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
-#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
@@ -46,28 +46,22 @@ struct fixture : fixture_base {
     run();
   }
 
-  void spawn_type_registry() {
-    type_registry
-      = self->spawn(system::type_registry, directory / "type-registry");
-  }
-
   void spawn_catalog() {
-    catalog = self->spawn(system::catalog, system::accountant_actor{});
+    catalog = self->spawn(system::catalog, system::accountant_actor{},
+                          directory / "type-registry");
   }
 
   void spawn_index() {
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     auto indexdir = directory / "index";
-    index = self->spawn(system::index, system::accountant_actor{}, fs,
-                        system::archive_actor{}, catalog, type_registry,
+    index = self->spawn(system::index, system::accountant_actor{}, fs, catalog,
                         indexdir, defaults::system::store_backend, 10000,
                         duration{}, 5, 5, 1, indexdir, vast::index_config{});
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer",
-                           system::archive_actor{}, index, type_registry,
+    importer = self->spawn(system::importer, directory / "importer", index,
                            std::vector<vast::pipeline>{});
   }
 
@@ -77,8 +71,6 @@ struct fixture : fixture_base {
   }
 
   void importer_setup() {
-    if (!type_registry)
-      spawn_type_registry();
     if (!catalog)
       spawn_catalog();
     if (!index)
@@ -132,7 +124,6 @@ struct fixture : fixture_base {
     CHECK_EQUAL(xs[4][1], "07mJRfg5RU5");
   }
 
-  system::type_registry_actor type_registry;
   system::catalog_actor catalog;
   system::index_actor index;
   system::importer_actor importer;

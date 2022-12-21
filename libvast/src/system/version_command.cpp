@@ -62,8 +62,8 @@ record retrieve_versions() {
   result["jemalloc"] = data{};
 #endif
   record plugin_versions;
-  for (auto& plugin : plugins::get()) {
-    if (plugin.type() == plugin_ptr::type::native)
+  for (const auto& plugin : plugins::get()) {
+    if (plugin.type() == plugin_ptr::type::builtin)
       continue;
     plugin_versions[plugin->name()] = plugin.version();
   }
@@ -80,7 +80,7 @@ caf::message
 version_command([[maybe_unused]] const invocation& inv, caf::actor_system&) {
   VAST_TRACE_SCOPE("{}", inv);
   print_version();
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

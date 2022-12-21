@@ -45,6 +45,9 @@ tests:
       - command: curl http://127.0.0.1:42025/api/v0/status
         prepend_vast: false
         transformation: jq .catalog
+      # Invalid parameter
+      - command: curl http://127.0.0.1:42025/api/v0/status?verbosity=!~asdf
+        prepend_vast: false
   Export Endpoint:
     tags: [rest, export]
     fixture: ServerTester
@@ -53,6 +56,9 @@ tests:
         input: data/conn.log.gz
       - command: flush
       - command: curl http://127.0.0.1:42025/api/v0/export?limit=20
+        transformation: jq .events
+        prepend_vast: false
+      - command: 'curl -XPOST -H"Content-Type: application/json" -d ''{"limit": "20"}'' http://127.0.0.1:42025/api/v0/export'
         transformation: jq .events
         prepend_vast: false
   Authenticated Endpoints:

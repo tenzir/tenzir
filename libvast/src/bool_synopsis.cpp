@@ -9,10 +9,6 @@
 #include "vast/bool_synopsis.hpp"
 
 #include "vast/detail/assert.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
-
-#include <caf/deserializer.hpp>
-#include <caf/serializer.hpp>
 
 namespace vast {
 
@@ -66,16 +62,12 @@ bool bool_synopsis::any_true() {
   return true_;
 }
 
-caf::error bool_synopsis::serialize(caf::serializer& sink) const {
-  return sink(false_, true_);
-}
-
-caf::error bool_synopsis::deserialize(caf::deserializer& source) {
-  return source(false_, true_);
-}
-
-bool bool_synopsis::deserialize(vast::detail::legacy_deserializer& source) {
-  return source(false_, true_);
+bool bool_synopsis::inspect_impl(supported_inspectors& inspector) {
+  return std::visit(
+    [this](auto inspector) {
+      return inspector.get().apply(false_) && inspector.get().apply(true_);
+    },
+    inspector);
 }
 
 } // namespace vast

@@ -12,6 +12,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/detail/collect.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
@@ -76,8 +77,9 @@ TEST(column view) {
     CHECK_EQUAL(cview.index(), column);
     CHECK_EQUAL(cview.size(), sut.rows());
     for (size_t row = 0; row < cview.size(); ++row)
-      CHECK_EQUAL(cview[row],
-                  sut.at(row, column, flat_layout.field(column).type));
+      CHECK_EQUAL(
+        materialize(cview[row]),
+        materialize(sut.at(row, column, flat_layout.field(column).type)));
   }
 }
 
@@ -90,8 +92,9 @@ TEST(row view) {
     CHECK_EQUAL(rview.index(), row);
     CHECK_EQUAL(rview.size(), sut.columns());
     for (size_t column = 0; column < rview.size(); ++column)
-      CHECK_EQUAL(rview[column],
-                  sut.at(row, column, flat_layout.field(column).type));
+      CHECK_EQUAL(
+        materialize(rview[column]),
+        materialize(sut.at(row, column, flat_layout.field(column).type)));
   }
 }
 
@@ -101,7 +104,8 @@ TEST(select - import time) {
   sut.offset(100);
   auto time = vast::time{std::chrono::milliseconds(202202141214)};
   sut.import_time(time);
-  auto result = select(sut, make_ids({{110, 120}, {170, 180}}));
+  auto result
+    = collect(select(sut, expression{}, make_ids({{110, 120}, {170, 180}})));
   REQUIRE_EQUAL(result.size(), 2u);
   CHECK_EQUAL(result[0].import_time(), time);
   CHECK_EQUAL(result[1].import_time(), time);
@@ -110,7 +114,7 @@ TEST(select - import time) {
 TEST(select all) {
   auto sut = zeek_conn_log_full[0];
   sut.offset(100);
-  auto xs = select(sut, make_ids({{100, 200}}));
+  auto xs = collect(select(sut, {}, make_ids({{100, 200}})));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0], sut);
 }
@@ -118,14 +122,14 @@ TEST(select all) {
 TEST(select none) {
   auto sut = zeek_conn_log_full[0];
   sut.offset(100);
-  auto xs = select(sut, make_ids({{200, 300}}));
+  auto xs = collect(select(sut, {}, make_ids({{200, 300}})));
   CHECK_EQUAL(xs.size(), 0u);
 }
 
 TEST(select prefix) {
   auto sut = zeek_conn_log_full[0];
   sut.offset(100);
-  auto xs = select(sut, make_ids({{0, 150}}));
+  auto xs = collect(select(sut, {}, make_ids({{0, 150}})));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0].rows(), 50u);
   CHECK_EQUAL(make_data(xs[0]), make_data(sut, 0, 50));
@@ -134,7 +138,7 @@ TEST(select prefix) {
 TEST(select off by one prefix) {
   auto sut = zeek_conn_log_full[0];
   sut.offset(100);
-  auto xs = select(sut, make_ids({{101, 151}}));
+  auto xs = collect(select(sut, {}, make_ids({{101, 151}})));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0].rows(), 50u);
   CHECK_EQUAL(make_data(xs[0]), make_data(sut, 1, 50));
@@ -143,7 +147,7 @@ TEST(select off by one prefix) {
 TEST(select intermediates) {
   auto sut = zeek_conn_log_full[0];
   sut.offset(100);
-  auto xs = select(sut, make_ids({{110, 120}, {170, 180}}));
+  auto xs = collect(select(sut, {}, make_ids({{110, 120}, {170, 180}})));
   REQUIRE_EQUAL(xs.size(), 2u);
   CHECK_EQUAL(xs[0].rows(), 10u);
   CHECK_EQUAL(make_data(xs[0]), make_data(sut, 10, 10));
@@ -154,7 +158,7 @@ TEST(select intermediates) {
 TEST(select off by one suffix) {
   auto sut = zeek_conn_log_full[0];
   sut.offset(100);
-  auto xs = select(sut, make_ids({{149, 199}}));
+  auto xs = collect(select(sut, {}, make_ids({{149, 199}})));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0].rows(), 50u);
   CHECK_EQUAL(make_data(xs[0]), make_data(sut, 49, 50));
@@ -163,7 +167,7 @@ TEST(select off by one suffix) {
 TEST(select suffix) {
   auto sut = zeek_conn_log_full[0];
   sut.offset(100);
-  auto xs = select(sut, make_ids({{150, 300}}));
+  auto xs = collect(select(sut, {}, make_ids({{150, 300}})));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0].rows(), 50u);
   CHECK_EQUAL(make_data(xs[0]), make_data(sut, 50, 50));
@@ -174,12 +178,12 @@ TEST(truncate) {
   REQUIRE_EQUAL(sut.rows(), 8u);
   sut.offset(100);
   auto truncated_events = [&](size_t num_rows) {
-    auto sub_slice = truncate(sut, num_rows);
+    auto sub_slice = head(sut, num_rows);
     if (sub_slice.rows() != num_rows)
       FAIL("expected " << num_rows << " rows, got " << sub_slice.rows());
     return make_data(sub_slice);
   };
-  auto sub_slice = truncate(sut, 8);
+  auto sub_slice = head(sut, 8);
   CHECK_EQUAL(sub_slice, sut);
   CHECK_EQUAL(truncated_events(7), make_data(sut, 0, 7));
   CHECK_EQUAL(truncated_events(6), make_data(sut, 0, 6));
@@ -274,15 +278,13 @@ TEST(evaluate) {
       };
   check_eval("#type == \"zeek.conn\"", {{0, 8}});
   check_eval("#type != \"zeek.conn\"", {});
-  check_eval("#field == \"orig_pkts\"", {{0, 8}});
-  check_eval("#field != \"orig_pkts\"", {});
 }
 
 TEST(project column flat index) {
-  auto sut = truncate(zeek_conn_log[0], 3);
+  auto sut = head(zeek_conn_log[0], 3);
   auto proj = project(sut, time_type{}, 0, string_type{}, 6);
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -296,7 +298,7 @@ TEST(project column full name) {
   auto proj = project(sut, time_type{}, "zeek.conn.ts", string_type{},
                       "zeek.conn.proto");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -309,7 +311,7 @@ TEST(project column name) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, time_type{}, "ts", string_type{}, "proto");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -322,7 +324,7 @@ TEST(project column mixed access) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, time_type{}, 0, string_type{}, "proto");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [ts, proto] : proj) {
     REQUIRE(ts);
     CHECK_GREATER_EQUAL(*ts, vast::time{});
@@ -335,7 +337,7 @@ TEST(project column order independence) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, string_type{}, "proto", time_type{}, "ts");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [proto, ts] : proj) {
     REQUIRE(proto);
     CHECK_EQUAL(*proto, "udp");
@@ -348,28 +350,28 @@ TEST(project column detect type mismatches) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, bool_type{}, "proto", time_type{}, "ts");
   CHECK(!proj);
-  CHECK_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() == proj.end());
 }
 
 TEST(project column detect wrong field names) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, string_type{}, "porto", time_type{}, "ts");
   CHECK(!proj);
-  CHECK_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() == proj.end());
 }
 
 TEST(project column detect wrong flat indices) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, string_type{}, 123, time_type{}, "ts");
   CHECK(!proj);
-  CHECK_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() == proj.end());
 }
 
 TEST(project column unspecified types) {
   auto sut = zeek_conn_log[0];
   auto proj = project(sut, type{}, "proto", time_type{}, "ts");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   for (auto&& [proto, ts] : proj) {
     REQUIRE(caf::holds_alternative<view<std::string>>(proto));
     CHECK_EQUAL(caf::get<vast::view<std::string>>(proto), "udp");
@@ -382,7 +384,7 @@ TEST(project column lists) {
   auto sut = zeek_dns_log[0];
   auto proj = project(sut, list_type{string_type{}}, "answers");
   CHECK(proj);
-  CHECK_NOT_EQUAL(proj.begin(), proj.end());
+  CHECK(proj.begin() != proj.end());
   CHECK_EQUAL(proj.size(), sut.rows());
   size_t answers = 0;
   for (auto&& [answer] : proj) {
@@ -401,9 +403,9 @@ TEST(roundtrip) {
   auto slice = zeek_dns_log[0];
   slice.offset(42u);
   table_slice slice_copy;
-  std::vector<char> buf;
+  caf::byte_buffer buf;
   caf::binary_serializer sink{nullptr, buf};
-  CHECK_EQUAL(inspect(sink, slice), caf::none);
+  CHECK(inspect(sink, slice));
   CHECK_EQUAL(detail::legacy_deserialize(buf, slice_copy), true);
   CHECK_EQUAL(slice_copy.offset(), 42u);
   CHECK_EQUAL(slice, slice_copy);

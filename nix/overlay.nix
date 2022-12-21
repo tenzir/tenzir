@@ -2,28 +2,49 @@
 final: prev:
 let
   inherit (final) lib;
+  inherit (final.stdenv.hostPlatform) isMusl;
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if final.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
+  nnbp = final.callPackage inputs.nix-npm-buildpackage {};
 in
 {
+  abseil-cpp = if !isStatic then prev.abseil-cpp else prev.abseil-cpp_202206;
   arrow-cpp = (prev.arrow-cpp.override { 
     enableShared = !isStatic;
-    enableFlight = !isStatic;
     enableS3 = !isStatic;
     enableGcs = !isStatic;
   }).overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ [
-      "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"
+    buildInputs = old.buildInputs ++ lib.optionals isStatic [ final.sqlite ];
+    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
+      # Needed for correct dependency resolution, should be the default...
+      "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
+      # Backtrace doesn't build in static mode, need to investigate.
+      "-DARROW_WITH_BACKTRACE=OFF"
     ];
+    doCheck = false;
+    doInstallCheck = !isStatic;
   });
-  arrow-cpp-no-simd = final.arrow-cpp.overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ [
-      "-DARROW_SIMD_LEVEL=NONE"
+  flatbuffers = prev.flatbuffers.overrideAttrs(_: rec {
+    version = "1.12.0";
+    src = prev.fetchFromGitHub {
+      owner = "google";
+      repo = "flatbuffers";
+      rev = "v${version}";
+      hash = "sha256-L1B5Y/c897Jg9fGwT2J3+vaXsZ+lfXnskp8Gto1p/Tg=";
+    };
+    NIX_CFLAGS_COMPILE = "-Wno-error=class-memaccess";
+  });
+  libevent = if !isStatic then prev.libevent else
+  prev.libevent.overrideAttrs (old: {
+    outputs = [ "out" ];
+    outputBin = null;
+    propagatedBuildOutputs = [ "out" ];
+    nativeBuildInputs = old.nativeBuildInputs ++ lib.optionals isStatic [
+      prev.buildPackages.cmake ];
+    cmakeFlags = [
+      "-DEVENT__LIBRARY_TYPE=STATIC"
     ];
-  });
-  xxHash = if !isStatic then prev.xxHash else
-  prev.xxHash.overrideAttrs (old: {
-    patches = [ ./xxHash/static.patch ];
+    postInstall = null;
   });
   http-parser = if !isStatic then prev.http-parser else
     prev.http-parser.overrideAttrs (_ : {
@@ -65,13 +86,11 @@ in
       # is a required argument, and it has to be passed explicitly instead.
       src = lib.callPackageWith source final.fetchFromGitHub { inherit (source) sha256; };
       inherit (source) version;
-      NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer"
+      NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer";
         # Building statically implies using -flto. Since we produce a final binary with
         # link time optimizaitons in VAST, we need to make sure that type definitions that
         # are parsed in both projects are the same, otherwise the compiler will complain
         # at the optimization stage.
-        # TODO: Remove when updating to CAF 0.18.
-        + lib.optionalString isStatic " -std=c++17";
       # https://github.com/NixOS/nixpkgs/issues/130963
       NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
       preCheck = ''
@@ -91,30 +110,31 @@ in
       ];
       dontStrip = true;
     });
+  c-ares = prev.c-ares.overrideAttrs (old: {
+    cmakeFlags = (old.cmakeFlags or []) ++ lib.optionals isStatic [
+      "-DCARES_SHARED=OFF"
+      "-DCARES_STATIC=ON"
+    ];
+  });
   fast_float = final.callPackage ./fast_float { };
   jemalloc = prev.jemalloc.overrideAttrs (old: {
     EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
     configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
+    doCheck = !isStatic;
+  });
+  re2 = prev.re2.overrideAttrs (_: {
+    # Times out.
+    doInstallCheck = !isStatic;
   });
   simdjson = prev.simdjson.overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
       "-DSIMDJSON_BUILD_STATIC=ON"
     ];
   });
-  spdlog = prev.spdlog.overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
-      "-DSPDLOG_BUILD_STATIC=ON"
-      "-DSPDLOG_BUILD_SHARED=OFF"
-    ];
-  });
   libunwind = prev.libunwind.overrideAttrs (old: {
     postPatch = if isStatic then ''
          substituteInPlace configure.ac --replace "-lgcc_s" ""
     '' else old.postPatch;
-  });
-  zeek-broker = (final.callPackage ./zeek-broker { inherit stdenv; }).overrideAttrs (old: {
-    # https://github.com/NixOS/nixpkgs/issues/130963
-    NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
   });
   vast-source = inputs.nix-filter.lib.filter {
     root = ./..;
@@ -128,12 +148,13 @@ in
       (inputs.nix-filter.lib.inDirectory ../python)
       (inputs.nix-filter.lib.inDirectory ../schema)
       (inputs.nix-filter.lib.inDirectory ../scripts)
-      (inputs.nix-filter.lib.inDirectory ../tools)
-      (inputs.nix-filter.lib.inDirectory ../vast)
-      ../BANNER
-      ../CHANGELOG.md
+      (inputs.nix-filter.lib.inDirectory ../docs)
+      (inputs.nix-filter.lib.inDirectory ../cmake)
+      (inputs.nix-filter.lib.inDirectory ../changelog)
+      ../VERSIONING.md
       ../CMakeLists.txt
       ../LICENSE
+      ../VAST.spdx
       ../README.md
       ../VAST.spdx
       ../VERSIONING.md
@@ -145,11 +166,6 @@ in
     # https://github.com/NixOS/nixpkgs/issues/130963
     NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
   });
-  vast-ci = final.vast.override {
-    buildType = "CI";
-    arrow-cpp = final.arrow-cpp-no-simd;
-    packageName = "vast-ci";
-  };
   speeve = final.buildGoModule rec {
     pname = "speeve";
     version  = "0.1.3";
@@ -160,5 +176,17 @@ in
       repo = pname;
       hash = "sha256-75QrtuOduUNT9g2RJRWUow8ESBqsDDXCMGVNQKFc+SE=";
     };
+  };
+
+  vast-ui = nnbp.buildYarnPackage {
+    name = "vast-ui";
+    src = ../plugins/web/ui; # TODO use nix-filter ?
+    yarnBuildMore = ''
+      export HOME=$(mktemp -d)
+      yarn build
+    '';
+    installPhase = ''
+      mv build $out
+    '';
   };
 }

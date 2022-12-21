@@ -59,9 +59,7 @@ mock_filesystem_actor::behavior_type mock_filesystem(
   return {
     [mmap_rp, self](deliver_mmap_promise) {
       REQUIRE(self->state.mmap_response_promise);
-      caf::response_promise& untyped_rp = *self->state.mmap_response_promise;
-      untyped_rp.deliver(static_cast<mock_filesystem_actor>(self),
-                         vast::chunk_ptr{});
+      self->state.mmap_response_promise->deliver(vast::chunk_ptr{});
       MESSAGE("Mock filesystem delivering mmap promise");
     },
     [](atom::write, const std::filesystem::path&,
@@ -104,6 +102,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture()
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
+    caf::init_global_meta_objects<caf::id_block::partition_ut_block>();
   }
 };
 
@@ -117,11 +116,10 @@ TEST(passive_partition - load) {
                              8, 9, 10, 12, 12, 13, 14, 15};
   auto bytes_view = as_bytes(std::span<char, 16>{bytes});
   auto id = uuid{bytes_view};
-  auto store = system::store_actor{};
   auto fs = self->spawn(mock_filesystem);
   auto path = std::filesystem::path{};
   auto aut = self->spawn(system::passive_partition, id,
-                         vast::system::accountant_actor{}, store, fs, path);
+                         vast::system::accountant_actor{}, fs, path);
   sched.run();
   self->send(aut, atom::erase_v);
   CHECK_EQUAL(sched.jobs.size(), 1u);

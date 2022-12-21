@@ -22,7 +22,7 @@
 namespace vast::system {
 
 /// Periodically queries the INDEX with a configurable expression and erases
-/// all hits from the ARCHIVE.
+/// all hits from relevant partitions.
 class eraser_state {
 public:
   // -- constants --------------------------------------------------------------

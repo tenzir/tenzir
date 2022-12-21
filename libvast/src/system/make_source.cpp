@@ -28,6 +28,7 @@
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
@@ -60,7 +61,7 @@ void send_to_source(caf::actor& source, Args&&... args) {
 caf::expected<caf::actor>
 make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
-            type_registry_actor type_registry,
+            catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
             std::vector<pipeline>&& pipelines, bool detached) {
   if (!importer)
@@ -69,9 +70,9 @@ make_source(caf::actor_system& sys, const std::string& format,
   auto udp_port = std::optional<uint16_t>{};
   // Parse options.
   const auto& options = inv.options;
-  auto max_events
-    = to_std(caf::get_if<caf::config_value::integer>(&options, //
-                                                     "vast.import.max-events"));
+  auto max_events = to_optional(
+    caf::get_if<caf::config_value::integer>(&options, //
+                                            "vast.import.max-events"));
   auto uri = caf::get_if<std::string>(&options, "vast.import.listen");
   auto file = caf::get_if<std::string>(&options, "vast.import.read");
   auto type = caf::get_if<std::string>(&options, "vast.import.type");
@@ -144,7 +145,7 @@ make_source(caf::actor_system& sys, const std::string& format,
         return sys.spawn<caf::detached>(source,
                                         std::forward<decltype(args)>(args)...);
       return sys.spawn(source, std::forward<decltype(args)>(args)...);
-    }(std::move(*reader), slice_size, max_events, std::move(type_registry),
+    }(std::move(*reader), slice_size, max_events, std::move(catalog),
       std::move(local_module), std::move(type_filter), std::move(accountant),
       std::move(pipelines));
   VAST_ASSERT(src);

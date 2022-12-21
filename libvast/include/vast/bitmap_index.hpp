@@ -123,7 +123,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bitmap_index& bmi) {
-    return f(bmi.coder_);
+    return f.apply(bmi.coder_);
   }
 
   friend flatbuffers::Offset<fbs::BitmapIndex>

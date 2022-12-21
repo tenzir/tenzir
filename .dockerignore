@@ -1,13 +1,10 @@
 *.md
 */*/.git*
 .clangd/
-/libvast/aux/caf
 /libvast/aux/robin-map
 CMakeUserPresets.json
 build/
 compile_commands.json
 nix/
-pyvast/
-!CHANGELOG.md
 !README.md
 !VERSIONING.md

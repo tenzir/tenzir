@@ -19,10 +19,12 @@
 namespace vast {
 
 struct query_state {
+  using type_query_context_map
+    = std::unordered_map<vast::type, vast::query_context>;
   static constexpr bool use_deep_to_string_formatter = true;
 
-  /// The query expression.
-  vast::query_context query_context;
+  /// The query expression for each schema.
+  type_query_context_map query_contexts_per_type;
 
   /// The query client.
   system::receiver_actor<atom::done> client = {};
@@ -41,13 +43,24 @@ struct query_state {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.query_context, x.client,
-             x.candidate_partitions, x.requested_partitions,
-             x.scheduled_partitions, x.completed_partitions);
+    return f.object(x)
+      .pretty_name("query_state")
+      .fields(f.field("query-contexts-per-type", x.query_contexts_per_type),
+              f.field("client", x.client),
+              f.field("candidate-partitions", x.candidate_partitions),
+              f.field("requested-partitions", x.requested_partitions),
+              f.field("scheduled-partitions", x.scheduled_partitions),
+              f.field("completed-partitions", x.completed_partitions));
   }
 
   std::size_t memusage() const {
-    return sizeof(*this) + query_context.memusage();
+    auto total_query_context_memusage
+      = std::accumulate(query_contexts_per_type.begin(),
+                        query_contexts_per_type.end(), 0,
+                        [](auto value, const auto& schema_context_entry) {
+                          return value + schema_context_entry.second.memusage();
+                        });
+    return sizeof(*this) + total_query_context_memusage;
   }
 };
 
@@ -56,15 +69,17 @@ public:
   /// The entry type for the `partitions` lists. Maps a partition ID
   /// to a list of query IDs.
   struct entry {
-    entry(uuid partition_id, uint64_t priority, std::vector<uuid> queries,
-          bool erased)
+    entry(uuid partition_id, type schema, uint64_t priority,
+          std::vector<uuid> queries, bool erased)
       : partition{std::move(partition_id)},
+        schema{std::move(schema)},
         priority{priority},
         queries{std::move(queries)},
         erased{erased} {
     }
 
     uuid partition;
+    type schema;
     uint64_t priority = 0;
     std::vector<uuid> queries;
     bool erased = false;
@@ -102,7 +117,7 @@ public:
 
   /// Inserts a new query into the queue.
   [[nodiscard]] caf::error
-  insert(query_state&& query_state, std::vector<uuid>&& candidates);
+  insert(query_state&& query_state, system::catalog_lookup_result&& candidates);
 
   /// Activates an inactive query.
   [[nodiscard]] caf::error activate(const uuid& qid, uint32_t num_partitions);

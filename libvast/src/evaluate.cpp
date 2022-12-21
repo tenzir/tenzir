@@ -1,0 +1,506 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include "vast/arrow_table_slice.hpp"
+#include "vast/bitmap_algorithms.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/detail/passthrough.hpp"
+#include "vast/expression.hpp"
+#include "vast/ids.hpp"
+#include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/type.hpp"
+
+#include <arrow/record_batch.h>
+
+#include <cstddef>
+#include <regex>
+#include <span>
+
+namespace vast {
+
+namespace {
+
+template <relational_operator Op>
+struct cell_evaluator;
+
+template <>
+struct cell_evaluator<relational_operator::equal> {
+  static bool evaluate(auto, auto) noexcept {
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+               { lhs == rhs } -> std::same_as<bool>;
+             }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs == rhs;
+  }
+
+  static bool evaluate(std::string_view lhs, view<pattern> rhs) noexcept {
+    return evaluate(rhs, lhs);
+  }
+
+  static bool evaluate(view<pattern> lhs, std::string_view rhs) noexcept {
+    return lhs.match(rhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::not_equal> {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
+    return !cell_evaluator<relational_operator::equal>::evaluate(lhs, rhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::less> {
+  static bool evaluate(auto, auto) noexcept {
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+               { lhs < rhs } -> std::same_as<bool>;
+             }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs < rhs;
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::less_equal> {
+  static bool evaluate(auto, auto) noexcept {
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+               { lhs <= rhs } -> std::same_as<bool>;
+             }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs <= rhs;
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::greater> {
+  static bool evaluate(auto, auto) noexcept {
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+               { lhs > rhs } -> std::same_as<bool>;
+             }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs > rhs;
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::greater_equal> {
+  static bool evaluate(auto, auto) noexcept {
+    return false;
+  }
+
+  template <class LhsView, class RhsView>
+    requires requires(const LhsView& lhs, const RhsView& rhs) {
+               { lhs >= rhs } -> std::same_as<bool>;
+             }
+  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
+    return lhs >= rhs;
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::in> {
+  static bool evaluate(auto, auto) noexcept {
+    return false;
+  }
+
+  static bool evaluate(view<std::string> lhs, view<std::string> rhs) noexcept {
+    return rhs.find(lhs) != view<std::string>::npos;
+  }
+
+  static bool evaluate(view<std::string> lhs, view<pattern> rhs) noexcept {
+    return rhs.search(lhs);
+  }
+
+  static bool evaluate(view<address> lhs, view<subnet> rhs) noexcept {
+    return rhs.contains(lhs);
+  }
+
+  static bool evaluate(view<subnet> lhs, view<subnet> rhs) noexcept {
+    return rhs.contains(lhs);
+  }
+
+  static bool evaluate(auto lhs, view<list> rhs) noexcept {
+    return std::any_of(rhs.begin(), rhs.end(), [lhs](data_view data) {
+      return caf::visit(
+        [lhs](auto view) noexcept {
+          return cell_evaluator<relational_operator::equal>::evaluate(lhs,
+                                                                      view);
+        },
+        data);
+    });
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::not_in> {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
+    return !cell_evaluator<relational_operator::in>::evaluate(lhs, rhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::ni> {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
+    return cell_evaluator<relational_operator::in>::evaluate(rhs, lhs);
+  }
+};
+
+template <>
+struct cell_evaluator<relational_operator::not_ni> {
+  static bool evaluate(auto lhs, auto rhs) noexcept {
+    return !cell_evaluator<relational_operator::ni>::evaluate(lhs, rhs);
+  }
+};
+
+// The default implementation for the column evaluator that dispatches to the
+// cell evaluator for every relevant row.
+template <relational_operator Op, concrete_type LhsType, class RhsView>
+struct column_evaluator {
+  static ids evaluate(LhsType type, id offset, const arrow::Array& array,
+                      RhsView rhs, const ids& selection) noexcept {
+    ids result{};
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      const auto row = detail::narrow_cast<int64_t>(id - offset);
+      // TODO: Instead of this in the loop, do selection &= array.null_bitmap
+      // outside of it.
+      if (array.IsNull(row))
+        continue;
+      result.append(false, id - result.size());
+      result.append(
+        cell_evaluator<Op>::evaluate(value_at(type, array, row), rhs), 1u);
+    }
+    result.append(false, offset + array.length() - result.size());
+    return result;
+  }
+};
+
+// Special-case equal operations with nil.
+template <concrete_type LhsType>
+struct column_evaluator<relational_operator::equal, LhsType, caf::none_t> {
+  static ids
+  evaluate([[maybe_unused]] LhsType type, id offset, const arrow::Array& array,
+           [[maybe_unused]] caf::none_t rhs, const ids& selection) noexcept {
+    // TODO: This entire loop semantically is just selection &
+    // ~array.null_bitmap, but we cannot do bitwise operations with Arrow's
+    // bitmaps yet.
+    ids result{};
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      const auto row = detail::narrow_cast<int64_t>(id - offset);
+      if (!array.IsNull(row))
+        continue;
+      result.append(false, id - result.size());
+      result.append(true, 1u);
+    }
+    result.append(false, offset + array.length() - result.size());
+    return result;
+  }
+};
+
+// Special-case not-equal operations with nil.
+template <concrete_type LhsType>
+struct column_evaluator<relational_operator::not_equal, LhsType, caf::none_t> {
+  static ids
+  evaluate([[maybe_unused]] LhsType type, id offset, const arrow::Array& array,
+           [[maybe_unused]] caf::none_t rhs, const ids& selection) noexcept {
+    // TODO: This entire loop semantically is just selection &
+    // array.null_bitmap, but we cannot do bitwise operations with Arrow's
+    // bitmaps yet.
+    ids result{};
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      const auto row = detail::narrow_cast<int64_t>(id - offset);
+      if (array.IsNull(row))
+        continue;
+      result.append(false, id - result.size());
+      result.append(true, 1u);
+    }
+    result.append(false, offset + array.length() - result.size());
+    return result;
+  }
+};
+
+// All operations comparing with nil except for equal and not-equal always yield
+// no results.
+template <relational_operator Op, concrete_type LhsType>
+struct column_evaluator<Op, LhsType, caf::none_t> {
+  static ids
+  evaluate([[maybe_unused]] LhsType type, id offset, const arrow::Array& array,
+           [[maybe_unused]] caf::none_t rhs,
+           [[maybe_unused]] const ids& selection) noexcept {
+    return ids{offset + array.length(), false};
+  }
+};
+
+// Speed up string and pattern comparisons by instantiating the regex object
+// less often.
+template <relational_operator Op>
+  requires(Op == relational_operator::equal
+           || Op == relational_operator::not_equal)
+struct column_evaluator<Op, string_type, view<pattern>> {
+  static ids evaluate(string_type type, id offset, const arrow::Array& array,
+                      view<pattern> rhs, const ids& selection) noexcept {
+    ids result{};
+    auto re = std::regex{std::string{rhs.string()}};
+    for (auto id : select(selection)) {
+      VAST_ASSERT(id >= offset);
+      const auto row = detail::narrow_cast<int64_t>(id - offset);
+      // TODO: Instead of this in the loop, do selection &= array.null_bitmap
+      // outside of it.
+      if (array.IsNull(row))
+        continue;
+      result.append(false, id - result.size());
+      const auto value = value_at(type, array, row);
+      if constexpr (Op == relational_operator::equal) {
+        if (std::regex_match(value.begin(), value.end(), re))
+          result.append_bit(true);
+      } else if constexpr (Op == relational_operator::not_equal) {
+        if (!std::regex_match(value.begin(), value.end(), re))
+          result.append_bit(true);
+      } else {
+        static_assert(detail::always_false_v<decltype(Op)>,
+                      "unexpected relational operator");
+      }
+    }
+    result.append(false, offset + array.length() - result.size());
+    return result;
+  }
+};
+
+// For operations comparing enumeration arrays with a string view we want to
+// first convert the string view into its underlying integral representation,
+// and then dispatch to that column evaluator.
+template <relational_operator Op>
+struct column_evaluator<Op, enumeration_type, view<std::string>> {
+  static ids
+  evaluate(enumeration_type type, id offset, const arrow::Array& array,
+           view<std::string> rhs, const ids& selection) noexcept {
+    if (auto key = type.resolve(rhs)) {
+      auto rhs_internal = detail::narrow_cast<view<enumeration>>(*key);
+      return column_evaluator<Op, enumeration_type, view<enumeration>>::evaluate(
+        type, offset, array, rhs_internal, selection);
+    }
+    return ids{offset + array.length(), false};
+  }
+};
+
+// A utility function for evaluating meta extractors in predicates. This is
+// always a yes or no question per batch, so the function does not have to deal
+// with bitmaps at all.
+bool evaluate_meta_extractor(const table_slice& slice,
+                             const meta_extractor& lhs, relational_operator op,
+                             const data& rhs) {
+  switch (lhs.kind) {
+    case meta_extractor::kind::type: {
+      switch (op) {
+#define VAST_EVAL_DISPATCH(op)                                                 \
+  case relational_operator::op: {                                              \
+    auto f = [&](const auto& rhs) noexcept {                                   \
+      return cell_evaluator<relational_operator::op>::evaluate(                \
+        slice.layout().name(), make_view(rhs));                                \
+    };                                                                         \
+    return caf::visit(f, rhs);                                                 \
+  }
+        VAST_EVAL_DISPATCH(equal);
+        VAST_EVAL_DISPATCH(not_equal);
+        VAST_EVAL_DISPATCH(in);
+        VAST_EVAL_DISPATCH(less);
+        VAST_EVAL_DISPATCH(not_in);
+        VAST_EVAL_DISPATCH(greater);
+        VAST_EVAL_DISPATCH(greater_equal);
+        VAST_EVAL_DISPATCH(less_equal);
+        VAST_EVAL_DISPATCH(ni);
+        VAST_EVAL_DISPATCH(not_ni);
+#undef VAST_EVAL_DISPATCH
+      }
+      die("unreachable");
+    }
+    case meta_extractor::kind::import_time: {
+      switch (op) {
+#define VAST_EVAL_DISPATCH(op)                                                 \
+  case relational_operator::op: {                                              \
+    auto f = [&](const auto& rhs) noexcept {                                   \
+      return cell_evaluator<relational_operator::op>::evaluate(                \
+        slice.import_time(), make_view(rhs));                                  \
+    };                                                                         \
+    return caf::visit(f, rhs);                                                 \
+  }
+        VAST_EVAL_DISPATCH(equal);
+        VAST_EVAL_DISPATCH(not_equal);
+        VAST_EVAL_DISPATCH(in);
+        VAST_EVAL_DISPATCH(less);
+        VAST_EVAL_DISPATCH(not_in);
+        VAST_EVAL_DISPATCH(greater);
+        VAST_EVAL_DISPATCH(greater_equal);
+        VAST_EVAL_DISPATCH(less_equal);
+        VAST_EVAL_DISPATCH(ni);
+        VAST_EVAL_DISPATCH(not_ni);
+#undef VAST_EVAL_DISPATCH
+      }
+      die("unreachable");
+    }
+  }
+  __builtin_unreachable();
+}
+
+} // namespace
+
+// Expression evaluation takes place in multiple resolution steps:
+// 1. Normalize the selection bitmap from the dense index result to the length
+//    of the batch + offset.
+// 2. Determine whether the expression is empty, a connective of some sort, or
+//    a predicate. For connectives, resolve them recursively and combine the
+//    resulting bitmaps accordingly.
+// 3. Evaluate predicates:
+//    a) If it's a meta extractor, operate on the batch metadata. In case of a
+//       match, the selection bitmap is the very result.
+//    b) If it's a data predicate, access the desired array, and lift the
+//       resolved types for both sides of the predicate into a compile-time
+//       context for the column evaluator.
+// 4. The column evaluator has specialization based on the three-tuple of lhs
+//    type, relational operator, and rhs view. The generic fall back case
+//    iterates over all fields per the selection bitmap to do the evaluation
+//    using the cell evaluator, which can be specialized per relational
+//    operator.
+ids evaluate(const expression& expr, const table_slice& slice,
+             const ids& hints) {
+  const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
+  const auto num_rows = slice.rows();
+  const auto evaluate_predicate = detail::overload{
+    [](const auto&, relational_operator, const auto&, const ids&) -> ids {
+      die("predicates must be normalized and bound for evaluation");
+    },
+    [&](const meta_extractor& lhs, relational_operator op, const data& rhs,
+        ids selection) -> ids {
+      // If no bit in the selection is set we have no results, but we can avoid
+      // an allocation by simply returning the already empty selection.
+      if (!any(selection))
+        return selection;
+      if (evaluate_meta_extractor(slice, lhs, op, rhs))
+        return selection;
+      return ids{offset + num_rows, false};
+    },
+    [&](const data_extractor& lhs, relational_operator op, const data& rhs,
+        const ids& selection) -> ids {
+      if (!any(selection))
+        return ids{offset + num_rows, false};
+      const auto index
+        = caf::get<record_type>(slice.layout()).resolve_flat_index(lhs.column);
+      const auto type = caf::get<record_type>(slice.layout()).field(index).type;
+      const auto array = static_cast<arrow::FieldPath>(index)
+                           .Get(*to_record_batch(slice))
+                           .ValueOrDie();
+      VAST_ASSERT(array);
+      switch (op) {
+#define VAST_EVAL_DISPATCH(op)                                                 \
+  case relational_operator::op: {                                              \
+    auto f = [&]<concrete_type Type, class Rhs>(                               \
+               Type type, const Rhs& rhs) noexcept -> ids {                    \
+      return column_evaluator<relational_operator::op, Type,                   \
+                              view<Rhs>>::evaluate(type, offset, *array,       \
+                                                   make_view(rhs), selection); \
+    };                                                                         \
+    return caf::visit(f, type, rhs);                                           \
+  }
+        VAST_EVAL_DISPATCH(equal);
+        VAST_EVAL_DISPATCH(not_equal);
+        VAST_EVAL_DISPATCH(in);
+        VAST_EVAL_DISPATCH(less);
+        VAST_EVAL_DISPATCH(not_in);
+        VAST_EVAL_DISPATCH(greater);
+        VAST_EVAL_DISPATCH(greater_equal);
+        VAST_EVAL_DISPATCH(less_equal);
+        VAST_EVAL_DISPATCH(ni);
+        VAST_EVAL_DISPATCH(not_ni);
+#undef VAST_EVAL_DISPATCH
+      }
+      die("unreachable");
+    },
+  };
+  const auto evaluate_expression
+    = [&](const auto& self, const expression& expr, ids selection) -> ids {
+    const auto evaluate_expression_impl = detail::overload{
+      [&](const caf::none_t&, const ids&) {
+        return ids{offset + num_rows, false};
+      },
+      [&](const negation& negation, const ids& selection) {
+        // For negations we want to return a bitmap that has 1s in places where
+        // the selection had 1s and the nested expression evaluation returned
+        // 0s. The opposite case where the selection has 0s and the nested
+        // expression evaluation returns 1s cannot exist (this is a precondition
+        // violation), so we can simply XOR the bitmaps to do the negation.
+        return selection ^ self(self, negation.expr(), selection);
+      },
+      [&](const conjunction& conjunction, ids selection) {
+        for (const auto& connective : conjunction) {
+          if (!any(selection))
+            return selection;
+          selection = self(self, connective, std::move(selection));
+        }
+        return selection;
+      },
+      [&](const disjunction& disjunction, const ids& selection) {
+        auto mask = selection;
+        for (const auto& connective : disjunction) {
+          if (!any(mask))
+            return selection;
+          mask &= ~self(self, connective, mask);
+        }
+        return selection & ~mask;
+      },
+      [&](const predicate& predicate, const ids& selection) -> ids {
+        return caf::visit(evaluate_predicate, predicate.lhs,
+                          detail::passthrough(predicate.op), predicate.rhs,
+                          detail::passthrough(selection));
+      },
+    };
+    return caf::visit(evaluate_expression_impl, expr,
+                      detail::passthrough(selection));
+  };
+  auto selection = ids{};
+  selection.append(false, offset);
+  if (hints.empty()) {
+    selection.append(true, num_rows);
+  } else {
+    for (auto hint : select(hints)) {
+      if (hint < offset)
+        continue;
+      if (hint >= offset + num_rows)
+        break;
+      selection.append(false, hint - selection.size());
+      selection.append<true>();
+    }
+    selection.append(false, offset + num_rows - selection.size());
+  }
+  VAST_ASSERT(selection.size() == offset + num_rows);
+  auto result
+    = evaluate_expression(evaluate_expression, expr, std::move(selection));
+  VAST_ASSERT(result.size() == offset + num_rows);
+  return result;
+}
+
+} // namespace vast

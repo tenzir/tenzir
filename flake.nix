@@ -6,13 +6,15 @@
     extra-trusted-public-keys = "vast.cachix.org-1:0L8rErLUuFAdspyGYYQK3Sgs9PYRMzkLEqS2GxfaQhA=";
   };
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/c4998c7bf6c84e3f5d7abe63a6ea8d110c2dbd95";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/b8869e373c810b2d397dc34c7a3025a66f3fa549";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.nix-filter.url = "github:numtide/nix-filter";
+  inputs.nix-npm-buildpackage.url = "github:dit7ya/nix-npm-buildpackage"; # TODO send a PR to upstream
+  inputs.nix-npm-buildpackage.inputs.nixpkgs.follows = "nixpkgs";
 
-  outputs = { self, nixpkgs, flake-utils, nix-filter, flake-compat }@inputs: {
+  outputs = { self, nixpkgs, flake-utils, ... }@inputs: {
     nixosModules.vast = {
       imports = [
         ./nix/module.nix
@@ -30,18 +32,44 @@
       inherit pkgs;
       packages = flake-utils.lib.flattenTree {
         vast = pkgs.vast;
-        vast-ci = pkgs.vast-ci;
         vast-static = pkgs.pkgsStatic.vast;
-        vast-ci-static = pkgs.pkgsStatic.vast-ci;
         staticShell = pkgs.mkShell {
           buildInputs = with pkgs; [
             git nixUnstable coreutils nix-prefetch-github
           ];
         };
+        vast-ui = pkgs.vast-ui;
         default = pkgs.vast;
       };
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };
       apps.vast-static = flake-utils.lib.mkApp { drv = packages.vast-static; };
+      apps.stream-static-image = {
+        type = "app";
+        program = "${pkgs.dockerTools.streamLayeredImage {
+          name = "tenzir/vast-slim";
+          tag = "latest";
+          config = let
+            vast-dir = "/var/lib/vast";
+          in {
+            Entrypoint = [ "${self.packages.${system}."vast-static"}/bin/vast" ];
+            CMD = [ "--help" ];
+            Env = [
+              # When changing these, make sure to also update the entries in the
+              # Dockerfile.
+              "VAST_ENDPOINT=0.0.0.0:42000"
+              "VAST_DB_DIRECTORY=${vast-dir}"
+              "VAST_LOG_FILE=/var/log/vast/server.log"
+            ];
+            ExposedPorts = {
+              "42000/tcp" = {};
+            };
+            WorkingDir = "${vast-dir}";
+            Volumes = {
+              "${vast-dir}" = {};
+            };
+          };
+        }}";
+      };
       apps.default = apps.vast;
       devShell = import ./shell.nix { inherit pkgs; };
       hydraJobs = { inherit packages; } // (

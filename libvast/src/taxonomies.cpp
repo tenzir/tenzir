@@ -233,13 +233,13 @@ resolve_impl(const taxonomies& ts, const expression& e,
         conjunction unrestricted;
         auto abs_op = is_negated(op) ? negate(op) : op;
         auto insert_meta_field_predicate = [&] {
-          auto make_meta_field_predicate
-            = [&](relational_operator op, const vast::data&) {
-                return [&, op](std::string item) {
-                  return predicate{meta_extractor{meta_extractor::field}, op,
-                                   vast::data{item}};
-                };
+          auto make_meta_field_predicate =
+            [&]([[maybe_unused]] relational_operator op, const vast::data&) {
+              return [](std::string item) {
+                return predicate{field_extractor{std::move(item)},
+                                 relational_operator::not_equal, vast::data{}};
               };
+            };
           unrestricted.emplace_back(
             resolve_concepts(*levels.top().first, relational_operator::equal,
                              caf::none, make_meta_field_predicate));
@@ -347,6 +347,12 @@ caf::expected<expression> resolve(const taxonomies& ts, const expression& e) {
 caf::expected<expression> resolve(const taxonomies& ts, const expression& e,
                                   const std::map<std::string, type_set>& seen) {
   return resolve_impl(ts, e, seen, true);
+}
+
+caf::expected<expression> resolve(const taxonomies& ts, const expression& e,
+                                  const vast::type& single_type) {
+  return resolve_impl(ts, e, {{std::string(single_type.name()), {single_type}}},
+                      true);
 }
 
 } // namespace vast

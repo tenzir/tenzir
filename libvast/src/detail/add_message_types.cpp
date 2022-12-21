@@ -29,20 +29,24 @@
 #include "vast/query_context.hpp"
 #include "vast/query_options.hpp"
 #include "vast/subnet.hpp"
+#include "vast/system/accountant_config.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/component_registry.hpp"
+#include "vast/system/index.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/type_registry.hpp"
+#include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/actor_system_config.hpp>
+#include <caf/init_global_meta_objects.hpp>
+#include <caf/inspector_access.hpp>
+#include <caf/io/middleman.hpp>
 #include <caf/stream.hpp>
 #include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -51,12 +55,29 @@
 #include <utility>
 #include <vector>
 
+namespace caf {
+template <class Slot>
+struct inspector_access<caf::inbound_stream_slot<Slot>> {
+  template <class Inspector, class T>
+  static auto apply(Inspector& f, caf::inbound_stream_slot<T>& x) {
+    auto val = x.value();
+    auto result = f.apply(val);
+    if constexpr (Inspector::is_loading)
+      x = caf::inbound_stream_slot<T>{val};
+    return result;
+  }
+};
+
+} // namespace caf
+
 namespace vast::detail {
 
-void add_message_types(caf::actor_system_config& cfg) {
-  cfg.add_message_types<caf::id_block::vast_types>();
-  cfg.add_message_types<caf::id_block::vast_atoms>();
-  cfg.add_message_types<caf::id_block::vast_actors>();
+void add_message_types() {
+  caf::core::init_global_meta_objects();
+  caf::io::middleman::init_global_meta_objects();
+  caf::init_global_meta_objects<caf::id_block::vast_types>();
+  caf::init_global_meta_objects<caf::id_block::vast_atoms>();
+  caf::init_global_meta_objects<caf::id_block::vast_actors>();
   auto old_blocks = std::vector<plugin_type_id_block>{
     {caf::id_block::vast_types::begin, caf::id_block::vast_actors::end}};
   // Check for type ID conflicts between dynamic plugins.
@@ -66,7 +87,7 @@ void add_message_types(caf::actor_system_config& cfg) {
       if (new_block.begin < old_block.end && old_block.begin < new_block.end)
         die("cannot assign overlapping plugin type ID blocks");
     old_blocks.push_back(new_block);
-    assigner(cfg);
+    assigner();
   }
 }
 

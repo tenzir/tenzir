@@ -1,0 +1,40 @@
+#! /usr/bin/env bash
+
+set -eux -o pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+EXPECTED_OUTPUT_FILE=$SCRIPT_DIR/output/output.json
+DOCKER_DIRECTORY="$SCRIPT_DIR/../../.."
+
+export COMPOSE_FILE
+COMPOSE_FILE="$DOCKER_DIRECTORY/compose/thehive.yaml"
+if [[ "$1" == "service" ]]; then
+  COMPOSE_FILE="$COMPOSE_FILE:$DOCKER_DIRECTORY/compose/vast.yaml:$DOCKER_DIRECTORY/compose/thehive.vast.yaml"
+elif [[ "$1" == "host" ]]; then
+  :
+else
+  echo "Missing argument service|host"
+  exit 1
+fi
+
+# Cleanup before
+rm -f EXPECTED_OUTPUT_FILE
+docker compose down -v
+
+docker compose \
+  run \
+  --entrypoint vast/search.py \
+  --volume $SCRIPT_DIR/input/$1.json:/job/input/input.json \
+  --volume $SCRIPT_DIR/output:/job/output \
+  --interactive=false \
+  --no-TTY \
+  --rm \
+  neuron \
+  /job \
+  || true
+
+# Cleanup after
+docker compose down -v
+
+grep -q "\"success\": true" $EXPECTED_OUTPUT_FILE || \
+  (echo "Neuron execution failed" && cat $EXPECTED_OUTPUT_FILE && exit 1)

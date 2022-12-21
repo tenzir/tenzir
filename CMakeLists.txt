@@ -114,16 +114,6 @@ add_custom_target(
           ${changelog_dependencies}
   COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/VASTChangelog.cmake")
 
-# NOTE: This does intentionally not specify <source-dir>/CHANGELOG.md as a
-# byproduct, because that causes the generated 'clean' target to remove it.
-add_custom_target(
-  update-changelog
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-  COMMAND
-    ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_CURRENT_BINARY_DIR}/CHANGELOG.md"
-    "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md")
-
 option(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE
        "Skip build configuration after update-changelog target" OFF)
 mark_as_advanced(VAST_ENABLE_SKIP_AFTER_CHANGELOG_UPDATE)
@@ -193,17 +183,6 @@ if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
     endif ()
     "
     COMPONENT Development)
-endif ()
-
-# -- silence policy-related warnings -------------------------------------------
-
-# TODO: When updating to CAF 0.18, this should no longer be needed.
-if (POLICY CMP0048)
-  unset(PROJECT_VERSION)
-  unset(PROJECT_VERSION_MAJOR)
-  unset(PROJECT_VERSION_MINOR)
-  unset(PROJECT_VERSION_PATCH)
-  unset(PROJECT_VERSION_TWEAK)
 endif ()
 
 # -- internal target -----------------------------------------------------------
@@ -698,6 +677,123 @@ add_feature_info("VAST_ENABLE_MANPAGES" VAST_ENABLE_MANPAGES
                  "generate manpages for binaries.")
 if (VAST_ENABLE_MANPAGES)
   find_package(Pandoc REQUIRED)
+endif ()
+
+# -- caf -----------------------------------------------------------------------
+
+# The CAF dependency is loaded project-wide because both libvast and
+# libvast_test need it.
+
+# CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
+find_package(OpenSSL REQUIRED)
+
+function (VASTSystemizeTarget tgt)
+  message(STATUS "Treating ${tgt} as a system dependency")
+  get_target_property(_includes ${tgt} INTERFACE_INCLUDE_DIRECTORIES)
+  set_property(
+    TARGET ${tgt}
+    APPEND
+    PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_includes}")
+endfunction ()
+
+# TODO: Require CAF to be installed.
+
+if (VAST_ENABLE_DEVELOPER_MODE
+    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt"
+    AND NOT CAF_ROOT_DIR)
+  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT ON)
+else ()
+  set(VAST_ENABLE_BUNDLED_CAF_DEFAULT OFF)
+endif ()
+option(VAST_ENABLE_BUNDLED_CAF "Use the CAF submodule"
+       "${VAST_ENABLE_BUNDLED_CAF_DEFAULT}")
+add_feature_info("VAST_ENABLE_BUNDLED_CAF" VAST_ENABLE_BUNDLED_CAF
+                 "use the CAF submodule.")
+if (NOT VAST_ENABLE_BUNDLED_CAF)
+  # Try to find the required CAF components first...
+  find_package(
+    CAF
+    COMPONENTS core io test openssl
+    REQUIRED)
+  if (NOT ${CAF_VERSION} VERSION_GREATER_EQUAL 0.18.6)
+    message(
+      FATAL_ERROR "Failed to find CAF >= 0.18.6 version (found ${CAF_VERSION})")
+  endif ()
+  string(
+    APPEND
+    VAST_FIND_DEPENDENCY_LIST
+    "\nfind_package(CAF ${CAF_VERSION} COMPONENTS core io test openssl REQUIRED)"
+  )
+else ()
+  # Use bundled CAF.
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the libvast/aux/caf submodule"
+    )
+  else ()
+    set(VAST_ENABLE_BUNDLED_CAF ON)
+    set(CAF_LOG_LEVEL ${VAST_CAF_LOG_LEVEL})
+    set(CAF_ENABLE_EXAMPLES OFF)
+    set(CAF_ENABLE_TESTING OFF)
+    set(CAF_ENABLE_TOOLS OFF)
+    set(CAF_ENABLE_OPENSSL ON)
+    # add_subdirectory libvast/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
+    # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
+    set(ORIGINAL_CXX_STANDARD ${CMAKE_CXX_STANDARD})
+    set(CMAKE_CXX_STANDARD 17)
+    add_subdirectory(libvast/aux/caf)
+    set(CMAKE_CXX_STANDARD ${ORIGINAL_CXX_STANDARD})
+    VASTSystemizeTarget(libcaf_core)
+    set_target_properties(libcaf_core PROPERTIES EXPORT_NAME core)
+    target_compile_features(libcaf_core INTERFACE cxx_std_17)
+    target_compile_options(
+      libcaf_core
+      PRIVATE
+        -Wno-maybe-uninitialized
+        -Wno-unqualified-std-cast-call
+        -Wno-unknown-warning-option
+        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-deprecated-declarations>
+        $<$<CXX_COMPILER_ID:GNU>:-Wno-deprecated>)
+    VASTSystemizeTarget(libcaf_io)
+    set_target_properties(libcaf_io PROPERTIES EXPORT_NAME io)
+    target_compile_options(
+      libcaf_io PRIVATE -Wno-maybe-uninitialized -Wno-unqualified-std-cast-call
+                        -Wno-unknown-warning-option)
+    if (NOT TARGET libcaf_openssl)
+      string(
+        JOIN " " err_message
+        "Unable to find the bundled CAF's OpenSSL module; consider setting "
+        "OPENSSL_ROOT_DIR to the install prefix of your OpenSSL installation.")
+      message(FATAL_ERROR "${err_message}")
+    endif ()
+    target_include_directories(
+      libcaf_openssl
+      PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/caf/libcaf_openssl>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    VASTSystemizeTarget(libcaf_openssl)
+    set_target_properties(libcaf_openssl PROPERTIES EXPORT_NAME openssl)
+    VASTSystemizeTarget(libcaf_test)
+    set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
+    mark_as_advanced(caf_build_header_path)
+    string(APPEND VAST_EXTRA_TARGETS_FILES
+           "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/../CAF/CAFTargets.cmake\")"
+           "\nmark_as_advanced(caf_build_header_path)")
+    set(CAF_FOUND true)
+  endif ()
+endif ()
+
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
+    AND BUILD_SHARED_LIBS
+    AND CAF_LIBRARY_CORE)
+  # Copy CAF libraries to installation directory
+  get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
+  file(GLOB CAF_INSTALLED_LIBRARIES "${CAF_LIBDIR}/libcaf*.so")
+  install(
+    FILES ${CAF_INSTALLED_LIBRARIES}
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    COMPONENT Runtime)
 endif ()
 
 # -- add subdirectories --------------------------------------------------------

@@ -11,12 +11,14 @@
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/fbs/value_index.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
 
+#include <caf/binary_serializer.hpp>
 #include <caf/serializer.hpp>
 #include <caf/settings.hpp>
 
@@ -30,30 +32,14 @@ string_index::string_index(vast::type t, caf::settings opts)
   length_ = length_bitmap_index{std::move(b)};
 }
 
-caf::error string_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval(
-    [&] {
-      return value_index::serialize(sink);
-    },
-    [&] {
-      return sink(max_length_, length_, chars_);
-    });
-}
-
-caf::error string_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval(
-    [&] {
-      return value_index::deserialize(source);
-    },
-    [&] {
-      return source(max_length_, length_, chars_);
-    });
-}
-
-bool string_index::deserialize(detail::legacy_deserializer& source) {
-  if (!value_index::deserialize(source))
-    return false;
-  return source(max_length_, length_, chars_);
+bool string_index::inspect_impl(supported_inspectors& inspector) {
+  return value_index::inspect_impl(inspector)
+         && std::visit(
+           [this](auto visitor) {
+             return detail::apply_all(visitor.get(), max_length_, length_,
+                                      chars_);
+           },
+           inspector);
 }
 
 bool string_index::append_impl(data_view x, id pos) {
@@ -82,6 +68,16 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
   auto f = detail::overload{
     [&](auto x) -> caf::expected<ids> {
       return caf::make_error(ec::type_clash, materialize(x));
+    },
+    [&](view<pattern>) -> caf::expected<ids> {
+      switch (op) {
+        default:
+          return caf::make_error(ec::unsupported_operator, op);
+        case relational_operator::equal:
+        case relational_operator::not_equal: {
+          return ids{offset(), true};
+        }
+      }
     },
     [&](view<std::string> str) -> caf::expected<ids> {
       auto str_size = str.size();

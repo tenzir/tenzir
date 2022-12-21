@@ -2,4 +2,4 @@ coloredlogs == 10.0
 jsondiff >= 1.2.0
 pyyaml >= 4.2b1
 schema == 0.6.8
-pyarrow >= 0.17
+pyarrow >= 8.0.0

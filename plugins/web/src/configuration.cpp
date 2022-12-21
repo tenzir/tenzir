@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/detail/installdirs.hpp>
+
 #include <web/configuration.hpp>
 
 namespace vast::plugins::web {
@@ -34,6 +36,7 @@ caf::expected<server_config> convert_and_validate(configuration config) {
       result.require_clientcerts = false;
       result.require_authentication = false;
       result.require_localhost = false;
+      result.response_headers["Access-Control-Allow-Origin"] = "*";
       break;
     case configuration::server_mode::upstream:
       result.require_tls = false;
@@ -55,12 +58,24 @@ caf::expected<server_config> convert_and_validate(configuration config) {
   }
   result.certfile = config.certfile;
   result.keyfile = config.keyfile;
-  // This doesn't help against TOCTOU errors, but at least it
-  // catches obvious ones.
-  if (!result.certfile.empty() && !std::filesystem::exists(result.certfile))
+  auto default_webroot = detail::install_datadir() / "plugin" / "web" / "www";
+  auto ec = std::error_code{};
+  if (!config.web_root.empty()) {
+    result.webroot = config.web_root;
+    // This doesn't help against TOCTOU errors, but at least it
+    // catches obvious ones.
+    if (!is_directory(*result.webroot, ec))
+      return caf::make_error(ec::invalid_argument, fmt::format("directory not "
+                                                               "found: {}",
+                                                               result.webroot));
+  } else if (is_directory(default_webroot, ec))
+    result.webroot = default_webroot;
+  else
+    result.webroot = std::nullopt;
+  if (!result.certfile.empty() && !exists(result.certfile))
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.certfile));
-  if (!result.keyfile.empty() && !std::filesystem::exists(result.keyfile))
+  if (!result.keyfile.empty() && !exists(result.keyfile))
     return caf::make_error(ec::invalid_argument,
                            fmt::format("file not found: {}", config.keyfile));
   if (result.require_tls)

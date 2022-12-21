@@ -69,15 +69,15 @@ TEST(index roundtrip) {
   vast::system::index_state state(/*self = */ nullptr);
   // Both unpersisted and persisted partitions should show up in the created
   // flatbuffer.
-  state.unpersisted[vast::uuid::random()] = nullptr;
-  state.unpersisted[vast::uuid::random()] = nullptr;
-  state.persisted_partitions.insert(vast::uuid::random());
-  state.persisted_partitions.insert(vast::uuid::random());
+  state.unpersisted[vast::uuid::random()] = {};
+  state.unpersisted[vast::uuid::random()] = {};
+  state.persisted_partitions.emplace(vast::uuid::random());
+  state.persisted_partitions.emplace(vast::uuid::random());
   std::set<vast::uuid> expected_uuids;
   for (auto& kv : state.unpersisted)
     expected_uuids.insert(kv.first);
-  for (auto& uuid : state.persisted_partitions)
-    expected_uuids.insert(uuid);
+  for (auto& persisted : state.persisted_partitions)
+    expected_uuids.insert(persisted);
   // Add some fake statistics
   state.stats.layouts["zeek.conn"] = vast::layout_statistics{54931u};
   // Serialize the index.
@@ -196,7 +196,8 @@ TEST(empty partition roundtrip) {
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
   CHECK_EQUAL(ps->events, state.data.events);
   auto catalog
-    = self->spawn(vast::system::catalog, vast::system::accountant_actor{});
+    = self->spawn(vast::system::catalog, vast::system::accountant_actor{},
+                  directory / "types");
   auto rp = self->request(catalog, caf::infinite, vast::atom::merge_v,
                           recovered_state.id, ps);
   run();
@@ -213,10 +214,11 @@ TEST(empty partition roundtrip) {
                            std::move(query_context));
   run();
   rp2.receive(
-    [&](const vast::system::catalog_result& result) {
-      const auto& candidates = result.partitions;
-      REQUIRE_EQUAL(candidates.size(), 1ull);
-      CHECK_EQUAL(candidates[0], state.data.id);
+    [&](const vast::system::catalog_lookup_result& candidates) {
+      REQUIRE_EQUAL(candidates.candidate_infos.size(), 1ull);
+      auto candidate_partition
+        = candidates.candidate_infos.begin()->second.partition_infos.front();
+      CHECK_EQUAL(candidate_partition.uuid, state.data.id);
     },
     [=](const caf::error& err) {
       FAIL(err);
@@ -241,7 +243,8 @@ TEST(full partition roundtrip) {
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
-                vast::index_config{}, store_builder, store_id, store_header);
+                vast::index_config{}, store_builder, store_id, store_header,
+                std::make_shared<vast::taxonomies>());
   run();
   REQUIRE(partition);
   // Add data to the partition.
@@ -279,8 +282,7 @@ TEST(full partition roundtrip) {
   self->send_exit(partition, caf::exit_reason::user_shutdown);
   auto readonly_partition
     = sys.spawn(vast::system::passive_partition, partition_uuid,
-                vast::system::accountant_actor{}, vast::system::archive_actor{},
-                fs, persist_path);
+                vast::system::accountant_actor{}, fs, persist_path);
   REQUIRE(readonly_partition);
   run();
   // A minimal `partition_client_actor`that stores the results in a local
@@ -293,31 +295,30 @@ TEST(full partition roundtrip) {
       },
     };
   };
-  auto test_expression
-    = [&](const vast::expression& expression, size_t expected_hits) {
-        uint64_t tally = 0;
-        auto result = std::make_shared<uint64_t>();
-        auto dummy = self->spawn(dummy_client, result);
-        auto rp = self->request(
-          readonly_partition, caf::infinite, vast::atom::query_v,
-          vast::query_context::make_count(
-            "test", dummy, vast::count_query_context::mode::estimate,
-            expression));
-        run();
-        rp.receive(
-          [&tally](uint64_t x) {
-            tally = x;
-          },
-          [](caf::error& e) {
-            REQUIRE_EQUAL(e, caf::error{});
-          });
-        run();
-        self->send_exit(dummy, caf::exit_reason::user_shutdown);
-        run();
-        CHECK_EQUAL(*result, expected_hits);
-        CHECK_EQUAL(tally, expected_hits);
-        return true;
-      };
+  auto test_expression = [&](const vast::expression& expression,
+                             size_t expected_hits) {
+    uint64_t tally = 0;
+    auto result = std::make_shared<uint64_t>();
+    auto dummy = self->spawn(dummy_client, result);
+    auto rp = self->request(
+      readonly_partition, caf::infinite, vast::atom::query_v,
+      vast::query_context::make_count(
+        "test", dummy, vast::count_query_context::mode::estimate, expression));
+    run();
+    rp.receive(
+      [&tally](uint64_t x) {
+        tally = x;
+      },
+      [](caf::error& e) {
+        REQUIRE_EQUAL(e, caf::error{});
+      });
+    run();
+    self->send_exit(dummy, caf::exit_reason::user_shutdown);
+    run();
+    CHECK_EQUAL(*result, expected_hits);
+    CHECK_EQUAL(tally, expected_hits);
+    return true;
+  };
   auto x_equals_zero = vast::expression{
     vast::predicate{vast::field_extractor{"x"},
                     vast::relational_operator::equal, vast::data{0u}}};

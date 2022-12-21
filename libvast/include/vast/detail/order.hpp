@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/bit_cast.hpp"
 #include "vast/die.hpp"
 
 #include <cmath>
@@ -36,8 +37,8 @@ auto order(T x) {
       return static_cast<std::make_unsigned_t<T>>(x);
     }
   } else if constexpr (std::is_floating_point_v<T>) {
-    static_assert(std::numeric_limits<T>::is_iec559,
-                  "can only order IEEE 754 double types");
+    static_assert(std::numeric_limits<T>::is_iec559, "can only order IEEE 754 "
+                                                     "double types");
     VAST_ASSERT(!std::isnan(x));
     uint64_t result;
     switch (std::fpclassify(x)) {
@@ -57,9 +58,9 @@ auto order(T x) {
       case FP_NORMAL: {
         static constexpr auto exp_mask = (~0ull << 53) >> 1;
         static constexpr auto sig_mask = ~0ull >> 12;
-        auto p = reinterpret_cast<uint64_t*>(std::launder(&x));
-        auto exp = (*p & exp_mask) >> 52;
-        auto sig = *p & sig_mask;
+        auto ux = bit_cast<uint64_t>(x);
+        auto exp = (ux & exp_mask) >> 52;
+        auto sig = ux & sig_mask;
         // If the value is positive we add a 1 as MSB left of the exponent and
         // if the value is negative, we make the MSB 0. If the value is
         // negative we also have to reverse the exponent to ensure that, e.g.,
@@ -70,7 +71,7 @@ auto order(T x) {
         // significand is always >= 0, we can use the same subtraction method
         // for negative values as for the offset-binary encoded exponent.
         if (x > 0.0) {
-          result = (*p & exp_mask) | (1ull << 63); // Add positive MSB
+          result = (ux & exp_mask) | (1ull << 63); // Add positive MSB
           result |= sig;                           // Plug in significand as-is.
           ++result;                                // Account for subnormal.
         } else {
@@ -82,8 +83,8 @@ auto order(T x) {
     }
     return result;
   } else {
-    static_assert(!std::is_same_v<T, T>,
-                  "T is neither an integral nor a floating point number");
+    static_assert(!std::is_same_v<T, T>, "T is neither an integral nor a "
+                                         "floating point number");
   }
 }
 
@@ -91,4 +92,3 @@ template <class T>
 using ordered_type = decltype(order(T{}));
 
 } // namespace vast::detail
-

@@ -10,8 +10,8 @@
 
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/raise_error.hpp"
-#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
@@ -88,6 +88,8 @@ uds_datagram_sender::make(const std::string& path) {
     return caf::make_error(
       ec::system_error,
       "failed to obtain an AF_UNIX DGRAM socket: ", ::strerror(errno));
+  if (auto err = make_nonblocking(result.src_fd))
+    return err;
   // Create a unique temporary directory for a place to bind the sending side
   // to. There is no mktemp variant for sockets, so that is unfortunately
   // necessary.
@@ -98,8 +100,8 @@ uds_datagram_sender::make(const std::string& path) {
     return caf::make_error(ec::system_error,
                            fmt::format("failed in mkdtemp({}): {}",
                                        mkd_template, ::strerror(errno)));
-  // Replace the fist null terminator with a directory separator to get the full
-  // path.
+  // Replace the first null terminator with a directory separator to get the
+  // full path.
   src_name[16] = '/';
   ::sockaddr_un src = {};
   std::memset(&src, 0, sizeof(src));
@@ -131,12 +133,43 @@ uds_datagram_sender::make(const std::string& path) {
   return std::move(result);
 }
 
-caf::error uds_datagram_sender::send(std::span<char> data) {
-  if (::sendto(src_fd, data.data(), data.size(), 0,
-               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un))
-      < 0)
+caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
+  // We try sending directly before polling to only use a single system call in
+  // the happy path.
+  auto sent
+    = ::sendto(src_fd, data.data(), data.size(), 0,
+               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un));
+  if (sent == detail::narrow_cast<int>(data.size()))
+    return caf::none;
+  if (sent >= 0)
+    return caf::make_error(ec::incomplete,
+                           fmt::format("::sendto could only transmit {} of {} "
+                                       "bytes in a single datagram",
+                                       sent, data.size()));
+  if (errno != EAGAIN && errno != EWOULDBLOCK)
     return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
-  return caf::none;
+  if (timeout_usec == 0)
+    return ec::timeout;
+  auto ready = wpoll(src_fd, timeout_usec);
+  if (!ready)
+    return ready.error();
+  // We just attempt to send again instead of returning ec::timeout outright.
+  // This handles the case when the receiving socket was replaced on the file
+  // system, but the original one was kept alive with an open file descriptor.
+  // The next send would go to the correct destination in that case.
+  sent
+    = ::sendto(src_fd, data.data(), data.size(), 0,
+               reinterpret_cast<sockaddr*>(&dst), sizeof(struct sockaddr_un));
+  if (sent == detail::narrow_cast<int>(data.size()))
+    return caf::none;
+  if (sent >= 0)
+    return caf::make_error(ec::incomplete,
+                           fmt::format("::sendto could only transmit {} of {} "
+                                       "bytes in a single datagram",
+                                       sent, data.size()));
+  if (errno != EAGAIN && errno != EWOULDBLOCK)
+    return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
+  return ec::timeout;
 }
 
 int uds_connect(const std::string& path, socket_type type) {
@@ -318,26 +351,28 @@ caf::error make_blocking(int fd) {
   return make_nonblocking(fd, false);
 }
 
-caf::error poll(int fd, int usec) {
-  fd_set rdset;
-  FD_ZERO(&rdset);
-  FD_SET(fd, &rdset);
+caf::expected<bool> rpoll(int fd, int usec) {
+  fd_set read_set;
+  FD_ZERO(&read_set);
+  FD_SET(fd, &read_set);
   timeval timeout{0, usec};
-  auto rc = ::select(fd + 1, &rdset, nullptr, nullptr, &timeout);
-  if (rc < 0) {
-    switch (rc) {
-      default:
-        vast::die("unhandled select(2) error");
-      case EINTR:
-      case ENOMEM:
-        return caf::make_error(ec::filesystem_error,
-                               "failed in select(2):", std::strerror(errno));
-    }
-  }
-  if (!FD_ISSET(fd, &rdset))
+  auto rc = ::select(fd + 1, &read_set, nullptr, nullptr, &timeout);
+  if (rc < 0)
     return caf::make_error(ec::filesystem_error,
-                           "failed in fd_isset(3):", std::strerror(errno));
-  return caf::none;
+                           "failed in select(2):", std::strerror(errno));
+  return !!FD_ISSET(fd, &read_set);
+}
+
+caf::expected<bool> wpoll(int fd, int usec) {
+  fd_set write_set;
+  FD_ZERO(&write_set);
+  FD_SET(fd, &write_set);
+  timeval timeout{0, usec};
+  auto rc = ::select(fd + 1, nullptr, &write_set, nullptr, &timeout);
+  if (rc < 0)
+    return caf::make_error(ec::filesystem_error,
+                           "failed in select(2):", std::strerror(errno));
+  return !!FD_ISSET(fd, &write_set);
 }
 
 caf::error close(int fd) {

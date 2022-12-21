@@ -9,8 +9,6 @@
 #pragma once
 
 #include "vast/bloom_filter_parameters.hpp"
-#include "vast/bloom_filter_synopsis.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/error.hpp"
 #include "vast/synopsis.hpp"
 
@@ -90,9 +88,14 @@ public:
     switch (op) {
       default:
         return {};
-      case relational_operator::equal:
+      case relational_operator::equal: {
+        if constexpr (std::is_same_v<view_type, view<std::string>>) {
+          if (caf::holds_alternative<view<pattern>>(rhs))
+            return {};
+        }
         // TODO: Switch to tsl::robin_set here for heterogeneous lookup.
         return data_.count(materialize(caf::get<view_type>(rhs)));
+      }
       case relational_operator::in: {
         if (auto xs = caf::get_if<view<list>>(&rhs)) {
           for (auto x : **xs)
@@ -105,19 +108,8 @@ public:
     }
   }
 
-  caf::error serialize(caf::serializer&) const override {
-    return caf::make_error(ec::logic_error, "attempted to serialize a "
-                                            "buffered_string_synopsis; did you "
-                                            "forget to shrink?");
-  }
-
-  caf::error deserialize(caf::deserializer&) override {
-    return caf::make_error(ec::logic_error, "attempted to deserialize a "
-                                            "buffered_string_synopsis");
-  }
-
-  bool deserialize(vast::detail::legacy_deserializer&) override {
-    VAST_ERROR("attempted to deserialize a buffered_string_synopsis");
+  bool inspect_impl(supported_inspectors&) override {
+    VAST_ERROR("attempted to inspect a buffered_string_synopsis");
     return false;
   }
 

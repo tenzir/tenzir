@@ -28,66 +28,19 @@ jobs:
       CMAKE_MAKE_PROGRAM: ninja
       DEBIAN_FRONTEND: noninteractive
     steps:
-      - name: Install Dependencies
+      - name: Install git
         run: |
           apt-get update
-          apt-get -y install \
-            apt-transport-https \
-            build-essential \
-            ca-certificates \
-            curl \
-            flatbuffers-compiler-dev \
-            g++-10 \
-            gcc-10 \
-            git \
-            gnupg2 gnupg-agent \
-            jq \
-            lcov \
-            libasio-dev \
-            libbroker-dev \
-            libcaf-dev \
-            libcaf-dev \
-            libflatbuffers-dev \
-            libfmt-dev \
-            libpcap-dev tcpdump \
-            librestinio-dev \
-            libsimdjson-dev \
-            libspdlog-dev \
-            libssl-dev \
-            libunwind-dev \
-            libyaml-cpp-dev \
-            libxxhash-dev \
-            lsb-release \
-            ninja-build \
-            pandoc \
-            pkg-config \
-            python3-dev \
-            python3-pip \
-            python3-venv \
-            software-properties-common \
-            wget
-          # Apache Arrow (c.f. https://arrow.apache.org/install/)
-          wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-          apt-get -y install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-          apt-get update
-          apt-get -y install libarrow-dev libparquet-dev
-          # Install CMake from pip -- we need at least 3.17 in CI for CCache
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --upgrade cmake
-          cmake --version
-      - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.1.6
-        with:
-          poetry-version: 1.1.14
-      - uses: actions/checkout@v3
+          apt-get -y install git
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Fetch Submodules and Tags
+          submodules: true
+      - name: Install Dependencies
         run: |
-          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-          git submodule sync --recursive
-          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch origin +refs/tags/*:refs/tags/*
+          ./scripts/debian/install-dev-dependencies.sh
+          apt-get -y install lcov
       - name: Configure
         run: |
           python3 --version
@@ -103,9 +56,8 @@ jobs:
             -DCMAKE_BUILD_TYPE:STRING=Debug \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/vast" \
             -DCPACK_GENERATOR:STRING=TGZ \
-            -DVAST_ENABLE_BUNDLED_CAF:BOOL=OFF \
+            -DVAST_ENABLE_BUNDLED_CAF:BOOL=ON \
             -DVAST_ENABLE_CODE_COVERAGE:BOOL=ON \
-            -DVAST_ENABLE_DSCAT:BOOL=ON \
             -DVAST_ENABLE_LSVAST:BOOL=ON \
             -DVAST_ENABLE_VAST_REGENERATE:BOOL=ON \
             -DVAST_PLUGINS:STRING='plugins/*' \

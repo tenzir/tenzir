@@ -17,7 +17,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/hash/hash.hpp"
-#include "vast/time.hpp"
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
@@ -530,7 +529,7 @@ struct hash<vast::data_view> {
     // The hash computation for `data` and `data_view` is subtly different when
     // not creating a view here: For `data_view` a hash of the contents of the
     // view is created (so that the same data compares equal whether it's
-    // stored in a default/msgpack/arrow view), but for `data` the hashing is
+    // stored in a default/arrow view), but for `data` the hashing is
     // forwarded to the actual container classes, which can define their own
     // hash functions.
     return (*this)(vast::make_view(x));
@@ -558,7 +557,7 @@ struct equal_to<vast::data> : equal_to<vast::data_view> {};
 
 } // namespace std
 
-#include "vast/concept/printable/vast/view.hpp"
+#include "vast/concept/printable/vast/view.hpp" // IWYU pragma: keep
 
 namespace fmt {
 

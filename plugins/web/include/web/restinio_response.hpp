@@ -14,6 +14,7 @@
 #include <restinio/compiler_features.hpp>
 #include <restinio/message_builders.hpp>
 #include <restinio/request_handler.hpp>
+#include <restinio/router/express.hpp>
 
 namespace vast::plugins::web {
 
@@ -23,10 +24,12 @@ using request_handle_t
   = restinio::generic_request_handle_t<restinio::no_extra_data_factory_t::data_t>;
 using response_t
   = restinio::response_builder_t<restinio::user_controlled_output_t>;
+using route_params_t = restinio::router::route_params_t;
 
 class restinio_response final : public vast::http_response {
 public:
-  restinio_response(request_handle_t&& handle, const rest_endpoint&);
+  restinio_response(request_handle_t&& handle, route_params_t&& route_params,
+                    const rest_endpoint&);
   ~restinio_response() override;
 
   restinio_response(restinio_response&&) = default;
@@ -38,11 +41,18 @@ public:
 
   void abort(uint16_t error_code, std::string message) override;
 
+  // Add a custom response header.
+  void add_header(std::string field, std::string value);
+
   // Get a handle to the original request.
   [[nodiscard]] const request_handle_t& request() const;
 
+  // Get a handle to the original route parameters.
+  [[nodiscard]] const route_params_t& route_params() const;
+
 private:
   request_handle_t request_;
+  route_params_t route_params_;
   response_t response_;
   size_t body_size_ = {};
 };

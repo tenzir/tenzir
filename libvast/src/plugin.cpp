@@ -65,28 +65,30 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
 caf::expected<std::filesystem::path>
 resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs,
                     std::string_view name) {
+  auto plugin_file_name
+    = fmt::format("libvast-plugin-{}.{}", name, VAST_MACOS ? "dylib" : "so");
   for (const auto& dir : plugin_dirs) {
-    auto maybe_path = dir
-                      / fmt::format("libvast-plugin-{}.{}", name,
-                                    VAST_MACOS ? "dylib" : "so");
+    auto maybe_path = dir / plugin_file_name;
     auto ec = std::error_code{};
     if (std::filesystem::is_regular_file(maybe_path, ec))
       return maybe_path;
   }
-  return caf::make_error(ec::invalid_configuration,
-                         fmt::format("failed to find the {} plugin", name));
+  return caf::make_error(
+    ec::invalid_configuration,
+    fmt::format("failed to find the {} plugin as {} in [{}]", name,
+                plugin_file_name, fmt::join(plugin_dirs, ",  ")));
 }
 
 std::vector<std::filesystem::path> loaded_config_files_singleton = {};
 
-/// Remove native plugins from the given list of plugins.
+/// Remove builtins the given list of plugins.
 std::vector<std::string>
-remove_native_plugins(std::vector<std::string> paths_or_names) {
+remove_builtins(std::vector<std::string> paths_or_names) {
   std::erase_if(paths_or_names, [](const auto& path_or_name) {
     return std::any_of(plugins::get().begin(), plugins::get().end(),
                        [&](const auto& plugin) {
                          return plugin->name() == path_or_name
-                                && plugin.type() == plugin_ptr::type::native;
+                                && plugin.type() == plugin_ptr::type::builtin;
                        });
   });
   return paths_or_names;
@@ -145,7 +147,7 @@ unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
         paths_or_names.erase(it, paths_or_names.end());
         return result;
       }
-      case plugin_ptr::type::native:
+      case plugin_ptr::type::builtin:
         return false;
     }
     die("unreachable");
@@ -191,10 +193,10 @@ const std::vector<plugin_ptr>& get() noexcept {
   return get_mutable();
 }
 
-std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
+std::vector<std::pair<plugin_type_id_block, void (*)()>>&
 get_static_type_id_blocks() noexcept {
-  static auto result = std::vector<
-    std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>{};
+  static auto result
+    = std::vector<std::pair<plugin_type_id_block, void (*)()>>{};
   return result;
 }
 
@@ -204,15 +206,15 @@ load(const std::vector<std::string>& bundled_plugins,
   auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
   // Get the necessary options.
   auto paths_or_names
-    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
+    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{"all"});
   if (paths_or_names.empty() && bundled_plugins.empty())
     return loaded_plugin_paths;
   const auto plugin_dirs = get_plugin_dirs(cfg);
   // Resolve the 'bundled' and 'all' identifiers.
   paths_or_names = expand_special_identifiers(std::move(paths_or_names),
                                               bundled_plugins, plugin_dirs);
-  // Silently ignore native plugins if they're in the list of plugins.
-  paths_or_names = remove_native_plugins(std::move(paths_or_names));
+  // Silently ignore builtins if they're in the list of plugins.
+  paths_or_names = remove_builtins(std::move(paths_or_names));
   // Disable static plugins that were not enabled, and remove the names of
   // static plugins from the list of enabled plugins.
   paths_or_names = unload_disabled_static_plugins(std::move(paths_or_names));
@@ -353,7 +355,7 @@ caf::expected<store_actor_plugin::builder_and_header>
 store_plugin::make_store_builder(system::accountant_actor accountant,
                                  system::filesystem_actor fs,
                                  const vast::uuid& id) const {
-  auto store = make_active_store();
+  auto store = make_active_store(content(fs->home_system().config()));
   if (!store)
     return store.error();
   auto path
@@ -475,9 +477,9 @@ plugin_ptr plugin_ptr::make_static(plugin* instance, void (*deleter)(plugin*),
   return plugin_ptr{nullptr, instance, deleter, version, type::static_};
 }
 
-plugin_ptr plugin_ptr::make_native(plugin* instance, void (*deleter)(plugin*),
-                                   const char* version) noexcept {
-  return plugin_ptr{nullptr, instance, deleter, version, type::native};
+plugin_ptr plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
+                                    const char* version) noexcept {
+  return plugin_ptr{nullptr, instance, deleter, version, type::builtin};
 }
 
 plugin_ptr::plugin_ptr() noexcept = default;

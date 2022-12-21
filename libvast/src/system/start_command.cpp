@@ -8,34 +8,31 @@
 
 #include "vast/system/start_command.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/command.hpp"
+#include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/endpoint.hpp"
+#include "vast/error.hpp"
+#include "vast/logger.hpp"
+#include "vast/scope_linked.hpp"
 #include "vast/system/application.hpp"
+#include "vast/system/signal_monitor.hpp"
+#include "vast/system/spawn_node.hpp"
 #include "vast/systemd.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/io/middleman.hpp>
+#include <caf/openssl/all.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
 #include <csignal>
 #include <thread>
-#if VAST_ENABLE_OPENSSL
-#  include <caf/openssl/all.hpp>
-#endif // VAST_ENABLE_OPENSSL
-
-#include "vast/fwd.hpp"
-
-#include "vast/concept/parseable/vast/endpoint.hpp"
-#include "vast/defaults.hpp"
-#include "vast/endpoint.hpp"
-#include "vast/error.hpp"
-#include "vast/logger.hpp"
-#include "vast/scope_linked.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn_node.hpp"
 
 namespace vast::system {
 
@@ -54,7 +51,8 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
                       "unset the option vast.node"));
   // Construct an endpoint.
   endpoint node_endpoint;
-  auto str = get_or(inv.options, "vast.endpoint", defaults::system::endpoint);
+  auto str
+    = get_or(inv.options, "vast.endpoint", defaults::system::endpoint.data());
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
       caf::make_error(ec::parse_error, "invalid endpoint", str));
@@ -75,13 +73,8 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   auto publish = [&]() -> caf::expected<uint16_t> {
     const auto reuse_address = true;
     if (sys.has_openssl_manager()) {
-#if VAST_ENABLE_OPENSSL
       return caf::openssl::publish(node, node_endpoint.port->number(), host,
                                    reuse_address);
-#else
-      return caf::make_error(ec::unspecified, "not compiled with OpenSSL "
-                                              "support");
-#endif
     }
     auto& mm = sys.middleman();
     return mm.publish(node, node_endpoint.port->number(), host, reuse_address);

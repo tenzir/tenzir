@@ -38,7 +38,11 @@ struct uds_datagram_sender {
   static caf::expected<uds_datagram_sender> make(const std::string& path);
 
   /// Send the content of `data to `dst`.
-  caf::error send(std::span<char> data);
+  /// @param data The data that should be written.
+  /// @param timeout_usec A duration to wait for readiness of the receiver.
+  /// @returns `no_error` if the data was sent or `timeout` if it was dropped
+  ///          because the timeout was reached
+  caf::error send(std::span<char> data, int timeout_usec = 0);
 
   /// The file descriptor for the "client" socket.
   int src_fd = -1;
@@ -100,8 +104,8 @@ struct [[nodiscard]] unix_domain_socket {
   /// @param path The filesystem path identifying the server socket.
   /// @param type The socket type.
   /// @returns A UNIX domain socket handle.
-  static unix_domain_socket connect(const std::string& path,
-                                    socket_type type = socket_type::stream);
+  static unix_domain_socket
+  connect(const std::string& path, socket_type type = socket_type::stream);
 
   /// Checks whether the UNIX domain socket is in working state.
   /// @returns `true` if the UNIX domain socket is open and operable.
@@ -134,8 +138,14 @@ struct [[nodiscard]] unix_domain_socket {
 /// Polls a file descriptor for ready read events via `select(2)`.
 /// @param fd The file descriptor to poll
 /// @param usec The number of microseconds to wait.
-/// @returns `caf::none` if *fd* has ready events for reading.
-[[nodiscard]] caf::error poll(int fd, int usec = 100000);
+/// @returns `true` if read operations on *fd* would not block.
+[[nodiscard]] caf::expected<bool> rpoll(int fd, int usec);
+
+/// Polls a file descriptor for write readiness via `select(2)`.
+/// @param fd The file descriptor to poll
+/// @param usec The number of microseconds to wait.
+/// @returns `true` if write operations on *fd* would not block.
+[[nodiscard]] caf::expected<bool> wpoll(int fd, int usec);
 
 /// Wraps `close(2)`.
 /// @param fd The file descriptor to close.

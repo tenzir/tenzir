@@ -22,8 +22,10 @@ static std::string content_type_to_string(vast::http_content_type type) {
 }
 
 restinio_response::restinio_response(request_handle_t&& handle,
+                                     route_params_t&& route_params,
                                      const rest_endpoint& endpoint)
   : request_(std::move(handle)),
+    route_params_(std::move(route_params)),
     // Note that ownership of the `connection` is transferred when creating a
     // response.
     response_(request_->create_response<restinio::user_controlled_output_t>()) {
@@ -49,8 +51,16 @@ void restinio_response::abort(uint16_t error_code, std::string message) {
   // it from being called multiple times.
 }
 
+void restinio_response::add_header(std::string field, std::string value) {
+  response_.append_header(std::move(field), std::move(value));
+}
+
 auto restinio_response::request() const -> const request_handle_t& {
   return request_;
+}
+
+const route_params_t& restinio_response::route_params() const {
+  return route_params_;
 }
 
 } // namespace vast::plugins::web

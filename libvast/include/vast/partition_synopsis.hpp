@@ -65,7 +65,7 @@ struct partition_synopsis final : public caf::ref_counted {
   time max_import_time = time::min();
 
   /// The version number of this partition.
-  uint64_t version = version::partition_version;
+  uint64_t version = version::current_partition_version;
 
   /// The schema of this partition. This is only set for partition synopses with
   /// a version >= 1, because they are guaranteed to be homogenous.
@@ -156,8 +156,11 @@ struct partition_info {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_info& x) {
-    return f(caf::meta::type_name("partition_info"), x.uuid, x.events,
-             x.max_import_time, x.schema, x.version);
+    return f.object(x)
+      .pretty_name("partition_info")
+      .fields(f.field("uuid", x.uuid), f.field("events", x.events),
+              f.field("max-import-time", x.max_import_time),
+              f.field("schema", x.schema), f.field("version", x.version));
   }
 };
 

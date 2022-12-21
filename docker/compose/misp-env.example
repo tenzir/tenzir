@@ -1,0 +1,25 @@
+# Changing the MISP version might break compatibility with dependencies
+MISP_VERSION=v2.4.145a
+
+# The host port on which MISP exposes ZeroMQ
+MISP_PORT_ZMQ=50000
+
+# The host port on which MISP exposes its web UI and Rest API
+MISP_PORT_HTTP=5000
+
+# Number of MISP workers 
+MISP_WORKERS=1
+
+# Default MISP user settings. Volumes need to be reset after a change
+MISP_ADMIN_USER=demo@tenzir.com
+MISP_ADMIN_PASSWORD=demo
+MISP_API_KEY=demodemodemodemodemodemodemodemodemodemo
+
+# MySQL is not exposed outside the MISP docker network, so these defaults can
+# be left as is. Volumes need to be reset after a change
+MYSQL_USER=demo
+MYSQL_PASSWORD=demo
+MYSQL_ROOT_PASSWORD=demo
+
+# The host port for dynamic hostname reverse proxy
+MISP_PROXY_PORT_HTTP=8080

@@ -1,6 +1,6 @@
 # -- dependencies --------------------------------------------------------------
 
-FROM debian:bullseye-slim AS dependencies
+FROM python:3.10-slim-bullseye AS dependencies
 LABEL maintainer="engineering@tenzir.com"
 
 ENV CC="gcc-10" \
@@ -8,50 +8,9 @@ ENV CC="gcc-10" \
 
 WORKDIR /tmp/vast
 
-# TODO: Once we upgrade the image to Debian Bookworm, install python3-poetry
-# instead of installing poetry from pip.
-RUN echo 'deb http://deb.debian.org/debian bullseye-backports main' \
-      > /etc/apt/sources.list.d/backports.list && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install \
-      build-essential \
-      ca-certificates \
-      cmake/bullseye-backports \
-      cmake-data/bullseye-backports \
-      flatbuffers-compiler-dev \
-      g++-10 \
-      gcc-10 \
-      git-core \
-      gnupg2 \
-      jq \
-      libasio-dev \
-      libcaf-dev \
-      libbroker-dev \
-      libflatbuffers-dev \
-      libfmt-dev \
-      libpcap-dev tcpdump \
-      libhttp-parser-dev \
-      libsimdjson-dev \
-      libspdlog-dev \
-      libssl-dev \
-      libunwind-dev \
-      libyaml-cpp-dev \
-      libxxhash-dev \
-      lsb-release \
-      ninja-build \
-      pkg-config \
-      python3-dev \
-      python3-pip \
-      python3-venv \
-      robin-map-dev \
-      wget && \
-    wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-    apt-get -y --no-install-recommends install \
-      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libarrow-dev=9.0.0-1 libprotobuf-dev libparquet-dev=9.0.0-1 && \
-    python3 -m pip install --upgrade poetry && \
-    rm -rf /var/lib/apt/lists/* *.deb
+COPY scripts ./scripts
+
+RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 
 # VAST
 COPY changelog ./changelog
@@ -62,20 +21,17 @@ COPY libvast_test ./libvast_test
 COPY plugins ./plugins
 COPY python ./python
 COPY schema ./schema
-COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
-COPY BANNER CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
+COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
      vast.yaml.example version.json ./
 
 # Resolve repository-internal symlinks.
 # TODO: We should try to get rid of these long-term, as Docker does not work
-# well with repository-internal symlinks. The pyvast symlink is unnecessary, and
-# the integration test symlinks we can get rid of by copying the integration
-# test directory to the build directory when building VAST.
-RUN ln -sf ../../pyvast/pyvast examples/jupyter/pyvast && \
-    ln -sf ../../vast.yaml.example vast/integration/vast.yaml.example && \
-    ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
+# well with repository-internal symlinks. The the integration test symlinks we
+# can get rid of by copying the integration test directory to the build
+# directory when building VAST.
+RUN ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
     ln -sf ../../vast/integration/data/ plugins/sigma/integration/data/ && \
     ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py && \
     ln -sf ../../../schema/types/base.schema libvast_test/artifacts/schemas/base.schema && \
@@ -90,8 +46,7 @@ ENV PREFIX="/opt/tenzir/vast" \
     CC="gcc-10" \
     CXX="g++-10" \
     VAST_DB_DIRECTORY="/var/lib/vast" \
-    VAST_LOG_FILE="/var/log/vast/server.log" \
-    VAST_PLUGINS="all"
+    VAST_LOG_FILE="/var/log/vast/server.log"
 
 # Additional arguments to be passed to CMake.
 ARG VAST_BUILD_OPTIONS
@@ -102,6 +57,7 @@ RUN cmake -B build -G Ninja \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D VAST_ENABLE_UNIT_TESTS:BOOL="OFF" \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
+      -D VAST_ENABLE_BUNDLED_CAF:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
       -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
@@ -121,13 +77,14 @@ CMD ["--help"]
 
 # -- production ----------------------------------------------------------------
 
-FROM debian:bullseye-slim AS production
+FROM python:3.10-slim-bullseye AS production
 
+# When changing these, make sure to also update the entries in the flake.nix
+# file.
 ENV PREFIX="/opt/tenzir/vast" \
     PATH="/opt/tenzir/vast/bin:${PATH}" \
     VAST_DB_DIRECTORY="/var/lib/vast" \
-    VAST_LOG_FILE="/var/log/vast/server.log" \
-    VAST_PLUGINS="all"
+    VAST_LOG_FILE="/var/log/vast/server.log"
 
 RUN useradd --system --user-group vast
 COPY --from=development --chown=vast:vast $PREFIX/ $PREFIX/
@@ -142,7 +99,6 @@ RUN apt-get update && \
       libcaf-core0.17 \
       libcaf-io0.17 \
       libcaf-openssl0.17 \
-      libbroker2 \
       libc++1 \
       libc++abi1 \
       libflatbuffers1 \
@@ -162,7 +118,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow900 libparquet900 && \
+    apt-get -y --no-install-recommends install libarrow1000 libparquet1000 && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast

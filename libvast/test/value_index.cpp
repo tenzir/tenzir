@@ -65,8 +65,8 @@ TEST(bool) {
   auto multi = unbox(idx->lookup(relational_operator::in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "11111111");
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK(detail::serialize(buf, idx));
   value_index_ptr idx2;
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   t = idx2->lookup(relational_operator::equal, make_data_view(true));
@@ -113,8 +113,8 @@ TEST(integer) {
   auto multi = unbox(idx->lookup(relational_operator::in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "0101011");
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK(detail::serialize(buf, idx));
   value_index_ptr idx2;
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   less_than_leet

@@ -59,10 +59,11 @@ template <class T, class Byte = uint8_t>
 caf::expected<flatbuffers::Offset<flatbuffers::Vector<Byte>>>
 serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
   static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
-  std::vector<char> buf;
+  caf::byte_buffer buf;
   caf::binary_serializer source(nullptr, buf);
-  if (auto error = source(x))
-    return error;
+  if (!source.apply(x))
+    return caf::make_error(ec::serialization_error, "failed to serialize "
+                                                    "bytes");
   return builder.CreateVector(reinterpret_cast<const Byte*>(buf.data()),
                               buf.size());
 }
@@ -75,7 +76,7 @@ caf::error deserialize_bytes(const flatbuffers::Vector<Byte>* v, T& x) {
   if (!v)
     return caf::make_error(ec::format_error, "no input");
   detail::legacy_deserializer sink(as_bytes(*v));
-  if (!sink(x))
+  if (!sink.apply(x))
     return caf::make_error(ec::parse_error,
                            fmt::format("failed to deserialize {}",
                                        detail::pretty_type_name(x)));

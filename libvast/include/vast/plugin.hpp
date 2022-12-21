@@ -11,15 +11,14 @@
 #include "vast/fwd.hpp"
 
 #include "vast/command.hpp"
-#include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/pp.hpp"
 #include "vast/http_api.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
 
-#include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
+#include <caf/init_global_meta_objects.hpp>
 #include <caf/stream.hpp>
 #include <caf/typed_actor.hpp>
 
@@ -69,7 +68,7 @@ template <typename Plugin>
 const Plugin* find(const std::string& name);
 
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
-std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
+std::vector<std::pair<plugin_type_id_block, void (*)()>>&
 get_static_type_id_blocks() noexcept;
 
 /// Load plugins specified in the configuration.
@@ -312,8 +311,9 @@ public:
   make_passive_store() const = 0;
 
   /// Create a store for active partitions.
+  /// @param vast_config The vast node configuration.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const = 0;
+  make_active_store(const caf::settings& vast_config) const = 0;
 
 private:
   [[nodiscard]] caf::expected<builder_and_header>
@@ -382,7 +382,7 @@ public:
   enum class type {
     dynamic, ///< The plugin is dynamically linked.
     static_, ///< The plugin is statically linked.
-    native,  ///< The plugin is builtin to the binary.
+    builtin, ///< The plugin is builtin to the binary.
   };
 
   /// Load a dynamic plugin from the specified library filename.
@@ -398,12 +398,12 @@ public:
   static plugin_ptr make_static(plugin* instance, void (*deleter)(plugin*),
                                 const char* version) noexcept;
 
-  /// Take ownership of a native plugin.
+  /// Take ownership of a builtin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
-  static plugin_ptr make_native(plugin* instance, void (*deleter)(plugin*),
-                                const char* version) noexcept;
+  static plugin_ptr make_builtin(plugin* instance, void (*deleter)(plugin*),
+                                 const char* version) noexcept;
 
   /// Default-construct an invalid plugin.
   plugin_ptr() noexcept;
@@ -494,22 +494,22 @@ detail::generator<const Plugin*> get() noexcept {
 
 // -- helper macros ------------------------------------------------------------
 
-#if defined(VAST_ENABLE_NATIVE_PLUGINS)
-#  define VAST_PLUGIN_VERSION "native"
+#if defined(VAST_ENABLE_BUILTINS)
+#  define VAST_PLUGIN_VERSION "builtin"
 #else
 extern const char* VAST_PLUGIN_VERSION;
 #endif
 
-#if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_NATIVE_PLUGINS)
+#if defined(VAST_ENABLE_STATIC_PLUGINS) && defined(VAST_ENABLE_BUILTINS)
 
 #  error "Plugins cannot be both static and native"
 
-#elif defined(VAST_ENABLE_STATIC_PLUGINS) || defined(VAST_ENABLE_NATIVE_PLUGINS)
+#elif defined(VAST_ENABLE_STATIC_PLUGINS) || defined(VAST_ENABLE_BUILTINS)
 
 #  if defined(VAST_ENABLE_STATIC_PLUGINS)
 #    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_static
 #  else
-#    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_native
+#    define VAST_MAKE_PLUGIN ::vast::plugin_ptr::make_builtin
 #  endif
 
 #  define VAST_REGISTER_PLUGIN(name)                                           \
@@ -534,15 +534,13 @@ extern const char* VAST_PLUGIN_VERSION;
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     struct auto_register_type_id_##name {                                      \
-      auto_register_type_id_##name() {                                         \
-        static_cast<void>(flag);                                               \
-      }                                                                        \
+      auto_register_type_id_##name() { static_cast<void>(flag); }              \
       static bool init() {                                                     \
         ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name::begin,           \
                                        ::caf::id_block::name::end},            \
-          +[](::caf::actor_system_config& cfg) noexcept {                      \
-            cfg.add_message_types<::caf::id_block::name>();                    \
+          +[]() noexcept {                                                     \
+            caf::init_global_meta_objects<::caf::id_block::name>();            \
           });                                                                  \
         return true;                                                           \
       }                                                                        \
@@ -575,19 +573,17 @@ extern const char* VAST_PLUGIN_VERSION;
     }
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
-    extern "C" void vast_plugin_register_type_id_block(                        \
-      ::caf::actor_system_config& cfg) {                                       \
-      cfg.add_message_types<::caf::id_block::name>();                          \
+    extern "C" void vast_plugin_register_type_id_block() {                     \
+      caf::init_global_meta_objects<::caf::id_block::name>();                  \
     }                                                                          \
     extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {      \
       return {::caf::id_block::name::begin, ::caf::id_block::name::end};       \
     }
 
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                   \
-    extern "C" void vast_plugin_register_type_id_block(                        \
-      ::caf::actor_system_config& cfg) {                                       \
-      cfg.add_message_types<::caf::id_block::name1>();                         \
-      cfg.add_message_types<::caf::id_block::name2>();                         \
+    extern "C" void vast_plugin_register_type_id_block() {                     \
+      caf::init_global_meta_objects<::caf::id_block::name1>();                 \
+      caf::init_global_meta_objects<::caf::id_block::name2>();                 \
     }                                                                          \
     extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {      \
       return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin    \

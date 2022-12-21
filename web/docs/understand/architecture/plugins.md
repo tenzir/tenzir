@@ -18,7 +18,7 @@ There exist **dynamic plugins** that come in the form shared libraries, and
 
 Plugins do not only exist for extensions by third parties, but VAST also
 implements core functionality through the plugin API. Such plugins compile as
-static plugins. Because they are always built, we call them *native plugins*.
+static plugins. Because they are always built, we call them *builtins*.
 
 ## Plugin types
 

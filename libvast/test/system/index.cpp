@@ -76,9 +76,9 @@ size_t receive_result(fixtures::deterministic_actor_system& fixture,
         [&](atom::done) {
           done = true;
         },
-        caf::others >> [](caf::message_view& msg) -> caf::result<caf::message> {
-          FAIL("unexpected message: " << msg.content());
-          return caf::none;
+        caf::others >> [](caf::message& msg) -> caf::skippable_result {
+          FAIL("unexpected message: " << to_string(msg));
+          return {};
         },
         after(0s) >>
           [&] {
@@ -86,7 +86,7 @@ size_t receive_result(fixtures::deterministic_actor_system& fixture,
           });
     if (!self->mailbox().empty())
       FAIL("mailbox not empty after receiving the 'done' for a batch: "
-           << to_string(*self->mailbox().peek()));
+           << deep_to_string(*self->mailbox().peek()));
     collected += batch;
   };
   fetch(scheduled);
@@ -100,16 +100,15 @@ size_t receive_result(fixtures::deterministic_actor_system& fixture,
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-
   fixture()
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     auto index_dir = directory / "index";
-    catalog = self->spawn(system::catalog, system::accountant_actor{});
-    index = self->spawn(system::index, system::accountant_actor{}, fs,
-                        system::archive_actor{}, catalog, type_registry,
+    catalog = self->spawn(system::catalog, system::accountant_actor{},
+                          directory / "types");
+    index = self->spawn(system::index, system::accountant_actor{}, fs, catalog,
                         index_dir, defaults::system::store_backend, slice_size,
                         vast::duration{}, in_mem_partitions, taste_count,
                         num_query_supervisors, index_dir, vast::index_config{});
@@ -154,10 +153,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   // Handle to the INDEX actor.
   system::index_actor index;
-  system::catalog_actor catalog;
   // Type registry should only be used for partition transforms, so it's
   // safe to pass a nullptr in this test.
-  system::type_registry_actor type_registry = {};
+  system::catalog_actor catalog = {};
 };
 
 } // namespace
@@ -227,56 +225,6 @@ TEST(iterable zeek conn log query result) {
     auto result = receive_result(query_id, hits, scheduled);
     CHECK_EQUAL(result, expected_result);
   }
-}
-
-FIXTURE_SCOPE_END()
-
-namespace {
-
-struct recovery_fixture : fixtures::deterministic_actor_system {
-  recovery_fixture()
-    : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
-  }
-
-  system::type_registry_actor type_registry = {};
-};
-
-} // namespace
-
-FIXTURE_SCOPE(recovery_tests, recovery_fixture)
-
-TEST(oversized partition recovery) {
-  std::error_code ec{};
-  auto root_dir = absolute(directory);
-  std::filesystem::copy(std::filesystem::path{VAST_TEST_PATH}
-                          / "artifacts/databases/suricata-flow",
-                        root_dir, std::filesystem::copy_options::recursive, ec);
-  MESSAGE(ec.message());
-  MESSAGE(root_dir);
-  auto index_dir = root_dir / "index";
-  // ftruncate the partition file
-  CHECK_EQUAL(
-    ::truncate((index_dir / "3e3ac6a7-7ddd-46d9-bf1b-0c95e2b40033").c_str(),
-               3ull * 1024 * 1024 * 1024),
-    0);
-  auto fs = self->spawn(system::posix_filesystem, root_dir,
-                        system::accountant_actor{});
-  auto catalog = self->spawn(system::catalog, system::accountant_actor{});
-  auto index
-    = self->spawn(system::index, system::accountant_actor{}, fs,
-                  system::archive_actor{}, catalog, type_registry, index_dir,
-                  defaults::system::store_backend, 1000u, vast::duration{},
-                  in_mem_partitions, taste_count, num_query_supervisors,
-                  index_dir, vast::index_config{});
-  run();
-  MESSAGE("query everything");
-  auto [query_id, hits, scheduled]
-    = query(*this, index, "#type == \"suricata.flow\"");
-  CHECK_EQUAL(hits, 1u);
-  CHECK_EQUAL(scheduled, 1u);
-  auto result = receive_result(*this, index, query_id, hits, scheduled);
-  CHECK_EQUAL(result, 1u);
-  anon_send_exit(index, caf::exit_reason::user_shutdown);
 }
 
 FIXTURE_SCOPE_END()

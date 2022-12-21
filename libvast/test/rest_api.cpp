@@ -76,7 +76,7 @@ TEST(OpenAPI specs) {
     auto spec = rest_plugin->openapi_specification(version);
     REQUIRE(caf::holds_alternative<vast::record>(spec));
     auto spec_record = caf::get<vast::record>(spec);
-    CHECK_EQUAL(endpoints.size(), spec_record.size());
+    auto endpoint_methods = size_t{0ull};
     for (auto const& [key, value] : spec_record) {
       auto path = to_express_format(key);
       auto endpoints_it = std::find_if(endpoints.begin(), endpoints.end(),
@@ -90,9 +90,11 @@ TEST(OpenAPI specs) {
       auto const& as_record = caf::get<vast::record>(value);
       auto method = method_to_string(endpoint.method);
       CHECK(as_record.contains(method));
+      endpoint_methods += as_record.size();
       // TODO: Implement a a more convenient accessor API into `vast::data`,
       // so we can also check things like number of parameters and content type.
     }
+    CHECK_EQUAL(endpoints.size(), endpoint_methods);
   }
 }
 
@@ -128,27 +130,104 @@ TEST(export endpoint) {
     = vast::plugins::find<vast::rest_endpoint_plugin>("api-export");
   REQUIRE(plugin);
   auto endpoints = plugin->rest_endpoints();
-  REQUIRE_EQUAL(endpoints.size(), 1ull);
-  auto const& export_endpoint = endpoints[0];
+  REQUIRE_EQUAL(endpoints.size(), 2ull);
+  { // GET /export
+    auto const& export_endpoint = endpoints[0];
+    auto handler = plugin->handler(self->system(), test_node);
+    auto response = std::make_shared<test_response>();
+    auto request = vast::http_request{
+      .params = {
+        {"expression", "addr in 192.168.0.0/16"},
+        {"limit", vast::count{16}},
+      },
+      .response = response,
+    };
+    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
+               std::move(request));
+    run();
+    CHECK_EQUAL(response->error_, caf::error{});
+    CHECK(!response->body_.empty());
+    auto padded_string = simdjson::padded_string{response->body_};
+    simdjson::dom::parser parser;
+    simdjson::dom::element doc;
+    auto error = parser.parse(padded_string).get(doc);
+    CHECK(!error);
+  }
+  { // POST /export
+    auto const& export_endpoint = endpoints[1];
+    auto handler = plugin->handler(self->system(), test_node);
+    auto response = std::make_shared<test_response>();
+    auto request = vast::http_request{
+      .params = {
+        {"expression", "addr in 192.168.0.0/16"},
+        {"limit", vast::count{16}},
+      },
+      .response = response,
+    };
+    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
+               std::move(request));
+    run();
+    CHECK_EQUAL(response->error_, caf::error{});
+    CHECK(!response->body_.empty());
+    auto padded_string = simdjson::padded_string{response->body_};
+    simdjson::dom::parser parser;
+    simdjson::dom::element doc;
+    auto error = parser.parse(padded_string).get(doc);
+    CHECK(!error);
+  }
+}
+
+TEST(query endpoint) {
+  auto const* plugin
+    = vast::plugins::find<vast::rest_endpoint_plugin>("api-query");
+  REQUIRE(plugin);
+  auto endpoints = plugin->rest_endpoints();
+  REQUIRE_EQUAL(endpoints.size(), 2ull);
+  auto const& query_new_endpoint = endpoints[0];
+  auto const& query_next_endpoint = endpoints[1];
   auto handler = plugin->handler(self->system(), test_node);
-  auto response = std::make_shared<test_response>();
-  auto request = vast::http_request{
+  auto response_new = std::make_shared<test_response>();
+  auto request_new = vast::http_request{
     .params = {
-      {"expression", "addr in 192.168.0.0/16"},
-      {"limit", vast::count{16}},
+      {"expression", "#type == \"zeek.conn\""},
     },
-    .response = response,
+    .response = response_new,
   };
-  self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
-             std::move(request));
+  self->send(handler, vast::atom::http_request_v,
+             query_new_endpoint.endpoint_id, std::move(request_new));
   run();
-  CHECK_EQUAL(response->error_, caf::error{});
-  CHECK(!response->body_.empty());
-  auto padded_string = simdjson::padded_string{response->body_};
+  CHECK_EQUAL(response_new->error_, caf::error{});
+  CHECK(!response_new->body_.empty());
+  auto padded_string = simdjson::padded_string{response_new->body_};
   simdjson::dom::parser parser;
   simdjson::dom::element doc;
   auto error = parser.parse(padded_string).get(doc);
   CHECK(!error);
+  CHECK(!doc.is_null());
+  CHECK(!doc["id"].is_null());
+  auto const* id = doc["id"].get<const char*>().value();
+  auto response_next = std::make_shared<test_response>();
+  const auto NUM_EVENTS = vast::count{16};
+  auto request_next = vast::http_request{
+    .params = {
+      {"id", std::string{id}},
+      {"n", NUM_EVENTS},
+    },
+    .response = response_next,
+  };
+  self->send(handler, vast::atom::http_request_v,
+             query_next_endpoint.endpoint_id, std::move(request_next));
+  run();
+  CHECK_EQUAL(response_next->error_, caf::error{});
+  CHECK(!response_next->body_.empty());
+  VAST_INFO("{}", response_next->body_);
+  auto padded_string2 = simdjson::padded_string{response_next->body_};
+  simdjson::dom::parser parser2;
+  simdjson::dom::element doc2;
+  auto error2 = parser2.parse(padded_string2).get(doc2);
+  CHECK(!error2);
+  CHECK(!doc2.is_null());
+  CHECK(!doc2["events"].is_null());
 }
 
 FIXTURE_SCOPE_END()

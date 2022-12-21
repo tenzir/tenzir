@@ -25,8 +25,6 @@ using token_t = std::string;
 
 CAF_BEGIN_TYPE_ID_BLOCK(vast_web_plugin_types, 1500)
   CAF_ADD_TYPE_ID(vast_web_plugin_types,
-                  (vast::plugins::web::restinio_response))
-  CAF_ADD_TYPE_ID(vast_web_plugin_types,
                   (std::shared_ptr<vast::plugins::web::restinio_response>))
 
   CAF_ADD_ATOM(vast_web_plugin_types, vast::atom, generate, "generate")
@@ -48,4 +46,5 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_web_plugin_actors, vast_web_plugin_types::end)
                   (vast::plugins::web::authenticator_actor))
 CAF_END_TYPE_ID_BLOCK(vast_web_plugin_actors)
 
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::plugins::web::restinio_response)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
+  std::shared_ptr<vast::plugins::web::restinio_response>)

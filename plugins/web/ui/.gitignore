@@ -1,0 +1,13 @@
+.DS_Store
+node_modules
+/build
+/.svelte-kit
+/package
+.env
+.env.*
+!.env.example
+.vercel
+.output
+/test-results/
+/playwright-report/
+/playwright/.cache/

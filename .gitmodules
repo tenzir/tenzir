@@ -1,9 +1,12 @@
-[submodule "libvast/aux/caf"]
-	path = libvast/aux/caf
-	url = https://github.com/tenzir/actor-framework
 [submodule "libvast/aux/fast_float"]
 	path = libvast/aux/fast_float
 	url = https://github.com/fastfloat/fast_float
 [submodule "plugins/web/aux/restinio"]
 	path = plugins/web/aux/restinio
 	url = https://github.com/Stiffstream/restinio
+[submodule "web/.github"]
+	path = web/.github
+	url = https://github.com/tenzir/.github.git
+[submodule "libvast/aux/caf"]
+	path = libvast/aux/caf
+	url = https://github.com/actor-framework/actor-framework

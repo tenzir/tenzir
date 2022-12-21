@@ -296,7 +296,8 @@ public:
     std::string category = "vast.import.pcap";
     if (auto interface = get_if<std::string>(&options, category + ".interface"))
       interface_ = *interface;
-    input_ = get_or(options, "vast.import.read", vast::defaults::import::read);
+    input_ = get_or(options, "vast.import.read",
+                    vast::defaults::import::read.data());
     cutoff_ = get_or(options, category + ".cutoff", defaults_t::cutoff);
     max_flows_
       = get_or(options, category + ".max-flows", defaults_t::max_flows);
@@ -651,8 +652,8 @@ public:
   explicit writer(const caf::settings& options) {
     flush_interval_ = get_or(options, "vast.export.pcap.flush-interval",
                              defaults::flush_interval);
-    trace_
-      = get_or(options, "vast.export.write", vast::defaults::export_::write);
+    trace_ = get_or(options, "vast.export.write",
+                    vast::defaults::export_::write.data());
   }
 
   ~writer() override = default;
@@ -722,7 +723,7 @@ public:
                total_packets_);
     if (::pcap_dump_flush(dumper_.get()) == -1)
       return caf::make_error(ec::format_error, "failed to flush");
-    return caf::no_error;
+    return {};
   }
 
   [[nodiscard]] const char* name() const override {
@@ -780,13 +781,13 @@ public:
   reader_options(command::opts_builder&& opts) const override {
     return std::move(opts)
       .add<std::string>("interface,i", "network interface to read packets from")
-      .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-      .add<size_t>("max-flows,m", "number of concurrent flows to track")
-      .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
-      .add<size_t>("flow-expiry,e", "flow table expiration interval")
-      .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
-                                               "1/c")
-      .add<size_t>("snaplen", "snapshot length in bytes")
+      .add<int64_t>("cutoff,c", "skip flow packets after this many bytes")
+      .add<int64_t>("max-flows,m", "number of concurrent flows to track")
+      .add<int64_t>("max-flow-age,a", "max flow lifetime before eviction")
+      .add<int64_t>("flow-expiry,e", "flow table expiration interval")
+      .add<int64_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
+                                                "1/c")
+      .add<int64_t>("snaplen", "snapshot length in bytes")
       .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
                                           "warnings to occur")
       .add<bool>("disable-community-id", "disable computation of community id "
@@ -816,7 +817,7 @@ public:
   [[nodiscard]] caf::config_option_set
   writer_options(command::opts_builder&& opts) const override {
     return std::move(opts)
-      .add<size_t>("flush-interval,f", "flush to disk after this many packets")
+      .add<int64_t>("flush-interval,f", "flush to disk after this many packets")
       .finish();
   }
 

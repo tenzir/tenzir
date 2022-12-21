@@ -12,10 +12,11 @@
 
 #include "vast/detail/flat_map.hpp"
 #include "vast/index_statistics.hpp"
-#include "vast/segment_builder.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 
+#include <caf/broadcast_downstream_manager.hpp>
+#include <caf/stream_stage.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <unordered_map>
@@ -36,9 +37,8 @@ struct partition_transformer_state {
   using synopsis_tuple = std::tuple<vast::uuid, chunk_ptr>;
 
   struct stream_data {
-    caf::expected<std::vector<partition_tuple>> partition_chunks
-      = caf::no_error;
-    caf::expected<std::vector<synopsis_tuple>> synopsis_chunks = caf::no_error;
+    caf::expected<std::vector<partition_tuple>> partition_chunks = caf::error{};
+    caf::expected<std::vector<synopsis_tuple>> synopsis_chunks = caf::error{};
   };
 
   struct path_data {
@@ -63,8 +63,8 @@ struct partition_transformer_state {
       self,
     stream_data&&, path_data&&) const;
 
-  /// Actor handle of the type registry.
-  type_registry_actor type_registry = {};
+  /// Actor handle of the catalog.
+  catalog_actor catalog = {};
 
   /// Actor handle of the accountant.
   accountant_actor accountant = {};
@@ -173,8 +173,7 @@ partition_transformer_actor::behavior_type partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
   const caf::settings& index_opts, accountant_actor accountant,
-  type_registry_actor type_registry, filesystem_actor fs,
-  pipeline_ptr transform, std::string partition_path_template,
-  std::string synopsis_path_template);
+  catalog_actor catalog, filesystem_actor fs, pipeline_ptr transform,
+  std::string partition_path_template, std::string synopsis_path_template);
 
 } // namespace vast::system

@@ -123,7 +123,8 @@ TEST(query pruning with index config) {
   auto index_opts = caf::settings{};
   auto partition
     = self->spawn(vast::system::active_partition, id, accountant, fs,
-                  index_opts, config1, store, store_id, store_header);
+                  index_opts, config1, store, store_id, store_header,
+                  std::make_shared<vast::taxonomies>());
   vast::detail::spawn_container_source(sys, zeek_conn_log, partition);
   run();
   auto ps = vast::partition_synopsis_ptr{};
@@ -136,9 +137,10 @@ TEST(query pruning with index config) {
       ps = std::move(result);
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      REQUIRE(!e);
     });
-  auto catalog = self->spawn(vast::system::catalog, accountant);
+  auto catalog
+    = self->spawn(vast::system::catalog, accountant, directory / "types");
   auto rp2 = self->request(catalog, caf::infinite, vast::atom::merge_v, id, ps);
   run();
   rp2.receive(
@@ -146,14 +148,14 @@ TEST(query pruning with index config) {
       /* nop */
     },
     [](const caf::error& e) {
-      REQUIRE_EQUAL(e, caf::no_error);
+      REQUIRE(!e);
     });
   // Check that the pruning works as expected. If it does, it will be
   // unnoticeable from the outside, so we have to access the internal
   // catalog state.
   auto& state
     = deref<
-        vast::system::catalog_actor::stateful_base<vast::system::catalog_state>>(
+        vast::system::catalog_actor::stateful_impl<vast::system::catalog_state>>(
         catalog)
         .state;
   auto& unprunable_fields = state.unprunable_fields;

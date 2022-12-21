@@ -8,15 +8,24 @@
 
 #include "vast/system/catalog.hpp"
 
+#include "vast/as_bytes.hpp"
+#include "vast/concept/convertible/data.hpp"
 #include "vast/data.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/set_operations.hpp"
 #include "vast/detail/stable_set.hpp"
-#include "vast/detail/string.hpp"
 #include "vast/detail/tracepoint.hpp"
+#include "vast/error.hpp"
+#include "vast/event_types.hpp"
 #include "vast/expression.hpp"
-#include "vast/fbs/utils.hpp"
+#include "vast/fbs/type_registry.hpp"
+#include "vast/flatbuffer.hpp"
+#include "vast/io/read.hpp"
+#include "vast/io/save.hpp"
+#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/prune.hpp"
@@ -26,149 +35,144 @@
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/time.hpp"
+#include "vast/taxonomies.hpp"
 
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/set_thread_name.hpp>
+#include <caf/expected.hpp>
 
 #include <type_traits>
 
 namespace vast::system {
-
-void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
-  for (auto const& [field, synopsis] : ps.field_synopses_)
-    if (synopsis != nullptr && field.type() == string_type{})
-      unprunable_fields.insert(std::string{field.name()});
-  // TODO/BUG: We also need to prevent pruning for enum types,
-  // which also use string literals for lookup. We must be even
-  // more strict here than with string fields, because incorrectly
-  // pruning string fields will only cause false positives, but
-  // incorrectly pruning enum fields can actually cause false negatives.
-  //
-  // else if (field.type() == enumeration_type{}) {
-  //   auto full_name = field.name();
-  //   for (auto suffix : detail::all_suffixes(full_name, "."))
-  //     unprunable_fields.insert(suffix);
-  // }
-}
-
-size_t catalog_state::memusage() const {
-  size_t result = 0;
-  for (const auto& [id, partition_synopsis] : synopses)
-    result += partition_synopsis->memusage();
-  return result;
-}
-
-void catalog_state::erase(const uuid& partition) {
-  synopses.erase(partition);
+void catalog_state::create_from(
+  std::unordered_map<uuid, partition_synopsis_ptr>&& ps) {
+  std::unordered_map<vast::type,
+                     std::vector<std::pair<uuid, partition_synopsis_ptr>>>
+    flat_data_map;
+  for (auto&& [uuid, synopsis] : std::move(ps)) {
+    VAST_ASSERT(synopsis->get_reference_count() == 1ull);
+    update_unprunable_fields(*synopsis);
+    flat_data_map[synopsis->schema].emplace_back(uuid, std::move(synopsis));
+  }
+  for (auto& [type, flat_data] : flat_data_map) {
+    std::sort(flat_data.begin(), flat_data.end(),
+              [](const std::pair<uuid, partition_synopsis_ptr>& lhs,
+                 const std::pair<uuid, partition_synopsis_ptr>& rhs) {
+                return lhs.first < rhs.first;
+              });
+    synopses_per_type[type]
+      = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
+        std::move(flat_data));
+  }
 }
 
 void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
   update_unprunable_fields(*ps);
-  synopses.emplace(partition, std::move(ps));
+  synopses_per_type[ps->schema][partition] = std::move(ps);
 }
 
-void catalog_state::create_from(std::map<uuid, partition_synopsis_ptr>&& ps) {
-  std::vector<std::pair<uuid, partition_synopsis_ptr>> flat_data;
-  for (auto&& [uuid, synopsis] : std::move(ps)) {
-    VAST_ASSERT(synopsis->get_reference_count() == 1ull);
-    flat_data.emplace_back(uuid, std::move(synopsis));
+void catalog_state::erase(const uuid& partition) {
+  for (auto& [type, uuid_synopsis_map] : synopses_per_type) {
+    auto erased = uuid_synopsis_map.erase(partition);
+    if (erased) {
+      if (uuid_synopsis_map.empty()) {
+        synopses_per_type.erase(type);
+      }
+      return;
+    }
   }
-  std::sort(flat_data.begin(), flat_data.end(),
-            [](const std::pair<uuid, partition_synopsis_ptr>& lhs,
-               const std::pair<uuid, partition_synopsis_ptr>& rhs) {
-              return lhs.first < rhs.first;
-            });
-  synopses = decltype(synopses)::make_unsafe(std::move(flat_data));
-  for (auto const& [_, synopsis] : synopses)
-    update_unprunable_fields(*synopsis);
 }
 
-partition_synopsis_ptr& catalog_state::at(const uuid& partition) {
-  return synopses.at(partition);
-}
-
-catalog_result catalog_state::lookup(const expression& expr) const {
+caf::expected<catalog_lookup_result>
+catalog_state::lookup(const expression& expr) const {
   auto start = system::stopwatch::now();
+  auto total_candidates = catalog_lookup_result{};
   auto pruned = prune(expr, unprunable_fields);
-  auto result = lookup_impl(pruned);
-  // Sort partitions by their max import time, returning the most recent
-  // partitions first.
-  std::sort(result.begin(), result.end(),
-            [&](const partition_info& lhs, const partition_info& rhs) {
-              return lhs.max_import_time > rhs.max_import_time;
-            });
-  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-    system::stopwatch::now() - start);
-  VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",
-             result.size(), delta.count());
-  VAST_TRACEPOINT(catalog_lookup, delta.count(), result.size());
-  // TODO: This is correct because every exact result can be regarded as a
-  // probabilistic result with zero false positives, but it is a
-  // pessimization.
-  // We should analyze the query here to see whether it's probabilistic or
-  // exact. An exact query consists of a disjunction of exact synopses or
-  // an explicit set of ids.
-  return catalog_result{catalog_result::probabilistic, std::move(result)};
+  for (const auto& [type, _] : synopses_per_type) {
+    auto resolved = resolve(taxonomies, pruned, type);
+    if (!resolved) {
+      return resolved.error();
+    }
+    auto candidates_per_type = lookup_impl(*resolved, type);
+    // Sort partitions by their max import time, returning the most recent
+    // partitions first.
+    std::sort(candidates_per_type.partition_infos.begin(),
+              candidates_per_type.partition_infos.end(),
+              [&](const partition_info& lhs, const partition_info& rhs) {
+                return lhs.max_import_time > rhs.max_import_time;
+              });
+    total_candidates.candidate_infos[type] = candidates_per_type;
+    auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
+      system::stopwatch::now() - start);
+    VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",
+               candidates_per_type.partition_infos.size(), delta.count());
+    VAST_TRACEPOINT(catalog_lookup, delta.count(),
+                    candidates_per_type.partition_infos.size());
+  }
+  return total_candidates;
 }
 
-std::vector<partition_info>
-catalog_state::lookup_impl(const expression& expr) const {
+catalog_lookup_result::candidate_info
+catalog_state::lookup_impl(const expression& expr, const type& schema) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
+  auto synopsis_map_per_type_it = synopses_per_type.find(schema);
+  VAST_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
+  const auto& partition_synopses = synopsis_map_per_type_it->second;
   // The partition UUIDs must be sorted, otherwise the invariants of the
   // inplace union and intersection algorithms are violated, leading to
   // wrong results. So all places where we return an assembled set must
   // ensure the post-condition of returning a sorted list. We currently
   // rely on `flat_map` already traversing them in the correct order, so
   // no separate sorting step is required.
-  using result_type = std::vector<partition_info>;
-  result_type memoized_partitions = {};
+  auto memoized_partitions = catalog_lookup_result::candidate_info{};
   auto all_partitions = [&] {
-    if (!memoized_partitions.empty() || synopses.empty())
+    if (!memoized_partitions.partition_infos.empty()
+        || partition_synopses.empty())
       return memoized_partitions;
-    memoized_partitions.reserve(synopses.size());
-    for (const auto& [partition, synopsis] : synopses) {
-      memoized_partitions.emplace_back(partition, synopsis->events,
-                                       synopsis->max_import_time,
-                                       synopsis->schema, synopsis->version);
+    for (const auto& [partition, synopsis] : partition_synopses) {
+      memoized_partitions.exp = expr;
+      memoized_partitions.partition_infos.emplace_back(
+        partition, synopsis->events, synopsis->max_import_time,
+        synopsis->schema, synopsis->version);
     }
     return memoized_partitions;
   };
   auto f = detail::overload{
-    [&](const conjunction& x) -> result_type {
+    [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
       VAST_ASSERT(!x.empty());
       auto i = x.begin();
-      auto result = lookup_impl(*i);
-      if (!result.empty())
+      auto result = lookup_impl(*i, schema);
+      if (!result.partition_infos.empty())
         for (++i; i != x.end(); ++i) {
           // TODO: A conjunction means that we can restrict the lookup to the
           // remaining candidates. This could be achived by passing the `result`
           // set to `lookup` along with the child expression.
-          auto xs = lookup_impl(*i);
-          if (xs.empty())
+          auto xs = lookup_impl(*i, schema);
+          if (xs.partition_infos.empty())
             return xs; // short-circuit
-          detail::inplace_intersect(result, xs);
-          VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+          detail::inplace_intersect(result.partition_infos, xs.partition_infos);
+          VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                     result.partition_infos.end()));
         }
       return result;
     },
-    [&](const disjunction& x) -> result_type {
-      result_type result;
-      auto string_synopsis_memo = detail::stable_set<std::string>{};
+    [&](const disjunction& x) -> catalog_lookup_result::candidate_info {
+      catalog_lookup_result::candidate_info result;
       for (const auto& op : x) {
         // TODO: A disjunction means that we can restrict the lookup to the
         // set of partitions that are outside of the current result set.
-        auto xs = lookup_impl(op);
-        VAST_ASSERT(std::is_sorted(xs.begin(), xs.end()));
-        if (xs.size() == synopses.size())
+        auto xs = lookup_impl(op, schema);
+        if (xs.partition_infos.size() == partition_synopses.size())
           return xs; // short-circuit
-        detail::inplace_unify(result, xs);
-        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+        VAST_ASSERT(
+          std::is_sorted(xs.partition_infos.begin(), xs.partition_infos.end()));
+        detail::inplace_unify(result.partition_infos, xs.partition_infos);
+        VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                   result.partition_infos.end()));
       }
       return result;
     },
-    [&](const negation&) -> result_type {
+    [&](const negation&) -> catalog_lookup_result::candidate_info {
       // We cannot handle negations, because a synopsis may return false
       // positives, and negating such a result may cause false
       // negatives.
@@ -176,7 +180,7 @@ catalog_state::lookup_impl(const expression& expr) const {
       // synopses, but it should be possible to handle time or bool synopses.
       return all_partitions();
     },
-    [&](const predicate& x) -> result_type {
+    [&](const predicate& x) -> catalog_lookup_result::candidate_info {
       // Performs a lookup on all *matching* synopses with operator and
       // data from the predicate of the expression. The match function
       // uses a qualified_record_field to determine whether the synopsis
@@ -184,8 +188,11 @@ catalog_state::lookup_impl(const expression& expr) const {
       auto search = [&](auto match) {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
         const auto& rhs = caf::get<data>(x.rhs);
-        result_type result;
-        for (const auto& [part_id, part_syn] : synopses) {
+        catalog_lookup_result::candidate_info result;
+        // dont iterate through all synopses, rewrite lookup_impl to use a
+        // singular type all synopses loops -> relevant anymore? Use type as
+        // synopses key
+        for (const auto& [part_id, part_syn] : partition_synopses) {
           for (const auto& [field, syn] : part_syn->field_synopses_) {
             if (match(field)) {
               // We need to prune the type's metadata here by converting it to a
@@ -202,9 +209,10 @@ catalog_state::lookup_impl(const expression& expr) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.emplace_back(part_id, part_syn->events,
-                                      part_syn->max_import_time,
-                                      part_syn->schema, part_syn->version);
+                  result.partition_infos.emplace_back(part_id, part_syn->events,
+                                                      part_syn->max_import_time,
+                                                      part_syn->schema,
+                                                      part_syn->version);
                   break;
                 }
                 // The field has no dedicated synopsis. Check if there is one
@@ -215,54 +223,63 @@ catalog_state::lookup_impl(const expression& expr) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.emplace_back(part_id, part_syn->events,
-                                      part_syn->max_import_time,
-                                      part_syn->schema, part_syn->version);
+                  result.partition_infos.emplace_back(part_id, part_syn->events,
+                                                      part_syn->max_import_time,
+                                                      part_syn->schema,
+                                                      part_syn->version);
                   break;
                 }
               } else {
                 // The catalog couldn't rule out this partition, so we have
                 // to include it in the result set.
-                result.emplace_back(part_id, part_syn->events,
-                                    part_syn->max_import_time, part_syn->schema,
-                                    part_syn->version);
+                result.partition_infos.emplace_back(part_id, part_syn->events,
+                                                    part_syn->max_import_time,
+                                                    part_syn->schema,
+                                                    part_syn->version);
                 break;
               }
             }
           }
         }
-        VAST_DEBUG(
-          "{} checked {} partitions for predicate {} and got {} results",
-          detail::pretty_type_name(this), synopses.size(), x, result.size());
+        VAST_DEBUG("{} checked {} partitions for predicate {} and got {} "
+                   "results",
+                   detail::pretty_type_name(this), synopses_per_type.size(), x,
+                   result.partition_infos.size());
         // Some calling paths require the result to be sorted.
-        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+        VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                   result.partition_infos.end()));
         return result;
       };
       auto extract_expr = detail::overload{
-        [&](const meta_extractor& lhs, const data& d) -> result_type {
+        [&](const meta_extractor& lhs,
+            const data& d) -> catalog_lookup_result::candidate_info {
           if (lhs.kind == meta_extractor::type) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
-            result_type result;
-            for (const auto& [part_id, part_syn] : synopses) {
+            catalog_lookup_result::candidate_info result;
+            for (const auto& [part_id, part_syn] : partition_synopses) {
               for (const auto& [fqf, _] : part_syn->field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
                 // short, so we're probably not hitting the allocator due to
                 // SSO.
                 if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
-                  result.emplace_back(part_id, part_syn->events,
-                                      part_syn->max_import_time,
-                                      part_syn->schema, part_syn->version);
+                  result.exp = expr;
+                  result.partition_infos.emplace_back(part_id, part_syn->events,
+                                                      part_syn->max_import_time,
+                                                      part_syn->schema,
+                                                      part_syn->version);
                   break;
                 }
               }
             }
-            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+            VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                       result.partition_infos.end()));
             return result;
-          } else if (lhs.kind == meta_extractor::import_time) {
-            result_type result;
-            for (const auto& [part_id, part_syn] : synopses) {
+          }
+          if (lhs.kind == meta_extractor::import_time) {
+            catalog_lookup_result::candidate_info result;
+            for (const auto& [part_id, part_syn] : partition_synopses) {
               VAST_ASSERT(part_syn->min_import_time
                             <= part_syn->max_import_time,
                           "encountered empty or moved-from partition synopsis");
@@ -272,53 +289,23 @@ catalog_state::lookup_impl(const expression& expr) const {
               };
               auto add = ts.lookup(x.op, caf::get<vast::time>(d));
               if (!add || *add) {
-                result.emplace_back(part_id, part_syn->events,
-                                    part_syn->max_import_time, part_syn->schema,
-                                    part_syn->version);
+                result.exp = expr;
+                result.partition_infos.emplace_back(part_id, part_syn->events,
+                                                    part_syn->max_import_time,
+                                                    part_syn->schema,
+                                                    part_syn->version);
               }
             }
-            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
-            return result;
-          } else if (lhs.kind == meta_extractor::field) {
-            // We don't have to look into the synopses for type queries, just
-            // at the layout names.
-            result_type result;
-            const auto* s = caf::get_if<std::string>(&d);
-            if (!s) {
-              VAST_WARN("#field meta queries only support string "
-                        "comparisons");
-            } else {
-              for (const auto& [part_id, part_syn] : synopses) {
-                // Compare the desired field name with each field in the
-                // partition.
-                auto matching = [&](const auto& part_syn) {
-                  for (const auto& [field, _] : part_syn->field_synopses_) {
-                    VAST_ASSERT(!field.is_standalone_type());
-                    auto rt = record_type{{field.field_name(), field.type()}};
-                    for ([[maybe_unused]] const auto& offset :
-                         rt.resolve_key_suffix(*s, field.layout_name()))
-                      return true;
-                  }
-                  return false;
-                }(part_syn);
-                // Only insert the partition if both sides are equal, i.e. the
-                // operator is "positive" and matching is true, or both are
-                // negative.
-                if (!is_negated(x.op) == matching) {
-                  result.emplace_back(part_id, part_syn->events,
-                                      part_syn->max_import_time,
-                                      part_syn->schema, part_syn->version);
-                }
-              }
-            }
-            VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
+            VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                       result.partition_infos.end()));
             return result;
           }
-          VAST_WARN("{} cannot process attribute extractor: {}",
+          VAST_WARN("{} cannot process meta extractor: {}",
                     detail::pretty_type_name(this), lhs.kind);
           return all_partitions();
         },
-        [&](const field_extractor& lhs, const data& d) -> result_type {
+        [&](const field_extractor& lhs,
+            const data& d) -> catalog_lookup_result::candidate_info {
           auto pred = [&](const auto& field) {
             auto match_name = [&] {
               auto field_name = field.field_name();
@@ -348,7 +335,8 @@ catalog_state::lookup_impl(const expression& expr) const {
           };
           return search(pred);
         },
-        [&](const type_extractor& lhs, const data& d) -> result_type {
+        [&](const type_extractor& lhs,
+            const data& d) -> catalog_lookup_result::candidate_info {
           auto result = [&] {
             if (!lhs.type) {
               auto pred = [&](auto& field) {
@@ -372,11 +360,13 @@ catalog_state::lookup_impl(const expression& expr) const {
               const auto type = field.type();
               return type.attribute("timestamp").has_value();
             };
-            detail::inplace_unify(result, search(pred));
+            auto pred_search_result = search(pred);
+            detail::inplace_unify(result.partition_infos,
+                                  pred_search_result.partition_infos);
           }
           return result;
         },
-        [&](const auto&, const auto&) -> result_type {
+        [&](const auto&, const auto&) -> catalog_lookup_result::candidate_info {
           VAST_WARN("{} cannot process predicate: {}",
                     detail::pretty_type_name(this), x);
           return all_partitions();
@@ -384,22 +374,255 @@ catalog_state::lookup_impl(const expression& expr) const {
       };
       return caf::visit(extract_expr, x.lhs, x.rhs);
     },
-    [&](caf::none_t) -> result_type {
+    [&](caf::none_t) -> catalog_lookup_result::candidate_info {
       VAST_ERROR("{} received an empty expression",
                  detail::pretty_type_name(this));
       VAST_ASSERT(!"invalid expression");
       return all_partitions();
     },
   };
-  return caf::visit(f, expr);
+  auto result = caf::visit(f, expr);
+  result.exp = expr;
+  return result;
+}
+
+size_t catalog_state::memusage() const {
+  size_t result = 0;
+  for (const auto& [type, id_synopsis_map] : synopses_per_type)
+    for (const auto& [id, synopsis] : id_synopsis_map) {
+      result += synopsis->memusage();
+    }
+  return result;
+}
+
+void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
+  for (auto const& [field, synopsis] : ps.field_synopses_)
+    if (synopsis != nullptr && field.type() == string_type{})
+      unprunable_fields.insert(std::string{field.name()});
+  // TODO/BUG: We also need to prevent pruning for enum types,
+  // which also use string literals for lookup. We must be even
+  // more strict here than with string fields, because incorrectly
+  // pruning string fields will only cause false positives, but
+  // incorrectly pruning enum fields can actually cause false negatives.
+  //
+  // else if (field.type() == enumeration_type{}) {
+  //   auto full_name = field.name();
+  //   for (auto suffix : detail::all_suffixes(full_name, "."))
+  //     unprunable_fields.insert(suffix);
+  // }
+}
+
+std::filesystem::path catalog_state::type_registry_filename() const {
+  return type_registry_dir / fmt::format("type-registry.reg", name);
+}
+
+caf::error catalog_state::save_type_registry_to_disk() const {
+  auto builder = flatbuffers::FlatBufferBuilder{};
+  auto entry_offsets
+    = std::vector<flatbuffers::Offset<fbs::type_registry::Entry>>{};
+  for (const auto& [key, types] : type_data) {
+    const auto key_offset = builder.CreateString(key);
+    auto type_offsets = std::vector<flatbuffers::Offset<fbs::TypeBuffer>>{};
+    type_offsets.reserve(types.size());
+    for (const auto& type : types) {
+      const auto type_bytes = as_bytes(type);
+      const auto type_offset = fbs::CreateTypeBuffer(
+        builder, builder.CreateVector(
+                   reinterpret_cast<const uint8_t*>(type_bytes.data()),
+                   type_bytes.size()));
+      type_offsets.push_back(type_offset);
+    }
+    const auto types_offset = builder.CreateVector(type_offsets);
+    const auto entry_offset
+      = fbs::type_registry::CreateEntry(builder, key_offset, types_offset);
+    entry_offsets.push_back(entry_offset);
+  }
+  const auto entries_offset = builder.CreateVector(entry_offsets);
+  const auto type_registry_v0_offset
+    = fbs::type_registry::Createv0(builder, entries_offset);
+  const auto type_registry_offset = fbs::CreateTypeRegistry(
+    builder, fbs::type_registry::TypeRegistry::type_registry_v0,
+    type_registry_v0_offset.Union());
+  fbs::FinishTypeRegistryBuffer(builder, type_registry_offset);
+  auto buffer = builder.Release();
+  return io::save(type_registry_filename(), as_bytes(buffer));
+}
+
+caf::error catalog_state::load_type_registry_from_disk() {
+  // Nothing to load is not an error.
+  std::error_code err{};
+  const auto dir_exists = std::filesystem::exists(type_registry_dir, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to find directory {}: {}",
+                                       type_registry_dir, err.message()));
+  if (!dir_exists) {
+    VAST_DEBUG("{} found no directory {} to load from", *self,
+               type_registry_dir);
+    return caf::none;
+  }
+  // Support the legacy CAF-serialized state, and delete it afterwards.
+  {
+    const auto fname = type_registry_dir / name;
+    const auto file_exists = std::filesystem::exists(fname, err);
+    if (err)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed while trying to find file {}: "
+                                         "{}",
+                                         fname, err.message()));
+    if (file_exists) {
+      auto buffer = io::read(fname);
+      if (!buffer)
+        return buffer.error();
+      std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
+      if (!detail::legacy_deserialize(*buffer, intermediate))
+        return caf::make_error(ec::parse_error, "failed to load legacy "
+                                                "type-registry state");
+      for (const auto& [k, vs] : intermediate) {
+        auto entry = type_set{};
+        for (const auto& v : vs)
+          entry.emplace(type::from_legacy_type(v));
+        type_data.emplace(k, entry);
+      }
+      VAST_DEBUG("{} loaded state from disk", *self);
+      // We save the new state already now before removing the old state just to
+      // be save against crashes.
+      if (auto err = save_type_registry_to_disk())
+        return err;
+      if (!std::filesystem::remove(fname, err) || err)
+        VAST_DEBUG("failed to delete legacy type-registry state");
+      return caf::none;
+    }
+  }
+  // Support the new FlatBuffers state.
+  {
+    const auto fname = type_registry_filename();
+    const auto file_exists = std::filesystem::exists(fname, err);
+    if (err)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed while trying to find file {}: "
+                                         "{}",
+                                         fname, err.message()));
+    if (file_exists) {
+      auto buffer = io::read(fname);
+      if (!buffer)
+        return buffer.error();
+      auto maybe_flatbuffer
+        = flatbuffer<fbs::TypeRegistry>::make(chunk::make(std::move(*buffer)));
+      if (!maybe_flatbuffer)
+        return maybe_flatbuffer.error();
+      const auto flatbuffer = std::move(*maybe_flatbuffer);
+      for (const auto& entry :
+           *flatbuffer->type_as_type_registry_v0()->entries()) {
+        auto types = type_set{};
+        for (const auto& value : *entry->values())
+          types.emplace(
+            type{flatbuffer.chunk()->slice(as_bytes(*value->buffer()))});
+        type_data.emplace(entry->key()->string_view(), std::move(types));
+      }
+      VAST_DEBUG("{} loaded state from disk", *self);
+    }
+  }
+  return caf::none;
+}
+
+caf::error catalog_state::load_taxonomies() {
+  VAST_DEBUG("{} loads taxonomies", *self);
+  std::error_code err{};
+  auto dirs = get_module_dirs(self->system().config());
+  concepts_map concepts;
+  models_map models;
+  for (const auto& dir : dirs) {
+    const auto dir_exists = std::filesystem::exists(dir, err);
+    if (err)
+      VAST_WARN("{} failed to open directory {}: {}", *self, dir,
+                err.message());
+    if (!dir_exists)
+      continue;
+    auto yamls = load_yaml_dir(dir);
+    if (!yamls)
+      return yamls.error();
+    for (auto& [file, yaml] : *yamls) {
+      VAST_DEBUG("{} extracts taxonomies from {}", *self, file.string());
+      if (auto err = convert(yaml, concepts, concepts_data_layout))
+        return caf::make_error(ec::parse_error,
+                               "failed to extract concepts from file",
+                               file.string(), err.context());
+      for (auto& [name, definition] : concepts)
+        VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
+                   definition.fields.size());
+      if (auto err = convert(yaml, models, models_data_layout))
+        return caf::make_error(ec::parse_error,
+                               "failed to extract models from file",
+                               file.string(), err.context());
+      for (auto& [name, definition] : models) {
+        VAST_DEBUG("{} extracted model {} with {} fields", *self, name,
+                   definition.definition.size());
+        VAST_TRACE("{} uses model mapping {} -> {}", *self, name,
+                   definition.definition);
+      }
+    }
+  }
+  taxonomies.concepts = std::move(concepts);
+  taxonomies.models = std::move(models);
+  return caf::none;
+}
+
+void catalog_state::insert(vast::type layout) {
+  auto& old_layouts = type_data[std::string{layout.name()}];
+  // Insert into the existing bucket.
+  auto [hint, success] = old_layouts.insert(std::move(layout));
+  if (success) {
+    // Check whether the new layout is compatible with the latest, i.e., whether
+    // the new layout is a superset of it.
+    if (old_layouts.begin() != hint) {
+      if (!is_subset(*old_layouts.begin(), *hint))
+        VAST_WARN("{} detected an incompatible layout change for {}", *self,
+                  hint->name());
+      else
+        VAST_INFO("{} detected a layout change for {}", *self, hint->name());
+    }
+    VAST_DEBUG("{} registered {}", *self, hint->name());
+  }
+  // Move the newly inserted layout to the front.
+  std::rotate(old_layouts.begin(), hint, std::next(hint));
+}
+
+type_set catalog_state::types() const {
+  auto result = type_set{};
+  for (const auto& x : configuration_module)
+    result.insert(x);
+  return result;
 }
 
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant) {
+        accountant_actor accountant,
+        const std::filesystem::path& type_reg_dir) {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("vast.catalog");
   self->state.self = self;
+  self->state.type_registry_dir = type_reg_dir;
+  // Register the exit handler.
+  self->set_exit_handler([self](const caf::exit_msg& msg) {
+    VAST_DEBUG("{} got EXIT from {}", *self, msg.source);
+    if (auto err = self->state.save_type_registry_to_disk())
+      VAST_ERROR("{} failed to persist state to disk: {}", *self, err);
+    self->quit(msg.reason);
+  });
+  // Load existing state from disk if possible.
+  if (auto err = self->state.load_type_registry_from_disk()) {
+    self->quit(std::move(err));
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
+  if (auto err = self->state.load_taxonomies()) {
+    self->quit(std::move(err));
+    return catalog_actor::behavior_type::make_empty_behavior();
+  }
+  // Load loaded schema types from the singleton.
+  // TODO: Move to the load handler and re-parse the files.
+  if (const auto* module = vast::event_types::get())
+    self->state.configuration_module = *module;
   if (accountant) {
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());
@@ -407,44 +630,75 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                        atom::telemetry_v);
   }
   return {
-    [=](
-      atom::merge,
-      std::shared_ptr<std::map<uuid, partition_synopsis_ptr>>& ps) -> atom::ok {
+    [self](atom::merge,
+           std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps)
+      -> caf::result<atom::ok> {
+      auto unsupported_partitions = std::vector<uuid>{};
+      for (const auto& [uuid, synopsis] : *ps) {
+        auto supported
+          = version::support_for_partition_version(synopsis->version);
+        if (supported.end_of_life)
+          unsupported_partitions.push_back(uuid);
+      }
+      if (!unsupported_partitions.empty()) {
+        return caf::make_error(
+          ec::version_error,
+          fmt::format("{} cannot load unsupported partitions; please run 'vast "
+                      "rebuild' with at least {} to rebuild the following "
+                      "partitions, or delete them from the database directory: "
+                      "{}",
+                      *self,
+                      version::support_for_partition_version(
+                        version::current_partition_version)
+                        .introduced,
+                      fmt::join(unsupported_partitions, ", ")));
+      }
       self->state.create_from(std::move(*ps));
       return atom::ok_v;
     },
-    [=](atom::merge, uuid partition,
-        partition_synopsis_ptr& synopsis) -> atom::ok {
+    [self](atom::merge, uuid partition,
+           partition_synopsis_ptr& synopsis) -> atom::ok {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(partition));
       self->state.merge(partition, std::move(synopsis));
       return atom::ok_v;
     },
-    [=](atom::merge, std::vector<augmented_partition_synopsis> v) -> atom::ok {
+    [self](atom::merge,
+           std::vector<augmented_partition_synopsis> v) -> atom::ok {
       for (auto& aps : v)
         self->state.merge(aps.uuid, aps.synopsis);
       return atom::ok_v;
     },
-    [=](atom::get) -> std::vector<partition_synopsis_pair> {
+    [self](atom::get) -> std::vector<partition_synopsis_pair> {
       std::vector<partition_synopsis_pair> result;
-      result.reserve(self->state.synopses.size());
-      for (const auto& synopsis : self->state.synopses)
-        result.push_back({synopsis.first, synopsis.second});
+      result.reserve(self->state.synopses_per_type.size());
+      for (const auto& [type, id_synopsis_map] :
+           self->state.synopses_per_type) {
+        for (const auto& [id, synopsis] : id_synopsis_map) {
+          result.push_back({id, synopsis});
+        }
+      }
       return result;
     },
-    [=](atom::erase, uuid partition) {
+    [self](atom::get, atom::type) {
+      VAST_TRACE_SCOPE("{} retrieves a list of all known types", *self);
+      // TODO: We can generate this list out of partition_synopses
+      // when we drop partition version 0 support.
+      return self->state.types();
+    },
+    [self](atom::erase, uuid partition) {
       self->state.erase(partition);
       return atom::ok_v;
     },
-    [=](atom::replace, std::vector<uuid> old_uuids,
-        std::vector<augmented_partition_synopsis> new_synopses) -> atom::ok {
+    [self](atom::replace, std::vector<uuid> old_uuids,
+           std::vector<augmented_partition_synopsis> new_synopses) -> atom::ok {
       for (auto const& uuid : old_uuids)
         self->state.erase(uuid);
       for (auto& aps : new_synopses)
         self->state.merge(aps.uuid, aps.synopsis);
       return atom::ok_v;
     },
-    [=](atom::candidates, const vast::query_context& query_context)
-      -> caf::result<catalog_result> {
+    [self](atom::candidates, const vast::query_context& query_context)
+      -> caf::result<catalog_lookup_result> {
       VAST_TRACE_SCOPE("{} {}", *self, VAST_ARG(query_context));
       bool has_expression = query_context.expr != vast::expression{};
       bool has_ids = !query_context.ids.empty();
@@ -456,8 +710,12 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                                                      "to have an expression");
       auto start = std::chrono::steady_clock::now();
       auto result = self->state.lookup(query_context.expr);
-      duration runtime = std::chrono::steady_clock::now() - start;
+      if (!result) {
+        return result.error();
+      }
+      auto total_candidate_amount = result->size();
       auto id_str = fmt::to_string(query_context.id);
+      duration runtime = std::chrono::steady_clock::now() - start;
       self->send(self->state.accountant, atom::metrics_v,
                  "catalog.lookup.runtime", runtime,
                  metrics_metadata{
@@ -465,37 +723,45 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
                    {"issuer", query_context.issuer},
                  });
       self->send(self->state.accountant, atom::metrics_v,
-                 "catalog.lookup.candidates", result.partitions.size(),
+                 "catalog.lookup.candidates", total_candidate_amount,
                  metrics_metadata{
                    {"query", std::move(id_str)},
                    {"issuer", query_context.issuer},
                  });
+
       return result;
     },
-    [=](atom::status, status_verbosity v) {
+    [self](atom::resolve,
+           const expression& e) -> caf::result<vast::expression> {
+      return resolve(self->state.taxonomies, e, self->state.type_data);
+    },
+    [self](atom::status, status_verbosity v) {
       record result;
       result["memory-usage"] = count{self->state.memusage()};
-      result["num-partitions"] = count{self->state.synopses.size()};
+      result["num-partitions"] = count{self->state.synopses_per_type.size()};
       if (v >= status_verbosity::detailed) {
         auto partitions = list{};
-        partitions.reserve(self->state.synopses.size());
-        for (const auto& [id, synopsis] : self->state.synopses) {
-          VAST_ASSERT(synopsis);
-          auto partition = record{
-            {"id", fmt::to_string(id)},
-            {"schema", synopsis->schema
-                         ? data{std::string{synopsis->schema.name()}}
-                         : data{}},
-            {"num-events", synopsis->events},
-            {"import-time",
-             record{
-               {"min", synopsis->min_import_time},
-               {"max", synopsis->max_import_time},
-             }},
-          };
-          if (v >= status_verbosity::debug)
-            partition["version"] = synopsis->version;
-          partitions.emplace_back(std::move(partition));
+        partitions.reserve(self->state.synopses_per_type.size());
+        for (const auto& [type, id_synopsis_map] :
+             self->state.synopses_per_type) {
+          for (const auto& [id, synopsis] : id_synopsis_map) {
+            VAST_ASSERT(synopsis);
+            auto partition = record{
+              {"id", fmt::to_string(id)},
+              {"schema", synopsis->schema
+                           ? data{std::string{synopsis->schema.name()}}
+                           : data{}},
+              {"num-events", synopsis->events},
+              {"import-time",
+               record{
+                 {"min", synopsis->min_import_time},
+                 {"max", synopsis->max_import_time},
+               }},
+            };
+            if (v >= status_verbosity::debug)
+              partition["version"] = synopsis->version;
+            partitions.emplace_back(std::move(partition));
+          }
         }
         result["partitions"] = std::move(partitions);
       }
@@ -503,26 +769,43 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         detail::fill_status_map(result, self);
       return result;
     },
-    [=](atom::telemetry) {
+    [self](atom::put, vast::type layout) {
+      VAST_TRACE_SCOPE("");
+      self->state.insert(std::move(layout));
+    },
+    [self](atom::get, atom::taxonomies) {
+      VAST_TRACE_SCOPE("");
+      return self->state.taxonomies;
+    },
+    [self](atom::telemetry) {
       VAST_ASSERT(self->state.accountant);
       auto num_partitions_and_events_per_schema_and_version
         = detail::stable_map<std::pair<std::string_view, count>,
                              std::pair<count, count>>{};
-      for (const auto& [_, synopsis] : self->state.synopses) {
-        VAST_ASSERT(synopsis);
-        auto& [num_partitions, num_events]
-          = num_partitions_and_events_per_schema_and_version[std::pair{
-            synopsis->schema.name(), synopsis->version}];
-        num_partitions += 1;
-        num_events += synopsis->events;
+      for (const auto& [type, id_synopsis_map] :
+           self->state.synopses_per_type) {
+        for (const auto& [id, synopsis] : id_synopsis_map) {
+          VAST_ASSERT(synopsis);
+          auto& [num_partitions, num_events]
+            = num_partitions_and_events_per_schema_and_version[std::pair{
+              synopsis->schema.name(), synopsis->version}];
+          num_partitions += 1;
+          num_events += synopsis->events;
+        }
       }
+      auto total_num_partitions = count{0};
+      auto total_num_events = count{0};
       auto r = report{};
       r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
       for (const auto& [schema_and_version, num_partitions_and_events] :
            num_partitions_and_events_per_schema_and_version) {
+        auto [schema_num_partitions, schema_num_events]
+          = num_partitions_and_events;
+        total_num_partitions += schema_num_partitions;
+        total_num_events += schema_num_events;
         r.data.push_back(data_point{
           .key = "catalog.num-partitions",
-          .value = num_partitions_and_events.first,
+          .value = schema_num_partitions,
           .metadata = {
             {"schema", std::string{schema_and_version.first}},
             {"partition-version", fmt::to_string(schema_and_version.second)},
@@ -530,13 +813,21 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         });
         r.data.push_back(data_point{
           .key = "catalog.num-events",
-          .value = num_partitions_and_events.second,
+          .value = schema_num_events,
           .metadata = {
             {"schema", std::string{schema_and_version.first}},
             {"partition-version", fmt::to_string(schema_and_version.second)},
           },
         });
       }
+      r.data.push_back(data_point{
+        .key = "catalog.num-partitions-total",
+        .value = total_num_partitions,
+      });
+      r.data.push_back(data_point{
+        .key = "catalog.num-events-total",
+        .value = total_num_events,
+      });
       r.data.push_back(data_point{
           .key = "memory-usage",
           .value = self->state.memusage(),

@@ -105,8 +105,8 @@ TEST(flat command invocation) {
   CHECK(is_error(exec("--flag bar", factory)));
   CHECK_EQUAL(get_or(inv.options, "flag", false), false);
   CHECK_EQUAL(get_or(inv.options, "value", 0), 0);
-  CHECK_VARIANT_EQUAL(exec("bar", factory), "bar"s);
-  CHECK_VARIANT_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
+  CHECK_VARIANT_EQUAL((exec("bar", factory)), "bar"s);
+  CHECK_VARIANT_EQUAL((exec("foo --flag -v 42", factory)), "foo"s);
   CHECK_EQUAL(get_or(inv.options, "flag", false), true);
   CHECK_EQUAL(get_or(inv.options, "value", 0), 42);
 }

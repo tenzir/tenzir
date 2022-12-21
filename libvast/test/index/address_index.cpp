@@ -52,7 +52,7 @@ TEST(address) {
   CHECK(to_string(*idx.lookup(relational_operator::equal, make_data_view(x)))
         == "000000");
   MESSAGE("invalid operator");
-  CHECK(!idx.lookup(relational_operator::match, make_data_view(x)));
+  CHECK(!idx.lookup(relational_operator::in, make_data_view(x)));
   MESSAGE("prefix membership");
   x = *to<address>("192.168.0.128");
   CHECK(idx.append(make_data_view(x)));
@@ -90,8 +90,8 @@ TEST(address) {
     to_string(unbox(idx.lookup(relational_operator::equal, make_data_view(x)))),
     str);
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK(detail::serialize(buf, idx));
   address_index idx2{type{address_type{}}};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   CHECK_EQUAL(to_string(unbox(

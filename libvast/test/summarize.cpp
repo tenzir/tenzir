@@ -186,34 +186,34 @@ TEST(summarize test) {
   const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
-  CHECK_EQUAL(summarized_slice.at(0, 0),
-              data_view{vast::time{std::chrono::seconds(1258329600)}});
-  CHECK_EQUAL(summarized_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
-  CHECK_EQUAL(summarized_slice.at(0, 2), data_view{count{443}});
-  CHECK_EQUAL(summarized_slice.at(0, 3), data_view{real{43.}});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 0)),
+              data{vast::time{std::chrono::seconds(1258329600)}});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), address::v4(0xC0A80101));
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), count{443});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), real{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
-  CHECK_EQUAL(summarized_slice.at(0, 5), data_view{integer{0}});
-  CHECK_EQUAL(summarized_slice.at(0, 6), data_view{integer{9}});
-  CHECK_EQUAL(summarized_slice.at(0, 7), data_view{true});
-  CHECK_EQUAL(summarized_slice.at(0, 8), data_view{false});
-  CHECK_EQUAL(summarized_slice.at(0, 9), data_view{true});
-  CHECK_EQUAL(summarized_slice.at(0, 10), data_view{false});
-  CHECK_EQUAL(summarized_slice.at(0, 11),
-              data_view{vast::time{std::chrono::seconds(1258329600)}});
-  CHECK_EQUAL(summarized_slice.at(0, 12),
-              data_view{vast::time{std::chrono::seconds(1258329609)}});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), integer{0});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), integer{9});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 7)), true);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 8)), false);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 9)), true);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 10)), false);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 11)),
+              vast::time{std::chrono::seconds(1258329600)});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 12)),
+              vast::time{std::chrono::seconds(1258329609)});
   const auto expected_ports = list{count{443}};
-  CHECK_EQUAL(summarized_slice.at(0, 13), make_data_view(expected_ports));
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 13)), expected_ports);
   const auto expected_alternating_numbers = list{count{0}, count{1}, count{2}};
   const auto expected_alternating_numbers_list
     = list{count{0}, count{1}, count{2}, count{3}, count{4}};
-  CHECK_EQUAL(summarized_slice.at(0, 14),
-              make_data_view(expected_alternating_numbers));
-  CHECK_EQUAL(summarized_slice.at(0, 15),
-              make_data_view(expected_alternating_numbers_list));
-  CHECK_EQUAL(summarized_slice.at(0, 16),
-              make_data_view(vast::time{std::chrono::seconds(1258329600)}));
-  CHECK_EQUAL(summarized_slice.at(0, 17), make_data_view(count{9}));
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 14)),
+              expected_alternating_numbers);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 15)),
+              expected_alternating_numbers_list);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 16)),
+              vast::time{std::chrono::seconds(1258329600)});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 17)), count{9});
 }
 
 TEST(summarize test fully qualified field names) {
@@ -245,18 +245,18 @@ TEST(summarize test fully qualified field names) {
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
   REQUIRE_EQUAL(summarized_slice.columns(), 11u);
-  CHECK_EQUAL(summarized_slice.at(0, 0),
-              data_view{vast::time{std::chrono::seconds(1258329600)}});
-  CHECK_EQUAL(summarized_slice.at(0, 1), data_view{address::v4(0xC0A80101)});
-  CHECK_EQUAL(summarized_slice.at(0, 2), data_view{count{443}});
-  CHECK_EQUAL(summarized_slice.at(0, 3), data_view{real{43.}});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 0)),
+              vast::time{std::chrono::seconds(1258329600)});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), address::v4(0xC0A80101));
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), count{443});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), real{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
-  CHECK_EQUAL(summarized_slice.at(0, 5), data_view{integer{0}});
-  CHECK_EQUAL(summarized_slice.at(0, 6), data_view{integer{9}});
-  CHECK_EQUAL(summarized_slice.at(0, 7), data_view{true});
-  CHECK_EQUAL(summarized_slice.at(0, 8), data_view{false});
-  CHECK_EQUAL(summarized_slice.at(0, 9), data_view{true});
-  CHECK_EQUAL(summarized_slice.at(0, 10), data_view{false});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), integer{0});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), integer{9});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 7)), true);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 8)), false);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 9)), true);
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 10)), false);
 }
 
 TEST(summarize test wrong config) {

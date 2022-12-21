@@ -32,8 +32,7 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(caf::none_t) const {
-      using vast::print;
-      return print(out_, caf::none);
+      return vast::print(out_, caf::none);
     }
 
     bool operator()(const conjunction& c) const {
@@ -58,10 +57,8 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(const meta_extractor& e) const {
-      return printers::str(out_, e.kind == meta_extractor::type ? "#type"
-                                 : e.kind == meta_extractor::field
-                                   ? "#field"
-                                   : "#import_time");
+      return printers::str(
+        out_, e.kind == meta_extractor::type ? "#type" : "#import_time");
     }
 
     bool operator()(const type_extractor& e) const {

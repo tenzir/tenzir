@@ -13,7 +13,7 @@ macro (VASTNormalizeInstallDirs)
           "RUNSTATE"
           "LIB"
           "INCLUDE"
-          "OLDINCLUDE"
+          # "OLDINCLUDE" <- deliberately omitted
           "DATAROOT"
           "DATA"
           "INFO"
@@ -24,16 +24,16 @@ macro (VASTNormalizeInstallDirs)
     # path to get the correct relative path because some package managers always
     # invoke CMake with absolute install paths even when they all share a common
     # prefix.
-    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_${_install}DIR}")
       string(
         REGEX
         REPLACE "^${CMAKE_INSTALL_PREFIX}/" "" "CMAKE_INSTALL_${_install}DIR"
-                "${CMAKE_INSTALL_FULL_${install}DIR}")
+                "${CMAKE_INSTALL_FULL_${_install}DIR}")
     endif ()
     # If the path is still absolute, e.g., because the full install dirs did
     # were not subdirectories if the install prefix, give up and error. Nothing
     # we can do here.
-    if (IS_ABSOLUTE "${CMAKE_INSTALL_${install}DIR}")
+    if (IS_ABSOLUTE "${CMAKE_INSTALL_${_install}DIR}")
       message(
         FATAL_ERROR
           "CMAKE_INSTALL_${_install}DIR must not be an absolute path for relocatable installations."
@@ -412,6 +412,14 @@ function (VASTRegisterPlugin)
     VASTNormalizeInstallDirs()
   endif ()
 
+  # Enable compile commands for external plugins.
+  # Must be done before the targets are created for CMake >= 3.20.
+  # TODO: Replace this with the corresponding interface target property on
+  # libvast_internal when bumping the minimum CMake version to 3.20.
+  if (NOT "${CMAKE_PROJECT_NAME}" STREQUAL "VAST")
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+  endif ()
+
   if (NOT PLUGIN_TARGET)
     message(
       FATAL_ERROR "TARGET must be specified in call to VASTRegisterPlugin")
@@ -517,7 +525,10 @@ function (VASTRegisterPlugin)
     if (NOT PLUGIN_REVISION)
       set(PLUGIN_REVISION \"${VAST_PLUGIN_REVISION_FALLBACK}\")
     endif ()
-    set(VAST_PLUGIN_VERSION \"v${PROJECT_VERSION}-\${PLUGIN_REVISION}\")
+    set(VAST_PLUGIN_VERSION \"v${PROJECT_VERSION}\")
+    if (PLUGIN_REVISION)
+      string(APPEND VAST_PLUGIN_VERSION \"-\${PLUGIN_REVISION}\")
+    endif ()
     configure_file(\"${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in\"
                   \"${CMAKE_CURRENT_BINARY_DIR}/config.cpp\" @ONLY)")
   set_source_files_properties(
@@ -564,13 +575,11 @@ function (VASTRegisterPlugin)
 
     # Install the plugin library to <libdir>/vast/plugins, and also configure
     # the library output directory accordingly.
-    if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
-      set_target_properties(
-        ${PLUGIN_TARGET}-shared
-        PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-                   "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
-                   OUTPUT_NAME "vast-plugin-${PLUGIN_TARGET}")
-    endif ()
+    set_target_properties(
+      ${PLUGIN_TARGET}-shared
+      PROPERTIES LIBRARY_OUTPUT_DIRECTORY
+                 "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/vast/plugins"
+                 OUTPUT_NAME "vast-plugin-${PLUGIN_TARGET}")
     install(
       TARGETS ${PLUGIN_TARGET}-shared
       DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins"
@@ -648,7 +657,7 @@ function (VASTRegisterPlugin)
     VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
                                ${PLUGIN_TARGET}-static)
     VASTTargetLinkWholeArchive(${PLUGIN_TARGET}-test PRIVATE
-                               vast::libvast_native_plugins)
+                               vast::libvast_builtins)
     add_test(NAME build-${PLUGIN_TARGET}-test
              COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
                      "$<CONFIG>" --target ${PLUGIN_TARGET}-test)

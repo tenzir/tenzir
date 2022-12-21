@@ -23,7 +23,7 @@ TEST(concepts - convert from data) {
   auto ref = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
                            {"bar", {"", {"a.bar", "b.baR"}, {}}}}};
   concepts_map test;
-  CHECK_EQUAL(convert(x, test, concepts_data_layout), caf::no_error);
+  CHECK_EQUAL(convert(x, test, concepts_data_layout), caf::error{});
   CHECK_EQUAL(test, ref);
 }
 
@@ -91,7 +91,7 @@ TEST(models - convert from data) {
   auto ref = models_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}}},
                          {"bar", {"", {"a.bar", "b.baR", "foo"}}}}};
   models_map test;
-  CHECK_EQUAL(convert(x, test, models_data_layout), caf::no_error);
+  CHECK_EQUAL(convert(x, test, models_data_layout), caf::error{});
   CHECK_EQUAL(test, ref);
   auto x2 = data{list{
     record{{"model", record{{"name", "foo"},
@@ -124,7 +124,7 @@ TEST(models - simple) {
     auto exp = unbox(to<expression>("x == <bar: 2>"));
     // clang-format off
     auto ref = unbox(to<expression>(
-          "(#field == \"a.fo0\" || #field == \"b.foO\" || #field == \"c.foe\")"
+          "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (a.bar == 2 || b.baR == 2)"));
     // clang-format on
     auto result = resolve(t, exp);
@@ -135,7 +135,7 @@ TEST(models - simple) {
     auto exp = unbox(to<expression>("y == <bar: 2, baz: F>"));
     // clang-format off
     auto ref = unbox(to<expression>(
-          "(#field == \"a.fo0\" || #field == \"b.foO\" || #field == \"c.foe\")"
+          "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (    (a.bar == 2 || b.baR == 2)"
                " && (a.BAZ == F || c.baz == F))"));
     // clang-format on
@@ -156,7 +156,7 @@ TEST(models - simple) {
     auto exp = unbox(to<expression>("y == <_, 2, F>"));
     // clang-format off
     auto ref = unbox(to<expression>(
-          "(#field == \"a.fo0\" || #field == \"b.foO\" || #field == \"c.foe\")"
+          "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (   (a.bar == 2 || b.baR == 2)"
               " && (a.BAZ == F || c.baz == F))"));
     // clang-format on
@@ -169,7 +169,7 @@ TEST(models - simple) {
     auto unnamed = unbox(to<expression>("z == <_, 2, F>"));
     // clang-format off
     auto ref = unbox(to<expression>(
-          "(#field == \"a.fo0\" || #field == \"b.foO\" || #field == \"c.foe\")"
+          "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (   (a.bar == 2 || b.baR == 2)"
               " && (a.BAZ == F || c.baz == F))"));
     // clang-format on

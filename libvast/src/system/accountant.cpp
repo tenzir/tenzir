@@ -28,6 +28,8 @@
 #include "vast/view.hpp"
 
 #include <caf/attach_continuous_stream_source.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
+#include <caf/downstream.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
@@ -93,6 +95,14 @@ struct accountant_state_impl {
   /// Handle to the uds output channel.
   std::unique_ptr<detail::uds_datagram_sender> uds_datagram_sink = nullptr;
 
+  /// Handle to the UDS output channel is currently dropping its input.
+  bool uds_datagram_sink_dropping = false;
+
+  /// The error code of the last error that came out of the uds sink.
+  /// This variable is used to prevent repeating the same warning for
+  /// every metric in case the receiver is not present of misconfigured.
+  ec last_uds_error = ec::no_error;
+
   /// The configuration.
   accountant_config cfg;
 
@@ -104,9 +114,8 @@ struct accountant_state_impl {
       return;
     auto slice = builder->finish();
     VAST_DEBUG("{} generated slice with {} rows", *self, slice.rows());
-
     slice_buffer.push(std::move(slice));
-    mgr->advance();
+    mgr->tick(self->clock().now());
   }
 
   void record_internally(const caf::actor_id actor_id, const std::string& key,
@@ -216,7 +225,28 @@ struct accountant_state_impl {
                           const metrics_metadata& meta2, time ts,
                           detail::uds_datagram_sender& dest) {
     auto buf = to_json_line(actor_id, ts, key, x, meta1, meta2);
-    dest.send(std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()});
+    // Only poll the socket for write readiness if it did not drop the previous
+    // line. Not doing this could increase the average message processing time
+    // of the accountant by the timeout value, and just as with any actor,
+    // receiving messages at a higher frequency that they can be processed will
+    // eventually consume all available memory. The initial timeout of 1 second
+    // is somewhat arbitrary. Long enough so any re-initialization of the
+    // listening side would not incur data loss without being excessive.
+    auto timeout_usec = uds_datagram_sink_dropping ? 0 : 1'000'000;
+    if (auto err = dest.send(
+          std::span<char>{reinterpret_cast<char*>(buf.data()), buf.size()},
+          timeout_usec)) {
+      const auto code = ec{err.code()};
+      if (code == ec::timeout)
+        uds_datagram_sink_dropping = true;
+      if (code != last_uds_error) {
+        last_uds_error = code;
+        VAST_WARN("{} failed to write metrics to UDS sink: {}", *self, err);
+      }
+      return;
+    } else {
+      last_uds_error = ec::no_error;
+    }
   }
 
   void record(const caf::actor_id actor_id, const std::string& key, real x,

@@ -57,10 +57,6 @@ struct relational_operator_printer : printer_base<relational_operator_printer> {
     switch (op) {
       default:
         die("missing case for relational operator");
-      case relational_operator::match:
-        return printers::str.print(out, "~");
-      case relational_operator::not_match:
-        return printers::str.print(out, "!~");
       case relational_operator::in:
         return printers::str.print(out, "in");
       case relational_operator::not_in:

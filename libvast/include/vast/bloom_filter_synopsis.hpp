@@ -9,13 +9,8 @@
 #pragma once
 
 #include "vast/bloom_filter.hpp"
-#include "vast/detail/legacy_deserialize.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/type.hpp"
-
-#include <caf/deserializer.hpp>
-#include <caf/optional.hpp>
-#include <caf/serializer.hpp>
 
 #include <optional>
 
@@ -54,6 +49,10 @@ public:
         // are non-nil.
         if (caf::holds_alternative<view<caf::none_t>>(rhs))
           return {};
+        if constexpr (std::is_same_v<T, std::string>) {
+          if (caf::holds_alternative<view<pattern>>(rhs))
+            return {};
+        }
         if (!caf::holds_alternative<view<T>>(rhs))
           return false;
         return bloom_filter_.lookup(caf::get<view<T>>(rhs));
@@ -85,16 +84,12 @@ public:
     return bloom_filter_.memusage();
   }
 
-  caf::error serialize(caf::serializer& sink) const override {
-    return sink(bloom_filter_);
-  }
-
-  caf::error deserialize(caf::deserializer& source) override {
-    return source(bloom_filter_);
-  }
-
-  bool deserialize(vast::detail::legacy_deserializer& source) override {
-    return source(bloom_filter_);
+  bool inspect_impl(supported_inspectors& inspector) override {
+    return std::visit(
+      [this](auto inspector) {
+        return inspector.get().apply(bloom_filter_);
+      },
+      inspector);
   }
 
   const bloom_filter<HashFunction>& filter() const {

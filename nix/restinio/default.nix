@@ -5,6 +5,7 @@
 , http-parser
 , fmt_8
 , asio
+, openssl
 }:
 
 let
@@ -42,6 +43,7 @@ stdenv.mkDerivation {
     http-parser
     fmt_8
     asio
+    openssl
   ];
 
   meta = with lib; {

@@ -16,9 +16,6 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/meta/load_callback.hpp>
-#include <caf/meta/type_name.hpp>
-
 #include <cstddef>
 #include <span>
 #include <vector>
@@ -221,71 +218,39 @@ public:
 
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice& x) ->
-    typename Inspector::result_type {
+  friend auto inspect(Inspector& f, table_slice& x) {
     auto chunk = x.chunk_;
-    return f(caf::meta::type_name("vast.table_slice"),
-             caf::meta::save_callback([&]() noexcept -> caf::error {
-               if (!x.is_serialized()) {
-                 auto serialized_x = table_slice{to_record_batch(x), x.layout(),
-                                                 serialize::yes};
-                 serialized_x.import_time(x.import_time());
-                 chunk = serialized_x.chunk_;
-                 x = std::move(serialized_x);
-               }
-               return caf::none;
-             }),
-             chunk, caf::meta::load_callback([&]() noexcept -> caf::error {
-               // When VAST allows for external tools to hook directly into the
-               // table slice streams, this should be switched to verify if the
-               // chunk is unique.
-               x = table_slice{std::move(chunk), table_slice::verify::no};
-               VAST_ASSERT(x.is_serialized());
-               return caf::none;
-             }),
-             x.offset_);
+    if constexpr (Inspector::is_loading) {
+      auto offset = vast::id{};
+      auto callback = [&]() noexcept {
+        // When VAST allows for external tools to hook directly into the
+        // table slice streams, this should be switched to verify if the
+        // chunk is unique.
+        x = table_slice{std::move(chunk), table_slice::verify::no};
+        x.offset_ = offset;
+        VAST_ASSERT(x.is_serialized());
+        return true;
+      };
+
+      return f.object(x)
+        .pretty_name("vast.table_slice")
+        .on_load(callback)
+        .fields(f.field("chunk", chunk), f.field("offset", offset));
+    } else {
+      if (!x.is_serialized()) {
+        auto serialized_x
+          = table_slice{to_record_batch(x), x.layout(), serialize::yes};
+        serialized_x.import_time(x.import_time());
+        chunk = serialized_x.chunk_;
+        x = std::move(serialized_x);
+      }
+      return f.object(x)
+        .pretty_name("vast.table_slice")
+        .fields(f.field("chunk", chunk), f.field("offset", x.offset_));
+    }
   }
 
   // -- operations -------------------------------------------------------------
-
-  /// Rebuilds a table slice with a given encoding if necessary.
-  /// @param slice The slice to rebuild.
-  /// @param encoding The encoding to convert to.
-  /// @note This function only rebuilds if necessary, i.e., the new encoding
-  /// is different from the existing one.
-  friend table_slice
-  rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept;
-
-  /// Selects all rows in `slice` with event IDs in `selection` and appends
-  /// produced table slices to `result`. Cuts `slice` into multiple slices if
-  /// `selection` produces gaps.
-  /// @param result The container for appending generated table slices.
-  /// @param slice The input table slice.
-  /// @param selection ID set for selecting events from `slice`.
-  /// @pre `slice.encoding() != table_slice_encoding::none`
-  friend void select(std::vector<table_slice>& result, const table_slice& slice,
-                     const ids& selection);
-
-  /// Produces a new table slice consisting only of events addressed in `hints`
-  /// that match the given expression. Does not preserve ids; use `select`
-  /// instead if the id mapping must be maintained.
-  /// @param slice The input table slice.
-  /// @param expr The expression to evaluate.
-  /// @param hints An ID set for pruning the events that need to be considered.
-  /// @returns a new table slice consisting only of events matching the given
-  ///          expression.
-  /// @pre `slice.encoding() != table_slice_encoding::none`
-  friend std::optional<table_slice>
-  filter(const table_slice& slice, expression expr, const ids& hints);
-
-  /// Counts the rows that match an expression.
-  /// @param slice The input table slice.
-  /// @param expr The expression to evaluate.
-  /// @param hints An ID set for pruning the events that need to be considered.
-  /// @returns the number of rows that are included in `hints` and match `expr`.
-  /// @pre `slice.encoding() != table_slice_encoding::none`
-  friend uint64_t count_matching(const table_slice& slice,
-                                 const expression& expr, const ids& hints);
 
 private:
   // -- implementation details -------------------------------------------------
@@ -299,9 +264,9 @@ private:
   chunk_ptr chunk_ = {};
 
   /// The offset of the table slice within its ID space.
-  /// @note Assigned by the importer on import and the archive on export and as
-  /// such not part of the FlatBuffers table. Binary representations of a table
-  /// slice do not contain the offset.
+  /// @note Assigned by the importer on import and and as such not part of the
+  /// FlatBuffers table. Binary representations of a table slice do not contain
+  /// the offset.
   id offset_ = invalid_id;
 
   /// A pointer to the table slice state. As long as the layout cannot be
@@ -309,11 +274,7 @@ private:
   /// expensive to deserialize the layout.
   union {
     const void* none = {};
-    const arrow_table_slice<fbs::table_slice::arrow::v0>* arrow_v0;
-    const arrow_table_slice<fbs::table_slice::arrow::v1>* arrow_v1;
     const arrow_table_slice<fbs::table_slice::arrow::v2>* arrow_v2;
-    const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
-    const msgpack_table_slice<fbs::table_slice::msgpack::v1>* msgpack_v1;
   } state_;
 
   /// The number of in-memory table slices.
@@ -322,23 +283,49 @@ private:
 
 // -- operations ---------------------------------------------------------------
 
+/// Concatenates all slices in the given range.
+/// @param slices The input table slices.
+table_slice concatenate(std::vector<table_slice> slices);
+
 /// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice`
 /// into multiple slices if `selection` produces gaps.
 /// @param slice The input table slice.
-/// @param selection ID set for selecting events from `slice`.
-/// @returns new table slices of the same implementation type as `slice` from
-///          `selection`.
+/// @param expr The filter expression.
+/// @param hints ID set for selecting events from `slice`.
 /// @pre `slice.encoding() != table_slice_encoding::none`
-std::vector<table_slice> select(const table_slice& slice, const ids& selection);
+detail::generator<table_slice>
+select(const table_slice& slice, expression expr, const ids& hints);
+
+/// Produces a new table slice consisting only of events addressed in `hints`
+/// that match the given expression. Does not preserve ids; use `select`
+/// instead if the id mapping must be maintained.
+/// @param slice The input table slice.
+/// @param expr The expression to evaluate.
+/// @param hints An ID set for pruning the events that need to be considered.
+/// @returns a new table slice consisting only of events matching the given
+///          expression.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+std::optional<table_slice>
+filter(const table_slice& slice, expression expr, const ids& hints);
+
+/// Counts the rows that match an expression.
+/// @param slice The input table slice.
+/// @param expr The expression to evaluate.
+/// @param hints An ID set for pruning the events that need to be considered.
+/// @returns the number of rows that are included in `hints` and match `expr`.
+/// @pre `slice.encoding() != table_slice_encoding::none`
+uint64_t count_matching(const table_slice& slice, const expression& expr,
+                        const ids& hints);
 
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
 /// @param num_rows The number of rows to keep.
-/// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
-///          table slice of the first `num_rows` rows from `slice`.
-/// @pre `slice.encoding() != table_slice_encoding::none`
-/// @pre `num_rows > 0`
-table_slice truncate(table_slice slice, size_t num_rows);
+table_slice head(table_slice slice, size_t num_rows);
+
+/// Selects the last `num_rows` rows of `slice`.
+/// @param slice The input table slice.
+/// @param num_rows The number of rows to keep.
+table_slice tail(table_slice slice, size_t num_rows);
 
 /// Splits a table slice into two slices such that the first slice contains
 /// the rows `[0, partition_point)` and the second slice contains the rows
@@ -349,7 +336,7 @@ table_slice truncate(table_slice slice, size_t num_rows);
 ///          otherwise returns `slice` and an invalid tbale slice.
 /// @pre `slice.encoding() != table_slice_encoding::none`
 std::pair<table_slice, table_slice>
-split(table_slice slice, size_t partition_point);
+split(const table_slice& slice, size_t partition_point);
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.

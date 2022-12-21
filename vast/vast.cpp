@@ -6,20 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/atoms.hpp"
-#include "vast/concept/convertible/to.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/config.hpp"
-#include "vast/data.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/detail/signal_handlers.hpp"
-#include "vast/detail/system.hpp"
-#include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/factory.hpp"
-#include "vast/format/reader_factory.hpp"
-#include "vast/format/writer_factory.hpp"
+#include "vast/format/reader_factory.hpp" // IWYU pragma: keep
+#include "vast/format/writer_factory.hpp" // IWYU pragma: keep
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
 #include "vast/plugin.hpp"
@@ -64,15 +56,7 @@ try_handle_deprecations(vast::system::default_configuration& cfg) {
     caf::put(cfg.content, "vast.index.default-fp-rate",
              meta_index_fp_rate ? *meta_index_fp_rate : *catalog_fp_rate);
   }
-  if (caf::holds_alternative<bool>(cfg, "vast.use-legacy-query-scheduler"))
-    VAST_WARN("the 'vast.use-legacy-query-scheduler' option no longer exists "
-              "and will be ignored.");
-  if (caf::get_or(cfg, "vast.store-backend", "feather") == "archive") {
-    VAST_WARN("the 'vast.store-backend' option 'archive' is deprecated; "
-              "automatically using 'feather' instead");
-    caf::put(cfg.content, "vast.store-backend", "feather");
-  } else if (caf::get_or(cfg, "vast.store-backend", "feather")
-             == "segment-store") {
+  if (caf::get_or(cfg, "vast.store-backend", "feather") == "segment-store") {
     VAST_WARN("the 'vast.store-backend' option 'segment-store' is deprecated; "
               "automatically using 'feather' instead");
     caf::put(cfg.content, "vast.store-backend", "feather");
@@ -187,18 +171,42 @@ int main(int argc, char** argv) {
   // Eagerly verify that the Arrow libraries we're using have Zstd support so
   // we can assert this works when serializing record batches.
   {
-    auto compression_level
+    const auto default_compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD);
-    if (!compression_level.ok()) {
+    if (!default_compression_level.ok()) {
       VAST_ERROR("failed to configure Zstd codec for Apache Arrow: {}",
-                 compression_level.status().ToString());
+                 default_compression_level.status().ToString());
       return EXIT_FAILURE;
     }
-    auto codec = arrow::util::Codec::Create(
-      arrow::Compression::ZSTD, compression_level.MoveValueUnsafe());
+    auto compression_level
+      = caf::get_or(cfg, "vast.zstd-compression-level",
+                    default_compression_level.ValueUnsafe());
+    auto min_level
+      = arrow::util::Codec::MinimumCompressionLevel(arrow::Compression::ZSTD);
+    auto max_level
+      = arrow::util::Codec::MaximumCompressionLevel(arrow::Compression::ZSTD);
+    if (!min_level.ok()) {
+      VAST_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
+                 min_level.status().ToString());
+      return EXIT_FAILURE;
+    }
+    if (!max_level.ok()) {
+      VAST_ERROR("unable to configure Zstd codec for Apache Arrow: {}",
+                 max_level.status().ToString());
+      return EXIT_FAILURE;
+    }
+    if (compression_level < min_level.ValueUnsafe()
+        || compression_level > max_level.ValueUnsafe()) {
+      VAST_ERROR("Zstd compression level '{}' outside of valid range [{}, {}]",
+                 compression_level, min_level.ValueUnsafe(),
+                 max_level.ValueUnsafe());
+      return EXIT_FAILURE;
+    }
+    auto codec
+      = arrow::util::Codec::Create(arrow::Compression::ZSTD, compression_level);
     if (!codec.ok()) {
       VAST_ERROR("failed to create Zstd codec for Apache Arrow: {}",
-                 compression_level.status().ToString());
+                 codec.status().ToString());
       return EXIT_FAILURE;
     }
   }

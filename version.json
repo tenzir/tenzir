@@ -2,16 +2,13 @@
   "vast-version-fallback_COMMENT": [
     "The main version fragment. This should be identical to the closest",
     "annotated git tag without the leading 'v'.",
-    "This value gets updated automatically by `scripts/prepare-release`.",
-    "If you modify it by hand you should also run the `update-changelog`",
-    "target and add the changes to CHANGELOG.md and the changelog directory",
-    "to the same commit."
+    "This value gets updated automatically by `scripts/prepare-release`."
   ],
-  "vast-version-fallback": "2.3.0",
+  "vast-version-fallback": "2.4.1",
   "vast-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",
     "layout of VAST's partitions."
   ],
-  "vast-partition-version": 1
+  "vast-partition-version": 2
 }

@@ -271,7 +271,7 @@ feed_url='https://pulsedive.com/premium/?key=&header=true&fields=id,type,risk,th
 # Ingest the feed into the matcher 'ips', but skip all retired indicators.
 curl -sSL "${feed_url}" |
   vast matcher import -t pulsedive csv ips \
-    'risk !~ /:retired/ && type ~ /ip.*/
+    'risk != /:retired/ && type == /ip.*/
 ```
 
 The matcher plugin conveniently ships with a Pulsedive schema and concept
@@ -308,7 +308,7 @@ to replicate the matcher at another VAST instance.
 
 ### Save/load state at the client
 
-To dump the state of a specific matcher, use the `matcher save` command:
+To show the state of a specific matcher, use the `matcher save` command:
 
 ```bash
 vast matcher save ips > ips.state

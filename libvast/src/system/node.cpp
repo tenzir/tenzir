@@ -40,7 +40,6 @@
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/system/shutdown.hpp"
-#include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_catalog.hpp"
 #include "vast/system/spawn_counter.hpp"
@@ -54,7 +53,6 @@
 #include "vast/system/spawn_pivoter.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
-#include "vast/system/spawn_type_registry.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/system/version_command.hpp"
@@ -87,7 +85,7 @@ auto make_error_msg(ec code, std::string msg) {
 /// A list of components that are essential for importing and exporting data
 /// from the node.
 std::set<const char*> core_components = {
-  "accountant", "archive", "catalog", "filesystem", "importer", "index",
+  "accountant", "catalog", "filesystem", "importer", "index",
 };
 
 bool is_core_component(std::string_view type) {
@@ -110,8 +108,8 @@ bool is_singleton(std::string_view type) {
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
   const char* singletons[]
-    = {"accountant", "archive", "disk-monitor", "eraser",       "filesystem",
-       "importer",   "index",   "catalog",      "type-registry"};
+    = {"accountant", "disk-monitor", "eraser", "filesystem",
+       "importer",   "index",        "catalog"};
   auto pred = [&](const char* x) {
     return x == type;
   };
@@ -263,6 +261,10 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
   if (!caf::get_or(content(self->system().config()), "vast.enable-metrics",
                    false))
     return {};
+  // It doesn't make much sense to run the accountant for one-shot commands
+  // with a local database using `--node`, so this prevents spawning it.
+  if (caf::get_or(content(self->system().config()), "vast.node", false))
+    return {};
   const auto metrics_opts = caf::get_or(content(self->system().config()),
                                         "vast.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
@@ -271,8 +273,8 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
                cfg.error());
     return {};
   }
-  auto accountant
-    = self->spawn(vast::system::accountant, std::move(*cfg), self->state.dir);
+  auto accountant = self->spawn<caf::detached>(
+    vast::system::accountant, std::move(*cfg), self->state.dir);
   auto err = register_component(self, caf::actor_cast<caf::actor>(accountant),
                                 "accountant");
   // Registration cannot fail; empty registry.
@@ -282,84 +284,14 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
 
 } // namespace
 
-caf::message dump_command(const invocation& inv, caf::actor_system&) {
-  auto as_yaml = caf::get_or(inv.options, "vast.dump.yaml", false);
-  auto self = this_node;
-  auto [type_registry] = self->state.registry.find<type_registry_actor>();
-  if (!type_registry)
-    return caf::make_message(caf::make_error(ec::missing_component, //
-                                             "type-registry"));
-  caf::error request_error = caf::none;
-  auto rp = self->make_response_promise();
-  self->request(type_registry, caf::infinite, atom::get_v, atom::taxonomies_v)
-    .then(
-      [=](struct taxonomies taxonomies) mutable {
-        auto result = list{};
-        result.reserve(taxonomies.concepts.size());
-        if (inv.full_name == "dump" || inv.full_name == "dump concepts") {
-          for (auto& [name, concept_] : taxonomies.concepts) {
-            auto fields = list{};
-            fields.reserve(concept_.fields.size());
-            for (auto& field : concept_.fields)
-              fields.push_back(std::move(field));
-            auto concepts = list{};
-            concepts.reserve(concept_.concepts.size());
-            for (auto& concept_ : concept_.concepts)
-              concepts.push_back(std::move(concept_));
-            auto entry = record{
-              {"concept",
-               record{
-                 {"name", std::move(name)},
-                 {"description", std::move(concept_.description)},
-                 {"fields", std::move(fields)},
-                 {"concepts", std::move(concepts)},
-               }},
-            };
-            result.push_back(std::move(entry));
-          }
-        }
-        if (inv.full_name == "dump" || inv.full_name == "dump models") {
-          for (auto& [name, model] : taxonomies.models) {
-            auto definition = list{};
-            definition.reserve(model.definition.size());
-            for (auto& definition_entry : model.definition)
-              definition.push_back(std::move(definition_entry));
-            auto entry = record{
-              {"model",
-               record{
-                 {"name", std::move(name)},
-                 {"description", std::move(model.description)},
-                 {"definition", std::move(definition)},
-               }},
-            };
-            result.push_back(std::move(entry));
-          }
-        }
-        if (as_yaml) {
-          if (auto yaml = to_yaml(data{std::move(result)}))
-            rp.deliver(to_string(std::move(*yaml)));
-          else
-            request_error = std::move(yaml.error());
-        } else {
-          if (auto json = to_json(data{std::move(result)}))
-            rp.deliver(std::move(*json));
-          else
-            request_error = std::move(json.error());
-        }
-      },
-      [=](caf::error& err) mutable {
-        request_error
-          = caf::make_error(ec::unspecified, fmt::format("'dump' failed to get "
-                                                         "taxonomies from "
-                                                         "type-registry: {}",
-                                                         std::move(err)));
-      });
-  if (request_error)
-    return caf::make_message(std::move(request_error));
-  return caf::none;
-}
-
 caf::message status_command(const invocation& inv, caf::actor_system&) {
+  if (caf::get_or(inv.options, "vast.node", false)) {
+    return caf::make_message(caf::make_error( //
+      ec::invalid_configuration,
+      "unable to execute status command when spawning a "
+      "node locally instead of connecting to one; please "
+      "unset the option vast.node"));
+  }
   auto self = this_node;
   auto verbosity = status_verbosity::info;
   if (caf::get_or(inv.options, "vast.status.detailed", false))
@@ -371,7 +303,7 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
   else
     VAST_VERBOSE("{} collects status for components {}", *self, inv.arguments);
   collect_component_status(self, verbosity, inv.arguments);
-  return caf::none;
+  return {};
 }
 
 caf::expected<caf::actor>
@@ -422,7 +354,7 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
           rp.deliver(err);
         });
   }
-  return caf::none;
+  return {};
 }
 
 /// Lifts a factory function that accepts `local_actor*` as first argument
@@ -445,7 +377,6 @@ node_state::component_factory_fun lift_component_factory() {
 auto make_component_factory() {
   auto result = node_state::named_component_factory{
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
-    {"spawn archive", lift_component_factory<spawn_archive>()},
     {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
     {"spawn eraser", lift_component_factory<spawn_eraser>()},
@@ -453,10 +384,10 @@ auto make_component_factory() {
     {"spawn explorer", lift_component_factory<spawn_explorer>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
-    {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
     {"spawn source", lift_component_factory<spawn_source>()},
+    {"spawn source arrow", lift_component_factory<spawn_source>()},
     {"spawn source csv", lift_component_factory<spawn_source>()},
     {"spawn source json", lift_component_factory<spawn_source>()},
     {"spawn source suricata", lift_component_factory<spawn_source>()},
@@ -486,13 +417,9 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
   auto result = command::factory{
-    {"dump", dump_command},
-    {"dump concepts", dump_command},
-    {"dump models", dump_command},
     {"kill", kill_command},
     {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
-    {"spawn archive", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
     {"spawn eraser", node_state::spawn_command},
@@ -500,13 +427,13 @@ auto make_command_factory() {
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn catalog", node_state::spawn_command},
-    {"spawn type-registry", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
     {"spawn pivoter", node_state::spawn_command},
     {"spawn sink ascii", node_state::spawn_command},
     {"spawn sink csv", node_state::spawn_command},
     {"spawn sink json", node_state::spawn_command},
     {"spawn sink zeek", node_state::spawn_command},
+    {"spawn source arrow", node_state::spawn_command},
     {"spawn source csv", node_state::spawn_command},
     {"spawn source json", node_state::spawn_command},
     {"spawn source suricata", node_state::spawn_command},
@@ -546,7 +473,6 @@ node_state::spawn_command(const invocation& inv,
   if (self->state.tearing_down)
     return caf::make_message(caf::make_error( //
       ec::no_error, "can't spawn a component while tearing down"));
-  auto rp = self->make_response_promise();
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
   VAST_ASSERT(inv_name_split.size() > 1);
@@ -558,12 +484,10 @@ node_state::spawn_command(const invocation& inv,
     label = *label_ptr;
     if (label.empty()) {
       auto err = caf::make_error(ec::unspecified, "empty component label");
-      rp.deliver(err);
       return caf::make_message(std::move(err));
     }
     if (self->state.registry.find_by_label(label)) {
       auto err = caf::make_error(ec::unspecified, "duplicate component label");
-      rp.deliver(err);
       return caf::make_message(std::move(err));
     }
   } else {
@@ -585,56 +509,19 @@ node_state::spawn_command(const invocation& inv,
     spawn_inv.options["import"] = import_opt;
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }
-  auto spawn_actually = [=](spawn_arguments& args) mutable {
-    // Spawn our new VAST component.
-    auto component = spawn_component(self, args.inv, args);
-    if (!component) {
-      if (component.error())
-        VAST_WARN("{} failed to spawn component: {}", __func__,
-                  render(component.error()));
-      rp.deliver(component.error());
-      return caf::make_message(std::move(component.error()));
-    }
-    if (auto err = register_component(self, *component, comp_type, label)) {
-      rp.deliver(err);
-      return caf::make_message(std::move(err));
-    }
-    VAST_DEBUG("{} registered {} as {}", *self, comp_type, label);
-    rp.deliver(*component);
-    return caf::make_message(*component);
-  };
-  auto handle_taxonomies = [=](expression e) mutable {
-    VAST_DEBUG("{} received the substituted expression {}", *self,
-               to_string(e));
-    spawn_arguments args{spawn_inv, self->state.dir, label, std::move(e)};
-    spawn_actually(args);
-  };
-  // Retrieve taxonomies and delay spawning until the response arrives if we're
-  // dealing with a query...
-  auto query_handlers = std::set<std::string>{"counter", "exporter"};
-  if (query_handlers.count(comp_type) > 0u
-      && !caf::get_or(spawn_inv.options,
-                      "vast." + comp_type + ".disable-taxonomies", false)) {
-    if (auto [type_registry] = self->state.registry.find<type_registry_actor>();
-        type_registry) {
-      auto expr = normalized_and_validated(spawn_inv.arguments);
-      if (!expr) {
-        rp.deliver(expr.error());
-        return make_message(expr.error());
-      }
-      self
-        ->request(type_registry, caf::infinite, atom::resolve_v,
-                  std::move(*expr))
-        .then(handle_taxonomies, [=](caf::error& err) mutable {
-          rp.deliver(err);
-          return make_message(err);
-        });
-      return caf::none;
-    }
-  }
-  // ... or spawn the component right away if not.
+  // Spawn our new VAST component.
   spawn_arguments args{spawn_inv, self->state.dir, label, std::nullopt};
-  return spawn_actually(args);
+  auto component = spawn_component(self, args.inv, args);
+  if (!component) {
+    if (component.error())
+      VAST_WARN("{} failed to spawn component: {}", __func__,
+                render(component.error()));
+    return caf::make_message(std::move(component.error()));
+  }
+  if (auto err = register_component(self, *component, comp_type, label))
+    return caf::make_message(std::move(err));
+  VAST_DEBUG("{} registered {} as {}", *self, comp_type, label);
+  return caf::make_message(*component);
 }
 
 node_actor::behavior_type
@@ -691,10 +578,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     caf::actor filesystem_handle;
     // The components listed here need to be terminated in sequential order.
     // The importer needs to shut down first because it might still have
-    // buffered data. The index uses the archive for querying. The filesystem
-    // is needed by all others for the persisting logic.
+    // buffered data. The filesystem is needed by all others for the persisting
+    // logic.
     auto shutdown_sequence = std::initializer_list<const char*>{
-      "importer", "index", "archive", "catalog", "accountant", "filesystem",
+      "importer", "index", "catalog", "accountant", "filesystem",
     };
     // Make sure that these remain in sync.
     VAST_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
@@ -764,8 +651,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
                                            *self, component->name()));
           else if (auto err = register_component(
                      self, caf::actor_cast<caf::actor>(handle),
-                     component->name());
-                   err && err != caf::no_error)
+                     component->name()))
             return caf::make_error( //
               ec::unspecified, fmt::format("{} failed to register component "
                                            "plugin {} in component registry: "
@@ -781,25 +667,25 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       // Run the command.
       this_node = self;
       auto msg = run(inv, self->system(), node_state::command_factory);
-      auto result = caf::expected<caf::actor>{caf::no_error};
+      auto result = caf::result<caf::actor>{caf::error{}};
       if (!msg) {
-        result = std::move(msg.error());
+        result = caf::result<caf::actor>{std::move(msg.error())};
       } else if (msg->empty()) {
         VAST_VERBOSE("{} encountered empty invocation response", *self);
       } else {
         auto f = caf::message_handler{
           [&](caf::error& x) {
-            result = std::move(x);
+            result.get_data() = std::move(x);
           },
           [&](caf::actor& x) {
-            result = std::move(x);
+            result = caf::result<caf::actor>{std::move(x)};
           },
           [&](caf::message& x) {
             VAST_ERROR("{} encountered invalid invocation response: {}", *self,
                        deep_to_string(x));
-            result = caf::make_error(ec::invalid_result,
-                                     "invalid spawn invocation response",
-                                     std::move(x));
+            result = caf::result<caf::actor>{caf::make_error(
+              ec::invalid_result, "invalid spawn invocation response",
+              std::move(x))};
           },
         };
         f(*msg);

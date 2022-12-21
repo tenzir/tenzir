@@ -5,9 +5,6 @@ POETRY := $(shell command -v poetry 2> /dev/null)
 RSCRIPT := $(shell command -v Rscript 2> /dev/null)
 QUARTO := $(shell command -v quarto 2> /dev/null)
 
-CHANGELOG_INPUT := ../CHANGELOG.md
-CHANGELOG_OUTPUT := src/pages/changelog.md
-
 CONTRIBUTING_DIR := docs/contribute
 
 QUARTO_INPUTS := $(shell find docs blog -name '*.qmd')
@@ -17,15 +14,7 @@ QUARTO_FILES_OUTPUTS := $(patsubst %.qmd, %_files, $(QUARTO_INPUTS))
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
 
-all: changelog dot-github rfc quarto
-
-changelog: $(CHANGELOG_OUTPUT)
-
-$(CHANGELOG_OUTPUT): $(CHANGELOG_INPUT)
-	cp -f $< $@
-
-.github:
-	git clone https://github.com/tenzir/.github.git
+all: dot-github rfc quarto
 
 dot-github: \
   $(CONTRIBUTING_DIR)/code-of-conduct.md \
@@ -33,19 +22,19 @@ dot-github: \
   $(CONTRIBUTING_DIR)/security.md \
   $(CONTRIBUTING_DIR)/workflow.md
 
-$(CONTRIBUTING_DIR)/code-of-conduct.md: .github
+$(CONTRIBUTING_DIR)/code-of-conduct.md:
 	@printf -- "---\nsidebar_position: 0\n---\n" > $@
 	@cat .github/CODE-OF-CONDUCT.md >> $@
 
-$(CONTRIBUTING_DIR)/coding-style.md: .github
+$(CONTRIBUTING_DIR)/coding-style.md:
 	@printf -- "---\nsidebar_position: 2\n---\n" > $@
 	@cat .github/$(@F) >> $@
 
-$(CONTRIBUTING_DIR)/security.md: .github
+$(CONTRIBUTING_DIR)/security.md:
 	@printf -- "---\nsidebar_position: 10\n---\n" > $@
 	@cat .github/SECURITY.md >> $@
 
-$(CONTRIBUTING_DIR)/workflow.md: .github
+$(CONTRIBUTING_DIR)/workflow.md:
 	@printf -- "---\nsidebar_position: 1\n---\n" > $@
 	@cat .github/$(@F) >> $@
 
@@ -92,10 +81,24 @@ quarto: poetry pak $(QUARTO_MD_OUTPUTS)
 
 clean:
 	rm -f $(CHANGELOG_OUTPUT)
-	rm -rf .github
 	rm -f $(RFC_OUTPUT)
 	rm -f $(CONTRIBUTING_DIR)/code-of-conduct.md
 	rm -f $(CONTRIBUTING_DIR)/coding-style.md
 	rm -f $(CONTRIBUTING_DIR)/security.md
 	rm -f $(CONTRIBUTING_DIR)/workflow.md
 	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
+
+
+# A straightforward target to enable `make docker TARGET=bash`
+bash: 
+	@bash
+
+# Run this makefile from within the Quarto Docker image.
+# You can specify another target using the TARGET variable:
+# make docker TARGET=clean
+docker:
+	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \
+		-f ../docker/compose/quarto.yaml \
+		-f ../docker/compose/quarto.bind.yaml \
+		run quarto \
+		make -C web $(TARGET)

@@ -3,3 +3,8 @@ CompileFlags:
   # header will give an error unless this macro is defined,
   # which is usually set by gcc's `-fcoroutines` flag.
   Add: [-D__cpp_lib_coroutine=201902L] 
+
+Diagnostics:
+  # Enable IWYU warnings via clangd.
+  # See https://clangd.llvm.org/guides/include-cleaner
+  UnusedIncludes: Strict

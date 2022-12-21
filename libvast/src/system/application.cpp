@@ -32,22 +32,17 @@ namespace {
 
 command::opts_builder add_index_opts(command::opts_builder ob) {
   return std::move(ob)
-    .add<size_t>("max-partition-size", "maximum number of events in a "
-                                       "partition")
+    .add<int64_t>("max-partition-size", "maximum number of events in a "
+                                        "partition")
     .add<duration>("active-partition-timeout",
                    "timespan after which an active partition is "
                    "forcibly flushed")
-    .add<size_t>("max-resident-partitions", "maximum number of in-memory "
-                                            "partitions")
-    .add<size_t>("max-taste-partitions", "maximum number of immediately "
-                                         "scheduled partitions")
-    .add<size_t>("max-queries,q", "maximum number of concurrent queries");
-}
-
-command::opts_builder add_archive_opts(command::opts_builder ob) {
-  return std::move(ob)
-    .add<size_t>("segments,s", "number of cached segments")
-    .add<size_t>("max-segment-size,m", "maximum segment size in MB");
+    .add<int64_t>("max-resident-partitions", "maximum number of in-memory "
+                                             "partitions")
+    .add<int64_t>("max-taste-partitions", "maximum number of immediately "
+                                          "scheduled partitions")
+    .add<int64_t>("max-queries,q", "maximum number of "
+                                   "concurrent queries");
 }
 
 auto make_count_command() {
@@ -57,17 +52,6 @@ auto make_count_command() {
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<bool>("estimate,e", "estimate an upper bound by "
                                "skipping candidate checks"));
-}
-
-auto make_dump_command() {
-  auto dump = std::make_unique<command>(
-    "dump", "print configuration objects as JSON",
-    opts("?vast.dump").add<bool>("yaml", "format output as YAML"));
-  dump->add_subcommand("concepts", "print all registered concept definitions",
-                       opts("?vast.dump.concepts"));
-  dump->add_subcommand("models", "print all registered model definitions",
-                       opts("?vast.dump.models"));
-  return dump;
 }
 
 auto make_explore_command() {
@@ -80,9 +64,9 @@ auto make_explore_command() {
       .add<std::string>("before,B", "include all records up to this much"
                                     " time before each result")
       .add<std::string>("by", "perform an equijoin on the given field")
-      .add<count>("max-events,n", "maximum number of results")
-      .add<count>("max-events-query", "maximum results for initial query")
-      .add<count>("max-events-context", "maximum results per exploration"));
+      .add<int64_t>("max-events,n", "maximum number of results")
+      .add<int64_t>("max-events-query", "maximum results for initial query")
+      .add<int64_t>("max-events-context", "maximum results per exploration"));
 }
 
 auto make_export_command() {
@@ -99,7 +83,7 @@ auto make_export_command() {
       // We don't expose the `preserve-ids` option to the user because it
       // doesnt' affect the formatted output.
       //.add<bool>("preserve-ids", "don't substitute taxonomy identifiers")
-      .add<size_t>("max-events,n", "maximum number of results")
+      .add<int64_t>("max-events,n", "maximum number of results")
       .add<std::string>("read,r", "path for reading the query")
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));
@@ -145,7 +129,7 @@ auto make_infer_command() {
   return std::make_unique<command>(
     "infer", "infers the schema from data",
     opts("?vast.infer")
-      .add<size_t>("buffer,b", "maximum number of bytes to buffer")
+      .add<int64_t>("buffer,b", "maximum number of bytes to buffer")
       .add<std::string>("read,r", "path to the input data"));
 }
 
@@ -163,8 +147,8 @@ auto make_pivot_command() {
   auto pivot = std::make_unique<command>(
     "pivot", "extracts related events of a given type",
     opts("?vast.pivot")
-      .add<size_t>("flush-interval,f", "flush to disk after this many packets "
-                                       "(only with the PCAP plugin)")
+      .add<int64_t>("flush-interval,f", "flush to disk after this many packets "
+                                        "(only with the PCAP plugin)")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<std::string>("format", "output format "
                                   "(default: JSON)"));
@@ -181,18 +165,21 @@ auto make_spawn_source_command() {
     "source", "creates a new source inside the node",
     opts("?vast.spawn.source")
       .add<std::string>("batch-encoding", "encoding type of table slices")
-      .add<size_t>("batch-size", "upper bound for the size of a table slice")
+      .add<int64_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")
       .add<std::string>("listen,l", "the endpoint to listen on "
                                     "([host]:port/type)")
-      .add<size_t>("max-events,n", "the maximum number of events to import")
+      .add<int64_t>("max-events,n", "the maximum number of events to import")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("read-timeout", "timeout for waiting for incoming data")
       .add<std::string>("schema,S", "alternate schema as string")
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("type,t", "filter event type based on prefix matching")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
+  spawn_source->add_subcommand("arrow",
+                               "creates a new Arrow IPC source inside the node",
+                               opts("?vast.spawn.source.arrow"));
   spawn_source->add_subcommand(
     "csv", "creates a new CSV source inside the node",
     opts("?vast.spawn.source.csv")
@@ -211,7 +198,7 @@ auto make_spawn_source_command() {
                                opts("?vast.spawn.source.syslog"));
   spawn_source->add_subcommand(
     "test", "creates a new test source inside the node",
-    opts("?vast.spawn.source.test").add<size_t>("seed", "the PRNG seed"));
+    opts("?vast.spawn.source.test").add<int64_t>("seed", "the PRNG seed"));
   spawn_source->add_subcommand("zeek",
                                "creates a new Zeek source inside the node",
                                opts("?vast.spawn.source.zeek"));
@@ -258,8 +245,6 @@ auto make_spawn_command() {
                                          opts("?vast.spawn"));
   spawn->add_subcommand("accountant", "spawns the accountant",
                         opts("?vast.spawn.accountant"), false);
-  spawn->add_subcommand("archive", "creates a new archive",
-                        add_archive_opts(opts("?vast.spawn.archive")), false);
   spawn->add_subcommand(
     "explorer", "creates a new explorer",
     opts("?vast.spawn.explorer")
@@ -271,7 +256,7 @@ auto make_spawn_command() {
     opts("?vast.spawn.exporter")
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
-      .add<uint64_t>("events,e", "maximum number of results"),
+      .add<int64_t>("events,e", "maximum number of results"),
     false);
   spawn->add_subcommand("importer", "creates a new importer",
                         opts("?vast.spawn.importer"), false);
@@ -297,17 +282,17 @@ auto make_start_command() {
     "start", "starts a node",
     opts("?vast.start")
       .add<bool>("print-endpoint", "print the client endpoint on stdout")
-      .add<std::vector<std::string>>("commands", "an ordered list of commands "
-                                                 "to run inside the node after "
-                                                 "starting")
-      .add<size_t>("disk-budget-check-interval", "time between two disk size "
-                                                 "scans")
+      .add<caf::config_value::list>("commands", "an ordered list of commands "
+                                                "to run inside the node after "
+                                                "starting")
+      .add<int64_t>("disk-budget-check-interval", "time between two disk size "
+                                                  "scans")
       .add<std::string>("disk-budget-check-binary",
                         "binary to run to determine current disk usage")
       .add<std::string>("disk-budget-high", "high-water mark for disk budget")
       .add<std::string>("disk-budget-low", "low-water mark for disk budget")
-      .add<size_t>("disk-budget-step-size", "number of partitions to erase "
-                                            "before re-checking size"));
+      .add<int64_t>("disk-budget-step-size", "number of partitions to erase "
+                                             "before re-checking size"));
 }
 
 auto make_stop_command() {
@@ -325,9 +310,6 @@ auto make_command_factory() {
   // clang-format off
   auto result = command::factory{
     {"count", count_command},
-    {"dump", remote_command},
-    {"dump concepts", remote_command},
-    {"dump models", remote_command},
     {"explore", explore_command},
     {"export ascii", make_writer_command("ascii")},
     {"export csv", make_writer_command("csv")},
@@ -343,22 +325,22 @@ auto make_command_factory() {
     {"import test", import_command},
     {"import zeek", import_command},
     {"import zeek-json", import_command},
+    {"import arrow", import_command},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},
     {"send", remote_command},
     {"spawn accountant", remote_command},
-    {"spawn archive", remote_command},
     {"spawn eraser", remote_command},
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
     {"spawn importer", remote_command},
-    {"spawn type-registry", remote_command},
     {"spawn index", remote_command},
     {"spawn sink ascii", remote_command},
     {"spawn sink csv", remote_command},
     {"spawn sink json", remote_command},
     {"spawn sink zeek", remote_command},
+    {"spawn source arrow", remote_command},
     {"spawn source csv", remote_command},
     {"spawn source json", remote_command},
     {"spawn source suricata", remote_command},
@@ -417,19 +399,19 @@ auto make_root_command(std::string_view path) {
                                                "console")
         .add<std::string>("console-format", "format string for logging to the "
                                             "console")
-        .add<std::vector<std::string>>("schema-dirs", module_desc.c_str())
+        .add<caf::config_value::list>("schema-dirs", module_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
         .add<std::string>("client-log-file", "client log file (default: "
                                              "disabled)")
-        .add<size_t>("log-queue-size", "the queue size for the logger")
+        .add<int64_t>("log-queue-size", "the queue size for the logger")
         .add<std::string>("endpoint,e", "node endpoint")
         .add<std::string>("node-id,i", "the unique ID of this node")
         .add<bool>("node,N", "spawn a node instead of connecting to one")
         .add<bool>("enable-metrics", "keep track of performance metrics")
-        .add<std::vector<std::string>>("plugin-dirs", "additional directories "
-                                                      "to load plugins from")
-        .add<std::vector<std::string>>(
+        .add<caf::config_value::list>("plugin-dirs", "additional directories "
+                                                     "to load plugins from")
+        .add<caf::config_value::list>(
           "plugins", "plugins to load at startup; the special values 'bundled' "
                      "and 'all' enable autoloading of bundled and all plugins "
                      "respectively.")
@@ -441,14 +423,12 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("connection-timeout", "the timeout for connecting to "
                                                 "a VAST server (default: 10s)");
   ob = add_index_opts(std::move(ob));
-  ob = add_archive_opts(std::move(ob));
   auto root = std::make_unique<command>(path, "", std::move(ob));
   root->add_subcommand(make_count_command());
-  root->add_subcommand(make_dump_command());
-  root->add_subcommand(make_export_command());
   root->add_subcommand(make_explore_command());
-  root->add_subcommand(make_infer_command());
+  root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
+  root->add_subcommand(make_infer_command());
   root->add_subcommand(make_kill_command());
   root->add_subcommand(make_peer_command());
   root->add_subcommand(make_pivot_command());
@@ -468,13 +448,13 @@ std::unique_ptr<command> make_import_command() {
     "import", "imports data from STDIN or file",
     opts("?vast.import")
       .add<std::string>("batch-encoding", "encoding type of table slices")
-      .add<size_t>("batch-size", "upper bound for the size of a table slice")
+      .add<int64_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<std::string>("listen,l", "the endpoint to listen on "
                                     "([host]:port/type)")
-      .add<size_t>("max-events,n", "the maximum number of events to import")
+      .add<int64_t>("max-events,n", "the maximum number of events to import")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("read-timeout", "timeout for waiting for incoming data")
       .add<std::string>("schema,S", "alternate schema as string")
@@ -500,9 +480,11 @@ std::unique_ptr<command> make_import_command() {
                           opts("?vast.import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
                           opts("?vast.import.syslog"));
+  import_->add_subcommand("arrow", "import from an Arrow IPC stream",
+                          opts("?vast.import.arrow"));
   import_->add_subcommand(
     "test", "imports random data for testing or benchmarking",
-    opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
+    opts("?vast.import.test").add<int64_t>("seed", "the PRNG seed"));
   for (const auto& plugin : plugins::get()) {
     if (const auto* reader = plugin.as<reader_plugin>()) {
       auto opts_category
@@ -538,7 +520,7 @@ void render_error(const command& root, const caf::error& err,
     // The user most likely killed the process via CTRL+C, print nothing.
     return;
   os << render(err) << '\n';
-  if (err.category() == caf::atom("vast")) {
+  if (err.category() == caf::type_id_v<vast::ec>) {
     auto x = static_cast<vast::ec>(err.code());
     switch (x) {
       default:

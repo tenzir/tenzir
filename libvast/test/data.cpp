@@ -31,7 +31,7 @@ using namespace std::chrono_literals;
 using namespace std::string_literals;
 
 TEST(list) {
-  REQUIRE(std::is_same_v<std::vector<data>, list>);
+  REQUIRE((std::is_same_v<std::vector<data>, list>));
 }
 
 TEST(maps) {
@@ -203,7 +203,6 @@ TEST(evaluation) {
 TEST(evaluation - pattern matching) {
   CHECK(evaluate(pattern{"f.*o"}, relational_operator::equal, "foo"));
   CHECK(evaluate("foo", relational_operator::equal, pattern{"f.*o"}));
-  CHECK(evaluate("foo", relational_operator::match, pattern{"f.*o"}));
 }
 
 TEST(serialization) {
@@ -212,8 +211,8 @@ TEST(serialization) {
   xs.emplace_back(count{53});
   xs.emplace_back(count{8});
   auto x0 = data{xs};
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, x0), caf::none);
+  caf::byte_buffer buf;
+  CHECK(detail::serialize(buf, x0));
   data x1;
   CHECK_EQUAL(detail::legacy_deserialize(buf, x1), true);
   CHECK_EQUAL(x0, x1);
@@ -283,14 +282,14 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == list{42u, 4.2, caf::none});
+  CHECK((d == list{42u, 4.2, caf::none}));
   MESSAGE("map");
   str = "{T->1,F->0}"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == map{{true, 1u}, {false, 0u}});
+  CHECK((d == map{{true, 1u}, {false, 0u}}));
 }
 
 TEST(convert - caf::config_value) {

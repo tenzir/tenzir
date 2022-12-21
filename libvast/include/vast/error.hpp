@@ -10,6 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/inspection_common.hpp"
+
 #include <caf/error.hpp>
 #include <caf/make_message.hpp>
 
@@ -45,6 +47,8 @@ enum class ec : uint8_t {
   timeout,
   /// An input didn't produce any data.
   stalled,
+  /// An operation did not run to completion.
+  incomplete,
   /// Encountered two incompatible versions.
   version_error,
   /// A command does not adhere to the expected syntax.
@@ -85,6 +89,8 @@ enum class ec : uint8_t {
   system_error,
   /// An breaking version change.
   breaking_change,
+  /// An error during serialization
+  serialization_error,
   /// No error; number of error codes.
   ec_count,
 };
@@ -96,6 +102,11 @@ const char* to_string(ec x);
 /// @relates ec
 std::string render(caf::error err);
 
+template <class Inspector>
+auto inspect(Inspector& f, ec& x) {
+  return detail::inspect_enum(f, x);
+}
+
 } // namespace vast
 
-CAF_ERROR_CODE_ENUM(vast::ec, "vast")
+CAF_ERROR_CODE_ENUM(vast::ec)

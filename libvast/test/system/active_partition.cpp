@@ -16,9 +16,11 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/uuid.hpp"
+#include "vast/span.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/taxonomies.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 #include "vast/time.hpp"
@@ -120,7 +122,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
     = sys.spawn(vast::system::active_partition, partition_id,
                 vast::system::accountant_actor{}, filesystem, caf::settings{},
                 index_config_, vast::system::store_actor{}, input_store_id,
-                partition_header);
+                partition_header, std::make_shared<vast::taxonomies>());
   REQUIRE(sut);
   auto builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, schema_);
@@ -148,9 +150,9 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   const auto& synopsis_chunk = last_written_chunks.at(synopsis_path).front();
   auto* synopsis_fbs = vast::fbs::GetPartitionSynopsis(synopsis_chunk->data());
   vast::partition_synopsis synopsis;
-  unpack(*synopsis_fbs->partition_synopsis_as<
-           vast::fbs::partition_synopsis::LegacyPartitionSynopsis>(),
-         synopsis);
+  CHECK(!unpack(*synopsis_fbs->partition_synopsis_as<
+                  vast::fbs::partition_synopsis::LegacyPartitionSynopsis>(),
+                synopsis));
   CHECK_EQUAL(synopsis.events, 1u);
   CHECK_EQUAL(synopsis.schema, schema_);
   CHECK_EQUAL(synopsis.min_import_time, now);
@@ -181,7 +183,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   const auto* indexes = part_fb->indexes();
   REQUIRE_EQUAL(indexes->size(), 1u);
   CHECK_EQUAL(indexes->Get(0)->field_name()->str(), "y.x");
-  CHECK_EQUAL(indexes->Get(0)->index()->data(), nullptr);
+  CHECK_EQUAL(indexes->Get(0)->index()->caf_0_18_data(), nullptr);
 }
 
 TEST(Delegate query to store with all possible ids in partition when query is to
@@ -192,7 +194,8 @@ TEST(Delegate query to store with all possible ids in partition when query is to
   auto sut = sys.spawn(vast::system::active_partition, vast::uuid::random(),
                        vast::system::accountant_actor{},
                        vast::system::filesystem_actor{}, caf::settings{},
-                       index_config_, store, "some-id", vast::chunk_ptr{});
+                       index_config_, store, "some-id", vast::chunk_ptr{},
+                       std::make_shared<vast::taxonomies>());
 
   REQUIRE(sut);
 

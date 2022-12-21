@@ -55,7 +55,7 @@ caf::message remote_command(const invocation& inv, caf::actor_system& sys) {
                 [&](caf::error e) { err = std::move(e); });
   if (err)
     return caf::make_message(std::move(err));
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system

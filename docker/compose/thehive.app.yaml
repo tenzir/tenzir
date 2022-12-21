@@ -1,0 +1,26 @@
+version: "3"
+services:
+  thehive-app:
+    build:
+      context: ../..
+      dockerfile: docker/dev/app.Dockerfile
+      args:
+        - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
+        - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
+        - RELATIVE_APP_DIR=docker/thehive/app
+    command: run-app
+    environment:
+      - THEHIVE_URL=http://thehive:9000
+      - VAST_ENDPOINT=vast:42000
+      - BACKFILL_LIMIT=${BACKFILL_LIMIT:-100}
+      - DEFAULT_ORGADMIN_EMAIL=${DEFAULT_ORGADMIN_EMAIL:-orgadmin@thehive.local}
+      - DEFAULT_ORGADMIN_PWD=${DEFAULT_ORGADMIN_PWD:-secret}
+    depends_on:
+      - vast
+      - thehive
+    networks:
+      - vast
+      - thehive
+  thehive:
+    networks:
+      - vast

@@ -16,7 +16,6 @@
 
 #include <caf/deep_to_string.hpp>
 #include <caf/fwd.hpp>
-#include <caf/meta/type_name.hpp>
 #include <fmt/format.h>
 
 #include <filesystem>
@@ -47,10 +46,15 @@ struct spawn_arguments {
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, spawn_arguments& x) ->
-    typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.system.spawn_arguments"), x.inv, x.dir,
-             x.label, x.expr);
+    requires(Inspector::is_loading == false)
+  friend auto inspect(Inspector& f, spawn_arguments& x) {
+    auto inv = x.inv;
+    auto dir = x.dir.string();
+    auto label = x.label;
+    return f.object(x)
+      .pretty_name("vast.system.spawn_arguments")
+      .fields(f.field("inv", inv), f.field("dir", dir), f.field("label", label),
+              f.field("exp", x.expr));
   }
 };
 

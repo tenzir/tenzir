@@ -1,9 +1,21 @@
 import ipaddress
+import json
+import pathlib
+import pytest
 import uuid
 
 import stix2
 
 from vast.utils.stix import *
+
+
+@pytest.fixture
+def sighting(request):
+    tests = pathlib.Path(request.node.fspath.strpath).parent
+    bundle = tests / "data" / "stix-bundle-sighting.json"
+    with bundle.open() as f:
+        bundle = json.load(f)
+        return stix2.parse(bundle)
 
 
 def test_ipv4_address_conversion():

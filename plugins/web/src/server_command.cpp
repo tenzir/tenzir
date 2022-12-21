@@ -10,6 +10,7 @@
 
 #include "web/authenticator.hpp"
 #include "web/configuration.hpp"
+#include "web/mime.hpp"
 #include "web/restinio_response.hpp"
 
 #include <vast/concept/convertible/data.hpp>
@@ -36,8 +37,6 @@
 #include <restinio/websocket/websocket.hpp>
 
 // Needed to forward incoming requests to the request_dispatcher
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(
-  std::shared_ptr<vast::plugins::web::restinio_response>)
 
 namespace vast::plugins::web {
 
@@ -60,6 +59,15 @@ restinio::http_method_id_t to_restinio_method(vast::http_method method) {
   }
   // Unreachable.
   return restinio::http_method_get();
+}
+
+auto parse_query_params(std::string_view text)
+  -> caf::expected<restinio::query_string_params_t> {
+  try {
+    return restinio::parse_query(text);
+  } catch (restinio::exception_t& e) {
+    return caf::make_error(ec::parse_error, e.what());
+  }
 }
 
 struct request_dispatcher_state {
@@ -111,18 +119,59 @@ request_dispatcher_actor::behavior_type request_dispatcher(
     },
     [self](atom::internal, atom::request, restinio_response_ptr& response,
            const rest_endpoint& endpoint, system::rest_handler_actor handler) {
-      // TODO: Also consider params in the request body here.
-      restinio::query_string_params_t string_params
-        = restinio::parse_query(response->request()->header().query());
+      auto const& header = response->request()->header();
+      auto query_params = parse_query_params(header.query());
+      if (!query_params)
+        return response->abort(400, fmt::format("failed to parse query "
+                                                "parameters: "
+                                                "{}\n",
+                                                query_params.error()));
+      auto parser = simdjson::dom::parser{};
+      auto body_params = std::optional<simdjson::dom::object>{};
+      // POST requests can contain request parameters in their body in any
+      // format supported by the server. The client indicates the data format
+      // they used in the `Content-Type` header. See also
+      // https://stackoverflow.com/a/26717908/92560
+      if (header.method() == restinio::http_method_post()) {
+        auto const& body = response->request()->body();
+        auto maybe_content_type
+          = header.opt_value_of(restinio::http_field_t::content_type);
+        if (maybe_content_type == "application/x-www-form-urlencoded") {
+          query_params
+            = parse_query_params(response->request()->header().query());
+          if (!query_params)
+            return response->abort(400, fmt::format("failed to parse query "
+                                                    "parameters: "
+                                                    "{}\n",
+                                                    query_params.error()));
+        } else if (maybe_content_type == "application/json") {
+          auto json_params = parser.parse(body);
+          if (!json_params.is_object())
+            return response->abort(400, "invalid JSON body\n");
+          body_params = json_params.get_object();
+        } else {
+          return response->abort(400, "unsupported content type");
+        }
+      }
+      auto const& route_params = response->route_params();
       vast::record params;
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
           auto restinio_name
             = restinio::string_view_t{name.data(), name.size()};
-          if (string_params.has(restinio_name)) {
-            auto string_value = std::string{string_params[restinio_name]};
-            auto typed_value = caf::visit(
+          auto maybe_param = query_params->get_param(restinio_name);
+          if (!maybe_param)
+            maybe_param = route_params.get_param(restinio_name);
+          if (!maybe_param && body_params.has_value())
+            if (auto maybe_string = body_params->at_key(restinio_name);
+                maybe_string.is_string())
+              maybe_param = std::string_view{maybe_string.get_c_str()};
+          if (!maybe_param)
+            continue;
+          auto string_value = std::string{*maybe_param};
+          auto typed_value
+            = caf::visit(
               detail::overload{
                 [&string_value](const string_type&) -> caf::expected<data> {
                   return data{string_value};
@@ -143,13 +192,12 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                 },
               },
               leaf.field.type);
-            if (!typed_value) {
-              response->abort(
-                422, fmt::format("failed to parse parameter '{}'\n", name));
-              return;
-            }
-            params[name] = std::move(*typed_value);
+          if (!typed_value) {
+            response->abort(422, fmt::format("failed to parse parameter '{}'\n",
+                                             name));
+            return;
           }
+          params[name] = std::move(*typed_value);
         }
       }
       auto vast_request = vast::http_request{
@@ -164,7 +212,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
 
 void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                  std::string_view prefix, request_dispatcher_actor dispatcher,
-                 vast::rest_endpoint endpoint,
+                 const server_config& config, vast::rest_endpoint endpoint,
                  system::rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
   auto path
@@ -176,10 +224,12 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
   router->add_handler(
     method, path,
     [=, &self](request_handle_t req,
-               restinio::router::route_params_t /*route_params*/)
+               restinio::router::route_params_t route_params)
       -> restinio::request_handling_status_t {
-      auto response
-        = std::make_shared<restinio_response>(std::move(req), endpoint);
+      auto response = std::make_shared<restinio_response>(
+        std::move(req), std::move(route_params), endpoint);
+      for (auto const& [field, value] : config.response_headers)
+        response->add_header(field, value);
       self->send(dispatcher, atom::request_v, std::move(response),
                  std::move(endpoint), handler);
       // TODO: Measure if always accepting introduces a noticeable
@@ -262,7 +312,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       }
       handlers.push_back(handler);
       setup_route(self, router, rest_plugin->prefix(), dispatcher,
-                  std::move(endpoint), handler);
+                  *server_config, std::move(endpoint), handler);
     }
   }
   // Set up non-API routes.
@@ -277,15 +327,52 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       return request->create_response(restinio::status_temporary_redirect())
         .append_header(restinio::http_field::server, "VAST")
         .append_header_date_field()
-        .append_header(restinio::http_field::location, "/api/v0/status")
+        .append_header(restinio::http_field::location, "/index")
         .done();
     });
+  if (server_config->webroot) {
+    VAST_VERBOSE("using {} as document root", *server_config->webroot);
+    router->http_get(
+      "/:path(.*)", restinio::path2regex::options_t{}.strict(true),
+      [webroot = *server_config->webroot](auto req, auto /*params*/) {
+        auto ec = std::error_code{};
+        auto http_path = req->header().path();
+        auto path = std::filesystem::path{std::string{http_path}};
+        VAST_DEBUG("serving static file {}", http_path);
+        auto normalized_path
+          = (webroot / path.relative_path()).lexically_normal();
+        if (ec)
+          return restinio::request_rejected();
+        if (!normalized_path.string().starts_with(webroot.string()))
+          return restinio::request_rejected();
+        // Map e.g. /status -> /status.html on disk.
+        if (!exists(normalized_path) && !normalized_path.has_extension())
+          normalized_path.replace_extension("html");
+        if (!exists(normalized_path))
+          return req->create_response(restinio::status_not_found())
+            .set_body("404 not found")
+            .done();
+        auto extension = normalized_path.extension().string();
+        auto sf = restinio::sendfile(normalized_path);
+        auto const* mime_type = content_type_by_file_extension(extension);
+        return req->create_response()
+          .append_header(restinio::http_field::server, "VAST")
+          .append_header_date_field()
+          .append_header(restinio::http_field::content_type, mime_type)
+          .set_body(std::move(sf))
+          .done();
+      });
+  } else {
+    VAST_VERBOSE("not serving a document root because no --web-root was given "
+                 "and the default location does not exist");
+  }
   // Run server.
   if (!server_config->require_tls) {
     struct my_server_traits : public restinio::default_single_thread_traits_t {
       using request_handler_t = restinio::router::express_router_t<>;
     };
-    VAST_INFO("listening on http://{}:{}", config.bind_address, config.port);
+    VAST_INFO("web plugin listening on http://{}:{}", config.bind_address,
+              config.port);
     restinio::run(restinio::on_this_thread<my_server_traits>()
                     .port(config.port)
                     .address(config.bind_address)
@@ -314,7 +401,8 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     // the OpenSSL built-in defaults, but asio has not been updated to
     // expose this API so we need to use the raw context.
     SSL_CTX_set_dh_auto(tls_context.native_handle(), true);
-    VAST_INFO("listening on https://{}:{}", config.bind_address, config.port);
+    VAST_INFO("web plugin listening on https://{}:{}", config.bind_address,
+              config.port);
     using namespace std::literals::chrono_literals;
     restinio::run(restinio::on_this_thread<traits_t>()
                     .address(config.bind_address)

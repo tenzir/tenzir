@@ -12,6 +12,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
+#include <caf/expected.hpp>
 #include <sys/select.h>
 
 #include <cstdio>
@@ -89,10 +90,13 @@ bool enable_echo() {
 }
 
 bool get(char& c, int timeout) {
-  if (auto err = poll(::fileno(stdin), timeout)) {
-    VAST_ERROR("{} {}", __func__, render(err));
+  auto ready = rpoll(::fileno(stdin), timeout);
+  if (!ready) {
+    VAST_ERROR("{} {}", __func__, render(ready.error()));
     return false;
   }
+  if (!*ready)
+    return false;
   auto i = ::fgetc(stdin);
   if (::feof(stdin))
     return false;

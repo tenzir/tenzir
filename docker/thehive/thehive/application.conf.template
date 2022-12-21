@@ -1,0 +1,38 @@
+play.http.secret.key="ThehiveTestPassword"
+
+http.address=0.0.0.0
+
+db.janusgraph {
+   storage.backend: berkeleyje
+   storage.directory: /opt/thp/thehive/db
+   berkeleyje.freeDisk: 200
+
+  index {
+    search {
+      # use local index instead of ES for simplicity reasons
+      backend: lucene
+      directory: /opt/thp/thehive/index
+    }
+  }  
+}
+
+play.modules.enabled += org.thp.thehive.connector.cortex.CortexModule
+cortex {
+  servers = [
+    {
+      name = local
+      url = "__CORTEX_URL_PLACEHOLDER__"
+      auth {
+        type = "bearer"
+        key = "__CORTEX_API_KEY_PLACEHOLDER__"
+      }
+    }
+  ]
+}
+
+storage {
+   provider: localfs
+   localfs.location: /opt/thp/thehive/data
+}
+
+play.http.parser.maxDiskBuffer: 20MB

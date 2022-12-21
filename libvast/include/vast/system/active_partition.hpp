@@ -26,6 +26,7 @@
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
 
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/optional.hpp>
 #include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -149,8 +150,7 @@ struct active_partition_state {
   /// with a serialized chunk.
   size_t persisted_indexers = {};
 
-  /// The store to retrieve the data from. Either the legacy global archive or a
-  /// local component that holds the data for this partition.
+  /// The store to retrieve the data from.
   store_actor store = {};
 
   /// Temporary storage for the serialized indexers of this partition, before
@@ -162,6 +162,9 @@ struct active_partition_state {
 
   // Vector of flush listeners.
   std::vector<flush_listener_actor> flush_listeners = {};
+
+  // Taxonomies for resolving expressions during a query.
+  std::shared_ptr<vast::taxonomies> taxonomies = {};
 };
 
 // -- flatbuffers --------------------------------------------------------------
@@ -186,12 +189,14 @@ pack_full(const active_partition_state::serialization_data& x,
 /// @param store_header A binary blob that allows reconstructing the store
 ///                     plugin when reading this partition from disk.
 /// @param index_config The meta-index configuration of the false-positives
+/// @param taxonomies The taxonomies for resolving expressions during a query.
 /// rates for the types and fields.
 // TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
   caf::settings index_opts, const index_config& synopsis_opts,
-  store_actor store, std::string store_id, chunk_ptr store_header);
+  store_actor store, std::string store_id, chunk_ptr store_header,
+  std::shared_ptr<vast::taxonomies> taxonomies);
 
 } // namespace vast::system

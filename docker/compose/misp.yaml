@@ -1,0 +1,76 @@
+version: "3"
+services:
+  redis:
+    image: redis:5.0.6
+    networks:
+      - misp
+  mysql:
+    image: mysql:8.0.19
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      - MYSQL_USER=${MYSQL_USER:-demo}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-demo}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-demo}
+      - MYSQL_DATABASE=misp
+    volumes:
+      - mysql_data:/var/lib/mysql
+    cap_add:
+      - SYS_NICE
+    networks:
+      - misp
+  misp:
+    pull_policy: build
+    build:
+      context: ../misp
+      args:
+        - MISP_VERSION=${MISP_VERSION:-v2.4.145a}
+    depends_on:
+      - redis
+      - mysql
+    ports:
+      - ${MISP_PORT_ZMQ:-50000}:50000
+      - ${MISP_PORT_HTTP:-5000}:80
+    volumes:
+      - certs:/etc/nginx/certs
+      - config:/var/www/MISP/app/Config
+      - files:/var/www/MISP/app/files
+      - logs:/var/www/MISP/app/tmp/logs/
+    environment:
+      - HOSTNAME=http://localhost:${MISP_PORT_HTTP:-5000}
+      - REDIS_FQDN=redis
+      - INIT=true
+      - NOREDIR=true
+      - CRON_USER_ID=1
+      - MYSQL_HOST=mysql
+      - MYSQL_USER=${MYSQL_USER:-demo}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-demo}
+      - MYSQL_DATABASE=misp
+      - DISIPV6=true
+      - WORKERS=${MISP_WORKERS:-1}
+      - MISP_ADMIN_USER=${MISP_ADMIN_USER:-demo@tenzir.com}
+      - MISP_ADMIN_PASSWORD=${MISP_ADMIN_PASSWORD:-demo}
+      - MISP_API_KEY=${MISP_API_KEY:-demodemodemodemodemodemodemodemodemodemo}
+    networks:
+      - misp
+  misp-modules:
+    image: coolacid/misp-docker:modules-v2.4.145a
+    environment:
+      - REDIS_BACKEND=redis
+    depends_on:
+      - redis
+      - mysql
+    networks:
+      - misp
+
+volumes:
+  mysql_data:
+  certs:
+  config:
+  files:
+  logs:
+
+networks:
+  # network on which TheHive, MySQL and Redis
+  misp:
+    driver: bridge

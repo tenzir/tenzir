@@ -1,0 +1,19 @@
+version: "3"
+services:
+  misp:
+    environment:
+      - HOSTNAME=http://placeholder-hostname-to-rewrite-in-nginx
+  proxy:
+    pull_policy: build
+    build:
+      context: ../misp/proxy
+    ports:
+      - ${MISP_PROXY_PORT_HTTP:-8080}:80
+    depends_on:
+      - misp
+    environment:
+      - NGINX_PLACEHOLDER_HOSTNAME=placeholder-hostname-to-rewrite-in-nginx
+      - NGINX_PORT=80
+      - NGINX_PROXY_PASS=http://misp:80
+    networks:
+      - misp

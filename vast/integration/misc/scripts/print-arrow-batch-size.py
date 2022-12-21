@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 # Example usage:
-# vast -N export arrow '#type ~ /suricata.*/' | ./scripts/print-arrow-batch-size.py
+# vast -N export arrow '#type == /suricata.*/' | ./scripts/print-arrow-batch-size.py
 
 import sys
 import pyarrow

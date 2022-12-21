@@ -17,6 +17,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/streambuf.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -28,10 +29,8 @@
 
 #include <caf/attach_continuous_stream_source.hpp>
 #include <caf/downstream.hpp>
-#include <caf/event_based_actor.hpp>
 #include <caf/io/broker.hpp>
 #include <caf/stateful_actor.hpp>
-#include <caf/streambuf.hpp>
 
 #include <chrono>
 #include <optional>
@@ -42,7 +41,7 @@ caf::behavior datagram_source(
   caf::stateful_actor<datagram_source_state, caf::io::broker>* self,
   uint16_t udp_listening_port, format::reader_ptr reader,
   size_t table_slice_size, std::optional<size_t> max_events,
-  const type_registry_actor& type_registry, vast::module local_module,
+  const catalog_actor& catalog, vast::module local_module,
   std::string type_filter, accountant_actor accountant,
   std::vector<pipeline>&& pipelines) {
   self->state.transformer
@@ -71,7 +70,7 @@ caf::behavior datagram_source(
   self->state.done = false;
   // Register with the accountant.
   self->send(self->state.accountant, atom::announce_v, self->state.name);
-  self->state.initialize(type_registry, std::move(type_filter));
+  self->state.initialize(catalog, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
     self->state.done = true;
@@ -106,7 +105,7 @@ caf::behavior datagram_source(
       }
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
+      detail::arraybuf buf{msg.buf.data(), msg.buf.size()};
       self->state.reader->reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
         self->state.filter_and_push(std::move(slice), [&](table_slice slice) {

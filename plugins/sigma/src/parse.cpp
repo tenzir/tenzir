@@ -322,7 +322,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           return caf::make_error(ec::unimplemented, //
                                  "utf16 not yet implemented");
         } else if (*i == "re") {
-          op = relational_operator::match;
+          op = relational_operator::equal;
           auto to_re = [](const data& d) -> data {
             auto f = detail::overload{
               [](const auto& x) -> data {
@@ -367,7 +367,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         if (auto str = caf::get_if<std::string>(&value))
           if (!str->empty())
             if (auto pat = make_pattern(*str))
-              return predicate{extractor, relational_operator::match,
+              return predicate{extractor, relational_operator::equal,
                                data{std::move(*pat)}};
         // The modifier 'base64offset' is unique in that it creates
         // multiple values represented as list. If followed by 'contains', then

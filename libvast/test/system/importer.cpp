@@ -15,9 +15,8 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/catalog.hpp"
 #include "vast/system/source.hpp"
-#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
@@ -64,10 +63,8 @@ struct importer_fixture : Base {
     : Base(VAST_PP_STRINGIFY(SUITE)), slice_size(table_slice_size) {
     MESSAGE("spawn importer");
     auto dir = this->directory / "importer";
-    importer
-      = this->self->spawn(system::importer, dir, system::archive_actor{},
-                          system::index_actor{}, system::type_registry_actor{},
-                          std::vector<vast::pipeline>{});
+    importer = this->self->spawn(system::importer, dir, system::index_actor{},
+                                 std::vector<vast::pipeline>{});
   }
 
   ~importer_fixture() {
@@ -95,7 +92,7 @@ struct importer_fixture : Base {
     auto reader = std::make_unique<format::zeek::reader>(caf::settings{},
                                                          std::move(stream));
     return this->self->spawn(system::source, std::move(reader), slice_size,
-                             std::nullopt, vast::system::type_registry_actor{},
+                             std::nullopt, vast::system::catalog_actor{},
                              vast::module{}, std::string{},
                              vast::system::accountant_actor{},
                              std::vector<vast::pipeline>{});
@@ -129,15 +126,16 @@ struct deterministic_fixture : deterministic_fixture_base {
 
   void fetch_ok() override {
     run();
-    expect((atom::ok), from(_).to(self).with(atom::ok::value));
+    expect((atom::ok), from(_).to(self).with(atom::ok_v));
   }
 
   auto fetch_result() {
     if (!received<std::vector<table_slice>>(self))
       FAIL("no result available");
     std::vector<table_slice> result;
-    self->receive(
-      [&](std::vector<table_slice>& xs) { result = std::move(xs); });
+    self->receive([&](std::vector<table_slice>& xs) {
+      result = std::move(xs);
+    });
     return result;
   }
 };
@@ -234,7 +232,9 @@ TEST(deterministic importer with one sink and failing zeek source) {
   } while (sched.try_run_once());
   using namespace std::chrono_literals;
   self->receive(
-    [](const caf::down_msg& x) { FAIL("unexpected down message: " << x); },
+    [](const caf::down_msg& x) {
+      FAIL("unexpected down message: " << x);
+    },
     caf::after(0s) >>
       [] {
         // nop
@@ -264,8 +264,9 @@ struct nondeterministic_fixture : nondeterministic_fixture_base {
 
   auto fetch_result() {
     std::vector<table_slice> result;
-    self->receive(
-      [&](std::vector<table_slice>& xs) { result = std::move(xs); });
+    self->receive([&](std::vector<table_slice>& xs) {
+      result = std::move(xs);
+    });
     return result;
   }
 };

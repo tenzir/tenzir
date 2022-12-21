@@ -27,7 +27,6 @@
 #include <caf/actor.hpp>
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
-#include <caf/meta/type_name.hpp>
 #include <caf/typed_response_promise.hpp>
 
 #include <queue>
@@ -36,6 +35,9 @@
 
 namespace vast::system {
 
+// 7 Returns the store path for a given partition id.
+std::filesystem::path store_path_for_partition(const uuid& id);
+
 /// The transformer replaces the old partition with the new one or keeps it
 /// depending on the value of keep_original_partition.
 enum class keep_original_partition : bool {
@@ -43,12 +45,22 @@ enum class keep_original_partition : bool {
   no = false,
 };
 
+template <class Inspector>
+auto inspect(Inspector& f, keep_original_partition& x) {
+  return detail::inspect_enum(f, x);
+}
+
 // New partition creation listeners will be sent the initial state of the
 // whole database if they set this to 'yes'.
 enum class send_initial_dbstate : bool {
   yes = true,
   no = false,
 };
+
+template <class Inspector>
+auto inspect(Inspector& f, send_initial_dbstate& x) {
+  return detail::inspect_enum(f, x);
+}
 
 /// Helper class used to route table slice columns to the correct indexer
 /// in the CAF stream stage.
@@ -100,8 +112,11 @@ struct active_partition_info {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, active_partition_info& x) {
-    return f(caf::meta::type_name("active_partition_info"), x.actor,
-             x.stream_slot, x.capacity, x.id, x.spawn_time);
+    return f.object(x)
+      .pretty_name("active_partition_info")
+      .fields(f.field("actor", x.actor), f.field("stream-slot", x.stream_slot),
+              f.field("capacity", x.capacity), f.field("id", x.id),
+              f.field("spawn-time", x.spawn_time));
   }
 };
 
@@ -255,7 +270,7 @@ struct index_state {
   // Then (assuming the query interface for both types of partition stays
   // identical) we could just use the same cache for unpersisted partitions and
   // unpin them after they're safely on disk.
-  std::unordered_map<uuid, partition_actor> unpersisted = {};
+  std::unordered_map<uuid, std::pair<type, partition_actor>> unpersisted = {};
 
   /// The set of passive (read-only) partitions currently loaded into memory.
   /// Uses the `partition_factory` to load new partitions as needed, and evicts
@@ -305,9 +320,6 @@ struct index_state {
   /// The CATALOG actor.
   catalog_actor catalog = {};
 
-  /// The TYPE REGISTRY actor. (required for spawning partition transformers)
-  type_registry_actor type_registry;
-
   /// The directory for persistent state.
   std::filesystem::path dir = {};
 
@@ -333,9 +345,6 @@ struct index_state {
   std::vector<partition_creation_listener_actor> partition_creation_listeners
     = {};
 
-  /// Actor handle of the store actor.
-  archive_actor global_store = {};
-
   /// Plugin responsible for spawning new partition-local stores.
   const vast::store_actor_plugin* store_actor_plugin = {};
 
@@ -355,6 +364,9 @@ struct index_state {
   std::vector<std::pair<caf::typed_response_promise<query_cursor>, query_context>>
     delayed_queries;
 
+  /// The taxonomies for querying.
+  std::shared_ptr<vast::taxonomies> taxonomies = {};
+
   constexpr static inline auto name = "index";
 };
 
@@ -362,9 +374,7 @@ struct index_state {
 /// @param accountant The accountant actor.
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
-/// @param archive The legacy archive actor. To be removed eventually (tm).
 /// @param catalog The catalog actor.
-/// @param type_registry The type registry actor.
 /// @param dir The directory of the index.
 /// @param store_backend The store backend to use for new partitions.
 /// @param partition_capacity The maximum number of events per partition.
@@ -383,8 +393,7 @@ struct index_state {
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       accountant_actor accountant, filesystem_actor filesystem,
-      archive_actor archive, catalog_actor catalog,
-      type_registry_actor type_registry, const std::filesystem::path& dir,
+      catalog_actor catalog, const std::filesystem::path& dir,
       std::string store_backend, size_t partition_capacity,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t taste_partitions, size_t max_concurrent_partition_lookups,

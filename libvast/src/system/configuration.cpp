@@ -20,6 +20,7 @@
 #include "vast/detail/installdirs.hpp"
 #include "vast/detail/load_contents.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
@@ -32,9 +33,7 @@
 
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
-#if VAST_ENABLE_OPENSSL
-#  include <caf/openssl/manager.hpp>
-#endif
+#include <caf/openssl/manager.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -88,44 +87,6 @@ caf::expected<caf::config_value> to_config_value(std::string_view value) {
     else
       return cfg_val.error();
   return caf::config_value{std::move(result)};
-}
-
-caf::expected<caf::config_value>
-to_config_value(const caf::config_value& value, const caf::config_option& opt) {
-  // The config_option (from our commands) includes type information on what
-  // value to accept. Command line values are checked against this.
-  // Unfortunately our YAML config operates purely based on values. This means
-  // we may have previously parsed a value incorrectly, e.g., where an atom was
-  // expected we got a string. This trouble will be gone with CAF > 0.18, but
-  // until then we have to *go back* into a string reprsentation to create
-  // ambiguity (i.e., allow for parsing input as either string or atom), and
-  // then come back to the config_value that matches the typing.
-  auto no_quote_stringify = detail::overload{
-    [](const auto& x) {
-      return caf::deep_to_string(x);
-    },
-    [](const std::string& x) {
-      return x;
-    },
-  };
-  auto str = caf::visit(no_quote_stringify, value);
-  auto result = opt.parse(str);
-  if (!result) {
-    // We now try to parse strings as atom using a regex, since we get
-    // recursive types like lists for free this way. A string-vs-atom type
-    // clash is the only instance we currently cannot distinguish. Everything
-    // else is a true type clash.
-    // (With CAF 0.18, this heuristic will be obsolete.)
-    str = detail::replace_all(std::move(str), "\"", "'");
-    result = opt.parse(str);
-    if (!result)
-      return caf::make_error(ec::type_clash,
-                             fmt::format( //
-                               "failed to parse config option {} as {}: {}",
-                               caf::deep_to_string(opt.full_name()),
-                               caf::deep_to_string(opt.type_name()), str));
-  }
-  return result;
 }
 
 caf::expected<std::vector<std::filesystem::path>>
@@ -270,11 +231,6 @@ caf::error merge_environment(record& config) {
 
 caf::expected<caf::settings> to_settings(record config) {
   // Pre-process our configuration so that it can be properly parsed later.
-  // Strip the "caf." prefix from all keys.
-  // TODO: Remove this after switching to CAF 0.18.
-  for (auto& option : config)
-    if (auto& key = option.first; std::string_view{key}.starts_with("caf."))
-      key.erase(0, 4);
   // Erase all null values because a caf::config_value has no such notion.
   for (auto i = config.begin(); i != config.end();) {
     if (caf::holds_alternative<caf::none_t>(i->second))
@@ -320,7 +276,7 @@ get_or_duration(const caf::settings& options, std::string_view key,
 }
 
 configuration::configuration() {
-  detail::add_message_types(*this);
+  detail::add_message_types();
   // Load I/O module.
   load<caf::io::middleman>();
   // Initialize factories.
@@ -381,8 +337,6 @@ caf::error configuration::parse(int argc, char** argv) {
                                        is_vast_opt);
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
-  for (auto& arg : caf_args)
-    arg.erase(2, 4); // Strip --caf. prefix
   command_line.erase(caf_opt, command_line.end());
   // Do not use builtin config directories in "bare mode". We're checking this
   // here and putting directly into the actor_system_config because
@@ -444,6 +398,17 @@ caf::error configuration::parse(int argc, char** argv) {
         .add<std::vector<std::string>>("?vast", "schema-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugins", "");
+  // Newly added plugin arguments from environment variables
+  // may contain empty values - sanitize them manually.
+  for (auto& plugin_arg : plugin_args) {
+    auto dummy_settings = caf::settings{};
+    auto parse_result = plugin_opts.parse(dummy_settings, {plugin_arg}).first;
+    if (parse_result == caf::pec::missing_argument)
+      plugin_arg.append("[]");
+    else if (parse_result == caf::pec::invalid_argument) {
+      plugin_arg = detail::convert_to_caf_compatible_list_arg(plugin_arg);
+    }
+  }
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   if (ec != caf::pec::success) {
     VAST_ASSERT(it != plugin_args.end());
@@ -456,14 +421,12 @@ caf::error configuration::parse(int argc, char** argv) {
   config_file_path.clear();
   auto result = actor_system_config::parse(std::move(caf_args));
   // Load OpenSSL last because it uses the parsed configuration.
-#if VAST_ENABLE_OPENSSL
   const auto use_encryption
     = !openssl_certificate.empty() || !openssl_key.empty()
       || !openssl_passphrase.empty() || !openssl_capath.empty()
       || !openssl_cafile.empty();
   if (use_encryption)
     load<caf::openssl::manager>();
-#endif // VAST_ENABLE_OPENSSL
   return result;
 }
 
@@ -476,10 +439,11 @@ caf::error configuration::embed_config(const caf::settings& settings) {
     // contains the valid type information, as defined by the command
     // hierarchy. The passed in config (file and environment) must abide to it.
     if (const auto* option = custom_options_.qualified_name_lookup(key)) {
-      if (auto x = to_config_value(value, *option))
-        put(content, key, std::move(*x));
+      auto val = value;
+      if (auto err = option->sync(val))
+        return err;
       else
-        return x.error();
+        put(content, key, std::move(val));
     } else {
       // If the option is not relevant to CAF's custom options, we just store
       // the value directly in the content.

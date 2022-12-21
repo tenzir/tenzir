@@ -10,8 +10,6 @@
 
 #include "vast/module.hpp"
 
-#include <caf/optional.hpp>
-
 namespace vast::event_types {
 
 /// Initializes the system-wide type registry.

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vast/address.hpp"
+#include "vast/detail/inspection_common.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/hash/uniquely_represented.hpp"
 #include "vast/port.hpp"
@@ -103,7 +104,7 @@ inline bool operator!=(const flow& x, const flow& y) {
 /// @relates flow
 template <class Inspector>
 auto inspect(Inspector& f, flow& x) {
-  return f(x.src_addr, x.dst_addr, x.src_port, x.dst_port);
+  return detail::apply_all(f, x.src_addr, x.dst_addr, x.src_port, x.dst_port);
 }
 
 } // namespace vast

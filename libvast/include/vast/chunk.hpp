@@ -11,9 +11,9 @@
 #include "vast/fwd.hpp"
 
 #include "vast/as_bytes.hpp"
-#include "vast/detail/assert.hpp"
 #include "vast/detail/function.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
+#include "vast/detail/narrow.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/intrusive_ptr.hpp>
@@ -224,17 +224,56 @@ public:
   friend caf::error
   write(const std::filesystem::path& filename, const chunk_ptr& x);
   friend caf::error read(const std::filesystem::path& filename, chunk_ptr& x);
-  friend caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
-  friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);
-  friend bool inspect(detail::legacy_deserializer& source, chunk_ptr& x);
 
 private:
   // -- implementation details -------------------------------------------------
+
+  /// The size of an invalid chunk when serialized.
+  static constexpr auto invalid_size = int64_t{-1};
 
   /// Constructs a chunk from a span and a deleter.
   /// @param view The span holding the raw data.
   /// @param deleter The function to delete the data.
   chunk(view_type view, deleter_type&& deleter) noexcept;
+
+  template <class Inspector>
+  friend bool load_impl(Inspector& f, chunk_ptr& x) {
+    int64_t size = 0;
+    if (!f.apply(size))
+      return false;
+    if (size == chunk::invalid_size) {
+      x = nullptr;
+      return true;
+    }
+    if (size == 0) {
+      x = chunk::make_empty();
+      return true;
+    }
+    auto buffer = std::make_unique<chunk::value_type[]>(size);
+    const auto data = buffer.get();
+    for (auto i = 0; i < size; ++i)
+      if (!f.apply(buffer[i])) {
+        x = nullptr;
+        return false;
+      }
+    x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
+      static_cast<void>(buffer);
+    });
+    return true;
+  }
+
+  template <class Inspector>
+  friend bool save_impl(Inspector& f, chunk_ptr& x) {
+    using vast::detail::narrow;
+    if (x == nullptr)
+      return f.apply(chunk::invalid_size);
+    if (!f.apply(narrow<int64_t>(x->size())))
+      return false;
+    for (auto byte : *x)
+      if (!f.apply(byte))
+        return false;
+    return true;
+  }
 
   /// A sized view on the raw data.
   const view_type view_;
@@ -242,6 +281,15 @@ private:
   /// The function to delete the data.
   deleter_type deleter_;
 };
+
+template <class Inspector>
+bool inspect(Inspector& f, chunk_ptr& x) {
+  if constexpr (Inspector::is_loading) {
+    return load_impl(f, x);
+  } else {
+    return save_impl(f, x);
+  }
+}
 
 } // namespace vast
 

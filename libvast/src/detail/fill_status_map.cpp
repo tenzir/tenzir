@@ -63,12 +63,10 @@ record fill_status_map(caf::stream_manager& mgr) {
   auto xs = record{};
   // Manager status.
   xs["idle"] = mgr.idle();
-  xs["congested"] = mgr.congested();
   // Downstream status.
   auto& out = mgr.out();
   auto downstream = record{};
   downstream["buffered"] = count{out.buffered()};
-  downstream["max-capacity"] = integer{out.max_capacity()};
   downstream["paths"] = count{out.num_paths()};
   downstream["stalled"] = out.stalled();
   downstream["clean"] = out.clean();
@@ -81,7 +79,6 @@ record fill_status_map(caf::stream_manager& mgr) {
     slot["next-batch-id"] = integer{opath.next_batch_id};
     slot["open-credit"] = integer{opath.open_credit};
     slot["desired-batch-size"] = integer{opath.desired_batch_size};
-    slot["max-capacity"] = integer{opath.max_capacity};
     downstream[name] = std::move(slot);
   });
   xs["downstream"] = std::move(downstream);
@@ -96,6 +93,7 @@ record fill_status_map(caf::stream_manager& mgr) {
     slot["priority"] = to_string(ipath->prio);
     slot["assigned-credit"] = integer{ipath->assigned_credit};
     slot["last-acked-batch-id"] = integer{ipath->last_acked_batch_id};
+    slot["congested"] = mgr.congested(*ipath);
     upstream[name] = std::move(slot);
   }
   xs["upstream"] = std::move(upstream);

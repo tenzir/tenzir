@@ -6,9 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/arrow_compat.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/detail/base64.hpp>
+#include <vast/detail/inspection_common.hpp>
 #include <vast/plugin.hpp>
 #include <vast/store.hpp>
 
@@ -27,11 +29,13 @@ namespace vast::plugins::parquet {
 /// Configuration for the Parquet plugin.
 struct configuration {
   uint64_t row_group_size{defaults::import::table_slice_size};
-  int64_t zstd_compression_level{9};
+  int64_t zstd_compression_level{
+    arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+      .ValueOrDie()};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(x.row_group_size, x.zstd_compression_level);
+    return detail::apply_all(f, x.row_group_size, x.zstd_compression_level);
   }
 
   static const record_type& layout() noexcept {
@@ -66,7 +70,7 @@ fix_enum_array(const enumeration_type& et,
         die("failed to reserve builder capacity for dict indices");
       for (auto v : *values) {
         if (v) {
-          if (!builder.Append(*et.resolve(v->to_string())).ok())
+          if (!builder.Append(*et.resolve(arrow_compat::align_type(*v))).ok())
             die("unable to append dict value");
         } else {
           if (!builder.AppendNull().ok())
@@ -495,8 +499,14 @@ class plugin final : public virtual store_plugin {
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
-  make_active_store() const override {
-    return std::make_unique<active_parquet_store>(parquet_config_);
+  make_active_store(const caf::settings& vast_config) const override {
+    const auto default_compression_level
+      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
+          .ValueOrDie();
+    auto zstd_compression_level = caf::get_or(
+      vast_config, "vast.zstd-compression-level", default_compression_level);
+    return std::make_unique<active_parquet_store>(
+      configuration{parquet_config_.row_group_size, zstd_compression_level});
   }
 
 private:

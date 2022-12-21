@@ -21,15 +21,18 @@ struct configuration {
     static auto result = vast::record_type{
       {"bind", vast::string_type{}},    {"port", vast::integer_type{}},
       {"mode", vast::string_type{}},    {"certfile", vast::string_type{}},
-      {"keyfile", vast::string_type{}},
+      {"keyfile", vast::string_type{}}, {"web-root", vast::string_type{}},
     };
     return result;
   }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return f(caf::meta::type_name("vast.plugins.rest.configuration"),
-             x.bind_address, x.port, x.mode, x.certfile, x.keyfile);
+    return f.object(x)
+      .pretty_name("vast.plugins.rest.configuration")
+      .fields(f.field("bind-address", x.bind_address), f.field("port", x.port),
+              f.field("mode", x.mode), f.field("certfile", x.certfile),
+              f.field("keyfile", x.keyfile), f.field("web-root", x.web_root));
   }
 
   enum class server_mode {
@@ -43,6 +46,7 @@ struct configuration {
   std::string certfile = {};
   std::string keyfile = {};
   std::string bind_address = "127.0.0.1";
+  std::string web_root;
   int port = 42001;
 };
 
@@ -74,6 +78,13 @@ public:
 
   /// The path to the TLS private key.
   std::filesystem::path keyfile = {};
+
+  /// Additional header to be inserted into every server response.
+  //  (eg. 'Server: VAST', 'Access-Control-Allow-Origin: *', ...)
+  std::unordered_map<std::string, std::string> response_headers;
+
+  /// The path from which to serve static files.
+  std::optional<std::filesystem::path> webroot = {};
 };
 
 /// Validate that the user-provided configuration makes sense.

@@ -27,12 +27,9 @@
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/io/middleman.hpp>
+#include <caf/openssl/all.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-
-#if VAST_ENABLE_OPENSSL
-#  include <caf/openssl/all.hpp>
-#endif
 
 using namespace caf;
 
@@ -41,12 +38,14 @@ namespace vast::system {
 caf::expected<node_actor>
 connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
-  auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
+  auto id = get_or(opts, "vast.node-id", defaults::system::node_id.data());
   auto timeout = node_connection_timeout(opts);
   endpoint node_endpoint;
-  auto endpoint_str = get_or(opts, "vast.endpoint", defaults::system::endpoint);
+  auto endpoint_str
+    = get_or(opts, "vast.endpoint", defaults::system::endpoint.data());
   if (!parsers::endpoint(endpoint_str, node_endpoint))
-    return caf::make_error(ec::parse_error, "invalid endpoint", endpoint_str);
+    return caf::make_error(ec::parse_error, "invalid endpoint",
+                           endpoint_str.data());
   // Default to port 42000/tcp if none is set.
   if (!node_endpoint.port)
     node_endpoint.port = port{defaults::system::endpoint_port, port_type::tcp};
@@ -62,13 +61,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   VAST_INFO("client connects to VAST node at {}", endpoint_str);
   auto result = [&]() -> caf::expected<node_actor> {
     if (self->system().has_openssl_manager()) {
-#if VAST_ENABLE_OPENSSL
       return openssl::remote_actor<node_actor>(
         self->system(), node_endpoint.host, node_endpoint.port->number());
-#else
-      return caf::make_error(ec::unspecified, "not compiled with OpenSSL "
-                                              "support");
-#endif
     }
     auto& mm = self->system().middleman();
     return mm.remote_actor<node_actor>(node_endpoint.host,

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
 
 #cmakedefine01 VAST_ENABLE_ASAN
 #cmakedefine01 VAST_ENABLE_ASSERTIONS
@@ -12,7 +15,6 @@
 #cmakedefine01 VAST_ENABLE_EXCEPTIONS
 #cmakedefine01 VAST_ENABLE_JEMALLOC
 #cmakedefine01 VAST_ENABLE_JOURNALD_LOGGING
-#cmakedefine01 VAST_ENABLE_OPENSSL
 #cmakedefine01 VAST_ENABLE_RELOCATABLE_INSTALLATIONS
 #cmakedefine01 VAST_ENABLE_SDT
 #cmakedefine01 VAST_ENABLE_STATIC_EXECUTABLE
@@ -35,7 +37,19 @@ extern const char* tweak;
 
 /// The version number of the VAST partition format. Bump this whenever making
 /// changes that require partitions to be rebuilt.
-extern const uint64_t partition_version;
+extern const uint64_t current_partition_version;
+
+/// Determines the supported VAST version range as [introduced, end_of_life] for
+/// a given partition version. The partition_version is still supported if
+/// end_of_life is not set.
+struct supported_versions {
+  std::string_view introduced;
+  std::optional<std::string_view> end_of_life;
+};
+
+/// Returns the supported VAST version range for the given partition version.
+supported_versions
+support_for_partition_version(uint64_t partition_version) noexcept;
 
 namespace build {
 

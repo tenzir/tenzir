@@ -89,14 +89,12 @@ TEST(string) {
   CHECK_EQUAL(to_string(unbox(result)), "0100010000");
   result = idx.lookup(relational_operator::ni, make_data_view("rge"));
   CHECK_EQUAL(to_string(unbox(result)), "0000000010");
-  result = idx.lookup(relational_operator::match, make_data_view("foo"));
-  CHECK(!result);
   auto xs = list{"foo", "bar", "baz"};
   result = idx.lookup(relational_operator::in, make_data_view(xs));
   CHECK_EQUAL(to_string(unbox(result)), "1111110000");
   MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
+  caf::byte_buffer buf;
+  CHECK(detail::serialize(buf, idx));
   auto idx2 = string_index{type{string_type{}}};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::equal, make_data_view("foo"));

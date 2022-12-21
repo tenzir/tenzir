@@ -14,8 +14,6 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 
-#include <caf/meta/load_callback.hpp>
-
 #include <cstddef>
 #include <functional>
 #include <list>
@@ -224,12 +222,13 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, cache& c) {
-    auto load = [&]() -> caf::error {
+    auto load = [&]() {
       for (auto i = c.xs_.begin(); i != c.xs_.end(); ++i)
         c.tracker_.emplace(i->first, i);
-      return {};
+      return true;
     };
-    return f(c.xs_, c.capacity_, caf::meta::load_callback(load));
+    return f.object(c).on_load(load).fields(f.field("xs", c.xs_),
+                                            f.field("capacity", c.capacity_));
   }
 
   friend bool operator==(const cache& x, const cache& y) {

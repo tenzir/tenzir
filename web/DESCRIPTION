@@ -3,9 +3,10 @@ Version: 0.0.1
 Description: VAST website
 Imports:
     dplyr,
-    lubridate,
     ggplot2,
     ggrepel,
+    lubridate,
+    pkgdepends,
     readr,
     rmarkdown,
     svglite,

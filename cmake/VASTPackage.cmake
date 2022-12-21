@@ -11,9 +11,8 @@ else ()
         ${CMAKE_INSTALL_PREFIX} are known to produce broken packages")
   endif ()
 endif ()
-if (NOT DEFINED CPACK_PACKAGE_NAME)
-  set(CPACK_PACKAGE_NAME "vast")
-endif ()
+# Lowercase fits better for file names and such.
+set(CPACK_PACKAGE_NAME "vast")
 set(CPACK_PACKAGE_VENDOR "Tenzir")
 set(CPACK_PACKAGE_CONTACT "engineering@tenzir.com")
 string(REGEX REPLACE "^v" "" CPACK_PACKAGE_VERSION "${VAST_VERSION_SHORT}")
@@ -36,6 +35,13 @@ set(CPACK_VERBATIM_VARIABLES ON)
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_INSTALLED_DIRECTORIES "/var/lib/vast" "/var/log/vast")
+
+# VAST switched it's versioning scheme from CalVer to SemVer, so we have to set
+# the package epoch so an older package with calendar-based versioning is not
+# considered newer than this one. This for whatever reason implies that the
+# package revision must be set, which is just zero for us.
+set(CPACK_DEBIAN_PACKAGE_EPOCH "1")
+set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
 
 set(CPACK_DEBIAN_COMPRESSION_TYPE "gzip")
 set(CPACK_DEBIAN_PACKAGE_SECTION "contrib/database")

@@ -18,11 +18,11 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/zip_iterator.hpp"
 #include "vast/error.hpp"
+#include "vast/expression.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/segment_builder.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
@@ -179,7 +179,8 @@ segment::erase(const vast::ids& xs) const {
     auto max_id = slice.offset() + slice.rows();
     if (keep_mask.size() < max_id)
       keep_mask.append_bits(true, max_id - keep_mask.size());
-    select(result, slice, keep_mask);
+    for (auto&& selected : select(slice, expression{}, keep_mask))
+      result.push_back(std::move(selected));
   }
   return result;
 }
@@ -222,21 +223,6 @@ segment::segment(fbs::flatbuffer_container container)
   auto segment_chunk = container_->get_raw(0);
   // FIXME: Error handling
   flatbuffer_ = *flatbuffer<fbs::Segment>::make(std::move(segment_chunk));
-}
-
-caf::expected<segment>
-segment::copy_without(const vast::segment& segment, const vast::ids& xs) {
-  // TODO: Add a `segment::size` field so we can get a better upper bound on
-  // the segment size from the old segment.
-  segment_builder builder(defaults::system::max_segment_size, segment.id());
-  if (is_subset(segment.ids(), xs))
-    return builder.finish();
-  auto slices = segment.erase(xs);
-  if (!slices)
-    return slices.error();
-  for (auto&& slice : std::exchange(*slices, {}))
-    builder.add(std::move(slice));
-  return builder.finish();
 }
 
 } // namespace vast

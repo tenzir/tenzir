@@ -42,9 +42,11 @@ table LegacyPartition {
   /// The available layouts in this partition, flattened with the layout name
   /// embedded in the field names, pruned of attributes, and serialized using
   /// CAF 0.17's binary serializer.
-  combined_layout: [ubyte];
+  /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
+  combined_layout_caf_0_17: [ubyte];
 
   /// A map storing the mapping from type name -> ids
+  /// Serialized using CAF's binary serializer.
   type_ids: [detail.LegacyTypeIDs];
 
   /// Various synopsis structures for partition-wide synopses of certain
@@ -56,6 +58,9 @@ table LegacyPartition {
 
   /// A store identifier and header information.
   store: detail.StoreHeader;
+
+  /// The schema of a partition.
+  schema: [ubyte] (nested_flatbuffer: "vast.fbs.Type");
 }
 
 union Partition {

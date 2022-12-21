@@ -262,7 +262,7 @@ caf::expected<void> validator::operator()(const conjunction& c) {
     if (!m)
       return m;
   }
-  return caf::no_error;
+  return {};
 }
 
 caf::expected<void> validator::operator()(const disjunction& d) {
@@ -271,7 +271,7 @@ caf::expected<void> validator::operator()(const disjunction& d) {
     if (!m)
       return m;
   }
-  return caf::no_error;
+  return {};
 }
 
 caf::expected<void> validator::operator()(const negation& n) {
@@ -302,15 +302,6 @@ validator::operator()(const meta_extractor& ex, const data& d) {
                            "type meta extractor requires string or pattern "
                            "operand",
                            "#type", op_, d);
-  if (ex.kind == meta_extractor::field) {
-    if (!caf::holds_alternative<std::string>(d)
-        || op_ != relational_operator::equal)
-      return caf::make_error(ec::syntax_error,
-                             fmt::format("field attribute extractor only "
-                                         "supports string equality operations: "
-                                         "#field {} {}",
-                                         op_, d));
-  }
   if (ex.kind == meta_extractor::import_time) {
     if (!caf::holds_alternative<time>(d)
         || !(op_ == relational_operator::less
@@ -323,7 +314,7 @@ validator::operator()(const meta_extractor& ex, const data& d) {
                                          "#import_time {} {}",
                                          op_, d));
   }
-  return caf::no_error;
+  return {};
 }
 
 caf::expected<void>
@@ -331,17 +322,17 @@ validator::operator()(const type_extractor& ex, const data& d) {
   // References to aliases can't be checked here because the expression parser
   // can't possible know about them. We defer the check to the type resolver.
   if (!ex.type)
-    return caf::no_error;
+    return {};
   if (!compatible(ex.type, op_, d))
     return caf::make_error(
       ec::syntax_error, "type extractor type check failure", ex.type, op_, d);
-  return caf::no_error;
+  return {};
 }
 
 caf::expected<void> validator::operator()(const field_extractor&, const data&) {
   // Validity of a field extractor requires a specific schema, which we don't
   // have in this context.
-  return caf::no_error;
+  return {};
 }
 
 type_resolver::type_resolver(const type& layout)
@@ -406,8 +397,8 @@ caf::expected<expression> type_resolver::operator()(const predicate& p) {
 
 caf::expected<expression>
 type_resolver::operator()(const meta_extractor& ex, const data& d) {
-  // We're leaving all attributes alone, because both #type and #field operate
-  // at a different granularity.
+  // We're leaving all attributes alone, because both #type and #import_time
+  // operate at a different granularity.
   return predicate{ex, op_, d};
 }
 
@@ -460,10 +451,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
     return expression{}; // did not resolve
   if (connective.size() == 1)
     return {std::move(connective[0])};
-  if (op_ == relational_operator::not_equal
-      || op_ == relational_operator::not_match
-      || op_ == relational_operator::not_in
-      || op_ == relational_operator::not_ni)
+  if (is_negated(op_))
     return {conjunction{std::move(connective)}};
   return {disjunction{std::move(connective)}};
 }

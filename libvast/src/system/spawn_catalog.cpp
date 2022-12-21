@@ -23,8 +23,11 @@ spawn_catalog(node_actor::stateful_pointer<node_state> self,
   auto [accountant] = self->state.registry.find<accountant_actor>();
   auto detached = caf::get_or(args.inv.options, "vast.detach-components",
                               defaults::system::detach_components);
-  auto handle = detached ? self->spawn<caf::detached>(catalog, accountant)
-                         : self->spawn(catalog, accountant);
+  auto handle
+    = detached
+        ? self->spawn<caf::detached>(catalog, accountant, args.dir / args.label)
+        : self->spawn(catalog, accountant, args.dir / args.label);
+  VAST_VERBOSE("{} spawned the catalog", *self);
   return caf::actor_cast<caf::actor>(handle);
 }
 

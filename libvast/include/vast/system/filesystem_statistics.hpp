@@ -10,8 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include <caf/meta/type_name.hpp>
-
 #include <cstdint>
 
 namespace vast::system {
@@ -24,10 +22,11 @@ struct filesystem_statistics {
     uint64_t bytes = 0;
 
     template <class Inspector>
-    friend auto inspect(Inspector& f, ops& x) ->
-      typename Inspector::result_type {
-      return f(caf::meta::type_name("vast.system.filesystem_statistics.ops"),
-               x.successful, x.failed, x.bytes);
+    friend auto inspect(Inspector& f, ops& x) {
+      return f.object(x)
+        .pretty_name("vast.system.filesystem_statistics.ops")
+        .fields(f.field("successful", x.successful),
+                f.field("failed", x.failed), f.field("bytes", x.bytes));
     }
   };
 
@@ -39,10 +38,12 @@ struct filesystem_statistics {
   ops moves;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, filesystem_statistics& x) ->
-    typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.system.filesystem_statistics"),
-             x.checks, x.writes, x.reads, x.mmaps, x.moves);
+  friend auto inspect(Inspector& f, filesystem_statistics& x) {
+    return f.object(x)
+      .pretty_name("vast.system.filesystem_statistics")
+      .fields(f.field("checks", x.checks), f.field("writes", x.writes),
+              f.field("reads", x.reads), f.field("mmaps", x.mmaps),
+              f.field("moves", x.moves));
   }
 };
 

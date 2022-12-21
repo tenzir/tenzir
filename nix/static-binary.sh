@@ -13,8 +13,7 @@ usage() {
   echo
   echo 'options:'
   echo "    -h,--help               print this message"
-  echo "       --with-plugin=<path> add <path> to the list of bundled plugins (pcap and"
-  echo "                            broker are enabled automatically)"
+  echo "       --with-plugin=<path> add <path> to the list of bundled plugins"
   echo "    -D<CMake option>        options starting with "-D" are passed to CMake"
   echo
 }
@@ -30,17 +29,8 @@ desc_short="${VAST_BUILD_VERSION_SHORT}"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 log "rev is ${vast_rev}"
 
-target="${STATIC_BINARY_TARGET:-vast}"
-
 cmakeFlags=""
-# Enable the bundled plugins by default.
-plugins=(
-  "${toplevel}/plugins/broker"
-  "${toplevel}/plugins/parquet"
-  "${toplevel}/plugins/pcap"
-  "${toplevel}/plugins/sigma"
-  "${toplevel}/plugins/web"
-)
+declare -a extraPlugins
 
 while [ $# -ne 0 ]; do
   case "$1" in
@@ -62,7 +52,7 @@ while [ $# -ne 0 ]; do
       exit 1
       ;;
     --with-plugin=*)
-      plugins+=("$(realpath "${optarg}")")
+      extraPlugins+=("$(realpath "${optarg}")")
       ;;
   esac
   shift
@@ -77,19 +67,18 @@ plugin_version() {
 }
 
 # Get Plugin versions
-for plugin in "${plugins[@]}"; do
+for plugin in "${extraPlugins[@]}"; do
   cmakeFlags="${cmakeFlags} \"$(plugin_version ${plugin})\""
 done
 
 read -r -d '' exp <<EOF || true
 let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
-pkgs.pkgsStatic."${target}".override {
+(pkgs.pkgsStatic.vast.override {
   versionOverride = "${desc}";
   versionShortOverride = "${desc_short}";
-  withPlugins = [ ${plugins[@]} ];
+  extraPlugins = [ ${extraPlugins[@]} ];
   extraCmakeFlags = [ ${cmakeFlags} ];
-  buildAsPackage = true;
-}
+}).package
 EOF
 
 log running "nix --print-build-logs build --print-out-paths --impure --expr  \'${exp}\'"

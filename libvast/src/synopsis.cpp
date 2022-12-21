@@ -13,7 +13,6 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -28,11 +27,30 @@
 
 namespace vast {
 
-synopsis::synopsis(vast::type x) : type_{std::move(x)} {
-  // nop
+namespace {
+caf::expected<synopsis_ptr> unpack_opaque_synopsis(
+  const vast::fbs::synopsis::LegacyOpaqueSynopsis& synopsis) {
+  auto ret = synopsis_ptr{nullptr};
+  if (auto data = synopsis.caf_0_17_data()) {
+    vast::detail::legacy_deserializer sink(as_bytes(*data));
+    if (sink(ret))
+      return ret;
+    return caf::make_error(ec::parse_error, "opaque_synopsis not "
+                                            "deserializable");
+  }
+  if (auto data = synopsis.caf_0_18_data()) {
+    caf::binary_deserializer sink(nullptr, data->data(), data->size());
+    if (sink.apply(ret))
+      return ret;
+    return caf::make_error(ec::parse_error, "opaque_synopsis(0_18) not "
+                                            "deserializable");
+  }
+  return caf::make_error(ec::parse_error, "Lack of data in "
+                                          "opaque_synopsis. Unable to "
+                                          "deserialize");
 }
-
-synopsis::~synopsis() {
+} // namespace
+synopsis::synopsis(vast::type x) : type_{std::move(x)} {
   // nop
 }
 
@@ -42,63 +60,6 @@ const vast::type& synopsis::type() const {
 
 synopsis_ptr synopsis::shrink() const {
   return nullptr;
-}
-
-caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
-  if (!ptr) {
-    static legacy_type dummy;
-    return sink(dummy);
-  }
-  return caf::error::eval(
-    [&] {
-      return sink(ptr->type().to_legacy_type());
-    },
-    [&] {
-      return ptr->serialize(sink);
-    });
-}
-
-caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
-  // Read synopsis type.
-  legacy_type t;
-  if (auto err = source(t))
-    return err;
-  // Only nullptr has an none type.
-  if (!t) {
-    ptr.reset();
-    return caf::none;
-  }
-  // Deserialize into a new instance.
-  auto new_ptr
-    = factory<synopsis>::make(type::from_legacy_type(t), caf::settings{});
-  if (!new_ptr)
-    return ec::invalid_synopsis_type;
-  if (auto err = new_ptr->deserialize(source))
-    return err;
-  // Change `ptr` only after successfully deserializing.
-  using std::swap;
-  swap(ptr, new_ptr);
-  return caf::none;
-}
-
-bool inspect(vast::detail::legacy_deserializer& source, synopsis_ptr& ptr) {
-  // Read synopsis type.
-  legacy_type t;
-  if (!source(t))
-    return false;
-  // Only nullptr has a none type.
-  if (!t) {
-    ptr.reset();
-    return true;
-  }
-  // Deserialize into a new instance.
-  auto new_ptr
-    = factory<synopsis>::make(type::from_legacy_type(t), caf::settings{});
-  if (!new_ptr || !new_ptr->deserialize(source))
-    return false;
-  // Change `ptr` only after successfully deserializing.
-  std::swap(ptr, new_ptr);
-  return true;
 }
 
 caf::expected<flatbuffers::Offset<fbs::synopsis::LegacySynopsis>>
@@ -129,7 +90,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
     if (!data)
       return data.error();
     fbs::synopsis::LegacyOpaqueSynopsisBuilder opaque_builder(builder);
-    opaque_builder.add_data(*data);
+    opaque_builder.add_caf_0_18_data(*data);
     auto opaque_synopsis = opaque_builder.Finish();
     fbs::synopsis::LegacySynopsisBuilder synopsis_builder(builder);
     synopsis_builder.add_qualified_record_field(*column_name);
@@ -149,14 +110,20 @@ unpack(const fbs::synopsis::LegacySynopsis& synopsis, synopsis_ptr& ptr) {
       vast::time{} + vast::duration{ts->start()},
       vast::time{} + vast::duration{ts->end()});
   else if (auto os = synopsis.opaque_synopsis()) {
-    vast::detail::legacy_deserializer sink(as_bytes(*os->data()));
-    if (!sink(ptr))
-      return caf::make_error(ec::parse_error, "opaque_synopsis not "
-                                              "deserializable");
+    if (auto synopsis = unpack_opaque_synopsis(*os)) {
+      ptr = std::move(*synopsis);
+    } else {
+      return std::move(synopsis.error());
+    }
+
   } else {
     return caf::make_error(ec::format_error, "no synopsis type");
   }
   return caf::none;
+}
+
+synopsis_ptr make_synopsis(const type& t) {
+  return factory<synopsis>::make(t, caf::settings{});
 }
 
 } // namespace vast

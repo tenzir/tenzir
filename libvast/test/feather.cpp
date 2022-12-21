@@ -13,6 +13,7 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/subnet.hpp>
+#include <vast/detail/collect.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/spawn_container_source.hpp>
 #include <vast/expression.hpp>
@@ -54,7 +55,8 @@ auto compare_table_slices(const table_slice& left, const table_slice& right) {
   // CHECK_EQUAL(left.offset(), right.offset());
   for (size_t col = 0; col < left.columns(); ++col) {
     for (size_t row = 0; row < left.rows(); ++row) {
-      CHECK_VARIANT_EQUAL(left.at(row, col), right.at(row, col));
+      CHECK_EQUAL(materialize(left.at(row, col)),
+                  materialize(right.at(row, col)));
     }
   }
 }
@@ -161,7 +163,7 @@ TEST(feather store roundtrip) {
   auto results = query(*store, ids);
   run();
   CHECK_EQUAL(results.size(), 1ull);
-  auto expected_rows = select(xs[0], ids);
+  auto expected_rows = collect(select(xs[0], expression{}, ids));
   CHECK_EQUAL(results[0].rows(), expected_rows[0].rows());
 }
 
@@ -364,7 +366,9 @@ TEST(passive feather store selective query) {
   auto results = query(*store, ids, *expr);
   run();
   REQUIRE_EQUAL(results.size(), 1ull);
-  const auto& expected_slice = filter(slice, *expr, vast::ids{});
+  const auto expected_slice = filter(slice, *expr, vast::ids{});
+  REQUIRE(expected_slice);
+  REQUIRE(expected_slice->encoding() != table_slice_encoding::none);
   compare_table_slices(*expected_slice, results[0]);
 }
 

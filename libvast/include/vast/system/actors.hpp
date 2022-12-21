@@ -13,6 +13,7 @@
 #include "vast/aliases.hpp"
 #include "vast/atoms.hpp"
 
+#include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
 #include <caf/replies_to.hpp>
 
@@ -21,28 +22,21 @@
 #define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast_actors, type)
 
 // NOLINTNEXTLINE(cert-dcl58-cpp)
-namespace std::filesystem {
+namespace caf {
 
-// TODO: With CAF 0.18, drop this inspector that is—strictly speaking—undefined
-// behavior and replace it with a specialization of caf::inspector_access.
-template <class Inspector>
-typename Inspector::result_type
-inspect(Inspector& f, ::std::filesystem::path& x) {
-  auto str = x.string();
-  if constexpr (std::is_same_v<typename Inspector::result_type, void>) {
-    f(str);
-    if constexpr (Inspector::reads_state)
-      x = {str};
-    return;
-  } else {
-    auto result = f(str);
-    if constexpr (Inspector::reads_state)
+template <>
+struct inspector_access<std::filesystem::path> {
+  template <class Inspector>
+  static auto apply(Inspector& f, std::filesystem::path& x) {
+    auto str = x.string();
+    auto result = f.apply(str);
+    if constexpr (Inspector::is_loading)
       x = {str};
     return result;
   }
-}
+};
 
-} // namespace std::filesystem
+} // namespace caf
 
 namespace vast::system {
 
@@ -148,7 +142,7 @@ using default_active_store_actor = typed_actor_fwd<
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression and send the matching events to the receiver.
   caf::replies_to<atom::query, query_context>::with<uint64_t>,
-  // Delete the whole partition from disk and from the archive
+  // Delete the whole partition from disk.
   caf::replies_to<atom::erase>::with<atom::done>>
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
@@ -213,9 +207,8 @@ using catalog_actor = typed_actor_fwd<
   // Reinitialize the catalog from a set of partition synopses. Used at
   // startup, so the map is expected to be huge and we use a shared_ptr
   // to be sure it's not accidentally copied.
-  caf::replies_to<
-    atom::merge,
-    std::shared_ptr<std::map<uuid, partition_synopsis_ptr>>>::with<atom::ok>,
+  caf::replies_to<atom::merge, std::shared_ptr<std::unordered_map<
+                                 uuid, partition_synopsis_ptr>>>::with<atom::ok>,
   // Merge a single partition synopsis.
   caf::replies_to<atom::merge, uuid, partition_synopsis_ptr>::with<atom::ok>,
   // Merge a set of partition synopsis.
@@ -228,10 +221,21 @@ using catalog_actor = typed_actor_fwd<
   // Atomatically replace a set of partititon synopses with another.
   caf::replies_to<atom::replace, std::vector<uuid>,
                   std::vector<augmented_partition_synopsis>>::with<atom::ok>,
-  // Return the candidate partitions for a query.
-  caf::replies_to<atom::candidates, vast::query_context>::with<catalog_result>,
+  // Return the candidate partitions per type for a query.
+  caf::replies_to<atom::candidates, vast::query_context>::with< //
+    catalog_lookup_result>,
   // Internal telemetry loop.
-  caf::reacts_to<atom::telemetry>>
+  caf::reacts_to<atom::telemetry>,
+  // Retrieves all known types.
+  caf::replies_to<atom::get, atom::type>::with<type_set>,
+  // Registers a given layout.
+  caf::reacts_to<atom::put, vast::type>,
+  // Retrieves the known taxonomies.
+  caf::replies_to<atom::get, atom::taxonomies>::with< //
+    taxonomies>,
+  // Resolves an expression in terms of the known taxonomies.
+  caf::replies_to<atom::resolve, expression>::with< //
+    expression>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -267,10 +271,10 @@ using index_actor = typed_actor_fwd<
                  partition_creation_listener_actor, send_initial_dbstate>,
   // Evaluates a query, ie. sends matching events to the caller.
   caf::replies_to<atom::evaluate, query_context>::with<query_cursor>,
-  // Resolves a query to its candidate partitions.
+  // Resolves a query to its candidate partitions per type.
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
-  caf::replies_to<atom::resolve, expression>::with<catalog_result>,
+  caf::replies_to<atom::resolve, expression>::with<catalog_lookup_result>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<atom::query, uuid, uint32_t>,
   // Erases the given partition from the INDEX.
@@ -278,56 +282,17 @@ using index_actor = typed_actor_fwd<
   // Erases the given set of partitions from the INDEX.
   caf::replies_to<atom::erase, std::vector<uuid>>::with<atom::done>,
   // Applies the given pipelineation to the partition.
-  // When keep_original_partition is yes: erases the existing partition and
-  // returns the synopsis of the new partition. If the partition is completely
-  // erased, returns the nil uuid. When keep_original_partition is no: does an
-  // in-place pipeline keeping the old ids, and makes a new partition
-  // preserving the old one(s).
-  caf::replies_to<atom::apply, pipeline_ptr, std::vector<uuid>,
+  // When keep_original_partition is yes: merges the transformed partitions with
+  // the original ones and returns the new partition infos. When
+  // keep_original_partition is no: does an in-place pipeline keeping the old
+  // ids, and makes new partitions preserving them.
+  caf::replies_to<atom::apply, pipeline_ptr, std::vector<vast::partition_info>,
                   keep_original_partition>::with<std::vector<partition_info>>,
   // Decomissions all active partitions, effectively flushing them to disk.
   caf::reacts_to<atom::flush>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
-/// The ARCHIVE actor interface.
-using archive_actor = typed_actor_fwd<
-  // Registers the ARCHIVE with the ACCOUNTANT.
-  caf::reacts_to<atom::set, accountant_actor>,
-  // INTERNAL: Handles a query for the given ids, and sends the table slices
-  // back to the client.
-  caf::reacts_to<atom::internal, atom::resume>,
-  // The internal telemetry loop of the ARCHIVE.
-  caf::reacts_to<atom::telemetry>>
-  // Conform to the protocol of the STORE BUILDER actor.
-  ::extend_with<store_builder_actor>::unwrap;
-
-/// The TYPE REGISTRY actor interface.
-using type_registry_actor = typed_actor_fwd<
-  // The internal telemetry loop of the TYPE REGISTRY.
-  caf::reacts_to<atom::telemetry>,
-  // Retrieves all known types.
-  caf::replies_to<atom::get>::with<type_set>,
-  // Registers the given taxonomies.
-  caf::reacts_to<atom::put, taxonomies>,
-  // Registers a given layout.
-  caf::reacts_to<atom::put, vast::type>,
-  // Retrieves the known taxonomies.
-  caf::replies_to<atom::get, atom::taxonomies>::with< //
-    taxonomies>,
-  // Loads the taxonomies on disk.
-  caf::replies_to<atom::load>::with< //
-    atom::ok>,
-  // Resolves an expression in terms of the known taxonomies.
-  caf::replies_to<atom::resolve, expression>::with< //
-    expression>,
-  // Registers the TYPE REGISTRY with the ACCOUNTANT.
-  caf::reacts_to<atom::set, accountant_actor>>
-  // Conform to the procotol of the STREAM SINK actor for table slices,
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
 /// The DISK MONITOR actor interface.
@@ -526,7 +491,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))
   VAST_ADD_TYPE_ID((vast::system::active_partition_actor))
   VAST_ADD_TYPE_ID((vast::system::analyzer_plugin_actor))
-  VAST_ADD_TYPE_ID((vast::system::archive_actor))
   VAST_ADD_TYPE_ID((vast::system::catalog_actor))
   VAST_ADD_TYPE_ID((vast::system::default_active_store_actor))
   VAST_ADD_TYPE_ID((vast::system::default_passive_store_actor))
@@ -547,7 +511,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>))
   VAST_ADD_TYPE_ID(
     (vast::system::stream_sink_actor<vast::table_slice, std::string>))
-  VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
 
@@ -556,7 +519,7 @@ CAF_END_TYPE_ID_BLOCK(vast_actors)
 // so so we add these as `UNSAFE_MESSAGE_TYPE` to assure caf that they will
 // never be sent over the network.
 #define vast_uuid_synopsis_map                                                 \
-  std::map<vast::uuid, vast::partition_synopsis_ptr>
+  std::unordered_map<vast::uuid, vast::partition_synopsis_ptr>
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_ptr)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(vast::partition_synopsis_pair)

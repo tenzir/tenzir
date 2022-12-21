@@ -28,7 +28,9 @@
 #include "vast/uuid.hpp"
 
 #include <caf/config_value.hpp>
+#include <caf/detail/stream_stage_impl.hpp>
 #include <caf/settings.hpp>
+#include <caf/stream_stage_driver.hpp>
 
 #include <filesystem>
 #include <fstream>
@@ -153,9 +155,14 @@ void importer_state::send_report() {
   samples.reserve(num_schemas_seen);
   samples.push_back(performance_sample{"importer"s, measurement_});
   samples.push_back(performance_sample{"node_throughput"s, node_throughput});
-  for (const auto& [name, count] : schema_counters)
+  auto total_count = count{0};
+  for (const auto& [name, count] : schema_counters) {
+    total_count += count;
     samples.push_back(performance_sample{
       "ingest", measurement{elapsed, count}, {{"schema", name}}});
+  }
+  auto total_measurement = measurement{elapsed, total_count};
+  samples.push_back(performance_sample{"ingest-total"s, total_measurement});
   schema_counters.clear();
   auto r = performance_report{
     .data = std::move(samples),
@@ -181,8 +188,7 @@ void importer_state::send_report() {
 
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, const store_builder_actor& store,
-         index_actor index, const type_registry_actor& type_registry,
+         const std::filesystem::path& dir, index_actor index,
          std::vector<pipeline>&& input_transformations) {
   VAST_TRACE_SCOPE("importer {} {}", VAST_ARG(self->id()), VAST_ARG(dir));
   for (const auto& x : input_transformations)
@@ -217,25 +223,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     return importer_actor::behavior_type::make_empty_behavior();
   }
   self->state.stage->add_outbound_path(self->state.transformer);
-  if (type_registry)
-    self
-      ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(type_registry))
-      .then([](const caf::outbound_stream_slot<table_slice>&) {},
-            [self](caf::error& error) {
-              VAST_ERROR("failed to connect type registry to the importer: {}",
-                         error);
-              self->quit(std::move(error));
-            });
-  if (store)
-    self
-      ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(store))
-      .then([](const caf::outbound_stream_slot<table_slice>&) {},
-            [self](caf::error& error) {
-              VAST_ERROR("failed to connect store to the importer: {}", error);
-              self->quit(std::move(error));
-            });
   if (index) {
     self->state.index = std::move(index);
     self
