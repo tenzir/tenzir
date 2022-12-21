@@ -610,7 +610,8 @@ caf::error index_state::load_from_disk() {
     caf::scoped_actor blocking{self->system()};
     blocking->request(transformer, caf::infinite, atom::persist_v)
       .receive(
-        [&synopses, &stats, this](std::vector<partition_synopsis_pair> result) {
+        [&synopses, &stats,
+         this](std::vector<partition_synopsis_pair>& result) {
           VAST_INFO("recovered {} corrupted partitions on startup",
                     result.size());
           for (auto&& x : std::exchange(result, {})) {
