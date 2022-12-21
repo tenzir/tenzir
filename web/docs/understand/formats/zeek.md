@@ -12,8 +12,10 @@ metadata.
 Zeek can also render its logs as JSON. There are two ways to do that:
 
 1. One log type per file, similar to TSV, but where each file consists of
-   homogeneous NDJSON records. Add `LogAscii::use_json=T` to your Zeek
-   invocation to enable this.
+   homogeneous NDJSON records. To enable this log style, add
+   [`LogAscii::use_json=T`](https://docs.zeek.org/en/master/frameworks/logging.html)
+   to your Zeek command line invocation or script configuration.
+
 2. A single file stream of heterogeneous records when using the
    [json-streaming-logs](https://github.com/corelight/json-streaming-logs)
    package. This mode adds a `_path` field to disambiguate the log type.
