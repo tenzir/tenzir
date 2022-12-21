@@ -114,6 +114,5 @@ vast export zeek '#type == /.*(flow|http)/'
 #close	2022-12-16-20-24-23
 ```
 
-The TSV format is not conducive to display data from multiple schemas, so VAST
-must add a new header whenever the result set contains a schema different from
-the previous batch of events.
+The Zeek TSV format cannot display data from multiple schemas. VAST prints a
+header for following lines whenever it encounters a schema change.
