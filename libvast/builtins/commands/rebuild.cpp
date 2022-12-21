@@ -129,7 +129,6 @@ struct statistics {
   size_t num_rebuilding = {};
   size_t num_completed = {};
   size_t num_results = {};
-  size_t num_heterogeneous = {};
 };
 
 /// The state of an in-progress rebuild.
@@ -138,8 +137,7 @@ struct run {
   struct statistics statistics = {};
   start_options options = {};
   std::vector<caf::typed_response_promise<void>> stop_requests = {};
-  std::vector<caf::typed_response_promise<void>> delayed_homogeneous_rebuilds
-    = {};
+  std::vector<caf::typed_response_promise<void>> delayed_rebuilds = {};
 };
 
 /// The interface of the REBUILDER actor.
@@ -192,7 +190,6 @@ struct rebuilder_state {
          {"transformed", run->statistics.num_completed},
          {"remaining", run->remaining_partitions.size()},
          {"results", run->statistics.num_results},
-         {"heterogeneous", run->statistics.num_heterogeneous},
        }},
       {"options",
        record{
@@ -322,13 +319,6 @@ struct rebuilder_state {
               }
             }
             run->statistics.num_total = result.partition_infos.size();
-
-            run->statistics.num_heterogeneous
-              += std::count_if(result.partition_infos.begin(),
-                               result.partition_infos.end(),
-                               [](const partition_info& partition) {
-                                 return !partition.schema;
-                               });
             run->remaining_partitions.insert(run->remaining_partitions.end(),
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
@@ -405,30 +395,7 @@ struct rebuilder_state {
       return {}; // We're done!
     auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
-    bool is_heterogeneous = false;
     bool is_oversized = false;
-    if (run->statistics.num_heterogeneous > 0) {
-      // If there's any partition that has no homogenous schema we want to
-      // take it first and split it up into heterogeneous partitions.
-      const auto heterogenenous_partition
-        = std::find_if(run->remaining_partitions.begin(),
-                       run->remaining_partitions.end(),
-                       [](const partition_info& partition) {
-                         return !partition.schema;
-                       });
-      if (heterogenenous_partition != run->remaining_partitions.end()) {
-        is_heterogeneous = true;
-        current_run_events += heterogenenous_partition->events;
-        current_run_partitions.push_back(*heterogenenous_partition);
-        run->remaining_partitions.erase(heterogenenous_partition);
-      } else {
-        // Wait until we have all heterogeneous partitions transformed into
-        // homogenous partitions before starting to work on the homogenous
-        // parittions. In practice, this leads to less undeful partitions.
-        auto rp = self->make_response_promise<void>();
-        return run->delayed_homogeneous_rebuilds.emplace_back(std::move(rp));
-      }
-    } else {
       // Take the first homogenous partition and collect as many of the same
       // type as possible to create new paritions. The approach used may
       // collects too many partitions if there is no exact match, but that is
@@ -455,7 +422,6 @@ struct rebuilder_state {
       run->remaining_partitions.erase(first_removed,
                                       run->remaining_partitions.end());
       is_oversized = current_run_events > max_partition_size;
-    }
     run->statistics.num_rebuilding += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
@@ -481,16 +447,9 @@ struct rebuilder_state {
     auto rp = self->make_response_promise<void>();
     auto pipeline
       = std::make_shared<vast::pipeline>("rebuild", std::vector<std::string>{});
-    if (is_heterogeneous) {
-      auto identity_operator = make_pipeline_operator("identity", {});
-      if (!identity_operator)
-        return identity_operator.error();
-      pipeline->add_operator(std::move(*identity_operator));
-    } else {
       pipeline->add_operator(std::make_unique<class rebatch_operator>(
         current_run_partitions[0].schema,
         detail::narrow_cast<int64_t>(desired_batch_size)));
-    }
     emit_telemetry();
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents
@@ -506,7 +465,7 @@ struct rebuilder_state {
                 system::keep_original_partition::no)
       .then(
         [this, rp, current_run_events,
-         num_partitions = current_run_partitions.size(), is_heterogeneous,
+         num_partitions = current_run_partitions.size(),
          is_oversized](std::vector<partition_info>& result) mutable {
           if (result.empty()) {
             VAST_DEBUG("{} skipped {} partitions as they are already being "
@@ -514,8 +473,6 @@ struct rebuilder_state {
                        *self, num_partitions);
             run->statistics.num_total -= num_partitions;
             run->statistics.num_rebuilding -= num_partitions;
-            if (is_heterogeneous)
-              finish_heterogeneous();
             // Pick up new work until we run out of remaining partitions.
             emit_telemetry();
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
@@ -545,24 +502,8 @@ struct rebuilder_state {
           // undersized transformed partitions to the list of remainig
           // partitions as desired.
           VAST_ASSERT(!result.empty());
-          if (is_heterogeneous) {
-            VAST_ASSERT(num_partitions == 1);
-            finish_heterogeneous();
-            if (result.size() > 1
-                || result[0].events <= detail::narrow_cast<size_t>(
-                     detail::narrow_cast<double>(max_partition_size)
-                     * undersized_threshold)) {
-              run->statistics.num_total += result.size();
-              std::copy(result.begin(), result.end(),
-                        std::back_inserter(run->remaining_partitions));
-              needs_second_stage = true;
-            } else {
-              run->statistics.num_completed += 1;
-            }
-          } else {
-            run->statistics.num_completed += num_partitions;
-            run->statistics.num_results += result.size();
-          }
+          run->statistics.num_completed += num_partitions;
+          run->statistics.num_results += result.size();
           if (is_oversized) {
             VAST_ASSERT(result.size() > 1);
             if (result.back().events <= detail::narrow_cast<size_t>(
@@ -587,12 +528,10 @@ struct rebuilder_state {
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                       atom::rebuild_v);
         },
-        [this, is_heterogeneous, num_partitions = current_run_partitions.size(),
+        [this, num_partitions = current_run_partitions.size(),
          rp](caf::error& error) mutable {
           VAST_WARN("{} failed to rebuild partititons: {}", *self, error);
           run->statistics.num_rebuilding -= num_partitions;
-          if (is_heterogeneous)
-            finish_heterogeneous();
           // Pick up new work until we run out of remainig partitions.
           emit_telemetry();
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
@@ -648,14 +587,6 @@ private:
     self->send(accountant, atom::metrics_v, std::move(report));
   }
 
-  void finish_heterogeneous() {
-    --run->statistics.num_heterogeneous;
-    if (run->statistics.num_heterogeneous == 0u)
-      for (auto&& delayed_rp :
-           std::exchange(run->delayed_homogeneous_rebuilds, {}))
-        delayed_rp.delegate(static_cast<rebuilder_actor>(self),
-                            atom::internal_v, atom::rebuild_v);
-  }
 };
 
 /// Defines the behavior of the REBUILDER actor.
@@ -693,8 +624,7 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     }
     for (auto&& rp : std::exchange(self->state.run->stop_requests, {}))
       rp.deliver(msg.reason);
-    for (auto&& rp :
-         std::exchange(self->state.run->delayed_homogeneous_rebuilds, {}))
+    for (auto&& rp : std::exchange(self->state.run->delayed_rebuilds, {}))
       rp.deliver(msg.reason);
     self->quit(msg.reason);
   });
