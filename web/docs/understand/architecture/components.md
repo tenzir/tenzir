@@ -154,10 +154,13 @@ that parses and ships the data to a [VAST server](/docs/use/run):
 VAST first acquires data through a *carrier* that represents the data transport
 medium. This typically involves I/O and has the effect of slicing the data into
 chunks of bytes. Thereafter, the *format* determines how to parse the bytes into
-structured events. On the VAST server, a partition builder (1) creates
-sketches for accelerating querying, and (2) creates a *store* instance by
-transforming the in-memory Arrow representation into an on-disk format, e.g.,
-Parquet.
+structured events. At the server, VAST (1) creates indexes for accelerating
+querying, and (2) creates a *store* instance by transforming the in-memory Arrow
+representation into an on-disk format, e.g., [Feather][feather] or
+[Parquet][parquet].
+
+[feather]: https://arrow.apache.org/docs/python/feather.html
+[parquet]: https://parquet.apache.org/
 
 Loading and parsing take place in a separate VAST client to facilitate
 horizontal scaling. The `import` command creates a client for precisly this
@@ -165,17 +168,18 @@ task.
 
 At the server, there exists one partition builder per schema. After a
 partition builder has reached a maximum number of events or reached a timeout,
-it sends the partition to the catalog to register it.
+it sends the partition to the catalog to register it. Our [tuning
+guide](/docs/setup/tune#batching-table-slices) has more details on how to set
+these parameters.
 
 :::note Lakehouse Architecture
 VAST uses open standards for data in motion ([Arrow](https://arrow.apache.org))
-and data at rest ([Feather][feather] & [Parquet](https://parquet.apache.org/)).
-You only ETL data once to a destination of your choice. In that sense, VAST
-resembles a [lakehouse architecture][lakehouse-paper]. Think of the above
-pipeline as a chain of independently operating microservices, each of which can
-be scaled independently. The [actor
-model](/docs/understand/architecture/actor-model/) architecture of VAST enables
-this naturally.
-[feather]: https://arrow.apache.org/docs/python/feather.html
-[lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf
+and data at rest ([Feather][feather] & [Parquet][parquet]). You only ETL data
+once to a destination of your choice. In that sense, VAST resembles a [lakehouse
+architecture][lakehouse-paper]. Think of the above pipeline as a chain of
+independently operating microservices, each of which can be scaled
+independently. The [actor model](actor-model) architecture of VAST enables this
+naturally.
 :::
+
+[lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf
