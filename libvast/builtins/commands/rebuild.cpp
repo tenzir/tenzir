@@ -396,15 +396,16 @@ struct rebuilder_state {
     auto current_run_partitions = std::vector<partition_info>{};
     auto current_run_events = size_t{0};
     bool is_oversized = false;
-      // Take the first homogenous partition and collect as many of the same
-      // type as possible to create new paritions. The approach used may
-      // collects too many partitions if there is no exact match, but that is
-      // usually better than conservatively undersizing the number of
-      // partitions for the current run. For oversized runs we move the last
-      // transformed partition back to the list of remaining partitions if it
-      // is less than some percentage of the desired size.
-      const auto schema = run->remaining_partitions[0].schema;
-      const auto first_removed = std::remove_if(
+    // Take the first partition and collect as many of the same
+    // type as possible to create new paritions. The approach used may
+    // collects too many partitions if there is no exact match, but that is
+    // usually better than conservatively undersizing the number of
+    // partitions for the current run. For oversized runs we move the last
+    // transformed partition back to the list of remaining partitions if it
+    // is less than some percentage of the desired size.
+    const auto schema = run->remaining_partitions[0].schema;
+    const auto first_removed
+      = std::remove_if(
         run->remaining_partitions.begin(), run->remaining_partitions.end(),
         [&](const partition_info& partition) {
           if (schema == partition.schema
@@ -419,9 +420,9 @@ struct rebuilder_state {
           }
           return false;
         });
-      run->remaining_partitions.erase(first_removed,
-                                      run->remaining_partitions.end());
-      is_oversized = current_run_events > max_partition_size;
+    run->remaining_partitions.erase(first_removed,
+                                    run->remaining_partitions.end());
+    is_oversized = current_run_events > max_partition_size;
     run->statistics.num_rebuilding += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
