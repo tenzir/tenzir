@@ -44,6 +44,33 @@
   display: none;
 }
 
+/* This abuse of the alt text makes it possible to apply conditional CSS styling
+ * when working with Markdown images, e.g., ![alt](/path/to/img). This hack
+ * comes at the slight cost of accessibility (i.e., a trailing #widthXXX value)
+ * but solves a major problem of defining a maximum image width. Without this
+ * ability, specifically hi-res diagrams blow up to the full text width, which
+ * often makes look textual annotations huge and out of proportion.
+ */
+img[alt$="#width300"]{
+  max-width: 300px;
+  display: block;
+}
+
+img[alt$="#width400"]{
+  max-width: 400px;
+  display: block;
+}
+
+img[alt$="#width500"]{
+  max-width: 500px;
+  display: block;
+}
+
+img[alt$="#width600"]{
+  max-width: 600px;
+  display: block;
+}
+
 /* This enable dark mode for inline SVGs. For our GFM content, inlining an SVG
  * requires doing this:
  *

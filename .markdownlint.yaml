@@ -6,3 +6,7 @@ indentation: false
 links: false
 spelling: true
 whitespace: true
+
+# MD010/no-hard-tabs - Hard tabs
+MD010:
+  code_blocks: false
