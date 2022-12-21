@@ -242,7 +242,7 @@ int main(int argc, char** argv) {
   auto signal_monitoring_thread = std::thread([&] {
     int signum = 0;
     sigwait(&sigset, &signum);
-    VAST_WARN("received signal {}", signum);
+    VAST_DEBUG("received signal {}", signum);
     if (!stop)
       caf::anon_send<caf::message_priority::high>(
         reflector.get(), atom::internal_v, atom::signal_v, signum);
