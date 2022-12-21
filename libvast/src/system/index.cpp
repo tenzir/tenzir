@@ -873,8 +873,9 @@ void index_state::decommission_active_partition(
                 completion(caf::none);
             },
             [=, this](const caf::error& err) {
-              VAST_DEBUG("{} received error for request to persist partition "
-                         "{} {}: {}",
+              VAST_ERROR("{} failed to commit partition {} {} to the catalog, "
+                         "the contained data will not be available for "
+                         "queries: {}",
                          *self, schema, id, err);
               unpersisted.erase(id);
               self->send_exit(actor, err);
@@ -883,8 +884,9 @@ void index_state::decommission_active_partition(
             });
       },
       [=, this](caf::error& err) {
-        VAST_ERROR("{} failed to persist partition {} {} with error: {}", *self,
-                   schema, id, err);
+        VAST_ERROR("{} failed to persist partition {} {} and evicts data from "
+                   "memory to preserve process integrity: {}",
+                   *self, schema, id, err);
         unpersisted.erase(id);
         self->send_exit(actor, err);
         if (completion)
