@@ -28,6 +28,14 @@
       }
     },
     {
+      "name": "nix-ci",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "CI",
+        "VAST_PLUGINS": "${sourceDir}/plugins/*"
+      }
+    },
+    {
       "name": "nix-relwithdebinfo",
       "hidden": true,
       "cacheVariables": {
@@ -59,6 +67,15 @@
       "binaryDir": "${sourceDir}/build/clang/debug",
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/debug"
+      }
+    },
+    {
+      "name": "nix-clang-ci",
+      "inherits": ["nix-base", "nix-ci", "clang-base"],
+      "displayName": "Nix Clang CI Config",
+      "binaryDir": "${sourceDir}/build/clang/ci",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang/ci"
       }
     },
     {
@@ -97,6 +114,15 @@
       },
       "environment": {
         "LDFLAGS": "-fuse-ld=lld"
+      }
+    },
+    {
+      "name": "nix-gcc-ci",
+      "inherits": ["nix-base", "nix-ci", "gcc-base"],
+      "displayName": "Nix GCC CI Config",
+      "binaryDir": "${sourceDir}/build/gcc/ci",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/gcc/ci"
       }
     },
     {
@@ -176,6 +202,10 @@
       "configurePreset": "nix-clang-debug"
     },
     {
+      "name": "nix-clang-ci",
+      "configurePreset": "nix-clang-ci"
+    },
+    {
       "name": "nix-clang-relwithdebinfo",
       "configurePreset": "nix-clang-relwithdebinfo"
     },
@@ -186,6 +216,10 @@
     {
       "name": "nix-gcc-debug",
       "configurePreset": "nix-gcc-debug"
+    },
+    {
+      "name": "nix-gcc-ci",
+      "configurePreset": "nix-gcc-ci"
     },
     {
       "name": "nix-gcc-relwithdebinfo",
