@@ -50,23 +50,6 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   auto query = read_query(inv, "vast.export.read", must_provide_query::no);
   if (!query)
     return caf::make_message(std::move(query.error()));
-  // Transform expression if needed, e.g., for PCAP sink.
-  // TODO: Can we remove this special-casing, or move it to the PCAP plugin
-  // somehow?
-  if (inv.name() == "pcap") {
-    VAST_DEBUG("{} restricts expression to PCAP packets",
-               detail::pretty_type_name(inv.full_name));
-    // We parse the query expression first, work on the AST, and then render
-    // the expression again to avoid performing brittle string manipulations.
-    auto expr = to<expression>(*query);
-    if (!expr)
-      return make_message(expr.error());
-    auto pred = predicate{meta_extractor{meta_extractor::type},
-                          relational_operator::equal, data{"pcap.packet"}};
-    auto ast = conjunction{std::move(pred), std::move(*expr)};
-    *query = to_string(ast);
-    VAST_DEBUG("{} transformed expression to {}", inv, *query);
-  }
   // Get VAST node.
   auto node_opt
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
