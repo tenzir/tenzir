@@ -12,7 +12,11 @@
 
 #include <vast/logger.hpp>
 
+#include <caf/event_based_actor.hpp>
+
 namespace vast::plugins::tui {
+
+using namespace std::chrono_literals;
 
 ui_state::ui_state(ui_actor::stateful_pointer<ui_state> self) : self{self} {
 }
@@ -20,20 +24,31 @@ ui_state::ui_state(ui_actor::stateful_pointer<ui_state> self) : self{self} {
 void ui_state::hook_logger() {
   auto receiver = caf::actor_cast<caf::actor>(self);
   auto sink = std::make_shared<actor_sink_mt>(receiver);
-  // FIXME: major danger. This is not thread safe. We probably want a dedicated
-  // logger plugin that allows for adding custom sinks.
+  // FIXME: major danger / highly inappropriate. This is not thread safe. We
+  // probably want a dedicated logger plugin that allows for adding custom
+  // sinks. This yolo approach is only temporary.
   detail::logger()->sinks().push_back(std::move(sink));
-}
-
-void ui_state::loop() {
-  tui.loop();
 }
 
 ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
   self->state.hook_logger();
-  return {[self](atom::run) {
-    self->state.loop();
-  }};
+  auto* tui = &self->state.tui;
+  self->set_down_handler([=](const caf::down_msg& msg) {
+    self->quit(msg.reason);
+  });
+  return {
+    [=](std::string log) {
+      tui->add_log(std::move(log));
+      tui->redraw();
+    },
+    [=](atom::run) {
+      // Ban UI into dedicated thread. We're getting a down message upon
+      // termination, e.g., when pushes the exit button or CTRL+C.
+      self->spawn<caf::detached + caf::monitored>([tui] {
+        tui->loop();
+      });
+    },
+  };
 }
 
 } // namespace vast::plugins::tui

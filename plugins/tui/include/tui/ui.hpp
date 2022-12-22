@@ -20,6 +20,7 @@ namespace vast::plugins::tui {
 
 using ui_actor = caf::typed_actor<
   // Initiates the main UI loop.
+  caf::reacts_to<std::string>,
   caf::reacts_to<atom::run>>;
 
 /// @relates ui
@@ -29,10 +30,7 @@ struct ui_state {
   /// Hook ourselves into the system-wide logger.
   void hook_logger();
 
-  /// Render loop and wait forever.
-  void loop();
-
-  struct tui tui;
+  class tui tui;
 
   /// Points to the parent actor.
   ui_actor::pointer self;

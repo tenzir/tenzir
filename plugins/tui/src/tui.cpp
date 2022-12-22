@@ -18,11 +18,7 @@ namespace vast::plugins::tui {
 
 using namespace ftxui;
 
-tui::tui() : screen{ScreenInteractive::Fullscreen()} {
-  // TODO: get the logger output in the bottom split.
-  // setup_logger(screen, logs);
-  logs.emplace_back(text("dummy log line"));
-  logs.emplace_back(text("another one"));
+tui::tui() : screen_{ScreenInteractive::Fullscreen()} {
 }
 
 void tui::loop() {
@@ -39,7 +35,7 @@ void tui::loop() {
     return text("top") | center;
   });
   auto bottom = Renderer([&] {
-    return vbox(logs);
+    return vbox(logs_);
   });
   int left_size = 20;
   int right_size = 20;
@@ -53,7 +49,23 @@ void tui::loop() {
   auto renderer = Renderer(container, [&] {
     return container->Render() | border;
   });
-  screen.Loop(renderer);
+  renderer |= CatchEvent([&](Event event) {
+    // Exit via 'q' or ESC.
+    if (event == Event::Character('q') || event == Event::Escape) {
+      screen_.ExitLoopClosure()();
+      return true;
+    }
+    return false;
+  });
+  screen_.Loop(renderer);
+}
+
+void tui::add_log(std::string line) {
+  logs_.emplace_back(text(std::move(line)));
+}
+
+void tui::redraw() {
+  screen_.PostEvent(Event::Custom);
 }
 
 } // namespace vast::plugins::tui

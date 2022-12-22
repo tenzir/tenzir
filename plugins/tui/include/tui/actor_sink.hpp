@@ -32,6 +32,7 @@ protected:
     spdlog::sinks::base_sink<Mutex>::formatter_->format(msg, formatted);
     auto line = fmt::to_string(formatted);
     buffer_.push_back(std::move(line));
+    flush_();
   }
 
   void flush_() override {

@@ -14,15 +14,23 @@
 namespace vast::plugins::tui {
 
 /// The terminal UI implementation.
-struct tui {
+class tui {
+public:
   /// Initialize the UI.
   tui();
 
-  /// Run forever.
+  /// Run the UI main loop in a dedicated thread.
   void loop();
 
-  std::vector<ftxui::Element> logs;
-  ftxui::ScreenInteractive screen;
+  /// Adds a log line.
+  void add_log(std::string line);
+
+  /// Triggers a redraw of the screen.
+  void redraw();
+
+private:
+  ftxui::ScreenInteractive screen_;
+  std::vector<ftxui::Element> logs_;
 };
 
 } // namespace vast::plugins::tui
