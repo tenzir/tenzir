@@ -26,7 +26,7 @@ caf::message exec_command(const invocation& inv, caf::actor_system& sys) {
     trimmed_args.emplace_back(detail::trim(arg));
   }
 
-  return caf::none;
+  return {};
 }
 
 } // namespace vast::system
