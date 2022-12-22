@@ -239,14 +239,22 @@ int main(int argc, char** argv) {
   scope_linked<system::signal_reflector_actor> reflector{
     sys.spawn<caf::detached>(system::signal_reflector)};
   std::atomic<bool> stop = false;
-  auto signal_monitoring_thread = std::thread([&] {
-    int signum = 0;
-    sigwait(&sigset, &signum);
-    VAST_DEBUG("received signal {}", signum);
-    if (!stop)
-      caf::anon_send<caf::message_priority::high>(
-        reflector.get(), atom::internal_v, atom::signal_v, signum);
-  });
+  // clang-format off
+  auto signal_monitoring_thread = std::thread([&]()
+#if VAST_GCC
+      // Workaround for an ASAN bug that only occurs with GCC.
+      // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=101476
+      __attribute__((no_sanitize_address))
+#endif
+      {
+        int signum = 0;
+        sigwait(&sigset, &signum);
+        VAST_DEBUG("received signal {}", signum);
+        if (!stop)
+          caf::anon_send<caf::message_priority::high>(
+            reflector.get(), atom::internal_v, atom::signal_v, signum);
+      });
+  // clang-format on
   // Put it into the actor registry so any actor can communicate with it.
   sys.registry().put("signal-reflector", reflector.get());
   auto run_error = caf::error{};
