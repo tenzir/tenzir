@@ -9,13 +9,10 @@
   const handlePdfExport = () => {
     window.print();
   };
-  // const handleImport = () => {
-  //
-  // }
 
   const handleJsonExport = () => {
     // Create a blob of the data
-    let fileName = 'vast-report.json'; // TODO use the title of the report
+    let fileName =  `${$report.title}.json`
     var fileToSave = new Blob([JSON.stringify($report, undefined, 2)], {
       type: 'application/json'
     });
@@ -57,7 +54,6 @@
       });
     }
   };
-  $: console.log($report);
 </script>
 
 <svelte:head>

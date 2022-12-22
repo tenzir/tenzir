@@ -19,7 +19,7 @@
             showEditor = true;
           }}
         >
-          Create New
+          Create New Report
         </Button>
       </div>
     </div>
