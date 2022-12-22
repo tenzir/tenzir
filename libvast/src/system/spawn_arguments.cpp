@@ -11,6 +11,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/detail/collect.hpp"
 #include "vast/detail/load_contents.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
@@ -36,20 +37,21 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
   if (begin == end)
     return caf::make_error(ec::syntax_error, "no query expression given");
   auto query = detail::join(begin, end, " ");
-  // Always try parsing as VAST expression first.
-  if (auto e = to<expression>(query))
-    return normalize_and_validate(std::move(*e));
-  // If that fails, we try all query language plugins, currently in a
-  // non-deterministic order.
+  // Get all query languages, but make sure that VAST is at the front.
   // TODO: let the user choose exactly one language instead.
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* language = plugin.as<query_language_plugin>()) {
-      if (auto expr = language->parse(query))
-        return normalize_and_validate(std::move(*expr));
-      else
-        VAST_DEBUG("failed to parse query as {} language: {}", language->name(),
-                   expr.error());
-    }
+  auto query_languages = collect(plugins::get<query_language_plugin>());
+  if (const auto* vastql = plugins::find<query_language_plugin>("VASTQL")) {
+    const auto it
+      = std::find(query_languages.begin(), query_languages.end(), vastql);
+    VAST_ASSERT(it != query_languages.end());
+    std::rotate(query_languages.begin(), it, it + 1);
+  }
+  for (const auto& query_language : query_languages) {
+    if (auto expr = query_language->make_query(query))
+      return normalize_and_validate(std::move(*expr));
+    else
+      VAST_DEBUG("failed to parse query as {} language: {}",
+                 query_language->name(), expr.error());
   }
   return caf::make_error(ec::syntax_error,
                          fmt::format("invalid query: {}", query));

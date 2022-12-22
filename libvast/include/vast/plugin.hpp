@@ -338,7 +338,7 @@ public:
   /// In the future, we may want to let this plugin return a substrait query
   /// plan instead of a VAST expression.
   [[nodiscard]] virtual caf::expected<expression>
-  parse(std::string_view query) const = 0;
+  make_query(std::string_view query) const = 0;
 };
 
 // -- rest endpoint plugin -----------------------------------------------------
