@@ -129,7 +129,8 @@ public:
   /// @note This function runs in the actor context of the NODE actor and can
   /// safely access the NODE's state.
   virtual system::component_plugin_actor make_component(
-    system::node_actor::stateful_pointer<system::node_state> node) const = 0;
+    system::node_actor::stateful_pointer<system::node_state> node) const
+    = 0;
 };
 
 // -- analyzer plugin ----------------------------------------------------------
@@ -161,7 +162,8 @@ protected:
   /// @note This function runs in the actor context of the NODE actor and can
   /// safely access the NODE's state.
   virtual system::analyzer_plugin_actor make_analyzer(
-    system::node_actor::stateful_pointer<system::node_state> node) const = 0;
+    system::node_actor::stateful_pointer<system::node_state> node) const
+    = 0;
 
 private:
   /// A weak handle to the spawned actor handle.
@@ -201,7 +203,8 @@ public:
   /// Returns the options for the `vast import <format>` and `vast spawn source
   /// <format>` commands.
   [[nodiscard]] virtual caf::config_option_set
-  reader_options(command::opts_builder&& opts) const = 0;
+  reader_options(command::opts_builder&& opts) const
+    = 0;
 
   /// Creates a reader, which will be available via `vast import <format>` and
   /// `vast spawn source <format>`.
@@ -226,7 +229,8 @@ public:
   /// Returns the options for the `vast export <format>` and `vast spawn sink
   /// <format>` commands.
   [[nodiscard]] virtual caf::config_option_set
-  writer_options(command::opts_builder&& opts) const = 0;
+  writer_options(command::opts_builder&& opts) const
+    = 0;
 
   /// Creates a reader, which will be available via `vast export <format>` and
   /// `vast spawn sink <format>`.
@@ -290,8 +294,8 @@ public:
   /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual caf::expected<builder_and_header>
   make_store_builder(system::accountant_actor accountant,
-                     system::filesystem_actor fs,
-                     const vast::uuid& id) const = 0;
+                     system::filesystem_actor fs, const vast::uuid& id) const
+    = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
   /// partition that uses this partition as a store backend.
@@ -301,7 +305,8 @@ public:
   /// @returns A new store actor.
   [[nodiscard]] virtual caf::expected<system::store_actor>
   make_store(system::accountant_actor accountant, system::filesystem_actor fs,
-             std::span<const std::byte> header) const = 0;
+             std::span<const std::byte> header) const
+    = 0;
 };
 
 /// A base class for plugins that add new store backends.
@@ -360,17 +365,19 @@ public:
   /// @returns A `vast::data` object that is a record containing entries for
   /// the `paths` element of an OpenAPI spec.
   [[nodiscard]] virtual data
-  openapi_specification(api_version version = api_version::latest) const = 0;
+  openapi_specification(api_version version = api_version::latest) const
+    = 0;
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] virtual const std::vector<rest_endpoint>&
-  rest_endpoints() const = 0;
+  [[nodiscard]] virtual const std::vector<rest_endpoint>& rest_endpoints() const
+    = 0;
 
   /// Actor that will handle this endpoint.
   //  TODO: This should get some integration with component_plugin so that
   //  the component can be used to answer requests directly.
   [[nodiscard]] virtual system::rest_handler_actor
-  handler(caf::actor_system& system, system::node_actor node) const = 0;
+  handler(caf::actor_system& system, system::node_actor node) const
+    = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------
@@ -523,9 +530,7 @@ extern const char* VAST_PLUGIN_VERSION;
     struct auto_register_plugin;                                               \
     template <>                                                                \
     struct auto_register_plugin<name> {                                        \
-      auto_register_plugin() {                                                 \
-        static_cast<void>(flag);                                               \
-      }                                                                        \
+      auto_register_plugin() { static_cast<void>(flag); }                      \
       static bool init() {                                                     \
         ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
           new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \
