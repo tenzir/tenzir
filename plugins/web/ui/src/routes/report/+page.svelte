@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from '$lib/components/Button.svelte';
 
-  import Editor from './Editor.svelte';
+  import ReportEditor from './ReportEditor.svelte';
   import Importer from './Importer.svelte';
   import { report } from './stores';
   let showEditor = false;
@@ -9,7 +9,7 @@
 
 <div>
   {#if $report.blocks.length !== 0 || showEditor}
-    <Editor />
+    <ReportEditor />
   {:else}
     <div class="flex flex-col">
       <Importer />
