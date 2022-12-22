@@ -10,7 +10,7 @@
   let showEditor = true;
 
   export let parameters = {
-    title: 'TODO make me editable',
+    title: '',
     content: ''
   };
 
@@ -22,8 +22,6 @@
 </script>
 
 <div>
-  <BlockHeader bind:title={parameters.title} onClick={() => handleSaveOrEdit()} />
-
   {#if showEditor}
     <Editor bind:value={parameters.content} {plugins} />
     <div class="py-2">
@@ -31,6 +29,13 @@
     </div>
   {/if}
   {#if !showEditor}
+    <BlockHeader
+      bind:title={parameters.title}
+      onEdit={() => handleSaveOrEdit()}
+      onDelete={() => {
+        console.log('delete is not implemented yet');
+      }}
+    />
     <Viewer bind:value={parameters.content} {plugins} />
   {/if}
 </div>
