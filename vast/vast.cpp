@@ -145,9 +145,7 @@ int main(int argc, char** argv) {
   // Tweak CAF parameters in case we're running a client command.
   bool is_server = invocation->full_name == "start"
                    || caf::get_or(cfg.content, "vast.node", false);
-  std::string_view max_threads_key = CAF_VERSION < 1800
-                                       ? "scheduler.max-threads"
-                                       : "caf.scheduler.max-threads";
+  std::string_view max_threads_key = "caf.scheduler.max-threads";
   if (!is_server
       && !caf::holds_alternative<caf::config_value::integer>(cfg,
                                                              max_threads_key))
