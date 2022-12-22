@@ -36,9 +36,13 @@ protected:
   }
 
   void flush_() override {
-    if (auto actor = caf::actor_cast<caf::actor>(receiver_))
-      for (auto& line : buffer_)
-        caf::anon_send(actor, std::move(line));
+    if (buffer_.empty())
+      return;
+    auto actor = caf::actor_cast<caf::actor>(receiver_.lock());
+    if (!actor)
+      return;
+    for (auto& line : buffer_)
+      caf::anon_send(actor, std::move(line));
     buffer_ = {};
   }
 

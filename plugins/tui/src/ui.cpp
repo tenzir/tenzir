@@ -23,7 +23,7 @@ ui_state::ui_state(ui_actor::stateful_pointer<ui_state> self) : self{self} {
 
 void ui_state::hook_logger() {
   auto receiver = caf::actor_cast<caf::actor>(self);
-  auto sink = std::make_shared<actor_sink_mt>(receiver);
+  auto sink = std::make_shared<actor_sink_mt>(std::move(receiver));
   // FIXME: major danger / highly inappropriate. This is not thread safe. We
   // probably want a dedicated logger plugin that allows for adding custom
   // sinks. This yolo approach is only temporary.
@@ -32,12 +32,15 @@ void ui_state::hook_logger() {
 
 ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
   self->state.hook_logger();
-  auto* tui = &self->state.tui;
   self->set_down_handler([=](const caf::down_msg& msg) {
     self->quit(msg.reason);
   });
+  auto* tui = &self->state.tui;
   return {
     [=](std::string log) {
+      // Warning: do not use the VAST_* log macros in this function. It will
+      // cause an infite loop because this handler is called for every log
+      // message.
       tui->add_log(std::move(log));
       tui->redraw();
     },
