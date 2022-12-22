@@ -40,12 +40,14 @@
                   on:click={props.sort.toggle}
                   class={showHeaderBorder ? 'border border-slate-300' : ''}
                 >
-                  <Render of={cell.render()} />
-                  {#if props.sort.order === 'asc'}
-                    ⬇️
-                  {:else if props.sort.order === 'desc'}
-                    ⬆️
-                  {/if}
+                  <div class="flex items-center">
+                    <Render of={cell.render()} />
+                    {#if props.sort.order === 'asc'}
+                      <div class="i-ic:outline-keyboard-arrow-down pl-2" />
+                    {:else if props.sort.order === 'desc'}
+                      <div class="i-ic:outline-keyboard-arrow-up pl-2" />
+                    {/if}
+                  </div>
                 </th>
               </Subscribe>
             {/each}
