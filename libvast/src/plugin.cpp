@@ -53,7 +53,7 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
         cfg, "vast.plugin-dirs"))
     result.insert(dirs->begin(), dirs->end());
   else
-    VAST_WARN("Unable to extract vast plugin dirs. {}", dirs.error());
+    VAST_WARN("failed to to extract vast plugin dirs: {}", dirs.error());
   if (!bare_mode)
     if (auto home = detail::getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
