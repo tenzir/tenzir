@@ -141,7 +141,7 @@ public:
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string_view name() const override {
     return "pseudonymize";
   };
 

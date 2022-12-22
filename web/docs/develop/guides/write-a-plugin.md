@@ -89,7 +89,7 @@ public:
   caf::error initialize(data config) override;
 
   /// Returns the unique name of the plugin.
-  const char* name() const override;
+  std::string_view name() const override;
 
   // TODO: override pure virtual functions from the base classes.
   // ...

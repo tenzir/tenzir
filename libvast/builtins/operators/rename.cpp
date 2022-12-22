@@ -155,7 +155,7 @@ public:
 
   /// The name is how the pipeline operator is addressed in a transform
   /// definition.
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string_view name() const override {
     return "rename";
   };
 

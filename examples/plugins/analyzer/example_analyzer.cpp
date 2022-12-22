@@ -150,7 +150,7 @@ public:
   }
 
   /// Returns the unique name of the plugin.
-  const char* name() const override {
+  std::string_view name() const override {
     return "example-analyzer";
   }
 

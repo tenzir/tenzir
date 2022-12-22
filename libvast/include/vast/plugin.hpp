@@ -22,6 +22,7 @@
 #include <caf/stream.hpp>
 #include <caf/typed_actor.hpp>
 
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -59,13 +60,13 @@ std::vector<plugin_ptr>& get_mutable() noexcept;
 const std::vector<plugin_ptr>& get() noexcept;
 
 /// Retrieves all plugins of a given plugin type.
-template <typename Plugin>
+template <class Plugin>
 detail::generator<const Plugin*> get() noexcept;
 
-/// Retrieves the plugin of type `Plugin` with the given name, or nullptr
-/// if it doesn't exist.
-template <typename Plugin>
-const Plugin* find(const std::string& name);
+/// Retrieves the plugin of type `Plugin` with the given name
+/// (case-insensitive), or nullptr if it doesn't exist.
+template <class Plugin = plugin>
+const Plugin* find(std::string_view name) noexcept;
 
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
 std::vector<std::pair<plugin_type_id_block, void (*)()>>&
@@ -113,7 +114,7 @@ public:
   [[nodiscard]] virtual caf::error initialize(data config) = 0;
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] virtual const char* name() const = 0;
+  [[nodiscard]] virtual std::string_view name() const = 0;
 };
 
 // -- component plugin --------------------------------------------------------
@@ -352,7 +353,7 @@ public:
   /// A path prefix to prepend to all routes declared by this plugin.
   /// Defaults to the plugin name.
   [[nodiscard]] virtual std::string prefix() const {
-    return std::string{"/"} + this->name();
+    return fmt::format("/{}", name());
   }
 
   /// OpenAPI spec for the plugin endpoints.
@@ -471,19 +472,24 @@ private:
 
 namespace vast::plugins {
 
-template <typename Plugin>
-const Plugin* find(const std::string& name) {
+template <class Plugin>
+const Plugin* find(std::string_view name) noexcept {
   const auto& plugins = get();
-  auto it
+  const auto found
     = std::find_if(plugins.begin(), plugins.end(), [&](const plugin_ptr& p) {
-        return name == p->name();
+        const auto plugin_name = p->name();
+        return std::equal(name.begin(), name.end(), plugin_name.begin(),
+                          plugin_name.end(),
+                          [](unsigned char lhs, unsigned char rhs) noexcept {
+                            return std::tolower(lhs) == std::tolower(rhs);
+                          });
       });
-  if (it == plugins.end())
+  if (found == plugins.end())
     return nullptr;
-  return it->template as<Plugin>();
+  return found->template as<Plugin>();
 }
 
-template <typename Plugin>
+template <class Plugin>
 detail::generator<const Plugin*> get() noexcept {
   for (auto const& plugin : get())
     if (auto const* specific_plugin = plugin.as<Plugin>())

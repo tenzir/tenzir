@@ -227,10 +227,7 @@ load(const std::vector<std::string>& bundled_plugins,
   for (auto path : std::move(*paths)) {
     if (auto plugin = plugin_ptr::make_dynamic(path.c_str(), cfg)) {
       // Check for name clashes.
-      auto has_same_name = [&](const auto& other) {
-        return !std::strcmp((*plugin)->name(), other->name());
-      };
-      if (std::any_of(get().begin(), get().end(), has_same_name))
+      if (find((*plugin)->name()))
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("failed to load the {} plugin "
                                            "because another plugin already "
@@ -245,7 +242,7 @@ load(const std::vector<std::string>& bundled_plugins,
   // Sort loaded plugins by name.
   std::sort(get_mutable().begin(), get_mutable().end(),
             [](const auto& lhs, const auto& rhs) {
-              return std::strcmp(lhs->name(), rhs->name()) < 0;
+              return lhs->name() < rhs->name();
             });
   return loaded_plugin_paths;
 }
@@ -362,7 +359,7 @@ store_plugin::make_store_builder(system::accountant_actor accountant,
     = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
   auto store_builder = fs->home_system().spawn<caf::lazy_init>(
     default_active_store, std::move(*store), fs, std::move(accountant),
-    std::move(path), name());
+    std::move(path), std::string{name()});
   auto header = chunk::copy(id);
   return builder_and_header{store_builder, header};
 }
@@ -380,10 +377,9 @@ store_plugin::make_store(system::accountant_actor accountant,
   const auto id = uuid{header.subspan<0, uuid::num_bytes>()};
   auto path
     = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
-  return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
-                                                 std::move(*store), fs,
-                                                 std::move(accountant),
-                                                 std::move(path), name());
+  return fs->home_system().spawn<caf::lazy_init>(
+    default_passive_store, std::move(*store), fs, std::move(accountant),
+    std::move(path), std::string{name()});
 }
 
 // -- plugin_ptr ---------------------------------------------------------------

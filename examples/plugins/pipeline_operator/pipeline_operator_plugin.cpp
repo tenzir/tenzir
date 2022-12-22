@@ -58,7 +58,7 @@ public:
   //              setting: value
   //           - step3:
   //
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string_view name() const override {
     return "example-pipeline";
   };
 

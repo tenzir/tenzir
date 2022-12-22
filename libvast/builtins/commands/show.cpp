@@ -225,7 +225,7 @@ public:
     return caf::none;
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string_view name() const override {
     return "show";
   }
 

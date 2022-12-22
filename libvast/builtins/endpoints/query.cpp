@@ -335,7 +335,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string_view name() const override {
     return "api-query";
   };
 

@@ -270,7 +270,7 @@ class plugin final : public virtual store_plugin {
     return convert(options, feather_config_);
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string_view name() const override {
     return "feather";
   }
 

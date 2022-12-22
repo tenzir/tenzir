@@ -768,8 +768,7 @@ index_state::create_active_partition(const type& schema) {
     = active_partitions.emplace(schema, active_partition_info{});
   VAST_ASSERT(inserted);
   VAST_ASSERT(active_partition != active_partitions.end());
-  std::string store_name = store_actor_plugin->name();
-  ;
+  auto store_name = std::string{store_actor_plugin->name()};
   chunk_ptr store_header = chunk::make_empty();
   auto builder_and_header
     = store_actor_plugin->make_store_builder(accountant, filesystem, id);
