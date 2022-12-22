@@ -3,6 +3,7 @@
   import Button from '$lib/components/Button.svelte';
   import Table from '$lib/components/Table.svelte';
   import type TableRow from '$lib/components/Table.svelte';
+  import BlockHeader from './BlockHeader.svelte';
 
   export let parameters = {
     title: 'TODO make me editable',
@@ -16,7 +17,6 @@
   }
 
   let queryResult: QueryResult;
-  $: console.log(queryResult);
 
   const handleRun = async () => {
     queryResult = await getQuery(parameters.query);
@@ -26,8 +26,14 @@
     Object.keys(queryResult?.events[0]).map((x) => {
       return { header: x, accessor: x };
     });
+
+  let showEditor = true;
+  const handleSaveOrEdit = () => {
+    showEditor = !showEditor;
+  };
 </script>
 
+<BlockHeader bind:title={parameters.title} onClick={() => handleSaveOrEdit()} />
 <div class="w-1/3 pb-4">
   <input
     bind:value={parameters.query}

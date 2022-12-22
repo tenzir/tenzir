@@ -1,7 +1,8 @@
 <script lang="ts">
   import InlineInput from '$lib/components/InlineInput.svelte';
   import Menu from '$lib/components/Menu.svelte';
-  import { saveAs } from 'file-saver';
+  import pkg from 'file-saver';
+  const { saveAs } = pkg;
   import MarkdownBlock from './MarkdownBlock.svelte';
   import QueryBlock from './QueryBlock.svelte';
   import { report } from './stores';
@@ -12,7 +13,7 @@
 
   const handleJsonExport = () => {
     // Create a blob of the data
-    let fileName =  `${$report.title}.json`
+    let fileName = `${$report.title}.json`;
     var fileToSave = new Blob([JSON.stringify($report, undefined, 2)], {
       type: 'application/json'
     });
