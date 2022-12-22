@@ -1,18 +1,21 @@
 <script lang="ts">
-  export let fileString: string | undefined = undefined;
+  import FilePondPluginFileValidateType from 'filepond-plugin-file-validate-type';
 
   import { report } from './stores';
-  import FilePond from 'svelte-filepond';
+  import type { FilePond as FilePondType } from 'filepond';
+  import FilePond, { registerPlugin } from 'svelte-filepond';
   import Button from '$lib/components/Button.svelte';
 
   // a reference to the component, used to call FilePond methods
-  let pond;
-
+  let pond: FilePondType;
   // the name to use for the internal file input
   let name = 'filepond';
 
-  const handleAddFile = async (err, fileItem) => {
-    // console.log('A file has been added', fileItem);
+  registerPlugin(FilePondPluginFileValidateType);
+
+  export let fileString: string | undefined = undefined;
+
+  const handleAddFile = async () => {
     const text = await pond.getFiles()[0].file.text();
     fileString = text;
   };
@@ -31,6 +34,8 @@
     allowMultiple={false}
     onaddfile={handleAddFile}
     credits={false}
+    labelIdle="Drag'n'Drop or <u>Browse</u> to import a Report"
+    acceptedFileTypes={['application/json']}
   />
   {#if fileString}
     <Button onClick={submitToStore}>Import</Button>

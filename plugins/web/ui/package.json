@@ -50,6 +50,7 @@
     "date-picker-svelte": "^2.2.4",
     "file-saver": "^2.0.5",
     "filepond": "^4.30.4",
+    "filepond-plugin-file-validate-type": "^1.2.8",
     "layercake": "^7.1.0",
     "svelte-filepond": "^0.2.0",
     "svelte-inline-input": "^1.2.1"
