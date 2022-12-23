@@ -1,11 +1,3 @@
-{"path":["catalog","memory-usage"],"type":"number"}
-{"path":["catalog","num-partitions"],"type":"number"}
-{"path":["catalog","partitions",0,"id"],"type":"string"}
-{"path":["catalog","partitions",0,"schema"],"type":"string"}
-{"path":["catalog","partitions",0,"num-events"],"type":"number"}
-{"path":["catalog","partitions",0,"import-time","min"],"type":"string"}
-{"path":["catalog","partitions",0,"import-time","max"],"type":"string"}
-{"path":["filesystem","type"],"type":"string"}
 {"path":["index","backlog","num-custom-priority"],"type":"number"}
 {"path":["index","backlog","num-low-priority"],"type":"number"}
 {"path":["index","backlog","num-normal-priority"],"type":"number"}
@@ -13,7 +5,6 @@
 {"path":["index","num-active-partitions"],"type":"number"}
 {"path":["index","num-cached-partitions"],"type":"number"}
 {"path":["index","num-unpersisted-partitions"],"type":"number"}
-{"path":["index","partitions","active",0,"id"],"type":"string"}
 {"path":["index","partitions","cached",0,"id"],"type":"string"}
 {"path":["index","statistics","events","total"],"type":"number"}
 {"path":["index","statistics","layouts","zeek.conn","count"],"type":"number"}
@@ -21,8 +12,3 @@
 {"path":["index","workers","busy"],"type":"number"}
 {"path":["index","workers","count"],"type":"number"}
 {"path":["index","workers","idle"],"type":"number"}
-{"path":["system","config-files",0],"type":"string"}
-{"path":["system","current-memory-usage"],"type":"number"}
-{"path":["system","database-path"],"type":"string"}
-{"path":["system","in-memory-table-slices"],"type":"number"}
-{"path":["system","peak-memory-usage"],"type":"number"}

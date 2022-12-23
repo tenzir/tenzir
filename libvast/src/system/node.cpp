@@ -740,9 +740,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       VAST_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
-    [self](atom::signal, int signal) {
-      VAST_WARN("{} got signal {}", *self, ::strsignal(signal));
-    },
   };
 }
 

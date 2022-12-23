@@ -237,10 +237,6 @@ inline constexpr const char* store_backend = "feather";
 inline constexpr std::chrono::milliseconds telemetry_rate
   = std::chrono::milliseconds{10000};
 
-/// Interval between checks whether a signal occured.
-inline constexpr std::chrono::milliseconds signal_monitoring_interval
-  = std::chrono::milliseconds{750};
-
 /// The timeout for the cascading requests of 'vast status'.
 inline constexpr std::chrono::milliseconds status_request_timeout
   = std::chrono::seconds{10};

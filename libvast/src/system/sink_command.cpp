@@ -13,7 +13,6 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -24,19 +23,12 @@
 #include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/uuid.hpp"
 
-#include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 #include <csignal>
-#include <iostream>
-#include <memory>
 #include <string>
 
 using namespace std::chrono_literals;
@@ -84,10 +76,6 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
                        ? std::get<node_actor>(node_opt)
                        : std::get<scope_linked<node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
-  // Start signal monitor.
-  std::thread sig_mon_thread;
-  auto signal_guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   VAST_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
@@ -213,10 +201,9 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
       },
       [&](atom::signal, int signal) {
         VAST_DEBUG("{} got {}", inv.full_name, ::strsignal(signal));
-        if (signal == SIGINT || signal == SIGTERM) {
-          self->send_exit(exporter, caf::exit_reason::user_shutdown);
-          self->send_exit(snk, caf::exit_reason::user_shutdown);
-        }
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        self->send_exit(exporter, caf::exit_reason::user_shutdown);
+        self->send_exit(snk, caf::exit_reason::user_shutdown);
       })
     .until([&] {
       return stop;

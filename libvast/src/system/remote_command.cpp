@@ -19,6 +19,7 @@
 #include <caf/actor.hpp>
 #include <caf/scoped_actor.hpp>
 
+#include <csignal>
 #include <iostream>
 
 using namespace std::chrono_literals;
@@ -41,18 +42,28 @@ caf::message remote_command(const invocation& inv, caf::actor_system& sys) {
   // Delegate invocation to node.
   caf::error err = caf::none;
   self->send(node, atom::run_v, std::move(inv));
-  self->receive([&](const caf::down_msg&) { err = ec::remote_node_down; },
-                [&](atom::ok) {
-                  // Standard reply for success.
-                },
-                [&](caf::actor&) {
-                  // "vast spawn" returns an actor.
-                },
-                [&](const std::string& str) {
-                  // Status messages or query results.
-                  std::cout << str << std::endl;
-                },
-                [&](caf::error e) { err = std::move(e); });
+  self->receive(
+    [&](const caf::down_msg&) {
+      err = ec::remote_node_down;
+    },
+    [&](atom::ok) {
+      // Standard reply for success.
+    },
+    [&](caf::actor&) {
+      // "vast spawn" returns an actor.
+    },
+    [&](const std::string& str) {
+      // Status messages or query results.
+      std::cout << str << std::endl;
+    },
+    [&](caf::error e) {
+      err = std::move(e);
+    },
+    [&](atom::signal, int signal) {
+      VAST_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
+                 ::strsignal(signal));
+      VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+    });
   if (err)
     return caf::make_message(std::move(err));
   return {};

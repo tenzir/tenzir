@@ -93,6 +93,18 @@ using status_client_actor = typed_actor_fwd<
   // Reply to a status request from the NODE.
   caf::replies_to<atom::status, status_verbosity>::with<record>>::unwrap;
 
+/// The TERMINATION HANDLER actor interface.
+using termination_handler_actor = typed_actor_fwd<
+  // Receive a signal from the reflector.
+  caf::reacts_to<atom::signal, int>>::unwrap;
+
+/// The SIGNAL REFLECTOR actor interface.
+using signal_reflector_actor = typed_actor_fwd<
+  // Receive a signal from the listener.
+  caf::reacts_to<atom::internal, atom::signal, int>,
+  // Subscribe to one or more signals.
+  caf::reacts_to<atom::subscribe>>::unwrap;
+
 /// The ERASER actor interface.
 using eraser_actor = typed_actor_fwd<
   /// The periodic loop of the ERASER.
@@ -467,10 +479,7 @@ using node_actor = typed_actor_fwd<
   // Retrieve the version of the process running the NODE.
   caf::replies_to<atom::get, atom::version>::with<record>,
   // Retrieve the configuration of the NODE.
-  caf::replies_to<atom::config>::with<record>,
-  // Handle a signal.
-  // TODO: Make this a signal_monitor_client_actor
-  caf::reacts_to<atom::signal, int>>::unwrap;
+  caf::replies_to<atom::config>::with<record>>::unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.

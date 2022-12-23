@@ -8,25 +8,21 @@
 
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
+#include <vast/system/connect_to_node.hpp>
 #include <vast/system/node_control.hpp>
-#include <vast/system/spawn_or_connect_to_node.hpp>
 
 namespace vast::plugins::flush {
 
 namespace {
 
-caf::message flush_command(const invocation& inv, caf::actor_system& sys) {
+caf::message flush_command(const invocation&, caf::actor_system& sys) {
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
-  auto node_opt = system::spawn_or_connect_to_node(self, inv.options,
-                                                   content(sys.config()));
-  if (auto* err = std::get_if<caf::error>(&node_opt))
-    return caf::make_message(std::move(*err));
-  const auto& node
-    = std::holds_alternative<system::node_actor>(node_opt)
-        ? std::get<system::node_actor>(node_opt)
-        : std::get<scope_linked<system::node_actor>>(node_opt).get();
+  auto node_opt = system::connect_to_node(self, content(sys.config()));
+  if (!node_opt)
+    return caf::make_message(node_opt.error());
+  const auto& node = *node_opt;
   // Get the index actor.
   auto components
     = system::get_node_components<system::index_actor>(self, node);

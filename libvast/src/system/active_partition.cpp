@@ -354,7 +354,7 @@ active_partition_actor::behavior_type active_partition(
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
   self->state.stage = detail::attach_notifying_stream_stage(
-    self, true,
+    self, false,
     [=](caf::unit_t&) {
       // nop
     },

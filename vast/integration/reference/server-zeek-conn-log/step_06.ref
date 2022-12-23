@@ -1,0 +1,6 @@
+{
+  "zeek.conn": {
+    "count": 34090,
+    "percentage": 100
+  }
+}

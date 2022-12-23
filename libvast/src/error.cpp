@@ -10,6 +10,7 @@
 
 #include "vast/detail/assert.hpp"
 
+#include <caf/exit_reason.hpp>
 #include <caf/pec.hpp>
 #include <caf/sec.hpp>
 
@@ -107,6 +108,10 @@ std::string render(caf::error err) {
       break;
     case caf::type_id_v<caf::sec>:
       oss << to_string(static_cast<caf::sec>(err.code()));
+      render_default_ctx(oss, err.context());
+      break;
+    case caf::type_id_v<caf::exit_reason>:
+      oss << to_string(static_cast<caf::exit_reason>(err.code()));
       render_default_ctx(oss, err.context());
       break;
   }

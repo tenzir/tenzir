@@ -17,6 +17,10 @@
 #include <vast/system/spawn_or_connect_to_node.hpp>
 #include <vast/taxonomies.hpp>
 
+#include <caf/blocking_actor.hpp>
+
+#include <csignal>
+
 namespace vast::plugins::show {
 
 namespace {
@@ -125,7 +129,6 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
     = inv.full_name == "show" || inv.full_name == "show models";
   const auto show_schemas
     = inv.full_name == "show" || inv.full_name == "show schemas";
-  const auto timeout = system::node_connection_timeout(inv.options);
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
@@ -146,59 +149,65 @@ caf::message show_command(const invocation& inv, caf::actor_system& sys) {
   // show!
   auto command_result = caf::expected<list>{list{}};
   if (show_concepts || show_models) {
-    self->request(catalog, timeout, atom::get_v, atom::taxonomies_v)
-      .receive(
-        [&](const taxonomies& taxonomies) mutable {
-          if (show_concepts) {
-            auto concepts_definition
-              = to_definition(taxonomies.concepts, filter);
-            command_result->insert(command_result->end(),
-                                   concepts_definition.begin(),
-                                   concepts_definition.end());
-          }
-          if (show_models) {
-            auto models_definition = to_definition(taxonomies.models, filter);
-            command_result->insert(command_result->end(),
-                                   models_definition.begin(),
-                                   models_definition.end());
-          }
-        },
-        [&](caf::error& err) mutable {
-          command_result = caf::make_error(ec::unspecified,
-                                           fmt::format("'show' failed to get "
-                                                       "taxonomies from "
-                                                       "catalog: {}",
-                                                       std::move(err)));
-        });
+    self->send(catalog, atom::get_v, atom::taxonomies_v);
+    self->receive(
+      [&](const taxonomies& taxonomies) mutable {
+        if (show_concepts) {
+          auto concepts_definition = to_definition(taxonomies.concepts, filter);
+          command_result->insert(command_result->end(),
+                                 concepts_definition.begin(),
+                                 concepts_definition.end());
+        }
+        if (show_models) {
+          auto models_definition = to_definition(taxonomies.models, filter);
+          command_result->insert(command_result->end(),
+                                 models_definition.begin(),
+                                 models_definition.end());
+        }
+      },
+      [&](caf::error& err) mutable {
+        command_result
+          = caf::make_error(ec::unspecified, fmt::format("'show' failed to get "
+                                                         "taxonomies from "
+                                                         "catalog: {}",
+                                                         std::move(err)));
+      },
+      [&](atom::signal, int signal) {
+        VAST_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
+                   ::strsignal(signal));
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+      });
   }
   if (show_schemas && !command_result.error()) {
     auto catch_all_query = expression{negation{expression{}}};
     auto query_context
       = query_context::make_extract("show", self, std::move(catch_all_query));
     query_context.id = uuid::random();
-    self
-      ->request(catalog, timeout, atom::candidates_v, std::move(query_context))
-      .receive(
-        [&](const system::catalog_lookup_result& catalog_result) {
-          auto types = type_set{};
-          for (const auto& [type, partitions] :
-               catalog_result.candidate_infos) {
-            for (const auto& partition_info : partitions.partition_infos) {
-              if (partition_info.schema)
-                types.insert(partition_info.schema);
-            }
+    self->send(catalog, atom::candidates_v, std::move(query_context));
+    self->receive(
+      [&](const system::catalog_lookup_result& catalog_result) {
+        auto types = type_set{};
+        for (const auto& [type, partitions] : catalog_result.candidate_infos) {
+          for (const auto& partition_info : partitions.partition_infos) {
+            if (partition_info.schema)
+              types.insert(partition_info.schema);
           }
-          auto types_definition = to_definition(types, filter);
-          command_result->insert(command_result->end(),
-                                 types_definition.begin(),
-                                 types_definition.end());
-        },
-        [&](caf::error& err) mutable {
-          command_result = caf::make_error(ec::unspecified,
-                                           fmt::format("'show' failed to get "
-                                                       "types from catalog: {}",
-                                                       std::move(err)));
-        });
+        }
+        auto types_definition = to_definition(types, filter);
+        command_result->insert(command_result->end(), types_definition.begin(),
+                               types_definition.end());
+      },
+      [&](caf::error& err) mutable {
+        command_result = caf::make_error(ec::unspecified,
+                                         fmt::format("'show' failed to get "
+                                                     "types from catalog: {}",
+                                                     std::move(err)));
+      },
+      [&](atom::signal, int signal) {
+        VAST_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
+                   ::strsignal(signal));
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+      });
   }
   if (!command_result)
     return caf::make_message(std::move(command_result.error()));

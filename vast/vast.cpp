@@ -15,19 +15,20 @@
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
 #include "vast/plugin.hpp"
+#include "vast/scope_linked.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
 #include "vast/system/make_pipelines.hpp"
+#include "vast/system/signal_reflector.hpp"
 
 #include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>
 
 #include <csignal>
 #include <cstdlib>
-#include <filesystem>
 #include <iostream>
-#include <string>
-#include <vector>
+#include <string_view>
+#include <thread>
 
 namespace {
 
@@ -103,6 +104,9 @@ int main(int argc, char** argv) {
   // for that is enabled.
   std::signal(SIGSEGV, fatal_handler);
   std::signal(SIGABRT, fatal_handler);
+  // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
+  auto sigset = system::termsigset();
+  pthread_sigmask(SIG_BLOCK, &sigset, nullptr);
   // Set up our configuration, e.g., load of YAML config file(s).
   system::default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
@@ -231,6 +235,28 @@ int main(int argc, char** argv) {
   // command. From this point onwards, do not execute code that is not
   // thread-safe.
   auto sys = caf::actor_system{cfg};
+  // The reflector scope variable cleans up the reflector on destruction.
+  scope_linked<system::signal_reflector_actor> reflector{
+    sys.spawn<caf::detached>(system::signal_reflector)};
+  std::atomic<bool> stop = false;
+  // clang-format off
+  auto signal_monitoring_thread = std::thread([&]()
+#if VAST_GCC
+      // Workaround for an ASAN bug that only occurs with GCC.
+      // https://gcc.gnu.org/bugzilla//show_bug.cgi?id=101476
+      __attribute__((no_sanitize_address))
+#endif
+      {
+        int signum = 0;
+        sigwait(&sigset, &signum);
+        VAST_DEBUG("received signal {}", signum);
+        if (!stop)
+          caf::anon_send<caf::message_priority::high>(
+            reflector.get(), atom::internal_v, atom::signal_v, signum);
+      });
+  // clang-format on
+  // Put it into the actor registry so any actor can communicate with it.
+  sys.registry().put("signal-reflector", reflector.get());
   auto run_error = caf::error{};
   if (auto result = run(*invocation, sys, root_factory); !result)
     run_error = std::move(result.error());
@@ -238,6 +264,12 @@ int main(int argc, char** argv) {
     caf::message_handler{[&](caf::error& err) {
       run_error = std::move(err);
     }}(*result);
+  sys.registry().erase("signal-reflector");
+  stop = true;
+  if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0)
+    VAST_ERROR("failed to cancel signal monitoring thread");
+  signal_monitoring_thread.join();
+  pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {
     system::render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;

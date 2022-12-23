@@ -1,6 +1,47 @@
-{
-  "zeek.conn": {
-    "count": 34090,
-    "percentage": 100
-  }
-}
+{"path":["catalog","memory-usage"],"type":"number"}
+{"path":["catalog","num-partitions"],"type":"number"}
+{"path":["catalog","partitions",0,"id"],"type":"string"}
+{"path":["catalog","partitions",0,"schema"],"type":"string"}
+{"path":["catalog","partitions",0,"num-events"],"type":"number"}
+{"path":["catalog","partitions",0,"import-time","min"],"type":"string"}
+{"path":["catalog","partitions",0,"import-time","max"],"type":"string"}
+{"path":["catalog","partitions",1,"id"],"type":"string"}
+{"path":["catalog","partitions",1,"schema"],"type":"string"}
+{"path":["catalog","partitions",1,"num-events"],"type":"number"}
+{"path":["catalog","partitions",1,"import-time","min"],"type":"string"}
+{"path":["catalog","partitions",1,"import-time","max"],"type":"string"}
+{"path":["catalog","partitions",2,"id"],"type":"string"}
+{"path":["catalog","partitions",2,"schema"],"type":"string"}
+{"path":["catalog","partitions",2,"num-events"],"type":"number"}
+{"path":["catalog","partitions",2,"import-time","min"],"type":"string"}
+{"path":["catalog","partitions",2,"import-time","max"],"type":"string"}
+{"path":["catalog","partitions",3,"id"],"type":"string"}
+{"path":["catalog","partitions",3,"schema"],"type":"string"}
+{"path":["catalog","partitions",3,"num-events"],"type":"number"}
+{"path":["catalog","partitions",3,"import-time","min"],"type":"string"}
+{"path":["catalog","partitions",3,"import-time","max"],"type":"string"}
+{"path":["catalog","partitions",4,"id"],"type":"string"}
+{"path":["catalog","partitions",4,"schema"],"type":"string"}
+{"path":["catalog","partitions",4,"num-events"],"type":"number"}
+{"path":["catalog","partitions",4,"import-time","min"],"type":"string"}
+{"path":["catalog","partitions",4,"import-time","max"],"type":"string"}
+{"path":["filesystem","type"],"type":"string"}
+{"path":["index","backlog","num-custom-priority"],"type":"number"}
+{"path":["index","backlog","num-low-priority"],"type":"number"}
+{"path":["index","backlog","num-normal-priority"],"type":"number"}
+{"path":["index","memory-usage"],"type":"number"}
+{"path":["index","num-active-partitions"],"type":"number"}
+{"path":["index","num-cached-partitions"],"type":"number"}
+{"path":["index","num-unpersisted-partitions"],"type":"number"}
+{"path":["index","partitions","cached",0,"id"],"type":"string"}
+{"path":["index","statistics","events","total"],"type":"number"}
+{"path":["index","statistics","layouts","zeek.conn","count"],"type":"number"}
+{"path":["index","statistics","layouts","zeek.conn","percentage"],"type":"number"}
+{"path":["index","workers","busy"],"type":"number"}
+{"path":["index","workers","count"],"type":"number"}
+{"path":["index","workers","idle"],"type":"number"}
+{"path":["system","config-files",0],"type":"string"}
+{"path":["system","current-memory-usage"],"type":"number"}
+{"path":["system","database-path"],"type":"string"}
+{"path":["system","in-memory-table-slices"],"type":"number"}
+{"path":["system","peak-memory-usage"],"type":"number"}
