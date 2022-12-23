@@ -282,9 +282,12 @@ time table_slice::import_time() const noexcept {
   return visit(f, as_flatbuffer(chunk_));
 }
 
-void table_slice::import_time(time import_time) noexcept {
+void table_slice::import_time(time import_time,
+                              const std::string& from) noexcept {
   if (!chunk_->unique()) {
-    VAST_WARN("setting import timestamp on a shared table slice incurs a copy");
+    VAST_WARN("setting import timestamp on a shared table slice incurs a copy. "
+              "From {}",
+              from);
     chunk_ = chunk::copy(*chunk_);
   }
   auto f = detail::overload{

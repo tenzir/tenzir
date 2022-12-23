@@ -144,7 +144,7 @@ public:
 
   /// Sets the import timestamp.
   /// @pre The underlying chunk must be unique.
-  void import_time(time import_time) noexcept;
+  void import_time(time import_time, const std::string& from = {}) noexcept;
 
   /// @returns Whether the slice is already serialized.
   [[nodiscard]] bool is_serialized() const noexcept;
