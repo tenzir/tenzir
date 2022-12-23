@@ -16,6 +16,8 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
+#include <caf/detail/serialized_size.hpp>
+
 #include <cstddef>
 #include <span>
 #include <vector>
@@ -237,12 +239,15 @@ public:
         .on_load(callback)
         .fields(f.field("chunk", chunk), f.field("offset", offset));
     } else {
-      if (!x.is_serialized()) {
-        auto serialized_x
-          = table_slice{to_record_batch(x), x.layout(), serialize::yes};
-        serialized_x.import_time(x.import_time());
-        chunk = serialized_x.chunk_;
-        x = std::move(serialized_x);
+      if constexpr (!std::is_same_v<Inspector,
+                                    caf::detail::serialized_size_inspector>) {
+        if (!x.is_serialized()) {
+          auto serialized_x
+            = table_slice{to_record_batch(x), x.layout(), serialize::yes};
+          serialized_x.import_time(x.import_time());
+          chunk = serialized_x.chunk_;
+          x = std::move(serialized_x);
+        }
       }
       return f.object(x)
         .pretty_name("vast.table_slice")
