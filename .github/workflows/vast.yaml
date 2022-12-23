@@ -786,7 +786,49 @@ jobs:
           ccache --show-stats
           # Print statistics about cache compression.
           ccache --show-compression
-      - name: Run Unit Tests
+      - name: Run Unit Tests 1
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Run Unit Tests 2
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Run Unit Tests 3
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Run Unit Tests 4
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Run Unit Tests 5
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Run Unit Tests 6
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
+        # --test-dir is not yet supported in the ctest version we're using here.
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          ctest --parallel
+      - name: Run Unit Tests 7
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
         # --test-dir is not yet supported in the ctest version we're using here.
