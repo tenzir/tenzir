@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <ftxui/component/screen_interactive.hpp>
-#include <ftxui/dom/elements.hpp>
 
 #pragma once
 
@@ -29,8 +28,8 @@ public:
   void redraw();
 
 private:
-  ftxui::ScreenInteractive screen_;
-  std::vector<ftxui::Element> logs_;
+  ftxui::ScreenInteractive screen_; // TODO: pimpl
+  std::vector<std::string> logs_;
 };
 
 } // namespace vast::plugins::tui

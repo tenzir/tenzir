@@ -10,58 +10,280 @@
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/dom/elements.hpp>
 #include <ftxui/dom/node.hpp>
+#include <ftxui/dom/table.hpp>
 #include <ftxui/screen/color.hpp>
 #include <ftxui/screen/screen.hpp>
 
 namespace vast::plugins::tui {
 
 using namespace ftxui;
+using namespace std::string_literals;
+
+namespace {
+
+// Style note:
+// For our handrolled FTXUI elements and components, we slightly deviate from
+// our naming convention. We use PascalCase for our own custom components, so
+// that their composition becomes clearer in the FTXUI context.
+
+/// The application global state.
+struct app_state {
+  bool show_help = false;
+  struct navigation {
+    int page_index = 0;
+    std::vector<std::string> page_names;
+  } nav;
+};
+
+// Element Vee() {
+//   static constexpr auto vee = {
+//     R"(////////////    **************************)",
+//     R"( ////////////    ************************ )",
+//     R"(  ////////////    **********************  )",
+//     R"(   ////////////    ********************   )",
+//     R"(    ////////////    ******************    )",
+//     R"(     ////////////         ***********     )",
+//     R"(      ////////////       ***********      )",
+//     R"(       ////////////     ***********       )",
+//     R"(        ////////////    **********        )",
+//     R"(         ////////////    ********         )",
+//     R"(          ////////////    ******          )",
+//     R"(           ////////////    ****           )",
+//     R"(            ////////////    **            )",
+//     R"(             ////////////                 )",
+//     R"(              ////////////                )",
+//   };
+//   Elements elements;
+//   for (const auto* line : vee)
+//     elements.emplace_back(text(line));
+//   return vbox(elements);
+// }
+
+Element Vee() {
+  Elements elements;
+  auto line = [&](auto... xs) {
+    elements.emplace_back(hbox(xs...));
+  };
+  auto c1 = [](auto x) {
+    return text(x) | color(Color::Blue);
+  };
+  auto c2 = [](auto x) {
+    return text(x) | color(Color::Cyan);
+  };
+  line(c1("////////////    "), c2("*************************"));
+  line(c1(" ////////////    "), c2("*********************** "));
+  line(c1("  ////////////    "), c2("*********************  "));
+  line(c1("   ////////////    "), c2("*******************   "));
+  line(c1("    ////////////    "), c2("*****************    "));
+  line(c1("     ////////////         "), c2("**********     "));
+  line(c1("      ////////////       "), c2("**********      "));
+  line(c1("       ////////////     "), c2("**********       "));
+  line(c1("        ////////////    "), c2("*********        "));
+  line(c1("         ////////////    "), c2("*******         "));
+  line(c1("          ////////////    "), c2("*****          "));
+  line(c1("           ////////////    "), c2("***           "));
+  line(c1("            ////////////    "), c2("*            "));
+  line(c1("             ////////////                 "));
+  line(c1("              ////////////                "));
+  return vbox(elements);
+}
+
+Element VAST() {
+  static constexpr auto letters = {
+    "@@@@@@        @@@@@@    @@@@@            @@@@@@@@      @@@@@@@@@@@@@@@@",
+    " @@@@@@      @@@@@@    @@@@@@@        @@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@",
+    "  @@@@@@    @@@@@@    @@@@@@@@@      @@@@@@                 @@@@@@     ",
+    "   @@@@@   @@@@@@    @@@@@ @@@@@      @@@@@@@@@@@@          @@@@@@     ",
+    "    @@@@@  @@@@@    @@@@@   @@@@@       @@@@@@@@@@@@@       @@@@@@     ",
+    "     @@@@@@@@@@    @@@@@@@@@@@@@@@              @@@@@@      @@@@@@     ",
+    "      @@@@@@@@    @@@@@@@@@@@@@@@@@   @@@@@@   @@@@@@       @@@@@@     ",
+    "       @@@@@@     @@@@@       @@@@@@   @@@@@@@@@@@@@        @@@@@@     ",
+  };
+  Elements elements;
+  for (const auto* line : letters)
+    elements.emplace_back(text(line));
+  return vbox(elements);
+}
+
+Element VASTslanted() {
+  static constexpr auto banner = {
+    R"( _   _____   __________)",
+    R"(| | / / _ | / __/_  __/)",
+    R"(| |/ / __ |_\ \  / /   )",
+    R"(|___/_/ |_/___/ /_/    )",
+  };
+  Elements elements;
+  for (const auto* line : banner)
+    elements.emplace_back(text(line));
+  return vbox(elements);
+}
+
+/// The help component.
+Component Help() {
+  struct Impl : public ComponentBase {
+    Element Render() override {
+      auto table = Table({
+        {"Key", "Description"},
+        {"q", "quit the UI"},
+        {"<UP>", "move focus one window up"},
+        {"<DOWN>", "move focus one window down"},
+        {"<LEFT>", "move focus one window to the left"},
+        {"<RIGHT>", "move focus one window to the right"},
+        {"?", "render this help"},
+      });
+      table.SelectAll().Border(LIGHT);
+      table.SelectColumn(0).Border(LIGHT);
+      // Set the table header apart from the rest
+      table.SelectRow(0).Decorate(bold);
+      table.SelectRow(0).SeparatorVertical(LIGHT);
+      // Align center the first column.
+      table.SelectColumn(0).DecorateCells(center);
+      return table.Render();
+    }
+
+    // TODO: make the table navigatable via arrows/j/k.
+    bool OnEvent(Event event) override {
+      if (!Focused())
+        return false;
+      int old_selected = selected;
+      if (event == Event::ArrowUp || event == Event::Character('k'))
+        selected--;
+      if (event == Event::ArrowDown || event == Event::Character('j'))
+        selected++;
+      if (event == Event::Tab && num_entries > 0)
+        selected = (selected + 1) % num_entries;
+      if (event == Event::TabReverse && num_entries > 0)
+        selected = (selected + num_entries - 1) % num_entries;
+      selected = std::max(0, std::min(num_entries - 1, selected));
+      return selected != old_selected;
+    }
+
+    int selected = 0;
+    int num_entries = 0;
+  };
+  return Make<Impl>();
+};
+
+struct page {
+  std::string name;
+  Component component;
+};
+
+page home_page() {
+  return {"Home", Renderer([&] {
+            return text("home") | color(Color::Green) | flex | center;
+          })};
+}
+
+page hunt_page() {
+  return {"Hunt", Renderer([&] {
+            return text("hunt!") | flex | center;
+          })};
+}
+
+page settings_page() {
+  return {"Settings", Renderer([&] {
+            return text("settings") | flex | center;
+          })};
+}
+
+page about_page() {
+  return {"About", Renderer([&] {
+            return vbox({
+                     Vee() | center,  //
+                     text(""), //
+                     text(""), //
+                     VAST() | color(Color::Green) | center, //
+                   })
+                   | flex | center;
+          })};
+}
+
+Component MainWindow(app_state* state) {
+  // Make the navigation a tad prettier.
+  auto option = MenuOption::HorizontalAnimated();
+  option.underline.SetAnimation(std::chrono::milliseconds(500),
+                                animation::easing::Linear);
+  option.entries.transform = [](EntryState entry_state) {
+    Element e = text(entry_state.label) | hcenter | flex;
+    if (entry_state.active && entry_state.focused)
+      e = e | bold;
+    if (!entry_state.focused && !entry_state.active)
+      e = e | dim;
+    return e;
+  };
+  option.underline.color_inactive = Color::Default;
+  option.underline.color_active = Color::Green;
+  // Register the pages.
+  auto pages = {
+    home_page(),     //
+    hunt_page(),     //
+    settings_page(), //
+    about_page(),    //
+  };
+  Components components;
+  components.reserve(pages.size());
+  for (const auto& page : pages) {
+    state->nav.page_names.push_back(page.name);
+    components.push_back(page.component);
+  }
+  // Create the navigation.
+  auto menu = Menu(&state->nav.page_names, &state->nav.page_index, option);
+  // Build the containers that the menu references.
+  auto content = Container::Tab(components, &state->nav.page_index);
+  // Build the main container.
+  auto container = Container::Vertical({
+    menu,
+    content,
+  });
+  return Renderer(container, [&] {
+    return vbox({
+             menu->Render(),
+             content->Render() | flex,
+           })
+           | border;
+  });
+}
+
+} // namespace
 
 tui::tui() : screen_{ScreenInteractive::Fullscreen()} {
 }
 
 void tui::loop() {
-  auto middle = Renderer([] {
-    return text("middle") | center;
-  });
-  auto left = Renderer([] {
-    return text("Left") | center;
-  });
-  auto right = Renderer([] {
-    return text("right") | center;
-  });
-  auto top = Renderer([] {
-    return text("top") | center;
-  });
-  auto bottom = Renderer([&] {
-    return vbox(logs_);
-  });
-  int left_size = 20;
-  int right_size = 20;
-  int top_size = 10;
-  int bottom_size = 10;
-  auto container = middle;
-  container = ResizableSplitLeft(left, container, &left_size);
-  container = ResizableSplitRight(right, container, &right_size);
-  container = ResizableSplitTop(top, container, &top_size);
-  container = ResizableSplitBottom(bottom, container, &bottom_size);
-  auto renderer = Renderer(container, [&] {
-    return container->Render() | border;
-  });
-  renderer |= CatchEvent([&](Event event) {
-    // Exit via 'q' or ESC.
-    if (event == Event::Character('q') || event == Event::Escape) {
-      screen_.ExitLoopClosure()();
-      return true;
+  auto screen = ScreenInteractive::Fullscreen();
+  app_state state;
+  auto main = MainWindow(&state);
+  auto help = Help();
+  main |= Modal(help, &state.show_help);
+  //  Catch key events.
+  main |= CatchEvent([&](Event event) {
+    // Catch events for every layer.
+    if (state.show_help) {
+      if (event == Event::Character('q') || event == Event::Escape) {
+        state.show_help = false;
+        return true;
+      }
+    } else {
+      if (event == Event::Character('q') || event == Event::Escape) {
+        screen_.ExitLoopClosure()();
+        return true;
+      }
+      // Show help via '?'
+      if (event == Event::Character('?')) {
+        state.show_help = true;
+        return true;
+      }
     }
     return false;
   });
-  screen_.Loop(renderer);
+  screen_.Loop(main);
 }
 
 void tui::add_log(std::string line) {
-  logs_.emplace_back(text(std::move(line)));
+  logs_.emplace_back(std::move(line));
 }
 
 void tui::redraw() {
