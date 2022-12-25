@@ -122,49 +122,26 @@ Element VASTslanted() {
 
 /// The help component.
 Component Help() {
-  struct Impl : public ComponentBase {
-    Element Render() override {
-      auto table = Table({
-        {"Key", "Description"},
-        {"q", "quit the UI"},
-        {"<UP>", "move focus one window up"},
-        {"<DOWN>", "move focus one window down"},
-        {"<LEFT>", "move focus one window to the left"},
-        {"<RIGHT>", "move focus one window to the right"},
-        {"?", "render this help"},
-      });
-      table.SelectAll().Border(LIGHT);
-      table.SelectColumn(0).Border(LIGHT);
-      // Set the table header apart from the rest
-      table.SelectRow(0).Decorate(bold);
-      table.SelectRow(0).SeparatorVertical(LIGHT);
-      // Align center the first column.
-      table.SelectColumn(0).DecorateCells(center);
-      return table.Render();
-    }
-
-    // TODO: make the table navigatable via arrows/j/k.
-    bool OnEvent(Event event) override {
-      if (!Focused())
-        return false;
-      int old_selected = selected;
-      if (event == Event::ArrowUp || event == Event::Character('k'))
-        selected--;
-      if (event == Event::ArrowDown || event == Event::Character('j'))
-        selected++;
-      if (event == Event::Tab && num_entries > 0)
-        selected = (selected + 1) % num_entries;
-      if (event == Event::TabReverse && num_entries > 0)
-        selected = (selected + num_entries - 1) % num_entries;
-      selected = std::max(0, std::min(num_entries - 1, selected));
-      return selected != old_selected;
-    }
-
-    int selected = 0;
-    int num_entries = 0;
-  };
-  return Make<Impl>();
-};
+  return Renderer([&] {
+    auto table = Table({
+      {"Key", "Description"},
+      {"q", "quit the UI"},
+      {"<UP>", "move focus one window up"},
+      {"<DOWN>", "move focus one window down"},
+      {"<LEFT>", "move focus one window to the left"},
+      {"<RIGHT>", "move focus one window to the right"},
+      {"?", "render this help"},
+    });
+    table.SelectAll().Border(LIGHT);
+    // Set the table header apart from the rest
+    table.SelectRow(0).Decorate(bold);
+    table.SelectRow(0).SeparatorHorizontal(LIGHT);
+    table.SelectRow(0).Border(LIGHT);
+    // Align center the first column.
+    table.SelectColumn(0).DecorateCells(center);
+    return table.Render();
+  });
+}
 
 struct page {
   std::string name;
@@ -192,9 +169,9 @@ page settings_page() {
 page about_page() {
   return {"About", Renderer([&] {
             return vbox({
-                     Vee() | center,  //
-                     text(""), //
-                     text(""), //
+                     Vee() | center,                        //
+                     text(""),                              //
+                     text(""),                              //
                      VAST() | color(Color::Green) | center, //
                    })
                    | flex | center;
