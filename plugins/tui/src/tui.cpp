@@ -123,19 +123,6 @@ Element VAST() {
   return vbox(elements);
 }
 
-Element VASTslanted() {
-  static constexpr auto banner = {
-    R"( _   _____   __________)",
-    R"(| | / / _ | / __/_  __/)",
-    R"(| |/ / __ |_\ \  / /   )",
-    R"(|___/_/ |_/___/ /_/    )",
-  };
-  Elements elements;
-  for (const auto* line : banner)
-    elements.emplace_back(text(line));
-  return vbox(elements);
-}
-
 /// The help component.
 Component Help() {
   return Renderer([&] {
