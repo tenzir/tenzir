@@ -8,6 +8,8 @@
 
 #include "tui/tui.hpp"
 
+#include <vast/logger.hpp>
+
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -21,19 +23,34 @@ namespace vast::plugins::tui {
 using namespace ftxui;
 using namespace std::string_literals;
 
-/// The state per connected VAST node.
-struct node_state {};
-
 /// The application global state. The UI thread owns this data structure. It is
 /// not thread-safe to modify it outside of this context.
 struct tui_state {
+  /// The FTXUI screen.
   ftxui::ScreenInteractive screen = ScreenInteractive::Fullscreen();
+
+  /// Flag that indicates whether the help modal is shown.
   bool show_help = false;
-  struct navigation {
+
+  /// State for the log pane.
+  struct log_state {
+    int height = 10;
+    int index = 0;
+    std::vector<std::string> messages;
+  } log;
+
+  /// Navigation state.
+  struct navigation_state {
     int page_index = 0;
     std::vector<std::string> page_names;
   } nav;
-  std::vector<ftxui::Element> logs;
+
+  struct theme_state {
+    Color primary_color = Color::Green;
+    Color secondary_color = Color::Blue;
+  } theme;
+
+  // --------------------------------
 
   /// Thread-safe channel to execute code in the context of FTXUI main thread.
   template <class Function>
@@ -47,6 +64,23 @@ struct tui_state {
 };
 
 namespace {
+
+auto make_button_option(tui_state::theme_state* state) {
+  ButtonOption result;
+  result.transform = [=](const EntryState& s) {
+    auto element = text(s.label) | border;
+    if (s.active)
+      element |= bold;
+    if (s.focused)
+      element |= color(state->primary_color);
+    return element;
+  };
+  return result;
+}
+
+auto make_button(auto label, auto action, tui_state* state) {
+  return Button(label, action, make_button_option(&state->theme));
+}
 
 // Style note:
 // For our handrolled FTXUI elements and components, we slightly deviate from
@@ -151,26 +185,35 @@ struct page {
   Component component;
 };
 
-page home_page() {
-  return {"Home", Renderer([&] {
-            return text("home") | color(Color::Green) | flex | center;
-          })};
+page home_page(tui_state* state) {
+  auto action = [=] { VAST_INFO("test!"); };
+  auto connect = make_button(" Connect ", action, state);
+  auto container = Container::Vertical({
+    connect //
+  });
+  auto renderer = Renderer(container, [=] {
+    return vbox({
+             connect->Render(),
+           })
+           | flex | center;
+  });
+  return {"Home", renderer};
 }
 
 page hunt_page() {
-  return {"Hunt", Renderer([&] {
+  return {"Hunt", Renderer([] {
             return text("hunt!") | flex | center;
           })};
 }
 
 page settings_page() {
-  return {"Settings", Renderer([&] {
+  return {"Settings", Renderer([] {
             return text("settings") | flex | center;
           })};
 }
 
 page about_page() {
-  return {"About", Renderer([&] {
+  return {"About", Renderer([] {
             return vbox({
                      Vee() | center,                        //
                      text(""),                              //
@@ -181,15 +224,36 @@ page about_page() {
           })};
 }
 
+Component LogPane(tui_state* state) {
+  MenuOption menu_option;
+  menu_option.entries.transform = [=](const EntryState& entry) {
+    Element e = text(entry.label);
+    if (entry.focused)
+      e |= color(state->theme.primary_color);
+    if (entry.active)
+      e |= bold;
+    if (!entry.focused && !entry.active)
+      e |= dim;
+    return e;
+  };
+  auto menu = Menu(&state->log.messages, &state->log.index, menu_option);
+  auto container = Container::Vertical({
+      menu
+      });
+  return Renderer(container, [=] {
+    return vbox({menu->Render() | vscroll_indicator | frame});
+  });
+}
+
 Component MainWindow(tui_state* state) {
   // Make the navigation a tad prettier.
   auto option = MenuOption::HorizontalAnimated();
   option.underline.SetAnimation(std::chrono::milliseconds(500),
                                 animation::easing::Linear);
-  option.entries.transform = [](EntryState entry_state) {
+  option.entries.transform = [=](EntryState entry_state) {
     Element e = text(entry_state.label) | hcenter | flex;
     if (entry_state.active && entry_state.focused)
-      e = e | bold;
+      e = e | bold | color(state->theme.primary_color);
     if (!entry_state.focused && !entry_state.active)
       e = e | dim;
     return e;
@@ -198,10 +262,10 @@ Component MainWindow(tui_state* state) {
   option.underline.color_active = Color::Green;
   // Register the pages.
   auto pages = {
-    home_page(),     //
-    hunt_page(),     //
-    settings_page(), //
-    about_page(),    //
+    home_page(state), //
+    hunt_page(),      //
+    settings_page(),  //
+    about_page(),     //
   };
   Components components;
   components.reserve(pages.size());
@@ -213,6 +277,8 @@ Component MainWindow(tui_state* state) {
   auto menu = Menu(&state->nav.page_names, &state->nav.page_index, option);
   // Build the containers that the menu references.
   auto content = Container::Tab(components, &state->nav.page_index);
+  auto log_pane = LogPane(state);
+  content = ResizableSplitBottom(log_pane, content, &state->log.height);
   // Build the main container.
   auto container = Container::Vertical({
     menu,
@@ -262,7 +328,9 @@ void tui::loop() {
 
 void tui::add_log(std::string line) {
   state_->mutate([line = std::move(line)](tui_state* state) mutable {
-    state->logs.emplace_back(text(std::move(line)));
+    state->log.messages.emplace_back(std::move(line));
+    // Always select last element when new log lines arrive.
+    state->log.index = static_cast<int>(state->log.messages.size() - 1);
   });
 }
 
