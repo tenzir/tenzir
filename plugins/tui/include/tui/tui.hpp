@@ -33,7 +33,6 @@ public:
 
 private:
   std::shared_ptr<tui_state> state_;
-  std::vector<std::string> logs_;
 };
 
 } // namespace vast::plugins::tui

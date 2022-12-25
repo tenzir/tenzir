@@ -21,12 +21,11 @@ namespace vast::plugins::tui {
 using namespace ftxui;
 using namespace std::string_literals;
 
-// Style note:
-// For our handrolled FTXUI elements and components, we slightly deviate from
-// our naming convention. We use PascalCase for our own custom components, so
-// that their composition becomes clearer in the FTXUI context.
+/// The state per connected VAST node.
+struct node_state {};
 
-/// The application global state.
+/// The application global state. The UI thread owns this data structure. It is
+/// not thread-safe to modify it outside of this context.
 struct tui_state {
   ftxui::ScreenInteractive screen = ScreenInteractive::Fullscreen();
   bool show_help = false;
@@ -35,9 +34,24 @@ struct tui_state {
     std::vector<std::string> page_names;
   } nav;
   std::vector<ftxui::Element> logs;
+
+  /// Thread-safe channel to execute code in the context of FTXUI main thread.
+  template <class Function>
+  void mutate(Function f) {
+    tui_state* state = this;
+    auto task = [=]() mutable {
+      f(state);
+    };
+    screen.Post(task);
+  }
 };
 
 namespace {
+
+// Style note:
+// For our handrolled FTXUI elements and components, we slightly deviate from
+// our naming convention. We use PascalCase for our own custom components, so
+// that their composition becomes clearer in the FTXUI context.
 
 // Element Vee() {
 //   static constexpr auto vee = {
@@ -260,7 +274,9 @@ void tui::loop() {
 }
 
 void tui::add_log(std::string line) {
-  state_->logs.emplace_back(text(std::move(line)));
+  state_->mutate([line = std::move(line)](tui_state* state) mutable {
+    state->logs.emplace_back(text(std::move(line)));
+  });
 }
 
 void tui::redraw() {
