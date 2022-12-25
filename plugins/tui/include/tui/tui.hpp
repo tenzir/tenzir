@@ -22,6 +22,8 @@ public:
   /// Initialize the UI.
   tui();
 
+  ~tui();
+
   /// Run the UI main loop in a dedicated thread.
   void loop();
 
@@ -32,7 +34,7 @@ public:
   void redraw();
 
 private:
-  std::shared_ptr<tui_state> state_;
+  std::unique_ptr<tui_state> state_;
 };
 
 } // namespace vast::plugins::tui

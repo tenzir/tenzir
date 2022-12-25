@@ -318,8 +318,10 @@ Component MainWindow(tui_state* state) {
 
 } // namespace
 
-tui::tui() : state_{std::make_shared<tui_state>()} {
+tui::tui() : state_{std::make_unique<tui_state>()} {
 }
+
+tui::~tui() = default;
 
 void tui::loop() {
   auto main = MainWindow(state_.get());
