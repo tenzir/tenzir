@@ -21,21 +21,23 @@ namespace vast::plugins::tui {
 using namespace ftxui;
 using namespace std::string_literals;
 
-namespace {
-
 // Style note:
 // For our handrolled FTXUI elements and components, we slightly deviate from
 // our naming convention. We use PascalCase for our own custom components, so
 // that their composition becomes clearer in the FTXUI context.
 
 /// The application global state.
-struct app_state {
+struct tui_state {
+  ftxui::ScreenInteractive screen = ScreenInteractive::Fullscreen();
   bool show_help = false;
   struct navigation {
     int page_index = 0;
     std::vector<std::string> page_names;
   } nav;
+  std::vector<ftxui::Element> logs;
 };
+
+namespace {
 
 // Element Vee() {
 //   static constexpr auto vee = {
@@ -178,7 +180,7 @@ page about_page() {
           })};
 }
 
-Component MainWindow(app_state* state) {
+Component MainWindow(tui_state* state) {
   // Make the navigation a tad prettier.
   auto option = MenuOption::HorizontalAnimated();
   option.underline.SetAnimation(std::chrono::milliseconds(500),
@@ -215,56 +217,54 @@ Component MainWindow(app_state* state) {
     menu,
     content,
   });
-  return Renderer(container, [&] {
+  auto main = Renderer(container, [&] {
     return vbox({
              menu->Render(),
              content->Render() | flex,
            })
            | border;
   });
-}
-
-} // namespace
-
-tui::tui() : screen_{ScreenInteractive::Fullscreen()} {
-}
-
-void tui::loop() {
-  auto screen = ScreenInteractive::Fullscreen();
-  app_state state;
-  auto main = MainWindow(&state);
   auto help = Help();
-  main |= Modal(help, &state.show_help);
+  main |= Modal(help, &state->show_help);
   //  Catch key events.
   main |= CatchEvent([&](Event event) {
-    // Catch events for every layer.
-    if (state.show_help) {
+    if (state->show_help) {
       if (event == Event::Character('q') || event == Event::Escape) {
-        state.show_help = false;
+        state->show_help = false;
         return true;
       }
     } else {
       if (event == Event::Character('q') || event == Event::Escape) {
-        screen_.ExitLoopClosure()();
+        state->screen.ExitLoopClosure()();
         return true;
       }
       // Show help via '?'
       if (event == Event::Character('?')) {
-        state.show_help = true;
+        state->show_help = true;
         return true;
       }
     }
     return false;
   });
-  screen_.Loop(main);
+  return main;
+}
+
+} // namespace
+
+tui::tui() : state_{std::make_shared<tui_state>()} {
+}
+
+void tui::loop() {
+  auto main = MainWindow(state_.get());
+  state_->screen.Loop(main);
 }
 
 void tui::add_log(std::string line) {
-  logs_.emplace_back(std::move(line));
+  state_->logs.emplace_back(text(std::move(line)));
 }
 
 void tui::redraw() {
-  screen_.PostEvent(Event::Custom);
+  state_->screen.PostEvent(Event::Custom);
 }
 
 } // namespace vast::plugins::tui

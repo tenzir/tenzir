@@ -6,11 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <ftxui/component/screen_interactive.hpp>
-
 #pragma once
 
+#include <memory>
+#include <vector>
+
 namespace vast::plugins::tui {
+
+/// @relates tui
+struct tui_state;
 
 /// The terminal UI implementation.
 class tui {
@@ -28,7 +32,7 @@ public:
   void redraw();
 
 private:
-  ftxui::ScreenInteractive screen_; // TODO: pimpl
+  std::shared_ptr<tui_state> state_;
   std::vector<std::string> logs_;
 };
 
