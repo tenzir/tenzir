@@ -17,7 +17,7 @@ namespace vast::plugins::tui {
 caf::message
 tui_command(const invocation& /* inv */, caf::actor_system& system) {
   auto self = caf::scoped_actor{system};
-  auto actor = self->spawn<caf::detached>(ui);
+  auto actor = self->spawn(ui);
   self->send(actor, atom::run_v);
   self->wait_for(actor);
   return {};
