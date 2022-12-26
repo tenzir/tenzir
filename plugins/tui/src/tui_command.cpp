@@ -8,18 +8,18 @@
 
 #include "tui/ui.hpp"
 
-#include <caf/scoped_actor.hpp>
 #include <vast/command.hpp>
-#include <vast/logger.hpp>
+
+#include <caf/scoped_actor.hpp>
 
 namespace vast::plugins::tui {
 
 caf::message
 tui_command(const invocation& /* inv */, caf::actor_system& system) {
-  auto self = caf::scoped_actor{system};
-  auto actor = self->spawn(ui);
-  self->send(actor, atom::run_v);
-  self->wait_for(actor);
+  auto ui = spawn_ui(system);
+  caf::scoped_actor self{system};
+  self->send(ui, atom::run_v);
+  self->wait_for(ui);
   return {};
 }
 

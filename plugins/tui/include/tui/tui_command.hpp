@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <vast/command.hpp>
 #include <vast/fwd.hpp>
 
 #include <caf/fwd.hpp>
