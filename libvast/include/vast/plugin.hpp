@@ -13,6 +13,7 @@
 #include "vast/command.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/pp.hpp"
+#include "vast/detail/weak_handle.hpp"
 #include "vast/http_api.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
@@ -167,7 +168,7 @@ protected:
 
 private:
   /// A weak handle to the spawned actor handle.
-  mutable caf::weak_actor_ptr weak_handle_ = {};
+  mutable detail::weak_handle<system::analyzer_plugin_actor> weak_handle_ = {};
 
   /// Indicates that the ANALYZER was spawned at least once. This flag is used
   /// to ensure that `make_analyzer` is called at most once per plugin.

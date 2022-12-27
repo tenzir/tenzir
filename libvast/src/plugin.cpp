@@ -322,7 +322,7 @@ const std::vector<std::filesystem::path>& loaded_config_files() {
 system::analyzer_plugin_actor analyzer_plugin::analyzer(
   system::node_actor::stateful_pointer<system::node_state> node) const {
   if (auto handle = weak_handle_.lock())
-    return caf::actor_cast<system::analyzer_plugin_actor>(handle);
+    return handle;
   if (spawned_once_ || !node)
     return {};
   auto handle = make_analyzer(node);
@@ -336,7 +336,7 @@ system::analyzer_plugin_actor analyzer_plugin::analyzer(
             VAST_ERROR("failed to connect analyzer {} to the importer: {}",
                        name(), error);
           });
-  weak_handle_ = caf::actor_cast<caf::weak_actor_ptr>(handle);
+  weak_handle_ = handle;
   spawned_once_ = true;
   return handle;
 }
