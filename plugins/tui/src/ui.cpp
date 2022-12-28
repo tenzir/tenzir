@@ -10,14 +10,15 @@
 
 #include "tui/actor_sink.hpp"
 
-#include <caf/event_based_actor.hpp>
-#include <caf/stateful_actor.hpp>
-
+#include <vast/defaults.hpp>
 #include <vast/logger.hpp>
 #include <vast/system/actors.hpp>
 #include <vast/system/connect_to_node.hpp>
 #include <vast/system/node.hpp>
 
+#include <caf/event_based_actor.hpp>
+#include <caf/scoped_actor.hpp>
+#include <caf/stateful_actor.hpp>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -31,59 +32,109 @@ namespace vast::plugins::tui {
 using namespace ftxui;
 using namespace std::string_literals;
 
+// Style note:
+// For our handrolled FTXUI elements and components, we slightly deviate from
+// our naming convention. We use PascalCase for our own custom components, so
+// that their composition becomes clearer in the FTXUI context.
+
 namespace {
 
-/// The FTXUI main loop owns this state data structure. The implementation style
-/// therefore follows a functional reactive programming pattern.
-///
-/// Any data that comes from the outside must be handed over to this structure
-/// in a thread-safe manner, which is only possible by moving the data into a
-/// lambda function f through ScreenInteractive::Post(f). The main loop then
-/// executes this function to update the application state and decides when to
-/// redraw the screen next.
-///
-/// Since we need to performance communication with the rest of the VAST
-/// ecosystem, we need an actor system to spawn helper actors that interact with
-/// remote VAST nodes, e.g., sending it commands and receiving data.
+/// State of the current theme.
+struct theme_state {
+  /// The theme colors.
+  struct color_state {
+    Color primary = Color::Green;
+    Color secondary = Color::Blue;
+  } color;
+
+  [[nodiscard]] ButtonOption button_option() const {
+    ButtonOption result;
+    result.transform = [=](const EntryState& s) {
+      auto element = text(s.label) | border;
+      if (s.active)
+        element |= bold;
+      if (s.focused)
+        element |= ftxui::color(color.primary);
+      return element;
+    };
+    return result;
+  }
+
+  [[nodiscard]] MenuOption menu_option_vertical() const {
+    MenuOption result;
+    result.entries.transform = [=](const EntryState& entry) {
+      Element e = text(entry.label);
+      if (entry.focused)
+        e |= ftxui::color(color.primary);
+      // if (entry.active)
+      //   e |= bold;
+      if (!entry.focused && !entry.active)
+        e |= dim;
+      return e;
+    };
+    return result;
+  }
+
+  [[nodiscard]] MenuOption menu_option_horizontal() const {
+    auto result = MenuOption::HorizontalAnimated();
+    result.underline.SetAnimation(std::chrono::milliseconds(500),
+                                  animation::easing::Linear);
+    result.entries.transform = [=](EntryState entry_state) {
+      Element e = text(entry_state.label) | hcenter | flex;
+      if (entry_state.active && entry_state.focused)
+        e = e | bold | ftxui::color(color.primary);
+      if (!entry_state.focused && !entry_state.active)
+        e = e | dim;
+      return e;
+    };
+    result.underline.color_inactive = Color::Default;
+    result.underline.color_active = color.primary;
+    return result;
+  }
+};
+
+/// The FTXUI main loop mutates this actor state. Any data that comes from the
+/// "outside" via messages must be handed over to the state in a thread-safe
+/// manner, for which there exists an explicit mutation function. It's only safe
+/// to stop this actor once the UI thread terminated.
 struct ui_state {
   explicit ui_state(ui_actor::stateful_pointer<ui_state> self) : self{self} {
   }
 
+  /// The actor owning the main loop.
+  caf::actor main_loop;
+
   /// The FTXUI screen.
   ScreenInteractive screen = ScreenInteractive::Fullscreen();
 
-  /// Flag that indicates whether the help modal is shown.
-  bool show_help = false;
+  /// The active theme.
+  theme_state theme;
 
-  /// State for the log pane.
-  struct log_state {
-    int height = 10;
-    int index = 0;
-    std::vector<std::string> messages;
-    caf::actor receiver;
-  } log;
+  /// The messages from the logger.
+  std::vector<std::string> log_messages;
 
-  /// Navigation state.
-  struct navigation_state {
-    int page_index = 0;
-    std::vector<std::string> page_names;
-  } nav;
-
-  struct theme_state {
-    Color primary_color = Color::Green;
-    Color secondary_color = Color::Blue;
-  } theme;
+  /// The textual description of node metadata..
+  struct node_description {
+    /// The node ID.
+    std::string id;
+    /// The node endpoint.
+    std::string endpoint;
+  } node_input;
 
   /// The state per connected VAST node.
   struct node_state {
-    std::string name;
-    std::string endpoint;
-    system::node_actor node;
+    /// The node description.
+    node_description description;
+    /// A handle to the remote node.
+    system::node_actor actor;
+    /// The settings to connect to the remote node.
     caf::settings opts;
   };
 
-  std::vector<node_state> nodes;
-  int node_index = -1;
+  using node_state_ptr = std::shared_ptr<node_state>;
+
+  /// The list of connected nodes.
+  std::vector<node_state_ptr> nodes;
 
   /// Pointer to the owning actor.
   ui_actor::pointer self;
@@ -92,27 +143,18 @@ struct ui_state {
   static inline const char* name = "ui";
 };
 
-auto make_button_option(ui_state::theme_state* state) {
-  ButtonOption result;
-  result.transform = [=](const EntryState& s) {
-    auto element = text(s.label) | border;
-    if (s.active)
-      element |= bold;
-    if (s.focused)
-      element |= color(state->primary_color);
-    return element;
-  };
+/// Constructs node state from the user-provided input.
+ui_state::node_state_ptr make_node_state(ui_state::node_description desc) {
+  if (desc.id.empty())
+    desc.id = defaults::system::node_id;
+  if (desc.endpoint.empty())
+    desc.endpoint = defaults::system::endpoint;
+  auto result = std::make_shared<ui_state::node_state>();
+  result->description = desc;
+  caf::put(result->opts, "vast.node-id", std::move(desc.id));
+  caf::put(result->opts, "vast.endpoint", std::move(desc.endpoint));
   return result;
 }
-
-auto make_button(auto label, auto action, ui_state* state) {
-  return Button(label, action, make_button_option(&state->theme));
-}
-
-// Style note:
-// For our handrolled FTXUI elements and components, we slightly deviate from
-// our naming convention. We use PascalCase for our own custom components, so
-// that their composition becomes clearer in the FTXUI context.
 
 // Element Vee() {
 //   static constexpr auto vee = {
@@ -186,7 +228,7 @@ Element VAST() {
 
 /// The help component.
 Component Help() {
-  return Renderer([&] {
+  return Renderer([] {
     auto table = Table({
       {"Key", "Description"},
       {"q", "quit the UI"},
@@ -207,148 +249,273 @@ Component Help() {
   });
 }
 
-struct page {
-  std::string name;
-  Component component;
-};
-
-page home_page(ui_state* state) {
-  // FIXME
-  // auto action = [=] {
-  //  const auto* node_state = state->nodes[state->node_index];
-  //  auto actor
-  //    = system::connect_to_node(node_state->self, node_state->settings);
-  //  if (actor
-  //  VAST_INFO("test!");
-  //};
-  auto action = [] {
-  VAST_INFO("test!");
+Component
+ConnectWindow(ui_state* state,
+              std::function<void(ui_state::node_state_ptr)> on_connect = {}) {
+  auto action = [=] {
+    auto node = make_node_state(state->node_input);
+    // We're creating a scoped actor only because connect_to_node requires one.
+    // Otherwise we could have used state->self.
+    caf::scoped_actor self{state->self->home_system()};
+    auto actor = system::connect_to_node(self, node->opts);
+    if (!actor) {
+      VAST_ERROR(actor.error());
+      return;
+    }
+    node->actor = std::move(*actor);
+    state->self->monitor(node->actor);
+    state->nodes.push_back(node);
+    if (on_connect)
+      on_connect(std::move(node));
   };
-  auto connect = make_button(" Connect ", action, state);
+  auto id
+    = Input(&state->node_input.id, std::string{defaults::system::node_id});
+  auto endpoint = Input(&state->node_input.endpoint,
+                        std::string{defaults::system::endpoint});
+  auto connect = Button(" Connect", action, state->theme.button_option());
   auto container = Container::Vertical({
-    connect //
+    id,       //
+    endpoint, //
+    connect,  //
   });
   auto renderer = Renderer(container, [=] {
     return vbox({
-             connect->Render(),
+             text("Connect to VAST node") | center | bold,
+             separator(),
+             hbox(text("ID:     "),
+                  id->Render() | color(state->theme.color.primary)),
+             hbox(text("Endpoint: "),
+                  endpoint->Render() | color(state->theme.color.primary)),
+             separator(),
+             connect->Render() | center,
+           })
+           | size(WIDTH, GREATER_THAN, 40) //
+           | border | center;
+  });
+  return renderer;
+}
+
+/// A component that displays the node status.
+Component NodeStatus(ui_state::node_state_ptr node) {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state::node_state_ptr node) : node_{std::move(node)} {
+      auto component = Renderer([=] {
+        FlexboxConfig config;
+        config.direction = FlexboxConfig::Direction::Row;
+        config.wrap = FlexboxConfig::Wrap::Wrap;
+        config.justify_content = FlexboxConfig::JustifyContent::SpaceAround;
+        config.align_items = FlexboxConfig::AlignItems::FlexStart;
+        config.align_content = FlexboxConfig::AlignContent::FlexStart;
+        auto charts = flexbox({chart("RAM"),    //
+                               chart("Memory"), //
+                               chart("Ingestion")},
+                              config);
+        return vbox({
+          text(node_->description.id) | hcenter, //
+          text(""),                              //
+          charts | flex,                         //
+        });
+      });
+      Add(component);
+    }
+
+    Element Render() override {
+      return ComponentBase::Render();
+    }
+
+  private:
+    static Element chart(std::string name) {
+      return window(text(std::move(name)), graph(dummy_graph)) //
+             | size(WIDTH, EQUAL, 40) | size(HEIGHT, EQUAL, 20);
+    }
+
+    static std::vector<int> dummy_graph(int width, int height) {
+      std::vector<int> result(width);
+      for (int i = 0; i < width; ++i)
+        result[i] = i % (height - 4) + 2;
+      return result;
+    }
+
+    ui_state::node_state_ptr node_;
+  };
+  return Make<Impl>(std::move(node));
+};
+
+/// An overview of the managed VAST nodes.
+Component Fleet(ui_state* state) {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state) : state_{state} {
+      // Create button to add new node.
+      auto action = [=] {
+        page_index_ = 1;
+      };
+      auto button = Button(" + ", action, state->theme.button_option());
+      // Create node menu.
+      auto menu
+        = Menu(&labels_, &menu_index_, state->theme.menu_option_vertical());
+      // The menu and button make up the navigation.
+      auto navigation_container = Container::Vertical({
+        button, //
+        menu,   //
+      });
+      // Render the navigation.
+      auto navigation = Renderer(navigation_container, [=] {
+        return vbox({
+                 hbox(text("VAST Nodes") | vcenter,
+                      filler(),          //
+                      button->Render()), //
+                 separator(),
+                 menu->Render(),
+               })
+               | size(WIDTH, GREATER_THAN, 20); //
+      });
+      // The connection window is always first; the button toggles it.
+      auto menu_tab = Container::Tab({}, &menu_index_);
+      auto on_connect = [=](ui_state::node_state_ptr node) {
+        page_index_ = 0;
+        menu_index_ = static_cast<int>(labels_.size());
+        labels_.emplace_back(node->description.id);
+        menu_tab->Add(NodeStatus(std::move(node)));
+      };
+      auto tab = Container::Tab({menu_tab, ConnectWindow(state_, on_connect)},
+                                &page_index_);
+      auto split = ResizableSplitLeft(navigation, tab, &menu_width_);
+      Add(split);
+    }
+
+    Element Render() override {
+      return ComponentBase::Render();
+    }
+
+  private:
+    ui_state* state_;
+    std::vector<std::string> labels_;
+    int page_index_ = 0;
+    int menu_index_ = 0;
+    int menu_width_ = 20;
+  };
+  return Make<Impl>(state);
+};
+
+Component Hunt() {
+  return Renderer([] {
+    return text("hunt!") | flex | center;
+  });
+}
+
+Component Settings() {
+  return Renderer([] {
+    return text("settings") | flex | center;
+  });
+}
+
+Component About() {
+  return Renderer([] {
+    return vbox({
+             Vee() | center,                        //
+             text(""),                              //
+             text(""),                              //
+             VAST() | color(Color::Green) | center, //
            })
            | flex | center;
   });
-  return {"Home", renderer};
-}
-
-page hunt_page() {
-  return {"Hunt", Renderer([] {
-            return text("hunt!") | flex | center;
-          })};
-}
-
-page settings_page() {
-  return {"Settings", Renderer([] {
-            return text("settings") | flex | center;
-          })};
-}
-
-page about_page() {
-  return {"About", Renderer([] {
-            return vbox({
-                     Vee() | center,                        //
-                     text(""),                              //
-                     text(""),                              //
-                     VAST() | color(Color::Green) | center, //
-                   })
-                   | flex | center;
-          })};
 }
 
 Component LogPane(ui_state* state) {
-  MenuOption menu_option;
-  menu_option.entries.transform = [=](const EntryState& entry) {
-    Element e = text(entry.label);
-    if (entry.focused)
-      e |= color(state->theme.primary_color);
-    //if (entry.active)
-    //  e |= bold;
-    if (!entry.focused && !entry.active)
-      e |= dim;
-    return e;
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state) : state_{state} {
+      Add(Menu(&state_->log_messages, &index_,
+               state_->theme.menu_option_vertical()));
+    }
+
+    Element Render() override {
+      auto size = static_cast<int>(state_->log_messages.size());
+      if (saved_size_ != size) {
+        saved_size_ = size;
+        index_ = size - 1;
+      }
+      return ComponentBase::Render() | vscroll_indicator | frame;
+    }
+
+  private:
+    ui_state* state_;
+    int index_ = 0;
+    int saved_size_ = 0;
   };
-  auto menu = Menu(&state->log.messages, &state->log.index, menu_option);
-  auto container = Container::Vertical({menu});
-  return Renderer(container, [=] {
-    return vbox({menu->Render()}) | focusPositionRelative(0, 1) | vscroll_indicator | frame;
-  });
+  return Make<Impl>(state);
 }
 
 Component MainWindow(ui_state* state) {
-  // Make the navigation a tad prettier.
-  auto option = MenuOption::HorizontalAnimated();
-  option.underline.SetAnimation(std::chrono::milliseconds(500),
-                                animation::easing::Linear);
-  option.entries.transform = [=](EntryState entry_state) {
-    Element e = text(entry_state.label) | hcenter | flex;
-    if (entry_state.active && entry_state.focused)
-      e = e | bold | color(state->theme.primary_color);
-    if (!entry_state.focused && !entry_state.active)
-      e = e | dim;
-    return e;
-  };
-  option.underline.color_inactive = Color::Default;
-  option.underline.color_active = state->theme.primary_color;
-  // Register the pages.
-  auto pages = {
-    home_page(state), //
-    hunt_page(),      //
-    settings_page(),  //
-    about_page(),     //
-  };
-  Components components;
-  components.reserve(pages.size());
-  for (const auto& page : pages) {
-    state->nav.page_names.push_back(page.name);
-    components.push_back(page.component);
-  }
-  // Create the navigation.
-  auto menu = Menu(&state->nav.page_names, &state->nav.page_index, option);
-  // Build the containers that the menu references.
-  auto content = Container::Tab(components, &state->nav.page_index);
-  auto log_pane = LogPane(state);
-  content = ResizableSplitBottom(log_pane, content, &state->log.height);
-  // Build the main container.
-  auto container = Container::Vertical({
-    menu,
-    content,
-  });
-  auto main = Renderer(container, [&] {
-    return vbox({
-             menu->Render(),
-             content->Render() | flex,
-           })
-           | border;
-  });
-  auto help = Help();
-  main |= Modal(help, &state->show_help);
-  main |= CatchEvent([&](Event event) {
-    if (state->show_help) {
-      if (event == Event::Character('q') || event == Event::Escape) {
-        state->show_help = false;
-        return true;
-      }
-    } else {
-      if (event == Event::Character('q') || event == Event::Escape) {
-        state->screen.ExitLoopClosure()();
-        return true;
-      }
-      // Show help via '?'
-      if (event == Event::Character('?')) {
-        state->show_help = true;
-        return true;
-      }
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state) : state_{state} {
+      Components pages;
+      auto add_page = [&](std::string name, Component page) {
+        page_names_.push_back(std::move(name));
+        pages.push_back(std::move(page));
+      };
+      add_page("Fleet", Fleet(state));
+      add_page("Hunt", Hunt());
+      add_page("Settings", Settings());
+      add_page("About", About());
+      // Create the navigation.
+      auto page_menu = Menu(&page_names_, &page_index_,
+                            state->theme.menu_option_horizontal());
+      // Build the containers that the menu references.
+      auto page_tab = Container::Tab(std::move(pages), &page_index_);
+      auto log_pane = LogPane(state);
+      page_tab = ResizableSplitBottom(log_pane, page_tab, &log_height_);
+      // Build the main container.
+      auto container = Container::Vertical({
+        page_menu,
+        page_tab,
+      });
+      auto main = Renderer(container, [=] {
+        return vbox({
+          page_menu->Render(),
+          page_tab->Render() | flex,
+        });
+      });
+      auto help = Help();
+      main |= Modal(help, &show_help_);
+      main |= CatchEvent([=](Event event) {
+        if (show_help_) {
+          if (event == Event::Character('q') || event == Event::Escape) {
+            show_help_ = false;
+            return true;
+          }
+        } else {
+          if (event == Event::Character('q') || event == Event::Escape) {
+            state->screen.Exit();
+            return true;
+          }
+          // Show help via '?'
+          if (event == Event::Character('?')) {
+            show_help_ = true;
+            return true;
+          }
+        }
+        return false;
+      });
+      Add(main);
     }
-    return false;
-  });
-  return main;
-}
+
+    Element Render() override {
+      return ComponentBase::Render() | border;
+    }
+
+  private:
+    ui_state* state_;
+    std::vector<std::string> page_names_;
+    bool show_help_ = false;
+    int page_index_ = -1;
+    int log_height_ = 10;
+  };
+  return Make<Impl>(state);
+};
 
 /// The implementation of the UI actor.
 ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
@@ -369,12 +536,29 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
   };
   /// Helper function to redraw the screen.
   auto redraw = [=] {
-    self->state.screen.PostEvent(Event::Custom); // redraw
+    self->state.screen.PostEvent(Event::Custom);
   };
-  self->set_down_handler([=](const caf::down_msg& msg) {
-    // Here's where we can do state cleanup after the FTXUI main loop has
-    // terminated.
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
+    auto f = [](ui_state* state) mutable {
+      state->screen.Exit();
+    };
+    mutate(f);
     self->quit(msg.reason);
+  });
+  self->set_down_handler([=](const caf::down_msg& msg) {
+    // If the main loop has exited, we're done.
+    if (msg.source == self->state.main_loop) {
+      self->quit(msg.reason);
+      return;
+    }
+    // We're also monitoring remote VAST nodes. If one goes down, update the UI
+    // state accordingly so that it can render the connection status.
+    auto f = [remote = msg.source](ui_state* state) mutable {
+      for (auto& node : state->nodes)
+        if (node->actor.address() == remote)
+          node->actor = system::node_actor{};
+    };
+    mutate(f);
   });
   return {
     // Process a message from the logger.
@@ -383,11 +567,7 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
     // message.
     [=](std::string& message) {
       auto f = [msg = std::move(message)](ui_state* state) mutable {
-        state->log.messages.emplace_back(std::move(msg));
-        // Always select last element when new log lines arrive. This is needed
-        // in combination with focusPositionRelative, otherwise we're entering
-        // in an unfocused area.
-        //state->log.index = static_cast<int>(state->log.messages.size() - 1);
+        state->log_messages.emplace_back(std::move(msg));
       };
       mutate(f);
       redraw();
@@ -395,7 +575,7 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
     [=](atom::run) {
       // Ban UI into dedicated thread. We're getting a down message upon
       // termination, e.g., when pushes the exit button or CTRL+C.
-      self->spawn<caf::detached + caf::monitored>([=] {
+      self->state.main_loop = self->spawn<caf::detached + caf::monitored>([=] {
         auto main = MainWindow(&self->state);
         self->state.screen.Loop(main);
       });
