@@ -43,52 +43,62 @@ namespace {
 struct theme_state {
   /// The theme colors.
   struct color_state {
-    Color primary = Color::Green;
+    Color primary = Color::Cyan;
     Color secondary = Color::Blue;
+    Color focus = Color::Green;
   } color;
 
+  /// Transforms an element according to given entry state.
+  void transform(Element& e, const EntryState& entry) const {
+    if (entry.focused)
+      e |= ftxui::color(color.focus);
+    if (entry.active)
+      e |= ftxui::color(color.secondary) | bold;
+    if (!entry.focused && !entry.active)
+      e |= ftxui::color(color.secondary) | dim;
+  }
+
+  /// Generates a ButtonOption instance.
   [[nodiscard]] ButtonOption button_option() const {
     ButtonOption result;
-    result.transform = [=](const EntryState& s) {
-      auto element = text(s.label) | border;
-      if (s.active)
-        element |= bold;
-      if (s.focused)
-        element |= ftxui::color(color.primary);
-      return element;
+    result.transform = [=](const EntryState& entry) {
+      Element e
+        = hbox({text(" "), text(entry.label), text(" ")}) | center | border;
+      transform(e, entry);
+      return e;
     };
     return result;
   }
 
-  [[nodiscard]] MenuOption menu_option_vertical() const {
+  [[nodiscard]] MenuOption structured_data() const {
     MenuOption result;
     result.entries.transform = [=](const EntryState& entry) {
       Element e = text(entry.label);
-      if (entry.focused)
-        e |= ftxui::color(color.primary);
-      // if (entry.active)
-      //   e |= bold;
-      if (!entry.focused && !entry.active)
-        e |= dim;
+      transform(e, entry);
       return e;
     };
     return result;
   }
 
-  [[nodiscard]] MenuOption menu_option_horizontal() const {
-    auto result = MenuOption::HorizontalAnimated();
-    result.underline.SetAnimation(std::chrono::milliseconds(500),
-                                  animation::easing::Linear);
-    result.entries.transform = [=](EntryState entry_state) {
-      Element e = text(entry_state.label) | hcenter | flex;
-      if (entry_state.active && entry_state.focused)
-        e = e | bold | ftxui::color(color.primary);
-      if (!entry_state.focused && !entry_state.active)
-        e = e | dim;
+  [[nodiscard]] MenuOption navigation(MenuOption::Direction direction
+                                      = MenuOption::Direction::Right) const {
+    using enum MenuOption::Direction;
+    MenuOption result;
+    result.direction = direction;
+    auto horizontal = direction == Left || direction == Right;
+    result.entries.transform = [=](const EntryState& entry) {
+      Element e = text(entry.label);
+      if (horizontal)
+        e |= center;
+      e |= flex;
+      transform(e, entry);
       return e;
     };
+    result.underline.enabled = horizontal;
+    result.underline.SetAnimation(std::chrono::milliseconds(500),
+                                  animation::easing::Linear);
     result.underline.color_inactive = Color::Default;
-    result.underline.color_active = color.primary;
+    result.underline.color_active = color.secondary;
     return result;
   }
 };
@@ -218,7 +228,7 @@ Element VAST() {
     "    @@@@@  @@@@@    @@@@@   @@@@@       @@@@@@@@@@@@@       @@@@@@     ",
     "     @@@@@@@@@@    @@@@@@@@@@@@@@@              @@@@@@      @@@@@@     ",
     "      @@@@@@@@    @@@@@@@@@@@@@@@@@   @@@@@@   @@@@@@       @@@@@@     ",
-    "       @@@@@@     @@@@@       @@@@@@   @@@@@@@@@@@@@        @@@@@@     ",
+    "       @@@@@@     @@@@@       @@@@@@    @@@@@@@@@@@@        @@@@@@     ",
   };
   Elements elements;
   for (const auto* line : letters)
@@ -272,7 +282,7 @@ ConnectWindow(ui_state* state,
     = Input(&state->node_input.id, std::string{defaults::system::node_id});
   auto endpoint = Input(&state->node_input.endpoint,
                         std::string{defaults::system::endpoint});
-  auto connect = Button(" Connect", action, state->theme.button_option());
+  auto connect = Button("Connect", action, state->theme.button_option());
   auto container = Container::Vertical({
     id,       //
     endpoint, //
@@ -280,7 +290,7 @@ ConnectWindow(ui_state* state,
   });
   auto renderer = Renderer(container, [=] {
     return vbox({
-             text("Connect to VAST node") | center | bold,
+             text("Connect to VAST Node") | center | bold,
              separator(),
              hbox(text("ID:     "),
                   id->Render() | color(state->theme.color.primary)),
@@ -326,7 +336,8 @@ Component NodeStatus(ui_state::node_state_ptr node) {
 
   private:
     static Element chart(std::string name) {
-      return window(text(std::move(name)), graph(dummy_graph)) //
+      return window(text(std::move(name)),
+                    graph(dummy_graph) | color(Color::GrayLight)) //
              | size(WIDTH, EQUAL, 40) | size(HEIGHT, EQUAL, 20);
     }
 
@@ -349,39 +360,39 @@ Component Fleet(ui_state* state) {
     Impl(ui_state* state) : state_{state} {
       // Create button to add new node.
       auto action = [=] {
-        page_index_ = 1;
+        mode_index_ = 1;
       };
-      auto button = Button(" + ", action, state->theme.button_option());
+      auto button = Button("+ Add Node", action, state->theme.button_option());
       // Create node menu.
-      auto menu
-        = Menu(&labels_, &menu_index_, state->theme.menu_option_vertical());
+      auto menu = Menu(&labels_, &menu_index_,
+                       state->theme.navigation(MenuOption::Direction::Down));
       // The menu and button make up the navigation.
       auto navigation_container = Container::Vertical({
-        button, //
         menu,   //
+        button, //
       });
       // Render the navigation.
       auto navigation = Renderer(navigation_container, [=] {
         return vbox({
-                 hbox(text("VAST Nodes") | vcenter,
-                      filler(),          //
-                      button->Render()), //
+                 text("Nodes") | center,
                  separator(),
                  menu->Render(),
+                 filler(),
+                 button->Render() | xflex,
                })
                | size(WIDTH, GREATER_THAN, 20); //
       });
       // The connection window is always first; the button toggles it.
       auto menu_tab = Container::Tab({}, &menu_index_);
       auto on_connect = [=](ui_state::node_state_ptr node) {
-        page_index_ = 0;
+        mode_index_ = 0;
         menu_index_ = static_cast<int>(labels_.size());
         labels_.emplace_back(node->description.id);
         menu_tab->Add(NodeStatus(std::move(node)));
       };
-      auto tab = Container::Tab({menu_tab, ConnectWindow(state_, on_connect)},
-                                &page_index_);
-      auto split = ResizableSplitLeft(navigation, tab, &menu_width_);
+      auto mode_tab = Container::Tab(
+        {menu_tab, ConnectWindow(state_, on_connect)}, &mode_index_);
+      auto split = ResizableSplitLeft(navigation, mode_tab, &menu_width_);
       Add(split);
     }
 
@@ -392,7 +403,7 @@ Component Fleet(ui_state* state) {
   private:
     ui_state* state_;
     std::vector<std::string> labels_;
-    int page_index_ = 0;
+    int mode_index_ = 1;
     int menu_index_ = 0;
     int menu_width_ = 20;
   };
@@ -414,10 +425,13 @@ Component Settings() {
 Component About() {
   return Renderer([] {
     return vbox({
-             Vee() | center,                        //
-             text(""),                              //
-             text(""),                              //
-             VAST() | color(Color::Green) | center, //
+             Vee() | center,                  //
+             text(""),                        //
+             text(""),                        //
+             VAST() | center,                 //
+             text(""),                        //
+             text(""),                        //
+             text("http://vast.io") | center, //
            })
            | flex | center;
   });
@@ -427,8 +441,8 @@ Component LogPane(ui_state* state) {
   class Impl : public ComponentBase {
   public:
     Impl(ui_state* state) : state_{state} {
-      Add(Menu(&state_->log_messages, &index_,
-               state_->theme.menu_option_vertical()));
+      Add(
+        Menu(&state_->log_messages, &index_, state_->theme.structured_data()));
     }
 
     Element Render() override {
@@ -462,8 +476,8 @@ Component MainWindow(ui_state* state) {
       add_page("Settings", Settings());
       add_page("About", About());
       // Create the navigation.
-      auto page_menu = Menu(&page_names_, &page_index_,
-                            state->theme.menu_option_horizontal());
+      auto page_menu
+        = Menu(&page_names_, &page_index_, state->theme.navigation());
       // Build the containers that the menu references.
       auto page_tab = Container::Tab(std::move(pages), &page_index_);
       auto log_pane = LogPane(state);
@@ -475,7 +489,7 @@ Component MainWindow(ui_state* state) {
       });
       auto main = Renderer(container, [=] {
         return vbox({
-          page_menu->Render(),
+          hbox({page_menu->Render() | flex}),
           page_tab->Render() | flex,
         });
       });
