@@ -675,15 +675,20 @@ bool convert(const caf::config_value& x, data& y) {
   return caf::visit(f, x.get_data());
 }
 
-record strip(const record& xs) {
+caf::expected<record> strip(const record& xs, size_t max_recursion) {
+  if (max_recursion == 0)
+    return ec::recursion_limit_reached;
   record result;
   for (const auto& [k, v] : xs) {
     if (caf::holds_alternative<caf::none_t>(v))
       continue;
     if (const auto* vr = caf::get_if<record>(&v)) {
-      auto nested = strip(*vr);
-      if (!nested.empty())
-        result.emplace(k, std::move(nested));
+      if (auto nested = strip(*vr, max_recursion - 1)) {
+        if (!nested->empty())
+          result.emplace(k, std::move(*nested));
+      } else {
+        return nested.error();
+      }
     } else {
       result.emplace(k, v);
     }

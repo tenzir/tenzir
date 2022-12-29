@@ -158,8 +158,12 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     static void deliver(caf::typed_response_promise<std::string>&& promise,
                         record&& content) {
       // We strip and sort the output for a cleaner presentation of the data.
-      if (auto json = to_json(sort(strip(content))))
-        promise.deliver(std::move(*json));
+      if (auto stripped = strip(content)) {
+        if (auto json = to_json(sort(std::move(*stripped))))
+          promise.deliver(std::move(*json));
+      } else {
+        promise.deliver(stripped.error());
+      }
     }
     // In-place sort each level of the tree.
     static record& sort(record&& r) {

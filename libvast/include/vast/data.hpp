@@ -271,12 +271,17 @@ bool convert(const caf::config_value& x, data& y);
 
 // -- strip ------------------------------------------------------------
 
-/// Remove empty sub-records from the tree.
+/// Removes empty sub-records from the tree.
+/// @param xs The record to prune.
+/// @param max_recursion The maximum number of nested records to traverse before
+/// aborting.
+/// @returns The pruned record.
 /// Example:
 ///   { a = 13, b = {}, c = { d = {} } }
 /// is changed into:
 ///   { a = 13 }
-record strip(const record& xs);
+caf::expected<record>
+strip(const record& xs, size_t max_recursion = defaults::max_recursion);
 
 // -- JSON -------------------------------------------------------------
 
