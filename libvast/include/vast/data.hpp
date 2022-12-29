@@ -285,6 +285,14 @@ strip(const record& xs, size_t max_recursion = defaults::max_recursion);
 
 // -- JSON -------------------------------------------------------------
 
+/// Parses JSON into a data.
+/// @param str The string containing the JSON content.
+/// @param max_recursion The maximum number of nested records to traverse before
+/// aborting.
+/// @returns The parsed JSON as data, or an error.
+caf::expected<data>
+from_json(std::string_view str, size_t max_recursion = defaults::max_recursion);
+
 /// Prints data as JSON.
 /// @param x The data instance.
 /// @returns The JSON representation of *x*, or an error.

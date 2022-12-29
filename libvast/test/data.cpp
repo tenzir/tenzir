@@ -118,7 +118,7 @@ TEST(strip) {
     {"g", caf::none},
   };
   auto expected = record{{"b", count{5u}}};
-  CHECK_EQUAL(strip(xs), expected);
+  CHECK_EQUAL(unbox(strip(xs)), expected);
 }
 
 TEST(construction) {
@@ -399,4 +399,58 @@ TEST(pack / unpack) {
   auto x2 = data{};
   REQUIRE_EQUAL(unpack(*flatbuffer, x2), caf::none);
   CHECK_EQUAL(x, x2);
+}
+
+TEST(from_json) {
+  auto jsonize = [](std::string_view str) {
+    return unbox(from_json(str));
+  };
+  CHECK_EQUAL(jsonize("null"), data{});
+  CHECK_EQUAL(jsonize("true"), data{true});
+  CHECK_EQUAL(jsonize("false"), data{false});
+  CHECK_EQUAL(jsonize("0"), data{integer{0}});
+  CHECK_EQUAL(jsonize("42"), data{integer{42}});
+  CHECK_NOT_EQUAL(jsonize("42"), data{count{42}});
+  CHECK_EQUAL(jsonize("4.2"), data{real{4.2}});
+  CHECK_EQUAL(jsonize("\"foo\""), data{"foo"});
+  CHECK_EQUAL(jsonize("[ null,true, -4.2]"),
+              data(list{data{}, data{true}, data{-4.2}}));
+  const auto json = R"(
+    {
+      "none": null,
+      "bool": true,
+      "integer": -42,
+      "real": -4.0,
+      "duration": "5 days",
+      "time": "2012-04-23T18:25:43.511Z",
+      "string": "foo",
+      "address": "1.2.3.4",
+      "subnet": "10.0.0.0/8",
+      "list": [null, true, -4.2, {}],
+      "record": {
+        "nested_real": 47.11,
+        "nested_record": {}
+      }
+    }
+  )";
+  vast::time t;
+  REQUIRE(parsers::ymdhms("2012-04-23T18:25:43.511Z", t));
+  auto rec = data{record{
+    {"none", caf::none},
+    {"bool", bool{true}},
+    {"integer", integer{-42}},
+    {"real", real{-4.0}},
+    {"duration", days{5}},
+    {"time", t},
+    {"string", std::string{"foo"}},
+    {"address", unbox(to<address>("1.2.3.4"))},
+    {"subnet", unbox(to<subnet>("10.0.0.0/8"))},
+    {"list", list{data{}, data{true}, data{-4.2}, data{record{}}}},
+    {"record",
+     record{
+       {"nested_real", real{47.11}},
+       {"nested_record", record{}},
+     }},
+  }};
+  CHECK_EQUAL(jsonize(json), rec);
 }

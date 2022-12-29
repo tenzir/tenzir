@@ -8,6 +8,8 @@
 
 #include "vast/data.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -31,6 +33,7 @@
 
 #include <iterator>
 #include <optional>
+#include <simdjson.h>
 #include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
@@ -693,6 +696,84 @@ caf::expected<record> strip(const record& xs, size_t max_recursion) {
       result.emplace(k, v);
     }
   }
+  return result;
+}
+
+namespace {
+
+caf::error convert(const simdjson::dom::element& json, data& result,
+                   size_t max_recursion) {
+  switch (json.type()) {
+    case simdjson::dom::element_type::ARRAY: {
+      auto array = json.get_array();
+      list xs;
+      xs.reserve(array.size());
+      for (auto element : array) {
+        data x;
+        if (auto err = convert(element, x, max_recursion - 1))
+          return err;
+        xs.push_back(std::move(x));
+      }
+      result = std::move(xs);
+      break;
+    }
+    case simdjson::dom::element_type::OBJECT: {
+      auto object = json.get_object();
+      record xs;
+      xs.reserve(object.size());
+      for (auto [k, v] : object) {
+        data value;
+        if (auto err = convert(v, value, max_recursion - 1))
+          return err;
+        xs.emplace(k, std::move(value));
+      }
+      result = std::move(xs);
+      break;
+    }
+    case simdjson::dom::element_type::INT64:
+      result = integer{json.get_int64().value()};
+      break;
+    case simdjson::dom::element_type::UINT64:
+      result = count{json.get_uint64().value()};
+      break;
+    case simdjson::dom::element_type::DOUBLE:
+      result = real{json.get_double().value()};
+      break;
+    case simdjson::dom::element_type::STRING: {
+      const auto& str = json.get_string().value();
+      time t;
+      duration d;
+      if (auto x = to<subnet>(str))
+        result = *x;
+      else if (auto x = to<address>(str))
+        result = *x;
+      else if (parsers::ymdhms(str, t))
+        result = t;
+      else if (parsers::duration(str, d))
+        result = d;
+      else
+        result = std::string{json.get_string().value()};
+      break;
+    }
+    case simdjson::dom::element_type::BOOL:
+      result = json.get_bool().value();
+      break;
+    case simdjson::dom::element_type::NULL_VALUE:
+      break;
+  }
+  return caf::none;
+}
+
+} // namespace
+
+caf::expected<data> from_json(std::string_view str, size_t max_recursion) {
+  simdjson::dom::parser json_parser;
+  auto parse_result = json_parser.parse(str);
+  if (parse_result.error() != simdjson::error_code::SUCCESS)
+    return caf::make_error(ec::parse_error, "failed to parse JSON value");
+  data result;
+  if (auto err = convert(parse_result.value(), result, max_recursion))
+    return err;
   return result;
 }
 
