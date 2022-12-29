@@ -114,6 +114,12 @@ struct partition_info {
     // nop
   }
 
+  partition_info(class uuid uuid, const partition_synopsis& synopsis)
+    : partition_info{uuid, synopsis.events, synopsis.max_import_time,
+                     synopsis.schema, synopsis.version} {
+    // nop
+  }
+
   /// The partition id.
   vast::uuid uuid = vast::uuid::nil();
 

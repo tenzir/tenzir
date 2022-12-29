@@ -247,7 +247,10 @@ using catalog_actor = typed_actor_fwd<
     taxonomies>,
   // Resolves an expression in terms of the known taxonomies.
   caf::replies_to<atom::resolve, expression>::with< //
-    expression>>
+    expression>,
+  // Retrieves information about a partition with a given uuid.
+  caf::replies_to<atom::get, uuid>::with< //
+    partition_info>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 

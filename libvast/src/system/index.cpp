@@ -1959,10 +1959,7 @@ index(index_actor::stateful_pointer<index_state> self,
               VAST_ASSERT(aps.synopsis);
               auto info = partition_info{
                 aps.uuid,
-                aps.synopsis->events,
-                aps.synopsis->max_import_time,
-                aps.synopsis->schema,
-                aps.synopsis->version,
+                *aps.synopsis,
               };
               // Update the index statistics. We only need to add the events of
               // the new partition here, the subtraction of the old events is
