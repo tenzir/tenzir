@@ -14,6 +14,7 @@
 #include <vast/concept/printable/vast/data.hpp>
 #include <vast/data.hpp>
 #include <vast/defaults.hpp>
+#include <vast/detail/narrow.hpp>
 #include <vast/detail/stable_map.hpp>
 #include <vast/logger.hpp>
 #include <vast/system/actors.hpp>
@@ -23,6 +24,7 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>
+#include <fmt/format.h>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -168,6 +170,17 @@ Component make_collapsible(std::string name, const data& x) {
   return Collapsible(std::move(name), caf::visit(f, x));
 }
 
+/// Applies consistent styling of table headers.
+/// In general, we're trying to style tables like the LaTeX booktabs package,
+/// i.e., as minimal vertical lines as possible.
+/// @relates make_table
+void apply_styling(Table& table) {
+  auto top = table.SelectRow(0);
+  top.Decorate(bold);
+  top.SeparatorVertical(EMPTY);
+  top.BorderBottom(LIGHT);
+}
+
 /// Creates a key-value table from a record. Nested records will be rendered as
 /// part of the value.
 /// @param key The name of the first column header.
@@ -187,11 +200,111 @@ Table make_table(std::string key, std::string value, const record& xs) {
     contents.push_back(std::move(row));
   }
   auto table = Table{std::move(contents)};
-  auto top = table.SelectRow(0);
-  top.Decorate(bold);
-  top.SeparatorVertical(EMPTY);
-  top.BorderBottom(LIGHT);
+  apply_styling(table);
   return table;
+}
+
+/// Creates a table that shows type statistics for all events in a VAST node.
+/// @param status An instance of a status record.
+/// @returns An event table
+/// @relates make_table
+Table make_schema_table(const data& status) {
+  using row_tuple = std::tuple<std::string, uint64_t, float>;
+  std::vector<row_tuple> rows;
+  if (auto xs = caf::get_if<record>(&status)) {
+    if (auto i = xs->find("index"); i != xs->end()) {
+      if (auto ys = caf::get_if<record>(&i->second)) {
+        if (auto j = ys->find("statistics"); j != ys->end()) {
+          if (auto zs = caf::get_if<record>(&j->second)) {
+            if (auto k = zs->find("layouts"); k != zs->end()) {
+              if (auto layouts = caf::get_if<record>(&k->second)) {
+                for (auto& [name, details] : *layouts) {
+                  if (auto obj = caf::get_if<record>(&details)) {
+                    row_tuple row;
+                    std::get<0>(row) = name;
+                    if (auto cnt = obj->find("count"); cnt != obj->end())
+                      if (auto n = caf::get_if<integer>(&cnt->second))
+                        std::get<1>(row)
+                          = detail::narrow_cast<uint64_t>(n->value);
+                    if (auto perc = obj->find("percentage"); perc != obj->end())
+                      if (auto frac = caf::get_if<real>(&perc->second))
+                        std::get<2>(row) = *frac / 100;
+                    rows.push_back(std::move(row));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  // Sort by event count.
+  std::sort(rows.begin(), rows.end(), [](const auto& xs, const auto& ys) {
+    return std::get<1>(xs) > std::get<1>(ys);
+  });
+  // Render the data.
+  std::vector<std::vector<Element>> contents;
+  contents.reserve(rows.size() + 1);
+  std::vector<Element> header(4);
+  header[0] = text("Schema");
+  header[1] = text("Events");
+  header[2] = text("Percentage");
+  header[3] = text("Histogram");
+  contents.push_back(std::move(header));
+  for (auto& [name, count, percentage] : rows) {
+    std::vector<Element> row(4);
+    row[0] = text(std::move(name));
+    row[1] = text(fmt::format(std::locale("en_US.UTF-8"), "{:L}", count));
+    row[2] = text(fmt::format("{:.1f}", percentage));
+    row[3] = gauge(percentage);
+    contents.push_back(std::move(row));
+  }
+  auto table = Table{std::move(contents)};
+  apply_styling(table);
+  table.SelectColumns(1, 2).DecorateCells(align_right);
+  return table;
+}
+
+/// Creates a table that shows the build configuration.
+/// @param status An instance of a status record.
+/// @returns A table of the build configuration.
+/// @relates make_table
+Table make_build_configuration_table(const data& status) {
+  if (const auto* xs = caf::get_if<record>(&status)) {
+    if (auto i = xs->find("version"); i != xs->end()) {
+      if (const auto* ys = caf::get_if<record>(&i->second)) {
+        if (auto j = ys->find("Build Configuration"); j != ys->end()) {
+          if (auto zs = caf::get_if<record>(&j->second)) {
+            auto t = make_table("Option", "Value", *zs);
+            apply_styling(t);
+            return t;
+          }
+        }
+      }
+    }
+  }
+  return {};
+}
+
+/// Creates a table that shows the VAST version details.
+/// @param status An instance of a status record.
+/// @returns A table of the version details fo the various components.
+/// @relates make_table
+Table make_version_table(const data& status) {
+  if (const auto* xs = caf::get_if<record>(&status)) {
+    if (auto i = xs->find("version"); i != xs->end()) {
+      if (const auto* ys = caf::get_if<record>(&i->second)) {
+        auto copy = *ys;
+        if (auto j = copy.find("Build Configuration"); j != copy.end())
+          copy.erase(j);
+        auto t = make_table("Component", "Version", copy);
+        apply_styling(t);
+        return t;
+      }
+    }
+  }
+  return {};
 }
 
 // Element Vee() {
@@ -362,27 +475,19 @@ Component NodeStatus(ui_state* state, std::string node_id) {
       // Add statistics.
       auto& node = state_->nodes[node_id_];
       VAST_ASSERT(node.actor);
-      // Add full status.
-      Element version;
-      Element build_config;
-      if (const auto* r = caf::get_if<record>(&node.status)) {
-        if (auto i = r->find("version"); i != r->end()) {
-          if (const auto* v = caf::get_if<record>(&i->second)) {
-            auto cleaned = *v;
-            if (auto j = cleaned.find("Build Configuration"); j != r->end()) {
-              auto cfg = std::move(caf::get<record>(j->second));
-              build_config = make_table("Option", "Value", cfg).Render();
-              cleaned.erase(j);
-            }
-            version = make_table("Component", "Version", cleaned).Render();
-          }
-        }
-      }
       auto stats = Renderer([=] {
+        auto version = make_version_table(node.status).Render();
+        auto build_cfg = make_build_configuration_table(node.status).Render();
+        auto schema = make_schema_table(node.status).Render();
+        auto make_box = [](auto x, auto... xs) {
+          // return vbox({text(x) | center, separator(), xs...}) | border;
+          return window(text(x) | center, xs...);
+        };
         return flexbox(
           {
-            window(text("Version"), version),
-            window(text("Build Configuration"), build_config),
+            make_box("Schema Distribution", schema),
+            make_box("Version", version),
+            make_box("Build Configuration", build_cfg),
           },
           flexbox_config_);
       });
@@ -392,14 +497,13 @@ Component NodeStatus(ui_state* state, std::string node_id) {
     }
 
     Element Render() override {
-      auto& node = state_->nodes[node_id_];
       auto charts = ChildAt(0);
       auto stats = ChildAt(1);
       auto status = ChildAt(2);
       return vbox({
         text(node_id_) | hcenter,
         text(""),
-        charts->Render() | xflex,
+        charts->Render(),
         text(""),
         stats->Render(),
         text(""),
@@ -698,7 +802,12 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
       // NB: it would be nice if VAST buffered the keye statistics so that we
       // have the key stats immediately to display, as opposed to slowly
       // accumulating them over time here at the client.
-      invocation inv{.full_name = "status"};
+      caf::settings options;
+      caf::put(options, "vast.status.detailed", true);
+      invocation inv{
+        .options = std::move(options),
+        .full_name = "status",
+      };
       self->request(*node, 5s, atom::run_v, std::move(inv))
         .then(
           [=](const caf::message&) {
@@ -721,7 +830,7 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
             }}(ctx);
             // Re-parse as data and update node state.
             if (auto json = from_json(actual_result)) {
-              VAST_DEBUG("got status: {}", *json);
+              VAST_DEBUG("got status");
               auto f = [=, status = std::move(*json)](ui_state* ui) mutable {
                 auto node_state = ui_state::node_state{
                   .actor = *node,
