@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "vast/atoms.hpp"
-#include <memory>
+#include <vast/atoms.hpp>
 
 #include <caf/typed_actor.hpp>
 
@@ -18,6 +17,8 @@ namespace vast::plugins::tui {
 using ui_actor = caf::typed_actor<
   /// Receive a log message.
   caf::reacts_to<std::string>,
+  /// Receive a log message.
+  caf::reacts_to<atom::connect, caf::settings>,
   /// Kick off the UI main loop.
   caf::reacts_to<atom::run>>;
 

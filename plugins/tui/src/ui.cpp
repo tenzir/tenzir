@@ -10,7 +10,11 @@
 
 #include "tui/actor_sink.hpp"
 
+#include <vast/concept/parseable/vast/json.hpp>
+#include <vast/concept/printable/vast/data.hpp>
+#include <vast/data.hpp>
 #include <vast/defaults.hpp>
+#include <vast/detail/stable_map.hpp>
 #include <vast/logger.hpp>
 #include <vast/system/actors.hpp>
 #include <vast/system/connect_to_node.hpp>
@@ -27,10 +31,13 @@
 #include <ftxui/screen/color.hpp>
 #include <ftxui/screen/screen.hpp>
 
+#include <chrono>
+
 namespace vast::plugins::tui {
 
 using namespace ftxui;
 using namespace std::string_literals;
+using namespace std::chrono_literals;
 
 // Style note:
 // For our handrolled FTXUI elements and components, we slightly deviate from
@@ -103,18 +110,10 @@ struct theme_state {
   }
 };
 
-/// The FTXUI main loop mutates this actor state. Any data that comes from the
-/// "outside" via messages must be handed over to the state in a thread-safe
-/// manner, for which there exists an explicit mutation function. It's only safe
-/// to stop this actor once the UI thread terminated.
+/// The FTXUI main loop is the only entity that *mutates* this state. The owning
+/// entity must ensure that interaction with the contained screen is safe.
 struct ui_state {
-  explicit ui_state(ui_actor::stateful_pointer<ui_state> self) : self{self} {
-  }
-
-  /// The actor owning the main loop.
-  caf::actor main_loop;
-
-  /// The FTXUI screen.
+  /// The screen.
   ScreenInteractive screen = ScreenInteractive::Fullscreen();
 
   /// The active theme.
@@ -123,47 +122,46 @@ struct ui_state {
   /// The messages from the logger.
   std::vector<std::string> log_messages;
 
-  /// The textual description of node metadata..
-  struct node_description {
-    /// The node ID.
-    std::string id;
-    /// The node endpoint.
-    std::string endpoint;
-  } node_input;
-
   /// The state per connected VAST node.
   struct node_state {
-    /// The node description.
-    node_description description;
     /// A handle to the remote node.
     system::node_actor actor;
     /// The settings to connect to the remote node.
     caf::settings opts;
+    /// The last status.
+    data status;
   };
 
-  using node_state_ptr = std::shared_ptr<node_state>;
-
   /// The list of connected nodes.
-  std::vector<node_state_ptr> nodes;
+  detail::stable_map<std::string, node_state> nodes;
 
-  /// Pointer to the owning actor.
-  ui_actor::pointer self;
-
-  /// Actor name.
-  static inline const char* name = "ui";
+  /// A handle to the UI actor so that it's possible to initiate actions through
+  /// user actions.
+  ui_actor parent;
 };
 
-/// Constructs node state from the user-provided input.
-ui_state::node_state_ptr make_node_state(ui_state::node_description desc) {
-  if (desc.id.empty())
-    desc.id = defaults::system::node_id;
-  if (desc.endpoint.empty())
-    desc.endpoint = defaults::system::endpoint;
-  auto result = std::make_shared<ui_state::node_state>();
-  result->description = desc;
-  caf::put(result->opts, "vast.node-id", std::move(desc.id));
-  caf::put(result->opts, "vast.endpoint", std::move(desc.endpoint));
-  return result;
+Component to_collapsible(std::string name, const data& x) {
+  auto f = detail::overload{
+    [&](const auto&) {
+      return Renderer([str = fmt::to_string(x)] {
+        return text(str);
+      });
+    },
+    [](const record& xs) {
+      Components components;
+      components.reserve(xs.size());
+      for (const auto& [k, v] : xs)
+        components.emplace_back(to_collapsible(k, v));
+      auto vertical = Container::Vertical(std::move(components));
+      return Renderer(vertical, [vertical] {
+        return hbox({
+          text(" "),
+          vertical->Render(),
+        });
+      });
+    },
+  };
+  return Collapsible(std::move(name), caf::visit(f, x));
 }
 
 // Element Vee() {
@@ -258,76 +256,44 @@ Component Help() {
     return table.Render();
   });
 }
-
-Component
-ConnectWindow(ui_state* state,
-              std::function<void(ui_state::node_state_ptr)> on_connect = {}) {
-  auto action = [=] {
-    auto node = make_node_state(state->node_input);
-    // We're creating a scoped actor only because connect_to_node requires one.
-    // Otherwise we could have used state->self.
-    caf::scoped_actor self{state->self->home_system()};
-    auto actor = system::connect_to_node(self, node->opts);
-    if (!actor) {
-      VAST_ERROR(actor.error());
-      return;
-    }
-    node->actor = std::move(*actor);
-    state->self->monitor(node->actor);
-    state->nodes.push_back(node);
-    if (on_connect)
-      on_connect(std::move(node));
-  };
-  auto id
-    = Input(&state->node_input.id, std::string{defaults::system::node_id});
-  auto endpoint = Input(&state->node_input.endpoint,
-                        std::string{defaults::system::endpoint});
-  auto connect = Button("Connect", action, state->theme.button_option());
-  auto container = Container::Vertical({
-    id,       //
-    endpoint, //
-    connect,  //
-  });
-  auto renderer = Renderer(container, [=] {
-    return vbox({
-             text("Connect to VAST Node") | center | bold,
-             separator(),
-             hbox(text("ID:     "),
-                  id->Render() | color(state->theme.color.primary)),
-             hbox(text("Endpoint: "),
-                  endpoint->Render() | color(state->theme.color.primary)),
-             separator(),
-             connect->Render() | center,
-           })
-           | size(WIDTH, GREATER_THAN, 40) //
-           | border | center;
-  });
-  return renderer;
-}
-
-/// A component that displays the node status.
-Component NodeStatus(ui_state::node_state_ptr node) {
+Component ConnectWindow(ui_state* state) {
   class Impl : public ComponentBase {
   public:
-    Impl(ui_state::node_state_ptr node) : node_{std::move(node)} {
-      auto component = Renderer([=] {
-        FlexboxConfig config;
-        config.direction = FlexboxConfig::Direction::Row;
-        config.wrap = FlexboxConfig::Wrap::Wrap;
-        config.justify_content = FlexboxConfig::JustifyContent::SpaceAround;
-        config.align_items = FlexboxConfig::AlignItems::FlexStart;
-        config.align_content = FlexboxConfig::AlignContent::FlexStart;
-        auto charts = flexbox({chart("RAM"),    //
-                               chart("Memory"), //
-                               chart("Ingestion")},
-                              config);
-        return vbox({
-          text(node_->description.id) | hcenter, //
-          text(""),                              //
-          charts | flex,                         //
-        });
+    Impl(ui_state* state) : state_{state} {
+      auto action = [=] {
+        static const auto default_node_id = std::string{defaults::system::node_id};
+        static const auto default_endpoint = std::string{defaults::system::endpoint};
+        caf::settings opts;
+        auto node_id = node_id_.empty() ? default_node_id : node_id_;
+        auto endpoint = endpoint_.empty() ? default_endpoint : endpoint_;
+        caf::put(opts, "vast.node-id", std::move(node_id));
+        caf::put(opts, "vast.endpoint", std::move(endpoint));
+        caf::anon_send(state_->parent, atom::connect_v, std::move(opts));
+      };
+      auto node_id = Input(&node_id_, std::string{defaults::system::node_id});
+      auto endpoint
+        = Input(&endpoint_, std::string{defaults::system::endpoint});
+      auto connect = Button("Connect", action, state->theme.button_option());
+      auto container = Container::Vertical({
+        node_id,  //
+        endpoint, //
+        connect,  //
       });
-      Add(component);
+      auto renderer = Renderer(container, [=] {
+        return vbox({
+                 text("Connect to VAST Node") | center | bold,
+                 separator(),
+                 hbox(text("ID:     "),
+                      node_id->Render() | color(state->theme.color.primary)),
+                 hbox(text("Endpoint: "),
+                      endpoint->Render() | color(state->theme.color.primary)),
+                 separator(),
+                 connect->Render() | center,
+               })
+               | size(WIDTH, GREATER_THAN, 40) //
+               | border | center;
+      });
+      Add(renderer);
     }
 
     Element Render() override {
@@ -335,10 +301,55 @@ Component NodeStatus(ui_state::node_state_ptr node) {
     }
 
   private:
+    ui_state* state_;
+    std::string node_id_;
+    std::string endpoint_;
+  };
+  return Make<Impl>(state);
+}
+
+/// A component that displays the node status.
+Component NodeStatus(ui_state* state, std::string node_id) {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state, std::string node_id)
+      : state_{state}, node_id_{std::move(node_id)} {
+      FlexboxConfig config;
+      config.direction = FlexboxConfig::Direction::Row;
+      config.wrap = FlexboxConfig::Wrap::Wrap;
+      config.justify_content = FlexboxConfig::JustifyContent::SpaceAround;
+      config.align_items = FlexboxConfig::AlignItems::FlexStart;
+      config.align_content = FlexboxConfig::AlignContent::FlexStart;
+      auto charts = Renderer([=] {
+        return flexbox({chart("RAM"),    //
+                        chart("Memory"), //
+                        chart("Ingestion")},
+                       config);
+      });
+      Add(charts);
+      auto& node = state_->nodes[node_id_];
+      VAST_ASSERT(node.actor);
+      auto status = to_collapsible("Status", node.status);
+      Add(status);
+    }
+
+    Element Render() override {
+      auto charts = ChildAt(0);
+      auto status = ChildAt(1);
+      return vbox({
+        text(node_id_) | hcenter,
+        text(""),
+        charts->Render() | xflex,
+        text(""),
+        status->Render(),
+      });
+    }
+
+  private:
     static Element chart(std::string name) {
       return window(text(std::move(name)),
                     graph(dummy_graph) | color(Color::GrayLight)) //
-             | size(WIDTH, EQUAL, 40) | size(HEIGHT, EQUAL, 20);
+             | size(WIDTH, EQUAL, 30) | size(HEIGHT, EQUAL, 15);
     }
 
     static std::vector<int> dummy_graph(int width, int height) {
@@ -348,10 +359,11 @@ Component NodeStatus(ui_state::node_state_ptr node) {
       return result;
     }
 
-    ui_state::node_state_ptr node_;
+    ui_state* state_;
+    std::string node_id_;
   };
-  return Make<Impl>(std::move(node));
-};
+  return Make<Impl>(state, std::move(node_id));
+}
 
 /// An overview of the managed VAST nodes.
 Component Fleet(ui_state* state) {
@@ -383,42 +395,52 @@ Component Fleet(ui_state* state) {
                | size(WIDTH, GREATER_THAN, 20); //
       });
       // The connection window is always first; the button toggles it.
-      auto menu_tab = Container::Tab({}, &menu_index_);
-      auto on_connect = [=](ui_state::node_state_ptr node) {
-        mode_index_ = 0;
-        menu_index_ = static_cast<int>(labels_.size());
-        labels_.emplace_back(node->description.id);
-        menu_tab->Add(NodeStatus(std::move(node)));
-      };
-      auto mode_tab = Container::Tab(
-        {menu_tab, ConnectWindow(state_, on_connect)}, &mode_index_);
-      auto split = ResizableSplitLeft(navigation, mode_tab, &menu_width_);
+      menu_tab_ = Container::Tab({}, &menu_index_);
+      auto connect_window = ConnectWindow(state_);
+      auto mode_tab = Container::Tab({menu_tab_, connect_window}, &mode_index_);
+      auto split = ResizableSplitLeft(navigation, mode_tab, &mode_width_);
       Add(split);
     }
 
     Element Render() override {
+      // Monitor state changes.
+      auto num_nodes = state_->nodes.size();
+      if (num_nodes > num_nodes_) {
+        // Register the newly add node.
+        num_nodes_ = num_nodes;
+        const auto& [id, node] = as_vector(state_->nodes).back();
+        // Add new menu entry.
+        labels_.emplace_back(id);
+        menu_index_ = static_cast<int>(labels_.size());
+        // Add corresponding status page.
+        menu_tab_->Add(NodeStatus(state_, id));
+        // Focus status pane.
+        mode_index_ = 0;
+      }
       return ComponentBase::Render();
     }
 
   private:
     ui_state* state_;
+    Component menu_tab_;
     std::vector<std::string> labels_;
-    int mode_index_ = 1;
     int menu_index_ = 0;
-    int menu_width_ = 20;
+    int mode_index_ = 1;
+    int mode_width_ = 20;
+    size_t num_nodes_ = 0;
   };
   return Make<Impl>(state);
 };
 
 Component Hunt() {
   return Renderer([] {
-    return text("hunt!") | flex | center;
+    return text("not yet implemented") | flex | center;
   });
 }
 
 Component Settings() {
   return Renderer([] {
-    return text("settings") | flex | center;
+    return text("not yet implemented") | flex | center;
   });
 }
 
@@ -471,16 +493,16 @@ Component MainWindow(ui_state* state) {
         page_names_.push_back(std::move(name));
         pages.push_back(std::move(page));
       };
-      add_page("Fleet", Fleet(state));
+      add_page("Fleet", Fleet(state_));
       add_page("Hunt", Hunt());
       add_page("Settings", Settings());
       add_page("About", About());
       // Create the navigation.
       auto page_menu
-        = Menu(&page_names_, &page_index_, state->theme.navigation());
+        = Menu(&page_names_, &page_index_, state_->theme.navigation());
       // Build the containers that the menu references.
       auto page_tab = Container::Tab(std::move(pages), &page_index_);
-      auto log_pane = LogPane(state);
+      auto log_pane = LogPane(state_);
       page_tab = ResizableSplitBottom(log_pane, page_tab, &log_height_);
       // Build the main container.
       auto container = Container::Vertical({
@@ -503,7 +525,7 @@ Component MainWindow(ui_state* state) {
           }
         } else {
           if (event == Event::Character('q') || event == Event::Escape) {
-            state->screen.Exit();
+            state_->screen.Exit();
             return true;
           }
           // Show help via '?'
@@ -531,8 +553,36 @@ Component MainWindow(ui_state* state) {
   return Make<Impl>(state);
 };
 
+struct ui_actor_state {
+  /// The only function to update the UI.
+  template <class Function>
+  void mutate(Function f) {
+    auto task = [=]() mutable {
+      f(&ui);
+    };
+    // Execute the task asynchronously.
+    ui.screen.Post(task);
+    // Always redraw the screen after a state mutation.
+    ui.screen.PostEvent(Event::Custom);
+  };
+
+  /// The FTXUI screen shared with the worker actor. We're passing data from
+  /// this actor to the UI via the mutation helper function.
+  ui_state ui;
+
+  /// The actor owning the UI main loop.
+  caf::actor loop;
+
+  /// Pointer to the owning actor.
+  ui_actor::pointer self;
+
+  /// Actor name.
+  static inline const char* name = "ui";
+};
+
 /// The implementation of the UI actor.
-ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
+ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
+  self->state.ui.parent = self;
   // Monkey-patch the logger. ¯\_(ツ)_/¯
   // FIXME: major danger / highly inappropriate. This is not thread safe. We
   // probably want a dedicated logger plugin that allows for adding custom
@@ -541,38 +591,25 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
   auto sink = std::make_shared<actor_sink_mt>(std::move(receiver));
   detail::logger()->sinks().clear();
   detail::logger()->sinks().push_back(std::move(sink));
-  /// This function is the only safe function to update the state.
-  auto mutate = [=](auto f) {
-    auto task = [=]() mutable {
-      f(&self->state);
-    };
-    self->state.screen.Post(task);
-  };
-  /// Helper function to redraw the screen.
-  auto redraw = [=] {
-    self->state.screen.PostEvent(Event::Custom);
-  };
+  // Terminate if we get a signal from the outside world.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    auto f = [](ui_state* state) mutable {
-      state->screen.Exit();
-    };
-    mutate(f);
+    // TODO: is Exit() thread-safe or do we need to go through mutate()?
+    self->state.ui.screen.Exit();
     self->quit(msg.reason);
   });
   self->set_down_handler([=](const caf::down_msg& msg) {
     // If the main loop has exited, we're done.
-    if (msg.source == self->state.main_loop) {
+    if (msg.source == self->state.loop) {
       self->quit(msg.reason);
       return;
     }
-    // We're also monitoring remote VAST nodes. If one goes down, update the UI
-    // state accordingly so that it can render the connection status.
-    auto f = [remote = msg.source](ui_state* state) mutable {
-      for (auto& node : state->nodes)
-        if (node->actor.address() == remote)
-          node->actor = system::node_actor{};
+    // We're also monitoring remote VAST nodes.
+    auto f = [remote = msg.source](ui_state* state) {
+      for (auto& [_, node] : state->nodes)
+        if (node.actor.address() == remote)
+          node.actor = system::node_actor{};
     };
-    mutate(f);
+    self->state.mutate(f);
   });
   return {
     // Process a message from the logger.
@@ -580,18 +617,69 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_state> self) {
     // cause an infite loop because this handler is called for every log
     // message.
     [=](std::string& message) {
-      auto f = [msg = std::move(message)](ui_state* state) mutable {
-        state->log_messages.emplace_back(std::move(msg));
+      auto f = [msg = std::move(message)](ui_state* ui) {
+        ui->log_messages.emplace_back(std::move(msg));
       };
-      mutate(f);
-      redraw();
+      self->state.mutate(f);
     },
+    [=](atom::connect, const caf::settings& opts) {
+      // We're creating a scoped actor only because connect_to_node requires
+      // one. Otherwise we could have used `self`.
+      caf::scoped_actor scoped_self{self->home_system()};
+      auto node = system::connect_to_node(scoped_self, opts);
+      if (!node) {
+        VAST_ERROR(node.error());
+        return;
+      }
+      // Get the status after connection.
+      // NB: it would be nice if VAST buffered the keye statistics so that we
+      // have the key stats immediately to display, as opposed to slowly
+      // accumulating them over time here at the client.
+      invocation inv{.full_name = "status"};
+      self->request(*node, 5s, atom::run_v, std::move(inv))
+        .then(
+          [=](const caf::message&) {
+            // In theory, we should be processing the status here. But it
+            // happens down below. The status handling urgently needs a
+            // refactoring. This dance through caf::error is also taking place
+            // in the /status endpoint plugin.
+          },
+          [=](caf::error& error) {
+            if (caf::sec{error.code()} != caf::sec::unexpected_response) {
+              VAST_ERROR(error);
+              return;
+            }
+            std::string actual_result;
+            auto ctx = error.context();
+            caf::message_handler{[&](caf::message& msg) {
+              caf::message_handler{[&](std::string& str) {
+                actual_result = std::move(str);
+              }}(msg);
+            }}(ctx);
+            // Re-parse as data and update node state.
+            if (auto json = from_json(actual_result)) {
+              VAST_DEBUG("got status: {}", *json);
+              auto f = [=, status = std::move(*json)](ui_state* ui) mutable {
+                auto node_state = ui_state::node_state{
+                  .actor = *node,
+                  .opts = opts,
+                  .status = std::move(status),
+                };
+                auto id = caf::get<std::string>(opts, "vast.node-id");
+                VAST_ASSERT(!id.empty());
+                ui->nodes.emplace(std::move(id), std::move(node_state));
+              };
+              self->state.mutate(f);
+            }
+          });
+    },
+    // Handle a connection to a new node.
     [=](atom::run) {
       // Ban UI into dedicated thread. We're getting a down message upon
       // termination, e.g., when pushes the exit button or CTRL+C.
-      self->state.main_loop = self->spawn<caf::detached + caf::monitored>([=] {
-        auto main = MainWindow(&self->state);
-        self->state.screen.Loop(main);
+      self->state.loop = self->spawn<caf::detached + caf::monitored>([=] {
+        auto main = MainWindow(&self->state.ui);
+        self->state.ui.screen.Loop(main);
       });
     },
   };
