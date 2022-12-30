@@ -605,12 +605,6 @@ Component Hunt() {
   });
 }
 
-Component Settings() {
-  return Renderer([] {
-    return text("not yet implemented") | flex | center;
-  });
-}
-
 Component About() {
   return Renderer([] {
     return vbox({
@@ -662,7 +656,6 @@ Component MainWindow(ui_state* state) {
       };
       add_page("Fleet", Fleet(state_));
       add_page("Hunt", Hunt());
-      add_page("Settings", Settings());
       add_page("About", About());
       // Create the navigation.
       auto page_menu
