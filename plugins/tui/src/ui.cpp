@@ -140,6 +140,10 @@ struct ui_state {
   ui_actor parent;
 };
 
+/// Creates a collapsible component from a data instance.
+/// @param name The top-level name for the collapsed data.
+/// @param x The data instance.
+/// @returns A collapsible component.
 Component make_collapsible(std::string name, const data& x) {
   auto f = detail::overload{
     [&](const auto&) {
@@ -162,6 +166,32 @@ Component make_collapsible(std::string name, const data& x) {
     },
   };
   return Collapsible(std::move(name), caf::visit(f, x));
+}
+
+/// Creates a key-value table from a record. Nested records will be rendered as
+/// part of the value.
+/// @param key The name of the first column header.
+/// @param value The name of the second column header.
+/// @returns A FTXUI table.
+Table make_table(std::string key, std::string value, const record& xs) {
+  std::vector<std::vector<std::string>> contents;
+  contents.reserve(xs.size() + 1);
+  auto header = std::vector<std::string>(2);
+  header[0] = std::move(key);
+  header[1] = std::move(value);
+  contents.push_back(std::move(header));
+  for (const auto& [k, v] : xs) {
+    auto row = std::vector<std::string>(2);
+    row[0] = k;
+    row[1] = fmt::to_string(v);
+    contents.push_back(std::move(row));
+  }
+  auto table = Table{std::move(contents)};
+  auto top = table.SelectRow(0);
+  top.Decorate(bold);
+  top.SeparatorVertical(EMPTY);
+  top.BorderBottom(LIGHT);
+  return table;
 }
 
 // Element Vee() {
@@ -261,8 +291,10 @@ Component ConnectWindow(ui_state* state) {
   public:
     Impl(ui_state* state) : state_{state} {
       auto action = [=] {
-        static const auto default_node_id = std::string{defaults::system::node_id};
-        static const auto default_endpoint = std::string{defaults::system::endpoint};
+        static const auto default_node_id
+          = std::string{defaults::system::node_id};
+        static const auto default_endpoint
+          = std::string{defaults::system::endpoint};
         caf::settings opts;
         auto node_id = node_id_.empty() ? default_node_id : node_id_;
         auto endpoint = endpoint_.empty() ? default_endpoint : endpoint_;
@@ -314,32 +346,62 @@ Component NodeStatus(ui_state* state, std::string node_id) {
   public:
     Impl(ui_state* state, std::string node_id)
       : state_{state}, node_id_{std::move(node_id)} {
-      FlexboxConfig config;
-      config.direction = FlexboxConfig::Direction::Row;
-      config.wrap = FlexboxConfig::Wrap::Wrap;
-      config.justify_content = FlexboxConfig::JustifyContent::SpaceAround;
-      config.align_items = FlexboxConfig::AlignItems::FlexStart;
-      config.align_content = FlexboxConfig::AlignContent::FlexStart;
+      flexbox_config_.direction = FlexboxConfig::Direction::Row;
+      flexbox_config_.wrap = FlexboxConfig::Wrap::Wrap;
+      flexbox_config_.justify_content
+        = FlexboxConfig::JustifyContent::SpaceAround;
+      flexbox_config_.align_items = FlexboxConfig::AlignItems::FlexStart;
+      flexbox_config_.align_content = FlexboxConfig::AlignContent::FlexStart;
       auto charts = Renderer([=] {
         return flexbox({chart("RAM"),    //
                         chart("Memory"), //
                         chart("Ingestion")},
-                       config);
+                       flexbox_config_);
       });
       Add(charts);
+      // Add statistics.
       auto& node = state_->nodes[node_id_];
       VAST_ASSERT(node.actor);
+      // Add full status.
+      Element version;
+      Element build_config;
+      if (const auto* r = caf::get_if<record>(&node.status)) {
+        if (auto i = r->find("version"); i != r->end()) {
+          if (const auto* v = caf::get_if<record>(&i->second)) {
+            auto cleaned = *v;
+            if (auto j = cleaned.find("Build Configuration"); j != r->end()) {
+              auto cfg = std::move(caf::get<record>(j->second));
+              build_config = make_table("Option", "Value", cfg).Render();
+              cleaned.erase(j);
+            }
+            version = make_table("Component", "Version", cleaned).Render();
+          }
+        }
+      }
+      auto stats = Renderer([=] {
+        return flexbox(
+          {
+            window(text("Version"), version),
+            window(text("Build Configuration"), build_config),
+          },
+          flexbox_config_);
+      });
+      Add(stats);
       auto status = make_collapsible("Status", node.status);
       Add(status);
     }
 
     Element Render() override {
+      auto& node = state_->nodes[node_id_];
       auto charts = ChildAt(0);
-      auto status = ChildAt(1);
+      auto stats = ChildAt(1);
+      auto status = ChildAt(2);
       return vbox({
         text(node_id_) | hcenter,
         text(""),
         charts->Render() | xflex,
+        text(""),
+        stats->Render(),
         text(""),
         status->Render(),
       });
@@ -361,6 +423,7 @@ Component NodeStatus(ui_state* state, std::string node_id) {
 
     ui_state* state_;
     std::string node_id_;
+    FlexboxConfig flexbox_config_;
   };
   return Make<Impl>(state, std::move(node_id));
 }
