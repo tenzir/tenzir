@@ -140,7 +140,7 @@ struct ui_state {
   ui_actor parent;
 };
 
-Component to_collapsible(std::string name, const data& x) {
+Component make_collapsible(std::string name, const data& x) {
   auto f = detail::overload{
     [&](const auto&) {
       return Renderer([str = fmt::to_string(x)] {
@@ -151,7 +151,7 @@ Component to_collapsible(std::string name, const data& x) {
       Components components;
       components.reserve(xs.size());
       for (const auto& [k, v] : xs)
-        components.emplace_back(to_collapsible(k, v));
+        components.emplace_back(make_collapsible(k, v));
       auto vertical = Container::Vertical(std::move(components));
       return Renderer(vertical, [vertical] {
         return hbox({
@@ -329,7 +329,7 @@ Component NodeStatus(ui_state* state, std::string node_id) {
       Add(charts);
       auto& node = state_->nodes[node_id_];
       VAST_ASSERT(node.actor);
-      auto status = to_collapsible("Status", node.status);
+      auto status = make_collapsible("Status", node.status);
       Add(status);
     }
 
