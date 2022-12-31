@@ -49,31 +49,46 @@ using namespace std::chrono_literals;
 namespace {
 
 /// State of the current theme.
-struct theme_state {
+struct theme {
+  /// Varies the style to drive the user attention.
+  enum class style { normal, alert };
+
   /// The theme colors.
   struct color_state {
     Color primary = Color::Cyan;
     Color secondary = Color::Blue;
     Color focus = Color::Green;
+    Color alert = Color::Red;
   } color;
 
   /// Transforms an element according to given entry state.
+  template <style Style>
   void transform(Element& e, const EntryState& entry) const {
-    if (entry.focused)
-      e |= ftxui::color(color.focus);
-    if (entry.active)
-      e |= ftxui::color(color.secondary) | bold;
-    if (!entry.focused && !entry.active)
-      e |= ftxui::color(color.secondary) | dim;
+    if constexpr (Style == style::normal) {
+      if (entry.focused)
+        e |= ftxui::color(color.focus);
+      if (entry.active)
+        e |= ftxui::color(color.secondary) | bold;
+      if (!entry.focused && !entry.active)
+        e |= ftxui::color(color.secondary) | dim;
+    } else if constexpr (Style == style::alert) {
+      if (entry.focused)
+        e |= ftxui::color(color.alert);
+      if (entry.active)
+        e |= ftxui::color(color.alert) | bold;
+      if (!entry.focused && !entry.active)
+        e |= ftxui::color(color.alert) | dim;
+    }
   }
 
   /// Generates a ButtonOption instance.
+  template <style Style = style::normal>
   [[nodiscard]] ButtonOption button_option() const {
     ButtonOption result;
     result.transform = [=](const EntryState& entry) {
       Element e
         = hbox({text(" "), text(entry.label), text(" ")}) | center | border;
-      transform(e, entry);
+      transform<Style>(e, entry);
       return e;
     };
     return result;
@@ -83,7 +98,7 @@ struct theme_state {
     MenuOption result;
     result.entries.transform = [=](const EntryState& entry) {
       Element e = text(entry.label);
-      transform(e, entry);
+      transform<style::normal>(e, entry);
       return e;
     };
     return result;
@@ -100,7 +115,7 @@ struct theme_state {
       if (horizontal)
         e |= center;
       e |= flex;
-      transform(e, entry);
+      transform<style::normal>(e, entry);
       return e;
     };
     result.underline.enabled = horizontal;
@@ -119,7 +134,7 @@ struct ui_state {
   ScreenInteractive screen = ScreenInteractive::Fullscreen();
 
   /// The active theme.
-  theme_state theme;
+  struct theme theme;
 
   /// The messages from the logger.
   std::vector<std::string> log_messages;
@@ -411,6 +426,11 @@ Component ConnectWindow(ui_state* state) {
         caf::settings opts;
         auto node_id = node_id_.empty() ? default_node_id : node_id_;
         auto endpoint = endpoint_.empty() ? default_endpoint : endpoint_;
+        // Do not allow duplicates.
+        if (state_->nodes.contains(node_id)) {
+          VAST_WARN("ignoring request to add duplicate node");
+          return;
+        }
         caf::put(opts, "vast.node-id", std::move(node_id));
         caf::put(opts, "vast.endpoint", std::move(endpoint));
         caf::anon_send(state_->parent, atom::connect_v, std::move(opts));
@@ -471,7 +491,6 @@ Component NodeStatus(ui_state* state, std::string node_id) {
                         chart("Ingestion")},
                        flexbox_config_);
       });
-      Add(charts);
       // Add statistics.
       auto& node = state_->nodes[node_id_];
       VAST_ASSERT(node.actor);
@@ -491,24 +510,38 @@ Component NodeStatus(ui_state* state, std::string node_id) {
           },
           flexbox_config_);
       });
-      Add(stats);
       auto status = make_collapsible("Status", node.status);
-      Add(status);
+      auto action = [=] {
+        state_->nodes.erase(node_id_);
+      };
+      auto remove_node
+        = Button("Remove Node", action,
+                 state->theme.button_option<theme::style::alert>());
+      auto container = Container::Vertical({
+        charts,
+        stats,
+        status,
+        remove_node,
+      });
+      auto renderer = Renderer(container, [=] {
+        return vbox({
+                 text(node_id_) | hcenter | bold,
+                 separator(),
+                 charts->Render(),
+                 separator(),
+                 stats->Render(),
+                 separator(),
+                 status->Render(),
+                 separator(),
+                 remove_node->Render() | xflex,
+               })
+               | vscroll_indicator | frame;
+      });
+      Add(renderer);
     }
 
     Element Render() override {
-      auto charts = ChildAt(0);
-      auto stats = ChildAt(1);
-      auto status = ChildAt(2);
-      return vbox({
-        text(node_id_) | hcenter,
-        text(""),
-        charts->Render(),
-        text(""),
-        stats->Render(),
-        text(""),
-        status->Render(),
-      });
+      return ComponentBase::Render();
     }
 
   private:
@@ -592,6 +625,24 @@ Component Fleet(ui_state* state) {
         menu_tab_->Add(NodeStatus(state_, id));
         // Focus status pane.
         mode_index_ = 0;
+      } else if (num_nodes < num_nodes_) {
+        // Remove the deleted node.
+        num_nodes_ = num_nodes;
+        // Figure out which node got removed.
+        auto i = std::find_if(labels_.begin(), labels_.end(),
+                              [&](const auto& label) {
+                                return !state_->nodes.contains(label);
+                              });
+        VAST_ASSERT(i != labels_.end());
+        // Remove the corresponding component.
+        auto idx = std::distance(labels_.begin(), i);
+        auto page = menu_tab_->ChildAt(idx);
+        VAST_ASSERT(page != nullptr);
+        page->Detach();
+        labels_.erase(i);
+        // Go back to connect pane.
+        menu_index_ = 0;
+        mode_index_ = 1;
       }
       return ComponentBase::Render();
     }
