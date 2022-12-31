@@ -545,6 +545,15 @@ Component Fleet(ui_state* state) {
       // Create node menu.
       auto menu = Menu(&labels_, &menu_index_,
                        state->theme.navigation(MenuOption::Direction::Down));
+      // When clicking nodes in the menu, go back to main mode.
+      menu |= CatchEvent([=](Event event) {
+        if (menu->Focused() && !labels_.empty())
+          if (event == Event::Return
+              || (event.mouse().button == Mouse::Left
+                  && event.mouse().motion == Mouse::Released))
+            mode_index_ = 0;
+        return false;
+      });
       // The menu and button make up the navigation.
       auto navigation_container = Container::Vertical({
         menu,   //
