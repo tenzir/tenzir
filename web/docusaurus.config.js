@@ -261,7 +261,7 @@ const config = {
       },
     }),
 
-  scripts: [{src: 'https://plausible.io/js/script.js', defer: true, 'data-domain': 'vast.io'}],
+  scripts: [{src: 'https://plausible.io/js/script.js', aysnc: true, defer: true, 'data-domain': 'vast.io'}],
 };
 
 module.exports = config;
