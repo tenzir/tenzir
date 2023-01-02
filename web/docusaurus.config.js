@@ -260,6 +260,8 @@ const config = {
         additionalLanguages: ['r'],
       },
     }),
+
+  scripts: [{src: 'https://plausible.io/js/script.js', defer: true, 'data-domain': 'vast.io'}],
 };
 
 module.exports = config;
