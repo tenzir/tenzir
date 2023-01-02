@@ -4,7 +4,7 @@
  */
 
 .heroBanner {
-  padding: 4rem 0;
+  padding: 1rem 0;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -24,11 +24,59 @@
 
 @media (min-width: 801px) {
   .leftAligned {
-    margin-right: 100px;
-    margin-left: 100px;
+    padding-right: 100px;
+    padding-left: 100px;
   }
 
   .vastLogo {
     width: 400px;
+  }
+}
+
+.carousel {
+  margin: 0 auto;
+  max-width: 90%;
+  max-height: 500px;
+  height: 300px;
+  overflow: hidden;
+  position: relative;
+  margin-top: -50px;
+  border-radius: 10px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.2);
+  z-index: 100000;
+  background-color: var(--ifm-color-carousel-bg);
+  padding-top: 70px;
+}
+
+.container {
+  display: flex;
+  align-items: center;
+  padding: 4rem 2rem;
+}
+
+.heroBanner {
+  background: linear-gradient(
+    -45deg,
+    #ee775250,
+    #e73c7e50,
+    #23a6d550,
+    #23d5ab50
+  );
+  background-size: 200% 200%;
+
+  animation: gradient 10s ease infinite;
+  height: 60vh;
+  margin-top: 0px;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
   }
 }
