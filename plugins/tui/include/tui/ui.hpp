@@ -9,6 +9,7 @@
 #pragma once
 
 #include <vast/atoms.hpp>
+#include <vast/fwd.hpp>
 
 #include <caf/typed_actor.hpp>
 
@@ -17,7 +18,11 @@ namespace vast::plugins::tui {
 using ui_actor = caf::typed_actor<
   /// Receive a log message.
   caf::reacts_to<std::string>,
-  /// Receive a log message.
+  /// Receives a table slice.
+  caf::reacts_to<table_slice>,
+  /// Create a query for a given pipeline ID, expression, and list of node IDs.
+  caf::reacts_to<atom::query, uuid, std::string, std::vector<std::string>>,
+  /// Connect to a node.
   caf::reacts_to<atom::connect, caf::settings>,
   /// Kick off the UI main loop.
   caf::reacts_to<atom::run>>;

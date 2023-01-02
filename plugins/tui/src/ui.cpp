@@ -10,7 +10,10 @@
 
 #include "tui/actor_sink.hpp"
 
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/json.hpp>
+#include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/data.hpp>
 #include <vast/data.hpp>
 #include <vast/defaults.hpp>
@@ -20,6 +23,9 @@
 #include <vast/system/actors.hpp>
 #include <vast/system/connect_to_node.hpp>
 #include <vast/system/node.hpp>
+#include <vast/table_slice.hpp>
+#include <vast/table_slice_column.hpp>
+#include <vast/uuid.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -60,6 +66,49 @@ struct theme {
     Color focus = Color::Green;
     Color alert = Color::Red;
   } color;
+
+  // TODO: make this a non-static function that respects the theme.
+  static Color colorize(data_view x) {
+    auto f = detail::overload{
+      [](const auto&) {
+        return Color::Grey50;
+      },
+      [](caf::none_t) {
+        return Color::Grey35;
+      },
+      [](view<bool>) {
+        return Color::DeepPink3;
+      },
+      [](view<integer>) {
+        return Color::IndianRed1;
+      },
+      [](view<count>) {
+        return Color::IndianRedBis;
+      },
+      [](view<real>) {
+        return Color::IndianRed;
+      },
+      [](view<duration>) {
+        return Color::DeepSkyBlue1;
+      },
+      [](view<time>) {
+        return Color::DeepSkyBlue2;
+      },
+      [](view<std::string>) {
+        return Color::Gold3Bis;
+      },
+      [](view<pattern>) {
+        return Color::Gold1;
+      },
+      [](view<address>) {
+        return Color::Green3;
+      },
+      [](view<subnet>) {
+        return Color::Green4;
+      },
+    };
+    return caf::visit(f, x);
+  }
 
   /// Transforms an element according to given entry state.
   template <style Style>
@@ -149,8 +198,23 @@ struct ui_state {
     data status;
   };
 
-  /// The list of connected nodes.
+  /// State per pipeline.
+  struct pipeline_state {
+    /// The pipeline expression.
+    expression expr;
+
+    /// The buffered data for this pipeline.
+    std::vector<table_slice> data;
+  };
+
+  /// The list of connected nodes, in order of connection time.
   detail::stable_map<std::string, node_state> nodes;
+
+  /// Tracks pipelines by unique ID, in order of creation.
+  detail::stable_map<uuid, pipeline_state> pipelines;
+
+  /// Maps exporters to pipelines.
+  std::unordered_map<system::exporter_actor, uuid> exporters;
 
   /// A handle to the UI actor so that it's possible to initiate actions through
   /// user actions.
@@ -322,6 +386,42 @@ Table make_version_table(const data& status) {
   return {};
 }
 
+// We are adding our "deep" event catching helper here becase we are facing the
+// smae issue of a parent component masking the events from its children as
+// reported in https://github.com/ArthurSonzogni/FTXUI/discussions/428.
+
+class DeepCatchBase : public ComponentBase {
+public:
+  // Constructor.
+  explicit DeepCatchBase(std::function<bool(Event)> on_event)
+    : on_event_{std::move(on_event)} {
+  }
+
+  bool OnEvent(Event event) override {
+    // Inverted invent handling compared to
+    // https://github.com/ArthurSonzogni/FTXUI/blob/master/src/ftxui/component/catch_event.cpp
+    return ComponentBase::OnEvent(event) || on_event_(event);
+  }
+
+protected:
+  std::function<bool(Event)> on_event_;
+};
+
+Component
+DeepCatch(Component child, std::function<bool(Event event)> on_event) {
+  auto out = Make<DeepCatchBase>(std::move(on_event));
+  out->Add(std::move(child));
+  return out;
+}
+
+ComponentDecorator DeepCatch(std::function<bool(Event)> on_event) {
+  return [on_event = std::move(on_event)](Component child) {
+    return DeepCatch(std::move(child), [on_event = on_event](Event event) {
+      return on_event(std::move(event));
+    });
+  };
+}
+
 // Element Vee() {
 //   static constexpr auto vee = {
 //     R"(////////////    **************************)",
@@ -438,7 +538,7 @@ Component ConnectWindow(ui_state* state) {
       auto node_id = Input(&node_id_, std::string{defaults::system::node_id});
       auto endpoint
         = Input(&endpoint_, std::string{defaults::system::endpoint});
-      auto connect = Button("Connect", action, state->theme.button_option());
+      auto connect = Button("Connect", action, state_->theme.button_option());
       auto container = Container::Vertical({
         node_id,  //
         endpoint, //
@@ -516,32 +616,31 @@ Component NodeStatus(ui_state* state, std::string node_id) {
       };
       auto remove_node
         = Button("Remove Node", action,
-                 state->theme.button_option<theme::style::alert>());
+                 state_->theme.button_option<theme::style::alert>());
       auto container = Container::Vertical({
-        charts,
+        charts | select | focus,
         stats,
         status,
         remove_node,
       });
       auto renderer = Renderer(container, [=] {
         return vbox({
-                 text(node_id_) | hcenter | bold,
-                 separator(),
-                 charts->Render(),
-                 separator(),
-                 stats->Render(),
-                 separator(),
-                 status->Render(),
-                 separator(),
-                 remove_node->Render() | xflex,
-               })
-               | vscroll_indicator | frame;
+          text(node_id_) | hcenter | bold,
+          text(""),
+          charts->Render(),
+          text(""),
+          stats->Render(),
+          text(""),
+          status->Render(),
+          text(""),
+          remove_node->Render() | xflex,
+        });
       });
       Add(renderer);
     }
 
     Element Render() override {
-      return ComponentBase::Render();
+      return ComponentBase::Render() | vscroll_indicator | frame;
     }
 
   private:
@@ -560,13 +659,12 @@ Component NodeStatus(ui_state* state, std::string node_id) {
 
     ui_state* state_;
     std::string node_id_;
-    FlexboxConfig flexbox_config_;
   };
   return Make<Impl>(state, std::move(node_id));
 }
 
 /// An overview of the managed VAST nodes.
-Component Fleet(ui_state* state) {
+Component FleetPage(ui_state* state) {
   class Impl : public ComponentBase {
   public:
     Impl(ui_state* state) : state_{state} {
@@ -574,7 +672,7 @@ Component Fleet(ui_state* state) {
       auto action = [=] {
         mode_index_ = 1;
       };
-      auto button = Button("+ Add Node", action, state->theme.button_option());
+      auto button = Button("+ Add Node", action, state_->theme.button_option());
       // Create node menu.
       auto menu = Menu(&labels_, &menu_index_,
                        state->theme.navigation(MenuOption::Direction::Down));
@@ -659,13 +757,199 @@ Component Fleet(ui_state* state) {
   return Make<Impl>(state);
 };
 
-Component Hunt() {
-  return Renderer([] {
-    return text("not yet implemented") | flex | center;
+/// A focusable cell in a DataView.
+Component Cell(data_view x) {
+  return Renderer([=](bool focused) {
+    auto element = text(to_string(x)) | color(theme::colorize(x));
+    if (focused)
+      element = element | inverted | focus;
+    return element;
   });
 }
 
-Component About() {
+/// A component that renders data as table.
+Component VerticalDataView(table_slice slice) {
+  class Impl : public ComponentBase {
+  public:
+    Impl(table_slice slice) {
+      auto table = Container::Horizontal({});
+      for (size_t i = 0; i < slice.columns(); ++i) {
+        auto column = Container::Vertical({});
+        // Add column header.
+        const auto& schema = caf::get<record_type>(slice.layout());
+        auto name = schema.key(schema.resolve_flat_index(i));
+        column->Add(header(std::move(name)));
+        column->Add(Renderer([=] {
+          return separatorLight();
+        }));
+        // Add column data.
+        auto col = table_slice_column(slice, i);
+        for (size_t j = 0; j < col.size(); ++j)
+          column->Add(Cell(col[j]));
+        table->Add(column);
+        if (i != slice.columns() - 1)
+          table->Add(Renderer([=] {
+            return separatorLight();
+          }));
+      }
+      table_ = table->Render() | border;
+    }
+
+    Element Render() override {
+      return hbox({
+        table_,
+        filler(),
+      });
+    }
+
+  private:
+    static Component header(std::string name) {
+      return Renderer([txt = std::move(name)](bool focused) mutable {
+        Element element = text(std::move(txt)) | xflex;
+        if (focused)
+          element = element | inverted | focus;
+        return element;
+      });
+    }
+
+    Element table_;
+  };
+  return Make<Impl>(std::move(slice));
+}
+
+Component HuntPage(ui_state* state) {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state) : state_{state} {
+      // The menu and button make up the navigation.
+      auto input = Input(&pipeline_input_, "");
+      auto action = [=] {
+        // Parse input as pipeline.
+        if (auto expr = to<expression>(pipeline_input_))
+          run(pipeline_input_);
+        else
+          VAST_WARN("failed to parse pipeline: {}", expr.error());
+      };
+      auto submit = Button("Run", action, state_->theme.button_option());
+      // Create a node selector.
+      selector_ = Container::Vertical({});
+      auto selector = Renderer(selector_, [=] {
+        return window(text("Nodes"),
+                      selector_->Render() | vscroll_indicator | yframe
+                        | color(state->theme.color.secondary) //
+                        | size(HEIGHT, EQUAL, 3));
+      });
+      selector |= Maybe([=] {
+        return !state_->nodes.empty();
+      });
+      // Put controls together in one row.
+      auto top = Container::Horizontal({
+        input,
+        submit,
+        selector,
+      });
+      top = Renderer(top, [=] {
+        return hbox({
+          window(text("Pipeline"), input->Render()) //
+            | xflex                                 //
+            | color(state->theme.color.primary),
+          submit->Render() | size(WIDTH, EQUAL, 9),
+          selector->Render(),
+        });
+      });
+      data_view_ = Container::Vertical({});
+      data_view_->Add(Renderer([] {
+        return Vee() | center | flex;
+      }));
+      auto container = Container::Vertical({
+        top,
+        data_view_ | flex,
+      });
+      Add(container);
+    }
+
+    Element Render() override {
+      // Update node selector upon state change.
+      auto num_nodes = state_->nodes.size();
+      if (num_nodes != num_nodes_) {
+        num_nodes_ = num_nodes;
+        selector_->DetachAllChildren();
+        checkboxes_.resize(num_nodes, true);
+        const auto& nodes = as_vector(state_->nodes);
+        for (size_t i = 0; i < num_nodes; ++i)
+          selector_->Add(Checkbox(nodes[i].first, &checkboxes_[i]));
+      }
+      // Update data views when new query results arrive.
+      auto& pipeline = state_->pipelines[pipeline_id_];
+      auto num_slices = pipeline.data.size();
+      if (num_slices > num_slices_) {
+        VAST_DEBUG("detected new slices: {} -> {}", num_slices_, num_slices);
+        // Remove placeholder for the first result.
+        if (num_slices_ == 0)
+          data_view_->DetachAllChildren();
+        // Render new table slices.
+        for (size_t i = num_slices_; i < num_slices; ++i)
+          data_view_->Add(VerticalDataView(pipeline.data[i]));
+        num_slices_ = num_slices;
+      }
+      return ComponentBase::Render();
+    }
+
+  private:
+    /// Executes the user-provided pipeline.
+    void run(std::string expression) {
+      // List of nodes to contact.
+      std::vector<std::string> node_ids;
+      // Zip through checkboxes and nodes.
+      VAST_DEBUG("collecting node actors for new pipeline");
+      for (size_t i = 0; i < checkboxes_.size(); ++i) {
+        if (checkboxes_[i]) {
+          const auto& id = as_vector(state_->nodes)[i].first;
+          VAST_DEBUG("selecting node '{}'", id);
+          node_ids.push_back(id);
+        }
+      }
+      if (node_ids.empty()) {
+        VAST_WARN("no nodes selected, ignoring pipeline: {}", expression);
+        return;
+      }
+      // Create pipeline ID and wait for its updates.
+      pipeline_id_ = uuid::random();
+      VAST_DEBUG("initiated new pipeline execution with id {}", pipeline_id_);
+      caf::anon_send(state_->parent, atom::query_v, pipeline_id_,
+                     std::move(expression), std::move(node_ids));
+    }
+
+    /// The global app state.
+    ui_state* state_;
+
+    /// The user input.
+    std::string pipeline_input_;
+
+    /// The node selector with checkboxes.
+    Component selector_;
+
+    /// A state flag that tells us when to rebuild the node selector.
+    size_t num_nodes_ = 0;
+
+    /// The bottom part of the scren showing the data.
+    Component data_view_;
+
+    /// A state flag that tells us when to rebuild the data view.
+    size_t num_slices_ = 0;
+
+    /// The boolean flags for the node selector. We're using a deque<bool>
+    /// because vector<bool> doesn't provide bool lvalues, which the checkbox
+    /// components need. A deque is the next-best thing to sequential storage.
+    std::deque<bool> checkboxes_;
+
+    /// The (for now just one and only) UUID for the pipeline state.
+    uuid pipeline_id_;
+  };
+  return Make<Impl>(state);
+}
+
+Component AboutPage() {
   return Renderer([] {
     return vbox({
              Vee() | center,                  //
@@ -714,9 +998,9 @@ Component MainWindow(ui_state* state) {
         page_names_.push_back(std::move(name));
         pages.push_back(std::move(page));
       };
-      add_page("Fleet", Fleet(state_));
-      add_page("Hunt", Hunt());
-      add_page("About", About());
+      add_page("Fleet", FleetPage(state_));
+      add_page("Hunt", HuntPage(state));
+      add_page("About", AboutPage());
       // Create the navigation.
       auto page_menu
         = Menu(&page_names_, &page_index_, state_->theme.navigation());
@@ -731,13 +1015,13 @@ Component MainWindow(ui_state* state) {
       });
       auto main = Renderer(container, [=] {
         return vbox({
-          hbox({page_menu->Render() | flex}),
+          page_menu->Render() | xflex,
           page_tab->Render() | flex,
         });
       });
       auto help = Help();
       main |= Modal(help, &show_help_);
-      main |= CatchEvent([=](Event event) {
+      main |= DeepCatch([=](Event event) {
         if (show_help_) {
           if (event == Event::Character('q') || event == Event::Escape) {
             show_help_ = false;
@@ -813,7 +1097,7 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
   detail::logger()->sinks().push_back(std::move(sink));
   // Terminate if we get a signal from the outside world.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    // TODO: is Exit() thread-safe or do we need to go through mutate()?
+    // Exit() is thread-safe, so we don't need to go through mutate().
     self->state.ui.screen.Exit();
     self->quit(msg.reason);
   });
@@ -828,6 +1112,13 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
       for (auto& [_, node] : state->nodes)
         if (node.actor.address() == remote)
           node.actor = system::node_actor{};
+      // And exporters.
+      if (auto exporter = caf::actor_cast<system::exporter_actor>(remote)) {
+        VAST_VERBOSE("removing exporter {}", exporter->address());
+        auto i = state->exporters.find(exporter);
+        VAST_ASSERT(i != state->exporters.end()); // we registered everyone
+        state->exporters.erase(i);
+      }
     };
     self->state.mutate(f);
   });
@@ -837,8 +1128,61 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
     // cause an infite loop because this handler is called for every log
     // message.
     [=](std::string& message) {
-      auto f = [msg = std::move(message)](ui_state* ui) {
-        ui->log_messages.emplace_back(std::move(msg));
+      auto f = [msg = std::move(message)](ui_state* ui) mutable {
+        ui->log_messages.push_back(std::move(msg));
+      };
+      self->state.mutate(f);
+    },
+    [=](table_slice slice) {
+      auto remote = self->current_sender();
+      // Hand slices to the UI thread that picks them up and renders them.
+      auto f = [=](ui_state* state) {
+        auto exporter = caf::actor_cast<system::exporter_actor>(remote);
+        VAST_ASSERT_CHEAP(state->exporters.contains(exporter));
+        auto pipeline_id = state->exporters[exporter];
+        auto& pipeline = state->pipelines[pipeline_id];
+        VAST_DEBUG("adding table slice with {} events to pipeline {} from {}",
+                   slice.rows(), pipeline_id, remote->address());
+        pipeline.data.push_back(slice);
+      };
+      self->state.mutate(f);
+    },
+    [=](atom::query, uuid pipeline_id, std::string expr,
+        std::vector<std::string>& node_ids) {
+      auto f = [=](ui_state* state) {
+        // Spawn one exporter per pipeline.
+        caf::settings options;
+        invocation inv = {
+          .options = options,
+          .full_name = "spawn exporter",
+          .arguments = {expr},
+        };
+        for (const auto& node_id : node_ids) {
+          VAST_ASSERT(state->nodes.contains(node_id));
+          auto& node = state->nodes[node_id];
+          self->request(node.actor, 10s, atom::spawn_v, inv)
+            .then(
+              // NB: it would be nice to get back the exporter UUID from the
+              // node so that we can also access the query through other forms
+              // of access, e.g., the REST API.
+              [=](caf::actor& actor) {
+                auto exporter
+                  = caf::actor_cast<system::exporter_actor>(std::move(actor));
+                VAST_DEBUG("got new EXPORTER for node '{}'", node_id);
+                self->monitor(exporter);
+                self->send(exporter, atom::sink_v,
+                           caf::actor_cast<caf::actor>(self));
+                self->send(exporter, atom::run_v);
+                // TODO: consider registering at accountant.
+                auto& pipeline = state->pipelines[pipeline_id];
+                pipeline.expr = *to<expression>(expr);
+                state->exporters[exporter] = pipeline_id;
+              },
+              [&](caf::error& err) {
+                VAST_ERROR("failed to spawn exporter at node '{}': {}", node_id,
+                           err);
+              });
+        }
       };
       self->state.mutate(f);
     },
