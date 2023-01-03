@@ -221,7 +221,7 @@ public:
 
   // -- concepts --------------------------------------------------------------
 
-  consteval static auto qualified_name() noexcept -> std::string_view {
+  VAST_CONSTEVAL static auto qualified_name() noexcept -> std::string_view {
     return std::string_view{Table::GetFullyQualifiedName()};
   }
 
