@@ -765,7 +765,7 @@ public:
   }
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] std::string_view name() const override {
+  [[nodiscard]] std::string name() const override {
     return "pcap";
   }
 

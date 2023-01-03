@@ -51,7 +51,7 @@ public:
     return caf::none;
   }
 
-  [[nodiscard]] std::string_view name() const override {
+  [[nodiscard]] std::string name() const override {
     return "flush";
   }
 

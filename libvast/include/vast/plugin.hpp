@@ -115,7 +115,7 @@ public:
   [[nodiscard]] virtual caf::error initialize(data config) = 0;
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] virtual std::string_view name() const = 0;
+  [[nodiscard]] virtual std::string name() const = 0;
 };
 
 // -- component plugin --------------------------------------------------------

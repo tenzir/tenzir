@@ -265,7 +265,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     return {};
   }
 
-  [[nodiscard]] std::string_view name() const override {
+  [[nodiscard]] std::string name() const override {
     return "api-export";
   };
 

@@ -23,7 +23,7 @@ class plugin final : public virtual query_language_plugin {
     return caf::none;
   }
 
-  [[nodiscard]] std::string_view name() const override {
+  [[nodiscard]] std::string name() const override {
     return "sigma";
   }
 

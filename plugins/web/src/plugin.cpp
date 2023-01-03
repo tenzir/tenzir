@@ -37,7 +37,7 @@ class plugin final : public virtual command_plugin,
   }
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] std::string_view name() const override {
+  [[nodiscard]] std::string name() const override {
     return "web";
   }
 
