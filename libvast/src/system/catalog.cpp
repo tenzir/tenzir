@@ -18,6 +18,7 @@
 #include "vast/detail/set_operations.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/detail/tracepoint.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/expression.hpp"
@@ -626,8 +627,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
   if (accountant) {
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());
-    self->delayed_send(self, defaults::system::telemetry_rate,
-                       atom::telemetry_v);
+    detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
+      self->send(self, atom::telemetry_v);
+    });
   }
   return {
     [self](atom::merge,
@@ -837,8 +839,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
           },
         });
       self->send(self->state.accountant, atom::metrics_v, std::move(r));
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
+      detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
+        self->send(self, atom::telemetry_v);
+      });
     }};
 }
 

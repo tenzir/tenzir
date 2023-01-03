@@ -16,6 +16,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
@@ -346,8 +347,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       }
       // Start streaming.
       self->state.has_sink = true;
-      self->delayed_send<caf::message_priority::high>(
-        self, defaults::system::telemetry_rate, atom::telemetry_v);
+      detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
+        self->send<caf::message_priority::high>(self, atom::telemetry_v);
+      });
       // Start streaming. Note that we add the outbound path only now,
       // otherwise for small imports the source might already shut down
       // before we receive a sink.
@@ -397,9 +399,12 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     [self](atom::telemetry) {
       VAST_DEBUG("{} got a telemetry atom", *self);
       self->state.send_report();
-      if (!self->state.mgr->done())
-        self->delayed_send<caf::message_priority::high>(
-          self, defaults::system::telemetry_rate, atom::telemetry_v);
+      if (!self->state.mgr->done()) {
+        detail::weak_run_delayed(
+          self, defaults::system::telemetry_rate, [self] {
+            self->send<caf::message_priority::high>(self, atom::telemetry_v);
+          });
+      }
     },
   };
   // We cannot return the behavior directly and make the SOURCE a typed actor

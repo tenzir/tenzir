@@ -18,6 +18,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/shutdown_stream_stage.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -256,7 +257,9 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     // The internal telemetry loop of the IMPORTER.
     [self](atom::telemetry) {
       self->state.send_report();
-      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
+      detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
+        self->send(self, atom::telemetry_v);
+      });
     },
     // -- stream_sink_actor<table_slice> ---------------------------------------
     [self](caf::stream<table_slice> in) {

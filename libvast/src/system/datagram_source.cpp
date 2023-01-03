@@ -18,6 +18,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/streambuf.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -145,9 +146,12 @@ caf::behavior datagram_source(
                                    self->current_sender()));
         return;
       }
-      if (self->state.accountant)
-        self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry_v);
+      if (self->state.accountant) {
+        detail::weak_run_delayed(self, defaults::system::telemetry_rate,
+                                 [self] {
+                                   self->send(self, atom::telemetry_v);
+                                 });
+      }
       // Start streaming.
       self->state.mgr->add_outbound_path(self->state.transformer);
       auto name = std::string{self->state.reader->name()};
@@ -206,9 +210,12 @@ caf::behavior datagram_source(
                   *self, self->state.dropped_packets);
         self->state.dropped_packets = 0;
       }
-      if (!self->state.done)
-        self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry_v);
+      if (!self->state.done) {
+        detail::weak_run_delayed(self, defaults::system::telemetry_rate,
+                                 [self] {
+                                   self->send(self, atom::telemetry_v);
+                                 });
+      }
     },
   };
 

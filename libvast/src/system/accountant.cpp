@@ -44,12 +44,6 @@
 
 namespace vast::system {
 
-namespace {
-
-constexpr std::chrono::seconds overview_delay(3);
-
-} // namespace
-
 struct accountant_state_impl {
   // -- member types -----------------------------------------------------------
 
@@ -376,8 +370,6 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     [](const bool&) {
       return false;
     });
-  VAST_DEBUG("{} animates heartbeat loop", *self);
-  self->delayed_send(self, overview_delay, atom::telemetry_v);
   return {
     [self](atom::announce, const std::string& name) {
       auto& st = *self->state;
@@ -471,9 +463,6 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       return result;
-    },
-    [self](atom::telemetry) {
-      self->delayed_send(self, overview_delay, atom::telemetry_v);
     },
     [self](atom::config, accountant_config cfg) {
       self->state->apply_config(std::move(cfg));

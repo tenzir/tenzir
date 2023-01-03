@@ -9,6 +9,7 @@
 #include "vast/system/posix_filesystem.hpp"
 
 #include "vast/chunk.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/system/report.hpp"
@@ -182,8 +183,9 @@ filesystem_actor::behavior_type posix_filesystem(
       auto accountant = self->state.accountant.lock();
       if (!accountant)
         return;
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
+      detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
+        self->send(self, atom::telemetry_v);
+      });
       auto msg = report{
         .data = {
           {"posix-filesystem.checks.sucessful", self->state.stats.checks.successful},

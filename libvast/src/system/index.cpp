@@ -29,6 +29,7 @@
 #include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/tracepoint.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
@@ -1418,9 +1419,11 @@ index(index_actor::stateful_pointer<index_state> self,
   if (self->state.accountant)
     self->send(self->state.accountant, atom::announce_v, self->name());
   if (self->state.accountant
-      || self->state.active_partition_timeout.count() > 0)
-    self->delayed_send(self, defaults::system::telemetry_rate,
-                       atom::telemetry_v);
+      || self->state.active_partition_timeout.count() > 0) {
+    detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
+      self->send(self, atom::telemetry_v);
+    });
+  }
   return {
     [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", *self, partition_id);
@@ -1431,8 +1434,9 @@ index(index_actor::stateful_pointer<index_state> self,
       return self->state.stage->add_inbound_path(in);
     },
     [self](atom::telemetry) {
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
+      detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
+        self->send(self, atom::telemetry_v);
+      });
       if (self->state.accountant)
         self->state.send_report();
       if (self->state.active_partition_timeout.count() > 0) {

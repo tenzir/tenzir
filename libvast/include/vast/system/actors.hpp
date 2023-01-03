@@ -203,9 +203,7 @@ using accountant_actor = typed_actor_fwd<
   // Record a metrics report.
   caf::reacts_to<atom::metrics, report>,
   // Record a performance report.
-  caf::reacts_to<atom::metrics, performance_report>,
-  // The internal telemetry loop of the ACCOUNTANT.
-  caf::reacts_to<atom::telemetry>>
+  caf::reacts_to<atom::metrics, performance_report>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
