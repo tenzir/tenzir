@@ -72,15 +72,7 @@ struct Offset;
 
 // -- caf ----------------------------------------------------------------------
 
-// These are missing from <caf/fwd.hpp>.
-
 namespace caf {
-
-template <class>
-class inbound_stream_slot;
-
-template <class, class...>
-class outbound_stream_slot;
 
 // TODO CAF 0.19. Check if this already implemented by CAF itself.
 template <class Slot>
