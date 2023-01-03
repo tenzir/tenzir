@@ -2,6 +2,7 @@
   import 'uno.css';
   import './styles.css';
   import { QueryClient, QueryClientProvider } from '@sveltestack/svelte-query';
+  import { goto } from '$app/navigation';
   const client = new QueryClient();
 </script>
 
@@ -9,17 +10,24 @@
   <div class="sticky top-0 h-screen" id="nav-sidebar">
     <nav class="flex flex-col items-center h-100% w-12 bg-gray-200 dark:bg-gray-800 z-50">
       <!-- /vast.svg is processed from static/vast.svg during build-->
-      <img class="my-4" src="/vast.svg" alt="" />
-      <div class="rounded bg-gray-300 hover:border border-gray-400 my-1">
-        <a href="/status">
-          <button class="i-pajamas-status-health m-2 hover:border hover:rounded w-16px" />
-        </a>
-      </div>
-      <div class="rounded bg-gray-300 hover:border border-gray-400 my-1">
-        <a href="/report">
-          <button class="i-bxs:report m-2 hover:border hover:rounded w-16px" />
-        </a>
-      </div>
+      <img class="mt-4 mb-6" src="/vast.svg" alt="VAST logo" />
+      <button
+        on:click={() => {
+          goto('/status');
+        }}
+        class="mb-2 flex bg-gray-300 border-none border-gray-300 rounded hover:border border-gray-400 hover:cursor-pointer w-34px h-34px"
+      >
+        <div class="i-pajamas-status-health m-auto text-lg" />
+      </button>
+
+      <button
+        on:click={() => {
+          goto('/report');
+        }}
+        class="mb-2 flex bg-gray-300 border-none border-gray-300 rounded hover:border border-gray-400 hover:cursor-pointer w-34px h-34px"
+      >
+        <div class="i-bxs:report m-auto text-lg" />
+      </button>
     </nav>
   </div>
 
