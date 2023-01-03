@@ -64,7 +64,7 @@
 
 <div class="reporting-page p-2 m-2 text-sm text-left text-gray-600">
   <div class="justify-center">
-    <div class="w-5/6 m-auto grid grid-cols-1 divide-y">
+    <div class="w-5/6 m-auto grid grid-cols-1 divide-y divide-slate-300">
       <div class="flex justify-between my-4 mr-4">
         <div class="text-xl font-bold">
           <InlineInput bind:value={$report.title} placeholder="" />
