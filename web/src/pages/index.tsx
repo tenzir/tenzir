@@ -11,8 +11,16 @@ import VASTLight from '@site/static/img/vast-white.svg';
 import VASTDark from '@site/static/img/vast-black.svg';
 import Carousel from '../components/Carousel';
 
+import ReactMarkdown from 'react-markdown';
+import strip from 'strip-markdown';
+
 // NOTE: this is internal and may change, and the types might not be guaranteed
 const blogpostsInternalArchive = require('../../.docusaurus/docusaurus-plugin-content-blog/default/blog-archive-80c.json');
+
+const extractTextBeforeTruncate = (str: string) => {
+  const truncateIndex = str.indexOf('<!--truncate-->');
+  return truncateIndex === -1 ? str : str.substring(0, truncateIndex);
+};
 
 function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
@@ -43,37 +51,44 @@ function HomepageHeader() {
         <div className={styles.carousel}>
           <Carousel>
             {[
-              <div className={styles.blogPost}>
-                <div className="container">
-                  <p>Sign up for our Newsletter</p>
-                  <p className="hero__subtitle">
-                    Stay in touch with what's new with VAST
-                  </p>
-                  <div>
-                    <Link
-                      className="button button--info button--md"
-                      to="/newsletter"
-                    >
-                      Subscribe
-                    </Link>
-                  </div>
-                </div>
-              </div>,
+              <CarouselCard
+                title="Sign up for our Newsletter"
+                link={'/newsletter'}
+                label="Get the latest news and updates from the VAST team"
+                buttonLabel="Subscribe"
+              />,
             ].concat(
               blogpostsInternalArchive?.blogPosts
-                ?.slice(0, 3)
-                ?.map((post, idx) => (
-                  <BlogPostSlide
-                    key={idx}
-                    title={post?.metadata?.title}
-                    link={post?.metadata?.permalink}
-                    isRelease={post?.metadata?.tags
-                      ?.map((tag) => tag?.label)
-                      ?.includes('release')}
-                    imageLink={post?.metadata?.frontMatter?.image}
-                    description={post?.metadata?.frontMatter?.description}
-                  />
-                ))
+                ?.slice(0, 4)
+                ?.map((post, idx) => {
+                  return (
+                    <CarouselCard
+                      key={idx}
+                      title={post?.metadata?.title}
+                      link={post?.metadata?.permalink}
+                      label={
+                        post?.metadata?.tags
+                          ?.map((tag) => tag?.label)
+                          ?.includes('release')
+                          ? 'Latest Release'
+                          : 'Latest Blogpost'
+                      }
+                      buttonLabel={
+                        post?.metadata?.tags
+                          ?.map((tag) => tag?.label)
+                          ?.includes('release')
+                          ? 'Read Announcement'
+                          : 'Read Post'
+                      }
+                      imageLink={post?.metadata?.frontMatter?.image}
+                      description={
+                        post?.metadata?.hasTruncateMarker
+                          ? extractTextBeforeTruncate(post?.content)
+                          : null
+                      }
+                    />
+                  );
+                })
             )}
           </Carousel>
         </div>
@@ -82,32 +97,44 @@ function HomepageHeader() {
   );
 }
 
-type BlogPostType = {
+type CarouselCard = {
   title: string;
   link: string;
+  label: string;
+  buttonLabel: string;
   description?: string;
   imageLink?: string;
-  isRelease?: boolean;
 };
 
-const BlogPostSlide = ({
+const CarouselCard = ({
   title,
   link,
   description,
   imageLink,
-  isRelease = false,
-}: BlogPostType) => {
+  label,
+  buttonLabel,
+}: CarouselCard) => {
   const {colorMode} = useColorMode();
   return (
-    <div className={styles.blogPost}>
-      <div className="container">
-        <p>{isRelease ? 'Release' : 'Latest from our blog'}</p>{' '}
-        <p className="hero__subtitle">{title}</p>
-        {description && <p>{description}</p>}
-        <div>
-          <Link className="button button--info button--md" to={link}>
-            {isRelease ? 'Read Announcement' : 'Read Post'}
-          </Link>
+    <div className={styles.carouselCard}>
+      <div className={clsx(styles.container, 'container')}>
+        <div className={styles.top}>
+          <div>
+            {label}
+            <p className="hero__subtitle">{title}</p>
+            {description && description !== '' && (
+              <div className={styles.blogDesc}>
+                <ReactMarkdown remarkPlugins={[strip]}>
+                  {description}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+          <div>
+            <Link className="button button--info button--md" to={link}>
+              {buttonLabel}
+            </Link>
+          </div>
         </div>
       </div>
       {imageLink && (
