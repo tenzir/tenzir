@@ -142,7 +142,7 @@ const CarouselCard = ({
           src={imageLink}
           alt="Blogpost Figure"
           height="200px"
-          className={colorMode === 'dark' ? styles.darkImage : ''}
+          className="svglite"
         />
       )}
     </div>

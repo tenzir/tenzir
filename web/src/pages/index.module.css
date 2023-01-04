@@ -84,11 +84,6 @@
   }
 }
 
-/* https://francoisbest.com/posts/2020/dark-mode-for-excalidraw */
-.darkImage {
-  filter: invert(100%) hue-rotate(180deg);
-}
-
 .blogDesc {
   max-width: 80%;
 }
