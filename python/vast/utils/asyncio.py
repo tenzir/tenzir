@@ -3,7 +3,7 @@ from signal import SIGINT, SIGTERM, SIGHUP
 
 import vast.utils.logging
 
-logger = vast.utils.logging.get()
+logger = vast.utils.logging.get(__name__)
 
 
 async def shutdown(loop, signal=None):
