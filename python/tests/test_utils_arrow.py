@@ -1,86 +1,87 @@
 import json
 import ipaddress
 import pyarrow as pa
-import pytest
 
 import vast.utils.arrow as vua
 
 
 def test_pattern_extension_type():
     ty = vua.PatternType()
-    storage = pa.array(["/foo*bar/", "/ba.qux/"], pa.string())
-    arr = pa.ExtensionArray.from_storage(ty, storage)
+    str_patterns = ["/foo*bar/", "/ba.qux/", None]
+    arr = vua.extension_array(str_patterns, ty)
     arr.validate()
     assert arr.type is ty
-    assert arr.storage.equals(storage)
     assert arr[0].as_py() == "/foo*bar/"
     assert arr[1].as_py() == "/ba.qux/"
+    assert arr[2].as_py() == None
 
 
 def test_ip_address_extension_type():
     ty = vua.AddressType()
-    bytes = vua.pack_ip("10.1.21.165")
-    storage = pa.array([bytes], pa.binary(16))
-    arr = pa.ExtensionArray.from_storage(ty, storage)
+    arr = vua.extension_array(["10.1.21.165", None], ty)
     arr.validate()
     assert arr.type is ty
-    assert arr.storage.equals(storage)
     assert arr[0].as_py() == ipaddress.IPv4Address("10.1.21.165")
+    assert arr[1].as_py() == None
 
 
 def test_subnet_extension_type():
     ty = vua.SubnetType()
-    bytes = vua.pack_ip("10.1.21.0")
-    address_array = pa.array([bytes, bytes], pa.binary(16))
-    length_array = pa.array([24, 25], pa.uint8())
-    storage = pa.StructArray.from_arrays(
-        [
-            pa.ExtensionArray.from_storage(vua.AddressType(), address_array),
-            length_array,
-        ],
-        names=["address", "length"],
-    )
-    arr = pa.ExtensionArray.from_storage(ty, storage)
+    arr = vua.extension_array(["10.1.21.0/24", None, "10.1.20.0/25"], ty)
     arr.validate()
     assert arr.type is ty
-    assert arr.storage.equals(storage)
     assert arr[0].as_py() == ipaddress.IPv4Network("10.1.21.0/24")
-    assert arr[1].as_py() == ipaddress.IPv4Network("10.1.21.0/25")
+    assert arr[1].as_py() == None
+    assert arr[2].as_py() == ipaddress.IPv4Network("10.1.20.0/25")
+
+
+def test_py_dict_to_arrow_dict():
+    py_dict = {
+        "foo": 0,
+        "bar": 2,
+    }
+    arrow_dict = vua.py_dict_to_arrow_dict(py_dict)
+    arrow_dict.validate()
+    assert arrow_dict.to_pylist() == ["foo", None, "bar"]
 
 
 def test_enum_extension_type():
     fields = {
         "foo": 1,
         "bar": 2,
-        "baz": 3,
+        "baz": 4,
     }
+    enum_py = ["foo", "bar", "baz", None, "foo"]
     ty = vua.EnumType(fields)
     assert ty.__arrow_ext_serialize__().decode() == json.dumps(fields)
-    dictionary_type = pa.dictionary(pa.uint8(), pa.string(), ordered=False)
+    dictionary_type = pa.dictionary(
+        vua.EnumType.DICTIONARY_INDEX_TYPE, pa.string(), ordered=False
+    )
     assert vua.EnumType.ext_type == dictionary_type
-    indices = pa.array([0, 1, 2, 1, 0], pa.uint8())
-    dictionary = pa.array(fields.keys(), pa.string())
-    storage = pa.DictionaryArray.from_arrays(indices, dictionary)
-    assert storage.dictionary.to_pylist() == ["foo", "bar", "baz"]
-    assert storage.indices.to_pylist() == indices.to_pylist()
-    arr = pa.ExtensionArray.from_storage(ty, storage)
+    arr = vua.extension_array(enum_py, ty)
     arr.validate()
     assert arr.type is ty
-    assert arr.storage.equals(storage)
-    assert arr.to_pylist() == ["foo", "bar", "baz", "bar", "foo"]
+    assert arr.to_pylist() == enum_py
 
 
-def test_enum_extension_type_fields():
-    fields = {
-        "foo": 1,
-        "bar": 2,
-        "baz": 3,
-    }
-    ty = vua.EnumType(fields)
-    assert ty.field(2) == "bar"
-    # Field mappings are stored in the inverse order.
-    assert list(ty.fields.keys()) == list(fields.values())
-    assert list(ty.fields.values()) == list(fields.keys())
+def test_extension_type_in_struct():
+    src_ips = ["10.1.0.2", None, "10.1.0.4"]
+    dst_ips = ["10.2.0.2", None, None]
+    srcs = vua.extension_array(src_ips, vua.AddressType())
+    dsts = vua.extension_array(dst_ips, vua.AddressType())
+
+    struct_array = pa.StructArray.from_arrays(
+        [srcs, dsts],
+        names=["src", "dst"],
+    )
+
+    assert struct_array.to_pylist() == [
+        {
+            "src": None if s is None else ipaddress.ip_address(s),
+            "dst": None if d is None else ipaddress.ip_address(d),
+        }
+        for (s, d) in zip(src_ips, dst_ips)
+    ]
 
 
 # Directly lifted from Arrow's test_extension_type.py
@@ -102,39 +103,29 @@ def test_ipc():
     # Create sample patterns.
     patterns = ["/foo/", "/bar/"]
     pattern_type = vua.PatternType()
-    pattern_storage = pa.array(patterns, pa.string())
-    pattern_array = pa.ExtensionArray.from_storage(pattern_type, pattern_storage)
+    pattern_array = vua.extension_array(patterns, pattern_type)
     # Create sample IP addresses.
-    addresses = ["10.1.21.165", "10.1.21.166"]
-    packed_addresses = [vua.pack_ip(x) for x in addresses]
+    addresses = [
+        ipaddress.IPv4Address("10.1.21.165"),
+        ipaddress.IPv6Address("2001:200:e000::100"),
+    ]
     address_type = vua.AddressType()
-    address_storage = pa.array(packed_addresses, pa.binary(16))
-    address_array = pa.ExtensionArray.from_storage(address_type, address_storage)
+    address_array = vua.extension_array(addresses, address_type)
     # Create sample subnets.
-    network = vua.pack_ip("10.1.21.0")
-    networks = [network, network]
-    prefixes = [24, 25]
-    networks_array = pa.array(networks, pa.binary(16))
-    length_array = pa.array(prefixes, pa.uint8())
+    networks = [
+        ipaddress.IPv4Network("10.1.21.0/24"),
+        ipaddress.IPv6Network("2001:200:e000::/35"),
+    ]
     subnet_type = vua.SubnetType()
-    subnet_storage = pa.StructArray.from_arrays(
-        [
-            pa.ExtensionArray.from_storage(address_type, networks_array),
-            length_array,
-        ],
-        names=["address", "length"],
-    )
-    subnet_array = pa.ExtensionArray.from_storage(subnet_type, subnet_storage)
+    subnet_array = vua.extension_array(networks, subnet_type)
     # Create sample enums.
     fields = {
         "foo": 1,
         "bar": 2,
     }
-    indices = pa.array([1, 0], pa.uint8())
-    dictionary = pa.array(fields.keys(), pa.string())
-    enum_storage = pa.DictionaryArray.from_arrays(indices, dictionary)
+    enums = [None, "bar"]
     enum_type = vua.EnumType(fields)
-    enum_array = pa.ExtensionArray.from_storage(enum_type, enum_storage)
+    enum_array = vua.extension_array(enums, enum_type)
     # Assemble a record batch.
     schema = pa.schema(
         [("p", pattern_type), ("a", address_type), ("s", subnet_type), ("e", enum_type)]
@@ -142,10 +133,12 @@ def test_ipc():
     batch = pa.record_batch(
         [pattern_array, address_array, subnet_array, enum_array], schema=schema
     )
+
     # Perform a roundtrip (logic lifted from Arrow's test_extension_type.py.
     buf = ipc_write_batch(batch)
     del batch
     batch = ipc_read_batch(buf)
+
     # Validate patterns.
     p = batch.column("p")
     assert isinstance(p, pa.ExtensionArray)
@@ -156,20 +149,17 @@ def test_ipc():
     a = batch.column("a")
     assert isinstance(a, pa.ExtensionArray)
     assert a.type == address_type
-    assert a.storage.to_pylist() == packed_addresses
-    assert a.to_pylist() == [ipaddress.IPv4Address(x) for x in addresses]
+    assert a.to_pylist() == addresses
     # Validate subnets.
     s = batch.column("s")
     assert isinstance(s, pa.ExtensionArray)
     assert s.type == subnet_type
-    assert s.storage.field("address").storage.to_pylist() == networks
-    assert s.storage.field("length").to_pylist() == prefixes
+    assert s.to_pylist() == networks
     # Validate enums.
     e = batch.column("e")
     assert isinstance(e, pa.ExtensionArray)
     assert e.type == enum_type
-    assert e.storage.equals(enum_storage)
-    assert e.to_pylist() == ["bar", "foo"]
+    assert e.to_pylist() == enums
 
 
 def test_schema_name_extraction():
@@ -209,3 +199,23 @@ def test_pack_ipv6():
 def test_unpack_ip():
     bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x15\xa5"
     assert vua.unpack_ip(bytes) == ipaddress.IPv4Address("10.1.21.165")
+
+
+def test_pack_subnetv4():
+    expected = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x00\x00"
+    from_obj = vua.pack_subnet(ipaddress.IPv4Network("10.1.0.0/16"))
+    assert from_obj[0] == expected
+    assert from_obj[1] == 16
+    from_str = vua.pack_subnet("10.1.0.0/16")
+    assert from_str[0] == expected
+    assert from_str[1] == 16
+
+
+def test_pack_subnetv6():
+    expected = b"\x20\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    from_obj = vua.pack_subnet(ipaddress.IPv6Network("2001::/16"))
+    assert from_obj[0] == expected
+    assert from_obj[1] == 16
+    from_str = vua.pack_subnet("2001:0000::/16")
+    assert from_str[0] == expected
+    assert from_str[1] == 16
