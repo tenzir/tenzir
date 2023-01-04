@@ -11,17 +11,8 @@ import VASTLight from '@site/static/img/vast-white.svg';
 import VASTDark from '@site/static/img/vast-black.svg';
 import Carousel from '../components/Carousel';
 
-// There is no straightforward way to generate these links without
-// overriding the blog plugin, so we hardcode them for now.
-const latestNonReleaseBlogPost = {
-  title: 'The New REST API',
-  link: '/blog/the-new-rest-api',
-};
-
-const latestReleaseBlogPost = {
-  title: 'VAST v2.4.1 Released',
-  link: '/blog/vast-v2.4.1',
-};
+// NOTE: this is internal and may change, and the types might not be guaranteed
+const blogpostsInternalArchive = require('../../.docusaurus/docusaurus-plugin-content-blog/default/blog-archive-80c.json');
 
 function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
@@ -51,31 +42,39 @@ function HomepageHeader() {
 
         <div className={styles.carousel}>
           <Carousel>
-            <div className={styles.leftAligned}>
-              <div className="container">
-                <p>Sign up for our Newsletter</p>
-                <p className="hero__subtitle">
-                  Stay in touch with what's new with VAST
-                </p>
-                <div>
-                  <Link
-                    className="button button--info button--md"
-                    to="/newsletter"
-                  >
-                    Subscribe
-                  </Link>
+            {[
+              <div className={styles.blogPost}>
+                <div className="container">
+                  <p>Sign up for our Newsletter</p>
+                  <p className="hero__subtitle">
+                    Stay in touch with what's new with VAST
+                  </p>
+                  <div>
+                    <Link
+                      className="button button--info button--md"
+                      to="/newsletter"
+                    >
+                      Subscribe
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <BlogPostSlide
-              title={latestNonReleaseBlogPost.title}
-              link={latestNonReleaseBlogPost.link}
-            />
-            <BlogPostSlide
-              title={latestReleaseBlogPost.title}
-              link={latestReleaseBlogPost.link}
-              isRelease={true}
-            />
+              </div>,
+            ].concat(
+              blogpostsInternalArchive?.blogPosts
+                ?.slice(0, 3)
+                ?.map((post, idx) => (
+                  <BlogPostSlide
+                    key={idx}
+                    title={post?.metadata?.title}
+                    link={post?.metadata?.permalink}
+                    isRelease={post?.metadata?.tags
+                      ?.map((tag) => tag?.label)
+                      ?.includes('release')}
+                    imageLink={post?.metadata?.frontMatter?.image}
+                    description={post?.metadata?.frontMatter?.description}
+                  />
+                ))
+            )}
           </Carousel>
         </div>
       </header>
@@ -83,18 +82,42 @@ function HomepageHeader() {
   );
 }
 
-const BlogPostSlide = ({title, link, isRelease = false}) => {
+type BlogPostType = {
+  title: string;
+  link: string;
+  description?: string;
+  imageLink?: string;
+  isRelease?: boolean;
+};
+
+const BlogPostSlide = ({
+  title,
+  link,
+  description,
+  imageLink,
+  isRelease = false,
+}: BlogPostType) => {
+  const {colorMode} = useColorMode();
   return (
-    <div className={styles.leftAligned}>
+    <div className={styles.blogPost}>
       <div className="container">
-        <p>{isRelease ? 'Latest Release' : 'Latest from our blog'}</p>
+        <p>{isRelease ? 'Release' : 'Latest from our blog'}</p>{' '}
         <p className="hero__subtitle">{title}</p>
+        {description && <p>{description}</p>}
         <div>
           <Link className="button button--info button--md" to={link}>
             {isRelease ? 'Read Announcement' : 'Read Post'}
           </Link>
         </div>
       </div>
+      {imageLink && (
+        <img
+          src={imageLink}
+          alt="Blogpost Figure"
+          height="200px"
+          className={colorMode === 'dark' ? styles.darkImage : ''}
+        />
+      )}
     </div>
   );
 };

@@ -22,10 +22,14 @@
   justify-content: center;
 }
 
+.blogPost {
+  display: flex;
+}
+
 @media (min-width: 801px) {
-  .leftAligned {
-    padding-right: 100px;
-    padding-left: 100px;
+  .blogPost {
+    padding-right: 40px;
+    padding-left: 40px;
   }
 
   .vastLogo {
@@ -36,8 +40,6 @@
 .carousel {
   margin: 0 auto;
   max-width: 90%;
-  max-height: 500px;
-  height: 300px;
   overflow: hidden;
   position: relative;
   margin-top: -50px;
@@ -45,7 +47,7 @@
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.2);
   z-index: 100000;
   background-color: var(--ifm-color-carousel-bg);
-  padding-top: 70px;
+  padding-top: 30px;
 }
 
 .container {
@@ -65,7 +67,7 @@
   background-size: 200% 200%;
 
   animation: gradient 10s ease infinite;
-  height: 40vh;
+  height: 50vh;
   margin-top: 0px;
 }
 
@@ -79,4 +81,9 @@
   100% {
     background-position: 0% 50%;
   }
+}
+
+/* https://francoisbest.com/posts/2020/dark-mode-for-excalidraw */
+.darkImage {
+  filter: invert(100%) hue-rotate(180deg);
 }
