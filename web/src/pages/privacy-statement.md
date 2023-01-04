@@ -46,8 +46,8 @@ further details on their privacy practices.
 ## Tracking
 
 We use [Plausible](https://plausible.io/) as a lightweight and open source web
-analytics solution. Plausible does not require cookies and is fully compliant
-with GDPR, CCPA and PECR. Plausible is made and hosted in the EU, powered by
+analytics solution. Plausible **does not require cookies** and is **fully compliant
+with GDPR, CCPA and PECR**. Plausible is made and hosted in the EU, powered by
 European-owned cloud infrastructure.
 
 For maximum transparency, we share our analytics dashboard publicly at
