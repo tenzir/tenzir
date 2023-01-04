@@ -40,18 +40,9 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
     return pipelines.error();
   if (!index)
     return caf::make_error(ec::missing_component, "index");
-  auto handle = self->spawn(importer, args.dir / args.label, index,
+  auto handle = self->spawn(importer, args.dir / args.label, index, accountant,
                             std::move(*pipelines));
   VAST_VERBOSE("{} spawned the importer", *self);
-  if (accountant) {
-    self->send(handle, atom::telemetry_v);
-    self->send(handle, accountant);
-  } else if (auto logger = caf::logger::current_logger();
-             logger && logger->console_verbosity() >= VAST_LOG_LEVEL_VERBOSE) {
-    // Initiate periodic rate logging.
-    // TODO: Implement live-reloading of the importer configuration.
-    self->send(handle, atom::telemetry_v);
-  }
   for (auto& source : self->state.registry.find_by_type("source")) {
     VAST_DEBUG("{} connects source to new importer", *self);
     self->anon_send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));

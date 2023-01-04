@@ -234,8 +234,6 @@ using catalog_actor = typed_actor_fwd<
   // Return the candidate partitions per type for a query.
   caf::replies_to<atom::candidates, vast::query_context>::with< //
     catalog_lookup_result>,
-  // Internal telemetry loop.
-  caf::reacts_to<atom::telemetry>,
   // Retrieves all known types.
   caf::replies_to<atom::get, atom::type>::with<type_set>,
   // Registers a given layout.
@@ -251,15 +249,11 @@ using catalog_actor = typed_actor_fwd<
 
 /// The interface of an IMPORTER actor.
 using importer_actor = typed_actor_fwd<
-  // Register the ACCOUNTANT actor.
-  caf::reacts_to<accountant_actor>,
   // Add a new sink.
   caf::replies_to<stream_sink_actor<table_slice>>::with< //
     caf::outbound_stream_slot<table_slice>>,
   // Register a FLUSH LISTENER actor.
-  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
-  // The internal telemetry loop of the IMPORTER.
-  caf::reacts_to<atom::telemetry>>
+  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STREAM SINK actor for table slices with a
@@ -272,8 +266,6 @@ using importer_actor = typed_actor_fwd<
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
   caf::reacts_to<atom::done, uuid>,
-  // INTERNAL: Telemetry loop handler.
-  caf::reacts_to<atom::telemetry>,
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // Subscribes a PARTITION CREATION LISTENER to the INDEX.
@@ -339,9 +331,7 @@ using filesystem_actor = typed_actor_fwd<
     chunk_ptr>,
   // Deletes a file.
   caf::replies_to<atom::erase, std::filesystem::path>::with< //
-    atom::done>,
-  // The internal telemetry loop of the filesystem.
-  caf::reacts_to<atom::telemetry>>
+    atom::done>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -424,9 +414,7 @@ using source_actor = typed_actor_fwd<
   // Update the expression used for filtering data in the SOURCE.
   caf::reacts_to<atom::normalize, expression>,
   // Set up a new stream sink for the generated data.
-  caf::reacts_to<stream_sink_actor<table_slice, std::string>>,
-  // INTERNAL: Telemetry loop handler.
-  caf::reacts_to<atom::telemetry>>
+  caf::reacts_to<stream_sink_actor<table_slice, std::string>>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 

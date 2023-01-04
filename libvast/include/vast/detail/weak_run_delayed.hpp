@@ -26,8 +26,25 @@ auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
                       Function&& function) {
   return self->clock().schedule(
     self->clock().now() + delay,
-    caf::make_action(std::forward<Function>(function)),
+    caf::make_action(std::forward<Function>(function),
+                     caf::action::state::waiting),
     caf::weak_actor_ptr{self->ctrl()});
+}
+
+/// Runs an action in a loop with a given delay without keeping the actor alive.
+/// @param self The hosting actor pointer.
+/// @param delay The delay after which to repeat the action.
+/// @param function The action to run with the signature () -> void.
+template <class Function>
+  requires std::is_invocable_r_v<void, std::remove_reference_t<Function>&>
+void weak_run_delayed_loop(caf::scheduled_actor* self, caf::timespan delay,
+                           Function&& function) {
+  weak_run_delayed(self, delay,
+                   [self, delay,
+                    function = std::forward<Function>(function)]() mutable {
+                     std::invoke(function);
+                     weak_run_delayed_loop(self, delay, std::move(function));
+                   });
 }
 
 } // namespace vast::detail

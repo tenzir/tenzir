@@ -354,9 +354,10 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       }
       // Start streaming.
       self->state.has_sink = true;
-      detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
-        self->send<caf::message_priority::high>(self, atom::telemetry_v);
-      });
+      detail::weak_run_delayed_loop(self, defaults::system::telemetry_rate,
+                                    [self] {
+                                      self->state.send_report();
+                                    });
       // Start streaming. Note that we add the outbound path only now,
       // otherwise for small imports the source might already shut down
       // before we receive a sink.
@@ -394,16 +395,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
           });
       }
       return rs->promise;
-    },
-    [self](atom::telemetry) {
-      VAST_DEBUG("{} got a telemetry atom", *self);
-      self->state.send_report();
-      if (!self->state.mgr->done()) {
-        detail::weak_run_delayed(
-          self, defaults::system::telemetry_rate, [self] {
-            self->send<caf::message_priority::high>(self, atom::telemetry_v);
-          });
-      }
     },
   };
   // We cannot return the behavior directly and make the SOURCE a typed actor

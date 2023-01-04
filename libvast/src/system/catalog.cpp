@@ -596,6 +596,65 @@ type_set catalog_state::types() const {
   return result;
 }
 
+void catalog_state::emit_metrics() const {
+  VAST_ASSERT(accountant);
+  auto num_partitions_and_events_per_schema_and_version
+    = detail::stable_map<std::pair<std::string_view, count>,
+                         std::pair<count, count>>{};
+  for (const auto& [type, id_synopsis_map] : synopses_per_type) {
+    for (const auto& [id, synopsis] : id_synopsis_map) {
+      VAST_ASSERT(synopsis);
+      auto& [num_partitions, num_events]
+        = num_partitions_and_events_per_schema_and_version[std::pair{
+          synopsis->schema.name(), synopsis->version}];
+      num_partitions += 1;
+      num_events += synopsis->events;
+    }
+  }
+  auto total_num_partitions = count{0};
+  auto total_num_events = count{0};
+  auto r = report{};
+  r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
+  for (const auto& [schema_and_version, num_partitions_and_events] :
+       num_partitions_and_events_per_schema_and_version) {
+    auto [schema_num_partitions, schema_num_events] = num_partitions_and_events;
+    total_num_partitions += schema_num_partitions;
+    total_num_events += schema_num_events;
+    r.data.push_back(data_point{
+          .key = "catalog.num-partitions",
+          .value = schema_num_partitions,
+          .metadata = {
+            {"schema", std::string{schema_and_version.first}},
+            {"partition-version", fmt::to_string(schema_and_version.second)},
+          },
+        });
+    r.data.push_back(data_point{
+          .key = "catalog.num-events",
+          .value = schema_num_events,
+          .metadata = {
+            {"schema", std::string{schema_and_version.first}},
+            {"partition-version", fmt::to_string(schema_and_version.second)},
+          },
+        });
+  }
+  r.data.push_back(data_point{
+    .key = "catalog.num-partitions-total",
+    .value = total_num_partitions,
+  });
+  r.data.push_back(data_point{
+    .key = "catalog.num-events-total",
+    .value = total_num_events,
+  });
+  r.data.push_back(data_point{
+          .key = "memory-usage",
+          .value = memusage(),
+          .metadata = {
+            {"component", std::string{name}},
+          },
+        });
+  self->send(accountant, atom::metrics_v, std::move(r));
+}
+
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
         accountant_actor accountant,
@@ -627,9 +686,10 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
   if (accountant) {
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());
-    detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
-      self->send(self, atom::telemetry_v);
-    });
+    detail::weak_run_delayed_loop(self, defaults::system::telemetry_rate,
+                                  [self] {
+                                    self->state.emit_metrics();
+                                  });
   }
   return {
     [self](atom::merge,
@@ -780,69 +840,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       VAST_TRACE_SCOPE("");
       return self->state.taxonomies;
     },
-    [self](atom::telemetry) {
-      VAST_ASSERT(self->state.accountant);
-      auto num_partitions_and_events_per_schema_and_version
-        = detail::stable_map<std::pair<std::string_view, count>,
-                             std::pair<count, count>>{};
-      for (const auto& [type, id_synopsis_map] :
-           self->state.synopses_per_type) {
-        for (const auto& [id, synopsis] : id_synopsis_map) {
-          VAST_ASSERT(synopsis);
-          auto& [num_partitions, num_events]
-            = num_partitions_and_events_per_schema_and_version[std::pair{
-              synopsis->schema.name(), synopsis->version}];
-          num_partitions += 1;
-          num_events += synopsis->events;
-        }
-      }
-      auto total_num_partitions = count{0};
-      auto total_num_events = count{0};
-      auto r = report{};
-      r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
-      for (const auto& [schema_and_version, num_partitions_and_events] :
-           num_partitions_and_events_per_schema_and_version) {
-        auto [schema_num_partitions, schema_num_events]
-          = num_partitions_and_events;
-        total_num_partitions += schema_num_partitions;
-        total_num_events += schema_num_events;
-        r.data.push_back(data_point{
-          .key = "catalog.num-partitions",
-          .value = schema_num_partitions,
-          .metadata = {
-            {"schema", std::string{schema_and_version.first}},
-            {"partition-version", fmt::to_string(schema_and_version.second)},
-          },
-        });
-        r.data.push_back(data_point{
-          .key = "catalog.num-events",
-          .value = schema_num_events,
-          .metadata = {
-            {"schema", std::string{schema_and_version.first}},
-            {"partition-version", fmt::to_string(schema_and_version.second)},
-          },
-        });
-      }
-      r.data.push_back(data_point{
-        .key = "catalog.num-partitions-total",
-        .value = total_num_partitions,
-      });
-      r.data.push_back(data_point{
-        .key = "catalog.num-events-total",
-        .value = total_num_events,
-      });
-      r.data.push_back(data_point{
-          .key = "memory-usage",
-          .value = self->state.memusage(),
-          .metadata = {
-            {"component", std::string{self->state.name}},
-          },
-        });
-      self->send(self->state.accountant, atom::metrics_v, std::move(r));
-      detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
-        self->send(self, atom::telemetry_v);
-      });
-    }};
+  };
 }
 
 } // namespace vast::system

@@ -147,10 +147,16 @@ caf::behavior datagram_source(
         return;
       }
       if (self->state.accountant) {
-        detail::weak_run_delayed(self, defaults::system::telemetry_rate,
-                                 [self] {
-                                   self->send(self, atom::telemetry_v);
-                                 });
+        detail::weak_run_delayed_loop(
+          self, defaults::system::telemetry_rate, [self] {
+            self->state.send_report();
+            if (self->state.dropped_packets > 0) {
+              VAST_WARN("{} has no capacity left in stream and dropped {} "
+                        "packets",
+                        *self, self->state.dropped_packets);
+              self->state.dropped_packets = 0;
+            }
+          });
       }
       // Start streaming.
       self->state.mgr->add_outbound_path(self->state.transformer);
@@ -198,21 +204,6 @@ caf::behavior datagram_source(
           });
       }
       return rs->promise;
-    },
-    [self](atom::telemetry) {
-      VAST_DEBUG("{} got a telemetry atom", *self);
-      self->state.send_report();
-      if (self->state.dropped_packets > 0) {
-        VAST_WARN("{} has no capacity left in stream and dropped {} packets",
-                  *self, self->state.dropped_packets);
-        self->state.dropped_packets = 0;
-      }
-      if (!self->state.done) {
-        detail::weak_run_delayed(self, defaults::system::telemetry_rate,
-                                 [self] {
-                                   self->send(self, atom::telemetry_v);
-                                 });
-      }
     },
   };
 

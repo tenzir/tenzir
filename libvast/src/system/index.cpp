@@ -1420,9 +1420,39 @@ index(index_actor::stateful_pointer<index_state> self,
     self->send(self->state.accountant, atom::announce_v, self->name());
   if (self->state.accountant
       || self->state.active_partition_timeout.count() > 0) {
-    detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
-      self->send(self, atom::telemetry_v);
-    });
+    detail::weak_run_delayed_loop(
+      self, defaults::system::telemetry_rate, [self] {
+        if (self->state.accountant)
+          self->state.send_report();
+        if (self->state.active_partition_timeout.count() > 0) {
+          auto decommissioned = std::vector<type>{};
+          for (const auto& [schema, active_partition] :
+               self->state.active_partitions) {
+            if (active_partition.spawn_time
+                  + self->state.active_partition_timeout
+                < std::chrono::steady_clock::now()) {
+              decommissioned.push_back(schema);
+            }
+          }
+          if (!decommissioned.empty()) {
+            for (const auto& schema : decommissioned) {
+              auto active_partition
+                = self->state.active_partitions.find(schema);
+              VAST_ASSERT(active_partition
+                          != self->state.active_partitions.end());
+              VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
+                           "after {} timeout",
+                           *self, schema,
+                           self->state.partition_capacity
+                             - active_partition->second.capacity,
+                           self->state.partition_capacity,
+                           data{self->state.active_partition_timeout});
+              self->state.decommission_active_partition(schema, {});
+            }
+            self->state.flush_to_disk();
+          }
+        }
+      });
   }
   return {
     [self](atom::done, uuid partition_id) {
@@ -1432,39 +1462,6 @@ index(index_actor::stateful_pointer<index_state> self,
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_DEBUG("{} got a new stream source", *self);
       return self->state.stage->add_inbound_path(in);
-    },
-    [self](atom::telemetry) {
-      detail::weak_run_delayed(self, defaults::system::telemetry_rate, [self] {
-        self->send(self, atom::telemetry_v);
-      });
-      if (self->state.accountant)
-        self->state.send_report();
-      if (self->state.active_partition_timeout.count() > 0) {
-        auto decommissioned = std::vector<type>{};
-        for (const auto& [schema, active_partition] :
-             self->state.active_partitions) {
-          if (active_partition.spawn_time + self->state.active_partition_timeout
-              < std::chrono::steady_clock::now()) {
-            decommissioned.push_back(schema);
-          }
-        }
-        if (!decommissioned.empty()) {
-          for (const auto& schema : decommissioned) {
-            auto active_partition = self->state.active_partitions.find(schema);
-            VAST_ASSERT(active_partition
-                        != self->state.active_partitions.end());
-            VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
-                         "after {} timeout",
-                         *self, schema,
-                         self->state.partition_capacity
-                           - active_partition->second.capacity,
-                         self->state.partition_capacity,
-                         data{self->state.active_partition_timeout});
-            self->state.decommission_active_partition(schema, {});
-          }
-          self->state.flush_to_disk();
-        }
-      }
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_DEBUG("{} adds flush listener", *self);

@@ -92,9 +92,6 @@ mock_filesystem_actor::behavior_type mock_filesystem(
     [](atom::status, system::status_verbosity) {
       return record{};
     },
-    [](atom::telemetry) {
-      // nop
-    },
   };
 }
 
