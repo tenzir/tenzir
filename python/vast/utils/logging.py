@@ -40,8 +40,14 @@ def configure(config: Dynaconf, logger: logging.Logger):
 
 
 def get(name=None):
+    """Get a logger instance while ensuring that the VAST logger namespace
+    (loggers with name "vast or "vast.*") is properly configured"""
+    # The logger "vast" is the root of the namespace. All loggers names vast.*
+    # will inherit its settings
     vast_logger = logging.getLogger("vast")
+    # Setting "propagate" to false disables inheritance from the root logger
     vast_logger.propagate = False
+    # If the logger has no handlers, it means it hasn't been configured yet.
     if not vast_logger.hasHandlers():
         config = vast.utils.config.create()
         configure(config, vast_logger)
