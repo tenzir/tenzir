@@ -41,7 +41,7 @@ def configure(config: Dynaconf, logger: logging.Logger):
 
 def get(name=None):
     vast_logger = logging.getLogger("vast")
-    # vast_logger.propagate = False
+    vast_logger.propagate = False
     if not vast_logger.hasHandlers():
         config = vast.utils.config.create()
         configure(config, vast_logger)
