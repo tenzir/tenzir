@@ -425,8 +425,6 @@ using source_actor = typed_actor_fwd<
   caf::reacts_to<atom::normalize, expression>,
   // Set up a new stream sink for the generated data.
   caf::reacts_to<stream_sink_actor<table_slice, std::string>>,
-  // INTERNAL: Cause the source to wake up.
-  caf::reacts_to<atom::wakeup>,
   // INTERNAL: Telemetry loop handler.
   caf::reacts_to<atom::telemetry>>
   // Conform to the protocol of the STATUS CLIENT actor.

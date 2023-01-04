@@ -199,9 +199,6 @@ caf::behavior datagram_source(
       }
       return rs->promise;
     },
-    [](atom::wakeup) {
-      // nop
-    },
     [self](atom::telemetry) {
       VAST_DEBUG("{} got a telemetry atom", *self);
       self->state.send_report();

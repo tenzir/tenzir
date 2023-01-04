@@ -282,7 +282,14 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
           // This pull handler was invoked while we were waiting for a wakeup
           // message. Sending another one would create a parallel wakeup cycle.
           self->state.waiting_for_input = true;
-          self->delayed_send(self, self->state.wakeup_delay, atom::wakeup_v);
+          detail::weak_run_delayed(self, self->state.wakeup_delay, [self] {
+            VAST_VERBOSE("{} wakes up to check for new input", *self);
+            self->state.waiting_for_input = false;
+            // If we are here, the reader returned with ec::stalled the last
+            // time it was called. Let's check if we can read something now.
+            if (self->state.mgr->generate_messages())
+              self->state.mgr->push();
+          });
           VAST_DEBUG("{} scheduled itself to resume after {}", *self,
                      self->state.wakeup_delay);
           // Exponential backoff for the wakeup calls.
@@ -387,14 +394,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
           });
       }
       return rs->promise;
-    },
-    [self](atom::wakeup) {
-      VAST_VERBOSE("{} wakes up to check for new input", *self);
-      self->state.waiting_for_input = false;
-      // If we are here, the reader returned with ec::stalled the last time it
-      // was called. Let's check if we can read something now.
-      if (self->state.mgr->generate_messages())
-        self->state.mgr->push();
     },
     [self](atom::telemetry) {
       VAST_DEBUG("{} got a telemetry atom", *self);
