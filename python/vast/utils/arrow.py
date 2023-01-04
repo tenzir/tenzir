@@ -4,11 +4,6 @@ from typing import Iterable, Optional, Sequence, SupportsBytes, SupportsIndex
 
 import pyarrow as pa
 
-# VAST's flatbuffer type representation uses a 32-bit unsigned integer. We
-# use an 8-bit type here only for backwards compatibility to the legacy
-# type. Eventually this will be a 32-bit type as well.
-ENUM_DICTIONARY_INDEX_TYPE = pa.uint8()
-
 
 class PatternScalar(pa.ExtensionScalar):
     def as_py(self) -> str | None:
@@ -115,8 +110,13 @@ class EnumType(pa.ExtensionType):
     `EnumType` stores as name-to-value mapping called `fields` that maps to the
     underlying integer type of represented the enum."""
 
+    # VAST's flatbuffer type representation uses a 32-bit unsigned integer. We
+    # use an 8-bit type here only for backwards compatibility to the legacy
+    # type. Eventually this will be a 32-bit type as well.
+    DICTIONARY_INDEX_TYPE = pa.uint8()
+
     ext_name = "vast.enumeration"
-    ext_type = pa.dictionary(ENUM_DICTIONARY_INDEX_TYPE, pa.string())
+    ext_type = pa.dictionary(DICTIONARY_INDEX_TYPE, pa.string())
 
     def __init__(self, fields: dict[str, int]):
         self._fields = fields
@@ -235,7 +235,7 @@ def extension_array(obj: Sequence, type: pa.DataType) -> pa.Array:
             # use the mappings in the `fields` metadata as indices for building
             # the dictionary
             indices_py = [None if e is None else fields[e] for e in obj]
-            indices = pa.array(indices_py, ENUM_DICTIONARY_INDEX_TYPE)
+            indices = pa.array(indices_py, EnumType.DICTIONARY_INDEX_TYPE)
             dictionary = py_dict_to_arrow_dict(fields)
             storage = pa.DictionaryArray.from_arrays(indices, dictionary)
             return pa.ExtensionArray.from_storage(type, storage)

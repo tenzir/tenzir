@@ -55,7 +55,7 @@ def test_enum_extension_type():
     ty = vua.EnumType(fields)
     assert ty.__arrow_ext_serialize__().decode() == json.dumps(fields)
     dictionary_type = pa.dictionary(
-        vua.ENUM_DICTIONARY_INDEX_TYPE, pa.string(), ordered=False
+        vua.EnumType.DICTIONARY_INDEX_TYPE, pa.string(), ordered=False
     )
     assert vua.EnumType.ext_type == dictionary_type
     arr = vua.extension_array(enum_py, ty)
