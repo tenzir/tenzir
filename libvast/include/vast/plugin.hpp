@@ -461,6 +461,16 @@ public:
   /// Returns the plugins type.
   [[nodiscard]] enum type type() const noexcept;
 
+  /// Compare two plugins.
+  friend bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
+  friend std::strong_ordering
+  operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
+
+  /// Compare a plugin by its name.
+  friend bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept;
+  friend std::strong_ordering
+  operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept;
+
 private:
   /// Create a plugin_ptr.
   plugin_ptr(void* library, plugin* instance, void (*deleter)(plugin*),
@@ -483,15 +493,7 @@ namespace vast::plugins {
 template <class Plugin>
 const Plugin* find(std::string_view name) noexcept {
   const auto& plugins = get();
-  const auto found
-    = std::find_if(plugins.begin(), plugins.end(), [&](const plugin_ptr& p) {
-        const auto plugin_name = p->name();
-        return std::equal(name.begin(), name.end(), plugin_name.begin(),
-                          plugin_name.end(),
-                          [](unsigned char lhs, unsigned char rhs) noexcept {
-                            return std::tolower(lhs) == std::tolower(rhs);
-                          });
-      });
+  const auto found = std::find(plugins.begin(), plugins.end(), name);
   if (found == plugins.end())
     return nullptr;
   return found->template as<Plugin>();

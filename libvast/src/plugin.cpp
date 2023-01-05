@@ -239,11 +239,8 @@ load(const std::vector<std::string>& bundled_plugins,
       return std::move(plugin.error());
     }
   }
-  // Sort loaded plugins by name.
-  std::sort(get_mutable().begin(), get_mutable().end(),
-            [](const auto& lhs, const auto& rhs) {
-              return lhs->name() < rhs->name();
-            });
+  // Sort loaded plugins by name (case-insensitive).
+  std::sort(get_mutable().begin(), get_mutable().end());
   return loaded_plugin_paths;
 }
 
@@ -550,6 +547,62 @@ const char* plugin_ptr::version() const noexcept {
 
 enum plugin_ptr::type plugin_ptr::type() const noexcept {
   return type_;
+}
+
+std::strong_ordering
+operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept {
+  if (&lhs == &rhs)
+    return std::strong_ordering::equal;
+  if (!lhs && !rhs)
+    return std::strong_ordering::equal;
+  if (!lhs)
+    return std::strong_ordering::less;
+  if (!rhs)
+    return std::strong_ordering::greater;
+  return lhs <=> rhs->name();
+}
+
+bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept {
+  if (&lhs == &rhs)
+    return true;
+  if (!lhs && !rhs)
+    return true;
+  return lhs == rhs->name();
+}
+
+std::strong_ordering
+operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept {
+  if (!lhs)
+    return std::strong_ordering::less;
+  auto lhs_name = lhs->name();
+  // TODO: Replace implementation with `std::lexicographical_compare_three_way`
+  // once that is implemented for all compilers we need to support. This does
+  // the same thing essentially, just a lot less generic.
+  while (!lhs_name.empty() && !rhs.empty()) {
+    const auto lhs_normalized
+      = std::tolower(static_cast<unsigned char>(lhs_name[0]));
+    const auto rhs_normalized
+      = std::tolower(static_cast<unsigned char>(rhs[0]));
+    if (lhs_normalized < rhs_normalized)
+      return std::strong_ordering::less;
+    if (lhs_normalized > rhs_normalized)
+      return std::strong_ordering::greater;
+    lhs_name = lhs_name.substr(1);
+    rhs = rhs.substr(1);
+  }
+  return !lhs_name.empty() ? std::strong_ordering::greater
+         : !rhs.empty()    ? std::strong_ordering::less
+                           : std::strong_ordering::equivalent;
+}
+
+bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept {
+  if (!lhs)
+    return false;
+  const auto lhs_name = lhs->name();
+  return std::equal(lhs_name.begin(), lhs_name.end(), rhs.begin(), rhs.end(),
+                    [](unsigned char lhs, unsigned char rhs) noexcept {
+                      return std::tolower(lhs) == std::tolower(rhs);
+                    });
 }
 
 } // namespace vast
