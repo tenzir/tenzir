@@ -136,15 +136,15 @@ const CarouselCard = ({
             </Link>
           </div>
         </div>
-      </div>
       {imageLink && (
         <img
           src={imageLink}
           alt="Blogpost Figure"
-          height="200px"
+          width="500px"
           className="svglite"
         />
       )}
+      </div>
     </div>
   );
 };
