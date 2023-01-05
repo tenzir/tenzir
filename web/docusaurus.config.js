@@ -226,7 +226,7 @@ const config = {
               },
               {
                 label: 'Newsletter',
-                to: '/newsletter',
+                href: '/newsletter',
               },
             ],
           },
