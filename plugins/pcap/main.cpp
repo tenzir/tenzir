@@ -664,7 +664,8 @@ public:
     auto&& layout = slice.layout();
     // TODO: relax this check. We really only need the (1) flow, and (2) PCAP
     // payload. Everything else is optional.
-    if (!congruent(layout, make_packet_type())) {
+    if (layout.name() != "pcap.packet"
+        || !congruent(layout, make_packet_type())) {
       return caf::make_error(
         ec::format_error, fmt::format("pcap-writer is unable to write batch "
                                       "of schema '{}': expected 'pcap.packet'",
