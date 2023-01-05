@@ -356,7 +356,7 @@ store_plugin::make_store_builder(system::accountant_actor accountant,
     = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
   auto store_builder = fs->home_system().spawn<caf::lazy_init>(
     default_active_store, std::move(*store), fs, std::move(accountant),
-    std::move(path), std::string{name()});
+    std::move(path), name());
   auto header = chunk::copy(id);
   return builder_and_header{store_builder, header};
 }
@@ -374,9 +374,10 @@ store_plugin::make_store(system::accountant_actor accountant,
   const auto id = uuid{header.subspan<0, uuid::num_bytes>()};
   auto path
     = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
-  return fs->home_system().spawn<caf::lazy_init>(
-    default_passive_store, std::move(*store), fs, std::move(accountant),
-    std::move(path), std::string{name()});
+  return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
+                                                 std::move(*store), fs,
+                                                 std::move(accountant),
+                                                 std::move(path), name());
 }
 
 // -- plugin_ptr ---------------------------------------------------------------
