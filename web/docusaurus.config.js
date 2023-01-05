@@ -231,6 +231,31 @@ const config = {
             ],
           },
           {
+            title: 'VAST',
+            items: [
+              {
+                label: 'Blog',
+                to: '/blog',
+              },
+              {
+                label: 'Changelog',
+                to: '/changelog',
+              },
+              {
+                label: 'Roadmap',
+                to: '/roadmap',
+              },
+              {
+                label: 'API',
+                to: '/api',
+              },
+              {
+                label: 'Privacy Statement',
+                to: '/privacy-statement',
+              },
+            ],
+          },
+          {
             title: 'Tenzir',
             items: [
               {
