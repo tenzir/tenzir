@@ -70,6 +70,12 @@ auto parse_query_params(std::string_view text)
   }
 }
 
+std::string
+format_api_route(const rest_endpoint& endpoint, std::string_view prefix) {
+  return fmt::format("/api/v{}{}{}", static_cast<uint8_t>(endpoint.version),
+                     prefix, endpoint.path);
+}
+
 struct request_dispatcher_state {
   request_dispatcher_state() = default;
 
@@ -137,8 +143,7 @@ request_dispatcher_actor::behavior_type request_dispatcher(
         auto maybe_content_type
           = header.opt_value_of(restinio::http_field_t::content_type);
         if (maybe_content_type == "application/x-www-form-urlencoded") {
-          query_params
-            = parse_query_params(response->request()->header().query());
+          query_params = parse_query_params(body);
           if (!query_params)
             return response->abort(400, fmt::format("failed to parse query "
                                                     "parameters: "
@@ -158,18 +163,20 @@ request_dispatcher_actor::behavior_type request_dispatcher(
       if (endpoint.params) {
         for (auto const& leaf : endpoint.params->leaves()) {
           auto name = leaf.field.name;
-          auto restinio_name
-            = restinio::string_view_t{name.data(), name.size()};
-          auto maybe_param = query_params->get_param(restinio_name);
-          if (!maybe_param)
-            maybe_param = route_params.get_param(restinio_name);
-          if (!maybe_param && body_params.has_value())
-            if (auto maybe_string = body_params->at_key(restinio_name);
-                maybe_string.is_string())
-              maybe_param = std::string_view{maybe_string.get_c_str()};
+          // TODO: Warn and/or return an error if the same parameter
+          // is passed using multiple methods.
+          auto maybe_param = std::optional<std::string>{};
+          if (auto query_param = query_params->get_param(name))
+            maybe_param = std::string{*query_param};
+          if (auto route_param = route_params.get_param(name))
+            maybe_param = std::string{*route_param};
+          if (body_params.has_value())
+            if (auto maybe_value = body_params->at_key(name);
+                maybe_value.error() != simdjson::NO_SUCH_FIELD)
+              maybe_param = simdjson::minify(maybe_value.value());
           if (!maybe_param)
             continue;
-          auto string_value = std::string{*maybe_param};
+          auto string_value = *maybe_param;
           auto typed_value
             = caf::visit(
               detail::overload{
@@ -192,11 +199,9 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                 },
               },
               leaf.field.type);
-          if (!typed_value) {
-            response->abort(422, fmt::format("failed to parse parameter '{}'\n",
-                                             name));
-            return;
-          }
+          if (!typed_value)
+            return response->abort(
+              422, fmt::format("failed to parse parameter '{}'\n", name));
           params[name] = std::move(*typed_value);
         }
       }
@@ -215,9 +220,7 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
                  const server_config& config, vast::rest_endpoint endpoint,
                  system::rest_handler_actor handler) {
   auto method = to_restinio_method(endpoint.method);
-  auto path
-    = fmt::format("/api/v{}{}{}", static_cast<uint8_t>(endpoint.version),
-                  prefix, endpoint.path);
+  auto path = format_api_route(endpoint, prefix);
   VAST_VERBOSE("setting up route {}", path);
   // The handler just injects the request into the actor system, the
   // actual processing starts in the request_dispatcher.
@@ -298,6 +301,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   VAST_ASSERT_CHEAP(dispatcher);
   // Set up API routes from plugins.
   std::vector<system::rest_handler_actor> handlers;
+  std::vector<std::string> api_routes;
   for (auto const* rest_plugin : plugins::get<rest_endpoint_plugin>()) {
     auto prefix = rest_plugin->prefix();
     if (!prefix.empty() && prefix[0] != '/') {
@@ -310,6 +314,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
         VAST_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;
       }
+      api_routes.push_back(format_api_route(endpoint, rest_plugin->prefix()));
       handlers.push_back(handler);
       setup_route(self, router, rest_plugin->prefix(), dispatcher,
                   *server_config, std::move(endpoint), handler);
@@ -319,7 +324,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
   router->non_matched_request_handler([](auto req) {
     VAST_VERBOSE("404 not found: {}", req->header().path());
     return req->create_response(restinio::status_not_found())
-      .set_body("404 not found")
+      .set_body("404 not found\n")
       .done();
   });
   router->http_get(
@@ -334,9 +339,17 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     VAST_VERBOSE("using {} as document root", *server_config->webroot);
     router->http_get(
       "/:path(.*)", restinio::path2regex::options_t{}.strict(true),
-      [webroot = *server_config->webroot](auto req, auto /*params*/) {
+      [webroot = *server_config->webroot, api_routes](auto req,
+                                                      auto /*params*/) {
         auto ec = std::error_code{};
         auto http_path = req->header().path();
+        // Catch the common mistake of sending a GET request to a POST endpoint.
+        if (http_path.starts_with("/api")
+            && std::find(api_routes.begin(), api_routes.end(), http_path)
+                 != api_routes.end())
+          return req->create_response(restinio::status_not_found())
+            .set_body("invalid request method\n")
+            .done();
         auto path = std::filesystem::path{std::string{http_path}};
         VAST_DEBUG("serving static file {}", http_path);
         auto normalized_path
@@ -350,7 +363,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
           normalized_path.replace_extension("html");
         if (!exists(normalized_path))
           return req->create_response(restinio::status_not_found())
-            .set_body("404 not found")
+            .set_body("404 not found\n")
             .done();
         auto extension = normalized_path.extension().string();
         auto sf = restinio::sendfile(normalized_path);

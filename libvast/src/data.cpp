@@ -31,6 +31,7 @@
 
 #include <iterator>
 #include <optional>
+#include <simdjson.h>
 #include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
@@ -691,6 +692,56 @@ record strip(const record& xs) {
   return result;
 }
 
+namespace {
+
+data parse(const simdjson::dom::element& elem, size_t depth = 0) {
+  if (depth > defaults::max_recursion)
+    throw std::runtime_error("nesting too deep");
+  switch (elem.type()) {
+    case simdjson::dom::element_type::NULL_VALUE:
+      return data{};
+    case simdjson::dom::element_type::DOUBLE:
+      return real{elem.get_double()};
+    case simdjson::dom::element_type::UINT64:
+      return count{elem.get_uint64()};
+    case simdjson::dom::element_type::INT64:
+      return integer{elem.get_int64()};
+    case simdjson::dom::element_type::BOOL:
+      return bool{elem.get_bool()};
+    case simdjson::dom::element_type::STRING: {
+      auto str = elem.get_string().value();
+      data result;
+      // Attempt some type inference.
+      if (parsers::boolean(str, result))
+        return result;
+      // Attempt maximum type inference.
+      if (parsers::data(str, result))
+        return result;
+      // Take the input as-is if nothing worked.
+      return std::string{str};
+    }
+    case simdjson::dom::element_type::ARRAY: {
+      list xs;
+      auto lst = elem.get_array();
+      xs.reserve(lst.size());
+      for (const auto& element : lst)
+        xs.push_back(parse(element, depth + 1));
+      return xs;
+    }
+    case simdjson::dom::element_type::OBJECT: {
+      record xs;
+      auto obj = elem.get_object();
+      xs.reserve(obj.size());
+      for (const auto& pair : obj)
+        xs.emplace(pair.key, parse(pair.value, depth + 1));
+      return xs;
+    }
+  }
+  die("unhandled json object type in switch statement");
+}
+
+} // end namespace
+
 caf::expected<std::string> to_json(const data& x) {
   std::string str;
   auto out = std::back_inserter(str);
@@ -699,6 +750,22 @@ caf::expected<std::string> to_json(const data& x) {
         .print(out, x))
     return str;
   return caf::make_error(ec::parse_error, "cannot convert to json");
+}
+
+caf::expected<data> from_json(std::string_view x) {
+  auto padded_string = simdjson::padded_string{x};
+  simdjson::dom::parser parser;
+  simdjson::dom::element doc;
+  auto error = parser.parse(padded_string).get(doc);
+  if (error)
+    return caf::make_error(ec::parse_error, fmt::format("{}", error));
+  try {
+    return parse(doc);
+  } catch (const simdjson::simdjson_error& e) {
+    return caf::make_error(ec::parse_error, fmt::format("{}", e.what()));
+  } catch (const std::runtime_error& e) {
+    return caf::make_error(ec::parse_error, fmt::format("{}", e.what()));
+  }
 }
 
 namespace {

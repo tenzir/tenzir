@@ -122,7 +122,7 @@ TEST(status endpoint) {
   simdjson::dom::parser parser;
   simdjson::dom::element doc;
   auto error = parser.parse(padded_string).get(doc);
-  CHECK(!error);
+  REQUIRE(!error);
 }
 
 TEST(export endpoint) {
@@ -130,14 +130,14 @@ TEST(export endpoint) {
     = vast::plugins::find<vast::rest_endpoint_plugin>("api-export");
   REQUIRE(plugin);
   auto endpoints = plugin->rest_endpoints();
-  REQUIRE_EQUAL(endpoints.size(), 2ull);
+  REQUIRE_EQUAL(endpoints.size(), 3ull);
   { // GET /export
     auto const& export_endpoint = endpoints[0];
     auto handler = plugin->handler(self->system(), test_node);
     auto response = std::make_shared<test_response>();
     auto request = vast::http_request{
       .params = {
-        {"expression", "addr in 192.168.0.0/16"},
+        {"expression", ":addr in 192.168.0.0/16"},
         {"limit", vast::count{16}},
       },
       .response = response,
@@ -151,7 +151,9 @@ TEST(export endpoint) {
     simdjson::dom::parser parser;
     simdjson::dom::element doc;
     auto error = parser.parse(padded_string).get(doc);
-    CHECK(!error);
+    REQUIRE(!error);
+    CHECK_EQUAL(int64_t{doc["num_events"]}, 16);
+    CHECK_EQUAL(doc["events"].get_array().size(), 16ull);
   }
   { // POST /export
     auto const& export_endpoint = endpoints[1];
@@ -159,7 +161,7 @@ TEST(export endpoint) {
     auto response = std::make_shared<test_response>();
     auto request = vast::http_request{
       .params = {
-        {"expression", "addr in 192.168.0.0/16"},
+        {"expression", ":addr in 192.168.0.0/16"},
         {"limit", vast::count{16}},
       },
       .response = response,
@@ -173,7 +175,36 @@ TEST(export endpoint) {
     simdjson::dom::parser parser;
     simdjson::dom::element doc;
     auto error = parser.parse(padded_string).get(doc);
-    CHECK(!error);
+    REQUIRE(!error);
+    CHECK_EQUAL(int64_t{doc["num_events"]}, 16);
+    CHECK_EQUAL(doc["events"].get_array().size(), 16ull);
+  }
+  { // POST /export/with-schema
+    auto const& export_endpoint = endpoints[2];
+    auto handler = plugin->handler(self->system(), test_node);
+    auto response = std::make_shared<test_response>();
+    auto request = vast::http_request{
+      .params = {
+        {"expression", ":addr in 192.168.0.0/16"},
+        {"limit", vast::count{16}},
+      },
+      .response = response,
+    };
+    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
+               std::move(request));
+    run();
+    CHECK_EQUAL(response->error_, caf::error{});
+    CHECK(!response->body_.empty());
+    auto padded_string = simdjson::padded_string{response->body_};
+    simdjson::dom::parser parser;
+    simdjson::dom::element doc;
+    auto error = parser.parse(padded_string).get(doc);
+    REQUIRE(!error);
+    CHECK_EQUAL(int64_t{doc["num_events"]}, 16);
+    auto first = doc["events"].get_array().at(0);
+    CHECK(!first.error());
+    CHECK_EQUAL(std::string_view{first["name"]}, "zeek.conn");
+    CHECK_EQUAL(first["data"].get_array().size(), 16ull);
   }
 }
 

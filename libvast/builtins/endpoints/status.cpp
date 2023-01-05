@@ -31,7 +31,7 @@ static auto const* SPEC_V0 = R"_(
         schema:
           type: string
           enum: [info, detailed, debug]
-        default: info
+          default: info
         required: false
         description: The verbosity level of the status response.
         example: detailed
@@ -41,7 +41,7 @@ static auto const* SPEC_V0 = R"_(
         content:
           application/json:
             schema:
-              type: dict
+              type: object
             example:
               catalog:
                 num-partitions: 7092
