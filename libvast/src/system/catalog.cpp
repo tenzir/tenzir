@@ -45,6 +45,7 @@
 #include <type_traits>
 
 namespace vast::system {
+
 void catalog_state::create_from(
   std::unordered_map<uuid, partition_synopsis_ptr>&& ps) {
   std::unordered_map<vast::type,
@@ -130,11 +131,9 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
     if (!memoized_partitions.partition_infos.empty()
         || partition_synopses.empty())
       return memoized_partitions;
-    for (const auto& [partition, synopsis] : partition_synopses) {
+    for (const auto& [partition_id, synopsis] : partition_synopses) {
       memoized_partitions.exp = expr;
-      memoized_partitions.partition_infos.emplace_back(
-        partition, synopsis->events, synopsis->max_import_time,
-        synopsis->schema, synopsis->version);
+      memoized_partitions.partition_infos.emplace_back(partition_id, *synopsis);
     }
     return memoized_partitions;
   };
@@ -210,10 +209,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.partition_infos.emplace_back(part_id, part_syn->events,
-                                                      part_syn->max_import_time,
-                                                      part_syn->schema,
-                                                      part_syn->version);
+                  result.partition_infos.emplace_back(part_id, *part_syn);
                   break;
                 }
                 // The field has no dedicated synopsis. Check if there is one
@@ -224,19 +220,13 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 if (!opt || *opt) {
                   VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
-                  result.partition_infos.emplace_back(part_id, part_syn->events,
-                                                      part_syn->max_import_time,
-                                                      part_syn->schema,
-                                                      part_syn->version);
+                  result.partition_infos.emplace_back(part_id, *part_syn);
                   break;
                 }
               } else {
                 // The catalog couldn't rule out this partition, so we have
                 // to include it in the result set.
-                result.partition_infos.emplace_back(part_id, part_syn->events,
-                                                    part_syn->max_import_time,
-                                                    part_syn->schema,
-                                                    part_syn->version);
+                result.partition_infos.emplace_back(part_id, *part_syn);
                 break;
               }
             }
@@ -266,10 +256,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 // SSO.
                 if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
                   result.exp = expr;
-                  result.partition_infos.emplace_back(part_id, part_syn->events,
-                                                      part_syn->max_import_time,
-                                                      part_syn->schema,
-                                                      part_syn->version);
+                  result.partition_infos.emplace_back(part_id, *part_syn);
                   break;
                 }
               }
@@ -291,10 +278,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
               auto add = ts.lookup(x.op, caf::get<vast::time>(d));
               if (!add || *add) {
                 result.exp = expr;
-                result.partition_infos.emplace_back(part_id, part_syn->events,
-                                                    part_syn->max_import_time,
-                                                    part_syn->schema,
-                                                    part_syn->version);
+                result.partition_infos.emplace_back(part_id, *part_syn);
               }
             }
             VAST_ASSERT(std::is_sorted(result.partition_infos.begin(),
@@ -797,6 +781,16 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [self](atom::resolve,
            const expression& e) -> caf::result<vast::expression> {
       return resolve(self->state.taxonomies, e, self->state.type_data);
+    },
+    [self](atom::get, uuid uuid) -> caf::result<partition_info> {
+      for (const auto& [type, synopses] : self->state.synopses_per_type) {
+        if (auto it = synopses.find(uuid); it != synopses.end()) {
+          return partition_info{uuid, *it->second};
+        }
+      }
+      return caf::make_error(
+        vast::ec::lookup_error,
+        fmt::format("unable to find partition with uuid: {}", uuid));
     },
     [self](atom::status, status_verbosity v) {
       record result;

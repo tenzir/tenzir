@@ -154,8 +154,9 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       else
         part.slice.import_time( //
           caf::get<vast::time>(unbox(to<data>("2015-01-02"))));
-      auto ps = caf::make_copy_on_write<partition_synopsis>(
-        make_partition_synopsis(part.slice));
+      auto& ps = merged_synopses.emplace_back(
+        caf::make_copy_on_write<partition_synopsis>(
+          make_partition_synopsis(part.slice)));
       merge(catalog_act, part.id, ps);
     }
     MESSAGE("verify generated timestamps");
@@ -277,6 +278,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   // Partition IDs.
   std::vector<uuid> ids;
+
+  std::vector<partition_synopsis_ptr> merged_synopses;
 };
 
 } // namespace
@@ -454,6 +457,49 @@ TEST(catalog messages) {
     },
     [](const caf::error&) {
       // nop
+    });
+}
+
+TEST(catalog partition info by uuid lookup returns error if no partition exists
+       with provided uuid) {
+  // generate unique uuid
+  auto uuid = uuid::random();
+  while (std::count(ids.begin(), ids.end(), uuid)) {
+    uuid = uuid::random();
+  }
+  auto response_handle
+    = self->request(catalog_act, caf::infinite, atom::get_v, uuid);
+  run();
+  response_handle.receive(
+    [](partition_info&) {
+      FAIL("expected an error");
+    },
+    [](const caf::error&) {
+      // nop
+    });
+}
+
+TEST(catalog partition info by uuid lookup returns proper
+       data if partition exists) {
+  const auto in_uuid = ids.back();
+  auto response_handle
+    = self->request(catalog_act, caf::infinite, atom::get_v, ids.back());
+  run();
+  response_handle.receive(
+    [&](partition_info& result) {
+      // In the fixture we create a partition synopsis for each uuid in
+      // fixture::ids. The merged_synopses.back() is the one kept in the catalog
+      // for the in_uuid. The result should have the same data as synopsis as
+      // the result is a partial view of the partition_synopsis.
+      const auto& data_source = merged_synopses.back();
+      CHECK_EQUAL(result.events, data_source->events);
+      CHECK_EQUAL(result.max_import_time, data_source->max_import_time);
+      CHECK_EQUAL(result.schema, data_source->schema);
+      CHECK_EQUAL(result.version, data_source->version);
+      CHECK_EQUAL(result.uuid, in_uuid);
+    },
+    [](const caf::error&) {
+      FAIL("expected partition_info to be returned");
     });
 }
 

@@ -239,7 +239,9 @@ using catalog_actor = typed_actor_fwd<
   // Retrieves the known taxonomies.
   auto(atom::get, atom::taxonomies)->caf::result<taxonomies>,
   // Resolves an expression in terms of the known taxonomies.
-  auto(atom::resolve, expression)->caf::result<expression>>
+  auto(atom::resolve, expression)->caf::result<expression>,
+  // Retrieves information about a partition with a given UUID.
+  auto(atom::get, uuid)->caf::result<partition_info>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 

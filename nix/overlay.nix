@@ -182,6 +182,11 @@ in
       repo = pname;
       hash = "sha256-75QrtuOduUNT9g2RJRWUow8ESBqsDDXCMGVNQKFc+SE=";
     };
+    # upstream does not provide a go.sum file
+    preBuild = ''
+      cp ${./speeve-go.sum} go.sum
+    '';
+    subPackages = [ "cmd/speeve" ];
   };
 
   vast-ui = nnbp.buildYarnPackage {
