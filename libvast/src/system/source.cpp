@@ -44,10 +44,10 @@ namespace {
 template <class... Args>
 void send_to_accountant(caf::scheduled_actor* self, accountant_actor accountant,
                         Args&&... args) {
-  static_assert(
-    caf::detail::tl_count_type<accountant_actor::signatures,
-                               caf::reacts_to<std::decay_t<Args>...>>::value,
-    "Args are incompatible with accountant actor's API");
+  static_assert(caf::detail::tl_count_type<
+                  accountant_actor::signatures,
+                  auto(std::decay_t<Args>...)->caf::result<void>>::value,
+                "Args are incompatible with accountant actor's API");
   caf::unsafe_send_as(self, accountant, std::forward<Args>(args)...);
 }
 } // namespace

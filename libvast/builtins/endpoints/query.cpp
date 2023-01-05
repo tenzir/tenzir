@@ -101,24 +101,22 @@ static auto const* SPEC_V0 = R"_(
 static constexpr auto QUERY_NEW_ENDPOINT = 0;
 static constexpr auto QUERY_NEXT_ENDPOINT = 1;
 
-// clang-format off
-
 /// An actor to help with handling a single query.
 using query_manager_actor = system::typed_actor_fwd<
-    caf::reacts_to<atom::provision, system::query_cursor>,
-    caf::replies_to<atom::next, http_request, uint64_t>::with<atom::done>,
-    caf::reacts_to<atom::done>
-  >
-  ::extend_with<system::receiver_actor<table_slice>>
-  ::unwrap;
+  // Initiate a query.
+  auto(atom::provision, system::query_cursor)->caf::result<void>,
+  // Get the next results for a query.
+  auto(atom::next, http_request, uint64_t)->caf::result<atom::done>,
+  // Finish a query.
+  auto(atom::done)->caf::result<void>>
+  // Conform to the protocol of a RECEIVER ACTOR of table slices.
+  ::extend_with<system::receiver_actor<table_slice>>::unwrap;
 
 /// An actor to receive REST endpoint requests and spawn exporters
 /// as needed.
 using request_multiplexer_actor = system::typed_actor_fwd<>
-  ::extend_with<system::rest_handler_actor>
-  ::unwrap;
-
-// clang-format on
+  // Conform to the protocol of the REST HANDLER actor.
+  ::extend_with<system::rest_handler_actor>::unwrap;
 
 namespace {
 

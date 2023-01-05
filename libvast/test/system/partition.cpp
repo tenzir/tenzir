@@ -34,7 +34,7 @@ struct mock_filesystem_state {
 struct deliver_mmap_promise {};
 
 using mock_filesystem_actor
-  = vast::system::typed_actor_fwd<caf::reacts_to<deliver_mmap_promise>>::
+  = vast::system::typed_actor_fwd<auto(deliver_mmap_promise)->caf::result<void>>::
     extend_with<system::filesystem_actor>::unwrap;
 
 } // namespace

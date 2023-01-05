@@ -43,10 +43,14 @@ namespace vast::plugins::web {
 using router_t = restinio::router::express_router_t<>;
 
 using request_dispatcher_actor = system::typed_actor_fwd<
-  caf::reacts_to<atom::request, restinio_response_ptr, rest_endpoint,
-                 system::rest_handler_actor>,
-  caf::reacts_to<atom::internal, atom::request, restinio_response_ptr,
-                 rest_endpoint, system::rest_handler_actor>>::unwrap;
+  // Handle a request.
+  auto(atom::request, restinio_response_ptr, rest_endpoint,
+       system::rest_handler_actor)
+    ->caf::result<void>,
+  // INTERNAL: Continue handling a requet.
+  auto(atom::internal, atom::request, restinio_response_ptr, rest_endpoint,
+       system::rest_handler_actor)
+    ->caf::result<void>>::unwrap;
 
 namespace {
 

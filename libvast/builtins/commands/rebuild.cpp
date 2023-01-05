@@ -143,13 +143,13 @@ struct run {
 /// The interface of the REBUILDER actor.
 using rebuilder_actor = system::typed_actor_fwd<
   // Start a rebuild.
-  caf::reacts_to<atom::start, start_options>,
+  auto(atom::start, start_options)->caf::result<void>,
   // Stop a rebuild.
-  caf::reacts_to<atom::stop, stop_options>,
+  auto(atom::stop, stop_options)->caf::result<void>,
   // INTERNAL: Continue working on the currently in-progress rebuild.
-  caf::reacts_to<atom::internal, atom::rebuild>,
+  auto(atom::internal, atom::rebuild)->caf::result<void>,
   // INTERNAL: Continue working on the currently in-progress rebuild.
-  caf::reacts_to<atom::internal, atom::schedule>>
+  auto(atom::internal, atom::schedule)->caf::result<void>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<system::component_plugin_actor>::unwrap;
 
