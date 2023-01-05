@@ -491,8 +491,7 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
       if (slice.rows() < remaining)
         self->state.results_.emplace_back(std::move(slice));
       else
-        self->state.results_.emplace_back(
-          head(std::move(slice), remaining));
+        self->state.results_.emplace_back(head(std::move(slice), remaining));
     },
     [self](atom::done) {
       bool remaining_partitions = self->state.cursor_->candidate_partitions
