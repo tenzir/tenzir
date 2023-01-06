@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import clsx from 'clsx';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
@@ -11,8 +11,8 @@ import VASTLight from '@site/static/img/vast-white.svg';
 import VASTDark from '@site/static/img/vast-black.svg';
 import Carousel from '../components/Carousel';
 
-import ReactMarkdown from 'react-markdown';
 import strip from 'strip-markdown';
+import {remark} from 'remark';
 
 // NOTE: this is internal and may change, and the types might not be guaranteed
 const blogpostsInternalArchive = require('../../.docusaurus/docusaurus-plugin-content-blog/default/blog-archive-80c.json');
@@ -114,7 +114,21 @@ const CarouselCard = ({
   label,
   buttonLabel,
 }: CarouselCard) => {
-  const {colorMode} = useColorMode();
+  const maximumCarouselCardExcerptLength = 300;
+  const [descriptionToShow, setDescriptionToShow] = useState('');
+  useEffect(() => {
+    remark()
+      .use(strip)
+      .process(description)
+      .then((file) => {
+        const truncated = truncateDesc(
+          file.toString(),
+          maximumCarouselCardExcerptLength
+        );
+        setDescriptionToShow(truncated);
+      });
+  }, [description]);
+
   return (
     <div className={styles.carouselCard}>
       <div className={clsx(styles.container, 'container')}>
@@ -123,11 +137,7 @@ const CarouselCard = ({
             {label}
             <p className="hero__subtitle">{title}</p>
             {description && description !== '' && (
-              <div className={styles.blogDesc}>
-                <ReactMarkdown remarkPlugins={[strip]}>
-                  {description}
-                </ReactMarkdown>
-              </div>
+              <div className={styles.blogDesc}>{descriptionToShow}</div>
             )}
           </div>
           <div>
