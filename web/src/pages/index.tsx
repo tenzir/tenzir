@@ -22,6 +22,21 @@ const extractTextBeforeTruncate = (str: string) => {
   return truncateIndex === -1 ? str : str.substring(0, truncateIndex);
 };
 
+const latestReleaseBlogPost = blogpostsInternalArchive?.blogPosts?.find(
+  (blogpost) =>
+    blogpost?.metadata?.tags?.map((tag) => tag.label)?.includes('release')
+);
+const latestTwoNonReleaseBlogPosts = blogpostsInternalArchive?.blogPosts
+  ?.filter(
+    (blogpost) =>
+      !blogpost?.metadata?.tags?.map((tag) => tag.label)?.includes('release')
+  )
+  ?.slice(0, 2);
+
+const truncateDesc = (str: string, n: number) => {
+  return str.length > n ? str.substring(0, n) + '...' : str;
+};
+
 function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
   const {colorMode} = useColorMode();
@@ -52,43 +67,39 @@ function HomepageHeader() {
           <Carousel>
             {[
               <CarouselCard
+                key="newsletter-carousel"
                 title="Sign up for our Newsletter"
                 link={'/newsletter'}
                 label="Get the latest news and updates from the VAST team"
                 buttonLabel="Subscribe"
               />,
+              latestReleaseBlogPost?.metadata?.title && (
+                <CarouselCard
+                  key="latest-release-carousel"
+                  title={latestReleaseBlogPost?.metadata?.title}
+                  link={latestReleaseBlogPost?.metadata?.permalink}
+                  label="Latest Relaese"
+                  buttonLabel="Read Announcement"
+                />
+              ),
             ].concat(
-              blogpostsInternalArchive?.blogPosts
-                ?.slice(0, 4)
-                ?.map((post, idx) => {
-                  return (
-                    <CarouselCard
-                      key={idx}
-                      title={post?.metadata?.title}
-                      link={post?.metadata?.permalink}
-                      label={
-                        post?.metadata?.tags
-                          ?.map((tag) => tag?.label)
-                          ?.includes('release')
-                          ? 'Latest Release'
-                          : 'Latest Blogpost'
-                      }
-                      buttonLabel={
-                        post?.metadata?.tags
-                          ?.map((tag) => tag?.label)
-                          ?.includes('release')
-                          ? 'Read Announcement'
-                          : 'Read Post'
-                      }
-                      imageLink={post?.metadata?.frontMatter?.image}
-                      description={
-                        post?.metadata?.hasTruncateMarker
-                          ? extractTextBeforeTruncate(post?.content)
-                          : null
-                      }
-                    />
-                  );
-                })
+              latestTwoNonReleaseBlogPosts?.slice(0, 4)?.map((post, idx) => {
+                return (
+                  <CarouselCard
+                    key="blogpost-${idx}-carousel"
+                    title={post?.metadata?.title}
+                    link={post?.metadata?.permalink}
+                    label="Latest Blogpost"
+                    buttonLabel="Read Post"
+                    imageLink={post?.metadata?.frontMatter?.image}
+                    description={
+                      post?.metadata?.hasTruncateMarker
+                        ? extractTextBeforeTruncate(post?.content)
+                        : null
+                    }
+                  />
+                );
+              })
             )}
           </Carousel>
         </div>
@@ -146,14 +157,14 @@ const CarouselCard = ({
             </Link>
           </div>
         </div>
-      {imageLink && (
-        <img
-          src={imageLink}
-          alt="Blogpost Figure"
-          width="500px"
-          className="svglite"
-        />
-      )}
+        {imageLink && (
+          <img
+            src={imageLink}
+            alt="Blogpost Figure"
+            className="svglite"
+            height="200px"
+          />
+        )}
       </div>
     </div>
   );
