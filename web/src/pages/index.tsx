@@ -83,7 +83,7 @@ function HomepageHeader() {
                 />
               ),
             ].concat(
-              latestTwoNonReleaseBlogPosts?.slice(0, 4)?.map((post, idx) => {
+              latestTwoNonReleaseBlogPosts?.map((post, idx) => {
                 return (
                   <CarouselCard
                     key="blogpost-${idx}-carousel"
@@ -157,7 +157,9 @@ const CarouselCard = ({
             </Link>
           </div>
         </div>
-        {imageLink && (
+        {/* HACK: This is to safeguard against one incompatible (wrong?) image url in
+        https://github.com/tenzir/vast/tree/6c17f01e630c71a55df7002d2276697dfcfaa463/web/blog/parquet-and-feather-writing-security-telemetry/index.qmd */}
+        {imageLink && imageLink.startsWith('/') && (
           <img
             src={imageLink}
             alt="Blogpost Figure"
