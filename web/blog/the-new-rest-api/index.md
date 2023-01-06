@@ -137,18 +137,22 @@ vast web server --mode=upstream
 ### Mutual TLS Mode
 
 The mutual TLS mode is suitable when VAST sits upstream of a separate TLS
-terminator that may be running on a different machine. This setup is commonly
-encountered when running nginx as a load balancer. VAST would typically be
-configured to use a self-signed certificate in this setup.
+terminator that may be running on a different machine. In this scenario,
+the connection between the terminator and VAST must again be encrypted
+to avoid leaking the authentication token to the network.
 
-VAST only accepts HTTPS requests, requires TLS client certificates for incoming
-connections, and requires valid authentication tokens for any authenticated
-endpoints.
+Regular TLS requires only the server to present a certificate to prove his
+identity. In mutual TLS mode, the client additionally needs to provide a
+valid *client certificate* to the server. This ensures that the TLS terminator
+cannot be impersonated or bypassed.
+
+Typically self-signed certificates are used for that purpose, since both ends of
+the connection are configured together and not exposed to the public internet.
 
 ![REST API - Mutual TLS Mode](/img/rest-api-mutual-tls-mode.light.png#gh-light-mode-only)
 ![REST API - Mutual TLS Mode](/img/rest-api-mutual-tls-mode.dark.png#gh-dark-mode-only)
 
-Pass `--mode=mtls` to start the REST API in server mode:
+Pass `--mode=mtls` to start the REST API in mutual TLS mode:
 
 ```bash
 vast web server --mode=mtls
@@ -165,9 +169,129 @@ end-to-end examples. We built the REST API for two reasons::
 We'll conclude this blog post with few examples that show how you can use the
 REST API.
 
-:::caution TODO
-Showcase `/status`, `/export` and `/query` route.
-:::
+One straightforward example is checking the number of events inside the database:
+```(bash)
+$ curl "https://vast.example.org:42001/api/v0/status?verbosity=detailed" \
+    | jq .index.statistics
+```
+```(json)
+{
+  "events": {
+    "total": 8462
+  },
+  "layouts": {
+    "zeek.conn": {
+      "count": 8462,
+      "percentage": 100
+    }
+  }
+}
+
+```
+
+The `/status` endpoint can also be used as a http health check in `docker-compose`:
+```
+version: '3.4'
+services:
+  web:
+    image: tenzir/vast:
+    environment:
+      - "VAST_START__COMMANDS=['web server --mode=dev']"
+    ports:
+      - "42001:42001"
+    healthcheck:
+      test: curl --fail http://localhost:42001/status || exit 1
+      interval: 60s
+      retries: 5
+      start_period: 20s
+      timeout: 10s
+```
+
+The other initial endpoints can be used to get data out of VAST. For example, to
+get up to two `zeek.conn` events which connect to the subnet `192.168.0.0/16`, using
+the VAST query expression `net.src.ip in 192.168.0.0/16`:
+```
+$ curl "http://127.0.0.1:42001/api/v0/export?limit=2&expression=net.src.ip%20in%20192.168.0.0%2f16"
+```
+```(json)
+{
+  "version": "v2.4.0-457-gb35c25d88a",
+  "num_events": 2,
+  "events": [
+    {
+      "ts": "2009-11-18T08:00:21.486539",
+      "uid": "Pii6cUUq1v4",
+      "id.orig_h": "192.168.1.102",
+      "id.orig_p": 68,
+      "id.resp_h": "192.168.1.1",
+      "id.resp_p": 67,
+      "proto": "udp",
+      "service": null,
+      "duration": "163.82ms",
+      "orig_bytes": 301,
+      "resp_bytes": 300,
+      "conn_state": "SF",
+      "local_orig": null,
+      "missed_bytes": 0,
+      "history": "Dd",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 329,
+      "resp_pkts": 1,
+      "resp_ip_bytes": 328,
+      "tunnel_parents": []
+    },
+    {
+      "ts": "2009-11-18T08:08:00.237253",
+      "uid": "nkCxlvNN8pi",
+      "id.orig_h": "192.168.1.103",
+      "id.orig_p": 137,
+      "id.resp_h": "192.168.1.255",
+      "id.resp_p": 137,
+      "proto": "udp",
+      "service": "dns",
+      "duration": "3.78s",
+      "orig_bytes": 350,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 7,
+      "orig_ip_bytes": 546,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": []
+    }
+  ]
+}
+```
+
+Note that when using curl, all request parameters need to be properly urlencoded. This can be cumbersome
+for the `expression` and `pipeline` parameters, so we also provide an `/export` POST endpoint that accepts
+parameters in a JSON body. The next example shows how to use POST requests from curl.
+
+It also uses the `/query` endpoint instead of `/export` to get results iteratively
+instead of a one-shot result. The cost for this is having to make two API calls instead
+of one:
+
+```(bash)
+$ curl -XPOST -H"Content-Type: application/json" -d'{"expression": "udp"}' http://127.0.0.1:42001/api/v0/query/new
+```
+```(json)
+{"id": "31cd0f6c-915f-448e-b64a-b5ab7aae2474"}
+```
+```(bash)
+$ curl http://127.0.0.1:42001/api/v0/query/31cd0f6c-915f-448e-b64a-b5ab7aae2474/next?n=2
+```
+```(json)
+{"position": 0, "events": [
+{"ts": "2009-11-18T08:00:21.486539", "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": "163.82ms", "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []},
+{"ts": "2009-11-18T08:08:00.237253", "uid": "nkCxlvNN8pi", "id.orig_h": "192.168.1.103", "id.orig_p": 137, "id.resp_h": "192.168.1.255", "id.resp_p": 137, "proto": "udp", "service": "dns", "duration": "3.78s", "orig_bytes": 350, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 7, "orig_ip_bytes": 546, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}]}
+```
+
+
+Please note that the `v0` API version is still considered experimental, and we make no
+stability guarantees at the moment.
 
 As always, if you have any question on usage, swing by our [community
 Slack](http://slack.tenzir.com). Missing routes? Let us know so that we know
