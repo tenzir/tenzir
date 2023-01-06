@@ -37,7 +37,7 @@ struct test_sink_state {
 };
 
 using test_sink_actor
-  = caf::typed_actor<caf::reacts_to<atom::ping>>::extend_with<
+  = caf::typed_actor<auto(atom::ping)->caf::result<void>>::extend_with<
     stream_sink_actor<table_slice, std::string>>;
 
 test_sink_actor::behavior_type

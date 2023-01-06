@@ -29,6 +29,7 @@
 #include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/tracepoint.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
@@ -768,8 +769,7 @@ index_state::create_active_partition(const type& schema) {
     = active_partitions.emplace(schema, active_partition_info{});
   VAST_ASSERT(inserted);
   VAST_ASSERT(active_partition != active_partitions.end());
-  std::string store_name = store_actor_plugin->name();
-  ;
+  auto store_name = std::string{store_actor_plugin->name()};
   chunk_ptr store_header = chunk::make_empty();
   auto builder_and_header
     = store_actor_plugin->make_store_builder(accountant, filesystem, id);
@@ -1419,9 +1419,41 @@ index(index_actor::stateful_pointer<index_state> self,
   if (self->state.accountant)
     self->send(self->state.accountant, atom::announce_v, self->name());
   if (self->state.accountant
-      || self->state.active_partition_timeout.count() > 0)
-    self->delayed_send(self, defaults::system::telemetry_rate,
-                       atom::telemetry_v);
+      || self->state.active_partition_timeout.count() > 0) {
+    detail::weak_run_delayed_loop(
+      self, defaults::system::telemetry_rate, [self] {
+        if (self->state.accountant)
+          self->state.send_report();
+        if (self->state.active_partition_timeout.count() > 0) {
+          auto decommissioned = std::vector<type>{};
+          for (const auto& [schema, active_partition] :
+               self->state.active_partitions) {
+            if (active_partition.spawn_time
+                  + self->state.active_partition_timeout
+                < std::chrono::steady_clock::now()) {
+              decommissioned.push_back(schema);
+            }
+          }
+          if (!decommissioned.empty()) {
+            for (const auto& schema : decommissioned) {
+              auto active_partition
+                = self->state.active_partitions.find(schema);
+              VAST_ASSERT(active_partition
+                          != self->state.active_partitions.end());
+              VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
+                           "after {} timeout",
+                           *self, schema,
+                           self->state.partition_capacity
+                             - active_partition->second.capacity,
+                           self->state.partition_capacity,
+                           data{self->state.active_partition_timeout});
+              self->state.decommission_active_partition(schema, {});
+            }
+            self->state.flush_to_disk();
+          }
+        }
+      });
+  }
   return {
     [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", *self, partition_id);
@@ -1430,38 +1462,6 @@ index(index_actor::stateful_pointer<index_state> self,
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_DEBUG("{} got a new stream source", *self);
       return self->state.stage->add_inbound_path(in);
-    },
-    [self](atom::telemetry) {
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
-      if (self->state.accountant)
-        self->state.send_report();
-      if (self->state.active_partition_timeout.count() > 0) {
-        auto decommissioned = std::vector<type>{};
-        for (const auto& [schema, active_partition] :
-             self->state.active_partitions) {
-          if (active_partition.spawn_time + self->state.active_partition_timeout
-              < std::chrono::steady_clock::now()) {
-            decommissioned.push_back(schema);
-          }
-        }
-        if (!decommissioned.empty()) {
-          for (const auto& schema : decommissioned) {
-            auto active_partition = self->state.active_partitions.find(schema);
-            VAST_ASSERT(active_partition
-                        != self->state.active_partitions.end());
-            VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
-                         "after {} timeout",
-                         *self, schema,
-                         self->state.partition_capacity
-                           - active_partition->second.capacity,
-                         self->state.partition_capacity,
-                         data{self->state.active_partition_timeout});
-            self->state.decommission_active_partition(schema, {});
-          }
-          self->state.flush_to_disk();
-        }
-      }
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_DEBUG("{} adds flush listener", *self);

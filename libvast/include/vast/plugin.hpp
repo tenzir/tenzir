@@ -13,6 +13,7 @@
 #include "vast/command.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/pp.hpp"
+#include "vast/detail/weak_handle.hpp"
 #include "vast/http_api.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
@@ -22,6 +23,7 @@
 #include <caf/stream.hpp>
 #include <caf/typed_actor.hpp>
 
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -59,13 +61,13 @@ std::vector<plugin_ptr>& get_mutable() noexcept;
 const std::vector<plugin_ptr>& get() noexcept;
 
 /// Retrieves all plugins of a given plugin type.
-template <typename Plugin>
+template <class Plugin>
 detail::generator<const Plugin*> get() noexcept;
 
-/// Retrieves the plugin of type `Plugin` with the given name, or nullptr
-/// if it doesn't exist.
-template <typename Plugin>
-const Plugin* find(const std::string& name);
+/// Retrieves the plugin of type `Plugin` with the given name
+/// (case-insensitive), or nullptr if it doesn't exist.
+template <class Plugin = plugin>
+const Plugin* find(std::string_view name) noexcept;
 
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
 std::vector<std::pair<plugin_type_id_block, void (*)()>>&
@@ -113,7 +115,7 @@ public:
   [[nodiscard]] virtual caf::error initialize(data config) = 0;
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] virtual const char* name() const = 0;
+  [[nodiscard]] virtual std::string name() const = 0;
 };
 
 // -- component plugin --------------------------------------------------------
@@ -128,7 +130,8 @@ public:
   /// @note This function runs in the actor context of the NODE actor and can
   /// safely access the NODE's state.
   virtual system::component_plugin_actor make_component(
-    system::node_actor::stateful_pointer<system::node_state> node) const = 0;
+    system::node_actor::stateful_pointer<system::node_state> node) const
+    = 0;
 };
 
 // -- analyzer plugin ----------------------------------------------------------
@@ -160,11 +163,12 @@ protected:
   /// @note This function runs in the actor context of the NODE actor and can
   /// safely access the NODE's state.
   virtual system::analyzer_plugin_actor make_analyzer(
-    system::node_actor::stateful_pointer<system::node_state> node) const = 0;
+    system::node_actor::stateful_pointer<system::node_state> node) const
+    = 0;
 
 private:
   /// A weak handle to the spawned actor handle.
-  mutable caf::weak_actor_ptr weak_handle_ = {};
+  mutable detail::weak_handle<system::analyzer_plugin_actor> weak_handle_ = {};
 
   /// Indicates that the ANALYZER was spawned at least once. This flag is used
   /// to ensure that `make_analyzer` is called at most once per plugin.
@@ -200,7 +204,8 @@ public:
   /// Returns the options for the `vast import <format>` and `vast spawn source
   /// <format>` commands.
   [[nodiscard]] virtual caf::config_option_set
-  reader_options(command::opts_builder&& opts) const = 0;
+  reader_options(command::opts_builder&& opts) const
+    = 0;
 
   /// Creates a reader, which will be available via `vast import <format>` and
   /// `vast spawn source <format>`.
@@ -225,7 +230,8 @@ public:
   /// Returns the options for the `vast export <format>` and `vast spawn sink
   /// <format>` commands.
   [[nodiscard]] virtual caf::config_option_set
-  writer_options(command::opts_builder&& opts) const = 0;
+  writer_options(command::opts_builder&& opts) const
+    = 0;
 
   /// Creates a reader, which will be available via `vast export <format>` and
   /// `vast spawn sink <format>`.
@@ -289,8 +295,8 @@ public:
   /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual caf::expected<builder_and_header>
   make_store_builder(system::accountant_actor accountant,
-                     system::filesystem_actor fs,
-                     const vast::uuid& id) const = 0;
+                     system::filesystem_actor fs, const vast::uuid& id) const
+    = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
   /// partition that uses this partition as a store backend.
@@ -300,7 +306,8 @@ public:
   /// @returns A new store actor.
   [[nodiscard]] virtual caf::expected<system::store_actor>
   make_store(system::accountant_actor accountant, system::filesystem_actor fs,
-             std::span<const std::byte> header) const = 0;
+             std::span<const std::byte> header) const
+    = 0;
 };
 
 /// A base class for plugins that add new store backends.
@@ -337,7 +344,7 @@ public:
   /// In the future, we may want to let this plugin return a substrait query
   /// plan instead of a VAST expression.
   [[nodiscard]] virtual caf::expected<expression>
-  parse(std::string_view query) const = 0;
+  make_query(std::string_view query) const = 0;
 };
 
 // -- rest endpoint plugin -----------------------------------------------------
@@ -352,24 +359,26 @@ public:
   /// A path prefix to prepend to all routes declared by this plugin.
   /// Defaults to the plugin name.
   [[nodiscard]] virtual std::string prefix() const {
-    return std::string{"/"} + this->name();
+    return fmt::format("/{}", name());
   }
 
   /// OpenAPI spec for the plugin endpoints.
   /// @returns A `vast::data` object that is a record containing entries for
   /// the `paths` element of an OpenAPI spec.
   [[nodiscard]] virtual data
-  openapi_specification(api_version version = api_version::latest) const = 0;
+  openapi_specification(api_version version = api_version::latest) const
+    = 0;
 
   /// List of API endpoints provided by this plugin.
-  [[nodiscard]] virtual const std::vector<rest_endpoint>&
-  rest_endpoints() const = 0;
+  [[nodiscard]] virtual const std::vector<rest_endpoint>& rest_endpoints() const
+    = 0;
 
   /// Actor that will handle this endpoint.
   //  TODO: This should get some integration with component_plugin so that
   //  the component can be used to answer requests directly.
   [[nodiscard]] virtual system::rest_handler_actor
-  handler(caf::actor_system& system, system::node_actor node) const = 0;
+  handler(caf::actor_system& system, system::node_actor node) const
+    = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------
@@ -452,6 +461,16 @@ public:
   /// Returns the plugins type.
   [[nodiscard]] enum type type() const noexcept;
 
+  /// Compare two plugins.
+  friend bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
+  friend std::strong_ordering
+  operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
+
+  /// Compare a plugin by its name.
+  friend bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept;
+  friend std::strong_ordering
+  operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept;
+
 private:
   /// Create a plugin_ptr.
   plugin_ptr(void* library, plugin* instance, void (*deleter)(plugin*),
@@ -471,19 +490,16 @@ private:
 
 namespace vast::plugins {
 
-template <typename Plugin>
-const Plugin* find(const std::string& name) {
+template <class Plugin>
+const Plugin* find(std::string_view name) noexcept {
   const auto& plugins = get();
-  auto it
-    = std::find_if(plugins.begin(), plugins.end(), [&](const plugin_ptr& p) {
-        return name == p->name();
-      });
-  if (it == plugins.end())
+  const auto found = std::find(plugins.begin(), plugins.end(), name);
+  if (found == plugins.end())
     return nullptr;
-  return it->template as<Plugin>();
+  return found->template as<Plugin>();
 }
 
-template <typename Plugin>
+template <class Plugin>
 detail::generator<const Plugin*> get() noexcept {
   for (auto const& plugin : get())
     if (auto const* specific_plugin = plugin.as<Plugin>())
@@ -517,9 +533,7 @@ extern const char* VAST_PLUGIN_VERSION;
     struct auto_register_plugin;                                               \
     template <>                                                                \
     struct auto_register_plugin<name> {                                        \
-      auto_register_plugin() {                                                 \
-        static_cast<void>(flag);                                               \
-      }                                                                        \
+      auto_register_plugin() { static_cast<void>(flag); }                      \
       static bool init() {                                                     \
         ::vast::plugins::get_mutable().push_back(VAST_MAKE_PLUGIN(             \
           new (name), /* NOLINT(cppcoreguidelines-owning-memory) */            \

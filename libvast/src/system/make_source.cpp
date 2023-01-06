@@ -48,10 +48,10 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 
 template <class... Args>
 void send_to_source(caf::actor& source, Args&&... args) {
-  static_assert(
-    caf::detail::tl_count_type<source_actor::signatures,
-                               caf::reacts_to<std::decay_t<Args>...>>::value,
-    "Args are incompatible with source actor's API");
+  static_assert(caf::detail::tl_count_type<
+                  source_actor::signatures,
+                  auto(std::decay_t<Args>...)->caf::result<void>>::value,
+                "Args are incompatible with source actor's API");
   caf::anon_send(source, std::forward<Args>(args)...);
 }
 

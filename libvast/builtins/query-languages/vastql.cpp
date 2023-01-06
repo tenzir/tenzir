@@ -6,17 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "sigma/parse.hpp"
-
-#include <vast/data.hpp>
+#include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/error.hpp>
 #include <vast/plugin.hpp>
 
-#include <caf/error.hpp>
-#include <caf/expected.hpp>
-#include <fmt/format.h>
-
-namespace vast::plugins::sigma {
+namespace vast::plugins::vastql {
 
 class plugin final : public virtual query_language_plugin {
   caf::error initialize(data) override {
@@ -24,19 +18,19 @@ class plugin final : public virtual query_language_plugin {
   }
 
   [[nodiscard]] std::string name() const override {
-    return "sigma";
+    return "VASTQL";
   }
 
   [[nodiscard]] caf::expected<expression>
   make_query(std::string_view query) const override {
-    if (auto yaml = from_yaml(query))
-      return parse_rule(*yaml);
-    else
-      return caf::make_error(ec::invalid_query,
-                             fmt::format("not a Sigma rule: {}", yaml.error()));
+    auto result = expression{};
+    if (parsers::expr(query, result))
+      return result;
+    return caf::make_error(ec::invalid_query,
+                           fmt::format("not a valid query: '{}'", query));
   }
 };
 
-} // namespace vast::plugins::sigma
+} // namespace vast::plugins::vastql
 
-VAST_REGISTER_PLUGIN(vast::plugins::sigma::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::vastql::plugin)

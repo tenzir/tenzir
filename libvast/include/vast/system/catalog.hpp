@@ -136,6 +136,9 @@ public:
   /// Get a list of known types from the registry.
   [[nodiscard]] type_set types() const;
 
+  /// Sends metrics to the accountant.
+  void emit_metrics() const;
+
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.

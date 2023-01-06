@@ -291,7 +291,7 @@ static auto const* SPEC_V0 = R"_(
 /// The EXPORT_HELPER handles a single query request.
 using export_helper_actor = system::typed_actor_fwd<
   // Receives an `atom::done` from the index after each batch of table slices.
-  caf::reacts_to<atom::done>>
+  auto(atom::done)->caf::result<void>>
   // Receives table slices from the index.
   ::extend_with<system::receiver_actor<table_slice>>::unwrap;
 
@@ -630,7 +630,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "api-export";
   };
 

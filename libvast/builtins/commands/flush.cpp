@@ -51,7 +51,7 @@ public:
     return caf::none;
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "flush";
   }
 

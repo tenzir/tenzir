@@ -125,7 +125,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "api-status";
   };
 
