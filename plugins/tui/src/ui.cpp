@@ -249,6 +249,11 @@ Component make_collapsible(std::string name, const data& x) {
   return Collapsible(std::move(name), caf::visit(f, x));
 }
 
+/// Creates uniform window.
+Element make_box(std::string title, Element inner) {
+  return window(text(std::move(title)) | center, std::move(inner));
+}
+
 /// Applies consistent styling of table headers.
 /// In general, we're trying to style tables like the LaTeX booktabs package,
 /// i.e., as minimal vertical lines as possible.
@@ -579,75 +584,89 @@ Component NodeStatus(ui_state* state, std::string node_id) {
   public:
     Impl(ui_state* state, std::string node_id)
       : state_{state}, node_id_{std::move(node_id)} {
-      flexbox_config_.direction = FlexboxConfig::Direction::Row;
-      flexbox_config_.wrap = FlexboxConfig::Wrap::Wrap;
-      flexbox_config_.justify_content
+      auto container = Container::Vertical({});
+      FlexboxConfig flexbox_config;
+      flexbox_config.direction = FlexboxConfig::Direction::Row;
+      flexbox_config.wrap = FlexboxConfig::Wrap::Wrap;
+      flexbox_config.justify_content
         = FlexboxConfig::JustifyContent::SpaceAround;
-      flexbox_config_.align_items = FlexboxConfig::AlignItems::FlexStart;
-      flexbox_config_.align_content = FlexboxConfig::AlignContent::FlexStart;
+      flexbox_config.align_items = FlexboxConfig::AlignItems::FlexStart;
+      flexbox_config.align_content = FlexboxConfig::AlignContent::FlexStart;
+      // Add charts.
       auto charts = Renderer([=] {
         return flexbox({chart("RAM"),    //
                         chart("Memory"), //
                         chart("Ingestion")},
-                       flexbox_config_);
+                       flexbox_config);
       });
-      // Add statistics.
-      auto& node = state_->nodes[node_id_];
-      VAST_ASSERT(node.actor);
-      auto stats = Renderer([=] {
-        auto version = make_version_table(node.status).Render();
-        auto build_cfg = make_build_configuration_table(node.status).Render();
-        auto schema = make_schema_table(node.status).Render();
-        auto make_box = [](auto x, auto... xs) {
-          // return vbox({text(x) | center, separator(), xs...}) | border;
-          return window(text(x) | center, xs...);
-        };
+      container->Add(charts);
+      // Add data statistics.
+      auto data_summary = Renderer([=] {
+        auto& node_status = state_->nodes[node_id_].status;
+        return make_box("Events", make_schema_table(node_status).Render());
+      });
+      container->Add(data_summary);
+      // Add node statistics.
+      auto node_summary = Renderer([=] {
+        auto& node_status = state_->nodes[node_id_].status;
+        auto version = make_version_table(node_status).Render();
+        auto build_cfg = make_build_configuration_table(node_status).Render();
         return flexbox(
           {
-            make_box("Schema Distribution", schema),
             make_box("Version", version),
             make_box("Build Configuration", build_cfg),
           },
-          flexbox_config_);
+          flexbox_config);
       });
-      auto status = make_collapsible("Status", node.status);
+      container->Add(node_summary);
+      // Add detailed status inspection.
+      auto details = Renderer([=] {
+        auto& node_status = state_->nodes[node_id_].status;
+        auto collapsible = make_collapsible("Status", node_status)->Render();
+        return make_box("Details", std::move(collapsible));
+      });
+      container->Add(details);
       auto action = [=] {
         state_->nodes.erase(node_id_);
       };
       auto remove_node
         = Button("Remove Node", action,
                  state_->theme.button_option<theme::style::alert>());
-      auto container = Container::Vertical({
-        charts | select | focus,
-        stats,
-        status,
-        remove_node,
-      });
+      container->Add(remove_node);
       auto renderer = Renderer(container, [=] {
         return vbox({
-          text(node_id_) | hcenter | bold,
-          text(""),
-          charts->Render(),
-          text(""),
-          stats->Render(),
-          text(""),
-          status->Render(),
-          text(""),
-          remove_node->Render() | xflex,
-        });
+                 text(node_id_) | hcenter | bold,
+                 text(""),
+                 charts->Render(),
+                 text(""),
+                 data_summary->Render() | hcenter,
+                 text(""),
+                 node_summary->Render(),
+                 text(""),
+                 details->Render(),
+                 text(""),
+                 remove_node->Render() | xflex,
+               })
+               | vscroll_indicator | frame;
       });
       Add(renderer);
     }
 
-    Element Render() override {
-      return ComponentBase::Render() | vscroll_indicator | frame;
+    bool OnEvent(Event event) override {
+      return ComponentBase::OnEvent(event);
     }
 
+    // Element Render() override {
+    //   return ComponentBase::Render();
+    // }
+
   private:
-    static Element chart(std::string name) {
-      return window(text(std::move(name)),
-                    graph(dummy_graph) | color(Color::GrayLight)) //
-             | size(WIDTH, EQUAL, 30) | size(HEIGHT, EQUAL, 15);
+    static Element chart(std::string title) {
+      auto g = graph(dummy_graph)        //
+               | color(Color::GrayLight) //
+               | size(WIDTH, EQUAL, 30)  //
+               | size(HEIGHT, EQUAL, 15);
+      return make_box(std::move(title), std::move(g));
     }
 
     static std::vector<int> dummy_graph(int width, int height) {
@@ -681,8 +700,9 @@ Component FleetPage(ui_state* state) {
         if (menu->Focused() && !labels_.empty())
           if (event == Event::Return
               || (event.mouse().button == Mouse::Left
-                  && event.mouse().motion == Mouse::Released))
+                  && event.mouse().motion == Mouse::Released)) {
             mode_index_ = 0;
+          }
         return false;
       });
       // The menu and button make up the navigation.
@@ -952,13 +972,10 @@ Component HuntPage(ui_state* state) {
 Component AboutPage() {
   return Renderer([] {
     return vbox({
-             Vee() | center,                  //
-             text(""),                        //
-             text(""),                        //
-             VAST() | center,                 //
-             text(""),                        //
-             text(""),                        //
-             text("http://vast.io") | center, //
+             VAST() | color(Color::Cyan) | center, //
+             text(""),                             //
+             text(""),                             //
+             text("http://vast.io") | center,      //
            })
            | flex | center;
   });
@@ -978,7 +995,7 @@ Component LogPane(ui_state* state) {
         saved_size_ = size;
         index_ = size - 1;
       }
-      return ComponentBase::Render() | vscroll_indicator | frame;
+      return ComponentBase::Render() | vscroll_indicator | yframe;
     }
 
   private:
