@@ -20,7 +20,7 @@
   export let description: string;
 </script>
 
-<div class="flex">
+<div class="flex menu-top-level">
   <div class="relative inline-block text-left z-10">
     <Menu>
       <span class="rounded-md shadow-sm">
@@ -61,3 +61,12 @@
     </Menu>
   </div>
 </div>
+
+<style>
+  /* Don't display anything when printed*/
+  @media print {
+    .menu-top-level * {
+      display: none !important;
+    }
+  }
+</style>
