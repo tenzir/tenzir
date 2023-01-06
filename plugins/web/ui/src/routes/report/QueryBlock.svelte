@@ -4,10 +4,12 @@
   import Table from '$lib/components/Table.svelte';
   import type TableRow from '$lib/components/Table.svelte';
   import BlockHeader from './BlockHeader.svelte';
+  import { onMount } from 'svelte';
 
   export let parameters = {
-    title: 'TODO make me editable',
-    query: ''
+    title: '',
+    query: '',
+    isEditing: false
   };
 
   interface QueryResult {
@@ -18,6 +20,13 @@
 
   let queryResult: QueryResult;
 
+  // If we are mounting with an exisitng query, we need to fetch the results
+  onMount(async () => {
+    if (parameters.query !== "") {
+      await handleRun();
+    }
+  });
+
   const handleRun = async () => {
     queryResult = await getQuery(parameters.query);
   };
@@ -27,13 +36,12 @@
       return { header: x, accessor: x };
     });
 
-  let showInput = true;
   const handleSaveOrEdit = () => {
-    showInput = !showInput;
+    parameters.isEditing= !parameters.isEditing;
   };
 </script>
 
-{#if !showInput}
+{#if !parameters.isEditing}
   <BlockHeader
     bind:title={parameters.title}
     onEdit={() => handleSaveOrEdit()}
@@ -42,7 +50,7 @@
     }}
   />
 {/if}
-{#if showInput}
+{#if parameters.isEditing}
   <div class="w-full pb-4 flex">
     <input
       bind:value={parameters.query}
@@ -54,7 +62,7 @@
     </div>
   </div>
 {/if}
-{#if !showInput}
+{#if !parameters.isEditing}
   <div class="py-2">
     <p class="text-lg p-2 bg-slate-100 rounded">{parameters.query}</p>
   </div>
@@ -71,7 +79,7 @@
         showHeaderBorder
       />
     </div>
-    {#if showInput}
+    {#if parameters.isEditing}
       <div class="pt-2">
         <Button onClick={handleSaveOrEdit}>Save</Button>
       </div>

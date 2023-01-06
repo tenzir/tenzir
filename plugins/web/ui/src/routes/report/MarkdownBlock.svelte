@@ -7,28 +7,28 @@
   import mermaid from '@bytemd/plugin-mermaid';
   import BlockHeader from './BlockHeader.svelte';
 
-  let showEditor = true;
 
   export let parameters = {
     title: '',
-    content: ''
+    content: '',
+    isEditing: false
   };
 
   const handleSaveOrEdit = () => {
-    showEditor = !showEditor;
+    parameters.isEditing= !parameters.isEditing;
   };
 
   const plugins = [highlight(), gfm(), mermaid()];
 </script>
 
 <div>
-  {#if showEditor}
+  {#if parameters.isEditing}
     <Editor bind:value={parameters.content} {plugins} />
     <div class="py-2">
       <Button onClick={handleSaveOrEdit}>Save</Button>
     </div>
   {/if}
-  {#if !showEditor}
+  {#if !parameters.isEditing}
     <BlockHeader
       bind:title={parameters.title}
       onEdit={() => handleSaveOrEdit()}

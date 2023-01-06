@@ -5,6 +5,7 @@ type MarkdownBlockType = {
   params: {
     title: string;
     content: string;
+    isEditing: boolean;
   };
 };
 type QueryBlockType = {
@@ -12,6 +13,7 @@ type QueryBlockType = {
   params: {
     title: string;
     query: string;
+    isEditing: boolean;
   };
 };
 

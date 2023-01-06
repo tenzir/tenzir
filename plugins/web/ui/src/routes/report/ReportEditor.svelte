@@ -31,7 +31,8 @@
               category: 'query',
               params: {
                 query: '',
-                title: ''
+                title: '',
+                isEditing: true,
               }
             }
           ]
@@ -47,7 +48,8 @@
               category: 'markdown',
               params: {
                 title: '',
-                content: ''
+                content: '',
+                isEditing: true,
               }
             }
           ]
