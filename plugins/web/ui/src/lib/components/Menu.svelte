@@ -21,7 +21,7 @@
 </script>
 
 <div class="flex">
-  <div class="relative inline-block text-left">
+  <div class="relative inline-block text-left z-10">
     <Menu>
       <span class="rounded-md shadow-sm">
         <MenuButton
