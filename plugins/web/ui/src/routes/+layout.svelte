@@ -17,7 +17,7 @@
         }}
         class="mb-2 flex bg-gray-300 border-none border-gray-300 rounded hover:border border-gray-400 hover:cursor-pointer w-34px h-34px"
       >
-        <div class="i-pajamas-status-health m-auto text-lg" />
+        <div class="i-pajamas-status-health m-auto" />
       </button>
 
       <button
@@ -26,7 +26,7 @@
         }}
         class="mb-2 flex bg-gray-300 border-none border-gray-300 rounded hover:border border-gray-400 hover:cursor-pointer w-34px h-34px"
       >
-        <div class="i-bxs:report m-auto text-lg" />
+        <div class="i-bxs:report m-auto" />
       </button>
     </nav>
   </div>
