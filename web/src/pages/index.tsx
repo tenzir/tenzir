@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import clsx from 'clsx';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
@@ -11,8 +11,8 @@ import VASTLight from '@site/static/img/vast-white.svg';
 import VASTDark from '@site/static/img/vast-black.svg';
 import Carousel from '../components/Carousel';
 
-import ReactMarkdown from 'react-markdown';
 import strip from 'strip-markdown';
+import {remark} from 'remark';
 
 // NOTE: this is internal and may change, and the types might not be guaranteed
 const blogpostsInternalArchive = require('../../.docusaurus/docusaurus-plugin-content-blog/default/blog-archive-80c.json');
@@ -20,6 +20,21 @@ const blogpostsInternalArchive = require('../../.docusaurus/docusaurus-plugin-co
 const extractTextBeforeTruncate = (str: string) => {
   const truncateIndex = str.indexOf('<!--truncate-->');
   return truncateIndex === -1 ? str : str.substring(0, truncateIndex);
+};
+
+const latestReleaseBlogPost = blogpostsInternalArchive?.blogPosts?.find(
+  (blogpost) =>
+    blogpost?.metadata?.tags?.map((tag) => tag.label)?.includes('release')
+);
+const latestTwoNonReleaseBlogPosts = blogpostsInternalArchive?.blogPosts
+  ?.filter(
+    (blogpost) =>
+      !blogpost?.metadata?.tags?.map((tag) => tag.label)?.includes('release')
+  )
+  ?.slice(0, 2);
+
+const truncateDesc = (str: string, n: number) => {
+  return str.length > n ? str.substring(0, n) + '...' : str;
 };
 
 function HomepageHeader() {
@@ -52,43 +67,39 @@ function HomepageHeader() {
           <Carousel>
             {[
               <CarouselCard
+                key="newsletter-carousel"
                 title="Sign up for our Newsletter"
                 link={'/newsletter'}
                 label="Get the latest news and updates from the VAST team"
                 buttonLabel="Subscribe"
               />,
+              latestReleaseBlogPost?.metadata?.title && (
+                <CarouselCard
+                  key="latest-release-carousel"
+                  title={latestReleaseBlogPost?.metadata?.title}
+                  link={latestReleaseBlogPost?.metadata?.permalink}
+                  label="Latest Relaese"
+                  buttonLabel="Read Announcement"
+                />
+              ),
             ].concat(
-              blogpostsInternalArchive?.blogPosts
-                ?.slice(0, 4)
-                ?.map((post, idx) => {
-                  return (
-                    <CarouselCard
-                      key={idx}
-                      title={post?.metadata?.title}
-                      link={post?.metadata?.permalink}
-                      label={
-                        post?.metadata?.tags
-                          ?.map((tag) => tag?.label)
-                          ?.includes('release')
-                          ? 'Latest Release'
-                          : 'Latest Blogpost'
-                      }
-                      buttonLabel={
-                        post?.metadata?.tags
-                          ?.map((tag) => tag?.label)
-                          ?.includes('release')
-                          ? 'Read Announcement'
-                          : 'Read Post'
-                      }
-                      imageLink={post?.metadata?.frontMatter?.image}
-                      description={
-                        post?.metadata?.hasTruncateMarker
-                          ? extractTextBeforeTruncate(post?.content)
-                          : null
-                      }
-                    />
-                  );
-                })
+              latestTwoNonReleaseBlogPosts?.map((post, idx) => {
+                return (
+                  <CarouselCard
+                    key="blogpost-${idx}-carousel"
+                    title={post?.metadata?.title}
+                    link={post?.metadata?.permalink}
+                    label="Latest Blogpost"
+                    buttonLabel="Read Post"
+                    imageLink={post?.metadata?.frontMatter?.image}
+                    description={
+                      post?.metadata?.hasTruncateMarker
+                        ? extractTextBeforeTruncate(post?.content)
+                        : null
+                    }
+                  />
+                );
+              })
             )}
           </Carousel>
         </div>
@@ -114,7 +125,21 @@ const CarouselCard = ({
   label,
   buttonLabel,
 }: CarouselCard) => {
-  const {colorMode} = useColorMode();
+  const maximumCarouselCardExcerptLength = 300;
+  const [descriptionToShow, setDescriptionToShow] = useState('');
+  useEffect(() => {
+    remark()
+      .use(strip)
+      .process(description)
+      .then((file) => {
+        const truncated = truncateDesc(
+          file.toString(),
+          maximumCarouselCardExcerptLength
+        );
+        setDescriptionToShow(truncated);
+      });
+  }, [description]);
+
   return (
     <div className={styles.carouselCard}>
       <div className={clsx(styles.container, 'container')}>
@@ -123,11 +148,7 @@ const CarouselCard = ({
             {label}
             <p className="hero__subtitle">{title}</p>
             {description && description !== '' && (
-              <div className={styles.blogDesc}>
-                <ReactMarkdown remarkPlugins={[strip]}>
-                  {description}
-                </ReactMarkdown>
-              </div>
+              <div className={styles.blogDesc}>{descriptionToShow}</div>
             )}
           </div>
           <div>
@@ -136,14 +157,16 @@ const CarouselCard = ({
             </Link>
           </div>
         </div>
-      {imageLink && (
-        <img
-          src={imageLink}
-          alt="Blogpost Figure"
-          width="500px"
-          className="svglite"
-        />
-      )}
+        {/* HACK: This is to safeguard against one incompatible (wrong?) image url in
+        https://github.com/tenzir/vast/tree/6c17f01e630c71a55df7002d2276697dfcfaa463/web/blog/parquet-and-feather-writing-security-telemetry/index.qmd */}
+        {imageLink && imageLink.startsWith('/') && (
+          <img
+            src={imageLink}
+            alt="Blogpost Figure"
+            className="svglite"
+            height="200px"
+          />
+        )}
       </div>
     </div>
   );
