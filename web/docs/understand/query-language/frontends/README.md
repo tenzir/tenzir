@@ -1,13 +1,23 @@
 # Frontends
 
-A query language *frontend* is the representation of query. VAST features a
-[query language plugin][query-language-plugin] that allows for exchanging the
-query frontend by replacing it with a different language.
+A query language *frontend* translates the textual representation of a query to
+VAST's internal representation.
+
+Specifically, the frontend parses the string representation that you enter in a
+user interface and translates it into an [abstract syntax tree
+(AST)](https://en.wikipedia.org/wiki/Abstract_syntax_tree) that
+operates on the semantic building blocks of the language, such as literals,
+predicates, extractors, and so on.
+
+The frontend is customizable through the [query language
+plugin][query-language-plugin]. For example, the [Sigma](sigma) frontend
+translates Sigma rules written in YAML to VAST queries. The [VASTQL](vastql)
+plugin is the default frontend that implements the language we designed for
+VAST.
 
 [query-language-plugin]: /docs/understand/architecture/plugins#query-language
 
-The [**VAST** **Q**uery **L**anguage (VASTQL)](.) is the default query language
-frontend. Besides VAST, the following frontends ship with VAST:
+VAST ships with the following frontends:
 
 import DocCardList from '@theme/DocCardList';
 
