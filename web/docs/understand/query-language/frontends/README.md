@@ -10,10 +10,10 @@ operates on the semantic building blocks of the language, such as literals,
 predicates, extractors, and so on.
 
 The frontend is customizable through the [query language
-plugin][query-language-plugin]. For example, the [Sigma](sigma) frontend
-translates Sigma rules written in YAML to VAST queries. The [VASTQL](vastql)
-plugin is the default frontend that implements the language we designed for
-VAST.
+plugin][query-language-plugin]. For example, the [Sigma](frontends/sigma)
+frontend translates Sigma rules written in YAML to VAST queries. The
+[VASTQL](frontends/vastql) plugin is the default frontend that implements the
+language we designed for VAST.
 
 [query-language-plugin]: /docs/understand/architecture/plugins#query-language
 
