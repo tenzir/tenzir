@@ -9,22 +9,21 @@
 #include "tui/ui.hpp"
 
 #include "tui/actor_sink.hpp"
+#include "tui/components.hpp"
+#include "tui/elements.hpp"
+#include "tui/theme.hpp"
 
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/json.hpp>
-#include <vast/concept/printable/to_string.hpp>
-#include <vast/concept/printable/vast/data.hpp>
 #include <vast/data.hpp>
 #include <vast/defaults.hpp>
-#include <vast/detail/narrow.hpp>
 #include <vast/detail/stable_map.hpp>
 #include <vast/logger.hpp>
 #include <vast/system/actors.hpp>
 #include <vast/system/connect_to_node.hpp>
 #include <vast/system/node.hpp>
 #include <vast/table_slice.hpp>
-#include <vast/table_slice_column.hpp>
 #include <vast/uuid.hpp>
 
 #include <caf/event_based_actor.hpp>
@@ -47,134 +46,7 @@ using namespace ftxui;
 using namespace std::string_literals;
 using namespace std::chrono_literals;
 
-// Style note:
-// For our handrolled FTXUI elements and components, we slightly deviate from
-// our naming convention. We use PascalCase for our own custom components, so
-// that their composition becomes clearer in the FTXUI context.
-
 namespace {
-
-/// State of the current theme.
-struct theme {
-  /// Varies the style to drive the user attention.
-  enum class style { normal, alert };
-
-  /// The theme colors.
-  struct color_state {
-    Color primary = Color::Cyan;
-    Color secondary = Color::Blue;
-    Color focus = Color::Green;
-    Color alert = Color::Red;
-  } color;
-
-  // TODO: make this a non-static function that respects the theme.
-  static Color colorize(data_view x) {
-    auto f = detail::overload{
-      [](const auto&) {
-        return Color::Grey50;
-      },
-      [](caf::none_t) {
-        return Color::Grey35;
-      },
-      [](view<bool>) {
-        return Color::DeepPink3;
-      },
-      [](view<integer>) {
-        return Color::IndianRed1;
-      },
-      [](view<count>) {
-        return Color::IndianRedBis;
-      },
-      [](view<real>) {
-        return Color::IndianRed;
-      },
-      [](view<duration>) {
-        return Color::DeepSkyBlue1;
-      },
-      [](view<time>) {
-        return Color::DeepSkyBlue2;
-      },
-      [](view<std::string>) {
-        return Color::Gold3Bis;
-      },
-      [](view<pattern>) {
-        return Color::Gold1;
-      },
-      [](view<address>) {
-        return Color::Green3;
-      },
-      [](view<subnet>) {
-        return Color::Green4;
-      },
-    };
-    return caf::visit(f, x);
-  }
-
-  /// Transforms an element according to given entry state.
-  template <style Style>
-  void transform(Element& e, const EntryState& entry) const {
-    if constexpr (Style == style::normal) {
-      if (entry.focused)
-        e |= ftxui::color(color.focus);
-      if (entry.active)
-        e |= ftxui::color(color.secondary) | bold;
-      if (!entry.focused && !entry.active)
-        e |= ftxui::color(color.secondary) | dim;
-    } else if constexpr (Style == style::alert) {
-      if (entry.focused)
-        e |= ftxui::color(color.alert);
-      if (entry.active)
-        e |= ftxui::color(color.alert) | bold;
-      if (!entry.focused && !entry.active)
-        e |= ftxui::color(color.alert) | dim;
-    }
-  }
-
-  /// Generates a ButtonOption instance.
-  template <style Style = style::normal>
-  [[nodiscard]] ButtonOption button_option() const {
-    ButtonOption result;
-    result.transform = [=](const EntryState& entry) {
-      Element e
-        = hbox({text(" "), text(entry.label), text(" ")}) | center | border;
-      transform<Style>(e, entry);
-      return e;
-    };
-    return result;
-  }
-
-  [[nodiscard]] MenuOption structured_data() const {
-    MenuOption result;
-    result.entries.transform = [=](const EntryState& entry) {
-      Element e = text(entry.label);
-      transform<style::normal>(e, entry);
-      return e;
-    };
-    return result;
-  }
-
-  [[nodiscard]] MenuOption navigation(MenuOption::Direction direction
-                                      = MenuOption::Direction::Right) const {
-    using enum MenuOption::Direction;
-    MenuOption result;
-    result.direction = direction;
-    auto horizontal = direction == Left || direction == Right;
-    result.entries.transform = [=](const EntryState& entry) {
-      Element e = text(entry.label);
-      if (horizontal)
-        e |= center;
-      e |= flex;
-      transform<style::normal>(e, entry);
-      return e;
-    };
-    result.underline.enabled = horizontal;
-    result.underline.SetAnimation(std::chrono::milliseconds(500),
-                                  animation::easing::Linear);
-    result.underline.color_inactive = Color::Default;
-    result.underline.color_active = color.secondary;
-    return result;
-  }
-};
 
 /// The FTXUI main loop is the only entity that *mutates* this state. The owning
 /// entity must ensure that interaction with the contained screen is safe.
@@ -220,282 +92,6 @@ struct ui_state {
   /// user actions.
   ui_actor parent;
 };
-
-/// Creates a collapsible component from a data instance.
-/// @param name The top-level name for the collapsed data.
-/// @param x The data instance.
-/// @returns A collapsible component.
-Component make_collapsible(std::string name, const data& x) {
-  auto f = detail::overload{
-    [&](const auto&) {
-      return Renderer([str = fmt::to_string(x)] {
-        return text(str);
-      });
-    },
-    [](const record& xs) {
-      Components components;
-      components.reserve(xs.size());
-      for (const auto& [k, v] : xs)
-        components.emplace_back(make_collapsible(k, v));
-      auto vertical = Container::Vertical(std::move(components));
-      return Renderer(vertical, [vertical] {
-        return hbox({
-          text(" "),
-          vertical->Render(),
-        });
-      });
-    },
-  };
-  return Collapsible(std::move(name), caf::visit(f, x));
-}
-
-/// Creates uniform window.
-Element make_box(std::string title, Element inner) {
-  return window(text(std::move(title)) | center, std::move(inner));
-}
-
-/// Applies consistent styling of table headers.
-/// In general, we're trying to style tables like the LaTeX booktabs package,
-/// i.e., as minimal vertical lines as possible.
-/// @relates make_table
-void apply_styling(Table& table) {
-  auto top = table.SelectRow(0);
-  top.Decorate(bold);
-  top.SeparatorVertical(EMPTY);
-  top.BorderBottom(LIGHT);
-}
-
-/// Creates a key-value table from a record. Nested records will be rendered as
-/// part of the value.
-/// @param key The name of the first column header.
-/// @param value The name of the second column header.
-/// @returns A FTXUI table.
-Table make_table(std::string key, std::string value, const record& xs) {
-  std::vector<std::vector<std::string>> contents;
-  contents.reserve(xs.size() + 1);
-  auto header = std::vector<std::string>(2);
-  header[0] = std::move(key);
-  header[1] = std::move(value);
-  contents.push_back(std::move(header));
-  for (const auto& [k, v] : xs) {
-    auto row = std::vector<std::string>(2);
-    row[0] = k;
-    row[1] = fmt::to_string(v);
-    contents.push_back(std::move(row));
-  }
-  auto table = Table{std::move(contents)};
-  apply_styling(table);
-  return table;
-}
-
-/// Creates a table that shows type statistics for all events in a VAST node.
-/// @param status An instance of a status record.
-/// @returns An event table
-/// @relates make_table
-Table make_schema_table(const data& status) {
-  using row_tuple = std::tuple<std::string, uint64_t, float>;
-  std::vector<row_tuple> rows;
-  if (auto xs = caf::get_if<record>(&status)) {
-    if (auto i = xs->find("index"); i != xs->end()) {
-      if (auto ys = caf::get_if<record>(&i->second)) {
-        if (auto j = ys->find("statistics"); j != ys->end()) {
-          if (auto zs = caf::get_if<record>(&j->second)) {
-            if (auto k = zs->find("layouts"); k != zs->end()) {
-              if (auto layouts = caf::get_if<record>(&k->second)) {
-                for (auto& [name, details] : *layouts) {
-                  if (auto obj = caf::get_if<record>(&details)) {
-                    row_tuple row;
-                    std::get<0>(row) = name;
-                    if (auto cnt = obj->find("count"); cnt != obj->end())
-                      if (auto n = caf::get_if<integer>(&cnt->second))
-                        std::get<1>(row)
-                          = detail::narrow_cast<uint64_t>(n->value);
-                    if (auto perc = obj->find("percentage"); perc != obj->end())
-                      if (auto frac = caf::get_if<real>(&perc->second))
-                        std::get<2>(row) = *frac / 100;
-                    rows.push_back(std::move(row));
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  // Sort by event count.
-  std::sort(rows.begin(), rows.end(), [](const auto& xs, const auto& ys) {
-    return std::get<1>(xs) > std::get<1>(ys);
-  });
-  // Render the data.
-  std::vector<std::vector<Element>> contents;
-  contents.reserve(rows.size() + 1);
-  std::vector<Element> header(4);
-  header[0] = text("Schema");
-  header[1] = text("Events");
-  header[2] = text("Percentage");
-  header[3] = text("Histogram");
-  contents.push_back(std::move(header));
-  for (auto& [name, count, percentage] : rows) {
-    std::vector<Element> row(4);
-    row[0] = text(std::move(name));
-    row[1] = text(fmt::format(std::locale("en_US.UTF-8"), "{:L}", count));
-    row[2] = text(fmt::format("{:.1f}", percentage));
-    row[3] = gauge(percentage);
-    contents.push_back(std::move(row));
-  }
-  auto table = Table{std::move(contents)};
-  apply_styling(table);
-  table.SelectColumns(1, 2).DecorateCells(align_right);
-  return table;
-}
-
-/// Creates a table that shows the build configuration.
-/// @param status An instance of a status record.
-/// @returns A table of the build configuration.
-/// @relates make_table
-Table make_build_configuration_table(const data& status) {
-  if (const auto* xs = caf::get_if<record>(&status)) {
-    if (auto i = xs->find("version"); i != xs->end()) {
-      if (const auto* ys = caf::get_if<record>(&i->second)) {
-        if (auto j = ys->find("Build Configuration"); j != ys->end()) {
-          if (auto zs = caf::get_if<record>(&j->second)) {
-            auto t = make_table("Option", "Value", *zs);
-            apply_styling(t);
-            return t;
-          }
-        }
-      }
-    }
-  }
-  return {};
-}
-
-/// Creates a table that shows the VAST version details.
-/// @param status An instance of a status record.
-/// @returns A table of the version details fo the various components.
-/// @relates make_table
-Table make_version_table(const data& status) {
-  if (const auto* xs = caf::get_if<record>(&status)) {
-    if (auto i = xs->find("version"); i != xs->end()) {
-      if (const auto* ys = caf::get_if<record>(&i->second)) {
-        auto copy = *ys;
-        if (auto j = copy.find("Build Configuration"); j != copy.end())
-          copy.erase(j);
-        auto t = make_table("Component", "Version", copy);
-        apply_styling(t);
-        return t;
-      }
-    }
-  }
-  return {};
-}
-
-// We are adding our "deep" event catching helper here becase we are facing the
-// smae issue of a parent component masking the events from its children as
-// reported in https://github.com/ArthurSonzogni/FTXUI/discussions/428.
-
-class DeepCatchBase : public ComponentBase {
-public:
-  // Constructor.
-  explicit DeepCatchBase(std::function<bool(Event)> on_event)
-    : on_event_{std::move(on_event)} {
-  }
-
-  bool OnEvent(Event event) override {
-    // Inverted invent handling compared to
-    // https://github.com/ArthurSonzogni/FTXUI/blob/master/src/ftxui/component/catch_event.cpp
-    return ComponentBase::OnEvent(event) || on_event_(event);
-  }
-
-protected:
-  std::function<bool(Event)> on_event_;
-};
-
-Component
-DeepCatch(Component child, std::function<bool(Event event)> on_event) {
-  auto out = Make<DeepCatchBase>(std::move(on_event));
-  out->Add(std::move(child));
-  return out;
-}
-
-ComponentDecorator DeepCatch(std::function<bool(Event)> on_event) {
-  return [on_event = std::move(on_event)](Component child) {
-    return DeepCatch(std::move(child), [on_event = on_event](Event event) {
-      return on_event(std::move(event));
-    });
-  };
-}
-
-// Element Vee() {
-//   static constexpr auto vee = {
-//     R"(////////////    **************************)",
-//     R"( ////////////    ************************ )",
-//     R"(  ////////////    **********************  )",
-//     R"(   ////////////    ********************   )",
-//     R"(    ////////////    ******************    )",
-//     R"(     ////////////         ***********     )",
-//     R"(      ////////////       ***********      )",
-//     R"(       ////////////     ***********       )",
-//     R"(        ////////////    **********        )",
-//     R"(         ////////////    ********         )",
-//     R"(          ////////////    ******          )",
-//     R"(           ////////////    ****           )",
-//     R"(            ////////////    **            )",
-//     R"(             ////////////                 )",
-//     R"(              ////////////                )",
-//   };
-//   Elements elements;
-//   for (const auto* line : vee)
-//     elements.emplace_back(text(line));
-//   return vbox(elements);
-// }
-
-Element Vee() {
-  Elements elements;
-  auto line = [&](auto... xs) {
-    elements.emplace_back(hbox(xs...));
-  };
-  auto c1 = [](auto x) {
-    return text(x) | color(Color::Blue);
-  };
-  auto c2 = [](auto x) {
-    return text(x) | color(Color::Cyan);
-  };
-  line(c1("////////////    "), c2("*************************"));
-  line(c1(" ////////////    "), c2("*********************** "));
-  line(c1("  ////////////    "), c2("*********************  "));
-  line(c1("   ////////////    "), c2("*******************   "));
-  line(c1("    ////////////    "), c2("*****************    "));
-  line(c1("     ////////////         "), c2("**********     "));
-  line(c1("      ////////////       "), c2("**********      "));
-  line(c1("       ////////////     "), c2("**********       "));
-  line(c1("        ////////////    "), c2("*********        "));
-  line(c1("         ////////////    "), c2("*******         "));
-  line(c1("          ////////////    "), c2("*****          "));
-  line(c1("           ////////////    "), c2("***           "));
-  line(c1("            ////////////    "), c2("*            "));
-  line(c1("             ////////////                 "));
-  line(c1("              ////////////                "));
-  return vbox(elements);
-}
-
-Element VAST() {
-  static constexpr auto letters = {
-    "@@@@@@        @@@@@@    @@@@@            @@@@@@@@      @@@@@@@@@@@@@@@@",
-    " @@@@@@      @@@@@@    @@@@@@@        @@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@",
-    "  @@@@@@    @@@@@@    @@@@@@@@@      @@@@@@                 @@@@@@     ",
-    "   @@@@@   @@@@@@    @@@@@ @@@@@      @@@@@@@@@@@@          @@@@@@     ",
-    "    @@@@@  @@@@@    @@@@@   @@@@@       @@@@@@@@@@@@@       @@@@@@     ",
-    "     @@@@@@@@@@    @@@@@@@@@@@@@@@              @@@@@@      @@@@@@     ",
-    "      @@@@@@@@    @@@@@@@@@@@@@@@@@   @@@@@@   @@@@@@       @@@@@@     ",
-    "       @@@@@@     @@@@@       @@@@@@    @@@@@@@@@@@@        @@@@@@     ",
-  };
-  Elements elements;
-  for (const auto* line : letters)
-    elements.emplace_back(text(line));
-  return vbox(elements);
-}
 
 /// The help component.
 Component Help() {
@@ -578,108 +174,56 @@ Component ConnectWindow(ui_state* state) {
   return Make<Impl>(state);
 }
 
-/// A component that displays the node status.
-Component NodeStatus(ui_state* state, std::string node_id) {
-  class Impl : public ComponentBase {
-  public:
-    Impl(ui_state* state, std::string node_id)
-      : state_{state}, node_id_{std::move(node_id)} {
-      auto container = Container::Vertical({});
-      FlexboxConfig flexbox_config;
-      flexbox_config.direction = FlexboxConfig::Direction::Row;
-      flexbox_config.wrap = FlexboxConfig::Wrap::Wrap;
-      flexbox_config.justify_content
-        = FlexboxConfig::JustifyContent::SpaceAround;
-      flexbox_config.align_items = FlexboxConfig::AlignItems::FlexStart;
-      flexbox_config.align_content = FlexboxConfig::AlignContent::FlexStart;
-      // Add charts.
-      auto charts = Renderer([=] {
-        return flexbox({chart("RAM"),    //
-                        chart("Memory"), //
-                        chart("Ingestion")},
-                       flexbox_config);
-      });
-      container->Add(charts);
-      // Add data statistics.
-      auto data_summary = Renderer([=] {
-        auto& node_status = state_->nodes[node_id_].status;
-        return make_box("Events", make_schema_table(node_status).Render());
-      });
-      container->Add(data_summary);
-      // Add node statistics.
-      auto node_summary = Renderer([=] {
-        auto& node_status = state_->nodes[node_id_].status;
-        auto version = make_version_table(node_status).Render();
-        auto build_cfg = make_build_configuration_table(node_status).Render();
-        return flexbox(
-          {
-            make_box("Version", version),
-            make_box("Build Configuration", build_cfg),
-          },
-          flexbox_config);
-      });
-      container->Add(node_summary);
-      // Add detailed status inspection.
-      auto details = Renderer([=] {
-        auto& node_status = state_->nodes[node_id_].status;
-        auto collapsible = make_collapsible("Status", node_status)->Render();
-        return make_box("Details", std::move(collapsible));
-      });
-      container->Add(details);
-      auto action = [=] {
-        state_->nodes.erase(node_id_);
-      };
-      auto remove_node
-        = Button("Remove Node", action,
-                 state_->theme.button_option<theme::style::alert>());
-      container->Add(remove_node);
-      auto renderer = Renderer(container, [=] {
-        return vbox({
-                 text(node_id_) | hcenter | bold,
-                 text(""),
-                 charts->Render(),
-                 text(""),
-                 data_summary->Render() | hcenter,
-                 text(""),
-                 node_summary->Render(),
-                 text(""),
-                 details->Render(),
-                 text(""),
-                 remove_node->Render() | xflex,
-               })
-               | vscroll_indicator | frame;
-      });
-      Add(renderer);
-    }
+// TODO: temporary helper function that produces data for a chart.
+std::vector<int> dummy_graph(int width, int height) {
+  std::vector<int> result(width);
+  for (int i = 0; i < width; ++i)
+    result[i] = i % (height - 4) + 2;
+  return result;
+}
 
-    bool OnEvent(Event event) override {
-      return ComponentBase::OnEvent(event);
-    }
+Element chart(std::string title) {
+  auto g = graph(dummy_graph)        //
+           | color(Color::GrayLight) //
+           | size(WIDTH, EQUAL, 30)  //
+           | size(HEIGHT, EQUAL, 15);
+  return window(text(std::move(title)), std::move(g));
+}
 
-    // Element Render() override {
-    //   return ComponentBase::Render();
-    // }
-
-  private:
-    static Element chart(std::string title) {
-      auto g = graph(dummy_graph)        //
-               | color(Color::GrayLight) //
-               | size(WIDTH, EQUAL, 30)  //
-               | size(HEIGHT, EQUAL, 15);
-      return make_box(std::move(title), std::move(g));
-    }
-
-    static std::vector<int> dummy_graph(int width, int height) {
-      std::vector<int> result(width);
-      for (int i = 0; i < width; ++i)
-        result[i] = i % (height - 4) + 2;
-      return result;
-    }
-
-    ui_state* state_;
-    std::string node_id_;
+Component NodeStatus(ui_state* state, const std::string& node_id) {
+  auto container = Container::Vertical({});
+  auto title = Renderer([=] {
+      return text(node_id) | hcenter | bold;
+  });
+  container->Add(title);
+  // Add charts
+  auto charts = hflow({chart("RAM"),    //
+                       chart("Memory"), //
+                       chart("Ingestion")});
+  container->Add(Hover(charts));
+  // Add data statistics.
+  auto& node_status = state->nodes[node_id].status;
+  auto schema_table = make_schema_table(node_status).Render();
+  container->Add(Hover(schema_table | xflex));
+  // Add node statistics.
+  auto version_table = make_version_table(node_status).Render();
+  auto build_config = make_build_configuration_table(node_status).Render();
+  auto node_summary = Container::Horizontal({});
+  node_summary->Add(Hover(std::move(version_table)));
+  node_summary->Add(Hover(std::move(build_config)));
+  container->Add(node_summary);
+  // Add detailed status inspection.
+  container->Add(Collapsible("Status", node_status));
+  // Add button to remove node.
+  auto action = [=] {
+    state->nodes.erase(node_id);
   };
-  return Make<Impl>(state, std::move(node_id));
+  auto remove_node = Button("Remove Node", action,
+                            state->theme.button_option<theme::style::alert>());
+  container->Add(remove_node);
+  return Renderer(container, [=] {
+    return container->Render() | vscroll_indicator | frame;
+  });
 }
 
 /// An overview of the managed VAST nodes.
@@ -777,66 +321,6 @@ Component FleetPage(ui_state* state) {
   return Make<Impl>(state);
 };
 
-/// A focusable cell in a DataView.
-Component Cell(data_view x) {
-  return Renderer([=](bool focused) {
-    auto element = text(to_string(x)) | color(theme::colorize(x));
-    if (focused)
-      element = element | inverted | focus;
-    return element;
-  });
-}
-
-/// A component that renders data as table.
-Component VerticalDataView(table_slice slice) {
-  class Impl : public ComponentBase {
-  public:
-    Impl(table_slice slice) {
-      auto table = Container::Horizontal({});
-      for (size_t i = 0; i < slice.columns(); ++i) {
-        auto column = Container::Vertical({});
-        // Add column header.
-        const auto& schema = caf::get<record_type>(slice.layout());
-        auto name = schema.key(schema.resolve_flat_index(i));
-        column->Add(header(std::move(name)));
-        column->Add(Renderer([=] {
-          return separatorLight();
-        }));
-        // Add column data.
-        auto col = table_slice_column(slice, i);
-        for (size_t j = 0; j < col.size(); ++j)
-          column->Add(Cell(col[j]));
-        table->Add(column);
-        if (i != slice.columns() - 1)
-          table->Add(Renderer([=] {
-            return separatorLight();
-          }));
-      }
-      table_ = table->Render() | border;
-    }
-
-    Element Render() override {
-      return hbox({
-        table_,
-        filler(),
-      });
-    }
-
-  private:
-    static Component header(std::string name) {
-      return Renderer([txt = std::move(name)](bool focused) mutable {
-        Element element = text(std::move(txt)) | xflex;
-        if (focused)
-          element = element | inverted | focus;
-        return element;
-      });
-    }
-
-    Element table_;
-  };
-  return Make<Impl>(std::move(slice));
-}
-
 Component HuntPage(ui_state* state) {
   class Impl : public ComponentBase {
   public:
@@ -870,12 +354,13 @@ Component HuntPage(ui_state* state) {
       });
       top = Renderer(top, [=] {
         return hbox({
-          window(text("Pipeline"), input->Render()) //
-            | xflex                                 //
-            | color(state->theme.color.primary),
-          submit->Render() | size(WIDTH, EQUAL, 9),
-          selector->Render(),
-        });
+                 window(text("Pipeline"), input->Render()) //
+                   | xflex                                 //
+                   | color(state->theme.color.primary),
+                 submit->Render() | size(WIDTH, EQUAL, 9),
+                 selector->Render(),
+               })
+               | size(HEIGHT, GREATER_THAN, 5);
       });
       data_view_ = Container::Vertical({});
       data_view_->Add(Renderer([] {
@@ -1038,7 +523,7 @@ Component MainWindow(ui_state* state) {
       });
       auto help = Help();
       main |= Modal(help, &show_help_);
-      main |= DeepCatch([=](Event event) {
+      main |= Catch<catch_policy::child>([=](Event event) {
         if (show_help_) {
           if (event == Event::Character('q') || event == Event::Escape) {
             show_help_ = false;
