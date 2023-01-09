@@ -87,10 +87,6 @@ struct partition_synopsis final : public caf::ref_counted {
   unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis&,
          partition_synopsis&);
 
-  FRIEND_ATTRIBUTE_NODISCARD friend caf::error
-  unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
-         partition_synopsis& ps, uint64_t offset, uint64_t events);
-
 private:
   // Returns a raw pointer to a deep copy of this partition synopsis.
   // For use by the `caf::intrusive_cow_ptr`.
@@ -115,6 +111,12 @@ struct partition_info {
       max_import_time{max_import_time},
       schema{std::move(schema)},
       version{version} {
+    // nop
+  }
+
+  partition_info(class uuid uuid, const partition_synopsis& synopsis)
+    : partition_info{uuid, synopsis.events, synopsis.max_import_time,
+                     synopsis.schema, synopsis.version} {
     // nop
   }
 
@@ -157,27 +159,24 @@ struct partition_info {
   template <class Inspector>
   friend auto inspect(Inspector& f, partition_info& x) {
     return f.object(x)
-      .pretty_name("partition_info")
+      .pretty_name("vast.partition-info")
       .fields(f.field("uuid", x.uuid), f.field("events", x.events),
               f.field("max-import-time", x.max_import_time),
               f.field("schema", x.schema), f.field("version", x.version));
   }
 };
 
-/// A partition synopsis with some additional information.
-//  A `augmented_partition_synopsis` is only created for new
-//  partitions, so it can not be a heterogenous legacy partition
-//  but must have exactly one type.
-struct augmented_partition_synopsis {
-  vast::uuid uuid;
-  vast::type type;
-  partition_synopsis_ptr synopsis;
-};
-
 /// A partition synopsis and a uuid.
 struct partition_synopsis_pair {
   vast::uuid uuid;
   partition_synopsis_ptr synopsis;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, partition_synopsis_pair& x) {
+    return f.object(x)
+      .pretty_name("vast.partition-synopsis-pair")
+      .fields(f.field("uuid", x.uuid), f.field("synopsis", x.synopsis));
+  }
 };
 
 } // namespace vast

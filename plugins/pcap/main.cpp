@@ -661,6 +661,16 @@ public:
   using format::writer::write;
 
   caf::error write(const table_slice& slice) override {
+    auto&& layout = slice.layout();
+    // TODO: relax this check. We really only need the (1) flow, and (2) PCAP
+    // payload. Everything else is optional.
+    if (layout.name() != "pcap.packet"
+        || !congruent(layout, make_packet_type())) {
+      return caf::make_error(
+        ec::format_error, fmt::format("pcap-writer is unable to write batch "
+                                      "of schema '{}': expected 'pcap.packet'",
+                                      slice.layout()));
+    }
     if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_.reset(::pcap_open_dead_with_tstamp_precision(
@@ -674,11 +684,6 @@ public:
       if (!dumper_)
         return caf::make_error(ec::format_error, "failed to open pcap dumper");
     }
-    auto&& layout = slice.layout();
-    // TODO: relax this check. We really only need the (1) flow, and (2) PCAP
-    // payload. Everything else is optional.
-    if (!congruent(layout, make_packet_type()))
-      return caf::make_error(ec::format_error, "invalid pcap packet type");
     // TODO: Consider iterating in natural order for the slice.
     // TODO: Calculate column offsets and indices only once instead
     // of again for every row.
@@ -761,7 +766,7 @@ public:
   }
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "pcap";
   }
 

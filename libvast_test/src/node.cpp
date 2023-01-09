@@ -35,6 +35,7 @@ node::node(std::string_view suite)
   spawn_component("catalog", {}, settings);
   spawn_component("index", {}, settings);
   spawn_component("importer");
+  ingest("zeek");
 }
 
 node::~node() {

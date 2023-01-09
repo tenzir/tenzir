@@ -182,6 +182,28 @@ inline constexpr const size_t rotate_files = 3;
 
 } // namespace logger
 
+// -- constants for the various builtin REST endpoints -------------------------
+namespace rest {
+
+/// Settings related to the `/export` endpoint.
+namespace export_ {
+
+/// The maximum number of results
+inline constexpr const size_t limit = 50;
+
+/// Whether to flatten nested fields.
+inline constexpr const bool flatten = false;
+
+/// Whether to render durations as numbers.
+inline constexpr const bool numeric_durations = false;
+
+/// Whether to omit null fields.
+inline constexpr const bool omit_nulls = false;
+
+} // namespace export_
+
+} // namespace rest
+
 // -- constants for the entire system ------------------------------------------
 
 /// Contains system-wide constants.
@@ -236,10 +258,6 @@ inline constexpr const char* store_backend = "feather";
 /// Rate at which telemetry data is sent to the ACCOUNTANT.
 inline constexpr std::chrono::milliseconds telemetry_rate
   = std::chrono::milliseconds{10000};
-
-/// Interval between checks whether a signal occured.
-inline constexpr std::chrono::milliseconds signal_monitoring_interval
-  = std::chrono::milliseconds{750};
 
 /// The timeout for the cascading requests of 'vast status'.
 inline constexpr std::chrono::milliseconds status_request_timeout

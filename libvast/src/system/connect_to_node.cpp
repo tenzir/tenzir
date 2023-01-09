@@ -10,12 +10,9 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/command.hpp"
-#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/port.hpp"
-#include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/endpoint.hpp"
@@ -24,19 +21,15 @@
 #include "vast/system/node_control.hpp"
 #include "vast/system/version_command.hpp"
 
-#include <caf/actor_system.hpp>
-#include <caf/actor_system_config.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/openssl/all.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
-using namespace caf;
-
 namespace vast::system {
 
 caf::expected<node_actor>
-connect_to_node(scoped_actor& self, const caf::settings& opts) {
+connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id.data());
   auto timeout = node_connection_timeout(opts);
@@ -61,7 +54,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   VAST_INFO("client connects to VAST node at {}", endpoint_str);
   auto result = [&]() -> caf::expected<node_actor> {
     if (self->system().has_openssl_manager()) {
-      return openssl::remote_actor<node_actor>(
+      return caf::openssl::remote_actor<node_actor>(
         self->system(), node_endpoint.host, node_endpoint.port->number());
     }
     auto& mm = self->system().middleman();

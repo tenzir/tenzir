@@ -2011,10 +2011,20 @@ namespace fmt {
 
 template <>
 struct formatter<vast::type> {
+  bool print_attributes = true;
+
+  // Callers may use '{:-a}' to disable rendering of attributes.
+  // TODO: Support '{:n}' for name-only.
   template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
-    // TODO: n = name_only
-    return ctx.begin();
+    auto it = ctx.begin();
+    auto end = ctx.end();
+    if (it != end && (*it++ == '-') && it != end && (*it++ == 'a'))
+      print_attributes = false;
+    // continue until end of range
+    while (it != end && *it != '}')
+      ++it;
+    return it;
   }
 
   template <class FormatContext>
@@ -2031,13 +2041,15 @@ struct formatter<vast::type> {
           out = format_to(out, "{}", x);
         },
         value);
-    for (bool first = false;
-         const auto& attribute : value.attributes(vast::type::recurse::no)) {
-      if (!first) {
-        out = format_to(out, " ");
-        first = false;
+    if (print_attributes) {
+      for (bool first = false;
+           const auto& attribute : value.attributes(vast::type::recurse::no)) {
+        if (!first) {
+          out = format_to(out, " ");
+          first = false;
+        }
+        out = format_to(out, "{}", attribute);
       }
-      out = format_to(out, "{}", attribute);
     }
     return out;
   }

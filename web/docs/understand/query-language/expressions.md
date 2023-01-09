@@ -107,6 +107,11 @@ VAST has the following extractor types:
 3. [Meta](#meta-extractor): matches on the type name or field name of a layout
    instead of the values contained in actual events.
 
+The diagram below illustrate how extractors relate to each other:
+
+![Extractors #width500](/img/extractors.light.png#gh-light-mode-only)
+![Extractors #width500](/img/extractors.dark.png#gh-dark-mode-only)
+
 #### Field Extractor
 
 Field extractors have the form `x` or `x.y.z` where `x`, `y`, and `z` match on
@@ -168,7 +173,7 @@ The predicate parser deduces the type of `X` automatically in this case.
 
 For example, `6.6.6.6` is a valid predicate and expands to `:addr == 6.6.6.6`.
 This allows for quick type-based point queries, such as
-`(6.6.6.6 || 80/tcp) && "evil"`.
+`(6.6.6.6 || 10.0.0.0/8) && "evil"`.
 
 :::tip
 Value predicates of type `subnet` expand more broadly. Given a subnet

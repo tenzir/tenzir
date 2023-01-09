@@ -1,1 +1,8 @@
-8
+suricata.alert: 2
+suricata.dns: 2
+suricata.fileinfo: 2
+suricata.flow: 2
+suricata.http: 2
+suricata.netflow: 2
+suricata.quic: 2
+suricata.stats: 2

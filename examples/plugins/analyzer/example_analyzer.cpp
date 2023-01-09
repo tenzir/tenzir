@@ -29,7 +29,7 @@ namespace vast::plugins {
 /// The EXAMPLE actor interface.
 using example_actor = caf::typed_actor<
   // Update the configuration of the EXAMPLE actor.
-  caf::reacts_to<atom::config, record>>
+  auto(atom::config, record)->caf::result<void>>
   // Conform to the protocol of the PLUGIN ANALYZER actor.
   ::extend_with<system::analyzer_plugin_actor>;
 
@@ -150,7 +150,7 @@ public:
   }
 
   /// Returns the unique name of the plugin.
-  const char* name() const override {
+  std::string name() const override {
     return "example-analyzer";
   }
 

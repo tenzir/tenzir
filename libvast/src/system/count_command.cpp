@@ -10,27 +10,20 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/read_query.hpp"
-#include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/start_command.hpp"
 
 #include <caf/actor.hpp>
-#include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-#include <caf/stateful_actor.hpp>
 
 #include <chrono>
-#include <iostream>
+#include <csignal>
 
-using namespace caf;
 using namespace std::chrono_literals;
 
 namespace vast::system {
@@ -53,10 +46,6 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
                        ? std::get<node_actor>(node_opt)
                        : std::get<scope_linked<node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
-  // Start signal monitor.
-  std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Spawn COUNTER at the node.
   caf::actor cnt;
   auto args = invocation{options, "spawn counter", {*query}};
@@ -83,7 +72,19 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
     // Loop until false.
     (counting)
     // Message handlers.
-    ([&](uint64_t x) { result += x; }, [&](atom::done) { counting = false; });
+    (
+      [&](uint64_t x) {
+        result += x;
+      },
+      [&](atom::done) {
+        counting = false;
+      },
+      [&](atom::signal, int signal) {
+        VAST_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
+                   ::strsignal(signal));
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        counting = false;
+      });
   std::cout << result << std::endl;
   return {};
 }

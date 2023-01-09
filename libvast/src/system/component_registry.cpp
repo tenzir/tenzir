@@ -30,7 +30,7 @@ bool component_registry::add(caf::actor comp, std::string type,
 }
 
 caf::expected<component_registry::component>
-component_registry::remove(const std::string& label) {
+component_registry::remove(std::string_view label) {
   auto i = components_.find(label);
   if (i == components_.end())
     return {caf::error{}};

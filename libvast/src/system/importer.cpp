@@ -18,6 +18,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/shutdown_stream_stage.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
@@ -189,6 +190,7 @@ void importer_state::send_report() {
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, index_actor index,
+         accountant_actor accountant,
          std::vector<pipeline>&& input_transformations) {
   VAST_TRACE_SCOPE("importer {} {}", VAST_ARG(self->id()), VAST_ARG(dir));
   for (const auto& x : input_transformations)
@@ -234,13 +236,16 @@ importer(importer_actor::stateful_pointer<importer_state> self,
               self->quit(std::move(error));
             });
   }
+  if (accountant) {
+    VAST_DEBUG("{} registers accountant {}", *self, accountant);
+    self->state.accountant = std::move(accountant);
+    self->send(self->state.accountant, atom::announce_v, self->name());
+    detail::weak_run_delayed_loop(self, defaults::system::telemetry_rate,
+                                  [self] {
+                                    self->state.send_report();
+                                  });
+  }
   return {
-    // Register the ACCOUNTANT actor.
-    [self](accountant_actor accountant) {
-      VAST_DEBUG("{} registers accountant {}", *self, accountant);
-      self->state.accountant = std::move(accountant);
-      self->send(self->state.accountant, atom::announce_v, self->name());
-    },
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) {
       VAST_DEBUG("{} adds a new sink: {}", *self, sink);
@@ -252,11 +257,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       VAST_ASSERT(self->state.stage != nullptr);
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
-    },
-    // The internal telemetry loop of the IMPORTER.
-    [self](atom::telemetry) {
-      self->state.send_report();
-      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     // -- stream_sink_actor<table_slice> ---------------------------------------
     [self](caf::stream<table_slice> in) {

@@ -31,7 +31,7 @@ namespace vast::system {
 struct partition_transformer_state {
   static constexpr const char* name = "partition-transformer";
 
-  using result_type = std::vector<augmented_partition_synopsis>;
+  using result_type = std::vector<partition_synopsis_pair>;
   using promise_type = caf::typed_response_promise<result_type>;
   using partition_tuple = std::tuple<vast::uuid, vast::type, chunk_ptr>;
   using synopsis_tuple = std::tuple<vast::uuid, chunk_ptr>;

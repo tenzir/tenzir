@@ -226,7 +226,32 @@ const config = {
               },
               {
                 label: 'Newsletter',
-                to: '/newsletter',
+                href: '/newsletter',
+              },
+            ],
+          },
+          {
+            title: 'VAST',
+            items: [
+              {
+                label: 'Blog',
+                to: '/blog',
+              },
+              {
+                label: 'Changelog',
+                to: '/changelog',
+              },
+              {
+                label: 'Roadmap',
+                to: '/roadmap',
+              },
+              {
+                label: 'API',
+                to: '/api',
+              },
+              {
+                label: 'Privacy Statement',
+                to: '/privacy-statement',
               },
             ],
           },
@@ -260,6 +285,8 @@ const config = {
         additionalLanguages: ['r'],
       },
     }),
+
+  scripts: [{src: 'https://plausible.io/js/script.js', aysnc: true, defer: true, 'data-domain': 'vast.io'}],
 };
 
 module.exports = config;

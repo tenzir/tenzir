@@ -37,9 +37,11 @@ namespace vast::plugins::segment_store {
 namespace {
 
 /// The STORE BUILDER actor interface.
-using local_store_actor
-  = system::typed_actor_fwd<caf::reacts_to<atom::internal, atom::persist>>::
-    extend_with<system::store_builder_actor>::unwrap;
+using local_store_actor = system::typed_actor_fwd<
+  // INTERNAL: Persist the actor.
+  auto(atom::internal, atom::persist)->caf::result<void>>
+  // Conform to the protocol of a STORE BUILDER actor.
+  ::extend_with<system::store_builder_actor>::unwrap;
 
 struct passive_store_state {
   /// Defaulted constructor to make this a non-aggregate.
@@ -279,7 +281,7 @@ public:
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "segment-store";
   };
 

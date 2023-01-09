@@ -75,3 +75,30 @@ Here's an example to include one image that exists in two variants:
 ![Image Description](/path/to/dark.png#gh-dark-mode-only)
 ![Image Description](/path/to/light.png#gh-light-mode-only)
 ```
+
+## Scale images
+
+We're making use of the alt text in Markdown images in combination with some
+CSS3 features to specify a maximum width:
+
+```markdown
+![alt #width500](/path/to/img)
+```
+
+The suffix `#width500` gets picked up by the following CSS:
+
+```css
+img[alt$="#width500"]{
+  max-width: 500px;
+  display: block;
+}
+```
+
+We currently support the following classes:
+
+- `#width300`
+- `#width400`
+- `#width500`
+- `#width600`
+
+This should hopefully cover the majority of use cases.

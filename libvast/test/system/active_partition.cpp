@@ -70,9 +70,6 @@ dummy_filesystem(std::reference_wrapper<
        const std::filesystem::path&) -> caf::result<vast::atom::done> {
       return vast::atom::done_v;
     },
-    [](vast::atom::telemetry) {
-      // nop
-    },
   };
 }
 

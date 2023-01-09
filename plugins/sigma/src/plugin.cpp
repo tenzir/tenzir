@@ -23,12 +23,12 @@ class plugin final : public virtual query_language_plugin {
     return caf::none;
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "sigma";
   }
 
   [[nodiscard]] caf::expected<expression>
-  parse(std::string_view query) const override {
+  make_query(std::string_view query) const override {
     if (auto yaml = from_yaml(query))
       return parse_rule(*yaml);
     else

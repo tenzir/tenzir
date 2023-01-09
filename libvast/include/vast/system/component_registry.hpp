@@ -10,6 +10,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/heterogeneous_string_hash.hpp"
 #include "vast/detail/tuple_map.hpp"
 
 #include <caf/actor.hpp>
@@ -33,7 +34,7 @@ public:
   };
 
   /// Maps labels to components.
-  using component_map = std::unordered_map<std::string, component>;
+  using component_map = detail::heterogeneous_string_hashmap<component>;
 
   /// Adds a component to the registry.
   /// @param compThe component actor.
@@ -49,7 +50,7 @@ public:
   /// @param label The label of the component.
   /// @returns The deleted component or an error if *label* does not identify
   /// an existing component.
-  [[nodiscard]] caf::expected<component> remove(const std::string& label);
+  [[nodiscard]] caf::expected<component> remove(std::string_view label);
 
   /// Removes a component from the registry.
   /// @param comp The component to erase.

@@ -187,7 +187,7 @@ void partition_transformer_state::fulfill(
   // Return early if no error occured and no new data was created,
   // ie. the input was erased completely.
   if (self->state.events == 0) {
-    promise.deliver(std::vector<augmented_partition_synopsis>{});
+    promise.deliver(std::vector<partition_synopsis_pair>{});
     self->quit();
     return;
   }
@@ -222,10 +222,9 @@ void partition_transformer_state::fulfill(
   }
   // Make a write request to the filesystem actor for every partition.
   auto fanout_counter
-    = detail::make_fanout_counter<std::vector<augmented_partition_synopsis>>(
+    = detail::make_fanout_counter<std::vector<partition_synopsis_pair>>(
       stream_data.partition_chunks->size(),
-      [self,
-       promise](std::vector<augmented_partition_synopsis>&& result) mutable {
+      [self, promise](std::vector<partition_synopsis_pair>&& result) mutable {
         // We're done now, but we may still need to wait for the stores.
         quit_or_stall(self,
                       partition_transformer_state::transformer_is_finished{
@@ -233,7 +232,7 @@ void partition_transformer_state::fulfill(
                         .result = std::move(result),
                       });
       },
-      [self, promise](std::vector<augmented_partition_synopsis>&&,
+      [self, promise](std::vector<partition_synopsis_pair>&&,
                       caf::error&& e) mutable {
         promise.deliver(std::move(e));
         self->quit();
@@ -245,9 +244,8 @@ void partition_transformer_state::fulfill(
     });
     VAST_ASSERT(it != rng.second); // The id must exist with this layout.
     auto synopsis = std::move(it->second.synopsis);
-    auto aps = augmented_partition_synopsis{
+    auto aps = partition_synopsis_pair{
       .uuid = id,
-      .type = layout,
       .synopsis = std::move(synopsis),
     };
     auto filename
@@ -490,12 +488,10 @@ partition_transformer_actor::behavior_type partition_transformer(
       }();
       store_or_fulfill(self, std::move(stream_data));
     },
-    [self](
-      atom::persist) -> caf::result<std::vector<augmented_partition_synopsis>> {
+    [self](atom::persist) -> caf::result<std::vector<partition_synopsis_pair>> {
       VAST_DEBUG("{} received request to persist", *self);
       auto promise
-        = self
-            ->make_response_promise<std::vector<augmented_partition_synopsis>>();
+        = self->make_response_promise<std::vector<partition_synopsis_pair>>();
       auto path_data = partition_transformer_state::path_data{
         .promise = promise,
       };

@@ -29,6 +29,7 @@
 #include "vast/detail/shutdown_stream_stage.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/tracepoint.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
@@ -521,7 +522,6 @@ caf::error index_state::load_from_disk() {
         if (auto error = extract_partition_synopsis(part_path, synopsis_path))
           return error;
       }
-    retry:
       auto chunk = chunk::mmap(synopsis_path);
       if (!chunk)
         return chunk.error();
@@ -534,19 +534,6 @@ caf::error index_state::load_from_disk() {
                                                  "version");
       const auto& synopsis_legacy
         = *ps_flatbuffer->partition_synopsis_as_legacy();
-      // Re-write old partition synopses that were created before the offset and
-      // id were saved.
-      if (!synopsis_legacy.id_range()) {
-        VAST_VERBOSE("{} rewrites old catalog data for partition {}", *self,
-                     partition_uuid);
-        if (auto error = extract_partition_synopsis(part_path, synopsis_path))
-          return error;
-        // TODO: There is probably a good way to rewrite this without the jump,
-        // but in the meantime I defer to Knuth:
-        //   http://people.cs.pitt.edu/~zhangyt/teaching/cs1621/goto.paper.pdf
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-goto)
-        goto retry;
-      }
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
       persisted_partitions.emplace(partition_uuid);
@@ -611,7 +598,7 @@ caf::error index_state::load_from_disk() {
     blocking->request(transformer, caf::infinite, atom::persist_v)
       .receive(
         [&synopses, &stats,
-         this](std::vector<augmented_partition_synopsis> result) {
+         this](std::vector<partition_synopsis_pair>& result) {
           VAST_INFO("recovered {} corrupted partitions on startup",
                     result.size());
           for (auto&& x : std::exchange(result, {})) {
@@ -782,8 +769,7 @@ index_state::create_active_partition(const type& schema) {
     = active_partitions.emplace(schema, active_partition_info{});
   VAST_ASSERT(inserted);
   VAST_ASSERT(active_partition != active_partitions.end());
-  std::string store_name = store_actor_plugin->name();
-  ;
+  auto store_name = std::string{store_actor_plugin->name()};
   chunk_ptr store_header = chunk::make_empty();
   auto builder_and_header
     = store_actor_plugin->make_store_builder(accountant, filesystem, id);
@@ -868,20 +854,27 @@ void index_state::decommission_active_partition(
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
               persisted_partitions.emplace(id);
+              self->send_exit(actor, caf::exit_reason::normal);
               if (completion)
                 completion(caf::none);
             },
             [=, this](const caf::error& err) {
-              VAST_DEBUG("{} received error for request to persist partition "
-                         "{} {}: {}",
+              VAST_ERROR("{} failed to commit partition {} {} to the catalog, "
+                         "the contained data will not be available for "
+                         "queries: {}",
                          *self, schema, id, err);
+              unpersisted.erase(id);
+              self->send_exit(actor, err);
               if (completion)
                 completion(err);
             });
       },
       [=, this](caf::error& err) {
-        VAST_ERROR("{} failed to persist partition {} {} with error: {}", *self,
-                   schema, id, err);
+        VAST_ERROR("{} failed to persist partition {} {} and evicts data from "
+                   "memory to preserve process integrity: {}",
+                   *self, schema, id, err);
+        unpersisted.erase(id);
+        self->send_exit(actor, err);
         if (completion)
           completion(err);
       });
@@ -1426,9 +1419,41 @@ index(index_actor::stateful_pointer<index_state> self,
   if (self->state.accountant)
     self->send(self->state.accountant, atom::announce_v, self->name());
   if (self->state.accountant
-      || self->state.active_partition_timeout.count() > 0)
-    self->delayed_send(self, defaults::system::telemetry_rate,
-                       atom::telemetry_v);
+      || self->state.active_partition_timeout.count() > 0) {
+    detail::weak_run_delayed_loop(
+      self, defaults::system::telemetry_rate, [self] {
+        if (self->state.accountant)
+          self->state.send_report();
+        if (self->state.active_partition_timeout.count() > 0) {
+          auto decommissioned = std::vector<type>{};
+          for (const auto& [schema, active_partition] :
+               self->state.active_partitions) {
+            if (active_partition.spawn_time
+                  + self->state.active_partition_timeout
+                < std::chrono::steady_clock::now()) {
+              decommissioned.push_back(schema);
+            }
+          }
+          if (!decommissioned.empty()) {
+            for (const auto& schema : decommissioned) {
+              auto active_partition
+                = self->state.active_partitions.find(schema);
+              VAST_ASSERT(active_partition
+                          != self->state.active_partitions.end());
+              VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
+                           "after {} timeout",
+                           *self, schema,
+                           self->state.partition_capacity
+                             - active_partition->second.capacity,
+                           self->state.partition_capacity,
+                           data{self->state.active_partition_timeout});
+              self->state.decommission_active_partition(schema, {});
+            }
+            self->state.flush_to_disk();
+          }
+        }
+      });
+  }
   return {
     [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", *self, partition_id);
@@ -1437,38 +1462,6 @@ index(index_actor::stateful_pointer<index_state> self,
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_DEBUG("{} got a new stream source", *self);
       return self->state.stage->add_inbound_path(in);
-    },
-    [self](atom::telemetry) {
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
-      if (self->state.accountant)
-        self->state.send_report();
-      if (self->state.active_partition_timeout.count() > 0) {
-        auto decommissioned = std::vector<type>{};
-        for (const auto& [schema, active_partition] :
-             self->state.active_partitions) {
-          if (active_partition.spawn_time + self->state.active_partition_timeout
-              < std::chrono::steady_clock::now()) {
-            decommissioned.push_back(schema);
-          }
-        }
-        if (!decommissioned.empty()) {
-          for (const auto& schema : decommissioned) {
-            auto active_partition = self->state.active_partitions.find(schema);
-            VAST_ASSERT(active_partition
-                        != self->state.active_partitions.end());
-            VAST_VERBOSE("{} flushes active partition {} with {}/{} events "
-                         "after {} timeout",
-                         *self, schema,
-                         self->state.partition_capacity
-                           - active_partition->second.capacity,
-                         self->state.partition_capacity,
-                         data{self->state.active_partition_timeout});
-            self->state.decommission_active_partition(schema, {});
-          }
-          self->state.flush_to_disk();
-        }
-      }
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_DEBUG("{} adds flush listener", *self);
@@ -1945,7 +1938,7 @@ index(index_actor::stateful_pointer<index_state> self,
         .then(
           [self, deliver, corrected_partitions, keep, marker_path, rp,
            partition_transfomer](
-            std::vector<augmented_partition_synopsis>& apsv) mutable {
+            std::vector<partition_synopsis_pair>& apsv) mutable {
             std::vector<uuid> old_partition_ids;
             old_partition_ids.reserve(corrected_partitions.size());
             for (const auto& [_, candidate_info] :
@@ -1956,8 +1949,8 @@ index(index_actor::stateful_pointer<index_state> self,
             }
             std::vector<uuid> new_partition_ids;
             new_partition_ids.reserve(apsv.size());
-            for (auto const& aps : apsv)
-              new_partition_ids.push_back(aps.uuid);
+            for (auto const& [uuid, _] : apsv)
+              new_partition_ids.push_back(uuid);
             auto result = std::vector<partition_info>{};
             for (auto const& aps : apsv) {
               // If synopsis was null (ie. all events were deleted),
@@ -1965,8 +1958,8 @@ index(index_actor::stateful_pointer<index_state> self,
               // it in the result.
               VAST_ASSERT(aps.synopsis);
               auto info = partition_info{
-                aps.uuid, aps.synopsis->events,  aps.synopsis->max_import_time,
-                aps.type, aps.synopsis->version,
+                aps.uuid,
+                *aps.synopsis,
               };
               // Update the index statistics. We only need to add the events of
               // the new partition here, the subtraction of the old events is
@@ -2075,6 +2068,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     [self](atom::flush) -> caf::result<void> {
+      VAST_DEBUG("{} got a flush request from {}", *self,
+                 self->current_sender());
       // If we've got nothing to flush we can just exit immediately.
       if (self->state.active_partitions.empty())
         return {};
