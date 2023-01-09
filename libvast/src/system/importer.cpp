@@ -65,7 +65,7 @@ public:
         it.value() += rows;
       else
         state.schema_counters.emplace(std::string{name}, rows);
-      slice.import_time(time::clock::now(), "importer process");
+      slice.import_time(time::clock::now());
       out.push(std::move(slice));
     }
     t.stop(events);

@@ -282,14 +282,9 @@ time table_slice::import_time() const noexcept {
   return visit(f, as_flatbuffer(chunk_));
 }
 
-void table_slice::import_time(time import_time,
-                              const std::string& from) noexcept {
-  if (!chunk_->unique()) {
-    VAST_WARN("setting import timestamp on a shared table slice incurs a copy. "
-              "From {}",
-              from);
+void table_slice::import_time(time import_time) noexcept {
+  if (!chunk_->unique())
     *this = table_slice{chunk::copy(*chunk_), verify::no};
-  }
   auto f = detail::overload{
     []() noexcept {
       die("cannot assign import time to invalid table slice");
