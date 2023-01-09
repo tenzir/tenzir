@@ -838,7 +838,37 @@ jobs:
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"
-      - name: Run Integration Tests
+      - name: Run Integration Tests 1
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 2
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 3
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 4
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 5 
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 6
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 7
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 8
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 9
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 10
+        run: |
+          cmake --build "$BUILD_DIR" --target integration
+      - name: Run Integration Tests 11
         run: |
           cmake --build "$BUILD_DIR" --target integration
       - name: Upload Integration Test Logs on Failure
