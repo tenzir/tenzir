@@ -128,6 +128,12 @@ public:
     return std::make_unique<where_operator>(
       std::move(*normalized_and_validated_expr));
   }
+
+  virtual std::pair<std::string_view::iterator,
+                    caf::expected<std::unique_ptr<pipeline_operator>>>
+  parse_pipeline_string(std::string_view str) const override {
+    return {str.begin() + str.find_first_of('|'), make_pipeline_operator({})};
+  }
 };
 
 } // namespace

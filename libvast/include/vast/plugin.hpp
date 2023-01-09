@@ -252,6 +252,11 @@ public:
   /// @param options The settings configured for this operator.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<pipeline_operator>>
   make_pipeline_operator(const vast::record& options) const = 0;
+
+  [[nodiscard]] virtual std::pair<
+    std::string_view::iterator,
+    caf::expected<std::unique_ptr<pipeline_operator>>>
+  parse_pipeline_string(std::string_view str) const = 0;
 };
 
 // -- aggregation function plugin ---------------------------------------------

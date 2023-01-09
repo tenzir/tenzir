@@ -180,6 +180,12 @@ public:
     }
     return std::make_unique<pseudonymize_operator>(std::move(*config));
   }
+
+  virtual std::pair<std::string_view::iterator,
+                    caf::expected<std::unique_ptr<pipeline_operator>>>
+  parse_pipeline_string(std::string_view str) const override {
+    return {str.begin() + str.find_first_of('|'), make_pipeline_operator({})};
+  }
 };
 
 } // namespace vast::plugins::pseudonymize
