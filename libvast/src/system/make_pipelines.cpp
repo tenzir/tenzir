@@ -190,4 +190,21 @@ make_pipeline(const std::string& name,
   return pipeline;
 }
 
+caf::expected<std::vector<std::unique_ptr<pipeline_operator>>>
+make_pipeline(std::string_view pipeline_string) {
+  std::vector<std::unique_ptr<pipeline_operator>> pipeline;
+  auto pipeline_str_it
+    = pipeline_string.substr(0, pipeline_string.find_first_of(' '));
+  while (pipeline_str_it != pipeline_string.end()) {
+    auto pipeline_op_parse_result
+      = parse_pipeline_operator(pipeline_str_it, pipeline_string);
+    if (pipeline_op_parse_result->second.error()) {
+      return pipeline_op_parse_result->second.error();
+    }
+    pipeline.emplace_back(std::move(*pipeline_op_parse_result->second));
+    pipeline_str_it = pipeline_op_parse_result->first;
+  }
+  return pipeline;
+}
+
 } // namespace vast::system
