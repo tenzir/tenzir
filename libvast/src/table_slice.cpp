@@ -288,7 +288,7 @@ void table_slice::import_time(time import_time,
     VAST_WARN("setting import timestamp on a shared table slice incurs a copy. "
               "From {}",
               from);
-    chunk_ = chunk::copy(*chunk_);
+    *this = table_slice{chunk::copy(*chunk_), verify::no};
   }
   auto f = detail::overload{
     []() noexcept {
