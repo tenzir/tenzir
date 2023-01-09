@@ -16,7 +16,6 @@
 #include <vast/format/reader_factory.hpp>
 #include <vast/format/writer_factory.hpp>
 #include <vast/table_slice.hpp>
-#include <vast/table_slice_builder_factory.hpp>
 #include <vast/table_slice_column.hpp>
 #include <vast/test/data.hpp>
 #include <vast/test/fixtures/actor_system.hpp>
@@ -59,7 +58,6 @@ struct fixture {
   fixture() {
     factory<format::reader>::initialize();
     factory<format::writer>::initialize();
-    factory<table_slice_builder>::initialize();
   }
 };
 

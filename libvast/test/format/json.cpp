@@ -13,7 +13,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
@@ -55,8 +54,7 @@ TEST(json to data) {
       {"mcs", map_type{count_type{}, string_type{}}},
     },
   };
-  auto builder = factory<table_slice_builder>::make(
-    defaults::import::table_slice_type, layout);
+  auto builder = std::make_shared<table_slice_builder>(layout);
   std::string_view str = R"json({
     "b": true,
     "c": 424242,

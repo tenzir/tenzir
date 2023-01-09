@@ -25,7 +25,7 @@
 #include "vast/system/passive_partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
@@ -126,8 +126,6 @@ struct fixture : fixtures::deterministic_actor_system {
 FIXTURE_SCOPE(partition_roundtrips, fixture)
 
 TEST(empty partition roundtrip) {
-  // Init factory.
-  vast::factory<vast::table_slice_builder>::initialize();
   // Create partition state.
   vast::system::active_partition_state state;
   state.data.id = vast::uuid::random();
@@ -150,8 +148,7 @@ TEST(empty partition roundtrip) {
   };
   auto qf = vast::qualified_record_field{layout, vast::offset{0}};
   state.indexers[qf] = nullptr;
-  auto slice_builder = vast::factory<vast::table_slice_builder>::make(
-    vast::defaults::import::table_slice_type, layout);
+  auto slice_builder = std::make_shared<vast::table_slice_builder>(layout);
   REQUIRE(slice_builder);
   auto slice = slice_builder->finish();
   slice.offset(0);
@@ -254,8 +251,7 @@ TEST(full partition roundtrip) {
       {"x", vast::count_type{}},
     },
   };
-  auto builder = vast::factory<vast::table_slice_builder>::make(
-    vast::defaults::import::table_slice_type, layout);
+  auto builder = std::make_shared<vast::table_slice_builder>(layout);
   CHECK(builder->add(0u));
   auto slice = builder->finish();
   slice.offset(0);

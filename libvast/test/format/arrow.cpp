@@ -11,7 +11,6 @@
 #include "vast/format/arrow.hpp"
 
 #include "vast/arrow_table_slice.hpp"
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/config.hpp"
@@ -20,6 +19,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"

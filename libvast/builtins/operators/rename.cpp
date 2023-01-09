@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice.hpp>
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
@@ -15,6 +14,7 @@
 #include <vast/detail/inspection_common.hpp>
 #include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
+#include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/table.h>

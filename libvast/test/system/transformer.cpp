@@ -10,7 +10,6 @@
 
 #include "vast/system/transformer.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/data.hpp"
@@ -18,7 +17,7 @@
 #include "vast/detail/logger_formatters.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/make_pipelines.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
@@ -78,7 +77,6 @@ struct transformer_fixture
   transformer_fixture()
     : fixtures::deterministic_actor_system_and_events(
       VAST_PP_STRINGIFY(SUITE)) {
-    vast::factory<vast::table_slice_builder>::initialize();
   }
 
   // Creates a table slice with a single string field and random data.
@@ -91,8 +89,7 @@ struct transformer_fixture
         {"index", vast::integer_type{}},
       },
     };
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      vast::defaults::import::table_slice_type, layout);
+    auto builder = std::make_shared<vast::table_slice_builder>(layout);
     REQUIRE(builder);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();

@@ -8,7 +8,6 @@
 
 #include "vast/arrow_table_slice.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
@@ -20,6 +19,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/value_index.hpp"
 
 #include <arrow/api.h>

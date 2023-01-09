@@ -9,7 +9,6 @@
 #include "vast/table_slice.hpp"
 
 #include "vast/arrow_table_slice.hpp"
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
@@ -25,7 +24,6 @@
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
@@ -157,8 +155,8 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 
 table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
                          type schema, enum serialize serialize) {
-  *this = arrow_table_slice_builder::create(record_batch, std::move(schema),
-                                            serialize);
+  *this
+    = table_slice_builder::create(record_batch, std::move(schema), serialize);
 }
 
 table_slice::table_slice(const table_slice& other) noexcept = default;

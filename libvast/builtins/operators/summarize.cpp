@@ -8,14 +8,13 @@
 
 #include <vast/aggregation_function.hpp>
 #include <vast/arrow_table_slice.hpp>
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
-#include <vast/table_slice_builder_factory.hpp>
+#include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/compute/api_scalar.h>

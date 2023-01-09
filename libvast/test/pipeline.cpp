@@ -14,7 +14,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/plugin.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -68,15 +68,11 @@ const auto testdata_layout3 = vast::type{
 
 struct pipelines_fixture {
   pipelines_fixture() {
-    vast::factory<vast::table_slice_builder>::initialize();
   }
 
   // Creates a table slice with a single string field and random data.
-  static vast::table_slice
-  make_pipelines_testdata(vast::table_slice_encoding encoding
-                          = vast::defaults::import::table_slice_type) {
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout);
+  static vast::table_slice make_pipelines_testdata() {
+    auto builder = std::make_shared<vast::table_slice_builder>(testdata_layout);
     REQUIRE(builder);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
@@ -91,11 +87,11 @@ struct pipelines_fixture {
   /// fields.
   static std::tuple<vast::table_slice, vast::table_slice>
   make_proj_and_del_testdata() {
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      vast::defaults::import::table_slice_type, testdata_layout2);
+    auto builder
+      = std::make_shared<vast::table_slice_builder>(testdata_layout2);
     REQUIRE(builder);
-    auto builder2 = vast::factory<vast::table_slice_builder>::make(
-      vast::defaults::import::table_slice_type, testresult_layout2);
+    auto builder2
+      = std::make_shared<vast::table_slice_builder>(testresult_layout2);
     REQUIRE(builder2);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
@@ -111,16 +107,14 @@ struct pipelines_fixture {
   /// Creates a table slice with ten rows(type, record_batch), a second having
   /// only the row with index==2 and a third having only the rows with index>5.
   static std::tuple<vast::table_slice, vast::table_slice, vast::table_slice>
-  make_where_testdata(vast::table_slice_encoding encoding
-                      = vast::defaults::import::table_slice_type) {
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout);
+  make_where_testdata() {
+    auto builder = std::make_shared<vast::table_slice_builder>(testdata_layout);
     REQUIRE(builder);
-    auto builder2 = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout);
+    auto builder2
+      = std::make_shared<vast::table_slice_builder>(testdata_layout);
     REQUIRE(builder2);
-    auto builder3 = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout);
+    auto builder3
+      = std::make_shared<vast::table_slice_builder>(testdata_layout);
     REQUIRE(builder3);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
@@ -142,8 +136,8 @@ struct pipelines_fixture {
   make_pseudonymize_testdata(const std::string& orig_ip,
                              const std::string& dest_ip,
                              const std::string& non_anon_ip) {
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      vast::defaults::import::table_slice_type, testdata_layout3);
+    auto builder
+      = std::make_shared<vast::table_slice_builder>(testdata_layout3);
     REQUIRE(builder);
     REQUIRE(builder->add(*vast::to<vast::address>(orig_ip),
                          vast::integer{40002},
@@ -267,8 +261,7 @@ TEST(extend operator) {
 }
 
 TEST(where operator) {
-  auto [slice, single_row_slice, multi_row_slice]
-    = make_where_testdata(vast::defaults::import::table_slice_type);
+  auto [slice, single_row_slice, multi_row_slice] = make_where_testdata();
   CHECK_EQUAL(slice.rows(), 10ull);
   CHECK_EQUAL(single_row_slice.rows(), 1ull);
   CHECK_EQUAL(multi_row_slice.rows(), 4ull);
@@ -491,8 +484,7 @@ TEST(pipeline with multiple steps) {
   CHECK_EQUAL(materialize((*transformed)[0].at(0, 0)), "xxx");
   auto wrong_layout = vast::type{"stub", testdata_layout};
   wrong_layout.assign_metadata(vast::type{"foo", vast::type{}});
-  auto builder = vast::factory<vast::table_slice_builder>::make(
-    vast::defaults::import::table_slice_type, wrong_layout);
+  auto builder = std::make_shared<vast::table_slice_builder>(wrong_layout);
   REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));
   auto wrong_slice = builder->finish();
   auto add2_failed = pipeline.add(std::move(wrong_slice));
@@ -576,8 +568,7 @@ TEST(pipeline executor - multiple matching pipelines) {
   pipeline2.add_operator(unbox(
     vast::make_pipeline_operator("drop", {{"fields", vast::list{"index"}}})));
   vast::pipeline_executor executor(std::move(pipelines));
-  auto slice
-    = make_pipelines_testdata(vast::defaults::import::table_slice_type);
+  auto slice = make_pipelines_testdata();
   REQUIRE_EQUAL(slice.encoding(), vast::defaults::import::table_slice_type);
   auto add_failed = executor.add(std::move(slice));
   REQUIRE(!add_failed);

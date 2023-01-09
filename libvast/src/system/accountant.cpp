@@ -23,7 +23,7 @@
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/time.hpp"
 #include "vast/view.hpp"
 
@@ -132,8 +132,7 @@ struct accountant_state_impl {
                     {"value", real_type{}},
                     {"metadata", map_type{string_type{}, string_type{}}}},
       };
-      builder
-        = factory<table_slice_builder>::make(cfg.self_sink.slice_type, layout);
+      builder = std::make_shared<table_slice_builder>(layout);
       VAST_DEBUG("{} obtained a table slice builder", *self);
     }
     map meta = {};

@@ -14,7 +14,6 @@
 #include "vast/atoms.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
@@ -29,7 +28,7 @@
 /// Helper macro to define a table-slice unit test.
 #define TEST_TABLE_SLICE(builder, id)                                          \
   TEST(type) {                                                                 \
-    initialize<builder>(table_slice_encoding::id);                             \
+    initialize();                                                              \
     run();                                                                     \
   }
 
@@ -72,22 +71,9 @@ public:
   explicit table_slices(std::string_view suite);
 
   /// Registers a table slice implementation.
-  template <class Builder>
-  void initialize(vast::table_slice_encoding id) {
+  void initialize() {
     using namespace vast;
-    factory<table_slice_builder>::add<Builder>(id);
-    builder = factory<table_slice_builder>::make(id, layout);
-    if (builder == nullptr)
-      FAIL("builder factory could not construct a valid instance");
-  }
-
-  // FIXME: Remove when removing legacy table slices.
-  /// Registers a table slice implementation.
-  template <class T, class Builder>
-  void legacy_initialize() {
-    using namespace vast;
-    factory<table_slice_builder>::add<Builder>(T::class_id);
-    builder = factory<table_slice_builder>::make(T::class_id, layout);
+    builder = std::make_shared<table_slice_builder>(layout);
     if (builder == nullptr)
       FAIL("builder factory could not construct a valid instance");
   }

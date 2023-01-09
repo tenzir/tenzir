@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
@@ -16,7 +15,7 @@
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
-#include <vast/table_slice_builder_factory.hpp>
+#include <vast/table_slice_builder.hpp>
 
 #include <arrow/type.h>
 #include <caf/expected.hpp>

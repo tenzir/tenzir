@@ -13,7 +13,7 @@
 #include <vast/pipeline.hpp>
 #include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
-#include <vast/table_slice_builder_factory.hpp>
+#include <vast/table_slice_builder.hpp>
 #include <vast/test/fixtures/events.hpp>
 #include <vast/test/test.hpp>
 
@@ -45,10 +45,8 @@ const auto agg_test_layout = vast::type{
 };
 
 // Creates a table slice with a single string field and random data.
-table_slice make_testdata(table_slice_encoding encoding
-                          = defaults::import::table_slice_type) {
-  auto builder
-    = vast::factory<vast::table_slice_builder>::make(encoding, agg_test_layout);
+table_slice make_testdata() {
+  auto builder = std::make_shared<vast::table_slice_builder>(agg_test_layout);
   REQUIRE(builder);
   for (int i = 0; i < 10; ++i) {
     // 2009-11-16 12 AM

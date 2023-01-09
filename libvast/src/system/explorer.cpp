@@ -22,7 +22,6 @@
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/uuid.hpp"
 

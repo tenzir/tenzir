@@ -20,7 +20,6 @@
 #include "vast/factory.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 
 #include <caf/settings.hpp>
 

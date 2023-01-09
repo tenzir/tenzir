@@ -14,7 +14,6 @@
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
-#include <vast/table_slice_builder_factory.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/type.h>

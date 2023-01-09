@@ -13,6 +13,7 @@
 #include "vast/format/reader.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/module.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 
 #include <arrow/io/api.h>
@@ -52,7 +53,7 @@ public:
 private:
   output_stream_ptr out_;
   type current_layout_;
-  table_slice_builder_ptr current_builder_;
+  std::unique_ptr<table_slice_builder> current_builder_;
   batch_writer_ptr current_batch_writer_;
 };
 

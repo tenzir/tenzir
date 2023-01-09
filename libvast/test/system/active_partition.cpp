@@ -19,7 +19,7 @@
 #include "vast/span.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
@@ -121,8 +121,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
                 index_config_, vast::system::store_actor{}, input_store_id,
                 partition_header, std::make_shared<vast::taxonomies>());
   REQUIRE(sut);
-  auto builder = vast::factory<vast::table_slice_builder>::make(
-    vast::defaults::import::table_slice_type, schema_);
+  auto builder = std::make_shared<vast::table_slice_builder>(schema_);
   CHECK(builder->add(0u));
   auto slice = builder->finish();
   slice.offset(0);
@@ -183,41 +182,32 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(indexes->Get(0)->index()->caf_0_18_data(), nullptr);
 }
 
-TEST(Delegate query to store with all possible ids in partition when query is to
+TEST(delegate query to store with all possible ids in partition when query is to
        be done without dense indexer) {
   std::vector<vast::query_context> last_query_contexts;
   auto store = sys.spawn(dummy_store, std::ref(last_query_contexts));
-
   auto sut = sys.spawn(vast::system::active_partition, vast::uuid::random(),
                        vast::system::accountant_actor{},
                        vast::system::filesystem_actor{}, caf::settings{},
                        index_config_, store, "some-id", vast::chunk_ptr{},
                        std::make_shared<vast::taxonomies>());
-
   REQUIRE(sut);
-
-  auto builder = vast::factory<vast::table_slice_builder>::make(
-    vast::defaults::import::table_slice_type, schema_);
-
+  auto builder = std::make_shared<vast::table_slice_builder>(schema_);
   CHECK(builder->add(0u));
   auto slice1 = builder->finish();
   slice1.offset(0);
-
   CHECK(builder->add(25u));
   auto slice2 = builder->finish();
   slice2.offset(1);
-
   auto src = vast::detail::spawn_container_source(
     sys, std::vector{slice1, slice2}, sut);
   REQUIRE(src);
   run();
-
   auto expr = vast::expression{vast::predicate{vast::field_extractor{"x"},
                                                vast::relational_operator::equal,
                                                vast::data{0u}}};
   auto query_context
     = vast::query_context::make_extract("test", self, std::move(expr));
-
   auto promise
     = self->request(sut, caf::infinite, vast::atom::query_v, query_context);
   run();
@@ -228,9 +218,7 @@ TEST(Delegate query to store with all possible ids in partition when query is to
     [](const caf::error& err) {
       FAIL(err);
     });
-
   REQUIRE_EQUAL(last_query_contexts.size(), 1u);
-
   vast::ids expected_ids;
   expected_ids.append_bits(true, 2);
   CHECK_EQUAL(last_query_contexts.back().ids, expected_ids);

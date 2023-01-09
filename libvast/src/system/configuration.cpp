@@ -27,7 +27,6 @@
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/synopsis_factory.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -281,7 +280,6 @@ configuration::configuration() {
   load<caf::io::middleman>();
   // Initialize factories.
   factory<synopsis>::initialize();
-  factory<table_slice_builder>::initialize();
   factory<value_index>::initialize();
   // Register Arrow extension types.
   auto register_extension_types =

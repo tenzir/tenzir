@@ -12,7 +12,6 @@
 #include "vast/factory.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 
 namespace vast::format {
 
@@ -70,9 +69,9 @@ table_slice_builder_ptr multi_layout_reader::builder(const type& t) {
     // printed only once.
     return builders_[t];
   }
-  auto ptr = factory<table_slice_builder>::make(table_slice_type_, t);
-  builders_.emplace(t, ptr);
-  return ptr;
+  auto builder = std::make_shared<table_slice_builder>(t);
+  builders_.emplace(t, builder);
+  return builder;
 }
 
 } // namespace vast::format

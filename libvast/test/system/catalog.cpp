@@ -24,7 +24,7 @@
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
@@ -64,8 +64,7 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
 
 template <class... Ts>
 vast::table_slice make_data(const vast::type& layout, Ts&&... ts) {
-  auto builder = factory<table_slice_builder>::make(
-    defaults::import::table_slice_type, layout);
+  auto builder = std::make_shared<table_slice_builder>(layout);
   REQUIRE(builder->add(std::forward<Ts>(ts)...));
   return builder->finish();
 }
@@ -81,8 +80,7 @@ struct generator {
   }
 
   table_slice operator()(size_t num) {
-    auto builder = factory<table_slice_builder>::make(
-      defaults::import::table_slice_type, layout);
+    auto builder = std::make_shared<table_slice_builder>(layout);
     for (size_t i = 0; i < num; ++i) {
       vast::time ts = epoch + std::chrono::seconds(i + offset);
       CHECK(builder->add(make_data_view(ts)));
@@ -129,8 +127,6 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       VAST_PP_STRINGIFY(SUITE)) {
     MESSAGE("register synopsis factory");
     factory<synopsis>::initialize();
-    MESSAGE("register table_slice_builder factory");
-    factory<table_slice_builder>::initialize();
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");
@@ -359,8 +355,7 @@ TEST(catalog with bool synopsis) {
       {"x", bool_type{}},
     },
   };
-  auto builder = factory<table_slice_builder>::make(
-    defaults::import::table_slice_type, layout);
+  auto builder = std::make_shared<table_slice_builder>(layout);
   REQUIRE(builder);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
