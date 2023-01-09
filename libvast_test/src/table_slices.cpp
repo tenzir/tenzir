@@ -106,7 +106,7 @@ table_slices::table_slices(std::string_view suite)
   // A bunch of test data for nested type combinations.
   // clang-format off
   auto test_lists = ""s
-    + ", [T]"s // va
+    + ", [true]"s // va
     + ", [+7]"s // vb
     + ", [42]"s // vc
     + ", [4.2]"s // vd
@@ -117,35 +117,35 @@ table_slices::table_slices(std::string_view suite)
     + ", [127.0.0.1]"s // vi
     + ", [10.0.0.0/8]"s // vj
     // + ", [[1, 2, 3]]"s // vl
-    // + ", [{1 -> T, 2 -> F, 3 -> T}]"s // vm
+    // + ", [{1 -> true, 2 -> false, 3 -> true}]"s // vm
     ;
   auto test_maps_left = ""s
-    + ", {T -> T}"s // maa
-    + ", {+7 -> T}"s // mba
-    + ", {42 -> T}"s // mca
-    + ", {4.2 -> T}"s // mda
-    + ", {1337ms -> T}"s // mea
-    + ", {2018-12-24 -> T}"s // mfa
-    + ", {\"foo\" -> T}"s // mga
-    + ", {/foo.*bar/ -> T}"s // mha
-    + ", {127.0.0.1 -> T}"s // mia
-    + ", {10.0.0.0/8 -> T}"s // mja
-    // + ", {[1, 2, 3] -> T}"s // mla
-    // + ", {{1 -> T, 2 -> F, 3 -> T} -> T}"s // mna
+    + ", {true -> true}"s // maa
+    + ", {+7 -> true}"s // mba
+    + ", {42 -> true}"s // mca
+    + ", {4.2 -> true}"s // mda
+    + ", {1337ms -> true}"s // mea
+    + ", {2018-12-24 -> true}"s // mfa
+    + ", {\"foo\" -> true}"s // mga
+    + ", {/foo.*bar/ -> true}"s // mha
+    + ", {127.0.0.1 -> true}"s // mia
+    + ", {10.0.0.0/8 -> true}"s // mja
+    // + ", {[1, 2, 3] -> true}"s // mla
+    // + ", {{1 -> true, 2 -> false, 3 -> true} -> true}"s // mna
     ;
   auto test_maps_right = ""s
     // (intentionally no maa)
-    + ", {T -> +7}"s // mab
-    + ", {T -> 42}"s // mac
-    + ", {T -> 4.2}"s // mad
-    + ", {T -> 1337ms}"s // mae
-    + ", {T -> 2018-12-24}"s // maf
-    + ", {T -> \"foo\"}"s // mag
-    + ", {T -> /foo.*bar/}"s // mah
-    + ", {T -> 127.0.0.1}"s // mai
-    + ", {T -> 10.0.0.0/8}"s // maj
-    // + ", {T -> [1, 2, 3]}"s // mal
-    // + ", {T -> {1 -> T, 2 -> F, 3 -> T}}"s // man
+    + ", {true -> +7}"s // mab
+    + ", {true -> 42}"s // mac
+    + ", {true -> 4.2}"s // mad
+    + ", {true -> 1337ms}"s // mae
+    + ", {true -> 2018-12-24}"s // maf
+    + ", {true -> \"foo\"}"s // mag
+    + ", {true -> /foo.*bar/}"s // mah
+    + ", {true -> 127.0.0.1}"s // mai
+    + ", {true -> 10.0.0.0/8}"s // maj
+    // + ", {true -> [1, 2, 3]}"s // mal
+    // + ", {true -> {1 -> true, 2 -> false, 3 -> true}}"s // man
     ;
   auto test_collections
     = test_lists
@@ -155,10 +155,11 @@ table_slices::table_slices(std::string_view suite)
   // clang-format on
   // Initialize test data.
   auto rows = std::vector<std::string>{
-    "[T, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
-    " 10.0.0.0/8, [1, 2, 3], {1 -> T, 2 -> F, 3 -> T}"
+    "[true, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
+    " 10.0.0.0/8, [1, 2, 3], {1 -> true, 2 -> false, 3 -> true}"
       + test_collections + ", \"aas\"]",
-    "[F, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, 64:ff9b::/96,"
+    "[false, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, "
+    "64:ff9b::/96,"
     " [], {}"
       + test_collections + ", \"aas\"]",
   };

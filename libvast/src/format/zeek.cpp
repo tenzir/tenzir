@@ -514,6 +514,10 @@ public:
     }
   }
 
+  bool operator()(Iterator& out, const view<bool>& x) const {
+    return printers::any.print(out, x ? 'T' : 'F');
+  }
+
   bool operator()(Iterator& out, const view<real>& x) const {
     return zeek_real.print(out, x);
   }

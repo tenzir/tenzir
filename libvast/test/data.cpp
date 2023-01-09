@@ -230,7 +230,7 @@ TEST(parseable) {
   auto p = make_parser<data>();
   data d;
   MESSAGE("bool");
-  auto str = "T"s;
+  auto str = "true"s;
   auto f = str.begin();
   auto l = str.end();
   CHECK(p(f, l, d));
@@ -284,7 +284,7 @@ TEST(parseable) {
   CHECK(f == l);
   CHECK((d == list{42u, 4.2, caf::none}));
   MESSAGE("map");
-  str = "{T->1,F->0}"s;
+  str = "{true->1,false->0}"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));

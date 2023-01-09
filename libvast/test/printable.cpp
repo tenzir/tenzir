@@ -188,7 +188,7 @@ TEST(choice) {
   auto p = any | tf | i64;
   std::string str;
   CHECK(p(str, x));
-  CHECK_EQUAL(str, "T");
+  CHECK_EQUAL(str, "true");
   str.clear();
   x = 'c';
   CHECK(p(str, x));
@@ -333,7 +333,7 @@ TEST(data) {
   data r{real{12.21}};
   CHECK_TO_STRING(r, "12.21");
   data b{true};
-  CHECK_TO_STRING(b, "T");
+  CHECK_TO_STRING(b, "true");
   data c{count{23}};
   CHECK_TO_STRING(c, "23");
   data i{integer{42}};
@@ -343,7 +343,7 @@ TEST(data) {
   data d{duration{512}};
   CHECK_TO_STRING(d, "512.0ns");
   data v{list{r, b, c, i, s, d}};
-  CHECK_TO_STRING(v, "[12.21, T, 23, +42, \"foobar\", 512.0ns]");
+  CHECK_TO_STRING(v, "[12.21, true, 23, +42, \"foobar\", 512.0ns]");
 }
 
 // -- std::chrono types -------------------------------------------------------
@@ -428,10 +428,10 @@ TEST(stream) {
 TEST(to) {
   auto t = to<std::string>(true);
   REQUIRE(t);
-  CHECK(*t == "T");
+  CHECK(*t == "true");
 }
 
 TEST(to_string) {
   auto str = to_string(true);
-  CHECK_EQUAL(str, "T");
+  CHECK_EQUAL(str, "true");
 }
