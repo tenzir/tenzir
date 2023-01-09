@@ -19,6 +19,7 @@
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
+#include <vast/system/spawn_arguments.hpp>
 #include <vast/table_slice.hpp>
 
 #include <caf/stateful_actor.hpp>
@@ -555,13 +556,16 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       } else {
         query_string = "#type != \"this_expression_matches_everything\"";
       }
-      auto expr = to<vast::expression>(*query_string);
-      if (!expr) {
-        rq.response->abort(400, "couldn't parse expression\n");
-        return;
-      }
+      auto expr = system::parse_expression(*query_string);
+      if (!expr)
+        return rq.response->abort(400, fmt::format("unparseable query: {}\n",
+                                                   expr.error()));
+      auto normalized_expr = normalize_and_validate(*expr);
+      if (!normalized_expr)
+        return rq.response->abort(400, fmt::format("invalid query: {}\n",
+                                                   normalized_expr.error()));
       auto params = export_parameters{
-        .expr = std::move(*expr),
+        .expr = std::move(*normalized_expr),
       };
       if (endpoint_id == ENDPOINT_EXPORT_TYPED)
         params.format_opts.typed_results = true;
