@@ -11,12 +11,7 @@ const config: UserConfig = {
     sveltekit(),
 
     Unocss({
-      presets: [
-        presetUno(),
-        presetIcons({
-          /* options */
-        })
-      ]
+      presets: [presetUno(), presetIcons({})]
     })
   ]
 };

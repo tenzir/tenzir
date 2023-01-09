@@ -2,27 +2,38 @@
   import 'uno.css';
   import './styles.css';
   import { QueryClient, QueryClientProvider } from '@sveltestack/svelte-query';
+  import { goto } from '$app/navigation';
   const client = new QueryClient();
 </script>
 
-<div>
-  <div class="flex">
-    <div class="sticky top-0 h-screen">
-      <nav class="flex flex-col items-center h-100% w-12 bg-gray-200 dark:bg-gray-800 z-50">
-        <!-- /vast.svg is processed from static/vast.svg during build-->
-        <img class="my-4" src="/vast.svg" alt="" />
-        <div class="border rounded border-gray-400 hover:bg-gray-300">
-          <a href="/status">
-            <button class="i-pajamas-status-health m-2 hover:border hover:rounded w-16px" />
-          </a>
-        </div>
-      </nav>
-    </div>
+<div class="flex">
+  <div class="sticky top-0 h-screen" id="nav-sidebar">
+    <nav class="flex flex-col items-center h-100% w-12 bg-gray-200 dark:bg-gray-800 z-50">
+      <!-- /vast.svg is processed from static/vast.svg during build-->
+      <img class="mt-4 mb-6" src="/vast.svg" alt="VAST logo" />
+      <button
+        on:click={() => {
+          goto('/status');
+        }}
+        class="mb-2 flex bg-gray-300 border-none border-gray-300 rounded hover:border border-gray-400 hover:cursor-pointer w-34px h-34px"
+      >
+        <div class="i-pajamas-status-health m-auto" />
+      </button>
 
-    <div id="detail" class="flex flex-col overflow-y-auto w-full">
-      <QueryClientProvider {client}>
-        <slot />
-      </QueryClientProvider>
-    </div>
+      <button
+        on:click={() => {
+          goto('/report');
+        }}
+        class="mb-2 flex bg-gray-300 border-none border-gray-300 rounded hover:border border-gray-400 hover:cursor-pointer w-34px h-34px"
+      >
+        <div class="i-bxs:report m-auto" />
+      </button>
+    </nav>
+  </div>
+
+  <div id="detail" class="flex flex-col overflow-y-auto w-full">
+    <QueryClientProvider {client}>
+      <slot />
+    </QueryClientProvider>
   </div>
 </div>
