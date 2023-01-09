@@ -95,7 +95,7 @@ std::vector<std::string> get_test_args(int argc, const char* const* argv) {
 } // namespace
 
 int main(int argc, char** argv) {
-  std::string vast_loglevel = "debug";
+  std::string vast_loglevel = "quiet";
   auto test_args = get_test_args(argc, argv);
   if (!test_args.empty()) {
     auto options

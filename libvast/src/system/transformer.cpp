@@ -32,48 +32,41 @@ transformer_stream_stage_ptr attach_pipeline_stage(
       // nop
     },
     [self](caf::unit_t&, caf::downstream<table_slice>& out,
-           detail::framed<table_slice> in_x) {
-      VAST_TRACE("Transformer Process framed table slice");
-      {
-        auto x = std::move(in_x);
-        VAST_TRACE("Transformer Process x moved");
-        if (x.header == detail::stream_control_header::eof) {
-          VAST_DEBUG("{} quits after receiving EOF control message in stream",
-                     self->state.transformer_name);
-          self->send_exit(self, caf::make_error(ec::end_of_input));
-          return;
-        }
-        auto offset = x.body.offset();
-        auto rows = x.body.rows();
-        if (auto err = self->state.executor.add(std::move(x.body))) {
-          VAST_WARN("{} skips slice because add failed: {}",
-                    self->state.transformer_name, err);
-          return;
-        }
-        VAST_TRACE("Transformer executor x body moved");
-        auto transformed = self->state.executor.finish();
-        if (!transformed) {
-          VAST_WARN("{} skips slice because of an error in pipeline: {}",
-                    self->state.transformer_name, transformed.error());
-          return;
-        }
-        if (self->state.reassign_offset_ranges) {
-          auto next_offset = offset;
-          for (auto& t1 : *transformed) {
-            t1.offset(next_offset);
-            next_offset += t1.rows();
-          }
-          if (next_offset > offset + rows) {
-            VAST_WARN(caf::make_error(ec::invalid_result,
-                                      "pipeline returned a slice "
-                                      "with an offset outside the "));
-            return;
-          }
-        }
-        for (auto& t2 : *transformed)
-          out.push(std::move(t2));
-        VAST_TRACE("Transformer Process framed table slice EXIT");
+           detail::framed<table_slice> x) {
+      if (x.header == detail::stream_control_header::eof) {
+        VAST_DEBUG("{} quits after receiving EOF control message in stream",
+                   self->state.transformer_name);
+        self->send_exit(self, caf::make_error(ec::end_of_input));
+        return;
       }
+      auto offset = x.body.offset();
+      auto rows = x.body.rows();
+      if (auto err = self->state.executor.add(std::move(x.body))) {
+        VAST_WARN("{} skips slice because add failed: {}",
+                  self->state.transformer_name, err);
+        return;
+      }
+      auto transformed = self->state.executor.finish();
+      if (!transformed) {
+        VAST_WARN("{} skips slice because of an error in pipeline: {}",
+                  self->state.transformer_name, transformed.error());
+        return;
+      }
+      if (self->state.reassign_offset_ranges) {
+        auto next_offset = offset;
+        for (auto& t1 : *transformed) {
+          t1.offset(next_offset);
+          next_offset += t1.rows();
+        }
+        if (next_offset > offset + rows) {
+          VAST_WARN(caf::make_error(ec::invalid_result,
+                                    "pipeline returned a slice "
+                                    "with an offset outside the "));
+          return;
+        }
+      }
+      for (auto& t2 : *transformed)
+        out.push(std::move(t2));
     },
     [=](caf::unit_t&, const caf::error&) {
       // nop
