@@ -176,8 +176,15 @@ request_dispatcher_actor::behavior_type request_dispatcher(
             maybe_param = std::string{*route_param};
           if (body_params.has_value())
             if (auto maybe_value = body_params->at_key(name);
-                maybe_value.error() != simdjson::NO_SUCH_FIELD)
+                maybe_value.error() != simdjson::NO_SUCH_FIELD) {
               maybe_param = simdjson::minify(maybe_value.value());
+              // Simdjson encloses strings into additional double quotes,
+              // which we need to remove again.
+              if (maybe_value.is_string()) {
+                VAST_ASSERT_CHEAP(maybe_param->size() >= 2);
+                maybe_param = maybe_param->substr(1, maybe_param->size() - 2);
+              }
+            }
           if (!maybe_param)
             continue;
           auto string_value = *maybe_param;
