@@ -8,8 +8,6 @@
 
 #include "tui/components.hpp"
 
-#include "tui/theme.hpp"
-
 #include <vast/concept/printable/to_string.hpp>
 #include <vast/concept/printable/vast/data.hpp>
 #include <vast/detail/overload.hpp>
@@ -20,8 +18,7 @@ namespace vast::plugins::tui {
 
 using namespace ftxui;
 
-HoverComponent::HoverComponent(Element element)
-  : element_{std::move(element)} {
+HoverComponent::HoverComponent(Element element) : element_{std::move(element)} {
 }
 
 Element HoverComponent::Render() {
@@ -69,6 +66,27 @@ bool HoverComponent::OnMouseEvent(Event event) {
 
 Component Hover(Element element) {
   return Make<HoverComponent>(std::move(element));
+}
+
+Component DropdownButton(std::string title, Component component,
+                         const struct theme& theme) {
+  class Impl : public ComponentBase {
+  public:
+    Impl(std::string title, Component component, const struct theme& theme) {
+      auto action = [this] {
+        show_ = !show_;
+      };
+      auto button = Button(std::move(title), action, theme.button_option());
+      Add(Container::Vertical({
+        button,
+        Maybe(std::move(component), &show_),
+      }));
+    }
+
+  private:
+    bool show_ = false;
+  };
+  return Make<Impl>(std::move(title), std::move(component), theme);
 }
 
 Component Collapsible(std::string name, const data& x) {

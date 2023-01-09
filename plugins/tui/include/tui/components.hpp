@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tui/theme.hpp"
+
 #include <vast/fwd.hpp>
 #include <vast/view.hpp>
 
@@ -91,6 +93,13 @@ private:
 /// @param element The element to wrap into a hover component.
 /// @returns The wrapped Element as component.
 ftxui::Component Hover(ftxui::Element element);
+
+/// A button-based dropdown that toggles a component right beneath it.
+/// @param title The title of the button.
+/// @param component The component to toggle on button click.
+/// @returns The dropdown component.
+ftxui::Component DropdownButton(std::string title, ftxui::Component component,
+                                const struct theme& theme = default_theme);
 
 /// Creates a Collapsible with a data instance.
 /// @param name The top-level name for the collapsed data.

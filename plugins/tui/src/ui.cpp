@@ -190,41 +190,85 @@ Element chart(std::string title) {
   return window(text(std::move(title)), std::move(g));
 }
 
-Component NodeStatus(ui_state* state, const std::string& node_id) {
-  auto container = Container::Vertical({});
-  auto title = Renderer([=] {
-      return text(node_id) | hcenter | bold;
-  });
-  container->Add(title);
-  // Add charts
-  auto charts = hflow({chart("RAM"),    //
-                       chart("Memory"), //
-                       chart("Ingestion")});
-  container->Add(Hover(charts));
-  // Add data statistics.
-  auto& node_status = state->nodes[node_id].status;
-  auto schema_table = make_schema_table(node_status).Render();
-  container->Add(Hover(schema_table | xflex));
-  // Add node statistics.
-  auto version_table = make_version_table(node_status).Render();
-  auto build_config = make_build_configuration_table(node_status).Render();
-  auto node_summary = Container::Horizontal({});
-  node_summary->Add(Hover(std::move(version_table)));
-  node_summary->Add(Hover(std::move(build_config)));
-  container->Add(node_summary);
-  // Add detailed status inspection.
-  container->Add(Collapsible("Status", node_status));
-  // Add button to remove node.
-  auto action = [=] {
-    state->nodes.erase(node_id);
+Component NodeStatus(ui_state* state, std::string node_id) {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state, std::string node_id)
+      : state_{state}, node_id_{std::move(node_id)} {
+      // Assemble page as vertical container.
+      auto container = Container::Vertical({});
+      auto header = Renderer([=] {
+        // Not very visible at the moment.
+        return text(node_id_) | hcenter | bold;
+      });
+      container->Add(header);
+      // Show charts
+      FlexboxConfig flexbox_config;
+      flexbox_config.direction = FlexboxConfig::Direction::Row;
+      flexbox_config.wrap = FlexboxConfig::Wrap::Wrap;
+      flexbox_config.justify_content
+        = FlexboxConfig::JustifyContent::SpaceAround;
+      flexbox_config.align_items = FlexboxConfig::AlignItems::FlexStart;
+      flexbox_config.align_content = FlexboxConfig::AlignContent::FlexStart;
+      // Add charts.
+      auto charts = flexbox({chart("RAM"), chart("Memory"), chart("Ingestion")},
+                            flexbox_config);
+      container->Add(Hover(charts));
+      // Compute immutable elements that do not change throughout node lifetime.
+      auto& status = state_->nodes[node_id_].status;
+      // Make schema summary.
+      schema_ = Container::Vertical({});
+      container->Add(DropdownButton("Schema", schema_));
+      // Make build summary.
+      auto build_cfg_table = make_build_configuration_table(status);
+      auto build_cfg = Renderer([element = build_cfg_table.Render()] {
+        return element;
+      });
+      container->Add(DropdownButton("Build Configuration", build_cfg));
+      // Make version summary.
+      auto version_table = make_version_table(status);
+      auto version = Renderer([element = version_table.Render()] {
+        return element;
+      });
+      container->Add(DropdownButton("Version", version));
+      // Add button to remove node.
+      auto action = [=] {
+        state->nodes.erase(node_id_);
+      };
+      auto remove_node
+        = Button("Remove Node", action,
+                 state->theme.button_option<theme::style::alert>());
+      container->Add(remove_node);
+      Add(container);
+    }
+
+    Element Render() override {
+      // Only re-render internal state if dynamic status has changed.
+      // TODO: determine this properly.
+      auto schemas_have_changed = schema_->ChildCount() == 0;
+      if (schemas_have_changed) {
+        auto& status = state_->nodes[node_id_].status;
+        rebuild_schema(status);
+      }
+      return ComponentBase::Render() | vscroll_indicator | frame;
+    }
+
+  private:
+    void rebuild_schema(const data& status) {
+      auto table = make_schema_table(status);
+      schema_->DetachAllChildren();
+      auto renderer = Renderer([element = table.Render()] {
+        return element;
+      });
+      schema_->Add(renderer);
+    }
+
+    Component schema_;
+    ui_state* state_;
+    std::string node_id_;
   };
-  auto remove_node = Button("Remove Node", action,
-                            state->theme.button_option<theme::style::alert>());
-  container->Add(remove_node);
-  return Renderer(container, [=] {
-    return container->Render() | vscroll_indicator | frame;
-  });
-}
+  return Make<Impl>(state, std::move(node_id));
+};
 
 /// An overview of the managed VAST nodes.
 Component FleetPage(ui_state* state) {
