@@ -163,7 +163,7 @@ class plugin final : public virtual reader_plugin {
     return "imports logs in Common Event Format (CEF)";
   }
 
-  [[nodiscard]] caf::config_option_set
+  [[nodiscard]] config_options
   reader_options(command::opts_builder&&) const override {
     return {};
   }

@@ -43,7 +43,7 @@ auto field_size(const command::children_list& xs) {
 }
 
 // Returns the field size for printing all names in `xs`.
-auto field_size(const caf::config_option_set& xs) {
+auto field_size(const config_options& xs) {
   return std::accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
     // We print parameters in the form "[-h | -? | --help=] <type>" (but we omit
     // the type for boolean). So, "[=]" adds 3 characters, each short name adds
@@ -231,17 +231,6 @@ void sanitize_long_form_argument(std::string& argument,
         = generate_default_value_for_argument_type(option_type.data());
       argument.append(options_type_default_val);
     }
-  } else if (state == caf::pec::invalid_argument) {
-    constexpr auto arg_prefix = std::string_view{"--"};
-    const auto name = argument.substr(0, argument.find_first_of('='))
-                        .substr(arg_prefix.length());
-    const auto long_name = cmd.options.cli_long_name_lookup(name);
-    if (!long_name)
-      return;
-    const auto caf_type_name = long_name->type_name();
-    const auto type_name = std::string_view{caf_type_name.data()};
-    if (type_name.starts_with("std::vector"))
-      argument = detail::convert_to_caf_compatible_list_arg(argument);
   }
 }
 
@@ -258,7 +247,7 @@ auto sanitize_arguments(const command& root, command::argument_iterator first,
 } // namespace
 
 command::command(std::string_view name, std::string_view description,
-                 caf::config_option_set opts, bool visible)
+                 config_options opts, bool visible)
   : parent{nullptr},
     name{name},
     description{description},
@@ -284,8 +273,8 @@ std::string command::full_name() const {
   return result;
 }
 
-caf::config_option_set command::opts() {
-  return caf::config_option_set{}.add<bool>("help,h?", "prints the help text");
+config_options command::opts() {
+  return config_options{}.add<bool>("help,h?", "prints the help text");
 }
 
 command::opts_builder command::opts(std::string_view category) {
