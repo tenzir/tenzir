@@ -196,7 +196,7 @@ Here is an over view of basic types:
 | Identifier | Description                             | Example Value
 | ---------- | --------------------------------------- | -------------
 | `none`     | Denotes an absent or invalid value      | `nil`
-| `bool`     | A boolean value                         | `T`, `F`
+| `bool`     | A boolean value                         | `true`, `false`
 | `int`      | A 64-bit signed integer                 | `-42`, `+3`
 | `count`    | A 64-bit unsigned integer               | `0`, `42`
 | `real`     | A 64-bit double (IEEE 754)              | `-0.7`, `1.337`

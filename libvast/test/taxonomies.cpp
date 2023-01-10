@@ -132,12 +132,12 @@ TEST(models - simple) {
   }
   {
     MESSAGE("model composition - unnamed fields query");
-    auto exp = unbox(to<expression>("y == <bar: 2, baz: F>"));
+    auto exp = unbox(to<expression>("y == <bar: 2, baz: false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
           "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (    (a.bar == 2 || b.baR == 2)"
-               " && (a.BAZ == F || c.baz == F))"));
+               " && (a.BAZ == false || c.baz == false))"));
     // clang-format on
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
@@ -153,25 +153,25 @@ TEST(models - simple) {
   }
   {
     MESSAGE("model composition - named fields query");
-    auto exp = unbox(to<expression>("y == <_, 2, F>"));
+    auto exp = unbox(to<expression>("y == <_, 2, false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
           "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (   (a.bar == 2 || b.baR == 2)"
-              " && (a.BAZ == F || c.baz == F))"));
+              " && (a.BAZ == false || c.baz == false))"));
     // clang-format on
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
   }
   {
     MESSAGE("model composition - multiple nested models");
-    auto named = unbox(to<expression>("z == <bar: 2, baz: F>"));
-    auto unnamed = unbox(to<expression>("z == <_, 2, F>"));
+    auto named = unbox(to<expression>("z == <bar: 2, baz: false>"));
+    auto unnamed = unbox(to<expression>("z == <_, 2, false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
           "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (   (a.bar == 2 || b.baR == 2)"
-              " && (a.BAZ == F || c.baz == F))"));
+              " && (a.BAZ == false || c.baz == false))"));
     // clang-format on
     CHECK_EQUAL(resolve(t, named), ref);
     CHECK_EQUAL(resolve(t, unnamed), ref);

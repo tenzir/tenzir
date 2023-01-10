@@ -9,7 +9,7 @@
 #pragma once
 
 #include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/printable/string/any.hpp"
+#include "vast/concept/printable/string/string.hpp"
 
 #include <type_traits>
 
@@ -21,7 +21,7 @@ struct bool_printer : printer_base<bool_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, bool x) const {
-    return printers::any.print(out, x ? 'T' : 'F');
+    return printers::str.print(out, x ? "true" : "false");
   }
 };
 

@@ -394,24 +394,24 @@ TEST(catalog with bool synopsis) {
   auto expected2 = std::vector<uuid>{id2};
   auto none = std::vector<uuid>{};
   // Check by field name field.
-  CHECK_EQUAL(lookup_("x == T"), expected1);
-  CHECK_EQUAL(lookup_("x != F"), expected1);
-  CHECK_EQUAL(lookup_("x == F"), expected2);
-  CHECK_EQUAL(lookup_("x != T"), expected2);
+  CHECK_EQUAL(lookup_("x == true"), expected1);
+  CHECK_EQUAL(lookup_("x != false"), expected1);
+  CHECK_EQUAL(lookup_("x == false"), expected2);
+  CHECK_EQUAL(lookup_("x != true"), expected2);
   // fully qualified name
-  CHECK_EQUAL(lookup_("test.x == T"), expected1);
-  CHECK_EQUAL(lookup_("test.x == F"), expected2);
-  CHECK_EQUAL(lookup_("est.x == T"), none);
+  CHECK_EQUAL(lookup_("test.x == true"), expected1);
+  CHECK_EQUAL(lookup_("test.x == false"), expected2);
+  CHECK_EQUAL(lookup_("est.x == true"), none);
   // Same as above, different extractor.
-  CHECK_EQUAL(lookup_(":bool == T"), expected1);
-  CHECK_EQUAL(lookup_(":bool != F"), expected1);
-  CHECK_EQUAL(lookup_(":bool == F"), expected2);
-  CHECK_EQUAL(lookup_(":bool != T"), expected2);
+  CHECK_EQUAL(lookup_(":bool == true"), expected1);
+  CHECK_EQUAL(lookup_(":bool != false"), expected1);
+  CHECK_EQUAL(lookup_(":bool == false"), expected2);
+  CHECK_EQUAL(lookup_(":bool != true"), expected2);
   // Invalid schema: y does not a valid field
-  CHECK_EQUAL(lookup_("y == T"), none);
-  CHECK_EQUAL(lookup_("y != F"), none);
-  CHECK_EQUAL(lookup_("y == F"), none);
-  CHECK_EQUAL(lookup_("y != T"), none);
+  CHECK_EQUAL(lookup_("y == true"), none);
+  CHECK_EQUAL(lookup_("y != false"), none);
+  CHECK_EQUAL(lookup_("y == false"), none);
+  CHECK_EQUAL(lookup_("y != true"), none);
 }
 
 TEST(catalog messages) {

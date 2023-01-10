@@ -32,8 +32,8 @@ TEST(data) {
   MESSAGE("nil");
   CHECK_EQUAL(to_data("nil"), caf::none);
   MESSAGE("bool");
-  CHECK_EQUAL(to_data("T"), data{true});
-  CHECK_EQUAL(to_data("F"), data{false});
+  CHECK_EQUAL(to_data("true"), data{true});
+  CHECK_EQUAL(to_data("false"), data{false});
   MESSAGE("int");
   CHECK_EQUAL(to_data("+42"), integer{42});
   CHECK_EQUAL(to_data("-42"), integer{-42});
@@ -56,9 +56,9 @@ TEST(data) {
   CHECK_EQUAL(to_data("[42, 4.2, nil]"), (list{42u, 4.2, caf::none}));
   MESSAGE("map");
   CHECK_EQUAL(to_data("{}"), map{});
-  CHECK_EQUAL(to_data("{+1->T,+2->F}"),
+  CHECK_EQUAL(to_data("{+1->true,+2->false}"),
               (map{{integer{1}, true}, {integer{2}, false}}));
-  CHECK_EQUAL(to_data("{-1 -> T, -2 -> F}"),
+  CHECK_EQUAL(to_data("{-1 -> true, -2 -> false}"),
               (map{{integer{-1}, true}, {integer{-2}, false}}));
   MESSAGE("record - named fields");
   CHECK_EQUAL(to_data("<>"), record{});
