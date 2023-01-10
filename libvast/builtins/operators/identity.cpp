@@ -60,7 +60,15 @@ public:
   virtual std::pair<std::string_view::iterator,
                     caf::expected<std::unique_ptr<pipeline_operator>>>
   parse_pipeline_string(std::string_view str) const override {
-    return {str.begin() + str.find_first_of('|'), make_pipeline_operator({})};
+    auto str_it = str.begin();
+    for (; str_it != str.end() && *str_it != '|'; ++str_it) {
+      if (!std::isspace(*str_it)) {
+        return {str_it, caf::make_error(ec::parse_error,
+                                        "identity operator should only "
+                                        "consist of one keyword")};
+      }
+    }
+    return std::pair{str_it, make_pipeline_operator({})};
   }
 };
 
