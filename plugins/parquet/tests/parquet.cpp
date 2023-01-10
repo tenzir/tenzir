@@ -34,9 +34,9 @@ namespace vast::plugins::parquet {
 namespace {
 
 template <class T, class... Ts>
-auto make_slice(const record_type& layout, std::vector<T> x0,
+auto make_slice(const record_type& schema, std::vector<T> x0,
                 std::vector<Ts>... xs) {
-  auto builder = std::make_shared<table_slice_builder>(type{"rec", layout});
+  auto builder = std::make_shared<table_slice_builder>(type{"rec", schema});
   for (size_t i = 0; i < x0.size(); ++i) {
     CHECK(builder->add(x0.at(i)));
     if constexpr (sizeof...(Ts) > 0)
@@ -51,7 +51,7 @@ auto compare_table_slices(const table_slice& left, const table_slice& right) {
   CHECK_EQUAL(left.import_time(), right.import_time());
   REQUIRE_EQUAL(left.columns(), right.columns());
   REQUIRE_EQUAL(left.rows(), right.rows());
-  REQUIRE_EQUAL(left.layout(), right.layout());
+  REQUIRE_EQUAL(left.schema(), right.schema());
   // CHECK_EQUAL(left.offset(), right.offset());
   for (size_t col = 0; col < left.columns(); ++col) {
     for (size_t row = 0; row < left.rows(); ++row) {

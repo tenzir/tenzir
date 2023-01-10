@@ -25,7 +25,7 @@
 
 namespace vast::policy {
 
-/// A policy that controls the cell layout of a Bloom filter.
+/// A policy that controls the cell schema of a Bloom filter.
 /// If `yes`, the Bloom filter bits are split into *k* equi-distant partitions.
 /// @relates bloom_filter
 enum class partitioning { yes, no };

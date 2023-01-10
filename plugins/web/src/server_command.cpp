@@ -271,7 +271,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     return caf::make_message(
       caf::make_error(ec::invalid_argument, "couldnt parse options"));
   auto invalid
-    = vast::validate(data, vast::plugins::web::configuration::layout(),
+    = vast::validate(data, vast::plugins::web::configuration::schema(),
                      vast::validate::permissive);
   if (invalid)
     return caf::make_message(caf::make_error(

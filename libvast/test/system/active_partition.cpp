@@ -165,8 +165,8 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   const auto err = unpack(*part_fb, passive_state);
   REQUIRE_EQUAL(err, caf::error{});
   CHECK_EQUAL(passive_state.id, partition_id);
-  REQUIRE(passive_state.combined_layout_);
-  CHECK_EQUAL(*passive_state.combined_layout_,
+  REQUIRE(passive_state.combined_schema_);
+  CHECK_EQUAL(*passive_state.combined_schema_,
               (vast::record_type{{"y.x", vast::count_type{}}}));
   vast::ids expected_ids;
   expected_ids.append_bit(true);

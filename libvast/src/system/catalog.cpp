@@ -246,7 +246,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
             const data& d) -> catalog_lookup_result::candidate_info {
           if (lhs.kind == meta_extractor::type) {
             // We don't have to look into the synopses for type queries, just
-            // at the layout names.
+            // at the schema names.
             catalog_lookup_result::candidate_info result;
             for (const auto& [part_id, part_syn] : partition_synopses) {
               for (const auto& [fqf, _] : part_syn->field_synopses_) {
@@ -254,7 +254,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 // we can use string_view here. Fortunately type names are
                 // short, so we're probably not hitting the allocator due to
                 // SSO.
-                if (evaluate(std::string{fqf.layout_name()}, x.op, d)) {
+                if (evaluate(std::string{fqf.schema_name()}, x.op, d)) {
                   result.exp = expr;
                   result.partition_infos.emplace_back(part_id, *part_syn);
                   break;
@@ -300,8 +300,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 auto sub = field_name.substr(pos);
                 return sub == key && (pos == 0 || field_name[pos - 1] == '.');
               }
-              auto layout_name = field.layout_name();
-              if (key.length() > layout_name.length() + 1 + field_name.length())
+              auto schema_name = field.schema_name();
+              if (key.length() > schema_name.length() + 1 + field_name.length())
                 return false;
               auto pos = key.length() - field_name.length();
               auto second = key.substr(pos);
@@ -309,9 +309,9 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                 return false;
               if (key[pos - 1] != '.')
                 return false;
-              auto fpos = layout_name.length() - (pos - 1);
-              return key.substr(0, pos - 1) == layout_name.substr(fpos)
-                     && (fpos == 0 || layout_name[fpos - 1] == '.');
+              auto fpos = schema_name.length() - (pos - 1);
+              return key.substr(0, pos - 1) == schema_name.substr(fpos)
+                     && (fpos == 0 || schema_name[fpos - 1] == '.');
             };
             if (!match_name())
               return false;
@@ -529,14 +529,14 @@ caf::error catalog_state::load_taxonomies() {
       return yamls.error();
     for (auto& [file, yaml] : *yamls) {
       VAST_DEBUG("{} extracts taxonomies from {}", *self, file.string());
-      if (auto err = convert(yaml, concepts, concepts_data_layout))
+      if (auto err = convert(yaml, concepts, concepts_data_schema))
         return caf::make_error(ec::parse_error,
                                "failed to extract concepts from file",
                                file.string(), err.context());
       for (auto& [name, definition] : concepts)
         VAST_DEBUG("{} extracted concept {} with {} fields", *self, name,
                    definition.fields.size());
-      if (auto err = convert(yaml, models, models_data_layout))
+      if (auto err = convert(yaml, models, models_data_schema))
         return caf::make_error(ec::parse_error,
                                "failed to extract models from file",
                                file.string(), err.context());
@@ -553,24 +553,24 @@ caf::error catalog_state::load_taxonomies() {
   return caf::none;
 }
 
-void catalog_state::insert(vast::type layout) {
-  auto& old_layouts = type_data[std::string{layout.name()}];
+void catalog_state::insert(vast::type schema) {
+  auto& old_schemas = type_data[std::string{schema.name()}];
   // Insert into the existing bucket.
-  auto [hint, success] = old_layouts.insert(std::move(layout));
+  auto [hint, success] = old_schemas.insert(std::move(schema));
   if (success) {
-    // Check whether the new layout is compatible with the latest, i.e., whether
-    // the new layout is a superset of it.
-    if (old_layouts.begin() != hint) {
-      if (!is_subset(*old_layouts.begin(), *hint))
-        VAST_WARN("{} detected an incompatible layout change for {}", *self,
+    // Check whether the new schema is compatible with the latest, i.e., whether
+    // the new schema is a superset of it.
+    if (old_schemas.begin() != hint) {
+      if (!is_subset(*old_schemas.begin(), *hint))
+        VAST_WARN("{} detected an incompatible schema change for {}", *self,
                   hint->name());
       else
-        VAST_INFO("{} detected a layout change for {}", *self, hint->name());
+        VAST_INFO("{} detected a schema change for {}", *self, hint->name());
     }
     VAST_DEBUG("{} registered {}", *self, hint->name());
   }
-  // Move the newly inserted layout to the front.
-  std::rotate(old_layouts.begin(), hint, std::next(hint));
+  // Move the newly inserted schema to the front.
+  std::rotate(old_schemas.begin(), hint, std::next(hint));
 }
 
 type_set catalog_state::types() const {
@@ -826,9 +826,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         detail::fill_status_map(result, self);
       return result;
     },
-    [self](atom::put, vast::type layout) {
+    [self](atom::put, vast::type schema) {
       VAST_TRACE_SCOPE("");
-      self->state.insert(std::move(layout));
+      self->state.insert(std::move(schema));
     },
     [self](atom::get, atom::taxonomies) {
       VAST_TRACE_SCOPE("");

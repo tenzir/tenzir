@@ -13,7 +13,7 @@
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
 #include "vast/format/json/selector.hpp"
-#include "vast/format/multi_layout_reader.hpp"
+#include "vast/format/multi_schema_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/module.hpp"
 #include "vast/policy/omit_nulls.hpp"
@@ -52,9 +52,9 @@ private:
 
 /// A reader for JSON data. It operates with a *selector* to determine the
 /// mapping of JSON object to the appropriate record type in the module.
-class reader final : public multi_layout_reader {
+class reader final : public multi_schema_reader {
 public:
-  using super = multi_layout_reader;
+  using super = multi_schema_reader;
 
   /// Constructs a JSON reader.
   /// @param options Additional options.

@@ -22,11 +22,11 @@ public:
   example_pipeline_operator() = default;
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
-  /// VAST layout.
+  /// VAST schema.
   [[nodiscard]] caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
     // Transform the table slice here.
-    transformed_.emplace_back(std::move(layout), std::move(batch));
+    transformed_.emplace_back(std::move(schema), std::move(batch));
     return caf::none;
   }
 

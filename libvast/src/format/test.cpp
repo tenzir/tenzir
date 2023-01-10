@@ -90,7 +90,7 @@ caf::expected<blueprint> make_blueprint(const type& t) {
           // distributions so we can add a nullopt in this case, and then handle
           // that case when visiting the distributions by printing a warning and
           // just adding nil. As-is, we just skip the field, which may result in
-          // errors for layouts that such fields anywhere but at the end.
+          // errors for schemas that such fields anywhere but at the end.
           if (!dist.error())
             continue;
           return dist.error();

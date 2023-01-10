@@ -100,7 +100,7 @@ struct active_partition_state {
 
   void notify_flush_listeners();
 
-  std::optional<vast::record_type> combined_layout() const;
+  std::optional<vast::record_type> combined_schema() const;
 
   const std::unordered_map<std::string, ids>& type_ids() const;
 
@@ -173,7 +173,7 @@ struct active_partition_state {
 // `vast::fbs::SegmentedFileHeader`.
 caf::expected<vast::chunk_ptr>
 pack_full(const active_partition_state::serialization_data& x,
-          const record_type& combined_layout);
+          const record_type& combined_schema);
 
 // -- behavior -----------------------------------------------------------------
 

@@ -18,10 +18,10 @@
 namespace vast {
 
 struct pipeline_batch {
-  pipeline_batch(type layout, std::shared_ptr<arrow::RecordBatch> batch)
-    : layout(std::move(layout)), batch(std::move(batch)) {
+  pipeline_batch(type schema, std::shared_ptr<arrow::RecordBatch> batch)
+    : schema(std::move(schema)), batch(std::move(batch)) {
   }
-  vast::type layout;
+  vast::type schema;
   std::shared_ptr<arrow::RecordBatch> batch;
 };
 
@@ -38,9 +38,9 @@ public:
   }
 
   /// Starts applyings the transformation to a batch with a corresponding vast
-  /// layout.
+  /// schema.
   [[nodiscard]] virtual caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch)
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch)
     = 0;
 
   /// Retrieves the result of the transformation, resets the internal state.

@@ -59,7 +59,7 @@ public:
     for (auto&& slice : std::exchange(slices, {})) {
       auto rows = slice.rows();
       events += rows;
-      auto name = slice.layout().name();
+      auto name = slice.schema().name();
       if (auto it = state.schema_counters.find(name);
           it != state.schema_counters.end())
         it.value() += rows;

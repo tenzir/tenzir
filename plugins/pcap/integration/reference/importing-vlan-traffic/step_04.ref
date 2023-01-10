@@ -2,7 +2,7 @@
   "events": {
     "total": 10
   },
-  "layouts": {
+  "schemas": {
     "pcap.packet": {
       "count": 10,
       "percentage": 100

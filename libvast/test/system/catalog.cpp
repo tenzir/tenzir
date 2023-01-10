@@ -63,8 +63,8 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
 }
 
 template <class... Ts>
-vast::table_slice make_data(const vast::type& layout, Ts&&... ts) {
-  auto builder = std::make_shared<table_slice_builder>(layout);
+vast::table_slice make_data(const vast::type& schema, Ts&&... ts) {
+  auto builder = std::make_shared<table_slice_builder>(schema);
   REQUIRE(builder->add(std::forward<Ts>(ts)...));
   return builder->finish();
 }
@@ -76,11 +76,11 @@ struct generator {
 
   explicit generator(std::string name, size_t first_event_id)
     : offset(first_event_id) {
-    layout.assign_metadata(type{name, type{}});
+    schema.assign_metadata(type{name, type{}});
   }
 
   table_slice operator()(size_t num) {
-    auto builder = std::make_shared<table_slice_builder>(layout);
+    auto builder = std::make_shared<table_slice_builder>(schema);
     for (size_t i = 0; i < num; ++i) {
       vast::time ts = epoch + std::chrono::seconds(i + offset);
       CHECK(builder->add(make_data_view(ts)));
@@ -92,7 +92,7 @@ struct generator {
     return slice;
   }
 
-  type layout = type{
+  type schema = type{
     "stub",
     record_type{
       {"timestamp", type{"timestamp", time_type{}}},
@@ -349,13 +349,13 @@ TEST(catalog with bool synopsis) {
   // FIXME: do we have to replace the catalog from the fixture with a new
   // one for this test?
   auto meta_idx = self->spawn(catalog, accountant_actor{}, directory / "types");
-  auto layout = type{
+  auto schema = type{
     "test",
     record_type{
       {"x", bool_type{}},
     },
   };
-  auto builder = std::make_shared<table_slice_builder>(layout);
+  auto builder = std::make_shared<table_slice_builder>(schema);
   REQUIRE(builder);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();

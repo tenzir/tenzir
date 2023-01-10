@@ -16,8 +16,8 @@ namespace vast::detail {
 /// just basic type inference. For example, the `ts` field in a Zeek log almost
 /// always refers to the event timestamp, and therefore the field should have
 /// the `timestamp` alias instead of just `time`.
-/// @param layout The layout to tune.
-/// @returns The lifted version of *layout* with stronger types.
-record_type zeekify(record_type layout);
+/// @param schema The schema to tune.
+/// @returns The lifted version of *schema* with stronger types.
+record_type zeekify(record_type schema);
 
 } // namespace vast::detail

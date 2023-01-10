@@ -31,10 +31,10 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// Constructs an Arrow table slice builder instance.
-  /// @param layout The layout of the slice.
+  /// @param schema The schema of the slice.
   /// @param initial_buffer_size The buffer size the builder starts with.
   /// @returns A table_slice_builder instance.
-  explicit table_slice_builder(type layout, size_t initial_buffer_size
+  explicit table_slice_builder(type schema, size_t initial_buffer_size
                                             = default_buffer_size);
 
   /// Destroys an Arrow table slice builder.
@@ -73,7 +73,7 @@ public:
   [[nodiscard]] table_slice finish();
 
   /// Creates a table slice from a record batch.
-  /// @pre `record_batch->schema()->Equals(make_experimental_schema(layout))``
+  /// @pre `record_batch->schema()->Equals(make_experimental_schema(schema))``
   /// @param batch A pre-existing record batch.
   /// @param schema VAST schema matching the record batch schema. Parameter
   ///     is optional and derived from the record batch if not provided.
@@ -92,14 +92,14 @@ public:
   /// @param `num_rows` The number of rows to allocate storage for.
   void reserve(size_t num_rows);
 
-  /// @returns The table layout.
-  const type& layout() const noexcept;
+  /// @returns The table schema.
+  const type& schema() const noexcept;
 
 private:
   // -- implementation details -------------------------------------------------
 
   // The VAST schema this builder was created from.
-  type layout_;
+  type schema_;
 
   /// A flattened representation of the schema that is iterated over when
   /// calling add.
@@ -109,12 +109,12 @@ private:
   /// Number of filled rows.
   size_t num_rows_ = 0;
 
-  /// The serialized layout can be cached because every builder instance only
-  /// produces slices of a single layout.
-  mutable std::vector<char> serialized_layout_cache_;
+  /// The serialized schema can be cached because every builder instance only
+  /// produces slices of a single schema.
+  mutable std::vector<char> serialized_schema_cache_;
 
-  /// Schema of the Record Batch corresponding to the layout.
-  std::shared_ptr<arrow::Schema> schema_ = {};
+  /// Schema of the Record Batch corresponding to the schema.
+  std::shared_ptr<arrow::Schema> arrow_schema_ = {};
 
   /// Underlying Arrow builder for record batches.
   std::shared_ptr<arrow::ArrayBuilder> arrow_builder_;

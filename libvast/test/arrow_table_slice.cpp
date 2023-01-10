@@ -34,8 +34,8 @@ using namespace std::string_view_literals;
 namespace {
 
 template <class... Ts>
-auto make_slice(const record_type& layout, Ts&&... xs) {
-  auto builder = std::make_shared<table_slice_builder>(type{"stub", layout});
+auto make_slice(const record_type& schema, Ts&&... xs) {
+  auto builder = std::make_shared<table_slice_builder>(type{"stub", schema});
   auto ok = builder->add(std::forward<Ts>(xs)...);
   if (!ok)
     FAIL("builder failed to add given values");
@@ -46,9 +46,9 @@ auto make_slice(const record_type& layout, Ts&&... xs) {
 }
 
 template <class T, class... Ts>
-auto make_slice(const record_type& layout, std::vector<T> x0,
+auto make_slice(const record_type& schema, std::vector<T> x0,
                 std::vector<Ts>... xs) {
-  auto builder = std::make_shared<table_slice_builder>(type{"rec", layout});
+  auto builder = std::make_shared<table_slice_builder>(type{"rec", schema});
   for (size_t i = 0; i < x0.size(); ++i) {
     CHECK(builder->add(x0.at(i)));
     if constexpr (sizeof...(Ts) > 0)
@@ -70,8 +70,8 @@ count operator"" _c(unsigned long long int x) {
 
 template <concrete_type VastType, class... Ts>
 auto make_single_column_slice(const VastType& t, const Ts&... xs) {
-  record_type layout{{"foo", t}};
-  return make_slice(layout, xs...);
+  record_type schema{{"foo", t}};
+  return make_slice(schema, xs...);
 }
 
 table_slice roundtrip(table_slice slice) {
@@ -167,16 +167,16 @@ TEST(batch transform nested column) {
     REQUIRE(new_array.ok());
     return {{field, new_array.MoveValueUnsafe()}};
   };
-  auto [layout, batch] = transform_columns(
-    slice.layout(), to_record_batch(slice), {{{2, 0}, transform_fn}});
-  REQUIRE(caf::holds_alternative<record_type>(layout));
+  auto [schema, batch] = transform_columns(
+    slice.schema(), to_record_batch(slice), {{{2, 0}, transform_fn}});
+  REQUIRE(caf::holds_alternative<record_type>(schema));
   const auto expected_t = record_type{
     {"f3.1", string_type{}},
     {"f3.2", integer_type{}},
   };
-  CHECK_EQUAL(caf::get<record_type>(layout).field(2).name, "f3_rec");
+  CHECK_EQUAL(caf::get<record_type>(schema).field(2).name, "f3_rec");
   CHECK_EQUAL(
-    type{caf::get<record_type>(caf::get<record_type>(layout).field(2).type)},
+    type{caf::get<record_type>(caf::get<record_type>(schema).field(2).type)},
     type{expected_t});
   auto fp = arrow::FieldPath{2, 0};
   auto col = fp.Get(*batch);
@@ -212,9 +212,9 @@ TEST(batch project nested column) {
                                   pattern("p4")};
   auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
   auto slice = make_slice(t, f1s, f2s, f3s, f4s);
-  auto [layout, batch]
-    = select_columns(slice.layout(), to_record_batch(slice), {{0}, {2, 1}});
-  REQUIRE(caf::holds_alternative<record_type>(layout));
+  auto [schema, batch]
+    = select_columns(slice.schema(), to_record_batch(slice), {{0}, {2, 1}});
+  REQUIRE(caf::holds_alternative<record_type>(schema));
   const auto expected_t = record_type{
     {"f1", type{string_type{}, {{"key", "value"}}}},
     {
@@ -228,7 +228,7 @@ TEST(batch project nested column) {
       },
     },
   };
-  CHECK_EQUAL(caf::get<record_type>(layout), expected_t);
+  CHECK_EQUAL(caf::get<record_type>(schema), expected_t);
   const auto old_batch = to_record_batch(slice);
   CHECK(arrow::FieldPath{0}
           .Get(*old_batch)
@@ -411,10 +411,10 @@ TEST(single column - subnet) {
 
 TEST(single column - list of integers) {
   auto t = list_type{integer_type{}};
-  record_type layout{{"values", t}};
+  record_type schema{{"values", t}};
   list list1{1_i, 2_i, 3_i};
   list list2{10_i, 20_i};
-  auto slice = make_slice(layout, list1, caf::none, list2);
+  auto slice = make_slice(schema, list1, caf::none, list2);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), list1);
   CHECK(!slice.at(1, 0, t));
@@ -429,7 +429,7 @@ TEST(list of structs) {
       FAIL("x == nullptr");
     return *std::forward<decltype(x)>(x);
   };
-  auto layout = record_type{
+  auto schema = record_type{
     {
       "foo",
       list_type{
@@ -463,7 +463,7 @@ TEST(list of structs) {
       {"baz", caf::none},
     },
   };
-  auto slice = make_slice(layout, foo1, foo2, foo3, foo4);
+  auto slice = make_slice(schema, foo1, foo2, foo3, foo4);
   auto batch = to_record_batch(slice);
   const auto& list_col
     = unbox_ref(caf::get_if<arrow::ListArray>(batch->column(0).get()));
@@ -542,9 +542,9 @@ TEST(list of structs) {
 
 TEST(single column - list of record) {
   auto t = list_type{record_type{{"a", string_type{}}}};
-  record_type layout{{"values", t}};
+  record_type schema{{"values", t}};
   list list1{record{{"a", "123"}}, caf::none};
-  auto slice = make_slice(layout, list1, caf::none);
+  auto slice = make_slice(schema, list1, caf::none);
   REQUIRE_EQUAL(slice.rows(), 2u);
   CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), list1);
   CHECK(!slice.at(1, 0, t));
@@ -554,10 +554,10 @@ TEST(single column - list of record) {
 
 TEST(single column - list of strings) {
   auto t = list_type{string_type{}};
-  record_type layout{{"values", t}};
+  record_type schema{{"values", t}};
   list list1{"hello"s, "world"s};
   list list2{"a"s, "b"s, "c"s};
-  auto slice = make_slice(layout, list1, list2, caf::none);
+  auto slice = make_slice(schema, list1, list2, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), list1);
   CHECK_VARIANT_EQUAL(materialize(*slice.at(1, 0, t)), list2);
@@ -570,14 +570,14 @@ TEST(single column - list of list of integers) {
   auto t = list_type{integer_type{}};
   // Note: we call the copy ctor if we don't wrap legacy_list_type into a type.
   auto llt = list_type{type{t}};
-  record_type layout{{"values", llt}};
+  record_type schema{{"values", llt}};
   list list11{1_i, 2_i, 3_i};
   list list12{10_i, 20_i};
   list list1{list11, list12};
   list list21{};
   list list22{0_i, 1_i, 1_i, 2_i, 3_i, 5_i, 8_i, 13_i};
   list list2{list11, list12};
-  auto slice = make_slice(layout, caf::none, list1, list2);
+  auto slice = make_slice(schema, caf::none, list1, list2);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK(!slice.at(0, 0, llt));
   CHECK_VARIANT_EQUAL(materialize(*slice.at(1, 0, llt)), list1);
@@ -588,10 +588,10 @@ TEST(single column - list of list of integers) {
 
 TEST(single column - map) {
   auto t = map_type{string_type{}, count_type{}};
-  record_type layout{{"values", t}};
+  record_type schema{{"values", t}};
   map map1{{"foo"s, 42_c}, {"bar"s, 23_c}};
   map map2{{"a"s, 0_c}, {"b"s, {}}, {"c", 2_c}};
-  auto slice = make_slice(layout, map1, map2, caf::none);
+  auto slice = make_slice(schema, map1, map2, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(materialize(*slice.at(0, 0, t)), map1);
   CHECK_VARIANT_EQUAL(materialize(*slice.at(1, 0, t)), map2);

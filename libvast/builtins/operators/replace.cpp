@@ -140,11 +140,11 @@ public:
       VAST_ASSERT(inserted);
       config = it;
     }
-    auto [adjusted_layout, adjusted_batch]
+    auto [adjusted_schema, adjusted_batch]
       = transform_columns(schema, batch, config->second.transformations);
-    VAST_ASSERT(adjusted_layout);
+    VAST_ASSERT(adjusted_schema);
     VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_layout),
+    transformed_.emplace_back(std::move(adjusted_schema),
                               std::move(adjusted_batch));
     return caf::none;
   }

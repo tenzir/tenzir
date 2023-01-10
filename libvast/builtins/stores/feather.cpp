@@ -42,7 +42,7 @@ struct configuration {
     return f.apply(x.zstd_compression_level);
   }
 
-  static const record_type& layout() noexcept {
+  static const record_type& schema() noexcept {
     static auto result = record_type{
       {"zstd-compression-level", integer_type{}},
     };
@@ -163,7 +163,7 @@ class passive_feather_store final : public passive_store {
         auto slice = cached_slices_.empty()
                        ? table_slice{unwrap_record_batch(batch)}
                        : table_slice{unwrap_record_batch(batch),
-                                     cached_slices_[0].layout()};
+                                     cached_slices_[0].schema()};
         slice.offset(offset);
         slice.import_time(derive_import_time(import_time_column));
         cached_slices_.push_back(std::move(slice));
@@ -184,7 +184,7 @@ class passive_feather_store final : public passive_store {
 
   [[nodiscard]] type schema() const override {
     for (const auto& slice : slices())
-      return slice.layout();
+      return slice.schema();
     die("store must not be empty");
   }
 

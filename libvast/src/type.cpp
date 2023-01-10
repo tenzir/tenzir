@@ -2505,7 +2505,7 @@ record record_type::construct() const noexcept {
   // record type happens to break its contract we can still create a fitting
   // record from it. Known occurences of such record types are:
   // - test.full blueprint record type for the test generator.
-  // - Combined layout of the partition v0.
+  // - Combined schema of the partition v0.
   // We should consider getting rid of vector_map::make_unsafe in the future.
   auto result = record::vector_type{};
   result.reserve(num_fields());
@@ -3130,9 +3130,9 @@ std::optional<record_type> record_type::transform(
         nested_layer = impl(impl, std::move(nested_layer),
                             std::move(nested_index), current, sentinel);
         if (!nested_layer.empty()) {
-          auto nested_layout = type{record_type{nested_layer}};
-          nested_layout.assign_metadata(layer[index.back()].type);
-          result.emplace_back(layer[index.back()].name, nested_layout);
+          auto nested_schema = type{record_type{nested_layer}};
+          nested_schema.assign_metadata(layer[index.back()].type);
+          result.emplace_back(layer[index.back()].name, nested_schema);
         }
       } else {
         result.push_back(std::move(layer[index.back()]));

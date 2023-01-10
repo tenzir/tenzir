@@ -36,7 +36,7 @@ struct configuration {
   }
 
   /// Enable parsing from a record via convertible.
-  static inline const record_type& layout() noexcept {
+  static inline const record_type& schema() noexcept {
     static auto result = record_type{
       {"expression", string_type{}},
     };
@@ -59,11 +59,11 @@ public:
   }
 
   /// Applies the transformation to a record batch with a corresponding vast
-  /// layout.
+  /// schema.
   [[nodiscard]] caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
     VAST_TRACE("where operator adds batch");
-    auto tailored_expr = tailor(expr_, layout);
+    auto tailored_expr = tailor(expr_, schema);
     if (!tailored_expr) {
       transformed_.clear();
       return tailored_expr.error();
@@ -72,7 +72,7 @@ public:
     // able to directly evaluate expressions on a record batch.
     if (auto new_slice = filter(table_slice{batch}, *tailored_expr)) {
       auto as_batch = to_record_batch(*new_slice);
-      transformed_.emplace_back(new_slice->layout(), std::move(as_batch));
+      transformed_.emplace_back(new_slice->schema(), std::move(as_batch));
     }
     return caf::none;
   }

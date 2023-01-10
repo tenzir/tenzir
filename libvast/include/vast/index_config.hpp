@@ -34,7 +34,7 @@ struct index_config {
                                x.create_partition_index);
     }
 
-    static inline const record_type& layout() noexcept {
+    static inline const record_type& schema() noexcept {
       static auto result = record_type{
         {"targets", list_type{string_type{}}},
         {"fp-rate", real_type{}},
@@ -52,9 +52,9 @@ struct index_config {
     return detail::apply_all(f, x.rules, x.default_fp_rate);
   }
 
-  static inline const record_type& layout() noexcept {
+  static inline const record_type& schema() noexcept {
     static auto result = record_type{
-      {"rules", list_type{rule::layout()}},
+      {"rules", list_type{rule::schema()}},
       {"default-fp-rate", real_type{}},
     };
     return result;

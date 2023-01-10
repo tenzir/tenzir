@@ -39,7 +39,7 @@ struct configuration {
   }
 
   /// Enable parsing from a record via convertible.
-  static inline const record_type& layout() noexcept {
+  static inline const record_type& schema() noexcept {
     static auto result = record_type{
       {"field", string_type{}},
       {"out", string_type{}},
@@ -54,13 +54,13 @@ public:
   explicit hash_operator(configuration configuration);
 
   [[nodiscard]] caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
     VAST_TRACE("hash operator adds batch");
     // Get the target field if it exists.
-    const auto& layout_rt = caf::get<record_type>(layout);
-    auto column_index = layout_rt.resolve_key(config_.field);
+    const auto& schema_rt = caf::get<record_type>(schema);
+    auto column_index = schema_rt.resolve_key(config_.field);
     if (!column_index) {
-      transformed_.emplace_back(layout, std::move(batch));
+      transformed_.emplace_back(schema, std::move(batch));
       return caf::none;
     }
     // Apply the transformation.
@@ -99,11 +99,11 @@ public:
         },
       };
     };
-    auto [adjusted_layout, adjusted_batch] = transform_columns(
-      layout, batch, {{*column_index, std::move(transform_fn)}});
-    VAST_ASSERT(adjusted_layout);
+    auto [adjusted_schema, adjusted_batch] = transform_columns(
+      schema, batch, {{*column_index, std::move(transform_fn)}});
+    VAST_ASSERT(adjusted_schema);
     VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_layout),
+    transformed_.emplace_back(std::move(adjusted_schema),
                               std::move(adjusted_batch));
     return caf::none;
   }

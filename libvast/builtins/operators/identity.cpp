@@ -23,9 +23,9 @@ public:
   identity_operator() noexcept = default;
 
   caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
     VAST_TRACE("identity operator adds batch");
-    transformed_.emplace_back(layout, std::move(batch));
+    transformed_.emplace_back(schema, std::move(batch));
     return caf::none;
   }
 

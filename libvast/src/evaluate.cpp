@@ -321,7 +321,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
   case relational_operator::op: {                                              \
     auto f = [&](const auto& rhs) noexcept {                                   \
       return cell_evaluator<relational_operator::op>::evaluate(                \
-        slice.layout().name(), make_view(rhs));                                \
+        slice.schema().name(), make_view(rhs));                                \
     };                                                                         \
     return caf::visit(f, rhs);                                                 \
   }
@@ -409,8 +409,8 @@ ids evaluate(const expression& expr, const table_slice& slice,
       if (!any(selection))
         return ids{offset + num_rows, false};
       const auto index
-        = caf::get<record_type>(slice.layout()).resolve_flat_index(lhs.column);
-      const auto type = caf::get<record_type>(slice.layout()).field(index).type;
+        = caf::get<record_type>(slice.schema()).resolve_flat_index(lhs.column);
+      const auto type = caf::get<record_type>(slice.schema()).field(index).type;
       const auto array = static_cast<arrow::FieldPath>(index)
                            .Get(*to_record_batch(slice))
                            .ValueOrDie();

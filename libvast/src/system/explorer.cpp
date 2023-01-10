@@ -135,8 +135,8 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       // Don't bother making new queries if we discard all results anyways.
       if (st.num_sent >= st.limits.total)
         return;
-      const auto& layout = slice.layout();
-      const auto& layout_rt = caf::get<record_type>(layout);
+      const auto& schema = slice.schema();
+      const auto& schema_rt = caf::get<record_type>(schema);
       auto is_timestamp = [](const auto& leaf) {
         const auto& [field, _] = leaf;
         for (const auto& name : field.type.names())
@@ -145,7 +145,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         return false;
       };
       auto timestamp_leaf = std::optional<record_type::leaf_view>{};
-      for (auto&& leaf : caf::get<record_type>(layout).leaves()) {
+      for (auto&& leaf : caf::get<record_type>(schema).leaves()) {
         if (is_timestamp(leaf)) {
           timestamp_leaf = std::move(leaf);
           break;
@@ -153,27 +153,27 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       }
       if (!timestamp_leaf) {
         VAST_DEBUG("{} could not find timestamp field in {}", *self,
-                   layout.name());
+                   schema.name());
         return;
       }
       std::optional<table_slice_column> by_column;
       if (st.by) {
         for (auto&& by_index :
-             layout_rt.resolve_key_suffix(*st.by, layout.name())) {
+             schema_rt.resolve_key_suffix(*st.by, schema.name())) {
           // NOTE: We're intentionally stopping after the first instance here.
-          by_column.emplace(slice, layout_rt.flat_index(by_index));
+          by_column.emplace(slice, schema_rt.flat_index(by_index));
           break;
         }
         if (!by_column) {
           VAST_TRACE_SCOPE("skipping slice with {} because it has no column {}",
-                           layout.name(), *st.by);
+                           schema.name(), *st.by);
           return;
         }
       }
       VAST_DEBUG("{} uses {} to construct timebox", *self,
                  timestamp_leaf->field.name);
       auto column = table_slice_column{
-        slice, layout_rt.flat_index(timestamp_leaf->index)};
+        slice, schema_rt.flat_index(timestamp_leaf->index)};
       for (size_t i = 0; i < column.size(); ++i) {
         auto data_view = column[i];
         auto x = caf::get_if<vast::time>(&data_view);

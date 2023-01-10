@@ -104,7 +104,7 @@ VAST has the following extractor types:
 2. [Type](#type-extractor): extracts all event types that have a field of a
    given type.
 
-3. [Meta](#meta-extractor): matches on the type name or field name of a layout
+3. [Meta](#meta-extractor): matches on the type name or field name of a schema
    instead of the values contained in actual events.
 
 The diagram below illustrate how extractors relate to each other:

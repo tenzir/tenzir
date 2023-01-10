@@ -37,13 +37,13 @@ namespace vast {
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.
 /// @param slice_size The number of rows per table slices.
-/// @param layout The layout of the table slice.
+/// @param schema The schema of the table slice.
 /// @param offset The offset of the first table slize.
 /// @param seed The seed value for initializing the random-number generator.
 /// @returns a list of randomnly filled table slices or an error.
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
-make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
+make_random_table_slices(size_t num_slices, size_t slice_size, type schema,
                          id offset = 0, size_t seed = 0);
 
 /// Converts the table slice into a 2-D matrix in row-major order such that
@@ -73,7 +73,7 @@ public:
   /// Registers a table slice implementation.
   void initialize() {
     using namespace vast;
-    builder = std::make_shared<table_slice_builder>(layout);
+    builder = std::make_shared<table_slice_builder>(schema);
     if (builder == nullptr)
       FAIL("builder factory could not construct a valid instance");
   }
@@ -104,7 +104,7 @@ private:
 
   void test_append_column_to_index();
 
-  vast::type layout = type{
+  vast::type schema = type{
     "test",
     record_type{
       {"a", bool_type{}},

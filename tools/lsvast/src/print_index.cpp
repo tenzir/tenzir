@@ -23,8 +23,8 @@ void print_index_v0(const vast::fbs::index::v0* index, indentation& indent,
   }
   std::cout << indent << "Index\n";
   indented_scope _(indent);
-  // print layouts
-  std::cout << indent << "layouts:\n";
+  // print schemas
+  std::cout << indent << "schemas:\n";
   if (auto stats = index->stats()) {
     indented_scope _(indent);
     for (auto stat : *stats)

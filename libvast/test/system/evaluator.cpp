@@ -88,7 +88,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     container.emplace_back(sys.spawn(dummy_indexer, std::move(data)));
   }
 
-  type layout = type{
+  type schema = type{
     "test",
     record_type{
       {"x", count_type{}},
@@ -116,7 +116,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   ids query(std::string_view expr_str) {
     auto expr = unbox(to<expression>(expr_str));
     std::vector<system::evaluation_triple> triples;
-    auto resolved = resolve(expr, layout);
+    auto resolved = resolve(expr, schema);
     VAST_ASSERT(resolved.size() > 0);
     for (auto& [expr_position, pred] : resolved) {
       VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
@@ -133,7 +133,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   ids query_with_ids(std::string_view expr_str, vast::ids ids_for_partition) {
     auto expr = unbox(to<expression>(expr_str));
     std::vector<system::evaluation_triple> triples;
-    auto resolved = resolve(expr, layout);
+    auto resolved = resolve(expr, schema);
     VAST_ASSERT(resolved.size() > 0);
     for (auto& [expr_position, pred] : resolved) {
       VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));

@@ -124,8 +124,8 @@ public:
   /// @returns The encoding of the slice.
   [[nodiscard]] enum table_slice_encoding encoding() const noexcept;
 
-  /// @returns The table layout.
-  [[nodiscard]] const type& layout() const noexcept;
+  /// @returns The table schema.
+  [[nodiscard]] const type& schema() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] size_type rows() const noexcept;
@@ -239,7 +239,7 @@ public:
     } else {
       if (!x.is_serialized()) {
         auto serialized_x
-          = table_slice{to_record_batch(x), x.layout(), serialize::yes};
+          = table_slice{to_record_batch(x), x.schema(), serialize::yes};
         serialized_x.import_time(x.import_time());
         chunk = serialized_x.chunk_;
         x = std::move(serialized_x);
@@ -269,9 +269,9 @@ private:
   /// the offset.
   id offset_ = invalid_id;
 
-  /// A pointer to the table slice state. As long as the layout cannot be
+  /// A pointer to the table slice state. As long as the schema cannot be
   /// represented from a FlatBuffers table directly, it is prohibitively
-  /// expensive to deserialize the layout.
+  /// expensive to deserialize the schema.
   union {
     const void* none = {};
     const arrow_table_slice<fbs::table_slice::arrow::v2>* arrow_v2;

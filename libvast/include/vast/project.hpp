@@ -235,8 +235,8 @@ auto project(table_slice slice, Hints&&... hints) {
                       ->projection<Types...> {
     static_assert(sizeof...(Types) == sizeof...(Indices),
                   "project requires an equal number of types and hints");
-    const auto& layout = slice.layout();
-    const auto& layout_rt = caf::get<record_type>(layout);
+    const auto& schema = slice.schema();
+    const auto& schema_rt = caf::get<record_type>(schema);
     auto find_flat_index_for_hint
       = [&]<type_or_concrete_type Type>(
           auto&& self, const Type& type,
@@ -249,14 +249,14 @@ auto project(table_slice slice, Hints&&... hints) {
       };
       if constexpr (std::is_convertible_v<decltype(index), offset>) {
         // If the index is an offset, we can just use it directly.
-        const auto field = layout_rt.field(index);
+        const auto field = schema_rt.field(index);
         if (congruent_or_none(field))
-          return layout_rt.flat_index(index);
+          return schema_rt.flat_index(index);
       } else if constexpr (std::is_constructible_v<std::string_view,
                                                    decltype(index)>) {
         // If the index is a string, we need to resolve it to an offset first.
         for (auto&& offset :
-             layout_rt.resolve_key_suffix(index, layout.name())) {
+             schema_rt.resolve_key_suffix(index, schema.name())) {
           // TODO: Should we instead check whether we have exactly one match, or
           // prefix-match rather than suffix-match? Currently we're
           // suffix-matching, but only considering the first match.
@@ -265,7 +265,7 @@ auto project(table_slice slice, Hints&&... hints) {
       } else if constexpr (std::is_convertible_v<decltype(index),
                                                  table_slice::size_type>) {
         for (table_slice::size_type flat_index = 0;
-             const auto& [field, _] : layout_rt.leaves()) {
+             const auto& [field, _] : schema_rt.leaves()) {
           if (flat_index
               == detail::narrow_cast<table_slice::size_type>(index)) {
             if (congruent_or_none(field))

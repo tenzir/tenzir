@@ -19,13 +19,13 @@
 
 namespace vast {
 
-qualified_record_field::qualified_record_field(const class type& layout,
+qualified_record_field::qualified_record_field(const class type& schema,
                                                const offset& index) noexcept {
-  VAST_ASSERT(!layout.name().empty());
+  VAST_ASSERT(!schema.name().empty());
   VAST_ASSERT(!index.empty());
-  const auto* rt = caf::get_if<record_type>(&layout);
+  const auto* rt = caf::get_if<record_type>(&schema);
   VAST_ASSERT(rt);
-  layout_name_ = layout.name();
+  schema_name_ = schema.name();
   // We cannot assign the field_view directly, but rather need to store a field
   // with a corrected name, as that needs to be flattened here.
   auto field = rt->field(index);
@@ -36,18 +36,18 @@ qualified_record_field::qualified_record_field(const class type& layout,
 }
 
 qualified_record_field::qualified_record_field(
-  std::string_view layout_name, std::string_view field_name,
+  std::string_view schema_name, std::string_view field_name,
   const class type& field_type) noexcept {
   if (field_name.empty()) {
     // backwards compat with partition v0
-    field_.type = {layout_name, field_type};
-    layout_name_ = field_.type.name();
-  } else if (layout_name.empty()) {
+    field_.type = {schema_name, field_type};
+    schema_name_ = field_.type.name();
+  } else if (schema_name.empty()) {
     field_.type = {field_name, field_type};
     field_.name = field_.type.name();
   } else {
     const class type intermediate = {
-      layout_name,
+      schema_name,
       record_type{
         {field_name, field_type},
       },
@@ -58,8 +58,8 @@ qualified_record_field::qualified_record_field(
   }
 }
 
-std::string_view qualified_record_field::layout_name() const noexcept {
-  return layout_name_;
+std::string_view qualified_record_field::schema_name() const noexcept {
+  return schema_name_;
 }
 
 std::string_view qualified_record_field::field_name() const noexcept {
@@ -67,11 +67,11 @@ std::string_view qualified_record_field::field_name() const noexcept {
 }
 
 std::string qualified_record_field::name() const noexcept {
-  if (layout_name_.empty())
+  if (schema_name_.empty())
     return std::string{field_.name};
   if (field_.name.empty())
-    return std::string{layout_name_};
-  return fmt::format("{}.{}", layout_name_, field_.name);
+    return std::string{schema_name_};
+  return fmt::format("{}.{}", schema_name_, field_.name);
 }
 
 bool qualified_record_field::is_standalone_type() const noexcept {
@@ -84,20 +84,20 @@ class type qualified_record_field::type() const noexcept {
 
 bool operator==(const qualified_record_field& x,
                 const qualified_record_field& y) noexcept {
-  return std::tie(x.layout_name_, x.field_.name, x.field_.type)
-         == std::tie(y.layout_name_, y.field_.name, y.field_.type);
+  return std::tie(x.schema_name_, x.field_.name, x.field_.type)
+         == std::tie(y.schema_name_, y.field_.name, y.field_.type);
 }
 
 bool operator<(const qualified_record_field& x,
                const qualified_record_field& y) noexcept {
-  return std::tie(x.layout_name_, x.field_.name, x.field_.type)
-         < std::tie(y.layout_name_, y.field_.name, y.field_.type);
+  return std::tie(x.schema_name_, x.field_.name, x.field_.type)
+         < std::tie(y.schema_name_, y.field_.name, y.field_.type);
 }
 
 bool inspect(caf::binary_serializer& f, qualified_record_field& x) {
-  std::string layout_name = std::string{x.layout_name_};
+  std::string schema_name = std::string{x.schema_name_};
   legacy_type field_type = x.field_.type.to_legacy_type();
-  return detail::apply_all(f, layout_name, x.field_.name, field_type);
+  return detail::apply_all(f, schema_name, x.field_.name, field_type);
 }
 
 bool inspect(caf::deserializer& f, qualified_record_field& x) {
@@ -105,26 +105,26 @@ bool inspect(caf::deserializer& f, qualified_record_field& x) {
   // This overload exists for backwards compatibility. In some cases, we used
   // to serialize qualified record fields using CAF. Back then, the qualified
   // record field had these three members:
-  // - std::string layout_name
+  // - std::string schema_name
   // - std::string field_name
   // - legacy_type field_type
-  std::string layout_name = {};
+  std::string schema_name = {};
   std::string field_name = {};
   legacy_type field_type = {};
-  auto result = detail::apply_all(f, layout_name, field_name, field_type);
+  auto result = detail::apply_all(f, schema_name, field_name, field_type);
   if (result)
-    x = qualified_record_field{layout_name, field_name,
+    x = qualified_record_field{schema_name, field_name,
                                type::from_legacy_type(field_type)};
   return result;
 }
 
 bool inspect(detail::legacy_deserializer& f, qualified_record_field& x) {
-  std::string layout_name = {};
+  std::string schema_name = {};
   std::string field_name = {};
   legacy_type field_type = {};
-  auto result = f(layout_name, field_name, field_type);
+  auto result = f(schema_name, field_name, field_type);
   if (result)
-    x = qualified_record_field{layout_name, field_name,
+    x = qualified_record_field{schema_name, field_name,
                                type::from_legacy_type(field_type)};
   return result;
 }

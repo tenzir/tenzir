@@ -31,17 +31,17 @@ namespace vast {
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_slice_builder::table_slice_builder(type layout,
+table_slice_builder::table_slice_builder(type schema,
                                          size_t initial_buffer_size)
-  : layout_{std::move(layout)},
-    schema_{layout_.to_arrow_schema()},
+  : schema_{std::move(schema)},
+    arrow_schema_{schema_.to_arrow_schema()},
     arrow_builder_{
-      this->layout().make_arrow_builder(arrow::default_memory_pool())},
+      this->schema().make_arrow_builder(arrow::default_memory_pool())},
     builder_{initial_buffer_size} {
-  VAST_ASSERT(caf::holds_alternative<record_type>(layout_));
-  VAST_ASSERT(!layout_.name().empty());
+  VAST_ASSERT(caf::holds_alternative<record_type>(schema_));
+  VAST_ASSERT(!schema_.name().empty());
   VAST_ASSERT(schema_);
-  for (auto&& leaf : caf::get<record_type>(layout_).leaves())
+  for (auto&& leaf : caf::get<record_type>(schema_).leaves())
     leaves_.push_back(std::move(leaf));
   current_leaf_ = leaves_.end();
 }
@@ -53,7 +53,7 @@ table_slice_builder::~table_slice_builder() noexcept {
 // -- properties ---------------------------------------------------------------
 
 size_t table_slice_builder::columns() const noexcept {
-  auto result = schema_->num_fields();
+  auto result = arrow_schema_->num_fields();
   VAST_ASSERT(result >= 0);
   return detail::narrow_cast<size_t>(result);
 }
@@ -139,16 +139,16 @@ verify_record_batch(const arrow::RecordBatch& record_batch) {
 
 table_slice table_slice_builder::finish() {
   // Sanity check: If this triggers, the calls to add() did not match the number
-  // of fields in the layout.
+  // of fields in the schema.
   VAST_ASSERT(current_leaf_ == leaves_.end());
   // Pack record batch.
   auto combined_array = arrow_builder_->Finish().ValueOrDie();
   auto record_batch = arrow::RecordBatch::Make(
-    schema_, detail::narrow_cast<int64_t>(num_rows_),
+    arrow_schema_, detail::narrow_cast<int64_t>(num_rows_),
     caf::get<type_to_arrow_array_t<record_type>>(*combined_array).fields());
   // Reset the builder state.
   num_rows_ = {};
-  return create_table_slice(record_batch, this->builder_, layout(),
+  return create_table_slice(record_batch, this->builder_, schema(),
                             table_slice::serialize::yes);
 }
 
@@ -169,8 +169,8 @@ void table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {
   // nop
 }
 
-const type& table_slice_builder::layout() const noexcept {
-  return layout_;
+const type& table_slice_builder::schema() const noexcept {
+  return schema_;
 }
 
 // -- implementation details ---------------------------------------------------
@@ -260,7 +260,7 @@ bool table_slice_builder::add(data_view x) {
   if (num_rows_ == 0 || current_leaf_ == leaves_.end()) {
     current_leaf_ = leaves_.begin();
     if (auto status = nested_builder->Append(); !status.ok()) {
-      VAST_ERROR("failed to add row to builder with schema {}: {}", layout(),
+      VAST_ERROR("failed to add row to builder with schema {}: {}", schema(),
                  status.ToString());
       return false;
     }
@@ -274,7 +274,7 @@ bool table_slice_builder::add(data_view x) {
       if (auto status = nested_builder->Append(); !status.ok()) {
         VAST_ERROR("failed to add nested record to builder with schema {}: "
                    "{}",
-                   layout(), status.ToString());
+                   schema(), status.ToString());
         return false;
       }
     }

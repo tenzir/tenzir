@@ -50,10 +50,10 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
 }
 
-const type concepts_data_layout = type{map_type{
+const type concepts_data_schema = type{map_type{
   type{string_type{}, {{"key", "concept.name"}}},
   record_type{
-    {"concept", concept_::layout()},
+    {"concept", concept_::schema()},
   },
 }};
 
@@ -61,10 +61,10 @@ bool operator==(const model& lhs, const model& rhs) {
   return lhs.definition == rhs.definition;
 }
 
-const type models_data_layout = type{map_type{
+const type models_data_schema = type{map_type{
   type{string_type{}, {{"key", "model.name"}}},
   record_type{
-    {"model", model::layout()},
+    {"model", model::schema()},
   },
 }};
 
@@ -112,13 +112,13 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
   while ((pos = x.find('.', pos)) != std::string::npos) {
     auto i = seen.find(std::string{std::string_view{x.c_str(), pos}});
     if (i != seen.end()) {
-      // A prefix of x matches an existing layout.
+      // A prefix of x matches an existing schema.
       auto field = x.substr(pos + 1);
       return std::any_of(
         i->second.begin(), i->second.end(), [&](const type& t) {
-          if (const auto& layout = caf::get_if<record_type>(&t)) {
-            if (auto offset = layout->resolve_key(field))
-              return compatible(layout->field(*offset).type, op, data);
+          if (const auto& schema = caf::get_if<record_type>(&t)) {
+            if (auto offset = schema->resolve_key(field))
+              return compatible(schema->field(*offset).type, op, data);
           }
           return false;
         });

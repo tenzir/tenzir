@@ -283,7 +283,7 @@ TEST(zeek reader - conn log) {
     CHECK_EQUAL(slice.rows(), 20u);
 }
 
-TEST(zeek reader - layout enrichment) {
+TEST(zeek reader - schema enrichment) {
   auto slices = read(custom_log_1_event, 1, 1);
   REQUIRE_EQUAL(slices.size(), 1u);
   std::string ref_module = R"__(
@@ -294,7 +294,7 @@ TEST(zeek reader - layout enrichment) {
     })__";
   auto expected = unbox(to<module>(ref_module));
   auto zeek_conn = unbox(expected.find("zeek.custom"));
-  CHECK_EQUAL(slices[0].layout(), flatten(zeek_conn));
+  CHECK_EQUAL(slices[0].schema(), flatten(zeek_conn));
 }
 
 TEST(zeek reader - custom module) {
@@ -346,7 +346,7 @@ TEST(zeek reader - custom module) {
     })__";
   auto expected = unbox(to<module>(ref_module));
   auto zeek_conn = unbox(expected.find("zeek.conn"));
-  CHECK_EQUAL(slices[0].layout(), flatten(zeek_conn));
+  CHECK_EQUAL(slices[0].schema(), flatten(zeek_conn));
 }
 
 TEST(zeek reader - continous stream with partial slice) {
@@ -430,14 +430,14 @@ TEST(zeek writer) {
   for (auto& slice : zeek_http_log)
     if (auto err = writer.write(slice))
       FAIL("failed to write HTTP log");
-  auto conn_layout = zeek_conn_log[0].layout();
-  const auto conn_layout_log
-    = std::filesystem::path{fmt::format("{}.log", conn_layout.name())};
-  CHECK(std::filesystem::exists(directory / conn_layout_log));
-  auto http_layout = zeek_http_log[0].layout();
-  const auto http_layout_log
-    = std::filesystem::path{fmt::format("{}.log", http_layout.name())};
-  CHECK(std::filesystem::exists(directory / http_layout_log));
+  auto conn_schema = zeek_conn_log[0].schema();
+  const auto conn_schema_log
+    = std::filesystem::path{fmt::format("{}.log", conn_schema.name())};
+  CHECK(std::filesystem::exists(directory / conn_schema_log));
+  auto http_schema = zeek_http_log[0].schema();
+  const auto http_schema_log
+    = std::filesystem::path{fmt::format("{}.log", http_schema.name())};
+  CHECK(std::filesystem::exists(directory / http_schema_log));
   // TODO: these tests should verify content as well.
 }
 

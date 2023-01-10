@@ -12,7 +12,7 @@
 
 #include "vast/data.hpp"
 #include "vast/detail/random.hpp"
-#include "vast/format/multi_layout_reader.hpp"
+#include "vast/format/multi_schema_reader.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/module.hpp"
 
@@ -51,9 +51,9 @@ struct blueprint {
 };
 
 /// Produces random events according to a given module.
-class reader : public multi_layout_reader {
+class reader : public multi_schema_reader {
 public:
-  using super = multi_layout_reader;
+  using super = multi_schema_reader;
 
   /// Constructs a test reader.
   /// @param options Additional options.

@@ -28,16 +28,16 @@ namespace vast {
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.
 /// @param slice_size The number of rows per table slices.
-/// @param layout The layout of the table slice.
+/// @param schema The schema of the table slice.
 /// @param offset The offset of the first table slize.
 /// @param seed The seed value for initializing the random-number generator.
 /// @returns a list of randomnly filled table slices or an error.
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
-make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
+make_random_table_slices(size_t num_slices, size_t slice_size, type schema,
                          id offset, size_t seed) {
   module mo;
-  mo.add(layout);
+  mo.add(schema);
   // We have no access to the actor system, so we can only pick the default
   // table slice type here. This ignores any user-defined overrides. However,
   // this function is only meant for testing anyways.
@@ -76,7 +76,7 @@ make_data(const table_slice& slice, size_t first_row, size_t num_rows) {
     num_rows = slice.rows() - first_row;
   std::vector<std::vector<data>> result;
   result.reserve(num_rows);
-  auto fl = flatten(caf::get<record_type>(slice.layout()));
+  auto fl = flatten(caf::get<record_type>(slice.schema()));
   for (size_t i = 0; i < num_rows; ++i) {
     std::vector<data> xs;
     xs.reserve(slice.columns());
@@ -203,8 +203,8 @@ void table_slices::test_add() {
   MESSAGE(">> test table_slice_builder::add");
   auto slice = make_slice();
   CHECK_EQUAL(slice.rows(), 2u);
-  auto flat_layout = flatten(caf::get<record_type>(layout));
-  CHECK_EQUAL(slice.columns(), flat_layout.num_fields());
+  auto flat_schema = flatten(caf::get<record_type>(schema));
+  CHECK_EQUAL(slice.columns(), flat_schema.num_fields());
   for (size_t row = 0; row < slice.rows(); ++row)
     for (size_t col = 0; col < slice.columns(); ++col) {
       MESSAGE("checking value at (" << row << ',' << col << ')');

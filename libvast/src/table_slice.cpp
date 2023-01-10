@@ -220,13 +220,13 @@ enum table_slice_encoding table_slice::encoding() const noexcept {
   return visit(f, as_flatbuffer(chunk_));
 }
 
-const type& table_slice::layout() const noexcept {
+const type& table_slice::schema() const noexcept {
   auto f = detail::overload{
     []() noexcept -> const type* {
-      die("unable to access layout of invalid table slice");
+      die("unable to access schema of invalid table slice");
     },
     [&](const auto& encoded) noexcept -> const type* {
-      return &state(encoded, state_)->layout();
+      return &state(encoded, state_)->schema();
     },
   };
   const auto* result = visit(f, as_flatbuffer(chunk_));
@@ -402,10 +402,10 @@ table_slice concatenate(std::vector<table_slice> slices) {
     return {};
   if (slices.size() == 1)
     return std::move(slices[0]);
-  auto schema = slices[0].layout();
+  auto schema = slices[0].schema();
   VAST_ASSERT(std::all_of(slices.begin(), slices.end(),
                           [&](const auto& slice) {
-                            return slice.layout() == schema;
+                            return slice.schema() == schema;
                           }),
               "concatenate requires slices to be homogeneous");
   auto builder = caf::get<record_type>(schema).make_arrow_builder(
@@ -532,7 +532,7 @@ select(const table_slice& slice, expression expr, const ids& hints) {
     // Tailor the expression to the type; this is required for using the
     // evaluate function, which expects field and type extractors to be resolved
     // already.
-    auto tailored_expr = tailor(expr, slice.layout());
+    auto tailored_expr = tailor(expr, slice.schema());
     if (!tailored_expr)
       co_return;
     selection = evaluate(*tailored_expr, slice, selection);
@@ -551,7 +551,7 @@ select(const table_slice& slice, expression expr, const ids& hints) {
     auto selected = table_slice{
       batch->Slice(detail::narrow_cast<int64_t>(first - offset),
                    detail::narrow_cast<int64_t>(last - first)),
-      slice.layout(),
+      slice.schema(),
     };
     selected.offset(offset + first);
     selected.import_time(slice.import_time());
@@ -566,7 +566,7 @@ table_slice head(table_slice slice, size_t num_rows) {
     return slice;
   auto rb = to_record_batch(slice);
   auto head = table_slice{rb->Slice(0, detail::narrow_cast<int64_t>(num_rows)),
-                          slice.layout()};
+                          slice.schema()};
   head.offset(slice.offset());
   head.import_time(slice.import_time());
   return head;
@@ -580,7 +580,7 @@ table_slice tail(table_slice slice, size_t num_rows) {
   auto rb = to_record_batch(slice);
   auto head = table_slice{
     rb->Slice(detail::narrow_cast<int64_t>(slice.rows() - num_rows)),
-    slice.layout()};
+    slice.schema()};
   head.offset(slice.offset());
   head.import_time(slice.import_time());
   return head;
@@ -642,7 +642,7 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   // Tailor the expression to the type; this is required for using the
   // evaluate function, which expects field and type extractors to be resolved
   // already.
-  auto tailored_expr = tailor(expr, slice.layout());
+  auto tailored_expr = tailor(expr, slice.schema());
   if (!tailored_expr)
     return 0;
   return rank(evaluate(expr, slice, hints));

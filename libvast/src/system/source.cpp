@@ -138,15 +138,15 @@ void source_state::filter_and_push(
     if (auto filtered_slice = vast::filter(std::move(slice), *filter)) {
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
-                 slice.layout());
+                 slice.schema());
       push_to_out(std::move(*filtered_slice));
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
-                 reader->name(), unfiltered_rows, slice.layout());
+                 reader->name(), unfiltered_rows, slice.schema());
     }
   } else {
     VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
-               unfiltered_rows, slice.layout());
+               unfiltered_rows, slice.schema());
     push_to_out(std::move(slice));
   }
 }
@@ -245,8 +245,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
         self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
-          const auto& layout = slice.layout();
-          self->state.event_counters[std::string{layout.name()}]
+          const auto& schema = slice.schema();
+          self->state.event_counters[std::string{schema.name()}]
             += slice.rows();
           self->state.mgr->out().push(std::move(slice));
         });

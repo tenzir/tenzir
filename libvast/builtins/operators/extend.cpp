@@ -112,13 +112,13 @@ public:
                                            "as it already has a field with "
                                            "this name",
                                            schema, field));
-    auto [adjusted_layout, adjusted_batch] = transform_columns(
+    auto [adjusted_schema, adjusted_batch] = transform_columns(
       schema, batch,
       {{offset{caf::get<record_type>(schema).num_fields() - 1},
         config_.transformation}});
-    VAST_ASSERT(adjusted_layout);
+    VAST_ASSERT(adjusted_schema);
     VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_layout),
+    transformed_.emplace_back(std::move(adjusted_schema),
                               std::move(adjusted_batch));
     return caf::none;
   }

@@ -391,7 +391,7 @@ std::string format_result_typed(const std::vector<table_slice>& slices,
   auto num_events = size_t{0ull};
   std::set<vast::type> all_types;
   for (auto const& slice : slices)
-    all_types.insert(slice.layout());
+    all_types.insert(slice.schema());
   std::unordered_map<vast::type, vast::format::json::writer> events;
   std::unordered_map<vast::type, std::string> schemas;
   for (auto const& type : all_types) {
@@ -414,7 +414,7 @@ std::string format_result_typed(const std::vector<table_slice>& slices,
     schema += "]";
   }
   for (auto const& slice : slices) {
-    auto& writer = events.at(slice.layout());
+    auto& writer = events.at(slice.schema());
     num_events += slice.rows();
     if (auto error = writer.write(slice))
       VAST_WARN("json writer failed to write table slice: {}", error);

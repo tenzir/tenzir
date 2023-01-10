@@ -90,15 +90,15 @@ TEST(PCAP read 1) {
                                              add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(events_produced, 44u);
-  auto&& layout = slice.layout();
-  CHECK_EQUAL(layout.name(), "pcap.packet");
+  auto&& schema = slice.schema();
+  CHECK_EQUAL(schema.name(), "pcap.packet");
   auto src = slice.at(43, 1, address_type{});
   REQUIRE(src);
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
-  auto idx = caf::get<record_type>(layout).resolve_key("community_id");
+  auto idx = caf::get<record_type>(schema).resolve_key("community_id");
   REQUIRE(idx);
   auto community_id_column
-    = table_slice_column{slice, caf::get<record_type>(layout).flat_index(*idx)};
+    = table_slice_column{slice, caf::get<record_type>(schema).flat_index(*idx)};
   for (size_t row = 0; row < 44; ++row)
     CHECK_VARIANT_EQUAL(materialize(community_id_column[row]),
                         community_ids[row]);
@@ -139,8 +139,8 @@ TEST(PCAP read 2) {
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(produced, 36u);
   CHECK_EQUAL(slice.rows(), 36u);
-  auto&& layout = slice.layout();
-  CHECK_EQUAL(layout.name(), "pcap.packet");
+  auto&& schema = slice.schema();
+  CHECK_EQUAL(schema.name(), "pcap.packet");
   MESSAGE("write out read packets");
   const auto file
     = std::filesystem::path{"vast-unit-test-workshop-2011-browse.pcap"};

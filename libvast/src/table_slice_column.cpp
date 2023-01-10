@@ -31,8 +31,8 @@ table_slice_column::table_slice_column(table_slice slice,
                                        size_t column) noexcept
   : slice_{std::move(slice)},
     column_{column},
-    field_{slice_.layout(),
-           caf::get<record_type>(slice_.layout()).resolve_flat_index(column_)} {
+    field_{slice_.schema(),
+           caf::get<record_type>(slice_.schema()).resolve_flat_index(column_)} {
   // nop
 }
 

@@ -23,7 +23,7 @@ TEST(concepts - convert from data) {
   auto ref = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
                            {"bar", {"", {"a.bar", "b.baR"}, {}}}}};
   concepts_map test;
-  CHECK_EQUAL(convert(x, test, concepts_data_layout), caf::error{});
+  CHECK_EQUAL(convert(x, test, concepts_data_schema), caf::error{});
   CHECK_EQUAL(test, ref);
 }
 
@@ -91,7 +91,7 @@ TEST(models - convert from data) {
   auto ref = models_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}}},
                          {"bar", {"", {"a.bar", "b.baR", "foo"}}}}};
   models_map test;
-  CHECK_EQUAL(convert(x, test, models_data_layout), caf::error{});
+  CHECK_EQUAL(convert(x, test, models_data_schema), caf::error{});
   CHECK_EQUAL(test, ref);
   auto x2 = data{list{
     record{{"model", record{{"name", "foo"},
@@ -99,7 +99,7 @@ TEST(models - convert from data) {
     record{{"model",
             record{{"name", "foo"}, {"definition", list{"a.bar", "b.baR"}}}}}}};
   models_map test2;
-  CHECK_EQUAL(convert(x2, test2, models_data_layout), ec::convert_error);
+  CHECK_EQUAL(convert(x2, test2, models_data_schema), ec::convert_error);
 }
 
 TEST(models - simple) {

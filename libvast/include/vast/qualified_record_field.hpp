@@ -23,21 +23,21 @@ struct qualified_record_field {
   // Required for serialization/deserialization.
   qualified_record_field() noexcept = default;
 
-  /// Constructs a qualified record field by prepending the layout name to a
+  /// Constructs a qualified record field by prepending the schema name to a
   /// record field.
-  /// @pre `!layout.name().empty()`
-  /// @pre `caf::holds_alternative<record_type>(layout)`
-  qualified_record_field(const class type& layout,
+  /// @pre `!schema.name().empty()`
+  /// @pre `caf::holds_alternative<record_type>(schema)`
+  qualified_record_field(const class type& schema,
                          const offset& index) noexcept;
 
   /// Constructs a qualified record field from the legacy specification. Use
   /// carefully!
-  qualified_record_field(std::string_view layout_name,
+  qualified_record_field(std::string_view schema_name,
                          std::string_view field_name,
                          const class type& field_type) noexcept;
 
-  /// Retrieves the layout name.
-  [[nodiscard]] std::string_view layout_name() const noexcept;
+  /// Retrieves the schema name.
+  [[nodiscard]] std::string_view schema_name() const noexcept;
 
   /// Retrieves the field name.
   [[nodiscard]] std::string_view field_name() const noexcept;
@@ -66,29 +66,29 @@ struct qualified_record_field {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, qualified_record_field& x) {
-    auto layout_name = std::string{};
+    auto schema_name = std::string{};
     if constexpr (Inspector::is_loading) {
       auto result = f.object(x)
                       .pretty_name("vast.qualified_record_field")
                       .fields(f.field("field.name", x.field_.name),
                               f.field("field.type", x.field_.type),
-                              f.field("layout-name", layout_name));
-      x = qualified_record_field{layout_name, x.field_.name, x.field_.type};
+                              f.field("schema-name", schema_name));
+      x = qualified_record_field{schema_name, x.field_.name, x.field_.type};
       return result;
     } else {
-      layout_name = x.layout_name_;
+      schema_name = x.schema_name_;
       return f.object(x)
         .pretty_name("vast.qualified_record_field")
         .fields(f.field("field.name", x.field_.name),
                 f.field("field.type", x.field_.type),
-                f.field("layout-name", layout_name));
+                f.field("schema-name", schema_name));
     }
   }
 
   // These overloads exists for backwards compatibility. In some cases, we
   // used to serialize qualified record fields using CAF. Back then, the
   // qualified record field had these three members:
-  // - std::string layout_name
+  // - std::string schema_name
   // - std::string field_name
   // - legacy_type field_type
   friend bool inspect(caf::binary_serializer& f, qualified_record_field& x);
@@ -100,8 +100,8 @@ private:
   /// The pointed-at field.
   struct record_type::field field_ = {};
 
-  /// The name of the layout we're using.
-  std::string_view layout_name_ = {};
+  /// The name of the schema we're using.
+  std::string_view schema_name_ = {};
 };
 
 } // namespace vast

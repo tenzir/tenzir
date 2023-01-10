@@ -24,7 +24,7 @@ namespace vast {
 
 namespace {
 
-const auto agg_test_layout = vast::type{
+const auto agg_test_schema = vast::type{
   "aggtestdata",
   vast::record_type{
     // FIXME: Do we want to test for other types? integer type?
@@ -46,7 +46,7 @@ const auto agg_test_layout = vast::type{
 
 // Creates a table slice with a single string field and random data.
 table_slice make_testdata() {
-  auto builder = std::make_shared<vast::table_slice_builder>(agg_test_layout);
+  auto builder = std::make_shared<vast::table_slice_builder>(agg_test_schema);
   REQUIRE(builder);
   for (int i = 0; i < 10; ++i) {
     // 2009-11-16 12 AM
@@ -113,7 +113,7 @@ TEST(summarize Zeek conn log) {
     = unbox(summarize_plugin->make_pipeline_operator(opts));
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
   for (const auto& slice : zeek_conn_log_full)
-    CHECK_EQUAL(summarize_operator->add(slice.layout(), to_record_batch(slice)),
+    CHECK_EQUAL(summarize_operator->add(slice.schema(), to_record_batch(slice)),
                 caf::none);
   const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
@@ -180,7 +180,7 @@ TEST(summarize test) {
   auto summarize_operator
     = unbox(summarize_plugin->make_pipeline_operator(opts));
   REQUIRE_SUCCESS(
-    summarize_operator->add(agg_test_layout, to_record_batch(make_testdata())));
+    summarize_operator->add(agg_test_schema, to_record_batch(make_testdata())));
   const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
@@ -238,7 +238,7 @@ TEST(summarize test fully qualified field names) {
   auto summarize_operator
     = unbox(summarize_plugin->make_pipeline_operator(opts));
   const auto test_batch = to_record_batch(make_testdata());
-  REQUIRE_SUCCESS(summarize_operator->add(agg_test_layout, test_batch));
+  REQUIRE_SUCCESS(summarize_operator->add(agg_test_schema, test_batch));
   const auto result = unbox(summarize_operator->finish());
   REQUIRE_EQUAL(result.size(), 1u);
   const auto summarized_slice = table_slice{result[0].batch};
@@ -296,13 +296,13 @@ TEST(summarize test wrong config) {
   REQUIRE_EQUAL(result.size(), 1u);
   // Following the renaming the output data should not be touched by the
   // summarize operator, so we expect the underlying data to be unchanged,
-  // although the layout will be renamed.
+  // although the schema will be renamed.
   const auto expected_data = make_testdata();
   CHECK(to_record_batch(result[0])->ToStructArray().ValueOrDie()->Equals(
     to_record_batch(expected_data)->ToStructArray().ValueOrDie()));
-  CHECK_EQUAL(result[0].layout().name(), "aggregated_aggtestdata");
-  CHECK_EQUAL(caf::get<record_type>(result[0].layout()),
-              caf::get<record_type>(expected_data.layout()));
+  CHECK_EQUAL(result[0].schema().name(), "aggregated_aggtestdata");
+  CHECK_EQUAL(caf::get<record_type>(result[0].schema()),
+              caf::get<record_type>(expected_data.schema()));
 }
 
 FIXTURE_SCOPE_END()

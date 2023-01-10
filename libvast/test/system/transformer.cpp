@@ -82,14 +82,14 @@ struct transformer_fixture
   // Creates a table slice with a single string field and random data.
   static std::vector<vast::detail::framed<vast::table_slice>>
   make_pipelines_testdata() {
-    auto layout = vast::type{
+    auto schema = vast::type{
       "vast.test",
       vast::record_type{
         {"uid", vast::string_type{}},
         {"index", vast::integer_type{}},
       },
     };
-    auto builder = std::make_shared<vast::table_slice_builder>(layout);
+    auto builder = std::make_shared<vast::table_slice_builder>(schema);
     REQUIRE(builder);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
@@ -149,7 +149,7 @@ TEST(transformer) {
   REQUIRE_EQUAL(slices.size(), 1ull);
   vast::detail::spawn_container_source(self->system(), slices, transformer);
   run(); // The dummy_sink should store the transformed table slice in `result`.
-  auto layout_after_delete = vast::type{
+  auto schema_after_delete = vast::type{
     "vast.test",
     vast::record_type{
       {"index", vast::integer_type{}},
@@ -158,7 +158,7 @@ TEST(transformer) {
   auto& slice = slices[0];
   CHECK_EQUAL(slice.header, vast::detail::stream_control_header::data);
   CHECK_EQUAL(slice.body.rows(), result.rows());
-  CHECK_EQUAL(result.layout(), layout_after_delete);
+  CHECK_EQUAL(result.schema(), schema_after_delete);
   CHECK_EQUAL(slice.body.offset(), result.offset());
   self->send_exit(transformer, caf::exit_reason::user_shutdown);
 }

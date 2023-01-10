@@ -45,8 +45,8 @@ TEST(syslog reader) {
                                      add_slice);
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   REQUIRE_EQUAL(produced, 5u);
-  auto&& layout = slice.layout();
-  CHECK_EQUAL(layout.name(), "syslog.rfc5424");
+  auto&& schema = slice.schema();
+  CHECK_EQUAL(schema.name(), "syslog.rfc5424");
 }
 
 TEST(syslog header parser) {

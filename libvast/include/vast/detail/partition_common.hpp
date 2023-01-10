@@ -19,7 +19,7 @@
 
 namespace vast::detail {
 
-/// Gets the INDEXER at position in the layout.
+/// Gets the INDEXER at position in the schema.
 /// @relates active_partition_state
 /// @relates passive_partition_state
 template <typename PartitionState>
@@ -94,20 +94,20 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
 template <typename PartitionState>
 std::vector<system::evaluation_triple>
 evaluate(const PartitionState& state, const expression& expr) {
-  auto combined_layout = state.combined_layout();
-  if (!combined_layout) {
-    // The partition may not have a combined layout yet, simply because it does
+  auto combined_schema = state.combined_schema();
+  if (!combined_schema) {
+    // The partition may not have a combined schema yet, simply because it does
     // not have any events yet. This is not an error, so we simply return an
     // empty set of evaluation triples here.
-    VAST_DEBUG("{} cannot evaluate expression because it has no layout",
+    VAST_DEBUG("{} cannot evaluate expression because it has no schema",
                *state.self);
     return {};
   }
   // Pretend the partition is a table, and return fitted predicates for the
-  // partitions layout.
+  // partitions schema.
   // TODO: Should resolve take a record_type directly?
   std::vector<system::evaluation_triple> result;
-  auto resolved = resolve(expr, type{*combined_layout});
+  auto resolved = resolve(expr, type{*combined_schema});
   for (auto& [offset, predicate] : resolved) {
     // For each fitted predicate, look up the corresponding INDEXER
     // according to the specified type of extractor.
@@ -137,7 +137,7 @@ evaluate(const PartitionState& state, const expression& expr) {
 
 /// Evaluator requires all ids for a given partition when no indexers are used.
 /// This is a helper function to extract them when needed.
-/// @param type_ids mapping of partition layout name to it's ids.
+/// @param type_ids mapping of partition schema name to it's ids.
 /// @param evaluation_triples contains indexers used for evaluation.
 /// @returns all ids from type_ids if any evaluation_triple doesn't have an
 /// indexer. Returns default initialized ids{} otherwise.

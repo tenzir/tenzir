@@ -146,7 +146,7 @@ bool deserialize(auto& source, synopsis_ptr& ptr) {
   return true;
 }
 
-/// Saves the contents (excluding the layout!) of this slice to `sink`.
+/// Saves the contents (excluding the schema!) of this slice to `sink`.
 bool serialize(auto& sink, synopsis_ptr& ptr) {
   if (!ptr) {
     static legacy_type dummy;

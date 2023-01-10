@@ -32,8 +32,8 @@ struct fixture : public fixtures::deterministic_actor_system {
 FIXTURE_SCOPE(zeek_reader_tests, fixture)
 
 TEST(json to data) {
-  auto layout = type{
-    "layout",
+  auto schema = type{
+    "schema",
     record_type{
       {"b", bool_type{}},
       {"c", count_type{}},
@@ -54,7 +54,7 @@ TEST(json to data) {
       {"mcs", map_type{count_type{}, string_type{}}},
     },
   };
-  auto builder = std::make_shared<table_slice_builder>(layout);
+  auto builder = std::make_shared<table_slice_builder>(schema);
   std::string_view str = R"json({
     "b": true,
     "c": 424242,

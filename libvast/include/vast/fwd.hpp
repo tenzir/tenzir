@@ -200,7 +200,7 @@ struct legacy_pattern_type;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
-struct layout_statistics;
+struct schema_statistics;
 struct legacy_real_type;
 struct legacy_record_type;
 struct status;

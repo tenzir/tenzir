@@ -39,7 +39,7 @@ web:
   mode: dev
   )_");
   auto config = vast::plugins::web::configuration{};
-  CHECK_EQUAL(validate(record, vast::plugins::web::configuration::layout(),
+  CHECK_EQUAL(validate(record, vast::plugins::web::configuration::schema(),
                        vast::validate::strict),
               caf::error{});
   REQUIRE_EQUAL(convert(record, config), caf::error{});

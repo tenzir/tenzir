@@ -32,7 +32,7 @@ struct configuration {
       return detail::apply_all(f, x.from, x.to);
     }
 
-    static inline const record_type& layout() noexcept {
+    static inline const record_type& schema() noexcept {
       static auto result = record_type{
         {"from", string_type{}},
         {"to", string_type{}},
@@ -49,7 +49,7 @@ struct configuration {
     return detail::apply_all(f, x.schemas, x.fields);
   }
 
-  static inline const record_type& layout() noexcept {
+  static inline const record_type& schema() noexcept {
     // schemas:
     //   - from: zeek.conn
     //     to: zeek.aggregated_conn
@@ -59,8 +59,8 @@ struct configuration {
     //   - from: resp_h
     //     to: response_h
     static auto result = record_type{
-      {"schemas", list_type{name_mapping::layout()}},
-      {"fields", list_type{name_mapping::layout()}},
+      {"schemas", list_type{name_mapping::schema()}},
+      {"fields", list_type{name_mapping::schema()}},
     };
     return result;
   }
@@ -73,16 +73,16 @@ public:
   }
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
-  /// VAST layout.
+  /// VAST schema.
   [[nodiscard]] caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
     // Step 1: Adjust field names.
     if (!config_.fields.empty()) {
       auto field_transformations = std::vector<indexed_transformation>{};
       for (const auto& field : config_.fields) {
         for (const auto& index :
-             caf::get<record_type>(layout).resolve_key_suffix(field.from,
-                                                              layout.name())) {
+             caf::get<record_type>(schema).resolve_key_suffix(field.from,
+                                                              schema.name())) {
           auto transformation
             = [&](struct record_type::field old_field,
                   std::shared_ptr<arrow::Array> array) noexcept
@@ -96,30 +96,30 @@ public:
         }
       }
       std::sort(field_transformations.begin(), field_transformations.end());
-      std::tie(layout, batch)
-        = transform_columns(layout, batch, field_transformations);
+      std::tie(schema, batch)
+        = transform_columns(schema, batch, field_transformations);
     }
     // Step 2: Adjust schema names.
     if (!config_.schemas.empty()) {
-      const auto schema
+      const auto schema_mapping
         = std::find_if(config_.schemas.begin(), config_.schemas.end(),
                        [&](const auto& name_mapping) noexcept {
-                         return name_mapping.from == layout.name();
+                         return name_mapping.from == schema.name();
                        });
-      if (schema == config_.schemas.end()) {
-        transformed_batches_.emplace_back(std::move(layout), std::move(batch));
+      if (schema_mapping == config_.schemas.end()) {
+        transformed_batches_.emplace_back(std::move(schema), std::move(batch));
         return caf::none;
       }
-      auto rename_layout = [&](const concrete_type auto& pruned_layout) {
-        VAST_ASSERT(!layout.has_attributes());
-        return type{schema->to, pruned_layout};
+      auto rename_schema = [&](const concrete_type auto& pruned_schema) {
+        VAST_ASSERT(!schema.has_attributes());
+        return type{schema_mapping->to, pruned_schema};
       };
-      layout = caf::visit(rename_layout, layout);
-      batch = arrow::RecordBatch::Make(layout.to_arrow_schema(),
+      schema = caf::visit(rename_schema, schema);
+      batch = arrow::RecordBatch::Make(schema.to_arrow_schema(),
                                        batch->num_rows(), batch->columns());
     }
     // Finally, store the result for later retrieval.
-    transformed_batches_.emplace_back(std::move(layout), std::move(batch));
+    transformed_batches_.emplace_back(std::move(schema), std::move(batch));
     return caf::none;
   } // namespace vast::plugins::rename
 
@@ -132,7 +132,7 @@ private:
   /// Cache for transformed batches.
   std::vector<pipeline_batch> transformed_batches_ = {};
 
-  /// Step-specific configuration, including the layout name mapping.
+  /// Step-specific configuration, including the schema name mapping.
   configuration config_ = {};
 };
 

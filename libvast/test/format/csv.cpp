@@ -117,7 +117,7 @@ std::string_view l0_log0 = R"__(ts,addr,port
 
 TEST(csv reader - simple) {
   auto slices = run(l0_log0, 8, 5);
-  REQUIRE_EQUAL(slices[0].layout(), l0);
+  REQUIRE_EQUAL(slices[0].schema(), l0);
   CHECK(slices[1].at(0, 0)
         == data{unbox(to<vast::time>("2011-08-12T14:59:11.994970Z"))});
   CHECK(slices[1].at(1, 2) == data{count{1047}});
@@ -135,7 +135,7 @@ std::string_view l0_log1 = R"__(ts,addr,port
 
 TEST(csv reader - empty fields) {
   auto slices = run(l0_log1, 8, 5);
-  REQUIRE_EQUAL(slices[0].layout(), l0);
+  REQUIRE_EQUAL(slices[0].schema(), l0);
   CHECK(slices[1].at(0, 1, address_type{})
         == data{unbox(to<address>("147.32.84.165"))});
   CHECK(slices[1].at(1, 2, count_type{}) == std::nullopt);
@@ -148,7 +148,7 @@ hello
 TEST(csv reader - string) {
   auto slices = run(l1_log_string, 1, 1);
   auto l1_string = type{"l1", record_type{{"s", string_type{}}}};
-  REQUIRE_EQUAL(slices[0].layout(), l1_string);
+  REQUIRE_EQUAL(slices[0].schema(), l1_string);
   CHECK(slices[0].at(0, 0) == data{"hello"});
 }
 
@@ -159,7 +159,7 @@ hello
 TEST(csv reader - pattern) {
   auto slices = run(l1_log_pattern, 1, 1);
   auto l1_pattern = type{"l1", record_type{{"ptn", pattern_type{}}}};
-  REQUIRE_EQUAL(slices[0].layout(), l1_pattern);
+  REQUIRE_EQUAL(slices[0].schema(), l1_pattern);
   CHECK(slices[0].at(0, 0) == data{pattern{"hello"}});
 }
 
@@ -192,9 +192,9 @@ but,a,[42,1337]
 burden,Sighing,[42,1337]
 ,,)__";
 
-TEST(csv reader - layout with container) {
+TEST(csv reader - schema with container) {
   auto slices = run(l1_log0, 20, 20);
-  REQUIRE_EQUAL(slices[0].layout(), l1);
+  REQUIRE_EQUAL(slices[0].schema(), l1);
   CHECK(slices[0].at(10, 1) == data{pattern{"gladness"}});
   auto xs = vast::list{};
   xs.emplace_back(data{count{42}});
@@ -231,7 +231,7 @@ but,a
 burden,Sighing
 ,,)__";
 
-TEST(csv reader - sublayout construction) {
+TEST(csv reader - subschema construction) {
   auto l1_sub = type{
     "l1",
     record_type{
@@ -240,7 +240,7 @@ TEST(csv reader - sublayout construction) {
     },
   };
   auto slices = run(l1_log1, 20, 20);
-  REQUIRE_EQUAL(slices[0].layout(), l1_sub);
+  REQUIRE_EQUAL(slices[0].schema(), l1_sub);
   CHECK(slices[0].at(10, 1) == data{pattern{"gladness"}});
 }
 
@@ -251,7 +251,7 @@ TEST(csv reader - map string->address) {
   auto slices = run(l2_log_msa, 1, 1);
   auto t = map_type{string_type{}, address_type{}};
   auto l2_msa = type{"l2", record_type{{"msa", t}}};
-  REQUIRE_EQUAL(slices[0].layout(), l2_msa);
+  REQUIRE_EQUAL(slices[0].schema(), l2_msa);
   auto m = vast::map{};
   m.emplace(data{"foo"}, unbox(to<address>("1.2.3.4")));
   m.emplace(data{"bar"}, unbox(to<address>("2001:db8::")));
@@ -266,7 +266,7 @@ TEST(csv reader - list of count) {
   auto slices = run(l2_log_vp, 2, 100);
   auto t = type{list_type{count_type{}}};
   auto l2_vp = type{"l2", record_type{{"lc", t}}};
-  REQUIRE_EQUAL(slices[0].layout(), l2_vp);
+  REQUIRE_EQUAL(slices[0].schema(), l2_vp);
   CHECK((slices[0].at(0, 0, t) == data{list{1u, 2u, 3u, 4u, 5u}}));
   CHECK(slices[0].at(1, 0, t) == data{list{}});
 }
@@ -278,7 +278,7 @@ std::string_view l2_log_subnet = R"__(sn
 TEST(csv reader - subnet) {
   auto slices = run(l2_log_subnet, 2, 2);
   auto l2_subnet = type{"l2", record_type{{"sn", subnet_type{}}}};
-  REQUIRE_EQUAL(slices[0].layout(), l2_subnet);
+  REQUIRE_EQUAL(slices[0].schema(), l2_subnet);
   CHECK(slices[0].at(0, 0) == data{unbox(to<subnet>("1.2.3.4/20"))});
   CHECK(slices[0].at(1, 0) == data{unbox(to<subnet>("2001:db8::/125"))});
 }
@@ -295,7 +295,7 @@ TEST(csv reader - duration) {
       {"d2", duration_type{}},
     },
   };
-  REQUIRE_EQUAL(slices[0].layout(), l2_duration);
+  REQUIRE_EQUAL(slices[0].schema(), l2_duration);
   CHECK(slices[0].at(0, 0, duration_type{})
         == data{unbox(to<duration>("42s"))});
 }
@@ -309,7 +309,7 @@ std::string_view l2_log_reord
 // },424242,4.2,-1337,T,147.32.84.165,42/udp,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,
 // [ 5555/tcp, 0/icmp ],[ 2019-04-30T11:46:13Z ],{ 1=FOO, 1024=BAR! })__";
 
-TEST(csv reader - reordered layout) {
+TEST(csv reader - reordered schema) {
   auto slices = run(l2_log_reord, 1, 1);
   auto l2_sub = type{
     "l2",
@@ -331,7 +331,7 @@ TEST(csv reader - reordered layout) {
       // {"mcs", map_type{count_type{}, string_type{}}}
     },
   };
-  REQUIRE_EQUAL(slices[0].layout(), l2_sub);
+  REQUIRE_EQUAL(slices[0].schema(), l2_sub);
   CHECK((slices[0].at(0, 0)
          == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
                      {data{"bar"}, unbox(to<address>("2001:db8::"))}}}));
@@ -367,7 +367,7 @@ TEST(csv reader - line endings) {
       {"d2", duration_type{}},
     },
   };
-  REQUIRE_EQUAL(slices[0].layout(), l2_duration);
+  REQUIRE_EQUAL(slices[0].schema(), l2_duration);
   CHECK(slices[0].at(0, 0) == data{unbox(to<duration>("42s"))});
   CHECK(slices[0].at(0, 1) == data{unbox(to<duration>("5days"))});
   CHECK(slices[0].at(1, 0) == data{unbox(to<duration>("10s"))});
@@ -391,7 +391,7 @@ TEST(csv reader - quoted strings in header) {
       {"s2,3", string_type{}},
     },
   };
-  REQUIRE_EQUAL(slices[0].layout(), l3_strings);
+  REQUIRE_EQUAL(slices[0].schema(), l3_strings);
   CHECK(slices[0].at(0, 0) == data{"a"});
   CHECK(slices[0].at(0, 1) == data{"b"});
   CHECK(slices[0].at(1, 0) == data{"c"});
@@ -414,7 +414,7 @@ TEST(csv reader - quoted string) {
         {"s1", string_type{}},
       },
     };
-    REQUIRE_EQUAL(slices[0].layout(), l3_strings);
+    REQUIRE_EQUAL(slices[0].schema(), l3_strings);
     CHECK(slices[0].at(0, 0) == data{"hello, world"});
   }
   {
@@ -426,7 +426,7 @@ TEST(csv reader - quoted string) {
         {"s2", string_type{}},
       },
     };
-    REQUIRE_EQUAL(slices[0].layout(), l3_strings);
+    REQUIRE_EQUAL(slices[0].schema(), l3_strings);
     CHECK(slices[0].at(0, 0) == data{"a"});
     CHECK(slices[0].at(0, 1) == data{"b,c"});
     CHECK(slices[0].at(1, 0) == data{"d,e,\"f"});

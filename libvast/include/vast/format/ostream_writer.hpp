@@ -11,7 +11,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/policy/flatten_layout.hpp"
+#include "vast/policy/flatten_schema.hpp"
 #include "vast/policy/include_field_names.hpp"
 #include "vast/policy/omit_nulls.hpp"
 #include "vast/table_slice.hpp"
@@ -74,7 +74,7 @@ protected:
   template <class... Policies, class Printer>
   caf::error
   print_record(Printer& printer, const line_elements& le,
-               const record_type& layout, table_slice_row row, size_t& pos) {
+               const record_type& schema, table_slice_row row, size_t& pos) {
     auto print_field = [&](auto& iter, const record_type::field_view& f,
                            size_t column) {
       auto rep = [&](data_view x) {
@@ -89,7 +89,7 @@ protected:
     auto iter = std::back_inserter(buf_);
     append(le.begin_of_line);
     auto start = 0;
-    for (const auto& f : layout.fields()) {
+    for (const auto& f : schema.fields()) {
       if constexpr (detail::is_any_v<policy::omit_nulls, Policies...>) {
         if (!caf::holds_alternative<record_type>(f.type)
             && caf::holds_alternative<caf::none_t>(row[pos])) {
@@ -125,7 +125,7 @@ protected:
   /// single line.
   /// @tparam Policies... accepted tags are ::include_field_names to repeat the
   ///         field name for each value (e.g., JSON output) and
-  ///         ::flatten_layout to flatten nested records into the top level
+  ///         ::flatten_schema to flatten nested records into the top level
   ///         event.
   /// @param printer The VAST printer for generating formatted output.
   /// @param xs The table slice for printing.
@@ -140,16 +140,16 @@ protected:
   template <class... Policies, class Printer>
   caf::error
   print(Printer& printer, const table_slice& xs, const line_elements& le) {
-    auto&& layout = [&]() {
-      if constexpr (detail::is_any_v<policy::flatten_layout, Policies...>)
-        return flatten(xs.layout());
+    auto&& schema = [&]() {
+      if constexpr (detail::is_any_v<policy::flatten_schema, Policies...>)
+        return flatten(xs.schema());
       else
-        return xs.layout();
+        return xs.schema();
     }();
     for (size_t row = 0; row < xs.rows(); ++row) {
       size_t pos = 0;
       if (auto err = print_record<Policies...>(printer, le,
-                                               caf::get<record_type>(layout),
+                                               caf::get<record_type>(schema),
                                                table_slice_row{xs, row}, pos))
         return err;
       append('\n');
