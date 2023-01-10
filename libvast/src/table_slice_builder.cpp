@@ -78,15 +78,8 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
   if (serialize == table_slice::serialize::yes) {
     auto ipc_ostream = arrow::io::BufferOutputStream::Create().ValueOrDie();
-    auto opts = arrow::ipc::IpcWriteOptions::Defaults();
-    opts.codec
-      = arrow::util::Codec::Create(
-          arrow::Compression::ZSTD,
-          arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-            .ValueOrDie())
-          .ValueOrDie();
     auto stream_writer
-      = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema(), opts)
+      = arrow::ipc::MakeStreamWriter(ipc_ostream, record_batch->schema())
           .ValueOrDie();
     auto status = stream_writer->WriteRecordBatch(*record_batch);
     if (!status.ok())
