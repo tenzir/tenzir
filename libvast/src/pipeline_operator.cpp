@@ -43,7 +43,7 @@ parse_pipeline_operator(std::string_view name, std::string_view str) {
   if (auto plugin = plugins::find<pipeline_operator_plugin>(name)) {
     return plugin->parse_pipeline_string(str);
   }
-  return caf::make_error(ec::invalid_configuration,
+  return caf::make_error(ec::parse_error,
                          fmt::format("unknown pipeline operator '{}'", name));
 }
 
