@@ -3,6 +3,7 @@ title: VAST v2.4
 description: Open Storage
 authors: dominiklohmann
 date: 2022-12-09
+last_updated: 2023-01-10
 tags: [release, frontend, feather, parquet, docker, python, arrow]
 ---
 
@@ -44,10 +45,11 @@ post series on them:
 
 1. [Enabling Open Investigations][parquet-and-feather-1]
 2. [Writing Security Telemetry][parquet-and-feather-2]
-3. Coming soon
+3. [Data Engineering Woes][parquet-and-feather-3]
 
 [parquet-and-feather-1]: /blog/parquet-and-feather-enabling-open-investigations/
 [parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
+[parquet-and-feather-3]: /blog/parquet-and-feather-data-engineering-woes/
 
 ## What's Next?
 

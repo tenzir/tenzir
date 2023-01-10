@@ -4,7 +4,7 @@ authors:
   - mavam
   - dispanser
 date: 2022-10-07
-last_updated: 2022-10-22
+last_updated: 2023-01-10
 tags: [arrow, parquet, feather]
 ---
 
@@ -27,11 +27,12 @@ question. In the next three blog posts, we
 :::info Parquet & Feather: 1/3
 This is blog post is part of a 3-piece series on Parquet and Feather.
 
-1. Enabling Open Investigations (this blog post)
+1. This blog post
 2. [Writing Security Telemetry][parquet-and-feather-2]
-3. TBD
+3. [Data Engineering Woes][parquet-and-feather-3]
 
 [parquet-and-feather-2]: /blog/parquet-and-feather-writing-security-telemetry/
+[parquet-and-feather-3]: /blog/parquet-and-feather-data-engineering-woes/
 :::
 
 ## Why Parquet and Feather?
