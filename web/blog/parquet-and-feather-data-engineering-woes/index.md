@@ -1,11 +1,7 @@
 ---
-draft: true
 title: "Parquet & Feather: Data Engineering Woes"
-authors:
-  - dispanser
-  - mavam
+authors: dispanser
 date: 2023-01-10
-image: arrow-schema-conversion.light.png
 tags: [arrow, parquet, feather]
 ---
 
@@ -54,7 +50,7 @@ what a recommended Parquet file size would look like. A typical Parquet file
 size recommendation is 1GB, which translates to 5–10GB of data in memory when
 reading the entire file. To produce files sized in this order of magnitude, we
 planned to use individual row groups, each of which aligned with the size of our
-Arrow record batches that comprise 2^16 events occopying a few MBs.
+Arrow record batches that comprise 2<sup>16</sup> events occupying a few MBs.
 
 However, attempting to read a Parquet file that was split into multiple row
 groups doesn't work for some of our schemas, yielding:
@@ -78,7 +74,7 @@ instruct Arrow to also serialize [its own
 schema](https://arrow.apache.org/docs/cpp/api/formats.html#_CPPv4N7parquet21ArrowWriterProperties7BuilderE)
 into the Parquet file metadata, this doesn't seem to play well in concert with
 extension types. As a result, a record batch written to and then read from a
-Parquet file no longer adheres to the same schema! 
+Parquet file no longer adheres to the same schema!
 
 This bit us in the following scenarios.
 
@@ -101,7 +97,7 @@ nested records. For example, a map from a VAST address to a VAST enumeration of
 the following Arrow type is not preserved:
 
 ```
-map<extension<vast.address>,  extension<vast.enumeration>>
+map<extension<vast.address>, extension<vast.enumeration>>
 ```
 
 After reading it from a Parquet file, the resulting Arrow type is:
@@ -222,7 +218,7 @@ batches).
 
 However, as VAST uses a few less common Arrow features we sometimes stumble over
 some of the rougher edges. We're looking forward to fixing some of these things
-upstream, but sometimes you just need a quick solution to help our users..
+upstream, but sometimes you just need a quick solution to help our users.
 
 The real reason why we wrote this blog post is to show how quickly the data
 engineering can escalate. This is the long tail that nobody wants to talk about
