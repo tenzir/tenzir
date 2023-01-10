@@ -13,7 +13,7 @@ import vast.utils.logging
 
 from .cli import CLI
 
-logger = vast.utils.logging.get("vast.vast")
+logger = vast.utils.logging.get(__name__)
 
 
 class ExportMode(Enum):
