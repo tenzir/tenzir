@@ -8,14 +8,8 @@
 
 #include "vast/format/arrow.hpp"
 
-#include "vast/arrow_table_slice.hpp"
-#include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/detail/fdoutbuf.hpp"
-#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
-#include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 
 #include <arrow/api.h>
@@ -23,6 +17,7 @@
 #include <arrow/ipc/reader.h>
 #include <caf/none.hpp>
 
+#include <iostream>
 #include <stdexcept>
 
 namespace vast::format::arrow {
@@ -49,6 +44,11 @@ caf::error writer::write(const table_slice& slice) {
       !status.ok())
     return caf::make_error(ec::unspecified, "failed to write record batch",
                            status.ToString());
+  // The StdoutStream used `cout` internally. `cout` is buffered by default,
+  // which can result in incomplete data at the destination until the next
+  // results arrive. We accept the theoretical pessimisation for one-shot
+  // writes because the typical batch size is not very small.
+  std::cout.flush();
   return caf::none;
 }
 
