@@ -10,6 +10,8 @@
 
 #include "vast/system/active_partition.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/detail/partition_common.hpp"
@@ -25,6 +27,8 @@
 #include "vast/test/test.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
+#include "vast/value_index.hpp"
+#include "vast/view.hpp"
 
 #include <caf/error.hpp>
 #include <flatbuffers/flatbuffers.h>
@@ -97,6 +101,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     "y",
     vast::record_type{
       {"x", vast::count_type{}},
+      {"z", vast::real_type{}},
     },
   };
 
@@ -123,6 +128,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   REQUIRE(sut);
   auto builder = std::make_shared<vast::table_slice_builder>(schema_);
   CHECK(builder->add(0u));
+  CHECK(builder->add(0.1));
   auto slice = builder->finish();
   slice.offset(0);
   const auto now = caf::make_timestamp();
@@ -153,8 +159,8 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(synopsis.schema, schema_);
   CHECK_EQUAL(synopsis.min_import_time, now);
   CHECK_EQUAL(synopsis.max_import_time, now);
-  CHECK_EQUAL(synopsis.field_synopses_.size(), 1u);
-  CHECK_EQUAL(synopsis.type_synopses_.size(), 1u);
+  CHECK_EQUAL(synopsis.field_synopses_.size(), 2u);
+  CHECK_EQUAL(synopsis.type_synopses_.size(), 2u);
   const auto& partition_chunk = last_written_chunks.at(persist_path).front();
   const auto container = vast::fbs::flatbuffer_container{partition_chunk};
   const auto part_fb
@@ -166,7 +172,8 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(passive_state.id, partition_id);
   REQUIRE(passive_state.combined_schema_);
   CHECK_EQUAL(*passive_state.combined_schema_,
-              (vast::record_type{{"y.x", vast::count_type{}}}));
+              (vast::record_type{{"y.x", vast::count_type{}},
+                                 {"y.z", vast::real_type{}}}));
   vast::ids expected_ids;
   expected_ids.append_bit(true);
   CHECK_EQUAL(passive_state.type_ids_.at(std::string{schema_.name()}),
@@ -175,9 +182,19 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(passive_state.store_id, input_store_id);
   CHECK_EQUAL(passive_state.store_header, as_bytes(partition_header));
   const auto* indexes = part_fb->indexes();
-  REQUIRE_EQUAL(indexes->size(), 1u);
+  REQUIRE_EQUAL(indexes->size(), 2u);
   CHECK_EQUAL(indexes->Get(0)->field_name()->str(), "y.x");
   CHECK_EQUAL(indexes->Get(0)->index()->caf_0_18_data(), nullptr);
+  MESSAGE("check value index correctness");
+  CHECK_EQUAL(indexes->Get(1)->field_name()->str(), "y.z");
+  CHECK_NOT_EQUAL(indexes->Get(1)->index()->caf_0_18_data(), nullptr);
+  auto col2_idx
+    = vast::system::unpack_value_index(*indexes->Get(1)->index(), container);
+  REQUIRE(col2_idx);
+  CHECK_EQUAL(vast::real_type{}, col2_idx->type());
+  auto result = col2_idx->lookup(vast::relational_operator::less,
+                                 vast::make_data_view(1.0));
+  CHECK_EQUAL(unbox(result), make_ids({0, 0}));
 }
 
 TEST(delegate query to store with all possible ids in partition when query is to
@@ -192,9 +209,11 @@ TEST(delegate query to store with all possible ids in partition when query is to
   REQUIRE(sut);
   auto builder = std::make_shared<vast::table_slice_builder>(schema_);
   CHECK(builder->add(0u));
+  CHECK(builder->add(0.1));
   auto slice1 = builder->finish();
   slice1.offset(0);
   CHECK(builder->add(25u));
+  CHECK(builder->add(3.1415));
   auto slice2 = builder->finish();
   slice2.offset(1);
   auto src = vast::detail::spawn_container_source(

@@ -99,6 +99,8 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
                                            "partition flatbuffer");
 }
 
+} // namespace
+
 value_index_ptr
 unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
                    const fbs::flatbuffer_container& container) {
@@ -113,7 +115,7 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     VAST_ASSERT(uncompressed_data);
     return uncompressed_data;
   };
-  if (auto* data = index_fbs.caf_0_18_data()) {
+  if (const auto* data = index_fbs.caf_0_18_data()) {
     auto uncompressed_data = uncompress(*data);
     auto bytes = as_bytes(*uncompressed_data);
     caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
@@ -124,7 +126,7 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     }
     return state_ptr;
   }
-  if (auto* data = index_fbs.caf_0_17_data()) {
+  if (const auto* data = index_fbs.caf_0_17_data()) {
     auto uncompressed_data = uncompress(*data);
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
@@ -159,8 +161,6 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
   }
   return {};
 }
-
-} // namespace
 
 /// Gets the INDEXER at a certain position.
 indexer_actor passive_partition_state::indexer_at(size_t position) const {

@@ -124,6 +124,10 @@ struct passive_partition_state {
 
 // -- flatbuffers --------------------------------------------------------------
 
+[[nodiscard]] value_index_ptr
+unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
+                   const fbs::flatbuffer_container& container);
+
 [[nodiscard]] caf::error
 unpack(const fbs::partition::LegacyPartition&, passive_partition_state&);
 
