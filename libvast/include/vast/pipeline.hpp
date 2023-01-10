@@ -52,7 +52,7 @@ private:
 
   /// Add the batch to the internal queue of batches to be transformed.
   [[nodiscard]] caf::error
-  add_batch(vast::type layout, std::shared_ptr<arrow::RecordBatch> batch);
+  add_batch(vast::type schema, std::shared_ptr<arrow::RecordBatch> batch);
 
   /// Applies pipelines to the batches in the internal queue.
   /// @note The offsets of the slices may not be preserved.
@@ -61,7 +61,7 @@ private:
   /// Applies the pipeline operator to every batch in the queue.
   caf::error
   process_queue(const std::unique_ptr<pipeline_operator>& op,
-                std::vector<pipeline_batch>& result, bool check_layout);
+                std::vector<pipeline_batch>& result, bool check_schema);
 
   /// Grant access to the pipelines engine so it can call
   /// add_batch/finsih_batch.
@@ -122,7 +122,7 @@ private:
   std::vector<pipeline> pipelines_;
 
   /// Mapping from event type to applicable pipelines.
-  std::unordered_map<std::string, std::vector<size_t>> layout_mapping_;
+  std::unordered_map<std::string, std::vector<size_t>> schema_mapping_;
 
   /// The pipelines that will be applied to *all* types.
   std::vector<size_t> general_pipelines_;

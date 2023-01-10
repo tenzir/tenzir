@@ -207,7 +207,7 @@ auto remove_down_source(auto* self, const caf::down_msg& down_msg) {
 
 type base_store::schema() const {
   for (const auto& slice : slices()) {
-    return slice.layout();
+    return slice.schema();
   }
   return {};
 }

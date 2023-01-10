@@ -11,6 +11,6 @@
 namespace vast::policy {
 
 /// Tag type to configure a ::writer.
-struct flatten_layout {};
+struct flatten_schema {};
 
 } // namespace vast::policy

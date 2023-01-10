@@ -13,12 +13,12 @@
 
 namespace vast::format {
 
-/// Base class for readers that only have a single layout at any point in time.
-class single_layout_reader : public reader {
+/// Base class for readers that only have a single schema at any point in time.
+class single_schema_reader : public reader {
 public:
-  single_layout_reader(const caf::settings& options);
+  single_schema_reader(const caf::settings& options);
 
-  ~single_layout_reader() override;
+  ~single_schema_reader() override;
 
 protected:
   /// Convenience function for finishing our current table slice in `builder_`
@@ -31,8 +31,8 @@ protected:
   /// @returns `result`, unless any `finish()` call fails.
   caf::error finish(consumer& f, caf::error result = caf::none);
 
-  /// Tries to create a new table slice builder from given layout.
-  bool reset_builder(type layout);
+  /// Tries to create a new table slice builder from given schema.
+  bool reset_builder(type schema);
 
   /// Stores the current builder instance.
   table_slice_builder_ptr builder_;

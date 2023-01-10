@@ -8,7 +8,6 @@
 
 #define SUITE feather
 
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/chunk.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
@@ -23,6 +22,7 @@
 #include <vast/query_context.hpp>
 #include <vast/system/posix_filesystem.hpp>
 #include <vast/system/status.hpp>
+#include <vast/table_slice_builder.hpp>
 #include <vast/test/fixtures/actor_system_and_events.hpp>
 #include <vast/test/memory_filesystem.hpp>
 #include <vast/test/test.hpp>
@@ -34,9 +34,9 @@ namespace vast::plugins::feather {
 namespace {
 
 template <class T, class... Ts>
-auto make_slice(const record_type& layout, std::vector<T> x0,
+auto make_slice(const record_type& schema, std::vector<T> x0,
                 std::vector<Ts>... xs) {
-  auto builder = arrow_table_slice_builder::make(type{"rec", layout});
+  auto builder = std::make_shared<table_slice_builder>(type{"rec", schema});
   for (size_t i = 0; i < x0.size(); ++i) {
     CHECK(builder->add(x0.at(i)));
     if constexpr (sizeof...(Ts) > 0)
@@ -51,7 +51,7 @@ auto compare_table_slices(const table_slice& left, const table_slice& right) {
   CHECK_EQUAL(left.import_time(), right.import_time());
   REQUIRE_EQUAL(left.columns(), right.columns());
   REQUIRE_EQUAL(left.rows(), right.rows());
-  REQUIRE_EQUAL(left.layout(), right.layout());
+  REQUIRE_EQUAL(left.schema(), right.schema());
   // CHECK_EQUAL(left.offset(), right.offset());
   for (size_t col = 0; col < left.columns(); ++col) {
     for (size_t row = 0; row < left.rows(); ++row) {

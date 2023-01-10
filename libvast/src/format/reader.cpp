@@ -29,15 +29,6 @@ reader::consumer::~consumer() {
 }
 
 reader::reader(const caf::settings& options) {
-  if (auto batch_encoding_arg
-      = caf::get_if<std::string>(&options, "vast.import.batch-encoding")) {
-    if (auto batch_encoding = to<table_slice_encoding>(*batch_encoding_arg))
-      table_slice_type_ = *batch_encoding;
-    else
-      VAST_WARN("{} cannot set vast.import.batch-encoding to {} as it "
-                "is not a valid encoding",
-                detail::pretty_type_name(this), *batch_encoding_arg);
-  }
   auto parse_timeout = [&](std::string_view key, duration fallback) {
     auto timeout_value = system::get_or_duration(options, key, fallback);
     if (!timeout_value) {

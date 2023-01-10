@@ -71,8 +71,8 @@ std::optional<double> get_field_fprate(const index_config& config,
   for (const auto& [targets, fprate, _] : config.rules)
     for (const auto& name : targets)
       if (name.size()
-            == field.field_name().size() + field.layout_name().size() + 1
-          && name.starts_with(field.layout_name())
+            == field.field_name().size() + field.schema_name().size() + 1
+          && name.starts_with(field.schema_name())
           && name.ends_with(field.field_name()))
         return fprate;
   return std::nullopt;
@@ -100,11 +100,10 @@ void partition_synopsis::add(const table_slice& slice,
       return nullptr;
     return factory<synopsis>::make(t, synopsis_options);
   };
-  const auto& layout = slice.layout();
   if (!schema)
-    schema = layout;
-  VAST_ASSERT(schema == layout);
-  auto each = caf::get<record_type>(layout).leaves();
+    schema = slice.schema();
+  VAST_ASSERT(schema == slice.schema());
+  auto each = caf::get<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
   // These options must be kept in sync with vast/address_synopsis.hpp and
@@ -128,7 +127,7 @@ void partition_synopsis::add(const table_slice& slice,
       }
     };
     // Make a field synopsis if it was configured.
-    if (auto key = qualified_record_field{layout, leaf.index};
+    if (auto key = qualified_record_field{schema, leaf.index};
         auto fprate = get_field_fprate(fp_rates, key)) {
       // Locate the relevant synopsis.
       auto it = field_synopses_.find(key);

@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice.hpp>
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
@@ -29,6 +28,7 @@
 #include <vast/system/spawn_or_connect_to_node.hpp>
 #include <vast/system/status.hpp>
 #include <vast/table_slice.hpp>
+#include <vast/table_slice_builder.hpp>
 #include <vast/uuid.hpp>
 
 #include <arrow/table.h>
@@ -72,7 +72,7 @@ public:
       auto [head, tail] = split(slice, slice.rows() - remainder);
       buffer_.push_back(head);
       auto result = concatenate(std::exchange(buffer_, {}));
-      results_.emplace_back(result.layout(), to_record_batch(result));
+      results_.emplace_back(result.schema(), to_record_batch(result));
       buffer_.push_back(tail);
     }
     return {};
@@ -81,7 +81,7 @@ public:
   caf::expected<std::vector<pipeline_batch>> finish() override {
     if (rows(buffer_) > 0) {
       auto result = concatenate(std::exchange(buffer_, {}));
-      results_.emplace_back(result.layout(), to_record_batch(result));
+      results_.emplace_back(result.schema(), to_record_batch(result));
     }
     return std::exchange(results_, {});
   }

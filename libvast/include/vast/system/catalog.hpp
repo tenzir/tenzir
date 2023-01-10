@@ -130,8 +130,8 @@ public:
   /// Load taxonomies.
   caf::error load_taxonomies();
 
-  /// Store a new layout in the registry.
-  void insert(vast::type layout);
+  /// Store a new schema in the registry.
+  void insert(vast::type schema);
 
   /// Get a list of known types from the registry.
   [[nodiscard]] type_set types() const;

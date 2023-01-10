@@ -25,7 +25,7 @@
 #include "vast/system/passive_partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
@@ -79,7 +79,7 @@ TEST(index roundtrip) {
   for (auto& persisted : state.persisted_partitions)
     expected_uuids.insert(persisted);
   // Add some fake statistics
-  state.stats.layouts["zeek.conn"] = vast::layout_statistics{54931u};
+  state.stats.schemas["zeek.conn"] = vast::schema_statistics{54931u};
   // Serialize the index.
   flatbuffers::FlatBufferBuilder builder;
   auto index = pack(builder, state);
@@ -105,7 +105,7 @@ TEST(index roundtrip) {
     restored_uuids.insert(restored_uuid);
   }
   CHECK_EQUAL(expected_uuids, restored_uuids);
-  // Check that layout statistics were restored correctly
+  // Check that schema statistics were restored correctly
   auto stats = idx_v0->stats();
   REQUIRE(stats);
   REQUIRE_EQUAL(stats->size(), 1u);
@@ -126,8 +126,6 @@ struct fixture : fixtures::deterministic_actor_system {
 FIXTURE_SCOPE(partition_roundtrips, fixture)
 
 TEST(empty partition roundtrip) {
-  // Init factory.
-  vast::factory<vast::table_slice_builder>::initialize();
   // Create partition state.
   vast::system::active_partition_state state;
   state.data.id = vast::uuid::random();
@@ -139,19 +137,18 @@ TEST(empty partition roundtrip) {
   auto& ids = state.data.type_ids["x"];
   ids.append_bits(false, 3);
   ids.append_bits(true, 3);
-  // Prepare a layout for the partition synopsis. The partition synopsis only
-  // looks at the layout of the table slices it gets, so we feed it
+  // Prepare a schema for the partition synopsis. The partition synopsis only
+  // looks at the schema of the table slices it gets, so we feed it
   // with an empty table slice.
-  auto layout = vast::type{
+  auto schema = vast::type{
     "y",
     vast::record_type{
       {"x", vast::count_type{}},
     },
   };
-  auto qf = vast::qualified_record_field{layout, vast::offset{0}};
+  auto qf = vast::qualified_record_field{schema, vast::offset{0}};
   state.indexers[qf] = nullptr;
-  auto slice_builder = vast::factory<vast::table_slice_builder>::make(
-    vast::defaults::import::table_slice_type, layout);
+  auto slice_builder = std::make_shared<vast::table_slice_builder>(schema);
   REQUIRE(slice_builder);
   auto slice = slice_builder->finish();
   slice.offset(0);
@@ -161,9 +158,9 @@ TEST(empty partition roundtrip) {
   // Serialize partition.
   vast::chunk_ptr partition_chunk = {};
   {
-    auto combined_layout = state.combined_layout();
-    REQUIRE(combined_layout);
-    auto partition = pack_full(state.data, *combined_layout);
+    auto combined_schema = state.combined_schema();
+    REQUIRE(combined_schema);
+    auto partition = pack_full(state.data, *combined_schema);
     REQUIRE(partition);
     partition_chunk = *partition;
   }
@@ -185,9 +182,9 @@ TEST(empty partition roundtrip) {
   CHECK(!error);
   CHECK_EQUAL(recovered_state.id, state.data.id);
   CHECK_EQUAL(recovered_state.events, state.data.events);
-  // As of the Type FlatBuffers change we no longer keep the combined layout in
+  // As of the Type FlatBuffers change we no longer keep the combined schema in
   // the active partition, which makes this test irrelevant:
-  //   CHECK_EQUAL(recovered_state.combined_layout_, state.combined_layout);
+  //   CHECK_EQUAL(recovered_state.combined_schema_, state.combined_schema);
   CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
   // Deserialize catalog state from this partition.
   auto ps = caf::make_copy_on_write<vast::partition_synopsis>();
@@ -248,14 +245,13 @@ TEST(full partition roundtrip) {
   run();
   REQUIRE(partition);
   // Add data to the partition.
-  auto layout = vast::type{
+  auto schema = vast::type{
     "y",
     vast::record_type{
       {"x", vast::count_type{}},
     },
   };
-  auto builder = vast::factory<vast::table_slice_builder>::make(
-    vast::defaults::import::table_slice_type, layout);
+  auto builder = std::make_shared<vast::table_slice_builder>(schema);
   CHECK(builder->add(0u));
   auto slice = builder->finish();
   slice.offset(0);

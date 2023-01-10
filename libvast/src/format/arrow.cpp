@@ -9,7 +9,6 @@
 #include "vast/format/arrow.hpp"
 
 #include "vast/arrow_table_slice.hpp"
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -40,10 +39,10 @@ caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
     return caf::make_error(ec::logic_error, "invalid arrow output stream");
   auto batch = to_record_batch(slice);
-  if (const auto& layout = slice.layout(); current_layout_ != layout) {
-    if (!this->layout(batch->schema()))
-      return caf::make_error(ec::logic_error, "failed to update layout");
-    current_layout_ = layout;
+  if (const auto& schema = slice.schema(); current_schema_ != schema) {
+    if (!this->schema(batch->schema()))
+      return caf::make_error(ec::logic_error, "failed to update schema");
+    current_schema_ = schema;
   }
   VAST_ASSERT(batch != nullptr);
   if (auto status = current_batch_writer_->WriteRecordBatch(*batch);
@@ -57,7 +56,7 @@ const char* writer::name() const {
   return "arrow-writer";
 }
 
-bool writer::layout(const std::shared_ptr<::arrow::Schema>& schema) {
+bool writer::schema(const std::shared_ptr<::arrow::Schema>& schema) {
   if (current_batch_writer_ != nullptr) {
     if (!current_batch_writer_->Close().ok())
       return false;

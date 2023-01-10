@@ -15,7 +15,7 @@
 #include <vast/detail/line_range.hpp>
 #include <vast/detail/make_io_stream.hpp>
 #include <vast/error.hpp>
-#include <vast/format/multi_layout_reader.hpp>
+#include <vast/format/multi_schema_reader.hpp>
 #include <vast/format/reader.hpp>
 #include <vast/module.hpp>
 #include <vast/plugin.hpp>
@@ -29,9 +29,9 @@
 
 namespace vast::plugins::cef {
 
-class reader : public format::multi_layout_reader {
+class reader : public format::multi_schema_reader {
 public:
-  using super = multi_layout_reader;
+  using super = multi_schema_reader;
 
   /// Constructs a CEF reader.
   /// @param options Additional options.

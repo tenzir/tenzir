@@ -103,7 +103,7 @@ struct validator {
 /// Transforms all ::field_extractor and ::type_extractor predicates into
 /// ::data_extractor instances according to a given type.
 struct type_resolver {
-  explicit type_resolver(const type& layout);
+  explicit type_resolver(const type& schema);
 
   caf::expected<expression> operator()(caf::none_t);
   caf::expected<expression> operator()(const conjunction& c);
@@ -130,7 +130,7 @@ struct type_resolver {
     auto make_predicate = [&](type t, size_t i) {
       return predicate{data_extractor{std::move(t), i}, op_, x};
     };
-    for (size_t flat_index = 0; const auto& [field, _] : layout_.leaves()) {
+    for (size_t flat_index = 0; const auto& [field, _] : schema_.leaves()) {
       if (f(field.type))
         connective.emplace_back(make_predicate(field.type, flat_index));
       ++flat_index;
@@ -145,8 +145,8 @@ struct type_resolver {
   }
 
   relational_operator op_;
-  const record_type& layout_;
-  std::string_view layout_name_;
+  const record_type& schema_;
+  std::string_view schema_name_;
 };
 
 /// Checks whether a [resolved](@ref type_extractor) expression matches a given

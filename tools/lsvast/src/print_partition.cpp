@@ -33,12 +33,12 @@ namespace {
 
 caf::expected<vast::record_type>
 get_partition_schema(const vast::fbs::partition::LegacyPartition& partition) {
-  if (auto layout = partition.combined_layout_caf_0_17()) {
+  if (auto schema = partition.combined_schema_caf_0_17()) {
     vast::legacy_record_type intermediate;
-    if (auto err = vast::fbs::deserialize_bytes(layout, intermediate))
+    if (auto err = vast::fbs::deserialize_bytes(schema, intermediate))
       return caf::make_error(vast::ec::parse_error,
                              fmt::format("failed to deserialize combined "
-                                         "layout (CAF 0.17): {}",
+                                         "schema (CAF 0.17): {}",
                                          err));
     return caf::get<vast::record_type>(
       vast::type::from_legacy_type(intermediate));

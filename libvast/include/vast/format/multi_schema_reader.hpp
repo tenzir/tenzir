@@ -16,12 +16,12 @@
 
 namespace vast::format {
 
-/// Base class for readers that deal with multiple layouts.
-class multi_layout_reader : public reader {
+/// Base class for readers that deal with multiple schemas.
+class multi_schema_reader : public reader {
 public:
-  multi_layout_reader(const caf::settings& options);
+  multi_schema_reader(const caf::settings& options);
 
-  ~multi_layout_reader() override;
+  ~multi_schema_reader() override;
 
 protected:
   /// Convenience function for finishing the current table slice in

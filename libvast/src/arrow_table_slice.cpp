@@ -8,7 +8,6 @@
 
 #include "vast/arrow_table_slice.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
@@ -20,6 +19,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/value_index.hpp"
 
 #include <arrow/api.h>
@@ -143,7 +143,7 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
   const std::shared_ptr<arrow::RecordBatch>& batch, type schema) noexcept
   : slice_{slice}, state_{} {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
-    // We decouple the sliced type from the layout intentionally. This is an
+    // We decouple the sliced type from the schema intentionally. This is an
     // absolute must because we store the state in the deletion step of the
     // table slice's chunk, and storing a sliced chunk in there would cause a
     // cyclic reference. In the future, we should just not store the sliced
@@ -166,16 +166,16 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
       state_.is_serialized = true;
     }
     if (schema) {
-      state_.layout = std::move(schema);
-      VAST_ASSERT(state_.layout
+      state_.schema = std::move(schema);
+      VAST_ASSERT(state_.schema
                   == type::from_arrow(*state_.record_batch->schema()));
     } else {
-      state_.layout = type::from_arrow(*state_.record_batch->schema());
+      state_.schema = type::from_arrow(*state_.record_batch->schema());
     }
-    VAST_ASSERT(caf::holds_alternative<record_type>(state_.layout));
+    VAST_ASSERT(caf::holds_alternative<record_type>(state_.schema));
     state_.flat_columns = index_column_arrays(state_.record_batch);
     VAST_ASSERT(state_.flat_columns.size()
-                == caf::get<record_type>(state_.layout).num_leaves());
+                == caf::get<record_type>(state_.schema).num_leaves());
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -194,8 +194,8 @@ arrow_table_slice<FlatBuffer>::~arrow_table_slice() noexcept {
 // -- properties -------------------------------------------------------------
 
 template <class FlatBuffer>
-const type& arrow_table_slice<FlatBuffer>::layout() const noexcept {
-  return state_.layout;
+const type& arrow_table_slice<FlatBuffer>::schema() const noexcept {
+  return state_.schema;
 }
 
 template <class FlatBuffer>
@@ -235,8 +235,8 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     if (auto&& batch = record_batch()) {
       auto&& array = state_.flat_columns[column];
-      const auto& layout = caf::get<record_type>(this->layout());
-      auto type = layout.field(layout.resolve_flat_index(column)).type;
+      const auto& schema = caf::get<record_type>(this->schema());
+      auto type = schema.field(schema.resolve_flat_index(column)).type;
       for (size_t row = 0; auto&& value : values(type, *array)) {
         if (!caf::holds_alternative<view<caf::none_t>>(value))
           index.append(value, offset + row);
@@ -255,9 +255,9 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                   table_slice::size_type column) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     auto&& array = state_.flat_columns[column];
-    const auto& layout = caf::get<record_type>(this->layout());
-    auto offset = layout.resolve_flat_index(column);
-    return value_at(layout.field(offset).type, *array, row);
+    const auto& schema = caf::get<record_type>(this->schema());
+    auto offset = schema.resolve_flat_index(column);
+    return value_at(schema.field(offset).type, *array, row);
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
@@ -270,8 +270,8 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             const type& t) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
     VAST_ASSERT(congruent(
-      caf::get<record_type>(this->layout())
-        .field(caf::get<record_type>(this->layout()).resolve_flat_index(column))
+      caf::get<record_type>(this->schema())
+        .field(caf::get<record_type>(this->schema()).resolve_flat_index(column))
         .type,
       t));
     auto&& array = state_.flat_columns[column];
@@ -314,10 +314,10 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 // -- utility functions -------------------------------------------------------
 
 std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
-  type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+  type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   const std::vector<indexed_transformation>& transformations) noexcept {
-  VAST_ASSERT(batch->schema()->Equals(layout.to_arrow_schema()),
-              "VAST layout and Arrow schema must match");
+  VAST_ASSERT(batch->schema()->Equals(schema.to_arrow_schema()),
+              "VAST schema and Arrow schema must match");
   VAST_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
               "transformations must be sorted by index");
   VAST_ASSERT(transformations.end()
@@ -388,10 +388,10 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
         nested_layer = impl(impl, std::move(nested_layer),
                             std::move(nested_index), current, sentinel);
         if (!nested_layer.fields.empty()) {
-          auto nested_layout = type{record_type{nested_layer.fields}};
-          nested_layout.assign_metadata(layer.fields[index.back()].type);
+          auto nested_schema = type{record_type{nested_layer.fields}};
+          nested_schema.assign_metadata(layer.fields[index.back()].type);
           result.fields.emplace_back(layer.fields[index.back()].name,
-                                     nested_layout);
+                                     nested_schema);
           auto nested_arrow_fields = arrow::FieldVector{};
           nested_arrow_fields.reserve(nested_layer.fields.size());
           for (const auto& nested_field : nested_layer.fields)
@@ -409,7 +409,7 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
     return result;
   };
   if (transformations.empty())
-    return {layout, batch};
+    return {schema, batch};
   auto current = transformations.begin();
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{
@@ -418,7 +418,7 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
   };
   const auto num_columns = detail::narrow_cast<size_t>(batch->num_columns());
   layer.fields.reserve(num_columns);
-  for (auto&& [name, type] : caf::get<record_type>(layout).fields())
+  for (auto&& [name, type] : caf::get<record_type>(schema).fields())
     layer.fields.push_back({std::string{name}, type});
   // Run the possibly recursive implementation.
   layer = impl(impl, std::move(layer), {0}, current, sentinel);
@@ -427,22 +427,22 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
   VAST_ASSERT(layer.fields.size() == layer.arrays.size());
   if (layer.fields.empty())
     return {};
-  auto new_layout = type{record_type{layer.fields}};
-  new_layout.assign_metadata(layout);
-  auto arrow_schema = new_layout.to_arrow_schema();
+  auto new_schema = type{record_type{layer.fields}};
+  new_schema.assign_metadata(schema);
+  auto arrow_schema = new_schema.to_arrow_schema();
   const auto num_rows = layer.arrays[0]->length();
   return {
-    std::move(new_layout),
+    std::move(new_schema),
     arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
                              std::move(layer.arrays)),
   };
 }
 
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
-select_columns(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                const std::vector<offset>& indices) noexcept {
-  VAST_ASSERT(batch->schema()->Equals(layout.to_arrow_schema()),
-              "VAST layout and Arrow schema must match");
+  VAST_ASSERT(batch->schema()->Equals(schema.to_arrow_schema()),
+              "VAST schema and Arrow schema must match");
   VAST_ASSERT(std::is_sorted(indices.begin(), indices.end()), "indices must be "
                                                               "sorted");
   VAST_ASSERT(
@@ -504,10 +504,10 @@ select_columns(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
                             std::move(nested_index), current, sentinel);
-        auto nested_layout = type{record_type{nested_layer.fields}};
-        nested_layout.assign_metadata(layer.fields[index.back()].type);
+        auto nested_schema = type{record_type{nested_layer.fields}};
+        nested_schema.assign_metadata(layer.fields[index.back()].type);
         result.fields.emplace_back(layer.fields[index.back()].name,
-                                   nested_layout);
+                                   nested_schema);
         auto nested_arrow_fields = arrow::FieldVector{};
         nested_arrow_fields.reserve(nested_layer.fields.size());
         for (const auto& nested_field : nested_layer.fields)
@@ -530,7 +530,7 @@ select_columns(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
   };
   const auto num_columns = detail::narrow_cast<size_t>(batch->num_columns());
   layer.fields.reserve(num_columns);
-  for (auto&& [name, type] : caf::get<record_type>(layout).fields())
+  for (auto&& [name, type] : caf::get<record_type>(schema).fields())
     layer.fields.push_back({std::string{name}, type});
   // Run the possibly recursive implementation, starting at the last field.
   layer = impl(impl, std::move(layer), {0}, current, sentinel);
@@ -539,12 +539,12 @@ select_columns(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
   VAST_ASSERT(layer.fields.size() == layer.arrays.size());
   if (layer.fields.empty())
     return {};
-  auto new_layout = type{record_type{layer.fields}};
-  new_layout.assign_metadata(layout);
-  auto arrow_schema = new_layout.to_arrow_schema();
+  auto new_schema = type{record_type{layer.fields}};
+  new_schema.assign_metadata(schema);
+  auto arrow_schema = new_schema.to_arrow_schema();
   const auto num_rows = layer.arrays[0]->length();
   return {
-    std::move(new_layout),
+    std::move(new_schema),
     arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
                              std::move(layer.arrays)),
   };

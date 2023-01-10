@@ -21,7 +21,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/format/reader.hpp"
-#include "vast/format/single_layout_reader.hpp"
+#include "vast/format/single_schema_reader.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/module.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -234,9 +234,9 @@ bool zeek_basic_parse(const type& t, Iterator& f, const Iterator& l,
 }
 
 /// A Zeek reader.
-class reader final : public single_layout_reader {
+class reader final : public single_schema_reader {
 public:
-  using super = single_layout_reader;
+  using super = single_schema_reader;
 
   /// Constructs a Zeek reader.
   /// @param options Additional options.
@@ -268,7 +268,7 @@ private:
   std::string empty_field_;
   std::string unset_field_;
   vast::module module_;
-  type layout_;
+  type schema_;
   std::optional<size_t> proto_field_;
   std::vector<rule<iterator_type, data>> parsers_;
 };
@@ -294,10 +294,10 @@ public:
 
 private:
   std::filesystem::path dir_;
-  type previous_layout_;
+  type previous_schema_;
   bool show_timestamp_tags_;
 
-  /// One writer for each layout.
+  /// One writer for each schema.
   // TODO: Consider switching to a robin map to make use of transparent key
   // lookups.
   std::unordered_map<std::string, ostream_writer_ptr> writers_;

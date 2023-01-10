@@ -30,23 +30,23 @@ struct default_selector final : selector {
 private:
   template <typename Prefix>
   static void
-  make_names_layout_impl(std::vector<std::string>& entries, Prefix& prefix,
+  make_names_schema_impl(std::vector<std::string>& entries, Prefix& prefix,
                          const ::simdjson::dom::object& obj) {
     for (const auto f : obj) {
       prefix.emplace_back(f.key);
       if (f.value.type() != ::simdjson::dom::element_type::OBJECT)
         entries.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
       else
-        make_names_layout_impl(entries, prefix, f.value);
+        make_names_schema_impl(entries, prefix, f.value);
       prefix.pop_back();
     }
   }
 
-  static inline auto make_names_layout(const ::simdjson::dom::object& obj) {
+  static inline auto make_names_schema(const ::simdjson::dom::object& obj) {
     std::vector<std::string> entries;
     entries.reserve(100);
     auto prefix = detail::stack_vector<std::string_view, 64>{};
-    make_names_layout_impl(entries, prefix, obj);
+    make_names_schema_impl(entries, prefix, obj);
     std::sort(entries.begin(), entries.end());
     return entries;
   }
@@ -61,7 +61,7 @@ public:
     // use it despite not being an exact match.
     if (type_cache.size() == 1)
       return type_cache.begin()->second;
-    if (auto search_result = type_cache.find(make_names_layout(obj));
+    if (auto search_result = type_cache.find(make_names_schema(obj));
         search_result != type_cache.end())
       return search_result->second;
     return {};
@@ -77,13 +77,13 @@ public:
       if (!caf::holds_alternative<record_type>(entry))
         continue;
       if (entry.name().empty()) {
-        VAST_WARN("unexpectedly unnamed layout in schema: {}", entry);
+        VAST_WARN("unexpectedly unnamed schema in schema: {}", entry);
         continue;
       }
       std::vector<std::string> cache_entry;
-      const auto& layout = caf::get<record_type>(entry);
-      for (const auto& [_, index] : layout.leaves())
-        cache_entry.emplace_back(layout.key(index));
+      const auto& schema = caf::get<record_type>(entry);
+      for (const auto& [_, index] : schema.leaves())
+        cache_entry.emplace_back(schema.key(index));
       std::sort(cache_entry.begin(), cache_entry.end());
       type_cache.insert({std::move(cache_entry), entry});
     }

@@ -118,8 +118,6 @@ protected:
     = 0;
 
 public:
-  table_slice_encoding table_slice_type_
-    = vast::defaults::import::table_slice_type;
   reader_clock::duration batch_timeout_ = vast::defaults::import::batch_timeout;
   reader_clock::duration read_timeout_ = vast::defaults::import::read_timeout;
 

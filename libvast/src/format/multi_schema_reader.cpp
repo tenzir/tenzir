@@ -6,27 +6,26 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/format/multi_layout_reader.hpp"
+#include "vast/format/multi_schema_reader.hpp"
 
 #include "vast/error.hpp"
 #include "vast/factory.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 
 namespace vast::format {
 
-multi_layout_reader::multi_layout_reader(const caf::settings& options)
+multi_schema_reader::multi_schema_reader(const caf::settings& options)
   : reader(options) {
   // nop
 }
 
-multi_layout_reader::~multi_layout_reader() {
+multi_schema_reader::~multi_schema_reader() {
   // nop
 }
 
 caf::error
-multi_layout_reader::finish(consumer& f, table_slice_builder_ptr& builder_ptr,
+multi_schema_reader::finish(consumer& f, table_slice_builder_ptr& builder_ptr,
                             caf::error result) {
   auto rows = builder_ptr->rows();
   if (builder_ptr != nullptr && rows > 0) {
@@ -51,7 +50,7 @@ multi_layout_reader::finish(consumer& f, table_slice_builder_ptr& builder_ptr,
   return result;
 }
 
-caf::error multi_layout_reader::finish(consumer& f, caf::error result) {
+caf::error multi_schema_reader::finish(consumer& f, caf::error result) {
   last_batch_sent_ = reader_clock::now();
   for (auto& kvp : builders_)
     if (auto err = finish(f, kvp.second))
@@ -59,7 +58,7 @@ caf::error multi_layout_reader::finish(consumer& f, caf::error result) {
   return result;
 }
 
-table_slice_builder_ptr multi_layout_reader::builder(const type& t) {
+table_slice_builder_ptr multi_schema_reader::builder(const type& t) {
   auto i = builders_.find(t);
   if (i != builders_.end())
     return i->second;
@@ -70,9 +69,9 @@ table_slice_builder_ptr multi_layout_reader::builder(const type& t) {
     // printed only once.
     return builders_[t];
   }
-  auto ptr = factory<table_slice_builder>::make(table_slice_type_, t);
-  builders_.emplace(t, ptr);
-  return ptr;
+  auto builder = std::make_shared<table_slice_builder>(t);
+  builders_.emplace(t, builder);
+  return builder;
 }
 
 } // namespace vast::format

@@ -44,13 +44,13 @@ FIXTURE_SCOPE(table_slice_tests, fixture)
 
 TEST(random integer slices) {
   auto t = type{integer_type{}, {{"default", "uniform(100,200)"}}};
-  auto layout = type{
+  auto schema = type{
     "test.integers",
     record_type{
       {"i", t},
     },
   };
-  auto slices = unbox(make_random_table_slices(10, 10, layout));
+  auto slices = unbox(make_random_table_slices(10, 10, schema));
   CHECK_EQUAL(slices.size(), 10u);
   CHECK(std::all_of(slices.begin(), slices.end(), [](auto& slice) {
     return slice.rows() == 10;
@@ -66,10 +66,10 @@ TEST(random integer slices) {
 
 TEST(column view) {
   auto sut = zeek_conn_log[0];
-  auto flat_layout = flatten(caf::get<record_type>(sut.layout()));
-  auto ts_index = flat_layout.resolve_key("ts");
+  auto flat_schema = flatten(caf::get<record_type>(sut.schema()));
+  auto ts_index = flat_schema.resolve_key("ts");
   REQUIRE(ts_index);
-  auto ts_cview = table_slice_column{sut, flat_layout.flat_index(*ts_index)};
+  auto ts_cview = table_slice_column{sut, flat_schema.flat_index(*ts_index)};
   CHECK_EQUAL(ts_cview.index(), 0u);
   for (size_t column = 0; column < sut.columns(); ++column) {
     auto cview = table_slice_column{sut, column};
@@ -79,13 +79,13 @@ TEST(column view) {
     for (size_t row = 0; row < cview.size(); ++row)
       CHECK_EQUAL(
         materialize(cview[row]),
-        materialize(sut.at(row, column, flat_layout.field(column).type)));
+        materialize(sut.at(row, column, flat_schema.field(column).type)));
   }
 }
 
 TEST(row view) {
   auto sut = zeek_conn_log[0];
-  auto flat_layout = flatten(caf::get<record_type>(sut.layout()));
+  auto flat_schema = flatten(caf::get<record_type>(sut.schema()));
   for (size_t row = 0; row < sut.rows(); ++row) {
     auto rview = table_slice_row{sut, row};
     REQUIRE_NOT_EQUAL(rview.size(), 0u);
@@ -94,7 +94,7 @@ TEST(row view) {
     for (size_t column = 0; column < rview.size(); ++column)
       CHECK_EQUAL(
         materialize(rview[column]),
-        materialize(sut.at(row, column, flat_layout.field(column).type)));
+        materialize(sut.at(row, column, flat_schema.field(column).type)));
   }
 }
 
@@ -229,7 +229,7 @@ TEST(filter - import time) {
   auto time = vast::time{std::chrono::milliseconds(202202141214)};
   sut.import_time(time);
   auto exp = unbox(
-    tailor(unbox(to<expression>("id.orig_h != 192.168.1.102")), sut.layout()));
+    tailor(unbox(to<expression>("id.orig_h != 192.168.1.102")), sut.schema()));
   auto result = filter(sut, exp);
   REQUIRE(result);
   CHECK_EQUAL(result->import_time(), time);
@@ -239,7 +239,7 @@ TEST(filter - expression overload) {
   auto sut = zeek_conn_log[0];
   // sut.offset(0);
   auto check_eval = [&](std::string_view expr, size_t x) {
-    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.layout()));
+    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.schema()));
     CHECK_EQUAL(filter(sut, exp)->rows(), x);
   };
   check_eval("id.orig_h != 192.168.1.102", 5);
@@ -260,7 +260,7 @@ TEST(filter - expression with hints) {
   // sut.offset(0);
   auto check_eval = [&](std::string_view expr,
                         std::initializer_list<id_range> id_init, size_t x) {
-    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.layout()));
+    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.schema()));
     auto hints = make_ids(id_init, sut.offset() + sut.rows());
     CHECK_EQUAL(filter(sut, exp, hints)->rows(), x);
   };

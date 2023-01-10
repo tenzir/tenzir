@@ -18,7 +18,6 @@
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
 
 #include <caf/settings.hpp>
@@ -43,9 +42,8 @@ struct alternating {};
 
 template <class Policy>
 std::vector<table_slice> make_integers(size_t count) {
-  auto layout = type{"test.int", record_type{{"value", integer_type{}}}};
-  auto builder = factory<table_slice_builder>::make(
-    defaults::import::table_slice_type, layout);
+  auto schema = type{"test.int", record_type{{"value", integer_type{}}}};
+  auto builder = std::make_shared<table_slice_builder>(schema);
   VAST_ASSERT(builder != nullptr);
   std::vector<table_slice> result;
   result.reserve(count);
@@ -134,7 +132,6 @@ events::events() {
   static bool initialized = false;
   if (initialized)
     return;
-  factory<table_slice_builder>::initialize();
   initialized = true;
   // Read schemas
   std::ifstream base(artifacts::schemas::base);
@@ -152,8 +149,8 @@ events::events() {
   zeek_conn_log = inhale<format::zeek::reader>(
     artifacts::logs::zeek::small_conn, slice_size);
   REQUIRE_EQUAL(rows(zeek_conn_log), 20u);
-  auto&& layout = zeek_conn_log[0].layout();
-  CHECK_EQUAL(layout.name(), "zeek.conn");
+  auto&& schema = zeek_conn_log[0].schema();
+  CHECK_EQUAL(schema.name(), "zeek.conn");
   zeek_dns_log
     = inhale<format::zeek::reader>(artifacts::logs::zeek::dns, slice_size);
   REQUIRE_EQUAL(rows(zeek_dns_log), 32u);

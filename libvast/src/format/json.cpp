@@ -1018,8 +1018,8 @@ caf::error
 add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
   auto self
     = [&](auto&& self, const ::simdjson::dom::object& object,
-          const record_type& layout, std::string_view prefix) -> caf::error {
-    for (const auto& field : layout.fields()) {
+          const record_type& schema, std::string_view prefix) -> caf::error {
+    for (const auto& field : schema.fields()) {
       auto handle_found = [&](const ::simdjson::dom::element& element) {
         auto f = detail::overload{
           [&](const map_type& mt) {
@@ -1088,8 +1088,8 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
     }
     return caf::none;
   };
-  const auto& layout = caf::get<record_type>(builder.layout());
-  return self(self, object, layout, "");
+  const auto& schema = caf::get<record_type>(builder.schema());
+  return self(self, object, schema, "");
 }
 
 // -- writer ------------------------------------------------------------------
@@ -1105,10 +1105,10 @@ writer::writer(ostream_ptr out, const caf::settings& options)
 caf::error writer::write(const table_slice& x) {
   auto run = [&](const auto& printer) {
     if (flatten_ && omit_nulls_)
-      return print<policy::include_field_names, policy::flatten_layout,
+      return print<policy::include_field_names, policy::flatten_schema,
                    policy::omit_nulls>(printer, x, {", ", ": ", "{", "}"});
     if (flatten_ && !omit_nulls_)
-      return print<policy::include_field_names, policy::flatten_layout>(
+      return print<policy::include_field_names, policy::flatten_schema>(
         printer, x, {", ", ": ", "{", "}"});
     if (!flatten_ && omit_nulls_)
       return print<policy::include_field_names, policy::omit_nulls>(
@@ -1244,23 +1244,23 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& cons) {
       ++num_invalid_lines_;
       continue;
     }
-    auto&& layout = (*selector_)(get_object_result.value());
-    if (!layout) {
+    auto&& schema = (*selector_)(get_object_result.value());
+    if (!schema) {
       if (num_unknown_layouts_ == 0)
         VAST_WARN("{} failed to find a matching type at line {}: {}",
                   detail::pretty_type_name(this), lines_->line_number(), line);
       ++num_unknown_layouts_;
       continue;
     }
-    bptr = builder(*layout);
+    bptr = builder(*schema);
     if (bptr == nullptr)
       return caf::make_error(ec::parse_error, "unable to get a builder");
     if (auto err = add(get_object_result.value(), *bptr))
       return finish(cons, //
                     caf::make_error(ec::logic_error,
                                     fmt::format("failed to add line {} of "
-                                                "layout {} to builder: {}",
-                                                lines_->line_number(), *layout,
+                                                "schema {} to builder: {}",
+                                                lines_->line_number(), *schema,
                                                 err)));
     produced++;
     batch_events_++;

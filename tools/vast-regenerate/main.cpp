@@ -98,13 +98,13 @@ caf::error write_index_bin(const std::vector<vast::uuid>& uuids,
   }
   fmt::print("writing {} partition\n", partition_offsets.size());
   auto partitions = builder.CreateVector(partition_offsets);
-  std::vector<flatbuffers::Offset<vast::fbs::layout_statistics::v0>>
+  std::vector<flatbuffers::Offset<vast::fbs::schema_statistics::v0>>
     stats_offsets;
-  for (const auto& [name, layout_stats] : stats.layouts) {
+  for (const auto& [name, schema_stats] : stats.schemas) {
     auto name_fb = builder.CreateString(name);
-    vast::fbs::layout_statistics::v0Builder stats_builder(builder);
+    vast::fbs::schema_statistics::v0Builder stats_builder(builder);
     stats_builder.add_name(name_fb);
-    stats_builder.add_count(layout_stats.count);
+    stats_builder.add_count(schema_stats.count);
     auto offset = stats_builder.Finish();
     stats_offsets.push_back(offset);
   }
@@ -226,7 +226,7 @@ int regenerate_index(const std::filesystem::path& dbdir) {
                    uuid, error);
         return 1;
       }
-      index_statistics.layouts[name->str()].count += rank(ids);
+      index_statistics.schemas[name->str()].count += rank(ids);
     }
   }
   // Build the new `index.bin`.

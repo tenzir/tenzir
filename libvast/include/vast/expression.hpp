@@ -376,12 +376,12 @@ expression normalize(expression expr);
 caf::expected<expression> normalize_and_validate(expression expr);
 
 /// Tailors an expression to a specific type.
-/// @param expr The expression to tailor to *layout*.
-/// @param layout The layout to tailor *expr* to.
-/// @pre `caf::holds_alternative<record_type>(layout)`
+/// @param expr The expression to tailor to *schema*.
+/// @param schema The schema to tailor *expr* to.
+/// @pre `caf::holds_alternative<record_type>(schema)`
 /// @returns An optimized version of *expr* specifically for evaluating events
-///          of type *layout*.
-caf::expected<expression> tailor(expression expr, const type& layout);
+///          of type *schema*.
+caf::expected<expression> tailor(expression expr, const type& schema);
 
 /// Retrieves an expression node at a given [offset](@ref offset).
 /// @param expr The expression to lookup.

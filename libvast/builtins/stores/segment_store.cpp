@@ -90,7 +90,7 @@ handle_lookup(Actor& self, const vast::query_context& query_context,
     if (query_context.expr == expression{}) {
       checkers.emplace_back();
     } else {
-      auto c = tailor(query_context.expr, slice.layout());
+      auto c = tailor(query_context.expr, slice.schema());
       if (!c)
         return c.error();
       checkers.emplace_back(prune_meta_predicates(std::move(*c)));

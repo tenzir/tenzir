@@ -6,29 +6,28 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/format/single_layout_reader.hpp"
+#include "vast/format/single_schema_reader.hpp"
 
 #include "vast/error.hpp"
 #include "vast/factory.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
-#include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
 
 #include <chrono>
 
 namespace vast::format {
 
-single_layout_reader::single_layout_reader(const caf::settings& options)
+single_schema_reader::single_schema_reader(const caf::settings& options)
   : reader(options) {
   // nop
 }
 
-single_layout_reader::~single_layout_reader() {
+single_schema_reader::~single_schema_reader() {
   // nop
 }
 
-caf::error single_layout_reader::finish(consumer& f, caf::error result) {
+caf::error single_schema_reader::finish(consumer& f, caf::error result) {
   last_batch_sent_ = reader_clock::now();
   batch_events_ = 0;
   if (builder_ != nullptr && builder_->rows() > 0) {
@@ -41,9 +40,8 @@ caf::error single_layout_reader::finish(consumer& f, caf::error result) {
   return result;
 }
 
-bool single_layout_reader::reset_builder(type layout) {
-  VAST_TRACE_SCOPE("{} {}", VAST_ARG(table_slice_type_), VAST_ARG(layout));
-  builder_ = factory<table_slice_builder>::make(table_slice_type_, layout);
+bool single_schema_reader::reset_builder(type schema) {
+  builder_ = std::make_shared<table_slice_builder>(std::move(schema));
   last_batch_sent_ = reader_clock::now();
   batch_events_ = 0;
   return builder_ != nullptr;

@@ -17,7 +17,7 @@ Let's go through each of these steps.
 To figure out what you can query, VAST offers
 [introspection](/docs/use/introspect) via the `show` command.
 
-Use `show schemas` to display the layout of all types:
+Use `show schemas` to display the schema of all types:
 
 ```bash
 vast show schemas --yaml
@@ -110,13 +110,13 @@ may print:
 ```
 
 The next section discusses how you can refer to various elements of this type
-layout.
+schema.
 
 ## Write a query expression
 
 We designed the [**VAST** **Q**uery **L**anguage
 (VASTQL)](/docs/understand/query-language) to make it easy to reference the data
-layout and put constraints on it. Specifically, VAST's expression language has
+schema and put constraints on it. Specifically, VAST's expression language has
 the concept of
 [extractors](/docs/understand/query-language/expressions#extractors) that refer
 to various parts of the event structure:

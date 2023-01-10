@@ -123,7 +123,6 @@ class active_store;
 class address;
 class address_type;
 class aggregation_function;
-class arrow_table_slice_builder;
 class bitmap;
 class bool_type;
 class chunk;
@@ -201,7 +200,7 @@ struct legacy_pattern_type;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
-struct layout_statistics;
+struct schema_statistics;
 struct legacy_real_type;
 struct legacy_record_type;
 struct status;
@@ -244,13 +243,9 @@ class legacy_deserializer;
 
 } // namespace detail
 
-void intrusive_ptr_add_ref(const table_slice_builder*);
-void intrusive_ptr_release(const table_slice_builder*);
-
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
-using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using pipeline_ptr = std::shared_ptr<pipeline>;
 using value_index_ptr = std::unique_ptr<value_index>;
 

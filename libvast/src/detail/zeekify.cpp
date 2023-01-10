@@ -34,11 +34,11 @@ bool is_opaque_id(const auto& field) {
 
 } // namespace
 
-record_type zeekify(record_type layout) {
+record_type zeekify(record_type schema) {
   auto transformations = std::vector<record_type::transformation>{};
-  transformations.reserve(layout.num_leaves());
+  transformations.reserve(schema.num_leaves());
   bool found_event_timestamp = false;
-  for (const auto& [field, offset] : layout.leaves()) {
+  for (const auto& [field, offset] : schema.leaves()) {
     if (!found_event_timestamp && field.name == "ts"
         && caf::holds_alternative<time_type>(field.type)) {
       // The first field is almost exclusively the event timestamp for standard
@@ -68,8 +68,8 @@ record_type zeekify(record_type layout) {
       });
     }
   }
-  auto adjusted_layout = layout.transform(std::move(transformations));
-  return adjusted_layout ? std::move(*adjusted_layout) : std::move(layout);
+  auto adjusted_schema = schema.transform(std::move(transformations));
+  return adjusted_schema ? std::move(*adjusted_schema) : std::move(schema);
 }
 
 } // namespace vast::detail

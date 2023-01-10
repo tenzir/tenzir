@@ -68,7 +68,7 @@ class hash_index : public value_index {
   static constexpr size_t max_hash_rounds = 32;
 
 public:
-  // TODO: switch to XXH3 once the persistent index layout is versioned and
+  // TODO: switch to XXH3 once the persistent index schema is versioned and
   // upgradable. Until then we have to support existing state produced by XXH64.
   using hash_algorithm = legacy_hash;
   using digest_type = std::array<std::byte, Bytes>;

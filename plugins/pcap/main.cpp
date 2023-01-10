@@ -11,7 +11,7 @@
 #include <vast/error.hpp>
 #include <vast/ether_type.hpp>
 #include <vast/format/reader.hpp>
-#include <vast/format/single_layout_reader.hpp>
+#include <vast/format/single_schema_reader.hpp>
 #include <vast/format/writer.hpp>
 #include <vast/frame_type.hpp>
 #include <vast/logger.hpp>
@@ -284,9 +284,9 @@ struct segment {
 };
 
 /// A PCAP reader.
-class reader : public format::single_layout_reader {
+class reader : public format::single_schema_reader {
 public:
-  using super = single_layout_reader;
+  using super = single_schema_reader;
 
   /// Constructs a PCAP reader.
   /// @param options Additional options.
@@ -661,15 +661,15 @@ public:
   using format::writer::write;
 
   caf::error write(const table_slice& slice) override {
-    auto&& layout = slice.layout();
+    auto&& schema = slice.schema();
     // TODO: relax this check. We really only need the (1) flow, and (2) PCAP
     // payload. Everything else is optional.
-    if (layout.name() != "pcap.packet"
-        || !congruent(layout, make_packet_type())) {
+    if (schema.name() != "pcap.packet"
+        || !congruent(schema, make_packet_type())) {
       return caf::make_error(
         ec::format_error, fmt::format("pcap-writer is unable to write batch "
                                       "of schema '{}': expected 'pcap.packet'",
-                                      slice.layout()));
+                                      slice.schema()));
     }
     if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
@@ -688,18 +688,18 @@ public:
     // TODO: Calculate column offsets and indices only once instead
     // of again for every row.
     for (size_t row = 0; row < slice.rows(); ++row) {
-      const auto& layout_rt = caf::get<record_type>(layout);
-      const auto payload_offset = layout_rt.resolve_key("payload");
+      const auto& schema_rt = caf::get<record_type>(schema);
+      const auto payload_offset = schema_rt.resolve_key("payload");
       VAST_ASSERT(payload_offset);
-      auto payload_field = slice.at(row, layout_rt.flat_index(*payload_offset),
-                                    layout_rt.field(*payload_offset).type);
+      auto payload_field = slice.at(row, schema_rt.flat_index(*payload_offset),
+                                    schema_rt.field(*payload_offset).type);
       auto& payload = caf::get<view<std::string>>(payload_field);
       // Make PCAP header.
       ::pcap_pkthdr header{};
-      const auto time_offset = layout_rt.resolve_key("time");
+      const auto time_offset = schema_rt.resolve_key("time");
       VAST_ASSERT(time_offset);
-      auto ns_field = slice.at(row, layout_rt.flat_index(*time_offset),
-                               layout_rt.field(*time_offset).type);
+      auto ns_field = slice.at(row, schema_rt.flat_index(*time_offset),
+                               schema_rt.field(*time_offset).type);
       auto ns = caf::get<view<time>>(ns_field).time_since_epoch().count();
       header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO

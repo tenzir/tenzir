@@ -7,13 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice.hpp>
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
+#include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/array.h>
@@ -112,13 +112,13 @@ public:
                                            "as it already has a field with "
                                            "this name",
                                            schema, field));
-    auto [adjusted_layout, adjusted_batch] = transform_columns(
+    auto [adjusted_schema, adjusted_batch] = transform_columns(
       schema, batch,
       {{offset{caf::get<record_type>(schema).num_fields() - 1},
         config_.transformation}});
-    VAST_ASSERT(adjusted_layout);
+    VAST_ASSERT(adjusted_schema);
     VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_layout),
+    transformed_.emplace_back(std::move(adjusted_schema),
                               std::move(adjusted_batch));
     return caf::none;
   }

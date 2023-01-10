@@ -240,12 +240,12 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
       return uuid_fb.error();
   }
   auto partitions = builder.CreateVector(partition_offsets);
-  std::vector<flatbuffers::Offset<fbs::layout_statistics::v0>> stats_offsets;
-  for (const auto& [name, layout_stats] : state.stats.layouts) {
+  std::vector<flatbuffers::Offset<fbs::schema_statistics::v0>> stats_offsets;
+  for (const auto& [name, schema_stats] : state.stats.schemas) {
     auto name_fb = builder.CreateString(name);
-    fbs::layout_statistics::v0Builder stats_builder(builder);
+    fbs::schema_statistics::v0Builder stats_builder(builder);
     stats_builder.add_name(name_fb);
-    stats_builder.add_count(layout_stats.count);
+    stats_builder.add_count(schema_stats.count);
     auto offset = stats_builder.Finish();
     stats_offsets.push_back(offset);
   }
@@ -537,7 +537,7 @@ caf::error index_state::load_from_disk() {
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
       persisted_partitions.emplace(partition_uuid);
-      stats.layouts[std::string{ps->schema.name()}].count += ps->events;
+      stats.schemas[std::string{ps->schema.name()}].count += ps->events;
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
     }();
@@ -603,7 +603,7 @@ caf::error index_state::load_from_disk() {
                     result.size());
           for (auto&& x : std::exchange(result, {})) {
             VAST_VERBOSE("adding newly created partition {}", x.uuid);
-            stats.layouts[std::string{x.synopsis->schema.name()}].count
+            stats.schemas[std::string{x.synopsis->schema.name()}].count
               += x.synopsis->events;
             persisted_partitions.emplace(x.uuid);
             synopses->emplace(x.uuid, std::move(x.synopsis));
@@ -655,8 +655,8 @@ caf::error index_state::load_from_disk() {
         return caf::make_error(ec::format_error, "no stats in persisted index "
                                                  "state");
       for (const auto* const stat : *stats) {
-        this->stats.layouts[stat->name()->str()]
-          = layout_statistics{stat->count()};
+        this->stats.schemas[stat->name()->str()]
+          = schema_statistics{stat->count()};
       }
     } else if (!persisted_partitions.empty()) {
       VAST_DEBUG("{} found existing database dir {} without index statefile, "
@@ -757,7 +757,7 @@ void index_state::notify_flush_listeners() {
 
 bool i_partition_selector::operator()(const type& filter,
                                       const table_slice& slice) const {
-  return filter == slice.layout();
+  return filter == slice.schema();
 }
 
 caf::expected<std::unordered_map<type, active_partition_info>::iterator>
@@ -1108,21 +1108,21 @@ index_state::status(status_verbosity v) const {
   auto rs = make_status_request_state<extra_state>(self);
   auto stats_object = record{};
   auto sum = uint64_t{0};
-  for (const auto& [_, layout_stats] : stats.layouts)
-    sum += layout_stats.count;
+  for (const auto& [_, schema_stats] : stats.schemas)
+    sum += schema_stats.count;
   auto xs = record{};
   xs["total"] = count{sum};
   stats_object["events"] = xs;
   if (v >= status_verbosity::detailed) {
-    auto layout_object = record{};
-    for (const auto& [name, layout_stats] : stats.layouts) {
+    auto schema_object = record{};
+    for (const auto& [name, schema_stats] : stats.schemas) {
       auto xs = record{};
-      xs["count"] = count{layout_stats.count};
-      xs["percentage"] = 100.0 * detail::narrow_cast<real>(layout_stats.count)
+      xs["count"] = count{schema_stats.count};
+      xs["percentage"] = 100.0 * detail::narrow_cast<real>(schema_stats.count)
                          / detail::narrow_cast<real>(sum);
-      layout_object[name] = xs;
+      schema_object[name] = xs;
     }
-    stats_object["layouts"] = std::move(layout_object);
+    stats_object["schemas"] = std::move(schema_object);
     auto backlog_status = record{};
     auto query_counters = get_query_counters(pending_queries);
     backlog_status["num-custom-priority"] = query_counters.num_custom_prio;
@@ -1278,14 +1278,14 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_ASSERT(x.encoding() != table_slice_encoding::none);
       if (!self->state.stage->running())
         return;
-      auto&& layout = x.layout();
-      // TODO: Consider switching layouts to a robin map to take advantage of
+      auto&& schema = x.schema();
+      // TODO: Consider switching schemas to a robin map to take advantage of
       // transparent key lookup with string views, avoding the copy of the name
       // here.
-      self->state.stats.layouts[std::string{layout.name()}].count += x.rows();
-      auto active_partition = self->state.active_partitions.find(layout);
+      self->state.stats.schemas[std::string{schema.name()}].count += x.rows();
+      auto active_partition = self->state.active_partitions.find(schema);
       if (active_partition == self->state.active_partitions.end()) {
-        auto part = self->state.create_active_partition(layout);
+        auto part = self->state.create_active_partition(schema);
         if (!part) {
           self->quit(caf::make_error(ec::logic_error,
                                      fmt::format("{} failed to create active "
@@ -1298,12 +1298,12 @@ index(index_actor::stateful_pointer<index_state> self,
         VAST_DEBUG("{} exceeds active capacity by {} rows", *self,
                    x.rows() - active_partition->second.capacity);
         VAST_VERBOSE(
-          "{} flushes active partition {} with {}/{} events", *self, layout,
+          "{} flushes active partition {} with {}/{} events", *self, schema,
           self->state.partition_capacity - active_partition->second.capacity,
           self->state.partition_capacity);
-        self->state.decommission_active_partition(layout, {});
+        self->state.decommission_active_partition(schema, {});
         self->state.flush_to_disk();
-        auto part = self->state.create_active_partition(layout);
+        auto part = self->state.create_active_partition(schema);
         if (!part) {
           self->quit(caf::make_error(ec::logic_error,
                                      fmt::format("{} failed to create active "
@@ -1692,7 +1692,7 @@ index(index_actor::stateful_pointer<index_state> self,
                                   path)));
                     return;
                   }
-                  // Adjust layout stats by subtracting the events of the
+                  // Adjust schema stats by subtracting the events of the
                   // removed partition.
                   if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
                       && flatbuffers::BufferHasIdentifier(
@@ -1754,8 +1754,8 @@ index(index_actor::stateful_pointer<index_state> self,
                                                         *self, stats.error())));
                         return;
                       } else {
-                        for (auto [name, stats] : stats->layouts)
-                          self->state.stats.layouts[name].count -= stats.count;
+                        for (auto [name, stats] : stats->schemas)
+                          self->state.stats.schemas[name].count -= stats.count;
                       }
                     }
                     // TODO: We could send `all_ids` as the second argument
@@ -1965,7 +1965,7 @@ index(index_actor::stateful_pointer<index_state> self,
               // the new partition here, the subtraction of the old events is
               // done in `erase`.
               auto name = std::string{info.schema.name()};
-              self->state.stats.layouts[name].count += info.events;
+              self->state.stats.schemas[name].count += info.events;
               result.emplace_back(std::move(info));
             }
             // Record in-progress marker.

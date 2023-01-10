@@ -17,7 +17,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/format/ostream_writer.hpp"
-#include "vast/format/single_layout_reader.hpp"
+#include "vast/format/single_schema_reader.hpp"
 #include "vast/module.hpp"
 
 #include <caf/fwd.hpp>
@@ -44,14 +44,14 @@ public:
   [[nodiscard]] const char* name() const override;
 
 private:
-  std::string last_layout_;
+  std::string last_schema_;
 };
 
 /// A reader for CSV data. It operates with a *selector* to determine the
 /// mapping of CSV object to the appropriate record type in the module.
-class reader final : public single_layout_reader {
+class reader final : public single_schema_reader {
 public:
-  using super = single_layout_reader;
+  using super = single_schema_reader;
   using iterator_type = std::string::const_iterator;
   using parser_type = type_erased_parser<iterator_type>;
 
@@ -83,7 +83,7 @@ private:
     std::vector<std::string> sorted;
   };
   caf::optional<type>
-  make_layout(const std::vector<std::string>& names, bool first_run = true);
+  make_schema(const std::vector<std::string>& names, bool first_run = true);
 
   caf::expected<parser_type> read_header(std::string_view line);
 

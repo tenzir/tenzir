@@ -8,7 +8,6 @@
 
 #include <vast/address.hpp>
 #include <vast/arrow_table_slice.hpp>
-#include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
@@ -16,6 +15,7 @@
 #include <vast/detail/inspection_common.hpp>
 #include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
+#include <vast/table_slice_builder.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/table.h>
@@ -36,7 +36,7 @@ struct configuration {
     return detail::apply_all(f, x.method, x.seed, x.fields);
   }
 
-  static inline const record_type& layout() noexcept {
+  static inline const record_type& schema() noexcept {
     static auto result = record_type{
       {"method", string_type{}},
       {"seed", string_type{}},
@@ -53,9 +53,9 @@ public:
   }
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
-  /// VAST layout.
+  /// VAST schema.
   [[nodiscard]] caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
     std::vector<indexed_transformation> transformations;
     auto transformation = [&](struct record_type::field field,
                               std::shared_ptr<arrow::Array> array) noexcept
@@ -83,9 +83,9 @@ public:
       };
     };
     for (const auto& field_name : config_.fields) {
-      for (const auto& index : caf::get<record_type>(layout).resolve_key_suffix(
-             field_name, layout.name())) {
-        auto index_type = caf::get<record_type>(layout).field(index).type;
+      for (const auto& index : caf::get<record_type>(schema).resolve_key_suffix(
+             field_name, schema.name())) {
+        auto index_type = caf::get<record_type>(schema).field(index).type;
         if (!caf::holds_alternative<address_type>(index_type)) {
           VAST_DEBUG("pseudonymize operator skips field '{}' of unsupported "
                      "type '{}'",
@@ -99,9 +99,9 @@ public:
     transformations.erase(std::unique(transformations.begin(),
                                       transformations.end()),
                           transformations.end());
-    auto [adjusted_layout, adjusted_batch]
-      = transform_columns(layout, batch, transformations);
-    transformed_batches_.emplace_back(std::move(adjusted_layout),
+    auto [adjusted_schema, adjusted_batch]
+      = transform_columns(schema, batch, transformations);
+    transformed_batches_.emplace_back(std::move(adjusted_schema),
                                       std::move(adjusted_batch));
     return caf::none;
   }

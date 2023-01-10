@@ -1,9 +1,9 @@
 include "uuid.fbs";
 
-namespace vast.fbs.layout_statistics;
+namespace vast.fbs.schema_statistics;
 
 table v0 {
-  /// Name of the layout.
+  /// Name of the schema.
   name: string;
 
   /// Number of events of that type.
@@ -18,7 +18,7 @@ table v0 {
   partitions: [LegacyUUID];
 
   /// The index statistics
-  stats: [layout_statistics.v0];
+  stats: [schema_statistics.v0];
 }
 
 namespace vast.fbs.index;

@@ -290,7 +290,7 @@ TEST(partition with multiple types) {
     [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       CHECK_EQUAL(apsv.size(), 3ull);
       for (auto& aps : apsv) {
-        stats.layouts[std::string{aps.synopsis->schema.name()}].count
+        stats.schemas[std::string{aps.synopsis->schema.name()}].count
           += aps.synopsis->events;
         uuids.push_back(aps.uuid);
         synopses.push_back(aps.synopsis);
@@ -299,11 +299,11 @@ TEST(partition with multiple types) {
     [&](caf::error& err) {
       FAIL("failed to persist: " << err);
     });
-  CHECK_EQUAL(stats.layouts["suricata.dns"].count, 2ull);
-  CHECK_EQUAL(stats.layouts["suricata.flow"].count, 1ull);
-  CHECK_EQUAL(stats.layouts["suricata.http"].count, 1ull);
+  CHECK_EQUAL(stats.schemas["suricata.dns"].count, 2ull);
+  CHECK_EQUAL(stats.schemas["suricata.flow"].count, 1ull);
+  CHECK_EQUAL(stats.schemas["suricata.http"].count, 1ull);
   size_t total_count = 0ull;
-  for (auto const& [layout, stats] : stats.layouts)
+  for (auto const& [schema, stats] : stats.schemas)
     total_count += stats.count;
   CHECK_EQUAL(total_count, events);
   // Verify that the partitions exist on disk.
@@ -672,10 +672,10 @@ TEST(exceeded partition size) {
       // We expect to receive 2 partitions with 4 events each.
       CHECK_EQUAL(apsv.size(), 2ull);
       for (auto& aps : apsv) {
-        stats.layouts[std::string{aps.synopsis->schema.name()}].count
+        stats.schemas[std::string{aps.synopsis->schema.name()}].count
           += aps.synopsis->events;
       }
-      CHECK_EQUAL(stats.layouts["suricata.dns"].count, 8ull);
+      CHECK_EQUAL(stats.schemas["suricata.dns"].count, 8ull);
     },
     [&](caf::error& err) {
       FAIL("failed to persist: " << err);

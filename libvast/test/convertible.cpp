@@ -34,10 +34,10 @@ struct X {
     return fun.apply(x.value);
   }
 
-  inline static const record_type& layout() noexcept {
-    if constexpr (has_layout<From>) {
+  inline static const record_type& schema() noexcept {
+    if constexpr (has_schema<From>) {
       static const auto result = record_type{
-        {"value", From::layout()},
+        {"value", From::schema()},
       };
       return result;
     } else {
@@ -156,7 +156,7 @@ struct MultiMember {
     return vast::detail::apply_all(f, a.x, a.y, a.z);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"x", integer_type{}},
       {"y", bool_type{}},
@@ -184,9 +184,9 @@ struct Nest {
     return f.apply(b.inner);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"inner", X<integer>::layout()},
+      {"inner", X<integer>::schema()},
     };
     return result;
   }
@@ -223,7 +223,7 @@ struct Complex {
     return vast::detail::apply_all(f, x.a, x.b, x.e, x.h);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"a", string_type{}},
       {"b",
@@ -242,7 +242,7 @@ struct Complex {
   }
 };
 
-TEST(nested struct - single layout) {
+TEST(nested struct - single schema) {
   auto x = Complex{};
   auto r = record{{"a", "c3po"},
                   {"b", record{{"c", integer{23}}, {"d", list{1u, 2u, 3u}}}}};
@@ -262,7 +262,7 @@ struct Enum {
     return f.apply(x.value);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"value", enumeration_type{{"foo"}, {"bar"}, {"baz"}}},
     };
@@ -287,9 +287,9 @@ TEST(parser - duration) {
 
 TEST(parser - list<subnet>) {
   auto x = std::vector<subnet>{};
-  auto layout = list_type{subnet_type{}};
+  auto schema = list_type{subnet_type{}};
   auto r = list{"10.0.0.0/8", "172.16.0.0/16"};
-  REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
+  REQUIRE_EQUAL(convert(r, x, schema), ec::no_error);
   auto ref = std::vector{unbox(to<subnet>("10.0.0.0/8")),
                          unbox(to<subnet>("172.16.0.0/16"))};
   CHECK_EQUAL(x, ref);
@@ -304,7 +304,7 @@ struct EC {
     return f.apply(x.value);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"value", enumeration_type{{{"foo"}, {"bar"}, {"baz"}}}},
     };
@@ -327,7 +327,7 @@ struct StdOpt {
     return f.apply(c.value);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"value", integer_type{}},
     };
@@ -343,7 +343,7 @@ struct CafOpt {
     return f.apply(c.value);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"value", integer_type{}},
     };
@@ -388,7 +388,7 @@ struct Vec {
     return f.apply(e.xs);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"xs", list_type{count_type{}}},
     };
@@ -416,9 +416,9 @@ struct VecS {
     return fun.apply(f.xs);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"xs", list_type{X<integer>::layout()}},
+      {"xs", list_type{X<integer>::schema()}},
     };
     return result;
   }
@@ -437,9 +437,9 @@ TEST(list to vector of struct) {
 TEST(map to map) {
   using Map = vast::detail::flat_map<count, std::string>;
   auto x = Map{};
-  auto layout = map_type{count_type{}, string_type{}};
+  auto schema = map_type{count_type{}, string_type{}};
   auto r = map{{1u, "foo"}, {12u, "bar"}, {997u, "baz"}};
-  REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
+  REQUIRE_EQUAL(convert(r, x, schema), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
   CHECK_EQUAL(x[1], "foo");
   CHECK_EQUAL(x[12], "bar");
@@ -449,11 +449,11 @@ TEST(map to map) {
 TEST(record to map) {
   using Map = vast::detail::stable_map<std::string, X<integer>>;
   auto x = Map{};
-  auto layout = map_type{string_type{}, record_type{{"value", integer_type{}}}};
+  auto schema = map_type{string_type{}, record_type{{"value", integer_type{}}}};
   auto r = record{{"foo", record{{"value", integer{-42}}}},
                   {"bar", record{{"value", integer{1337}}}},
                   {"baz", record{{"value", integer{997}}}}};
-  REQUIRE_EQUAL(convert(r, x, layout), ec::no_error);
+  REQUIRE_EQUAL(convert(r, x, schema), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
   CHECK_EQUAL(x["foo"].value.value, -42);
   CHECK_EQUAL(x["bar"].value.value, 1337);
@@ -463,7 +463,7 @@ TEST(record to map) {
 TEST(list of record to map) {
   using T = X<integer>;
   auto x = vast::detail::stable_map<std::string, T>{};
-  auto layout = map_type{
+  auto schema = map_type{
     type{string_type{}, {{"key", "outer.name"}}},
     record_type{
       {"outer",
@@ -488,7 +488,7 @@ TEST(list of record to map) {
        }},
     },
   };
-  REQUIRE_EQUAL(convert(l1, x, layout), ec::no_error);
+  REQUIRE_EQUAL(convert(l1, x, schema), ec::no_error);
   auto l2 = list{
     record{
       {"outer",
@@ -498,13 +498,13 @@ TEST(list of record to map) {
        }},
     },
   };
-  REQUIRE_EQUAL(convert(l2, x, layout), ec::no_error);
+  REQUIRE_EQUAL(convert(l2, x, schema), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
   CHECK_EQUAL(x["x"].value.value, 1);
   CHECK_EQUAL(x["y"].value.value, 82);
   CHECK_EQUAL(x["z"].value.value, -42);
   // Assigning the same keys again should fail.
-  REQUIRE_EQUAL(convert(l2, x, layout), ec::convert_error);
+  REQUIRE_EQUAL(convert(l2, x, schema), ec::convert_error);
 }
 
 struct iList {
@@ -522,7 +522,7 @@ struct iList {
     return fun.apply(x.value);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"value", list_type{count_type{}}},
     };
@@ -532,10 +532,10 @@ struct iList {
 
 TEST(list of record to map monoid) {
   auto x = vast::detail::stable_map<std::string, iList>{};
-  auto layout = map_type{
+  auto schema = map_type{
     type{string_type{}, {{"key", "outer.name"}}},
     record_type{
-      {"outer", iList::layout()},
+      {"outer", iList::schema()},
     },
   };
   auto l1 = list{
@@ -554,7 +554,7 @@ TEST(list of record to map monoid) {
        }},
     },
   };
-  REQUIRE_EQUAL(convert(l1, x, layout), ec::no_error);
+  REQUIRE_EQUAL(convert(l1, x, schema), ec::no_error);
   auto l2 = list{
     record{
       {"outer",
@@ -571,7 +571,7 @@ TEST(list of record to map monoid) {
        }},
     },
   };
-  REQUIRE_EQUAL(convert(l2, x, layout), ec::no_error);
+  REQUIRE_EQUAL(convert(l2, x, schema), ec::no_error);
   REQUIRE_EQUAL(x.size(), 2u);
   REQUIRE_EQUAL(x["x"].value.size(), 3u);
   CHECK_EQUAL(x["x"].value[0], 1u);
@@ -593,7 +593,7 @@ struct OptVec {
     return vast::detail::apply_all(f, x.ovs, x.ou);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"ovs", list_type{string_type{}}},
       {"ou", count_type{}},
@@ -612,9 +612,9 @@ struct SMap {
     return f.apply(x.xs);
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"xs", map_type{string_type{}, OptVec::layout()}},
+      {"xs", map_type{string_type{}, OptVec::schema()}},
     };
     return result;
   }
