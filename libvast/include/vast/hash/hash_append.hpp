@@ -345,13 +345,6 @@ struct hash_inspector {
     return true;
   }
 
-  template <class Getter, class Setter>
-  bool apply(Getter&& getter, Setter&&) {
-    auto&& val = std::forward<Getter>(getter)();
-    (*this)(val);
-    return true;
-  }
-
   template <class T, class... Ts>
   result_type operator()(T&& x, Ts&&... xs) const noexcept {
     hash_append(h_, std::forward<T>(x));

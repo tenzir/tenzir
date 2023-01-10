@@ -48,17 +48,23 @@ public:
   }
 
   template <class Callback>
-    requires(Inspector::is_loading == true)
-  constexpr auto on_load(Callback&& callback) {
-    return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
-      inspector_, std::forward<Callback>(callback)};
+  constexpr decltype(auto) on_load(Callback&& callback) {
+    if constexpr (Inspector::is_loading) {
+      return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
+        inspector_, std::forward<Callback>(callback)};
+    } else {
+      return *this;
+    }
   }
 
   template <class Callback>
-    requires(Inspector::is_loading == false)
-  constexpr auto on_save(Callback&& callback) {
-    return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
-      inspector_, std::forward<Callback>(callback)};
+  constexpr decltype(auto) on_save(Callback&& callback) {
+    if constexpr (!Inspector::is_loading) {
+      return inspection_object<Inspector, std::remove_cvref_t<Callback>>{
+        inspector_, std::forward<Callback>(callback)};
+    } else {
+      return *this;
+    }
   }
 
 private:
@@ -99,13 +105,15 @@ template <class Inspector, class Enum>
   requires std::is_enum_v<Enum> bool
 inspect_enum(Inspector& f, Enum& x) {
   using underlying_type = std::underlying_type_t<Enum>;
-  auto setter = [&x](underlying_type value) {
-    x = static_cast<Enum>(value);
-  };
-  auto getter = [&x] {
-    return static_cast<underlying_type>(x);
-  };
-  return f.apply(getter, setter);
+  if constexpr (Inspector::is_loading) {
+    underlying_type tmp;
+    if (!f.apply(tmp))
+      return false;
+    x = static_cast<Enum>(tmp);
+    return true;
+  } else {
+    return f.apply(static_cast<underlying_type>(x));
+  }
 }
 
 } // namespace vast::detail
