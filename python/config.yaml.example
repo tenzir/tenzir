@@ -1,9 +1,9 @@
 # - The configuration file is sourced from the directory where the Python script
-#   is exectuted from.
+#   is exectuted from and is expected to be named `config.yaml` or `config.yml`
 # - The configurations are defaulted with the values specified in this example
-#   file.
+#   file
 # - Configurations can also be provided through environment variables, e.g:
-#   `python.console-verbosity` maps to VAST_PYTHON_CONSOLE_VERBOSITY
+#   `python.console-verbosity` maps to `VAST_PYTHON_CONSOLE_VERBOSITY`
 
 python:
   console-verbosity: "debug"
