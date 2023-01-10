@@ -155,9 +155,9 @@ using indexer_actor = typed_actor_fwd<
 
 /// The ACTIVE INDEXER actor interface.
 using active_indexer_actor = typed_actor_fwd<
-  // Hooks into the table slice column stream.
-  auto(caf::stream<table_slice_column>)
-    ->caf::result<caf::inbound_stream_slot<table_slice_column>>,
+  // Hooks into the table slice stream.
+  auto(caf::stream<table_slice>)
+    ->caf::result<caf::inbound_stream_slot<table_slice>>,
   // Finalizes the ACTIVE INDEXER into a chunk, which containes an INDEXER.
   auto(atom::snapshot)->caf::result<chunk_ptr>>
   // Conform the the INDEXER ACTOR interface.

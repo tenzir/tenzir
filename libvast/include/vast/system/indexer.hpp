@@ -10,10 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/fbs/partition.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/instrumentation.hpp"
-#include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -25,14 +22,16 @@ namespace vast::system {
 // TODO: Create a separate `passive_indexer_state`, similar to how partitions
 // are handled.
 struct indexer_state {
-  /// The name of this indexer.
-  std::string name;
+  constexpr static inline auto name = "index";
 
   /// The index holding the data.
   value_index_ptr idx;
 
   /// The partition id to which this indexer belongs (for log messages).
   uuid partition_id;
+
+  /// The flat index of the column that the indexer is attached to.
+  size_t column;
 
   /// Tracks whether we received at least one table slice column.
   bool stream_initiated;
@@ -43,13 +42,12 @@ struct indexer_state {
 
 /// Indexes a table slice column with a single value index.
 /// @param self A pointer to the spawned actor.
-/// @param name The name of the column.
+/// @param column The flat index of the column in the slice schema.
 /// @param index The underlying value index.
-/// @pre !name.empty()
 /// @pre index
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
-               const std::string& name, value_index_ptr index);
+               size_t column, value_index_ptr index);
 
 /// An indexer that was recovered from on-disk state. It can only respond
 /// to queries, but not add eny more entries.

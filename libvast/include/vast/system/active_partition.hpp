@@ -21,7 +21,6 @@
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
@@ -43,13 +42,6 @@ bool should_skip_index_creation(const type& type,
                                 const qualified_record_field& qf,
                                 const std::vector<index_config::rule>& rules);
 
-/// Helper class used to route table slice columns to the correct indexer
-/// in the CAF stream stage.
-struct partition_selector {
-  bool operator()(const qualified_record_field& filter,
-                  const table_slice_column& column) const;
-};
-
 /// The state of the ACTIVE PARTITION actor.
 struct active_partition_state {
   // -- constructor ------------------------------------------------------------
@@ -58,10 +50,9 @@ struct active_partition_state {
 
   // -- member types -----------------------------------------------------------
 
-  using partition_stream_stage_ptr = caf::stream_stage_ptr<
-    table_slice,
-    caf::broadcast_downstream_manager<
-      table_slice_column, vast::qualified_record_field, partition_selector>>;
+  using partition_stream_stage_ptr
+    = caf::stream_stage_ptr<table_slice,
+                            caf::broadcast_downstream_manager<table_slice>>;
 
   /// Contains all the data necessary to create a partition flatbuffer.
   struct serialization_data {
