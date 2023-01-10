@@ -11,16 +11,16 @@ def configure(config: Dynaconf, logger: logging.Logger):
     fmt = "%(asctime)s %(name)s %(levelname)-7s %(message)s"
     colored_formatter = coloredlogs.ColoredFormatter(fmt)
     plain_formatter = logging.Formatter(fmt)
-    if config.file_verbosity != "quiet":
-        fh = logging.FileHandler(config.filename)
-        fh_level = logging.getLevelName(config.file_verbosity.upper())
+    if config.get("file-verbosity") != "quiet":
+        fh = logging.FileHandler(config.get("log-file"))
+        fh_level = logging.getLevelName(config.get("file-verbosity").upper())
         logger.setLevel(fh_level)
         fh.setLevel(fh_level)
         fh.setFormatter(plain_formatter)
         logger.addHandler(fh)
-    if config.console_verbosity != "quiet":
+    if config.get("console-verbosity") != "quiet":
         ch = logging.StreamHandler()
-        ch_level = logging.getLevelName(config.console_verbosity.upper())
+        ch_level = logging.getLevelName(config.get("console-verbosity").upper())
         ch.setLevel(ch_level)
         if logger.level > ch_level or logger.level == 0:
             logger.setLevel(ch_level)
