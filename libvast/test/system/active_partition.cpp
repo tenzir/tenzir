@@ -155,7 +155,6 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(synopsis.max_import_time, now);
   CHECK_EQUAL(synopsis.field_synopses_.size(), 1u);
   CHECK_EQUAL(synopsis.type_synopses_.size(), 1u);
-  CHECK_EQUAL(synopsis.offset, 0u);
   const auto& partition_chunk = last_written_chunks.at(persist_path).front();
   const auto container = vast::fbs::flatbuffer_container{partition_chunk};
   const auto part_fb
@@ -172,7 +171,6 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   expected_ids.append_bit(true);
   CHECK_EQUAL(passive_state.type_ids_.at(std::string{schema_.name()}),
               expected_ids);
-  CHECK_EQUAL(passive_state.offset, 0u);
   CHECK_EQUAL(passive_state.events, 1u);
   CHECK_EQUAL(passive_state.store_id, input_store_id);
   CHECK_EQUAL(passive_state.store_header, as_bytes(partition_header));

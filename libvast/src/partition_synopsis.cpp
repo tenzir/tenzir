@@ -17,7 +17,6 @@
 namespace vast {
 
 partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
-  offset = std::exchange(that.offset, {});
   events = std::exchange(that.events, {});
   min_import_time = std::exchange(that.min_import_time, time::max());
   max_import_time = std::exchange(that.max_import_time, time::min());
@@ -31,7 +30,6 @@ partition_synopsis::partition_synopsis(partition_synopsis&& that) noexcept {
 partition_synopsis&
 partition_synopsis::operator=(partition_synopsis&& that) noexcept {
   if (this != &that) {
-    offset = std::exchange(that.offset, {});
     events = std::exchange(that.events, {});
     min_import_time = std::exchange(that.min_import_time, time::max());
     max_import_time = std::exchange(that.max_import_time, time::min());
@@ -180,7 +178,6 @@ size_t partition_synopsis::memusage() const {
 
 partition_synopsis* partition_synopsis::copy() const {
   auto result = std::make_unique<partition_synopsis>();
-  result->offset = offset;
   result->events = events;
   result->min_import_time = min_import_time;
   result->max_import_time = max_import_time;
@@ -228,7 +225,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
     reinterpret_cast<const uint8_t*>(schema_bytes.data()), schema_bytes.size());
   fbs::partition_synopsis::LegacyPartitionSynopsisBuilder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
-  vast::fbs::uinterval id_range{x.offset, x.offset + x.events};
+  vast::fbs::uinterval id_range{0, x.events};
   ps_builder.add_id_range(&id_range);
   vast::fbs::interval import_time_range{
     x.min_import_time.time_since_epoch().count(),
@@ -271,8 +268,8 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
                   partition_synopsis& ps) {
   if (!x.id_range())
     return caf::make_error(ec::format_error, "missing id range");
-  ps.offset = x.id_range()->begin();
-  ps.events = x.id_range()->end() - x.id_range()->begin();
+  VAST_ASSERT_CHEAP(x.id_range()->begin() == 0);
+  ps.events = x.id_range()->end();
   if (x.import_time_range()) {
     ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
     ps.max_import_time = time{} + duration{x.import_time_range()->end()};

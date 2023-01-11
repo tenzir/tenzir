@@ -411,7 +411,6 @@ partition_transformer_actor::behavior_type partition_transformer(
         // TODO: It would make more sense if the partition
         // synopsis keeps track of offset/events internally.
         mutable_synopsis.shrink();
-        mutable_synopsis.offset = 0;
         mutable_synopsis.events = data.events;
         for (auto& [qf, idx] :
              self->state.partition_buildup.at(data.id).indexers) {

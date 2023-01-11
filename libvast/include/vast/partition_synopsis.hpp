@@ -51,9 +51,6 @@ struct partition_synopsis final : public caf::ref_counted {
   ///          synopsis.
   size_t memusage() const;
 
-  /// Id of the first event in the partition.
-  uint64_t offset = invalid_id;
-
   // Number of events in the partition.
   uint64_t events = 0;
 

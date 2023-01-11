@@ -225,7 +225,6 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   if (auto error = unpack(*partition.uuid(), state.id))
     return error;
   state.events = partition.events();
-  state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
   if (auto schema = unpack_schema(partition))
     state.combined_schema_ = std::move(*schema);

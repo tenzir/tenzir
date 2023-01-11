@@ -80,9 +80,6 @@ struct passive_partition_state {
   /// A readable name for this partition.
   std::string name = {};
 
-  /// The first ID in the partition.
-  size_t offset = {};
-
   /// The number of events in the partition.
   size_t events = {};
 
