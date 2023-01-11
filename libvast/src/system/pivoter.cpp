@@ -81,9 +81,9 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,
-                               fmt::format("pivoter failed to normalize and "
+                               fmt::format("{} failed to normalize and "
                                            "validate expression: {}",
-                                           normalized_expr.error())));
+                                           *self, normalized_expr.error())));
     return {};
   }
   expr = *normalized_expr;

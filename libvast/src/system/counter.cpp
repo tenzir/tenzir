@@ -62,9 +62,9 @@ caf::behavior counter(caf::stateful_actor<counter_state>* self, expression expr,
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,
-                               fmt::format("counter failed to normalize and "
+                               fmt::format("{} failed to normalize and "
                                            "validate expression: {}",
-                                           normalized_expr.error())));
+                                           *self, normalized_expr.error())));
     return {};
   }
   self->state.init(std::move(*normalized_expr), std::move(index),

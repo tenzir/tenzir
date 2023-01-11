@@ -204,9 +204,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,
-                               fmt::format("exporter failed to normalize and "
+                               fmt::format("{} failed to normalize and "
                                            "validate expression: {}",
-                                           normalized_expr.error())));
+                                           *self, normalized_expr.error())));
     return exporter_actor::behavior_type::make_empty_behavior();
   }
   expr = *normalized_expr;
