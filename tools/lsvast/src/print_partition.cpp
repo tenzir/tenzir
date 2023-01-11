@@ -143,7 +143,6 @@ void print_partition_legacy(
     if (auto error = unpack(*partition->uuid(), id))
       fmt::print(stderr, "{}{}", indent, to_string(error));
   fmt::print("{}uuid: {}\n", indent, id);
-  fmt::print("{}offset: {}\n", indent, partition->offset());
   fmt::print("{}events: {}\n", indent, partition->events());
   // Print contained event types.
   fmt::print("{}Event Types: \n", indent);
