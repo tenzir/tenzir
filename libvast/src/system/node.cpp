@@ -511,7 +511,7 @@ node_state::spawn_command(const invocation& inv,
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }
   // Spawn our new VAST component.
-  spawn_arguments args{spawn_inv, self->state.dir, label, std::nullopt};
+  spawn_arguments args{spawn_inv, self->state.dir, label};
   auto component = spawn_component(self, args.inv, args);
   if (!component) {
     if (component.error())

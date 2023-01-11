@@ -32,8 +32,8 @@
 namespace vast::system {
 
 caf::expected<expression>
-normalized_and_validated(std::vector<std::string>::const_iterator begin,
-                         std::vector<std::string>::const_iterator end) {
+parse_expression(std::vector<std::string>::const_iterator begin,
+                 std::vector<std::string>::const_iterator end) {
   if (begin == end)
     return caf::make_error(ec::syntax_error, "no query expression given");
   auto query = detail::join(begin, end, " ");
@@ -48,7 +48,7 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
   }
   for (const auto& query_language : query_languages) {
     if (auto expr = query_language->make_query(query))
-      return normalize_and_validate(std::move(*expr));
+      return expr;
     else
       VAST_DEBUG("failed to parse query as {} language: {}",
                  query_language->name(), expr.error());
@@ -58,20 +58,12 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
 }
 
 caf::expected<expression>
-normalized_and_validated(const std::vector<std::string>& args) {
-  return normalized_and_validated(args.begin(), args.end());
+parse_expression(const std::vector<std::string>& args) {
+  return parse_expression(args.begin(), args.end());
 }
 
-caf::expected<expression>
-normalized_and_validated(const spawn_arguments& args) {
-  auto& arguments = args.inv.arguments;
-  return normalized_and_validated(arguments.begin(), arguments.end());
-}
-
-caf::expected<expression> get_expression(const spawn_arguments& args) {
-  if (args.expr)
-    return *args.expr;
-  auto expr = system::normalized_and_validated(args.inv.arguments);
+caf::expected<expression> parse_expression(const spawn_arguments& args) {
+  auto expr = system::parse_expression(args.inv.arguments);
   if (!expr)
     return expr.error();
   return *expr;

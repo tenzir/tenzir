@@ -201,6 +201,15 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options, std::vector<pipeline>&& pipelines) {
+  auto normalized_expr = normalize_and_validate(expr);
+  if (!normalized_expr) {
+    self->quit(caf::make_error(ec::format_error,
+                               fmt::format("exporter failed to normalize and "
+                                           "validate expression: {}",
+                                           normalized_expr.error())));
+    return exporter_actor::behavior_type::make_empty_behavior();
+  }
+  expr = *normalized_expr;
   self->state.options = options;
   self->state.query_context
     = vast::query_context::make_extract("export", self, std::move(expr));
