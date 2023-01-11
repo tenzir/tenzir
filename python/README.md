@@ -31,6 +31,14 @@ Run the unit tests via pytest:
 poetry run pytest
 ```
 
+### Integration Tests
+
+Run the integrations tests via Docker Compose and pytest:
+
+```bash
+docker compose -f "../docker/compose/vast.tests.yaml" up --build
+```
+
 ## Packaging
 
 The following instructions concern maintainers who want to publish the Python

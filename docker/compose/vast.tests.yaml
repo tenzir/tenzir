@@ -1,0 +1,12 @@
+version: "3"
+services:
+  vast-tests:
+    build:
+      context: ../..
+      dockerfile: docker/dev/app.Dockerfile
+      target: bindings-tests
+      args:
+        - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
+        - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
+    environment:
+      - VAST_CONSOLE_VERBOSITY=info

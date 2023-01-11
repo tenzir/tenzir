@@ -1,10 +1,9 @@
 import asyncio
-import io
 import json
 import time
-from collections import defaultdict
+from abc import ABC
 from enum import Enum, auto
-from typing import Any, AsyncIterable, Dict
+from typing import Any, AsyncIterable, Dict, Optional
 
 import pyarrow as pa
 import vast.utils.arrow
@@ -22,6 +21,38 @@ class ExportMode(Enum):
     UNIFIED = auto()
 
 
+class TableSlice(ABC):
+    """The VAST abstraction wrapping Arrow record batches"""
+
+
+class PyArrowTableSlice(TableSlice):
+    """A TableSlice internally represented by a PyArrow RecordBatch"""
+
+    def __init__(self, batch: pa.RecordBatch):
+        self._batch = batch
+
+
+class AsyncRecordBatchStreamReader:
+    def __init__(self, source):
+        self.reader = pa.RecordBatchStreamReader(source)
+        self.loop = asyncio.get_event_loop()
+
+    def _next_batch(self) -> Optional[TableSlice]:
+        try:
+            return PyArrowTableSlice(self.reader.read_next_batch())
+        except StopIteration:
+            return None
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> TableSlice:
+        value = await self.loop.run_in_executor(None, self._next_batch)
+        if value is None:
+            raise StopAsyncIteration
+        return value
+
+
 class VAST:
     """An instance of a VAST node."""
 
@@ -29,62 +60,7 @@ class VAST:
         pass
 
     @staticmethod
-    async def start():
-        """Starts a VAST node."""
-        self = VAST()
-        proc = await CLI().start().exec()
-        await proc.communicate()
-        logger.debug(proc.stderr.decode())
-        return self
-
-    async def export(self, expression: str, limit: int = 100):
-        """Executes a VAST and receives results as Arrow Tables."""
-        proc = await CLI().export(max_events=limit).arrow(expression).exec()
-        stdout, stderr = await proc.communicate()
-        logger.debug(stderr.decode())
-        istream = pa.input_stream(io.BytesIO(stdout))
-        num_batches = 0
-        num_rows = 0
-        batches = defaultdict(list)
-        try:
-            while True:
-                reader = pa.ipc.RecordBatchStreamReader(istream)
-                try:
-                    while True:
-                        batch = reader.read_next_batch()
-                        name = vast.utils.arrow.name(batch.schema)
-                        logger.debug(f"got batch of {name}")
-                        num_batches += 1
-                        num_rows += batch.num_rows
-                        # TODO: this might be slow, but schemas are not
-                        # hashable. The string representation is the next best
-                        # thing to determine uniqueness.
-                        batches[batch.schema.to_string()].append(batch)
-                except StopIteration:
-                    logger.debug(f"read {num_batches}/{num_rows} batches/rows")
-                    num_batches = 0
-                    num_rows = 0
-        except pa.ArrowInvalid:
-            logger.debug("completed processing stream of record batches")
-        result = defaultdict(list)
-        for (_, batches) in batches.items():
-            table = pa.Table.from_batches(batches)
-            name = vast.utils.arrow.name(table.schema)
-            result[name].append(table)
-        return result
-
-    @staticmethod
-    async def export_rows(
-        expression: str, mode: ExportMode, limit: int = -1
-    ) -> AsyncIterable[Dict[str, Any]]:
-        """Get a row wise view of the data
-
-        This method does not provide type information because it is using json
-        as export format. It is a temporary workaround for asynchronicity issues
-        with PyArrow, but we plan to have all VAST Python exports properly typed
-        and backed by Arrow."""
-        if limit == 0:
-            return
+    def _export_args(mode: ExportMode, limit: int):
         args = {}
         match mode:
             case ExportMode.CONTINUOUS:
@@ -95,20 +71,45 @@ class VAST:
                 pass
         if limit > 0:
             args["max_events"] = limit
-        proc = await CLI().export(**args).json(expression).exec()
-        while True:
-            if proc.stdout.at_eof():
-                break
-            line = await proc.stdout.readline()
-            if line.strip() == b"":
-                continue
-            line_dict = json.loads(line)
-            assert isinstance(line_dict, Dict)
-            yield line_dict
+        return args
 
-        _, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            logger.error(stderr.decode())
+    @staticmethod
+    async def start():
+        """Starts a VAST node."""
+        self = VAST()
+        proc = await CLI().start().exec()
+        await proc.communicate()
+        logger.debug(proc.stderr.decode())
+        return self
+
+    @staticmethod
+    async def export(
+        expression: str, mode: ExportMode = ExportMode.HISTORICAL, limit: int = 100
+    ) -> AsyncIterable[TableSlice]:
+        """Executes a VAST and receives results as Arrow Tables."""
+        if limit == 0:
+            return
+        cmd = CLI().export(**VAST._export_args(mode, limit))
+        if expression == "":
+            cmd = cmd.arrow()
+        else:
+            cmd = cmd.arrow(expression)
+        proc = cmd.sync_exec()
+        try:
+            # VAST concatenates IPC streams for different types so we need to
+            # spawn multiple stream readers
+            while True:
+                async for batch in AsyncRecordBatchStreamReader(proc.stdout):
+                    yield batch
+        except Exception as e:
+            # Process should be completed when stdout is closed, but Popen state
+            # might not be updated yet. Calling `wait()` with a very short
+            # timeout ensures the returncode is properly set.
+            if isinstance(e, pa.ArrowInvalid) and proc.wait(0.1) == 0:
+                logger.debug("completed processing stream of record batches")
+            else:
+                logger.error(proc.stderr)
+                raise e
 
     @staticmethod
     async def status(timeout=0, retry_delay=0.5, **kwargs) -> str:
