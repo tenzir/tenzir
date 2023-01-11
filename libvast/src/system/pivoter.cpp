@@ -78,7 +78,7 @@ pivoter_state::pivoter_state(caf::event_based_actor*) {
 
 caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
                       std::string target, expression expr) {
-  auto normalized_expr = normalize_and_validate(expr);
+  auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,
                                fmt::format("pivoter failed to normalize and "
