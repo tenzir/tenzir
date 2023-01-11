@@ -13,7 +13,6 @@
 #include <vast/detail/filter_dir.hpp>
 #include <vast/detail/logger_formatters.hpp>
 #include <vast/fbs/utils.hpp>
-#include <vast/index_statistics.hpp>
 #include <vast/io/read.hpp>
 #include <vast/io/write.hpp>
 #include <vast/partition_synopsis.hpp>
@@ -86,7 +85,6 @@ int regenerate_mdx(const std::filesystem::path& dbdir) {
 }
 
 caf::error write_index_bin(const std::vector<vast::uuid>& uuids,
-                           const vast::index_statistics& stats,
                            const std::filesystem::path& index_file) {
   flatbuffers::FlatBufferBuilder builder;
   std::vector<flatbuffers::Offset<vast::fbs::LegacyUUID>> partition_offsets;
@@ -159,9 +157,8 @@ int regenerate_index_nocontent(const std::filesystem::path& dbdir) {
     }
     uuids.push_back(uuid);
   }
-  auto index_statistics = vast::index_statistics{};
   // Build the new `index.bin`.
-  if (auto error = write_index_bin(uuids, index_statistics, index_file)) {
+  if (auto error = write_index_bin(uuids, index_file)) {
     fmt::print(stderr, "error writing index to {}: {}", index_file, error);
     return 1;
   }
@@ -193,7 +190,6 @@ int regenerate_index(const std::filesystem::path& dbdir) {
     fmt::print(stderr, "Error traversing directory: {}", files.error());
     return 1;
   }
-  auto index_statistics = vast::index_statistics{};
   auto uuids = std::vector<vast::uuid>{};
   for (auto& file : *files) {
     auto partition_file = file.filename().replace_extension("");
@@ -226,11 +222,10 @@ int regenerate_index(const std::filesystem::path& dbdir) {
                    uuid, error);
         return 1;
       }
-      index_statistics.schemas[name->str()].count += rank(ids);
     }
   }
   // Build the new `index.bin`.
-  if (auto error = write_index_bin(uuids, index_statistics, index_file)) {
+  if (auto error = write_index_bin(uuids, index_file)) {
     fmt::print(stderr, "error writing index to {}: {}", index_file, error);
     return 1;
   }

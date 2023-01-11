@@ -78,8 +78,6 @@ TEST(index roundtrip) {
     expected_uuids.insert(kv.first);
   for (auto& persisted : state.persisted_partitions)
     expected_uuids.insert(persisted);
-  // Add some fake statistics
-  state.stats.schemas["zeek.conn"] = vast::schema_statistics{54931u};
   // Serialize the index.
   flatbuffers::FlatBufferBuilder builder;
   auto index = pack(builder, state);
@@ -105,13 +103,6 @@ TEST(index roundtrip) {
     restored_uuids.insert(restored_uuid);
   }
   CHECK_EQUAL(expected_uuids, restored_uuids);
-  // Check that schema statistics were restored correctly
-  auto stats = idx_v0->stats();
-  REQUIRE(stats);
-  REQUIRE_EQUAL(stats->size(), 1u);
-  REQUIRE(stats->Get(0));
-  CHECK_EQUAL(stats->Get(0)->name()->str(), std::string{"zeek.conn"});
-  CHECK_EQUAL(stats->Get(0)->count(), 54931u);
 }
 
 namespace {

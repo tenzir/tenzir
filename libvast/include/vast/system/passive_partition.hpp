@@ -138,8 +138,6 @@ unpack(const fbs::partition::LegacyPartition&, partition_synopsis&);
 /// used by different VAST versions. They are also a stop-gap until we introduce
 /// a dedicated class to wrap a partition flatbuffer.
 struct partition_chunk {
-  static caf::expected<index_statistics> get_statistics(vast::chunk_ptr);
-
   static caf::expected<const vast::fbs::Partition*>
     get_flatbuffer(vast::chunk_ptr);
 };

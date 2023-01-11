@@ -11,7 +11,6 @@
 #include "vast/detail/friend_attribute.hpp"
 #include "vast/fbs/partition_synopsis.hpp"
 #include "vast/index_config.hpp"
-#include "vast/index_statistics.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"

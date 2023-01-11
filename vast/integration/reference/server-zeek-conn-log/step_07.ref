@@ -1,6 +1,6 @@
 {
   "zeek.conn": {
-    "count": 34090,
-    "percentage": 100
+    "num-events": 34090,
+    "num-partitions": 5
   }
 }

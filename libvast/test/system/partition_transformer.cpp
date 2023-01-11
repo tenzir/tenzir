@@ -262,36 +262,24 @@ TEST(partition with multiple types) {
                   SYNOPSIS_PATH_TEMPLATE);
   REQUIRE(transformer);
   // Stream data with three different types
-  size_t events = 0;
-  for (auto& slice : suricata_dns_log) {
-    events += slice.rows();
+  for (auto& slice : suricata_dns_log)
     self->send(transformer, slice);
-  }
-  for (auto& slice : suricata_http_log) {
-    events += slice.rows();
+  for (auto& slice : suricata_http_log)
     self->send(transformer, slice);
-  }
-  for (auto& slice : suricata_dns_log) {
-    events += slice.rows();
+  for (auto& slice : suricata_dns_log)
     self->send(transformer, slice);
-  }
-  for (auto& slice : suricata_flow_log) {
-    events += slice.rows();
+  for (auto& slice : suricata_flow_log)
     self->send(transformer, slice);
-  }
   self->send(transformer, vast::atom::done_v);
   run();
   auto rp = self->request(transformer, caf::infinite, vast::atom::persist_v);
   run();
   auto synopses = std::vector<vast::partition_synopsis_ptr>{};
   auto uuids = std::vector<vast::uuid>{};
-  auto stats = vast::index_statistics{};
   rp.receive(
     [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       CHECK_EQUAL(apsv.size(), 3ull);
       for (auto& aps : apsv) {
-        stats.schemas[std::string{aps.synopsis->schema.name()}].count
-          += aps.synopsis->events;
         uuids.push_back(aps.uuid);
         synopses.push_back(aps.synopsis);
       }
@@ -299,13 +287,6 @@ TEST(partition with multiple types) {
     [&](caf::error& err) {
       FAIL("failed to persist: " << err);
     });
-  CHECK_EQUAL(stats.schemas["suricata.dns"].count, 2ull);
-  CHECK_EQUAL(stats.schemas["suricata.flow"].count, 1ull);
-  CHECK_EQUAL(stats.schemas["suricata.http"].count, 1ull);
-  size_t total_count = 0ull;
-  for (auto const& [schema, stats] : stats.schemas)
-    total_count += stats.count;
-  CHECK_EQUAL(total_count, events);
   // Verify that the partitions exist on disk.
   for (auto& uuid : uuids) {
     auto partition_path
@@ -666,16 +647,12 @@ TEST(exceeded partition size) {
   run();
   auto synopses = std::vector<vast::partition_synopsis_ptr>{};
   auto uuids = std::vector<vast::uuid>{};
-  auto stats = vast::index_statistics{};
   rp.receive(
     [&](std::vector<vast::partition_synopsis_pair>& apsv) {
       // We expect to receive 2 partitions with 4 events each.
-      CHECK_EQUAL(apsv.size(), 2ull);
-      for (auto& aps : apsv) {
-        stats.schemas[std::string{aps.synopsis->schema.name()}].count
-          += aps.synopsis->events;
-      }
-      CHECK_EQUAL(stats.schemas["suricata.dns"].count, 8ull);
+      REQUIRE_EQUAL(apsv.size(), 2ull);
+      CHECK_EQUAL(apsv[0].synopsis->events, 4ull);
+      CHECK_EQUAL(apsv[1].synopsis->events, 4ull);
     },
     [&](caf::error& err) {
       FAIL("failed to persist: " << err);

@@ -795,10 +795,49 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [self](atom::status, status_verbosity v) {
       record result;
       result["memory-usage"] = count{self->state.memusage()};
-      result["num-partitions"] = count{self->state.synopses_per_type.size()};
+      auto num_events = count{};
+      auto num_partitions = count{};
+      struct schema_stats_entry {
+        count num_events = {};
+        count num_partitions = {};
+        time min_import_time = time::max();
+        time max_import_time = time::min();
+      };
+      auto schema_stats
+        = std::unordered_map<std::string_view, schema_stats_entry>{};
+      for (const auto& [schema, synopses] : self->state.synopses_per_type) {
+        num_partitions += synopses.size();
+        auto& schema_stats_entry = schema_stats[schema.name()];
+        schema_stats_entry.num_partitions += synopses.size();
+        for (const auto& [_, synopsis] : synopses) {
+          num_events += synopsis->events;
+          schema_stats_entry.num_events += synopsis->events;
+          schema_stats_entry.min_import_time = std::min(
+            schema_stats_entry.min_import_time, synopsis->min_import_time);
+          schema_stats_entry.max_import_time = std::max(
+            schema_stats_entry.max_import_time, synopsis->max_import_time);
+        }
+      }
+      auto schemas = record{};
+      schemas.reserve(schema_stats.size());
+      for (const auto& [name, stats] : schema_stats) {
+        auto entry = record{
+          {"num-events", stats.num_events},
+          {"num-partitions", stats.num_partitions},
+          {"import-time",
+           record{
+             {"min", stats.min_import_time},
+             {"max", stats.max_import_time},
+           }},
+        };
+        schemas.emplace(std::string{name}, std::move(entry));
+      }
+      result["num-events"] = num_events;
+      result["num-partitions"] = num_partitions;
+      result["schemas"] = std::move(schemas);
       if (v >= status_verbosity::detailed) {
         auto partitions = list{};
-        partitions.reserve(self->state.synopses_per_type.size());
+        partitions.reserve(num_partitions);
         for (const auto& [type, id_synopsis_map] :
              self->state.synopses_per_type) {
           for (const auto& [id, synopsis] : id_synopsis_map) {

@@ -26,15 +26,6 @@ namespace vast::system {
 
 namespace {
 
-void update_statistics(index_statistics& stats, const table_slice& slice) {
-  auto schema_name = slice.schema().name();
-  auto& schemas = stats.schemas;
-  auto it = schemas.find(schema_name);
-  if (it == schemas.end())
-    it = schemas.emplace(std::string{schema_name}, schema_statistics{}).first;
-  it.value().count += slice.rows();
-}
-
 // A local reimplementation of `caf::broadcast_downstream_manager::push_to()`,
 // because that function was only added late in the 0.17.x cycle and is not
 // available on the Debian 10 packaged version of CAF.
@@ -300,7 +291,6 @@ partition_transformer_actor::behavior_type partition_transformer(
   });
   return {
     [self](vast::table_slice& slice) {
-      update_statistics(self->state.stats_in, slice);
       const auto old_import_time = slice.import_time();
       if (auto err = self->state.transform->add(std::move(slice))) {
         VAST_ERROR("{} failed to add slice: {}", *self, err);
@@ -337,7 +327,6 @@ partition_transformer_actor::behavior_type partition_transformer(
           = std::min(slice.import_time(), unshared_synopsis->min_import_time);
         unshared_synopsis->max_import_time
           = std::max(slice.import_time(), unshared_synopsis->max_import_time);
-        update_statistics(self->state.stats_out, slice);
         partition_data.events += slice.rows();
         self->state.events += slice.rows();
         self->state.partition_buildup[partition_data.id].slices.push_back(

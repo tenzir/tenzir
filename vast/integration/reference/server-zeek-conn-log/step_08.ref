@@ -1,4 +1,5 @@
 {"path":["catalog","memory-usage"],"type":"number"}
+{"path":["catalog","num-events"],"type":"number"}
 {"path":["catalog","num-partitions"],"type":"number"}
 {"path":["catalog","partitions",0,"id"],"type":"string"}
 {"path":["catalog","partitions",0,"schema"],"type":"string"}
@@ -25,6 +26,10 @@
 {"path":["catalog","partitions",4,"num-events"],"type":"number"}
 {"path":["catalog","partitions",4,"import-time","min"],"type":"string"}
 {"path":["catalog","partitions",4,"import-time","max"],"type":"string"}
+{"path":["catalog","schemas","zeek.conn","import-time","max"],"type":"string"}
+{"path":["catalog","schemas","zeek.conn","import-time","min"],"type":"string"}
+{"path":["catalog","schemas","zeek.conn","num-events"],"type":"number"}
+{"path":["catalog","schemas","zeek.conn","num-partitions"],"type":"number"}
 {"path":["filesystem","type"],"type":"string"}
 {"path":["index","backlog","num-custom-priority"],"type":"number"}
 {"path":["index","backlog","num-low-priority"],"type":"number"}
@@ -34,9 +39,6 @@
 {"path":["index","num-cached-partitions"],"type":"number"}
 {"path":["index","num-unpersisted-partitions"],"type":"number"}
 {"path":["index","partitions","cached",0,"id"],"type":"string"}
-{"path":["index","statistics","events","total"],"type":"number"}
-{"path":["index","statistics","schemas","zeek.conn","count"],"type":"number"}
-{"path":["index","statistics","schemas","zeek.conn","percentage"],"type":"number"}
 {"path":["index","workers","busy"],"type":"number"}
 {"path":["index","workers","count"],"type":"number"}
 {"path":["index","workers","idle"],"type":"number"}

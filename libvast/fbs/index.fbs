@@ -17,8 +17,8 @@ table v0 {
   /// The contained partition UUIDs.
   partitions: [LegacyUUID];
 
-  /// The index statistics
-  stats: [schema_statistics.v0];
+  /// The index statistics; removed with VAST v3.0.
+  stats: [schema_statistics.v0] (deprecated);
 }
 
 namespace vast.fbs.index;
