@@ -17,8 +17,32 @@ vast status
 ```json
 {
   "catalog": {
-    "memory-usage": 0,
-    "num-partitions": 0
+    "memory-usage": 1512,
+    "num-events": 2,
+    "num-partitions": 2,
+    "schemas": {
+      "suricata.alert": {
+        "import-time": {
+          "max": "2023-01-11T15:14:59.921171",
+          "min": "2023-01-11T15:14:59.921171"
+        },
+        "num-events": 1,
+        "num-partitions": 1
+      },
+      "suricata.dns": {
+        "import-time": {
+          "max": "2023-01-11T15:14:59.920248",
+          "min": "2023-01-11T15:14:59.920248"
+        },
+        "num-events": 1,
+        "num-partitions": 1
+      }
+    }
+  },
+  "disk-monitor": {
+    "disk-monitor": {
+      "blacklist-size": 0
+    }
   },
   "filesystem": {
     "type": "POSIX"
@@ -29,36 +53,31 @@ vast status
     }
   },
   "index": {
-    "memory-usage": 0,
-    "statistics": {
-      "events": {
-        "total": 0
-      }
-    }
+    "memory-usage": 0
   },
   "system": {
     "current-memory-usage": 499281920,
     "database-path": "/var/lib/vast",
-    "in-memory-table-slices": 0,
-    "peak-memory-usage": 499281920,
-    "swap-space-usage": 0
+    "in-memory-table-slices": 2,
+    "peak-memory-usage": 499281920
   },
   "version": {
-    "Apache Arrow": "10.0.0",
+    "Apache Arrow": "10.0.1",
     "Build Configuration": {
-      "Address Sanitizer": false,
-      "Assertions": false,
-      "Tree Hash": "8a718abf17a268f95ff60772b57f9294",
-      "Type": "Release",
+      "Address Sanitizer": true,
+      "Assertions": true,
+      "Tree Hash": "54256390cff0a8ed63218140c35b54f3",
+      "Type": "Debug",
       "Undefined Behavior Sanitizer": false
     },
-    "CAF": "0.17.6",
-    "VAST": "v2.4.0-rc2-97-g52d30f9834",
+    "CAF": "0.18.6",
+    "VAST": "v2.4.0-583-gade8a85ac4-dirty",
     "plugins": {
-      "parquet": "v1.0.0-g027ba25701",
-      "pcap": "v1.1.0-gfc9827be2d",
-      "sigma": "v1.1.0-g128d0b45a3",
-      "web": "v1.0.0-g21258eda7c"
+      "cef": "v0.1.0-g314fcdd30c",
+      "parquet": "v1.0.0-g314fcdd30c",
+      "pcap": "v1.1.0-g314fcdd30c",
+      "sigma": "v1.1.0-g2b0cf481e4",
+      "web": "v1.0.0-g0bcf9abed8"
     }
   }
 }
