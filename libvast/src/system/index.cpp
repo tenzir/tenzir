@@ -584,8 +584,7 @@ caf::error index_state::load_from_disk() {
     caf::scoped_actor blocking{self->system()};
     blocking->request(transformer, caf::infinite, atom::persist_v)
       .receive(
-        [&synopses, 
-         this](std::vector<partition_synopsis_pair>& result) {
+        [&synopses, this](std::vector<partition_synopsis_pair>& result) {
           VAST_INFO("recovered {} corrupted partitions on startup",
                     result.size());
           for (auto&& x : std::exchange(result, {})) {
@@ -1586,8 +1585,7 @@ index(index_actor::stateful_pointer<index_state> self,
         ->request<caf::message_priority::high>(
           self->state.catalog, caf::infinite, atom::erase_v, partition_id)
         .then(
-          [self, partition_id, path, synopsis_path, rp
-           ](atom::ok) mutable {
+          [self, partition_id, path, synopsis_path, rp](atom::ok) mutable {
             VAST_DEBUG("{} erased partition {} from catalog", *self,
                        partition_id);
             auto partition_actor
