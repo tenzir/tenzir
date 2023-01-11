@@ -543,6 +543,13 @@ if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
     INTERFACE "-fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 endif ()
 
+option(VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES
+       "Update references when running in integration tests" OFF)
+add_feature_info(
+  "VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES"
+  VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES
+  "update references when running integration tests.")
+
 # -- additional warnings -------------------------------------------------------
 
 option(VAST_ENABLE_MORE_WARNINGS "Enable addditional warnings" OFF)
