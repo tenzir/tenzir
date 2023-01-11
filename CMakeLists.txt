@@ -941,13 +941,24 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
     file(
       GLOB VAST_PYTHON_WHL
       \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python/dist/*.whl\")
+    file(
+      GLOB VAST_OLD_INSTALLED_BINS
+      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
     execute_process(
       COMMAND \"${POETRY_PATH}\" run pip install
         ${VAST_POETRY_EXTRA_INSTALL_ARGS}
         --prefix \"\${CMAKE_INSTALL_PREFIX}\"
         \"\${VAST_PYTHON_WHL}\"
       WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
-      COMMAND_ERROR_IS_FATAL ANY)"
+      COMMAND_ERROR_IS_FATAL ANY)
+    file(
+      GLOB VAST_NEW_INSTALLED_BINS
+      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
+    foreach (new IN LISTS VAST_NEW_INSTALLED_BINS)
+      if (NOT \"\${new}\" IN_LIST VAST_OLD_INSTALLED_BINS)
+        file(REMOVE \"\${new}\")
+      endif ()
+    endforeach ()"
     COMPONENT Runtime)
 endif ()
 
