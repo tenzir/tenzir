@@ -96,20 +96,8 @@ caf::error write_index_bin(const std::vector<vast::uuid>& uuids,
   }
   fmt::print("writing {} partition\n", partition_offsets.size());
   auto partitions = builder.CreateVector(partition_offsets);
-  std::vector<flatbuffers::Offset<vast::fbs::schema_statistics::v0>>
-    stats_offsets;
-  for (const auto& [name, schema_stats] : stats.schemas) {
-    auto name_fb = builder.CreateString(name);
-    vast::fbs::schema_statistics::v0Builder stats_builder(builder);
-    stats_builder.add_name(name_fb);
-    stats_builder.add_count(schema_stats.count);
-    auto offset = stats_builder.Finish();
-    stats_offsets.push_back(offset);
-  }
-  auto stats_fb = builder.CreateVector(stats_offsets);
   vast::fbs::index::v0Builder v0_builder(builder);
   v0_builder.add_partitions(partitions);
-  v0_builder.add_stats(stats_fb);
   auto index_v0 = v0_builder.Finish();
   vast::fbs::IndexBuilder index_builder(builder);
   index_builder.add_index_type(vast::fbs::index::Index::v0);
@@ -214,7 +202,6 @@ int regenerate_index(const std::filesystem::path& dbdir) {
     }
     uuids.push_back(uuid);
     for (const auto* partition_stats : *partition_legacy->type_ids()) {
-      const auto* name = partition_stats->name();
       vast::ids ids;
       if (auto error
           = vast::fbs::deserialize_bytes(partition_stats->ids(), ids)) {
