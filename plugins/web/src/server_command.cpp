@@ -12,11 +12,13 @@
 #include "web/configuration.hpp"
 #include "web/mime.hpp"
 #include "web/restinio_response.hpp"
+#include "web/restinio_server.hpp"
 
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/detail/exception_ptr.hpp>
 #include <vast/format/json.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
@@ -39,8 +41,6 @@
 // Needed to forward incoming requests to the request_dispatcher
 
 namespace vast::plugins::web {
-
-using router_t = restinio::router::express_router_t<>;
 
 using request_dispatcher_actor = system::typed_actor_fwd<
   // Handle a request.
@@ -320,13 +320,13 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       continue;
     }
     auto handler = rest_plugin->handler(system, node);
+    handlers.push_back(handler);
     for (auto const& endpoint : rest_plugin->rest_endpoints()) {
       if (endpoint.path.empty() || endpoint.path[0] != '/') {
         VAST_WARN("ignoring route {} due to missing '/'", endpoint.path);
         continue;
       }
       api_routes.push_back(format_api_route(endpoint, rest_plugin->prefix()));
-      handlers.push_back(handler);
       setup_route(self, router, rest_plugin->prefix(), dispatcher,
                   *server_config, std::move(endpoint), handler);
     }
@@ -391,56 +391,60 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
                  "and the default location does not exist");
   }
   // Run server.
-  if (!server_config->require_tls) {
-    struct my_server_traits : public restinio::default_single_thread_traits_t {
-      using request_handler_t = restinio::router::express_router_t<>;
-    };
-    VAST_INFO("web plugin listening on http://{}:{}", config.bind_address,
-              config.port);
-    restinio::run(restinio::on_this_thread<my_server_traits>()
-                    .port(config.port)
-                    .address(config.bind_address)
-                    .request_handler(std::move(router)));
-  } else {
-    using traits_t = restinio::single_thread_tls_traits_t<
-      restinio::asio_timer_manager_t, restinio::single_threaded_ostream_logger_t,
-      restinio::router::express_router_t<>>;
-
-    asio::ssl::context tls_context{asio::ssl::context::tls};
-    // Most examples also set `asio::ssl::context::default_workarounds`, but
-    // based on [1] these are only relevant for SSL which we don't support
-    // anyways.
-    // [1]: https://www.openssl.org/docs/man1.0.2/man3/SSL_CTX_set_options.html
-    tls_context.set_options(asio::ssl::context::tls_server
-                            | asio::ssl::context::single_dh_use);
-    if (server_config->require_clientcerts)
-      tls_context.set_verify_mode(
-        asio::ssl::context::verify_peer
-        | asio::ssl::context::verify_fail_if_no_peer_cert);
-    else
-      tls_context.set_verify_mode(asio::ssl::context::verify_none);
-    tls_context.use_certificate_chain_file(config.certfile);
-    tls_context.use_private_key_file(config.keyfile, asio::ssl::context::pem);
-    // Manually specifying DH parameters is deprecated in favor of using
-    // the OpenSSL built-in defaults, but asio has not been updated to
-    // expose this API so we need to use the raw context.
-    SSL_CTX_set_dh_auto(tls_context.native_handle(), true);
-    VAST_INFO("web plugin listening on https://{}:{}", config.bind_address,
-              config.port);
-    using namespace std::literals::chrono_literals;
-    restinio::run(restinio::on_this_thread<traits_t>()
-                    .address(config.bind_address)
-                    .port(config.port)
-                    .request_handler(std::move(router))
-                    .read_next_http_message_timelimit(10s)
-                    .write_http_response_timelimit(1s)
-                    .handle_request_timeout(1s)
-                    .tls_context(std::move(tls_context)));
-  }
-  self->send_exit(dispatcher, caf::error{});
+  auto io_context = asio::io_context{};
+  auto server = make_server(*server_config, std::move(router),
+                            restinio::external_io_context(io_context));
+  // Post initial action to asio event loop. Note that the action
+  // must have been posted *before* calling `io_context.run()`.
+  asio::post(io_context, [&] {
+    std::visit(detail::overload{[](auto& server) {
+                 server->open_sync();
+               }},
+               server);
+  });
+  // Launch the thread on which the server will work.
+  std::thread server_thread{[&] {
+    auto const* scheme = server_config->require_tls ? "https" : "http";
+    VAST_INFO("server listening on on {}://{}:{}", scheme,
+              server_config->bind_address, server_config->port);
+    io_context.run();
+  }};
+  // Run main loop.
+  caf::error err;
+  auto stop = false;
+  self->monitor(node);
+  self
+    ->do_receive(
+      [&](caf::down_msg& msg) {
+        VAST_ASSERT(msg.source == node);
+        VAST_DEBUG("{} received DOWN from node", *self);
+        stop = true;
+        if (msg.reason != caf::exit_reason::user_shutdown)
+          err = std::move(msg.reason);
+      },
+      // Only called when running this command with `vast -N`.
+      [&](atom::signal, int signal) {
+        VAST_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
+                   ::strsignal(signal));
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        stop = true;
+      })
+    .until([&] {
+      return stop;
+    });
+  // Shutdown
+  std::visit(
+    detail::overload{
+      [](auto& server) {
+        restinio::initiate_shutdown(*server);
+      },
+    },
+    server);
+  self->send_exit(dispatcher, caf::exit_reason::user_shutdown);
   for (auto& handler : handlers)
-    self->send_exit(handler, caf::error{});
-  return {};
+    self->send_exit(handler, caf::exit_reason::user_shutdown);
+  server_thread.join();
+  return caf::make_message(std::move(err));
 }
 
 } // namespace vast::plugins::web
