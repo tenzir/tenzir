@@ -233,7 +233,7 @@ jobs:
       - configure
     if: ${{ needs.configure.outputs.run-changelog == 'true' }}
     runs-on: ubuntu-20.04
-    container: debian:bullseye-slim
+    container: python:3.10-slim-bullseye
     steps:
       - name: Install git
         run: |
@@ -677,7 +677,7 @@ jobs:
       matrix:
         vast:
           - os: ubuntu-20.04
-            container: debian:bullseye-slim
+            container: python:3.10-slim-bullseye
             name: Debian
             compiler: GCC
             cc: gcc-10
@@ -884,7 +884,7 @@ jobs:
         setup:
           - os: ubuntu-20.04
             name: Debian
-            container: debian:bullseye-slim
+            container: python:3.10-slim-bullseye
             cc: gcc-10
             cxx: g++-10
             package-suffix: Release-GCC
