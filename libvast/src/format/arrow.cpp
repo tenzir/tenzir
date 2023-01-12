@@ -158,6 +158,19 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
                                        close_result.ToString()));
       continue;
     }
+    // Skip record batches with incompatible metadata. This check is not
+    // complete because it doesn't visit every (potentially nested) array in the
+    // batch, but it's a good enough heuristic to prevent users from running
+    // into crashes. A proper fix for this requires casting to VAST-compatible
+    // record batch.
+    if (read_result->batch->schema()->metadata()->FindKey("VAST:name:0")
+        == -1) {
+      VAST_ERROR("{} skips record batch with {} rows: metadata is "
+                 "incomaptible with VAST",
+                 detail::pretty_type_name(*this),
+                 read_result->batch->num_rows());
+      continue;
+    }
     auto slice = table_slice{read_result->batch};
     produced += slice.rows();
     f(std::move(slice));
