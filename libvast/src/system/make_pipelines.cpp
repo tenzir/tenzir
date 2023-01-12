@@ -193,25 +193,27 @@ make_pipeline(const std::string& name,
 caf::expected<std::vector<std::unique_ptr<pipeline_operator>>>
 make_pipeline(std::string_view pipeline_string) {
   std::vector<std::unique_ptr<pipeline_operator>> pipeline;
-  auto pl_str_it = pipeline_string.begin();
-  while (pl_str_it != pipeline_string.end()) {
+  for (auto pl_str_it = pipeline_string.begin();
+       pl_str_it != pipeline_string.end();) {
+    if (std::isspace(*pl_str_it)) {
+      ++pl_str_it;
+      continue;
+    }
     auto pl_str_to_parse = std::string_view{pl_str_it, pipeline_string.end()};
     auto pl_op_str_it = pl_str_it;
-    while (std::isalnum(*pl_op_str_it) && pl_op_str_it != pipeline_string.end()) {
+    while (std::isalnum(*pl_op_str_it)
+           && pl_op_str_it != pipeline_string.end()) {
       ++pl_op_str_it;
     };
     auto pl_op_str = std::string_view{pl_str_it, pl_op_str_it};
     pl_str_to_parse = std::string_view{pl_op_str_it, pipeline_string.end()};
-    auto parsed_pl_op
+    auto [new_str_it_pos, pipeline_op]
       = parse_pipeline_operator(pl_op_str, pl_str_to_parse);
-    if (!parsed_pl_op->second) {
-      return parsed_pl_op->second.error();
+    if (!pipeline_op) {
+      return pipeline_op.error();
     }
-    pipeline.emplace_back(std::move(*parsed_pl_op->second));
-    pl_str_it = parsed_pl_op->first;
-    while (!std::isalpha(*pl_str_it) && pl_str_it != pipeline_string.end()) {
-      ++pl_str_it;
-    };
+    pipeline.emplace_back(std::move(*pipeline_op));
+    pl_str_it = new_str_it_pos;
   }
   return pipeline;
 }
