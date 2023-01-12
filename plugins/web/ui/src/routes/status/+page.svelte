@@ -52,12 +52,12 @@
     { header: 'Percentage', accessor: 'percentage' }
   ];
 
-  const getEventsRows = (events: Events, total_events: number) => {
+  const getEventsRows = (events: Events, totalEvents: number) => {
     return Object.keys(events).map((key) => ({
       schema: key,
       count: events[key]['num-events'],
       percentage: new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(
-        events[key]['num-events'] / total_events * 100.0
+        events[key]['num-events'] / totalEvents * 100.0
       )
     }));
   };
@@ -111,9 +111,9 @@
     {/if}
 
     <div class="py-6 text-left md:w-1/4">
-      {#if $queryResult.data?.catalog.schemas}
+      {#if $queryResult.data?.catalog?.schemas}
         <Table
-          tableRows={getEventsRows($queryResult.data?.catalog.schemas, $queryResult.data?.catalog['num-events'])}
+          tableRows={getEventsRows($queryResult.data?.catalog?.schemas, $queryResult.data?.catalog['num-events'])}
           columnDetails={eventColumns}
         />
       {:else}
