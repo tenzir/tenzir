@@ -267,6 +267,15 @@ vast:
       # Omit null fields in JSON objects.
       omit-nulls: false
 
+      # Omit empty records in JSON objects.
+      omit-empty-records: false
+
+      # Omit empty lists in JSON objects.
+      omit-empty-lists: false
+
+      # Omit empty maps in JSON objects.
+      omit-empty-maps: false
+
     # The `vast export pcap` command exports events in the PCAP format.
     pcap:
       # Flush to disk after this many packets.

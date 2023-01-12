@@ -1104,9 +1104,12 @@ writer::writer(std::unique_ptr<std::ostream> out, const caf::settings& options)
       .numeric_durations
       = get_or(options, "vast.export.json.numeric-durations", false),
       .omit_nulls = get_or(options, "vast.export.json.omit-nulls", false),
-      .omit_empty_records = false,
-      .omit_empty_lists = false,
-      .omit_empty_maps = false,
+      .omit_empty_records
+      = get_or(options, "vast.export.json.omit-empty-records", false),
+      .omit_empty_lists
+      = get_or(options, "vast.export.json.omit-empty-lists", false),
+      .omit_empty_maps
+      = get_or(options, "vast.export.json.omit-empty-maps", false),
     }} {
   // nop
 }
