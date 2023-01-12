@@ -53,11 +53,25 @@ caf::error parse_pipeline_operators(pipeline& pipeline,
 caf::expected<std::vector<std::unique_ptr<pipeline_operator>>>
 make_pipeline(std::string_view pipeline_string);
 
+enum class parsing_mode {
+  NONE,
+  EXTRACTOR,
+  ASSIGNMENT,
+  SHORT_OPTION_KEY,
+  LONG_OPTION_KEY,
+  SHORT_OPTION_ASSIGNMENT,
+  LONG_OPTION_ASSIGNMENT,
+  SHORT_OPTION_VALUE,
+  LONG_OPTION_VALUE
+};
+
 struct pipeline_parsing_result {
   vast::list extractors;
   vast::list assignments;
+  record options;
   std::string_view::iterator new_str_it;
   caf::error parse_error;
+  parsing_mode current_mode{parsing_mode::NONE};
 };
 
 pipeline_parsing_result parse_pipeline(std::string_view str);

@@ -220,27 +220,43 @@ make_pipeline(std::string_view pipeline_string) {
 
 pipeline_parsing_result parse_pipeline(std::string_view str) {
   pipeline_parsing_result result;
-  auto parsing_word = false;
   auto maybe_last_word = false;
-  std::string current_extractor;
+  std::string current_token;
+  std::string current_option_key;
   auto str_r_it = str.begin();
   for (auto str_l_it = str_r_it; str_l_it != str.end() && *str_l_it != '|';) {
     if (std::isspace(*str_r_it)) {
-      if (parsing_word && !maybe_last_word) {
+      if ((result.current_mode == parsing_mode::EXTRACTOR
+           || result.current_mode == parsing_mode::LONG_OPTION_KEY
+           || result.current_mode == parsing_mode::SHORT_OPTION_KEY)
+          && !maybe_last_word) {
         maybe_last_word = true;
-        current_extractor = {str_l_it, str_r_it};
+        current_token = {str_l_it, str_r_it};
+      } else if (result.current_mode == parsing_mode::SHORT_OPTION_KEY) {
+        result.current_mode = parsing_mode::SHORT_OPTION_VALUE;
+      } else if (result.current_mode == parsing_mode::LONG_OPTION_KEY) {
+        maybe_last_word = true;
+        ++str_l_it;
+        current_option_key = {str_l_it, str_r_it};
+        result.options[current_option_key] = {};
+        result.current_mode = parsing_mode::LONG_OPTION_ASSIGNMENT;
+      } else if (result.current_mode == parsing_mode::SHORT_OPTION_VALUE
+                 || result.current_mode == parsing_mode::LONG_OPTION_VALUE) {
+        current_token = {str_l_it, str_r_it};
+        result.options[current_option_key] = current_token;
+        result.current_mode = parsing_mode::NONE;
       }
       ++str_r_it;
     } else if (*str_r_it == ','
                || (str_r_it == str.end() || *str_r_it == '|')) {
-      if (parsing_word) {
-        parsing_word = false;
+      if (result.current_mode != parsing_mode::NONE) {
+        result.current_mode = parsing_mode::NONE;
         if (maybe_last_word) {
           maybe_last_word = false;
         } else {
-          current_extractor = {str_l_it, str_r_it};
+          current_token = {str_l_it, str_r_it};
         }
-        result.extractors.emplace_back(current_extractor);
+        result.extractors.emplace_back(current_token);
         str_l_it = str_r_it;
         if (str_r_it != str.end()) {
           ++str_r_it;
@@ -248,16 +264,63 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       } else {
         result.parse_error
           = caf::make_error(ec::parse_error, "comma not delimiting extractors");
+        break;
       }
+    } else if (*str_r_it == '-') {
+      if (result.current_mode == parsing_mode::NONE) {
+        result.current_mode = parsing_mode::SHORT_OPTION_KEY;
+        str_l_it = str_r_it;
+      } else if (result.current_mode == parsing_mode::SHORT_OPTION_KEY) {
+        result.current_mode = parsing_mode::LONG_OPTION_KEY;
+        str_l_it = str_r_it;
+      } else if (result.current_mode == parsing_mode::SHORT_OPTION_ASSIGNMENT
+                 || result.current_mode
+                      == parsing_mode::LONG_OPTION_ASSIGNMENT) {
+        result.parse_error
+          = caf::make_error(ec::parse_error, "option definition in place of "
+                                             "option value assignment");
+        break;
+      }
+      ++str_r_it;
+    } else if (*str_r_it == '=') {
+      if (result.current_mode != parsing_mode::LONG_OPTION_KEY
+          && result.current_mode != parsing_mode::EXTRACTOR) {
+        result.parse_error
+          = caf::make_error(ec::parse_error, "assignment is missing key");
+        break;
+      } else if (result.current_mode == parsing_mode::EXTRACTOR) {
+        result.current_mode = parsing_mode::ASSIGNMENT;
+      } else if (result.current_mode == parsing_mode::LONG_OPTION_KEY) {
+        ++str_l_it;
+        current_option_key = {str_l_it, str_r_it};
+        result.options[current_option_key] = {};
+        result.current_mode = parsing_mode::LONG_OPTION_ASSIGNMENT;
+      } else if (result.current_mode == parsing_mode::SHORT_OPTION_VALUE
+                 || result.current_mode == parsing_mode::LONG_OPTION_VALUE
+                 || result.current_mode == parsing_mode::SHORT_OPTION_ASSIGNMENT
+                 || result.current_mode
+                      == parsing_mode::LONG_OPTION_ASSIGNMENT) {
+        result.parse_error
+          = caf::make_error(ec::parse_error, "duplicate assignment");
+        break;
+      }
+      ++str_r_it;
     } else {
       if (maybe_last_word) {
         result.parse_error = caf::make_error(ec::parse_error, "extractors must "
                                                               "be separated by "
                                                               "a comma");
+        break;
       }
-      if (!parsing_word) {
+      if (result.current_mode == parsing_mode::NONE) {
         str_l_it = str_r_it;
-        parsing_word = true;
+        result.current_mode = parsing_mode::EXTRACTOR;
+      } if (result.current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT) {
+        str_l_it = str_r_it;
+        result.current_mode = parsing_mode::LONG_OPTION_VALUE;
+      } else if (result.current_mode == parsing_mode::SHORT_OPTION_ASSIGNMENT) {
+        str_l_it = str_r_it;
+        result.current_mode = parsing_mode::SHORT_OPTION_VALUE;
       }
       ++str_r_it;
     }
