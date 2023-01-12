@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/system/make_pipelines.hpp"
 #include <vast/address.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
@@ -184,7 +185,21 @@ public:
   virtual std::pair<std::string_view::iterator,
                     caf::expected<std::unique_ptr<pipeline_operator>>>
   parse_pipeline_string(std::string_view str) const override {
-    return {str.begin() + str.find_first_of('|'), make_pipeline_operator({})};
+    record options;
+    auto parse_result = system::parse_pipeline(str);
+    if (parse_result.parse_error) {
+      return {parse_result.new_str_it, parse_result.parse_error};
+    }
+    if (!parse_result.extractors.empty()) {
+      options["fields"] = parse_result.extractors;
+    }
+    for (const auto &option : parse_result.options) {
+      auto key = option.first;
+      auto value = option.second;
+      options[key] = value;
+    }
+
+    return {parse_result.new_str_it, make_pipeline_operator(options)};
   }
 };
 
