@@ -16,7 +16,7 @@ db.janusgraph {
   }  
 }
 
-play.modules.enabled += org.thp.thehive.connector.cortex.CortexModule
+scalligraph.modules += org.thp.thehive.connector.cortex.CortexModule
 cortex {
   servers = [
     {
