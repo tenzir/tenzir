@@ -12,6 +12,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/config.hpp"
+#include "vast/config_options.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/add_message_types.hpp"
 #include "vast/detail/append.hpp"
@@ -392,21 +393,10 @@ caf::error configuration::parse(int argc, char** argv) {
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());
   auto plugin_opts
-    = caf::config_option_set{}
+    = config_options{}
         .add<std::vector<std::string>>("?vast", "schema-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugin-dirs", "")
         .add<std::vector<std::string>>("?vast", "plugins", "");
-  // Newly added plugin arguments from environment variables
-  // may contain empty values - sanitize them manually.
-  for (auto& plugin_arg : plugin_args) {
-    auto dummy_settings = caf::settings{};
-    auto parse_result = plugin_opts.parse(dummy_settings, {plugin_arg}).first;
-    if (parse_result == caf::pec::missing_argument)
-      plugin_arg.append("[]");
-    else if (parse_result == caf::pec::invalid_argument) {
-      plugin_arg = detail::convert_to_caf_compatible_list_arg(plugin_arg);
-    }
-  }
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   if (ec != caf::pec::success) {
     VAST_ASSERT(it != plugin_args.end());

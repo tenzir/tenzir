@@ -10,9 +10,9 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/config_options.hpp"
 #include "vast/detail/string.hpp"
 
-#include <caf/config_option_set.hpp>
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
 #include <fmt/format.h>
@@ -51,7 +51,7 @@ public:
       // nop
     }
 
-    opts_builder(std::string_view category, caf::config_option_set xs)
+    opts_builder(std::string_view category, config_options xs)
       : category_(category), xs_(std::move(xs)) {
       // nop
     }
@@ -61,12 +61,12 @@ public:
     opts_builder&& add(std::string_view name, std::string_view description) && {
       static_assert(caf::detail::is_config_value_type_v<T>, "T is not a valid "
                                                             "config option");
-      xs_.add(caf::make_config_option<T>(category_, name, description));
+      xs_.add<T>(category_, name, description);
       return std::move(*this);
     }
 
     /// Extracts the options from this builder.
-    caf::config_option_set finish() {
+    config_options finish() {
       return std::move(xs_);
     }
 
@@ -75,7 +75,7 @@ public:
     std::string_view category_;
 
     /// Our set-under-construction.
-    caf::config_option_set xs_;
+    config_options xs_;
   };
 
   // -- member variables -------------------------------------------------------
@@ -90,7 +90,7 @@ public:
   std::string_view description;
 
   /// The options of the command.
-  caf::config_option_set options;
+  config_options options;
 
   /// The list of sub-commands.
   children_list children;
@@ -102,7 +102,7 @@ public:
 
   /// Construct a new command
   command(std::string_view name, std::string_view description,
-          caf::config_option_set opts, bool visible = true);
+          config_options opts, bool visible = true);
 
   /// Construct a new command
   command(std::string_view name, std::string_view description,
@@ -122,7 +122,7 @@ public:
   // -- factory functions ------------------------------------------------------
 
   /// Creates a config option set pre-initialized with a help option.
-  static caf::config_option_set opts();
+  static config_options opts();
 
   /// Creates a config option set pre-initialized with a help option.
   static opts_builder opts(std::string_view category);

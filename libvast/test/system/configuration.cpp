@@ -102,8 +102,8 @@ TEST(environment key mangling and value parsing) {
   env("VAST_BARE_MODE", "true"); // bool parsed manually
   env("VAST_NODE", "true");      // bool parsed late (via automatic conversion)
   env("VAST_IMPORT__BATCH_SIZE", "42"); // numbers should not be strings
-  env("VAST_PLUGINS", "[\"foo\",\"bar\"]"); // list parsed manually
-  env("VAST_INVALID", "[\"foo\",\"bar\"]"); // list parsed late
+  env("VAST_PLUGINS", "foo,bar");       // list parsed manually
+  env("VAST_INVALID", "foo,bar");       // list parsed late
   parse();
   CHECK(!holds_alternative<std::string>("vast.endpoint"));
   CHECK(get<bool>("vast.bare-mode"));
@@ -137,7 +137,7 @@ TEST(command line no value for list generates empty list value) {
 }
 
 TEST(command line empty list value for list generates empty list value) {
-  parse("--plugins=[]");
+  parse("--plugins=");
   CHECK(get_vec<std::string>("vast.plugins").empty());
 }
 
@@ -148,14 +148,14 @@ TEST(environment key no value for plugin list generates empty list value) {
 }
 
 TEST(environment key empty value for plugin list generates empty list value) {
-  env("VAST_PLUGINS", "[]");
+  env("VAST_PLUGINS", "");
   parse();
   CHECK(get_vec<std::string>("vast.plugins").empty());
 }
 
 TEST(command line overrides environment even for plugins) {
-  env("VAST_PLUGINS", "[\"plugin1\"]");
-  parse("--plugins=[\"plugin2\"]");
+  env("VAST_PLUGINS", "plugin1");
+  parse("--plugins=plugin2");
   CHECK_EQUAL(get_vec<std::string>("vast.plugins"),
               std::vector<std::string>{"plugin2"});
 }
