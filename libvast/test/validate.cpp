@@ -20,7 +20,7 @@ using namespace vast;
 
 // clang-format off
 
-auto test_layout = record_type{
+auto test_schema = record_type{
     {"time", record_type{
       {"interval", duration_type{}},
       {"rules", list_type{record_type{
@@ -52,9 +52,9 @@ TEST(exhaustive validation) {
   )_");
   REQUIRE_NOERROR(data);
   auto valid = caf::error{};
-  CHECK_EQUAL(vast::validate(*data, test_layout, validate::permissive), valid);
-  CHECK_EQUAL(vast::validate(*data, test_layout, validate::strict), valid);
-  CHECK_EQUAL(vast::validate(*data, test_layout, validate::exhaustive), valid);
+  CHECK_EQUAL(vast::validate(*data, test_schema, validate::permissive), valid);
+  CHECK_EQUAL(vast::validate(*data, test_schema, validate::strict), valid);
+  CHECK_EQUAL(vast::validate(*data, test_schema, validate::exhaustive), valid);
 }
 
 TEST(no rules configured) {
@@ -69,8 +69,8 @@ TEST(no rules configured) {
   REQUIRE_NOERROR(data);
   auto valid = caf::error{};
   // Should be fine
-  CHECK_EQUAL(vast::validate(*data, test_layout, validate::strict), valid);
-  CHECK_EQUAL(vast::validate(*data, test_layout, validate::exhaustive), valid);
+  CHECK_EQUAL(vast::validate(*data, test_schema, validate::strict), valid);
+  CHECK_EQUAL(vast::validate(*data, test_schema, validate::exhaustive), valid);
 }
 
 TEST(extra field) {
@@ -83,9 +83,9 @@ TEST(extra field) {
   )_");
   REQUIRE_NOERROR(data);
   auto valid = caf::error{};
-  CHECK_EQUAL(vast::validate(*data, test_layout, validate::permissive), valid);
-  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::strict), valid);
-  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::exhaustive),
+  CHECK_EQUAL(vast::validate(*data, test_schema, validate::permissive), valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_schema, validate::strict), valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_schema, validate::exhaustive),
                   valid);
 }
 
@@ -98,9 +98,9 @@ TEST(incompatible field) {
   )_");
   REQUIRE_NOERROR(data);
   auto valid = caf::error{};
-  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::permissive),
+  CHECK_NOT_EQUAL(vast::validate(*data, test_schema, validate::permissive),
                   valid);
-  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::strict), valid);
-  CHECK_NOT_EQUAL(vast::validate(*data, test_layout, validate::exhaustive),
+  CHECK_NOT_EQUAL(vast::validate(*data, test_schema, validate::strict), valid);
+  CHECK_NOT_EQUAL(vast::validate(*data, test_schema, validate::exhaustive),
                   valid);
 }

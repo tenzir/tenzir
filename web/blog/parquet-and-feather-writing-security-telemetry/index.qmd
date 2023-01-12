@@ -4,6 +4,7 @@ authors:
   - dispanser
   - mavam
 date: 2022-10-24
+last_updated: 2023-01-10
 image: image.jpg
 tags: [benchmark, arrow, parquet, feather, quarto, r]
 ---
@@ -20,10 +21,11 @@ structured security data? In this blog post, we answer this question.
 This is blog post is part of a 3-piece series on Parquet and Feather.
 
 1. [Enabling Open Investigations][parquet-and-feather-1]
-2. Writing Security Telemetry (this blog post)
-3. TBD
+2. This blog post
+3. [Data Engineering Woes][parquet-and-feather-3]
 
 [parquet-and-feather-1]: /blog/parquet-and-feather-enabling-open-investigations/
+[parquet-and-feather-3]: /blog/parquet-and-feather-data-engineering-woes/
 :::
 
 In the [previous blog][parquet-and-feather-1], we explained why Parquet and

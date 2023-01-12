@@ -20,7 +20,7 @@
 #include "vast/detail/zeekify.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/policy/flatten_layout.hpp"
+#include "vast/policy/flatten_schema.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
@@ -204,7 +204,7 @@ caf::error reader::module(vast::module mod) {
 
 module reader::module() const {
   vast::module result;
-  result.add(layout_);
+  result.add(schema_);
   return result;
 }
 
@@ -234,9 +234,9 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       return ec::stalled;
     if (auto err = parse_header())
       return err;
-    if (!reset_builder(layout_))
+    if (!reset_builder(schema_))
       return caf::make_error(ec::parse_error,
-                             "unable to create a bulider for parsed layout at",
+                             "unable to create a bulider for parsed schema at",
                              lines_->line_number());
     // EOF check.
     if (lines_->done())
@@ -273,9 +273,9 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       separator_.clear();
       if (auto err = parse_header())
         return err;
-      if (!reset_builder(layout_))
+      if (!reset_builder(schema_))
         return caf::make_error(
-          ec::parse_error, "unable to create a bulider for parsed layout at",
+          ec::parse_error, "unable to create a bulider for parsed schema at",
           lines_->line_number());
     } else if (line.starts_with('#')) {
       // Ignore comments.
@@ -304,7 +304,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
         if (is_unset(i))
           xs[i] = caf::none;
         else if (is_empty(i))
-          xs[i] = caf::get<record_type>(layout_).field(i).type.construct();
+          xs[i] = caf::get<record_type>(schema_).field(i).type.construct();
         else if (!parsers_[i](fields[i], xs[i]))
           return finish(f, caf::make_error(ec::parse_error, "field", i, "line",
                                            lines_->line_number(),
@@ -404,7 +404,7 @@ caf::error reader::parse_header() {
       proto_field_ = i;
   }
   // Construct type.
-  auto layout = record_type{record_fields};
+  auto schema = record_type{record_fields};
   VAST_DEBUG("{} parsed zeek header:", detail::pretty_type_name(this));
   VAST_DEBUG("{}     #separator {}", detail::pretty_type_name(this),
              separator_);
@@ -416,7 +416,7 @@ caf::error reader::parse_header() {
              unset_field_);
   VAST_DEBUG("{}     #path {}", detail::pretty_type_name(this), path);
   VAST_DEBUG("{}     #fields:", detail::pretty_type_name(this));
-  layout = detail::zeekify(layout);
+  schema = detail::zeekify(schema);
   auto name = std::string{type_name_prefix} + path;
   // If a congruent type exists in the module, we give the type in the module
   // precedence.
@@ -427,42 +427,42 @@ caf::error reader::parse_header() {
                              "the zeek reader expects records for "
                              "the top level types in the schema");
     auto transformations = std::vector<record_type::transformation>{};
-    for (const auto& [layout_field, layout_index] : layout.leaves()) {
-      const auto key = layout.key(layout_index);
+    for (const auto& [schema_field, schema_index] : schema.leaves()) {
+      const auto key = schema.key(schema_index);
       if (auto module_index = r->resolve_key(key)) {
         const auto module_field = r->field(*module_index);
-        if (!congruent(module_field.type, layout_field.type))
+        if (!congruent(module_field.type, schema_field.type))
           VAST_WARN("{} encountered a type mismatch between the schema "
                     "definition ({}) and the input data ({}",
-                    detail::pretty_type_name(this), module_field, layout_field);
+                    detail::pretty_type_name(this), module_field, schema_field);
         else {
           transformations.push_back({
-            layout_index,
+            schema_index,
             record_type::assign({
-              {std::string{layout_field.name}, module_field.type},
+              {std::string{schema_field.name}, module_field.type},
             }),
           });
         }
       }
     }
-    auto transformed_layout = layout.transform(std::move(transformations));
+    auto transformed_schema = schema.transform(std::move(transformations));
     // Cannot fail; we're not deleting any fields.
-    VAST_ASSERT(transformed_layout);
-    layout = std::move(*transformed_layout);
+    VAST_ASSERT(transformed_schema);
+    schema = std::move(*transformed_schema);
   }
-  for (auto i = 0u; i < layout.num_fields(); ++i)
+  for (auto i = 0u; i < schema.num_fields(); ++i)
     VAST_DEBUG("{}       {}) {} : {}", detail::pretty_type_name(this), i,
-               layout.field(i).name, layout.field(i).type);
-  // After having modified layout attributes, we no longer make changes to the
+               schema.field(i).name, schema.field(i).type);
+  // After having modified schema attributes, we no longer make changes to the
   // type and can now safely copy it.
-  layout_ = type{name, layout};
+  schema_ = type{name, schema};
   // Create Zeek parsers.
   auto make_parser = [](const auto& type, const auto& set_sep) {
     return make_zeek_parser<iterator_type>(type, set_sep);
   };
-  parsers_.resize(layout.num_fields());
-  for (size_t i = 0; i < layout.num_fields(); i++)
-    parsers_[i] = make_parser(layout.field(i).type, set_separator_);
+  parsers_.resize(schema.num_fields());
+  for (size_t i = 0; i < schema.num_fields(); i++)
+    parsers_[i] = make_parser(schema.field(i).type, set_separator_);
   return caf::none;
 }
 
@@ -514,6 +514,10 @@ public:
     }
   }
 
+  bool operator()(Iterator& out, const view<bool>& x) const {
+    return printers::any.print(out, x ? 'T' : 'F');
+  }
+
   bool operator()(Iterator& out, const view<real>& x) const {
     return zeek_real.print(out, x);
   }
@@ -555,7 +559,7 @@ private:
   static constexpr inline auto zeek_real = real_printer<real, 6, 6>{};
 };
 
-/// Owns an `std::ostream` and prints to it for a single layout.
+/// Owns an `std::ostream` and prints to it for a single schema.
 class writer_child : public ostream_writer {
 public:
   using super = ostream_writer;
@@ -571,7 +575,7 @@ public:
 
   caf::error write(const table_slice& slice) override {
     zeek_printer<std::back_insert_iterator<std::vector<char>>> p;
-    return print<policy::flatten_layout>(
+    return print<policy::flatten_schema>(
       p, slice, {std::string_view{&separator, 1}, "", "", ""});
   }
 
@@ -586,27 +590,27 @@ public:
 
 caf::error writer::write(const table_slice& slice) {
   ostream_writer* child = nullptr;
-  auto&& layout = slice.layout();
+  auto&& schema = slice.schema();
   if (dir_.string().empty()) {
     if (writers_.empty()) {
       VAST_DEBUG("{} creates a new stream for STDOUT",
                  detail::pretty_type_name(this));
       auto out = std::make_unique<detail::fdostream>(1);
-      writers_.emplace(layout.name(), std::make_unique<writer_child>(
+      writers_.emplace(schema.name(), std::make_unique<writer_child>(
                                         std::move(out), show_timestamp_tags_));
     }
     child = writers_.begin()->second.get();
-    if (layout != previous_layout_) {
-      print_header(layout, child->out(), show_timestamp_tags_);
-      previous_layout_ = layout;
+    if (schema != previous_schema_) {
+      print_header(schema, child->out(), show_timestamp_tags_);
+      previous_schema_ = schema;
     }
   } else {
-    auto i = writers_.find(std::string{layout.name()});
+    auto i = writers_.find(std::string{schema.name()});
     if (i != writers_.end()) {
       child = i->second.get();
     } else {
-      VAST_DEBUG("{} creates new stream for layout {}",
-                 detail::pretty_type_name(this), layout.name());
+      VAST_DEBUG("{} creates new stream for schema {}",
+                 detail::pretty_type_name(this), schema.name());
       std::error_code err{};
       const auto exists = std::filesystem::exists(dir_, err);
       if (err)
@@ -625,11 +629,11 @@ caf::error writer::write(const table_slice& slice) {
         return caf::make_error(
           ec::format_error, "got existing non-directory path", dir_.string());
       }
-      auto filename = dir_ / fmt::format("{}.log", layout.name());
+      auto filename = dir_ / fmt::format("{}.log", schema.name());
       auto fos = std::make_unique<std::ofstream>(filename.string());
-      print_header(layout, *fos, show_timestamp_tags_);
+      print_header(schema, *fos, show_timestamp_tags_);
       auto i = writers_.emplace(
-        layout.name(),
+        schema.name(),
         std::make_unique<writer_child>(std::move(fos), show_timestamp_tags_));
       child = i.first->second.get();
     }

@@ -47,7 +47,7 @@ class plugin : public virtual aggregation_function_plugin {
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "max";
   };
 

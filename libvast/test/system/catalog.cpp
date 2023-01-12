@@ -24,7 +24,7 @@
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
@@ -63,9 +63,8 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
 }
 
 template <class... Ts>
-vast::table_slice make_data(const vast::type& layout, Ts&&... ts) {
-  auto builder = factory<table_slice_builder>::make(
-    defaults::import::table_slice_type, layout);
+vast::table_slice make_data(const vast::type& schema, Ts&&... ts) {
+  auto builder = std::make_shared<table_slice_builder>(schema);
   REQUIRE(builder->add(std::forward<Ts>(ts)...));
   return builder->finish();
 }
@@ -77,12 +76,11 @@ struct generator {
 
   explicit generator(std::string name, size_t first_event_id)
     : offset(first_event_id) {
-    layout.assign_metadata(type{name, type{}});
+    schema.assign_metadata(type{name, type{}});
   }
 
   table_slice operator()(size_t num) {
-    auto builder = factory<table_slice_builder>::make(
-      defaults::import::table_slice_type, layout);
+    auto builder = std::make_shared<table_slice_builder>(schema);
     for (size_t i = 0; i < num; ++i) {
       vast::time ts = epoch + std::chrono::seconds(i + offset);
       CHECK(builder->add(make_data_view(ts)));
@@ -94,7 +92,7 @@ struct generator {
     return slice;
   }
 
-  type layout = type{
+  type schema = type{
     "stub",
     record_type{
       {"timestamp", type{"timestamp", time_type{}}},
@@ -129,8 +127,6 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       VAST_PP_STRINGIFY(SUITE)) {
     MESSAGE("register synopsis factory");
     factory<synopsis>::initialize();
-    MESSAGE("register table_slice_builder factory");
-    factory<table_slice_builder>::initialize();
     auto fs = self->spawn(system::posix_filesystem, directory,
                           system::accountant_actor{});
     catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");
@@ -154,8 +150,9 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
       else
         part.slice.import_time( //
           caf::get<vast::time>(unbox(to<data>("2015-01-02"))));
-      auto ps = caf::make_copy_on_write<partition_synopsis>(
-        make_partition_synopsis(part.slice));
+      auto& ps = merged_synopses.emplace_back(
+        caf::make_copy_on_write<partition_synopsis>(
+          make_partition_synopsis(part.slice)));
       merge(catalog_act, part.id, ps);
     }
     MESSAGE("verify generated timestamps");
@@ -277,6 +274,8 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   // Partition IDs.
   std::vector<uuid> ids;
+
+  std::vector<partition_synopsis_ptr> merged_synopses;
 };
 
 } // namespace
@@ -350,14 +349,13 @@ TEST(catalog with bool synopsis) {
   // FIXME: do we have to replace the catalog from the fixture with a new
   // one for this test?
   auto meta_idx = self->spawn(catalog, accountant_actor{}, directory / "types");
-  auto layout = type{
+  auto schema = type{
     "test",
     record_type{
       {"x", bool_type{}},
     },
   };
-  auto builder = factory<table_slice_builder>::make(
-    defaults::import::table_slice_type, layout);
+  auto builder = std::make_shared<table_slice_builder>(schema);
   REQUIRE(builder);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
@@ -391,24 +389,24 @@ TEST(catalog with bool synopsis) {
   auto expected2 = std::vector<uuid>{id2};
   auto none = std::vector<uuid>{};
   // Check by field name field.
-  CHECK_EQUAL(lookup_("x == T"), expected1);
-  CHECK_EQUAL(lookup_("x != F"), expected1);
-  CHECK_EQUAL(lookup_("x == F"), expected2);
-  CHECK_EQUAL(lookup_("x != T"), expected2);
+  CHECK_EQUAL(lookup_("x == true"), expected1);
+  CHECK_EQUAL(lookup_("x != false"), expected1);
+  CHECK_EQUAL(lookup_("x == false"), expected2);
+  CHECK_EQUAL(lookup_("x != true"), expected2);
   // fully qualified name
-  CHECK_EQUAL(lookup_("test.x == T"), expected1);
-  CHECK_EQUAL(lookup_("test.x == F"), expected2);
-  CHECK_EQUAL(lookup_("est.x == T"), none);
+  CHECK_EQUAL(lookup_("test.x == true"), expected1);
+  CHECK_EQUAL(lookup_("test.x == false"), expected2);
+  CHECK_EQUAL(lookup_("est.x == true"), none);
   // Same as above, different extractor.
-  CHECK_EQUAL(lookup_(":bool == T"), expected1);
-  CHECK_EQUAL(lookup_(":bool != F"), expected1);
-  CHECK_EQUAL(lookup_(":bool == F"), expected2);
-  CHECK_EQUAL(lookup_(":bool != T"), expected2);
+  CHECK_EQUAL(lookup_(":bool == true"), expected1);
+  CHECK_EQUAL(lookup_(":bool != false"), expected1);
+  CHECK_EQUAL(lookup_(":bool == false"), expected2);
+  CHECK_EQUAL(lookup_(":bool != true"), expected2);
   // Invalid schema: y does not a valid field
-  CHECK_EQUAL(lookup_("y == T"), none);
-  CHECK_EQUAL(lookup_("y != F"), none);
-  CHECK_EQUAL(lookup_("y == F"), none);
-  CHECK_EQUAL(lookup_("y != T"), none);
+  CHECK_EQUAL(lookup_("y == true"), none);
+  CHECK_EQUAL(lookup_("y != false"), none);
+  CHECK_EQUAL(lookup_("y == false"), none);
+  CHECK_EQUAL(lookup_("y != true"), none);
 }
 
 TEST(catalog messages) {
@@ -454,6 +452,49 @@ TEST(catalog messages) {
     },
     [](const caf::error&) {
       // nop
+    });
+}
+
+TEST(catalog partition info by uuid lookup returns error if no partition exists
+       with provided uuid) {
+  // generate unique uuid
+  auto uuid = uuid::random();
+  while (std::count(ids.begin(), ids.end(), uuid)) {
+    uuid = uuid::random();
+  }
+  auto response_handle
+    = self->request(catalog_act, caf::infinite, atom::get_v, uuid);
+  run();
+  response_handle.receive(
+    [](partition_info&) {
+      FAIL("expected an error");
+    },
+    [](const caf::error&) {
+      // nop
+    });
+}
+
+TEST(catalog partition info by uuid lookup returns proper
+       data if partition exists) {
+  const auto in_uuid = ids.back();
+  auto response_handle
+    = self->request(catalog_act, caf::infinite, atom::get_v, ids.back());
+  run();
+  response_handle.receive(
+    [&](partition_info& result) {
+      // In the fixture we create a partition synopsis for each uuid in
+      // fixture::ids. The merged_synopses.back() is the one kept in the catalog
+      // for the in_uuid. The result should have the same data as synopsis as
+      // the result is a partial view of the partition_synopsis.
+      const auto& data_source = merged_synopses.back();
+      CHECK_EQUAL(result.events, data_source->events);
+      CHECK_EQUAL(result.max_import_time, data_source->max_import_time);
+      CHECK_EQUAL(result.schema, data_source->schema);
+      CHECK_EQUAL(result.version, data_source->version);
+      CHECK_EQUAL(result.uuid, in_uuid);
+    },
+    [](const caf::error&) {
+      FAIL("expected partition_info to be returned");
     });
 }
 

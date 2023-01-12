@@ -104,8 +104,13 @@ VAST has the following extractor types:
 2. [Type](#type-extractor): extracts all event types that have a field of a
    given type.
 
-3. [Meta](#meta-extractor): matches on the type name or field name of a layout
+3. [Meta](#meta-extractor): matches on the type name or field name of a schema
    instead of the values contained in actual events.
+
+The diagram below illustrate how extractors relate to each other:
+
+![Extractors #width500](/img/extractors.light.png#gh-light-mode-only)
+![Extractors #width500](/img/extractors.dark.png#gh-dark-mode-only)
 
 #### Field Extractor
 
@@ -168,7 +173,7 @@ The predicate parser deduces the type of `X` automatically in this case.
 
 For example, `6.6.6.6` is a valid predicate and expands to `:addr == 6.6.6.6`.
 This allows for quick type-based point queries, such as
-`(6.6.6.6 || 80/tcp) && "evil"`.
+`(6.6.6.6 || 10.0.0.0/8) && "evil"`.
 
 :::tip
 Value predicates of type `subnet` expand more broadly. Given a subnet
@@ -191,7 +196,7 @@ Here is an over view of basic types:
 | Identifier | Description                             | Example Value
 | ---------- | --------------------------------------- | -------------
 | `none`     | Denotes an absent or invalid value      | `nil`
-| `bool`     | A boolean value                         | `T`, `F`
+| `bool`     | A boolean value                         | `true`, `false`
 | `int`      | A 64-bit signed integer                 | `-42`, `+3`
 | `count`    | A 64-bit unsigned integer               | `0`, `42`
 | `real`     | A 64-bit double (IEEE 754)              | `-0.7`, `1.337`

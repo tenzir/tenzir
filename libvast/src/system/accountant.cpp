@@ -23,7 +23,7 @@
 #include "vast/system/report.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/time.hpp"
 #include "vast/view.hpp"
 
@@ -43,12 +43,6 @@
 #include <string_view>
 
 namespace vast::system {
-
-namespace {
-
-constexpr std::chrono::seconds overview_delay(3);
-
-} // namespace
 
 struct accountant_state_impl {
   // -- member types -----------------------------------------------------------
@@ -129,7 +123,7 @@ struct accountant_state_impl {
       return;
     }
     if (!builder) {
-      auto layout = type{
+      auto schema = type{
         "vast.metrics",
         record_type{{"ts", type{"timestamp", time_type{}}},
                     {"version", string_type{}},
@@ -138,8 +132,7 @@ struct accountant_state_impl {
                     {"value", real_type{}},
                     {"metadata", map_type{string_type{}, string_type{}}}},
       };
-      builder
-        = factory<table_slice_builder>::make(cfg.self_sink.slice_type, layout);
+      builder = std::make_shared<table_slice_builder>(schema);
       VAST_DEBUG("{} obtained a table slice builder", *self);
     }
     map meta = {};
@@ -376,8 +369,6 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     [](const bool&) {
       return false;
     });
-  VAST_DEBUG("{} animates heartbeat loop", *self);
-  self->delayed_send(self, overview_delay, atom::telemetry_v);
   return {
     [self](atom::announce, const std::string& name) {
       auto& st = *self->state;
@@ -471,9 +462,6 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       return result;
-    },
-    [self](atom::telemetry) {
-      self->delayed_send(self, overview_delay, atom::telemetry_v);
     },
     [self](atom::config, accountant_config cfg) {
       self->state->apply_config(std::move(cfg));

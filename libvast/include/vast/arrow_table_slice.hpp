@@ -28,8 +28,8 @@ struct arrow_table_slice_state;
 
 template <>
 struct arrow_table_slice_state<fbs::table_slice::arrow::v2> {
-  /// The deserialized table layout.
-  type layout;
+  /// The deserialized table schema.
+  type schema;
 
   /// The deserialized Arrow Record Batch.
   std::shared_ptr<arrow::RecordBatch> record_batch;
@@ -71,8 +71,8 @@ public:
   inline static constexpr enum table_slice_encoding encoding
     = table_slice_encoding::arrow;
 
-  /// @returns The table layout.
-  [[nodiscard]] const type& layout() const noexcept;
+  /// @returns The table schema.
+  [[nodiscard]] const type& schema() const noexcept;
 
   /// @returns The number of rows in the slice.
   [[nodiscard]] table_slice::size_type rows() const noexcept;
@@ -345,23 +345,23 @@ struct indexed_transformation {
   }
 };
 
-/// Applies a list of transformations to both a VAST layout and an Arrow record
+/// Applies a list of transformations to both a VAST schema and an Arrow record
 /// batch.
-/// @pre VAST layout and Arrow schema must match.
+/// @pre VAST schema and Arrow schema must match.
 /// @pre Transformations must be sorted by index.
 /// @pre Transformation indices must not be a subset of the following
 /// transformation's index.
 std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
-  type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+  type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   const std::vector<indexed_transformation>& transformations) noexcept;
 
-/// Removed all unspecified columns from both a VAST layout and an Arrow record
+/// Removed all unspecified columns from both a VAST schema and an Arrow record
 /// batch.
-/// @pre VAST layout and Arrow schema must match.
+/// @pre VAST schema and Arrow schema must match.
 /// @pre Indices must be sorted.
 /// @pre Indices must not be a subset of the following index.
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
-select_columns(type layout, const std::shared_ptr<arrow::RecordBatch>& batch,
+select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                const std::vector<offset>& indices) noexcept;
 
 // -- template machinery -------------------------------------------------------

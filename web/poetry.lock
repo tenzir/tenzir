@@ -230,7 +230,7 @@ python-versions = ">=3.5"
 
 [[package]]
 name = "ipykernel"
-version = "6.19.3"
+version = "6.20.1"
 description = "IPython Kernel for Jupyter"
 category = "main"
 optional = false
@@ -252,7 +252,9 @@ traitlets = ">=5.4.0"
 
 [package.extras]
 cov = ["coverage[toml]", "curio", "matplotlib", "pytest-cov", "trio"]
-docs = ["myst-parser", "pydata-sphinx-theme", "sphinx", "sphinxcontrib-github-alt"]
+docs = ["myst-parser", "pydata-sphinx-theme", "sphinx", "sphinx-autodoc-typehints", "sphinxcontrib-github-alt", "sphinxcontrib-spelling", "trio"]
+pyqt5 = ["pyqt5"]
+pyside6 = ["pyside6"]
 test = ["flaky", "ipyparallel", "pre-commit", "pytest (>=7.0)", "pytest-asyncio", "pytest-cov", "pytest-timeout"]
 
 [[package]]
@@ -1039,7 +1041,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "c1f910f862c7825aa7e40c729671757068d27d20ecceb11fb5655f35f86c9b91"
+content-hash = "3521fea168002d46ed07a12b24b49c32c18f9344c1963465307e99bb5a2aa36a"
 
 [metadata.files]
 anyio = [
@@ -1220,8 +1222,8 @@ idna = [
     {file = "idna-3.4.tar.gz", hash = "sha256:814f528e8dead7d329833b91c5faa87d60bf71824cd12a7530b5526063d02cb4"},
 ]
 ipykernel = [
-    {file = "ipykernel-6.19.3-py3-none-any.whl", hash = "sha256:67daadf01c461d23aaefe2f5670779866b9bde7269b7a02ae4ef5b37e1adbf8f"},
-    {file = "ipykernel-6.19.3.tar.gz", hash = "sha256:70953ffa209fefc7166d365d230b710d90cdc2d2ad56e535d4c775d46da07089"},
+    {file = "ipykernel-6.20.1-py3-none-any.whl", hash = "sha256:a314e6782a4f9e277783382976b3a93608a3787cd70a235b558b47f875134be1"},
+    {file = "ipykernel-6.20.1.tar.gz", hash = "sha256:f6016ecbf581d0ea6e29ba16cee6cc1a9bbde3835900c46c6571a791692f4139"},
 ]
 ipython = [
     {file = "ipython-8.6.0-py3-none-any.whl", hash = "sha256:91ef03016bcf72dd17190f863476e7c799c6126ec7e8be97719d1bc9a78a59a4"},

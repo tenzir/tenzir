@@ -165,10 +165,10 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   VAST_DEBUG("{} got batch of {} events", *self, slice.rows());
   // Construct a candidate checker if we don't have one for this type.
-  auto layout = slice.layout();
-  auto it = self->state.checkers.find(layout);
+  auto schema = slice.schema();
+  auto it = self->state.checkers.find(schema);
   if (it == self->state.checkers.end()) {
-    auto x = tailor(self->state.query_context.expr, layout);
+    auto x = tailor(self->state.query_context.expr, schema);
     if (!x) {
       VAST_ERROR("{} failed to tailor expression: {}", *self,
                  render(x.error()));
@@ -176,9 +176,9 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
       shutdown(self);
       return;
     }
-    VAST_DEBUG("{} tailored AST to {}: {}", *self, layout, x);
+    VAST_DEBUG("{} tailored AST to {}: {}", *self, schema, x);
     std::tie(it, std::ignore)
-      = self->state.checkers.emplace(layout, std::move(*x));
+      = self->state.checkers.emplace(schema, std::move(*x));
   }
   auto& checker = it->second;
   // Perform candidate check, splitting the slice into subsets if needed.
@@ -201,6 +201,15 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options, std::vector<pipeline>&& pipelines) {
+  auto normalized_expr = normalize_and_validate(std::move(expr));
+  if (!normalized_expr) {
+    self->quit(caf::make_error(ec::format_error,
+                               fmt::format("{} failed to normalize and "
+                                           "validate expression: {}",
+                                           *self, normalized_expr.error())));
+    return exporter_actor::behavior_type::make_empty_behavior();
+  }
+  expr = *normalized_expr;
   self->state.options = options;
   self->state.query_context
     = vast::query_context::make_extract("export", self, std::move(expr));

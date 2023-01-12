@@ -198,14 +198,14 @@ caf::expected<expression> normalize_and_validate(expression expr) {
   return expr;
 }
 
-caf::expected<expression> tailor(expression expr, const type& layout) {
-  VAST_ASSERT(caf::holds_alternative<record_type>(layout));
+caf::expected<expression> tailor(expression expr, const type& schema) {
+  VAST_ASSERT(caf::holds_alternative<record_type>(schema));
   if (caf::holds_alternative<caf::none_t>(expr))
     return caf::make_error(ec::unspecified, fmt::format("failed to tailor "
                                                         "expression {} for "
-                                                        "layout {}",
-                                                        expr, layout));
-  return caf::visit(type_resolver{layout}, std::move(expr));
+                                                        "schema {}",
+                                                        expr, schema));
+  return caf::visit(type_resolver{schema}, std::move(expr));
 }
 
 namespace {

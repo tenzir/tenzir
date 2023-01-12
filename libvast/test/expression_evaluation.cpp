@@ -37,12 +37,12 @@ struct fixture : fixtures::events {
 
   expression make_conn_expr(std::string_view str) const {
     auto expr = make_expr(str);
-    return unbox(tailor(expr, zeek_conn_log_slice.layout()));
+    return unbox(tailor(expr, zeek_conn_log_slice.schema()));
   }
 
   table_slice zeek_conn_log_slice;
   type id_type
-    = caf::get<record_type>(zeek_conn_log[0].layout()).field(offset{1}).type;
+    = caf::get<record_type>(zeek_conn_log[0].schema()).field(offset{1}).type;
 };
 
 } // namespace

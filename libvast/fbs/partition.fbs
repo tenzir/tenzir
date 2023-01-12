@@ -39,11 +39,11 @@ table LegacyPartition {
   /// The number of contained events.
   events: uint64;
 
-  /// The available layouts in this partition, flattened with the layout name
+  /// The available schemas in this partition, flattened with the schema name
   /// embedded in the field names, pruned of attributes, and serialized using
   /// CAF 0.17's binary serializer.
   /// NOTE: This can be marked (deprecated) once the minimum partition version is 3.
-  combined_layout_caf_0_17: [ubyte];
+  combined_schema_caf_0_17: [ubyte];
 
   /// A map storing the mapping from type name -> ids
   /// Serialized using CAF's binary serializer.
@@ -71,7 +71,7 @@ namespace vast.fbs;
 
 // Up to VAST 2.3 the partition files on disk contained a `Partition`
 // as root type, after 2.3 a `SegmentedFileHeader` is the root type
-// and the total file has the following layout:
+// and the total file has the following schema:
 //
 // [SegmentedFileHeader | vast::fbs::Partition | data0 | data1 | ... ]
 //

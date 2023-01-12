@@ -261,7 +261,7 @@ struct index_state {
   /// The streaming stage.
   index_stream_stage_ptr stage;
 
-  /// One active (read/write) partition per layout.
+  /// One active (read/write) partition per schema.
   std::unordered_map<type, active_partition_info> active_partitions = {};
 
   /// Partitions that are currently in the process of persisting.

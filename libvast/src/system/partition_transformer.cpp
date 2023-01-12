@@ -27,11 +27,11 @@ namespace vast::system {
 namespace {
 
 void update_statistics(index_statistics& stats, const table_slice& slice) {
-  auto layout_name = slice.layout().name();
-  auto& layouts = stats.layouts;
-  auto it = layouts.find(layout_name);
-  if (it == layouts.end())
-    it = layouts.emplace(std::string{layout_name}, layout_statistics{}).first;
+  auto schema_name = slice.schema().name();
+  auto& schemas = stats.schemas;
+  auto it = schemas.find(schema_name);
+  if (it == schemas.end())
+    it = schemas.emplace(std::string{schema_name}, schema_statistics{}).first;
   it.value().count += slice.rows();
 }
 
@@ -115,19 +115,19 @@ void quit_or_stall(
 
 active_partition_state::serialization_data&
 partition_transformer_state::create_or_get_partition(const table_slice& slice) {
-  auto const& layout = slice.layout();
+  auto const& schema = slice.schema();
   // x marks the spot
-  auto [x, end] = data.equal_range(layout);
+  auto [x, end] = data.equal_range(schema);
   if (x == end) {
     x = data.insert(
-      std::make_pair(layout, active_partition_state::serialization_data{}));
+      std::make_pair(schema, active_partition_state::serialization_data{}));
   } else {
     x = std::prev(end);
     // Create a new partition if inserting the slice would overflow
     // the old one.
     if (x->second.events + slice.rows() > partition_capacity)
       x = data.insert(
-        std::make_pair(layout, active_partition_state::serialization_data{}));
+        std::make_pair(schema, active_partition_state::serialization_data{}));
   }
   return x->second;
 }
@@ -138,9 +138,9 @@ partition_transformer_state::create_or_get_partition(const table_slice& slice) {
 void partition_transformer_state::update_type_ids_and_indexers(
   std::unordered_map<std::string, ids>& type_ids,
   const vast::uuid& partition_id, const table_slice& slice) {
-  const auto& layout = slice.layout();
+  const auto& schema = slice.schema();
   // Update type ids
-  auto it = type_ids.emplace(layout.name(), ids{}).first;
+  auto it = type_ids.emplace(schema.name(), ids{}).first;
   auto& ids = it->second;
   auto first = slice.offset();
   auto last = slice.offset() + slice.rows();
@@ -148,10 +148,10 @@ void partition_transformer_state::update_type_ids_and_indexers(
   ids.append_bits(false, first - ids.size());
   ids.append_bits(true, last - first);
   // Push the event data to the indexers.
-  VAST_ASSERT(slice.columns() == caf::get<record_type>(layout).num_leaves());
+  VAST_ASSERT(slice.columns() == caf::get<record_type>(schema).num_leaves());
   for (size_t flat_index = 0;
-       const auto& [field, offset] : caf::get<record_type>(layout).leaves()) {
-    const auto qf = qualified_record_field{layout, offset};
+       const auto& [field, offset] : caf::get<record_type>(schema).leaves()) {
+    const auto qf = qualified_record_field{schema, offset};
     auto& typed_indexers = partition_buildup.at(partition_id).indexers;
     auto it = typed_indexers.find(qf);
     if (it == typed_indexers.end()) {
@@ -187,7 +187,7 @@ void partition_transformer_state::fulfill(
   // Return early if no error occured and no new data was created,
   // ie. the input was erased completely.
   if (self->state.events == 0) {
-    promise.deliver(std::vector<augmented_partition_synopsis>{});
+    promise.deliver(std::vector<partition_synopsis_pair>{});
     self->quit();
     return;
   }
@@ -222,10 +222,9 @@ void partition_transformer_state::fulfill(
   }
   // Make a write request to the filesystem actor for every partition.
   auto fanout_counter
-    = detail::make_fanout_counter<std::vector<augmented_partition_synopsis>>(
+    = detail::make_fanout_counter<std::vector<partition_synopsis_pair>>(
       stream_data.partition_chunks->size(),
-      [self,
-       promise](std::vector<augmented_partition_synopsis>&& result) mutable {
+      [self, promise](std::vector<partition_synopsis_pair>&& result) mutable {
         // We're done now, but we may still need to wait for the stores.
         quit_or_stall(self,
                       partition_transformer_state::transformer_is_finished{
@@ -233,21 +232,20 @@ void partition_transformer_state::fulfill(
                         .result = std::move(result),
                       });
       },
-      [self, promise](std::vector<augmented_partition_synopsis>&&,
+      [self, promise](std::vector<partition_synopsis_pair>&&,
                       caf::error&& e) mutable {
         promise.deliver(std::move(e));
         self->quit();
       });
-  for (auto& [id, layout, partition_chunk] : *stream_data.partition_chunks) {
-    auto rng = self->state.data.equal_range(layout);
+  for (auto& [id, schema, partition_chunk] : *stream_data.partition_chunks) {
+    auto rng = self->state.data.equal_range(schema);
     auto it = std::find_if(rng.first, rng.second, [id = id](auto const& kv) {
       return kv.second.id == id;
     });
-    VAST_ASSERT(it != rng.second); // The id must exist with this layout.
+    VAST_ASSERT(it != rng.second); // The id must exist with this schema.
     auto synopsis = std::move(it->second.synopsis);
-    auto aps = augmented_partition_synopsis{
+    auto aps = partition_synopsis_pair{
       .uuid = id,
-      .type = layout,
       .synopsis = std::move(synopsis),
     };
     auto filename
@@ -323,9 +321,9 @@ partition_transformer_actor::behavior_type partition_transformer(
         return {};
       }
       for (auto& slice : *transformed) {
-        auto const& layout = slice.layout();
-        // TODO: Technically we'd only need to send *new* layouts here.
-        self->send(self->state.catalog, atom::put_v, layout);
+        auto const& schema = slice.schema();
+        // TODO: Technically we'd only need to send *new* schemas here.
+        self->send(self->state.catalog, atom::put_v, schema);
         auto& partition_data = self->state.create_or_get_partition(slice);
         if (!partition_data.synopsis) {
           partition_data.id = vast::uuid::random();
@@ -376,7 +374,7 @@ partition_transformer_actor::behavior_type partition_transformer(
           /* nop */
         },
         [](caf::unit_t&, const caf::error&) { /* nop */ });
-      for (auto& [layout, partition_data] : self->state.data) {
+      for (auto& [schema, partition_data] : self->state.data) {
         if (partition_data.events == 0)
           continue;
         auto builder_and_header = store_actor_plugin->make_store_builder(
@@ -405,7 +403,7 @@ partition_transformer_actor::behavior_type partition_transformer(
     },
     [self](atom::internal, atom::resume, atom::done) {
       VAST_DEBUG("{} got resume", *self);
-      for (auto& [layout, data] : self->state.data) {
+      for (auto& [schema, data] : self->state.data) {
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
         auto& buildup = self->state.partition_buildup.at(data.id);
@@ -448,7 +446,7 @@ partition_transformer_actor::behavior_type partition_transformer(
       // This is an inline lambda so we can use `return` after errors
       // instead of `goto`.
       [&] {
-        for (auto& [layout, partition_data] :
+        for (auto& [schema, partition_data] :
              self->state.data) { // Pack partitions
           auto indexers_it
             = self->state.partition_buildup.find(partition_data.id);
@@ -468,9 +466,9 @@ partition_transformer_actor::behavior_type partition_transformer(
             return;
           }
           stream_data.partition_chunks->emplace_back(
-            std::make_tuple(partition_data.id, layout, *partition));
+            std::make_tuple(partition_data.id, schema, *partition));
         }
-        for (auto& [layout, partition_data] :
+        for (auto& [schema, partition_data] :
              self->state.data) { // Pack partition synopsis
           flatbuffers::FlatBufferBuilder builder;
           auto synopsis = pack(builder, *partition_data.synopsis);
@@ -490,12 +488,10 @@ partition_transformer_actor::behavior_type partition_transformer(
       }();
       store_or_fulfill(self, std::move(stream_data));
     },
-    [self](
-      atom::persist) -> caf::result<std::vector<augmented_partition_synopsis>> {
+    [self](atom::persist) -> caf::result<std::vector<partition_synopsis_pair>> {
       VAST_DEBUG("{} received request to persist", *self);
       auto promise
-        = self
-            ->make_response_promise<std::vector<augmented_partition_synopsis>>();
+        = self->make_response_promise<std::vector<partition_synopsis_pair>>();
       auto path_data = partition_transformer_state::path_data{
         .promise = promise,
       };

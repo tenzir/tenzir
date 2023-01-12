@@ -152,15 +152,15 @@ writer::writer(ostream_ptr out, const caf::settings&) : super{std::move(out)} {
 
 caf::error writer::write(const table_slice& x) {
   constexpr char separator = writer::defaults::separator;
-  // Print a new header each time we encounter a new layout.
-  const auto& layout = x.layout();
-  const auto& rlayout = caf::get<record_type>(layout);
-  if (last_layout_ != layout.name()) {
-    last_layout_ = layout.name();
+  // Print a new header each time we encounter a new schema.
+  const auto& schema = x.schema();
+  const auto& rschema = caf::get<record_type>(schema);
+  if (last_schema_ != schema.name()) {
+    last_schema_ = schema.name();
     append("type");
-    for (const auto& [_, index] : rlayout.leaves()) {
+    for (const auto& [_, index] : rschema.leaves()) {
       append(separator);
-      append(rlayout.key(index));
+      append(rschema.key(index));
     }
     append('\n');
     write_buf();
@@ -168,9 +168,9 @@ caf::error writer::write(const table_slice& x) {
   // Print the cell contents.
   auto iter = std::back_inserter(buf_);
   for (size_t row = 0; row < x.rows(); ++row) {
-    append(last_layout_);
+    append(last_schema_);
     size_t column = 0;
-    for (const auto& [field, _] : rlayout.leaves()) {
+    for (const auto& [field, _] : rschema.leaves()) {
       append(separator);
       if (auto err = render(iter, to_canonical(field.type,
                                                x.at(row, column, field.type))))
@@ -231,7 +231,7 @@ const char* reader::name() const {
 }
 
 caf::optional<type>
-reader::make_layout(const std::vector<std::string>& names, bool first_run) {
+reader::make_schema(const std::vector<std::string>& names, bool first_run) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(names));
   for (const auto& t : module_) {
     if (const auto* r = caf::get_if<record_type>(&t)) {
@@ -275,7 +275,7 @@ reader::make_layout(const std::vector<std::string>& names, bool first_run) {
   }
   if (!first_run)
     return caf::none;
-  return make_layout(names, false);
+  return make_schema(names, false);
 }
 
 namespace {
@@ -450,14 +450,14 @@ struct csv_parser_factory {
 
 template <class Iterator>
 caf::optional<reader::parser_type>
-make_csv_parser(const record_type& layout, table_slice_builder_ptr builder,
+make_csv_parser(const record_type& schema, table_slice_builder_ptr builder,
                 const options& opt) {
-  auto num_fields = layout.num_fields();
+  auto num_fields = schema.num_fields();
   VAST_ASSERT(num_fields > 0);
   auto factory = csv_parser_factory<Iterator>{opt, builder};
-  auto result = factory(layout.field(0).type);
+  auto result = factory(schema.field(0).type);
   for (size_t i = 1; i < num_fields; ++i) {
-    auto p = factory(layout.field(i).type);
+    auto p = factory(schema.field(i).type);
     result = result >> opt.separator >> std::move(p);
   }
   return result;
@@ -489,14 +489,14 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   const auto* f = b;
   if (!p(f, line.end(), columns))
     return caf::make_error(ec::parse_error, "unable to parse csv header");
-  auto layout = make_layout(columns);
-  if (!layout)
-    return caf::make_error(ec::parse_error, "unable to derive a layout");
-  VAST_DEBUG("csv_reader derived layout {}", *layout);
-  if (!reset_builder(*layout))
+  auto schema = make_schema(columns);
+  if (!schema)
+    return caf::make_error(ec::parse_error, "unable to derive a schema");
+  VAST_DEBUG("csv_reader derived schema {}", *schema);
+  if (!reset_builder(*schema))
     return caf::make_error(ec::parse_error, "unable to create a builder for "
-                                            "layout");
-  auto parser = make_csv_parser<iterator_type>(caf::get<record_type>(*layout),
+                                            "schema");
+  auto parser = make_csv_parser<iterator_type>(caf::get<record_type>(*schema),
                                                builder_, opt_);
   if (!parser)
     return caf::make_error(ec::parse_error, "unable to generate a parser");

@@ -38,6 +38,6 @@ table LegacySynopsis {
   /// Synopsis for a time column.
   time_synopsis: TimeSynopsis;
 
-  /// Other synopsis type with no native flatbuffer layout.
+  /// Other synopsis type with no native flatbuffer schema.
   opaque_synopsis: LegacyOpaqueSynopsis;
 }

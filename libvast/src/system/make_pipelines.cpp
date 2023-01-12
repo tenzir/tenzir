@@ -31,8 +31,6 @@ using namespace vast::binary_byte_literals;
 
 namespace vast::system {
 
-namespace {
-
 // An example of a pipeline with two steps:
 //
 // remove_action:
@@ -68,8 +66,6 @@ caf::error parse_pipeline_operators(pipeline& pipeline,
   }
   return caf::none;
 }
-
-} // namespace
 
 caf::expected<std::vector<pipeline>>
 make_pipelines(pipelines_location location, const caf::settings& settings) {

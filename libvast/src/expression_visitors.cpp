@@ -335,8 +335,8 @@ caf::expected<void> validator::operator()(const field_extractor&, const data&) {
   return {};
 }
 
-type_resolver::type_resolver(const type& layout)
-  : layout_{caf::get<record_type>(layout)}, layout_name_{layout.name()} {
+type_resolver::type_resolver(const type& schema)
+  : schema_{caf::get<record_type>(schema)}, schema_name_{schema.name()} {
   // nop
 }
 
@@ -439,12 +439,12 @@ caf::expected<expression>
 type_resolver::operator()(const field_extractor& ex, const data& d) {
   std::vector<expression> connective;
   // First, interpret the field as a suffix of a record field name.
-  auto suffixes = layout_.resolve_key_suffix(ex.field, layout_name_);
+  auto suffixes = schema_.resolve_key_suffix(ex.field, schema_name_);
   for (auto&& offset : suffixes) {
-    const auto f = layout_.field(offset);
+    const auto f = schema_.field(offset);
     if (!compatible(f.type, op_, d))
       continue;
-    auto x = data_extractor{layout_, offset};
+    auto x = data_extractor{schema_, offset};
     connective.emplace_back(predicate{std::move(x), op_, d});
   }
   if (connective.empty())

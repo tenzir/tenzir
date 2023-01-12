@@ -138,3 +138,48 @@ using a pluggable *writer* for a given output format, e.g., JSON, CSV, or PCAP.
 This component is not yet implemented. Until then, the [SINK](#SINK)
 performs both output formatting and subsequent I/O.
 :::
+
+## Component Interaction
+
+This section provides examples of how the different compentents interact.
+
+### Ingestion
+
+Sending data to VAST (aka *ingesting*) involves spinning up a VAST client
+that parses and ships the data to a [VAST server](/docs/use/run):
+
+![Ingest process](/img/ingest.light.png#gh-light-mode-only)
+![Ingest process](/img/ingest.dark.png#gh-dark-mode-only)
+
+VAST first acquires data through a *carrier* that represents the data transport
+medium. This typically involves I/O and has the effect of slicing the data into
+chunks of bytes. Thereafter, the *format* determines how to parse the bytes into
+structured events. At the server, VAST (1) creates indexes for accelerating
+querying, and (2) creates a *store* instance by transforming the in-memory Arrow
+representation into an on-disk format, e.g., [Feather][feather] or
+[Parquet][parquet].
+
+[feather]: https://arrow.apache.org/docs/python/feather.html
+[parquet]: https://parquet.apache.org/
+
+Loading and parsing take place in a separate VAST client to facilitate
+horizontal scaling. The `import` command creates a client for precisly this
+task.
+
+At the server, there exists one partition builder per schema. After a
+partition builder has reached a maximum number of events or reached a timeout,
+it sends the partition to the catalog to register it. Our [tuning
+guide](/docs/setup/tune#batching-table-slices) has more details on how to set
+these parameters.
+
+:::note Lakehouse Architecture
+VAST uses open standards for data in motion ([Arrow](https://arrow.apache.org))
+and data at rest ([Feather][feather] & [Parquet][parquet]). You only ETL data
+once to a destination of your choice. In that sense, VAST resembles a [lakehouse
+architecture][lakehouse-paper]. Think of the above pipeline as a chain of
+independently operating microservices, each of which can be scaled
+independently. The [actor model](actor-model) architecture of VAST enables this
+naturally.
+:::
+
+[lakehouse-paper]: http://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf

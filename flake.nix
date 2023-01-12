@@ -33,9 +33,12 @@
       packages = flake-utils.lib.flattenTree {
         vast = pkgs.vast;
         vast-static = pkgs.pkgsStatic.vast;
-        staticShell = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            git nixUnstable coreutils nix-prefetch-github
+        vast-integration-test-shell = pkgs.mkShell {
+          packages = pkgs.vast-integration-test-deps;
+        };
+        static-shell = pkgs.mkShell {
+          nativeBuildInputs = with pkgs; [
+            git nixUnstable coreutils
           ];
         };
         vast-ui = pkgs.vast-ui;

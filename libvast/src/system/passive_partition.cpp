@@ -80,7 +80,7 @@ void deliver_error_to_deferred_requests(passive_partition_state& state,
 
 caf::expected<vast::record_type>
 unpack_schema(const fbs::partition::LegacyPartition& partition) {
-  if (auto const* data = partition.combined_layout_caf_0_17()) {
+  if (auto const* data = partition.combined_schema_caf_0_17()) {
     auto lrt = legacy_record_type{};
     if (auto error = fbs::deserialize_bytes(data, lrt))
       return error;
@@ -89,13 +89,13 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
   if (auto const* data = partition.schema()) {
     auto chunk = chunk::copy(as_bytes(*data));
     auto t = type{std::move(chunk)};
-    auto* layout = caf::get_if<record_type>(&t);
-    if (!layout)
+    auto* schema = caf::get_if<record_type>(&t);
+    if (!schema)
       return caf::make_error(ec::format_error, "schema field contained "
                                                "unexpected type");
-    return std::move(*layout);
+    return std::move(*schema);
   }
-  return caf::make_error(ec::format_error, "missing 'layouts' field in "
+  return caf::make_error(ec::format_error, "missing 'schemas' field in "
                                            "partition flatbuffer");
 }
 
@@ -181,8 +181,8 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
 }
 
 const std::optional<vast::record_type>&
-passive_partition_state::combined_layout() const {
-  return combined_layout_;
+passive_partition_state::combined_schema() const {
+  return combined_schema_;
 }
 
 const std::unordered_map<std::string, ids>&
@@ -228,20 +228,20 @@ caf::error unpack(const fbs::partition::LegacyPartition& partition,
   state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
   if (auto schema = unpack_schema(partition))
-    state.combined_layout_ = std::move(*schema);
+    state.combined_schema_ = std::move(*schema);
   else
     return schema.error();
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
-  if (state.combined_layout_->num_fields() < indexes->size()) {
+  if (state.combined_schema_->num_fields() < indexes->size()) {
     VAST_ERROR("{} found incoherent number of indexers in deserialized state; "
                "{} fields for {} indexes",
-               state.name, state.combined_layout_->num_fields(),
+               state.name, state.combined_schema_->num_fields(),
                indexes->size());
     return caf::make_error(ec::format_error, "incoherent number of indexers");
   }
   // We only create dummy entries here, since the positions of the `indexers`
-  // vector must be the same as in `combined_layout`. The actual indexers are
+  // vector must be the same as in `combined_schema`. The actual indexers are
   // deserialized and spawned lazily on demand.
   state.indexers.resize(indexes->size());
   VAST_DEBUG("{} found {} indexers for partition {}", state.name,
@@ -266,10 +266,6 @@ unpack(const fbs::partition::LegacyPartition& x, partition_synopsis& ps) {
     return caf::make_error(ec::format_error, "missing partition synopsis");
   if (!x.type_ids())
     return caf::make_error(ec::format_error, "missing type_ids");
-  // The id_range was only added in VAST 2021.08.26, so we fill it
-  // from the data in the partition if it does not exist.
-  if (!x.partition_synopsis()->id_range())
-    return unpack(*x.partition_synopsis(), ps, x.offset(), x.events());
   return unpack(*x.partition_synopsis(), ps);
 }
 
@@ -280,7 +276,7 @@ partition_chunk::get_statistics(vast::chunk_ptr chunk) {
                                        fbs::PartitionIdentifier())) {
     // For partitions written prior to VAST 2.3, the chunk contains the
     // partition as top-level flatbuffer. For very old ones, it may also
-    // happen that it has multiple layouts.
+    // happen that it has multiple schemas.
     using ::flatbuffers::soffset_t;
     if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE)
       return caf::make_error(ec::format_error, "chunk exceeds max buffer size");
@@ -300,7 +296,7 @@ partition_chunk::get_statistics(vast::chunk_ptr chunk) {
         continue;
       }
       all_ids |= ids;
-      result.layouts[name->str()].count += rank(ids);
+      result.schemas[name->str()].count += rank(ids);
     }
   } else if (flatbuffers::BufferHasIdentifier(
                chunk->data(), fbs::SegmentedFileHeaderIdentifier())) {
@@ -331,7 +327,7 @@ partition_chunk::get_statistics(vast::chunk_ptr chunk) {
       return caf::make_error(ec::format_error, "could not get schema from "
                                                "synopsis");
     auto type = vast::type{chunk::copy(as_bytes(*synopsis->schema()))};
-    result.layouts[std::string{type.name()}].count
+    result.schemas[std::string{type.name()}].count
       += partition_legacy->events();
   } else {
     return caf::make_error(ec::format_error, "unknown header");

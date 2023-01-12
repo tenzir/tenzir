@@ -45,7 +45,7 @@ struct concept_ {
       f.field("concepts", c.concepts));
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"description", string_type{}},
       {"fields", list_type{string_type{}}},
@@ -58,9 +58,9 @@ struct concept_ {
 /// Maps concept names to their definitions.
 using concepts_map = detail::stable_map<std::string, concept_>;
 
-/// Describes the layout of a vast::list of concepts for automatic conversion to
+/// Describes the schema of a vast::list of concepts for automatic conversion to
 /// a `concepts_map`.
-extern const type concepts_data_layout;
+extern const type concepts_data_schema;
 
 /// The definition of a model.
 struct model {
@@ -69,7 +69,7 @@ struct model {
 
   /// The ordered concepts and models that the model is composed of.
   /// If an entry is another model, its concepts must also be represented  for
-  /// a layout to be considered.
+  /// a schema to be considered.
   std::vector<std::string> definition;
 
   friend bool operator==(const model& lhs, const model& rhs);
@@ -81,7 +81,7 @@ struct model {
       f.field("definition", m.definition));
   }
 
-  inline static const record_type& layout() noexcept {
+  inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"description", string_type{}},
       {"definition", list_type{string_type{}}},
@@ -93,9 +93,9 @@ struct model {
 /// Maps model names to their definitions.
 using models_map = detail::stable_map<std::string, model>;
 
-/// Describes the layout of a vast::list of models for automatic conversion to
+/// Describes the schema of a vast::list of models for automatic conversion to
 /// a `models_map`.
-extern const type models_data_layout;
+extern const type models_data_schema;
 
 /// A taxonomy is a combination of concepts and models. VAST stores all
 /// configured taxonomies in memory together, hence the plural naming.

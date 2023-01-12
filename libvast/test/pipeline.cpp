@@ -14,7 +14,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/plugin.hpp"
-#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/test.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -29,7 +29,7 @@
 
 using namespace std::literals;
 
-const auto testdata_layout = vast::type{
+const auto testdata_schema = vast::type{
   "testdata",
   vast::record_type{
     {"uid", vast::string_type{}},
@@ -38,7 +38,7 @@ const auto testdata_layout = vast::type{
   },
 };
 
-const auto testdata_layout2 = vast::type{
+const auto testdata_schema2 = vast::type{
   "testdata",
   vast::record_type{
     {"uid", vast::string_type{}},
@@ -48,7 +48,7 @@ const auto testdata_layout2 = vast::type{
   },
 };
 
-const auto testresult_layout2 = vast::type{
+const auto testresult_schema2 = vast::type{
   "testdata",
   vast::record_type{
     {"uid", vast::string_type{}},
@@ -56,7 +56,7 @@ const auto testresult_layout2 = vast::type{
   },
 };
 
-const auto testdata_layout3 = vast::type{
+const auto testdata_schema3 = vast::type{
   "testdata",
   vast::record_type{
     {"orig_addr", vast::address_type{}},
@@ -68,15 +68,11 @@ const auto testdata_layout3 = vast::type{
 
 struct pipelines_fixture {
   pipelines_fixture() {
-    vast::factory<vast::table_slice_builder>::initialize();
   }
 
   // Creates a table slice with a single string field and random data.
-  static vast::table_slice
-  make_pipelines_testdata(vast::table_slice_encoding encoding
-                          = vast::defaults::import::table_slice_type) {
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout);
+  static vast::table_slice make_pipelines_testdata() {
+    auto builder = std::make_shared<vast::table_slice_builder>(testdata_schema);
     REQUIRE(builder);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
@@ -91,11 +87,11 @@ struct pipelines_fixture {
   /// fields.
   static std::tuple<vast::table_slice, vast::table_slice>
   make_proj_and_del_testdata() {
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      vast::defaults::import::table_slice_type, testdata_layout2);
+    auto builder
+      = std::make_shared<vast::table_slice_builder>(testdata_schema2);
     REQUIRE(builder);
-    auto builder2 = vast::factory<vast::table_slice_builder>::make(
-      vast::defaults::import::table_slice_type, testresult_layout2);
+    auto builder2
+      = std::make_shared<vast::table_slice_builder>(testresult_schema2);
     REQUIRE(builder2);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
@@ -111,16 +107,14 @@ struct pipelines_fixture {
   /// Creates a table slice with ten rows(type, record_batch), a second having
   /// only the row with index==2 and a third having only the rows with index>5.
   static std::tuple<vast::table_slice, vast::table_slice, vast::table_slice>
-  make_where_testdata(vast::table_slice_encoding encoding
-                      = vast::defaults::import::table_slice_type) {
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout);
+  make_where_testdata() {
+    auto builder = std::make_shared<vast::table_slice_builder>(testdata_schema);
     REQUIRE(builder);
-    auto builder2 = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout);
+    auto builder2
+      = std::make_shared<vast::table_slice_builder>(testdata_schema);
     REQUIRE(builder2);
-    auto builder3 = vast::factory<vast::table_slice_builder>::make(
-      encoding, testdata_layout);
+    auto builder3
+      = std::make_shared<vast::table_slice_builder>(testdata_schema);
     REQUIRE(builder3);
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
@@ -142,8 +136,8 @@ struct pipelines_fixture {
   make_pseudonymize_testdata(const std::string& orig_ip,
                              const std::string& dest_ip,
                              const std::string& non_anon_ip) {
-    auto builder = vast::factory<vast::table_slice_builder>::make(
-      vast::defaults::import::table_slice_type, testdata_layout3);
+    auto builder
+      = std::make_shared<vast::table_slice_builder>(testdata_schema3);
     REQUIRE(builder);
     REQUIRE(builder->add(*vast::to<vast::address>(orig_ip),
                          vast::integer{40002},
@@ -156,8 +150,8 @@ struct pipelines_fixture {
     = vast::plugins::find<vast::pipeline_operator_plugin>("rename");
 };
 
-vast::type layout(caf::expected<std::vector<vast::pipeline_batch>> batches) {
-  return (*batches)[0].layout;
+vast::type schema(caf::expected<std::vector<vast::pipeline_batch>> batches) {
+  return (*batches)[0].schema;
 }
 
 vast::table_slice
@@ -174,7 +168,7 @@ TEST(drop operator) {
   REQUIRE(drop_plugin);
   auto drop_operator = unbox(drop_plugin->make_pipeline_operator(
     {{"fields", vast::list{"desc", "note"}}}));
-  auto add_failed = drop_operator->add(slice.layout(), to_record_batch(slice));
+  auto add_failed = drop_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add_failed);
   auto deleted = unbox(drop_operator->finish());
   REQUIRE_EQUAL(deleted.size(), 1ull);
@@ -182,7 +176,7 @@ TEST(drop operator) {
   auto invalid_drop_operator = unbox(
     drop_plugin->make_pipeline_operator({{"fields", vast::list{"xxx"}}}));
   auto invalid_add_failed
-    = invalid_drop_operator->add(slice.layout(), to_record_batch(slice));
+    = invalid_drop_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
   auto not_dropped = unbox(invalid_drop_operator->finish());
   REQUIRE_EQUAL(not_dropped.size(), 1ull);
@@ -190,7 +184,7 @@ TEST(drop operator) {
   auto schema_drop_operator = unbox(
     drop_plugin->make_pipeline_operator({{"schemas", vast::list{"testdata"}}}));
   auto schema_add_failed
-    = schema_drop_operator->add(slice.layout(), to_record_batch(slice));
+    = schema_drop_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!schema_add_failed);
   auto dropped = unbox(invalid_drop_operator->finish());
   CHECK(dropped.empty());
@@ -204,13 +198,13 @@ TEST(select operator) {
   // Arrow test:
   auto [slice, expected_slice] = make_proj_and_del_testdata();
   auto add_failed
-    = project_operator->add(slice.layout(), to_record_batch(slice));
+    = project_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add_failed);
   auto projected = unbox(project_operator->finish());
   REQUIRE_EQUAL(projected.size(), 1ull);
   REQUIRE_EQUAL(as_table_slice(projected), expected_slice);
   auto invalid_add_failed
-    = invalid_project_operator->add(slice.layout(), to_record_batch(slice));
+    = invalid_project_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!invalid_add_failed);
   auto not_projected = unbox(invalid_project_operator->finish());
   CHECK(not_projected.empty());
@@ -222,18 +216,18 @@ TEST(replace operator) {
     "replace",
     {{"fields", vast::record{{"uid", "xxx"}, {"desc", "1.2.3.4"}}}}));
   auto add_failed
-    = replace_operator->add(slice.layout(), to_record_batch(slice));
+    = replace_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add_failed);
   auto replaced = unbox(replace_operator->finish());
   REQUIRE_EQUAL(replaced.size(), 1ull);
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
+    caf::get<vast::record_type>(as_table_slice(replaced).schema()).num_fields(),
     3ull);
   CHECK_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(0).name,
+    caf::get<vast::record_type>(as_table_slice(replaced).schema()).field(0).name,
     "uid");
   CHECK_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(1).name,
+    caf::get<vast::record_type>(as_table_slice(replaced).schema()).field(1).name,
     "desc");
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(materialize(table_slice.at(0, 0)), "xxx");
@@ -247,18 +241,18 @@ TEST(extend operator) {
     "extend",
     {{"fields", vast::record{{"secret", "xxx"}, {"ip", "1.2.3.4"}}}}));
   auto add_failed
-    = replace_operator->add(slice.layout(), to_record_batch(slice));
+    = replace_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add_failed);
   auto replaced = unbox(replace_operator->finish());
   REQUIRE_EQUAL(replaced.size(), 1ull);
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(replaced).layout()).num_fields(),
+    caf::get<vast::record_type>(as_table_slice(replaced).schema()).num_fields(),
     5ull);
   CHECK_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(3).name,
+    caf::get<vast::record_type>(as_table_slice(replaced).schema()).field(3).name,
     "secret");
   CHECK_EQUAL(
-    caf::get<vast::record_type>(as_table_slice(replaced).layout()).field(4).name,
+    caf::get<vast::record_type>(as_table_slice(replaced).schema()).field(4).name,
     "ip");
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(materialize(table_slice.at(0, 3)), "xxx");
@@ -267,8 +261,7 @@ TEST(extend operator) {
 }
 
 TEST(where operator) {
-  auto [slice, single_row_slice, multi_row_slice]
-    = make_where_testdata(vast::defaults::import::table_slice_type);
+  auto [slice, single_row_slice, multi_row_slice] = make_where_testdata();
   CHECK_EQUAL(slice.rows(), 10ull);
   CHECK_EQUAL(single_row_slice.rows(), 1ull);
   CHECK_EQUAL(multi_row_slice.rows(), 4ull);
@@ -278,7 +271,7 @@ TEST(where operator) {
   auto where_operator = unbox(
     where_plugin->make_pipeline_operator({{"expression", "index == +2"}}));
   REQUIRE(where_operator);
-  auto add_failed = where_operator->add(slice.layout(), to_record_batch(slice));
+  auto add_failed = where_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add_failed);
   auto selected = where_operator->finish();
   REQUIRE_NOERROR(selected);
@@ -288,7 +281,7 @@ TEST(where operator) {
     where_plugin->make_pipeline_operator({{"expression", "index > +5"}}));
   REQUIRE(where_operator2);
   auto add2_failed
-    = where_operator2->add(slice.layout(), to_record_batch(slice));
+    = where_operator2->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add2_failed);
   auto selected2 = where_operator2->finish();
   REQUIRE_NOERROR(selected2);
@@ -298,7 +291,7 @@ TEST(where operator) {
     where_plugin->make_pipeline_operator({{"expression", "index > +9"}}));
   REQUIRE(where_operator3);
   auto add3_failed
-    = where_operator3->add(slice.layout(), to_record_batch(slice));
+    = where_operator3->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add3_failed);
   auto selected3 = where_operator3->finish();
   REQUIRE_NOERROR(selected3);
@@ -306,7 +299,7 @@ TEST(where operator) {
   auto where_operator4 = unbox(where_plugin->make_pipeline_operator(
     {{"expression", "#type == \"testdata\""}}));
   auto add4_failed
-    = where_operator4->add(slice.layout(), to_record_batch(slice));
+    = where_operator4->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add4_failed);
   auto selected4 = where_operator4->finish();
   REQUIRE_NOERROR(selected4);
@@ -315,7 +308,7 @@ TEST(where operator) {
   auto where_operator5 = unbox(where_plugin->make_pipeline_operator(
     {{"expression", "#type != \"testdata\""}}));
   auto add5_failed
-    = where_operator5->add(slice.layout(), to_record_batch(slice));
+    = where_operator5->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add5_failed);
   auto selected5 = where_operator5->finish();
   REQUIRE_NOERROR(selected5);
@@ -326,12 +319,12 @@ TEST(hash operator) {
   auto slice = make_pipelines_testdata();
   auto hash_operator = unbox(vast::make_pipeline_operator(
     "hash", {{"field", "uid"}, {"out", "hashed_uid"}}));
-  auto add_failed = hash_operator->add(slice.layout(), to_record_batch(slice));
+  auto add_failed = hash_operator->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!add_failed);
   auto hashed = unbox(hash_operator->finish());
   REQUIRE_EQUAL(hashed.size(), 1ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(hashed)).num_fields(), 4ull);
-  REQUIRE_EQUAL(caf::get<vast::record_type>(layout(hashed)).field(1).name,
+  REQUIRE_EQUAL(caf::get<vast::record_type>(schema(hashed)).num_fields(), 4ull);
+  REQUIRE_EQUAL(caf::get<vast::record_type>(schema(hashed)).field(1).name,
                 "hashed_uid");
   // TODO: not sure how we can check that the data was correctly hashed.
 }
@@ -374,11 +367,11 @@ TEST(pseudonymize - seed input too short and odd amount of chars) {
                      {"seed", "deadbee"},
                      {"fields", vast::list{"orig_addr", "dest_addr"}}}));
   auto pseudonymize_failed
-    = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
+    = pseudonymize_op->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!pseudonymize_failed);
   auto pseudonymized = unbox(pseudonymize_op->finish());
   auto pseudonymized_values
-    = caf::get<vast::record_type>(layout(pseudonymized));
+    = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
                 *vast::to<vast::address>("20.251.116.68"));
@@ -400,11 +393,11 @@ TEST(pseudonymize - seed input too long) {
               "6590bdf48c968be5de53836e"},
      {"fields", vast::list{"orig_addr", "dest_addr"}}}));
   auto pseudonymize_failed
-    = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
+    = pseudonymize_op->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!pseudonymize_failed);
   auto pseudonymized = unbox(pseudonymize_op->finish());
   auto pseudonymized_values
-    = caf::get<vast::record_type>(layout(pseudonymized));
+    = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
                 *vast::to<vast::address>("117.8.135.123"));
@@ -425,11 +418,11 @@ TEST(pseudonymize - IPv4 address batch pseudonymizing) {
                               "8be5de53836e"},
                      {"fields", vast::list{"orig_addr", "dest_addr"}}}));
   auto pseudonymize_failed
-    = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
+    = pseudonymize_op->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!pseudonymize_failed);
   auto pseudonymized = unbox(pseudonymize_op->finish());
   auto pseudonymized_values
-    = caf::get<vast::record_type>(layout(pseudonymized));
+    = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
                 *vast::to<vast::address>("117.8.135.123"));
@@ -451,11 +444,11 @@ TEST(pseudonymize - IPv6 address batch pseudonymizing) {
                               "8be5de53836e"},
                      {"fields", vast::list{"orig_addr", "dest_addr"}}}));
   auto pseudonymize_failed
-    = pseudonymize_op->add(slice.layout(), to_record_batch(slice));
+    = pseudonymize_op->add(slice.schema(), to_record_batch(slice));
   REQUIRE(!pseudonymize_failed);
   auto pseudonymized = unbox(pseudonymize_op->finish());
   auto pseudonymized_values
-    = caf::get<vast::record_type>(layout(pseudonymized));
+    = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
                 *vast::to<vast::address>("1482:f447:75b3:f1f9:"
@@ -484,15 +477,14 @@ TEST(pipeline with multiple steps) {
   REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->size(), 1ull);
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
+    caf::get<vast::record_type>((*transformed)[0].schema()).num_fields(), 2ull);
   CHECK_EQUAL(
-    caf::get<vast::record_type>((*transformed)[0].layout()).field(0).name, "ui"
+    caf::get<vast::record_type>((*transformed)[0].schema()).field(0).name, "ui"
                                                                            "d");
   CHECK_EQUAL(materialize((*transformed)[0].at(0, 0)), "xxx");
-  auto wrong_layout = vast::type{"stub", testdata_layout};
-  wrong_layout.assign_metadata(vast::type{"foo", vast::type{}});
-  auto builder = vast::factory<vast::table_slice_builder>::make(
-    vast::defaults::import::table_slice_type, wrong_layout);
+  auto wrong_schema = vast::type{"stub", testdata_schema};
+  wrong_schema.assign_metadata(vast::type{"foo", vast::type{}});
+  auto builder = std::make_shared<vast::table_slice_builder>(wrong_schema);
   REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));
   auto wrong_slice = builder->finish();
   auto add2_failed = pipeline.add(std::move(wrong_slice));
@@ -501,23 +493,23 @@ TEST(pipeline with multiple steps) {
   REQUIRE_NOERROR(not_transformed);
   REQUIRE_EQUAL(not_transformed->size(), 1ull);
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>((*not_transformed)[0].layout()).num_fields(),
+    caf::get<vast::record_type>((*not_transformed)[0].schema()).num_fields(),
     3ull);
   CHECK_EQUAL(
-    caf::get<vast::record_type>((*not_transformed)[0].layout()).field(0).name,
+    caf::get<vast::record_type>((*not_transformed)[0].schema()).field(0).name,
     "uid");
   CHECK_EQUAL(
-    caf::get<vast::record_type>((*not_transformed)[0].layout()).field(1).name,
+    caf::get<vast::record_type>((*not_transformed)[0].schema()).field(1).name,
     "desc");
   CHECK_EQUAL(
-    caf::get<vast::record_type>((*not_transformed)[0].layout()).field(2).name,
+    caf::get<vast::record_type>((*not_transformed)[0].schema()).field(2).name,
     "index");
   CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 0)), "asdf");
   CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 1)), "jklo");
   CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), vast::integer{23});
 }
 
-TEST(pipeline rename layout) {
+TEST(pipeline rename schema) {
   vast::pipeline pipeline("test_pipeline", {{"testdata"}});
   auto rename_settings = vast::record{
     {"schemas", vast::list{vast::record{
@@ -535,7 +527,7 @@ TEST(pipeline rename layout) {
   REQUIRE_NOERROR(transformed);
   REQUIRE_EQUAL(transformed->size(), 1ull);
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
+    caf::get<vast::record_type>((*transformed)[0].schema()).num_fields(), 2ull);
 }
 
 TEST(Pipeline executor - single matching pipeline) {
@@ -556,12 +548,12 @@ TEST(Pipeline executor - single matching pipeline) {
   REQUIRE_EQUAL(transformed->size(), 1ull);
   // We expect that only one pipeline has been applied.
   REQUIRE_EQUAL(
-    caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 2ull);
+    caf::get<vast::record_type>((*transformed)[0].schema()).num_fields(), 2ull);
   CHECK_EQUAL(
-    caf::get<vast::record_type>((*transformed)[0].layout()).field(0).name, "des"
+    caf::get<vast::record_type>((*transformed)[0].schema()).field(0).name, "des"
                                                                            "c");
   CHECK_EQUAL(
-    caf::get<vast::record_type>((*transformed)[0].layout()).field(1).name,
+    caf::get<vast::record_type>((*transformed)[0].schema()).field(1).name,
     "index");
 }
 
@@ -576,8 +568,7 @@ TEST(pipeline executor - multiple matching pipelines) {
   pipeline2.add_operator(unbox(
     vast::make_pipeline_operator("drop", {{"fields", vast::list{"index"}}})));
   vast::pipeline_executor executor(std::move(pipelines));
-  auto slice
-    = make_pipelines_testdata(vast::defaults::import::table_slice_type);
+  auto slice = make_pipelines_testdata();
   REQUIRE_EQUAL(slice.encoding(), vast::defaults::import::table_slice_type);
   auto add_failed = executor.add(std::move(slice));
   REQUIRE(!add_failed);
@@ -587,7 +578,7 @@ TEST(pipeline executor - multiple matching pipelines) {
   REQUIRE_EQUAL((*transformed)[0].encoding(),
                 vast::defaults::import::table_slice_type);
   CHECK_EQUAL(
-    caf::get<vast::record_type>((*transformed)[0].layout()).num_fields(), 1ull);
+    caf::get<vast::record_type>((*transformed)[0].schema()).num_fields(), 1ull);
 }
 
 TEST(pipeline executor - aggregate validation pipelines) {

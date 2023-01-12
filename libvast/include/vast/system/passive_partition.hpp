@@ -56,7 +56,7 @@ struct passive_partition_state {
 
   indexer_actor indexer_at(size_t position) const;
 
-  const std::optional<vast::record_type>& combined_layout() const;
+  const std::optional<vast::record_type>& combined_schema() const;
 
   const std::unordered_map<std::string, ids>& type_ids() const;
 
@@ -72,7 +72,7 @@ struct passive_partition_state {
   uuid id = {};
 
   /// The combined type of all columns of this partition.
-  std::optional<record_type> combined_layout_ = {};
+  std::optional<record_type> combined_schema_ = {};
 
   /// Maps type names to ids. Used the answer #type queries.
   std::unordered_map<std::string, ids> type_ids_ = {};

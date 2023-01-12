@@ -74,8 +74,8 @@ print_segment_v0(const vast::fbs::segment::v0* segment, indentation& indent,
                                      flat_slice->data()->size(), {});
       auto slice
         = vast::table_slice(std::move(chunk), vast::table_slice::verify::no);
-      const auto& layout = slice.layout();
-      fmt::print("{}{}: {} rows", indent, layout.name(), slice.rows());
+      const auto& schema = slice.schema();
+      fmt::print("{}{}: {} rows", indent, schema.name(), slice.rows());
       if (options.format.print_bytesizes) {
         auto size = flat_slice->data()->size();
         fmt::print(" ({})", print_bytesize(size, options.format));

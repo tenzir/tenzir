@@ -120,7 +120,7 @@ caf::error validate_(const vast::data& data, const vast::type& type,
             return error;
           prefixes.insert(nested_prefix);
         }
-        // In 'exhaustive' mode, additionally go through the layout and verify
+        // In 'exhaustive' mode, additionally go through the schema and verify
         // that all fields exist in the data.
         if (mode == validate::exhaustive) {
           for (const auto& field : record_type.fields()) {
@@ -148,9 +148,9 @@ caf::error validate_(const vast::data& data, const vast::type& type,
 
 } // namespace
 
-caf::error validate(const vast::data& data, const vast::record_type& layout,
+caf::error validate(const vast::data& data, const vast::record_type& schema,
                     enum vast::validate mode) {
-  return validate_(data, vast::type{layout}, mode);
+  return validate_(data, vast::type{schema}, mode);
 }
 
 } // namespace vast

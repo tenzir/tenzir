@@ -112,16 +112,16 @@ void serialize(
       std::make_pair(qf.name(), chunk_it->second));
   }
   // Create the partition flatbuffer.
-  auto combined_layout = self->state.combined_layout();
-  if (!combined_layout) {
+  auto combined_schema = self->state.combined_schema();
+  if (!combined_schema) {
     auto err = caf::make_error(ec::logic_error, "unable to create "
-                                                "combined layout");
+                                                "combined schema");
     VAST_ERROR("{} failed to serialize {} with error: {}", *self,
                self->state.name, err);
     self->state.persistence_promise.deliver(err);
     return;
   }
-  auto partition = pack_full(self->state.data, *combined_layout);
+  auto partition = pack_full(self->state.data, *combined_schema);
   if (!partition) {
     VAST_ERROR("{} failed to serialize {} with error: {}", *self,
                self->state.name, partition.error());
@@ -188,7 +188,7 @@ active_indexer_actor active_partition_state::indexer_at(size_t position) const {
   return as_vector(indexers)[position].second;
 }
 
-std::optional<record_type> active_partition_state::combined_layout() const {
+std::optional<record_type> active_partition_state::combined_schema() const {
   if (indexers.empty())
     return {};
   auto fields = std::vector<struct record_type::field>{};
@@ -224,7 +224,7 @@ bool partition_selector::operator()(const qualified_record_field& filter,
 
 caf::expected<vast::chunk_ptr>
 pack_full(const active_partition_state::serialization_data& x,
-          const record_type& combined_layout) {
+          const record_type& combined_schema) {
   flatbuffers::FlatBufferBuilder builder;
   auto uuid = pack(builder, x.id);
   if (!uuid)
@@ -272,8 +272,8 @@ pack_full(const active_partition_state::serialization_data& x,
     indices.push_back(qindex);
   }
   auto indexes = builder.CreateVector(indices);
-  // Serialize layout.
-  auto schema_bytes = as_bytes(combined_layout);
+  // Serialize schema.
+  auto schema_bytes = as_bytes(combined_schema);
   auto schema_offset = builder.CreateVector(
     reinterpret_cast<const uint8_t*>(schema_bytes.data()), schema_bytes.size());
   std::vector<flatbuffers::Offset<fbs::partition::detail::LegacyTypeIDs>> tids;
@@ -354,7 +354,7 @@ active_partition_actor::behavior_type active_partition(
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
   self->state.stage = detail::attach_notifying_stream_stage(
-    self, true,
+    self, false,
     [=](caf::unit_t&) {
       // nop
     },
@@ -380,9 +380,9 @@ active_partition_actor::behavior_type active_partition(
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
       auto first = x.offset();
       auto last = x.offset() + x.rows();
-      const auto& layout = x.layout();
-      VAST_ASSERT(!layout.name().empty());
-      auto it = self->state.data.type_ids.emplace(layout.name(), ids{}).first;
+      const auto& schema = x.schema();
+      VAST_ASSERT(!schema.name().empty());
+      auto it = self->state.data.type_ids.emplace(schema.name(), ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());
       // Mark the ids of this table slice for the current type.
@@ -393,8 +393,8 @@ active_partition_actor::behavior_type active_partition(
         x, self->state.partition_capacity, self->state.synopsis_index_config);
       size_t col = 0;
       for (const auto& [field, offset] :
-           caf::get<record_type>(layout).leaves()) {
-        const auto qf = qualified_record_field{layout, offset};
+           caf::get<record_type>(schema).leaves()) {
+        const auto qf = qualified_record_field{schema, offset};
         auto& idx = self->state.indexers[qf];
         if (should_skip_index_creation(
               field.type, qf, self->state.synopsis_index_config.rules)) {

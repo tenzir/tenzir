@@ -53,7 +53,7 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
         cfg, "vast.plugin-dirs"))
     result.insert(dirs->begin(), dirs->end());
   else
-    VAST_WARN("Unable to extract vast plugin dirs. {}", dirs.error());
+    VAST_WARN("failed to to extract plugin dirs: {}", dirs.error());
   if (!bare_mode)
     if (auto home = detail::getenv("HOME"))
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "vast"
@@ -227,10 +227,7 @@ load(const std::vector<std::string>& bundled_plugins,
   for (auto path : std::move(*paths)) {
     if (auto plugin = plugin_ptr::make_dynamic(path.c_str(), cfg)) {
       // Check for name clashes.
-      auto has_same_name = [&](const auto& other) {
-        return !std::strcmp((*plugin)->name(), other->name());
-      };
-      if (std::any_of(get().begin(), get().end(), has_same_name))
+      if (find((*plugin)->name()))
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("failed to load the {} plugin "
                                            "because another plugin already "
@@ -242,11 +239,8 @@ load(const std::vector<std::string>& bundled_plugins,
       return std::move(plugin.error());
     }
   }
-  // Sort loaded plugins by name.
-  std::sort(get_mutable().begin(), get_mutable().end(),
-            [](const auto& lhs, const auto& rhs) {
-              return std::strcmp(lhs->name(), rhs->name()) < 0;
-            });
+  // Sort loaded plugins by name (case-insensitive).
+  std::sort(get_mutable().begin(), get_mutable().end());
   return loaded_plugin_paths;
 }
 
@@ -325,7 +319,7 @@ const std::vector<std::filesystem::path>& loaded_config_files() {
 system::analyzer_plugin_actor analyzer_plugin::analyzer(
   system::node_actor::stateful_pointer<system::node_state> node) const {
   if (auto handle = weak_handle_.lock())
-    return caf::actor_cast<system::analyzer_plugin_actor>(handle);
+    return handle;
   if (spawned_once_ || !node)
     return {};
   auto handle = make_analyzer(node);
@@ -339,7 +333,7 @@ system::analyzer_plugin_actor analyzer_plugin::analyzer(
             VAST_ERROR("failed to connect analyzer {} to the importer: {}",
                        name(), error);
           });
-  weak_handle_ = caf::actor_cast<caf::weak_actor_ptr>(handle);
+  weak_handle_ = handle;
   spawned_once_ = true;
   return handle;
 }
@@ -554,6 +548,62 @@ const char* plugin_ptr::version() const noexcept {
 
 enum plugin_ptr::type plugin_ptr::type() const noexcept {
   return type_;
+}
+
+std::strong_ordering
+operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept {
+  if (&lhs == &rhs)
+    return std::strong_ordering::equal;
+  if (!lhs && !rhs)
+    return std::strong_ordering::equal;
+  if (!lhs)
+    return std::strong_ordering::less;
+  if (!rhs)
+    return std::strong_ordering::greater;
+  return lhs <=> rhs->name();
+}
+
+bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept {
+  if (&lhs == &rhs)
+    return true;
+  if (!lhs && !rhs)
+    return true;
+  return lhs == rhs->name();
+}
+
+std::strong_ordering
+operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept {
+  if (!lhs)
+    return std::strong_ordering::less;
+  auto lhs_name = lhs->name();
+  // TODO: Replace implementation with `std::lexicographical_compare_three_way`
+  // once that is implemented for all compilers we need to support. This does
+  // the same thing essentially, just a lot less generic.
+  while (!lhs_name.empty() && !rhs.empty()) {
+    const auto lhs_normalized
+      = std::tolower(static_cast<unsigned char>(lhs_name[0]));
+    const auto rhs_normalized
+      = std::tolower(static_cast<unsigned char>(rhs[0]));
+    if (lhs_normalized < rhs_normalized)
+      return std::strong_ordering::less;
+    if (lhs_normalized > rhs_normalized)
+      return std::strong_ordering::greater;
+    lhs_name = lhs_name.substr(1);
+    rhs = rhs.substr(1);
+  }
+  return !lhs_name.empty() ? std::strong_ordering::greater
+         : !rhs.empty()    ? std::strong_ordering::less
+                           : std::strong_ordering::equivalent;
+}
+
+bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept {
+  if (!lhs)
+    return false;
+  const auto lhs_name = lhs->name();
+  return std::equal(lhs_name.begin(), lhs_name.end(), rhs.begin(), rhs.end(),
+                    [](unsigned char lhs, unsigned char rhs) noexcept {
+                      return std::tolower(lhs) == std::tolower(rhs);
+                    });
 }
 
 } // namespace vast

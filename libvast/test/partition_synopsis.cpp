@@ -46,14 +46,14 @@ TEST(custom index_config) {
     ps.add(slice, capacity, synopsis_opts);
   ps.shrink();
   // Verify field synopses.
-  auto&& layout = zeek_http_log.at(0).layout();
-  auto const& layout_rt = caf::get<vast::record_type>(layout);
-  auto uri_key = layout_rt.resolve_key("uri");
-  auto host_key = layout_rt.resolve_key("host");
+  auto&& schema = zeek_http_log.at(0).schema();
+  auto const& schema_rt = caf::get<vast::record_type>(schema);
+  auto uri_key = schema_rt.resolve_key("uri");
+  auto host_key = schema_rt.resolve_key("host");
   REQUIRE(uri_key);
   REQUIRE(host_key);
-  auto uri_field = vast::qualified_record_field(layout, *uri_key);
-  auto host_field = vast::qualified_record_field(layout, *host_key);
+  auto uri_field = vast::qualified_record_field(schema, *uri_key);
+  auto host_field = vast::qualified_record_field(schema, *host_key);
   auto const& host_synopsis = ps.field_synopses_.at(host_field);
   CHECK_EQUAL(host_synopsis, nullptr);
   auto& url_synopsis = ps.field_synopses_.at(uri_field);

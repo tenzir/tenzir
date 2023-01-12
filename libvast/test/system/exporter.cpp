@@ -61,8 +61,9 @@ struct fixture : fixture_base {
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer", index,
-                           std::vector<vast::pipeline>{});
+    importer
+      = self->spawn(system::importer, directory / "importer", index,
+                    system::accountant_actor{}, std::vector<vast::pipeline>{});
   }
 
   void spawn_exporter(query_options opts) {
@@ -77,7 +78,6 @@ struct fixture : fixture_base {
       spawn_index();
     if (!importer)
       spawn_importer();
-    run();
   }
 
   void exporter_setup(query_options opts) {

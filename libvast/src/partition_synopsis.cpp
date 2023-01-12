@@ -71,8 +71,8 @@ std::optional<double> get_field_fprate(const index_config& config,
   for (const auto& [targets, fprate, _] : config.rules)
     for (const auto& name : targets)
       if (name.size()
-            == field.field_name().size() + field.layout_name().size() + 1
-          && name.starts_with(field.layout_name())
+            == field.field_name().size() + field.schema_name().size() + 1
+          && name.starts_with(field.schema_name())
           && name.ends_with(field.field_name()))
         return fprate;
   return std::nullopt;
@@ -100,11 +100,10 @@ void partition_synopsis::add(const table_slice& slice,
       return nullptr;
     return factory<synopsis>::make(t, synopsis_options);
   };
-  const auto& layout = slice.layout();
   if (!schema)
-    schema = layout;
-  VAST_ASSERT(schema == layout);
-  auto each = caf::get<record_type>(layout).leaves();
+    schema = slice.schema();
+  VAST_ASSERT(schema == slice.schema());
+  auto each = caf::get<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
   // These options must be kept in sync with vast/address_synopsis.hpp and
@@ -128,7 +127,7 @@ void partition_synopsis::add(const table_slice& slice,
       }
     };
     // Make a field synopsis if it was configured.
-    if (auto key = qualified_record_field{layout, leaf.index};
+    if (auto key = qualified_record_field{schema, leaf.index};
         auto fprate = get_field_fprate(fp_rates, key)) {
       // Locate the relevant synopsis.
       auto it = field_synopses_.find(key);
@@ -274,30 +273,6 @@ caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
     return caf::make_error(ec::format_error, "missing id range");
   ps.offset = x.id_range()->begin();
   ps.events = x.id_range()->end() - x.id_range()->begin();
-  if (x.import_time_range()) {
-    ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
-    ps.max_import_time = time{} + duration{x.import_time_range()->end()};
-  } else {
-    ps.min_import_time = time{};
-    ps.max_import_time = time{};
-  }
-  ps.version = x.version();
-  if (const auto* schema = x.schema())
-    ps.schema = type{chunk::copy(as_bytes(*schema))};
-  if (!x.synopses())
-    return caf::make_error(ec::format_error, "missing synopses");
-  return unpack_(*x.synopses(), ps);
-}
-
-// This overload is for supporting the transition from VAST 2021.07.29
-// to 2021.08.26, where the `id_range` field was added to partition
-// synopsis. It can be removed once these versions are unsupported.
-caf::error unpack(const fbs::partition_synopsis::LegacyPartitionSynopsis& x,
-                  partition_synopsis& ps, uint64_t offset, uint64_t events) {
-  // We should not end up in this overload when an id range already exists.
-  VAST_ASSERT(!x.id_range());
-  ps.offset = offset;
-  ps.events = events;
   if (x.import_time_range()) {
     ps.min_import_time = time{} + duration{x.import_time_range()->begin()};
     ps.max_import_time = time{} + duration{x.import_time_range()->end()};

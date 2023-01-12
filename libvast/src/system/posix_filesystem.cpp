@@ -9,6 +9,7 @@
 #include "vast/system/posix_filesystem.hpp"
 
 #include "vast/chunk.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/system/report.hpp"
@@ -52,7 +53,34 @@ filesystem_actor::behavior_type posix_filesystem(
   if (accountant) {
     self->state.accountant = accountant;
     self->send(accountant, atom::announce_v, self->name());
-    self->send(self, atom::telemetry_v);
+    detail::weak_run_delayed_loop(
+      self, defaults::system::telemetry_rate, [self] {
+        auto accountant = self->state.accountant.lock();
+        if (!accountant)
+          return;
+        auto msg = report{
+          .data = {
+            {"posix-filesystem.checks.sucessful", self->state.stats.checks.successful},
+            {"posix-filesystem.checks.failed", self->state.stats.checks.failed},
+            {"posix-filesystem.writes.sucessful", self->state.stats.writes.successful},
+            {"posix-filesystem.writes.failed", self->state.stats.writes.failed},
+            {"posix-filesystem.writes.bytes", self->state.stats.writes.bytes},
+            {"posix-filesystem.reads.sucessful", self->state.stats.reads.successful},
+            {"posix-filesystem.reads.failed", self->state.stats.reads.failed},
+            {"posix-filesystem.reads.bytes", self->state.stats.reads.bytes},
+            {"posix-filesystem.mmaps.sucessful", self->state.stats.mmaps.successful},
+            {"posix-filesystem.mmaps.failed", self->state.stats.mmaps.failed},
+            {"posix-filesystem.mmaps.bytes", self->state.stats.mmaps.bytes},
+            {"posix-filesystem.erases.sucessful", self->state.stats.erases.successful},
+            {"posix-filesystem.erases.failed", self->state.stats.erases.failed},
+            {"posix-filesystem.erases.bytes", self->state.stats.erases.bytes},
+            {"posix-filesystem.moves.sucessful", self->state.stats.moves.successful},
+            {"posix-filesystem.moves.failed", self->state.stats.moves.failed},
+          },
+          .metadata = {},
+        };
+        self->send(accountant, atom::metrics_v, std::move(msg));
+      });
   }
   return {
     [self](atom::write, const std::filesystem::path& filename,
@@ -177,35 +205,6 @@ filesystem_actor::behavior_type posix_filesystem(
         result["operations"] = std::move(ops);
       }
       return result;
-    },
-    [self](atom::telemetry) {
-      auto accountant = self->state.accountant.lock();
-      if (!accountant)
-        return;
-      self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry_v);
-      auto msg = report{
-        .data = {
-          {"posix-filesystem.checks.sucessful", self->state.stats.checks.successful},
-          {"posix-filesystem.checks.failed", self->state.stats.checks.failed},
-          {"posix-filesystem.writes.sucessful", self->state.stats.writes.successful},
-          {"posix-filesystem.writes.failed", self->state.stats.writes.failed},
-          {"posix-filesystem.writes.bytes", self->state.stats.writes.bytes},
-          {"posix-filesystem.reads.sucessful", self->state.stats.reads.successful},
-          {"posix-filesystem.reads.failed", self->state.stats.reads.failed},
-          {"posix-filesystem.reads.bytes", self->state.stats.reads.bytes},
-          {"posix-filesystem.mmaps.sucessful", self->state.stats.mmaps.successful},
-          {"posix-filesystem.mmaps.failed", self->state.stats.mmaps.failed},
-          {"posix-filesystem.mmaps.bytes", self->state.stats.mmaps.bytes},
-          {"posix-filesystem.erases.sucessful", self->state.stats.erases.successful},
-          {"posix-filesystem.erases.failed", self->state.stats.erases.failed},
-          {"posix-filesystem.erases.bytes", self->state.stats.erases.bytes},
-          {"posix-filesystem.moves.sucessful", self->state.stats.moves.successful},
-          {"posix-filesystem.moves.failed", self->state.stats.moves.failed},
-        },
-        .metadata = {},
-      };
-      self->send(accountant, atom::metrics_v, std::move(msg));
     },
   };
 }

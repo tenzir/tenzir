@@ -12,7 +12,6 @@
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
-#include <vast/table_slice_builder_factory.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/type.h>
@@ -37,7 +36,7 @@ struct configuration {
   }
 
   /// Enable parsing from a record via convertible.
-  static inline const record_type& layout() noexcept {
+  static inline const record_type& schema() noexcept {
     static auto result = record_type{
       {"fields", list_type{string_type{}}},
     };
@@ -53,21 +52,21 @@ public:
   }
 
   /// Projects an arrow record batch.
-  /// @returns The new layout and the projected record batch.
+  /// @returns The new schema and the projected record batch.
   caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
     VAST_TRACE("select operator adds batch");
     auto indices = std::vector<offset>{};
     for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(layout).resolve_key_suffix(
-             field, layout.name()))
+      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
+             field, schema.name()))
         indices.push_back(std::move(index));
     std::sort(indices.begin(), indices.end());
-    auto [adjusted_layout, adjusted_batch]
-      = select_columns(layout, batch, indices);
-    if (adjusted_layout) {
+    auto [adjusted_schema, adjusted_batch]
+      = select_columns(schema, batch, indices);
+    if (adjusted_schema) {
       VAST_ASSERT(adjusted_batch);
-      transformed_.emplace_back(std::move(adjusted_layout),
+      transformed_.emplace_back(std::move(adjusted_schema),
                                 std::move(adjusted_batch));
     }
     return caf::none;
@@ -93,7 +92,7 @@ public:
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "select";
   };
 

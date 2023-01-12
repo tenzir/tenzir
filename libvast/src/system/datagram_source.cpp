@@ -18,6 +18,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/streambuf.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -145,9 +146,18 @@ caf::behavior datagram_source(
                                    self->current_sender()));
         return;
       }
-      if (self->state.accountant)
-        self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry_v);
+      if (self->state.accountant) {
+        detail::weak_run_delayed_loop(
+          self, defaults::system::telemetry_rate, [self] {
+            self->state.send_report();
+            if (self->state.dropped_packets > 0) {
+              VAST_WARN("{} has no capacity left in stream and dropped {} "
+                        "packets",
+                        *self, self->state.dropped_packets);
+              self->state.dropped_packets = 0;
+            }
+          });
+      }
       // Start streaming.
       self->state.mgr->add_outbound_path(self->state.transformer);
       auto name = std::string{self->state.reader->name()};
@@ -194,21 +204,6 @@ caf::behavior datagram_source(
           });
       }
       return rs->promise;
-    },
-    [](atom::wakeup) {
-      // nop
-    },
-    [self](atom::telemetry) {
-      VAST_DEBUG("{} got a telemetry atom", *self);
-      self->state.send_report();
-      if (self->state.dropped_packets > 0) {
-        VAST_WARN("{} has no capacity left in stream and dropped {} packets",
-                  *self, self->state.dropped_packets);
-        self->state.dropped_packets = 0;
-      }
-      if (!self->state.done)
-        self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry_v);
     },
   };
 

@@ -38,7 +38,7 @@ struct configuration {
     return detail::apply_all(f, x.row_group_size, x.zstd_compression_level);
   }
 
-  static const record_type& layout() noexcept {
+  static const record_type& schema() noexcept {
     static auto result = record_type{
       {"row-group-size", count_type{}},
       {"zstd-compression-level", integer_type{}},
@@ -489,7 +489,7 @@ class plugin final : public virtual store_plugin {
     return convert(options, parquet_config_);
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "parquet";
   }
 

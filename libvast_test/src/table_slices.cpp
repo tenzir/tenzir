@@ -28,16 +28,16 @@ namespace vast {
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.
 /// @param slice_size The number of rows per table slices.
-/// @param layout The layout of the table slice.
+/// @param schema The schema of the table slice.
 /// @param offset The offset of the first table slize.
 /// @param seed The seed value for initializing the random-number generator.
 /// @returns a list of randomnly filled table slices or an error.
 /// @relates table_slice
 caf::expected<std::vector<table_slice>>
-make_random_table_slices(size_t num_slices, size_t slice_size, type layout,
+make_random_table_slices(size_t num_slices, size_t slice_size, type schema,
                          id offset, size_t seed) {
   module mo;
-  mo.add(layout);
+  mo.add(schema);
   // We have no access to the actor system, so we can only pick the default
   // table slice type here. This ignores any user-defined overrides. However,
   // this function is only meant for testing anyways.
@@ -76,7 +76,7 @@ make_data(const table_slice& slice, size_t first_row, size_t num_rows) {
     num_rows = slice.rows() - first_row;
   std::vector<std::vector<data>> result;
   result.reserve(num_rows);
-  auto fl = flatten(caf::get<record_type>(slice.layout()));
+  auto fl = flatten(caf::get<record_type>(slice.schema()));
   for (size_t i = 0; i < num_rows; ++i) {
     std::vector<data> xs;
     xs.reserve(slice.columns());
@@ -106,7 +106,7 @@ table_slices::table_slices(std::string_view suite)
   // A bunch of test data for nested type combinations.
   // clang-format off
   auto test_lists = ""s
-    + ", [T]"s // va
+    + ", [true]"s // va
     + ", [+7]"s // vb
     + ", [42]"s // vc
     + ", [4.2]"s // vd
@@ -117,35 +117,35 @@ table_slices::table_slices(std::string_view suite)
     + ", [127.0.0.1]"s // vi
     + ", [10.0.0.0/8]"s // vj
     // + ", [[1, 2, 3]]"s // vl
-    // + ", [{1 -> T, 2 -> F, 3 -> T}]"s // vm
+    // + ", [{1 -> true, 2 -> false, 3 -> true}]"s // vm
     ;
   auto test_maps_left = ""s
-    + ", {T -> T}"s // maa
-    + ", {+7 -> T}"s // mba
-    + ", {42 -> T}"s // mca
-    + ", {4.2 -> T}"s // mda
-    + ", {1337ms -> T}"s // mea
-    + ", {2018-12-24 -> T}"s // mfa
-    + ", {\"foo\" -> T}"s // mga
-    + ", {/foo.*bar/ -> T}"s // mha
-    + ", {127.0.0.1 -> T}"s // mia
-    + ", {10.0.0.0/8 -> T}"s // mja
-    // + ", {[1, 2, 3] -> T}"s // mla
-    // + ", {{1 -> T, 2 -> F, 3 -> T} -> T}"s // mna
+    + ", {true -> true}"s // maa
+    + ", {+7 -> true}"s // mba
+    + ", {42 -> true}"s // mca
+    + ", {4.2 -> true}"s // mda
+    + ", {1337ms -> true}"s // mea
+    + ", {2018-12-24 -> true}"s // mfa
+    + ", {\"foo\" -> true}"s // mga
+    + ", {/foo.*bar/ -> true}"s // mha
+    + ", {127.0.0.1 -> true}"s // mia
+    + ", {10.0.0.0/8 -> true}"s // mja
+    // + ", {[1, 2, 3] -> true}"s // mla
+    // + ", {{1 -> true, 2 -> false, 3 -> true} -> true}"s // mna
     ;
   auto test_maps_right = ""s
     // (intentionally no maa)
-    + ", {T -> +7}"s // mab
-    + ", {T -> 42}"s // mac
-    + ", {T -> 4.2}"s // mad
-    + ", {T -> 1337ms}"s // mae
-    + ", {T -> 2018-12-24}"s // maf
-    + ", {T -> \"foo\"}"s // mag
-    + ", {T -> /foo.*bar/}"s // mah
-    + ", {T -> 127.0.0.1}"s // mai
-    + ", {T -> 10.0.0.0/8}"s // maj
-    // + ", {T -> [1, 2, 3]}"s // mal
-    // + ", {T -> {1 -> T, 2 -> F, 3 -> T}}"s // man
+    + ", {true -> +7}"s // mab
+    + ", {true -> 42}"s // mac
+    + ", {true -> 4.2}"s // mad
+    + ", {true -> 1337ms}"s // mae
+    + ", {true -> 2018-12-24}"s // maf
+    + ", {true -> \"foo\"}"s // mag
+    + ", {true -> /foo.*bar/}"s // mah
+    + ", {true -> 127.0.0.1}"s // mai
+    + ", {true -> 10.0.0.0/8}"s // maj
+    // + ", {true -> [1, 2, 3]}"s // mal
+    // + ", {true -> {1 -> true, 2 -> false, 3 -> true}}"s // man
     ;
   auto test_collections
     = test_lists
@@ -155,10 +155,11 @@ table_slices::table_slices(std::string_view suite)
   // clang-format on
   // Initialize test data.
   auto rows = std::vector<std::string>{
-    "[T, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
-    " 10.0.0.0/8, [1, 2, 3], {1 -> T, 2 -> F, 3 -> T}"
+    "[true, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
+    " 10.0.0.0/8, [1, 2, 3], {1 -> true, 2 -> false, 3 -> true}"
       + test_collections + ", \"aas\"]",
-    "[F, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, 64:ff9b::/96,"
+    "[false, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, "
+    "64:ff9b::/96,"
     " [], {}"
       + test_collections + ", \"aas\"]",
   };
@@ -202,8 +203,8 @@ void table_slices::test_add() {
   MESSAGE(">> test table_slice_builder::add");
   auto slice = make_slice();
   CHECK_EQUAL(slice.rows(), 2u);
-  auto flat_layout = flatten(caf::get<record_type>(layout));
-  CHECK_EQUAL(slice.columns(), flat_layout.num_fields());
+  auto flat_schema = flatten(caf::get<record_type>(schema));
+  CHECK_EQUAL(slice.columns(), flat_schema.num_fields());
   for (size_t row = 0; row < slice.rows(); ++row)
     for (size_t col = 0; col < slice.columns(); ++col) {
       MESSAGE("checking value at (" << row << ',' << col << ')');

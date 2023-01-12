@@ -55,8 +55,9 @@ std::vector<table_slice> inhale(const char* data) {
   auto input = std::make_unique<std::istringstream>(data);
   Reader reader{caf::settings{}, std::move(input)};
   std::vector<table_slice> slices;
-  auto add_slice
-    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
+  auto add_slice = [&](table_slice slice) {
+    slices.emplace_back(std::move(slice));
+  };
   auto [err, produced]
     = reader.read(std::numeric_limits<size_t>::max(),
                   defaults::import::table_slice_size, add_slice);
@@ -110,7 +111,7 @@ FIXTURE_SCOPE(pivoter_tests, fixture)
 
 TEST(count IP point query without candidate check) {
   MESSAGE("build expression");
-  auto expr = unbox(to<expression>("proto == udp && orig_bytes < 600"));
+  auto expr = unbox(to<expression>("proto == \"udp\" && orig_bytes < 600"));
   MESSAGE("spawn the pivoter with the target type pcap");
   spawn_aut(expr, "pcap.packet");
   MESSAGE("send a table slice");

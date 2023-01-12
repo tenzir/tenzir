@@ -1,6 +1,6 @@
-<script>
+<script lang="ts">
   import { Disclosure, DisclosureButton, DisclosurePanel } from '@rgossiaux/svelte-headlessui';
-  export let summary;
+  export let summary: string;
 </script>
 
 <Disclosure let:open>

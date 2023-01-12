@@ -9,18 +9,14 @@
 #include "vast/system/import_command.hpp"
 
 #include "vast/command.hpp"
-#include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/node_control.hpp"
-#include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/transformer.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/make_message.hpp>
@@ -60,10 +56,6 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     = make_pipelines(pipelines_location::client_source, inv.options);
   if (!pipelines)
     return caf::make_message(pipelines.error());
-  // Start signal monitor.
-  std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   const auto format = std::string{inv.name()};
   // Start the source.
   auto src_result = make_source(sys, format, inv, accountant, catalog, importer,
@@ -99,7 +91,12 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
           stop = true;
         } else if (msg.source == src) {
           VAST_DEBUG("{} received DOWN from source", __PRETTY_FUNCTION__);
-          if (caf::get_or(inv.options, "vast.import.blocking", false))
+          // Wait for the ingest to complete. This must also be done when
+          // the index is in the same process because otherwise it can
+          // happen that the index gets an exit message before the first
+          // table slice arrives on the stream.
+          if (caf::get_or(inv.options, "vast.import.blocking", false)
+              || caf::get_or(inv.options, "vast.node", false))
             self->send(importer, atom::subscribe_v, atom::flush_v,
                        caf::actor_cast<flush_listener_actor>(self));
           else
@@ -117,12 +114,33 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
       [&](atom::signal, int signal) {
         VAST_DEBUG("{} received signal {}", __PRETTY_FUNCTION__,
                    ::strsignal(signal));
-        if (signal == SIGINT || signal == SIGTERM)
-          self->send_exit(src, caf::exit_reason::user_shutdown);
+        VAST_ASSERT(signal == SIGINT || signal == SIGTERM);
+        self->send_exit(src, caf::exit_reason::user_shutdown);
       })
     .until(stop);
   if (err)
     return caf::make_message(std::move(err));
+  // The flush listener based blocking mechanism is flawed and fails quite
+  // often. As a workaround we force a flush-to-disk of all data that is
+  // currently held in memory.
+  if (caf::get_or(inv.options, "vast.import.blocking", false)) {
+    auto components
+      = system::get_node_components<system::index_actor>(self, node);
+    if (!components)
+      return caf::make_message(std::move(components.error()));
+    auto [index] = std::move(*components);
+    // Flush!
+    auto result = caf::message{};
+    self->request(index, caf::infinite, atom::flush_v)
+      .receive(
+        []() {
+          // nop
+        },
+        [&](caf::error& err) {
+          result = caf::make_message(std::move(err));
+        });
+    return result;
+  }
   return {};
 }
 

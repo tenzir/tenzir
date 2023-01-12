@@ -15,6 +15,7 @@
 #include <caf/type_id.hpp>
 
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <unordered_map>
 #include <vector>
@@ -81,6 +82,31 @@ class inbound_stream_slot;
 template <class, class...>
 class outbound_stream_slot;
 
+// TODO CAF 0.19. Check if this already implemented by CAF itself.
+template <class Slot>
+struct inspector_access<inbound_stream_slot<Slot>> {
+  template <class Inspector, class T>
+  static auto apply(Inspector& f, inbound_stream_slot<T>& x) {
+    auto val = x.value();
+    auto result = f.apply(val);
+    if constexpr (Inspector::is_loading)
+      x = inbound_stream_slot<T>{val};
+    return result;
+  }
+};
+
+template <>
+struct inspector_access<std::filesystem::path> {
+  template <class Inspector>
+  static auto apply(Inspector& f, std::filesystem::path& x) {
+    auto str = x.string();
+    auto result = f.apply(str);
+    if constexpr (Inspector::is_loading)
+      x = {str};
+    return result;
+  }
+};
+
 namespace detail {
 
 class stringification_inspector;
@@ -97,7 +123,6 @@ class active_store;
 class address;
 class address_type;
 class aggregation_function;
-class arrow_table_slice_builder;
 class bitmap;
 class bool_type;
 class chunk;
@@ -142,7 +167,6 @@ class wah_bitmap;
 
 struct rest_endpoint;
 struct attribute;
-struct augmented_partition_synopsis;
 struct count_query_context;
 struct legacy_address_type;
 struct legacy_alias_type;
@@ -176,7 +200,7 @@ struct legacy_pattern_type;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
-struct layout_statistics;
+struct schema_statistics;
 struct legacy_real_type;
 struct legacy_record_type;
 struct status;
@@ -219,13 +243,9 @@ class legacy_deserializer;
 
 } // namespace detail
 
-void intrusive_ptr_add_ref(const table_slice_builder*);
-void intrusive_ptr_release(const table_slice_builder*);
-
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using ids = bitmap; // temporary; until we have a real type for 'ids'
 using partition_synopsis_ptr = caf::intrusive_cow_ptr<partition_synopsis>;
-using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using pipeline_ptr = std::shared_ptr<pipeline>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
@@ -436,7 +456,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
     (std::unordered_map<vast::uuid, vast::partition_synopsis_ptr>))
   VAST_ADD_TYPE_ID((std::unordered_map<vast::type, //
                                        vast::system::catalog_lookup_result>))
-  VAST_ADD_TYPE_ID((std::vector<vast::augmented_partition_synopsis>))
   VAST_ADD_TYPE_ID((std::map<vast::uuid, vast::partition_synopsis_ptr>))
   VAST_ADD_TYPE_ID(
     (std::shared_ptr<

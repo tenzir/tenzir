@@ -37,9 +37,11 @@ namespace vast::plugins::segment_store {
 namespace {
 
 /// The STORE BUILDER actor interface.
-using local_store_actor
-  = system::typed_actor_fwd<caf::reacts_to<atom::internal, atom::persist>>::
-    extend_with<system::store_builder_actor>::unwrap;
+using local_store_actor = system::typed_actor_fwd<
+  // INTERNAL: Persist the actor.
+  auto(atom::internal, atom::persist)->caf::result<void>>
+  // Conform to the protocol of a STORE BUILDER actor.
+  ::extend_with<system::store_builder_actor>::unwrap;
 
 struct passive_store_state {
   /// Defaulted constructor to make this a non-aggregate.
@@ -88,7 +90,7 @@ handle_lookup(Actor& self, const vast::query_context& query_context,
     if (query_context.expr == expression{}) {
       checkers.emplace_back();
     } else {
-      auto c = tailor(query_context.expr, slice.layout());
+      auto c = tailor(query_context.expr, slice.schema());
       if (!c)
         return c.error();
       checkers.emplace_back(prune_meta_predicates(std::move(*c)));
@@ -279,7 +281,7 @@ public:
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "segment-store";
   };
 

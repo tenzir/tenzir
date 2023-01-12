@@ -23,7 +23,7 @@ TEST(concepts - convert from data) {
   auto ref = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
                            {"bar", {"", {"a.bar", "b.baR"}, {}}}}};
   concepts_map test;
-  CHECK_EQUAL(convert(x, test, concepts_data_layout), caf::error{});
+  CHECK_EQUAL(convert(x, test, concepts_data_schema), caf::error{});
   CHECK_EQUAL(test, ref);
 }
 
@@ -91,7 +91,7 @@ TEST(models - convert from data) {
   auto ref = models_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}}},
                          {"bar", {"", {"a.bar", "b.baR", "foo"}}}}};
   models_map test;
-  CHECK_EQUAL(convert(x, test, models_data_layout), caf::error{});
+  CHECK_EQUAL(convert(x, test, models_data_schema), caf::error{});
   CHECK_EQUAL(test, ref);
   auto x2 = data{list{
     record{{"model", record{{"name", "foo"},
@@ -99,7 +99,7 @@ TEST(models - convert from data) {
     record{{"model",
             record{{"name", "foo"}, {"definition", list{"a.bar", "b.baR"}}}}}}};
   models_map test2;
-  CHECK_EQUAL(convert(x2, test2, models_data_layout), ec::convert_error);
+  CHECK_EQUAL(convert(x2, test2, models_data_schema), ec::convert_error);
 }
 
 TEST(models - simple) {
@@ -132,12 +132,12 @@ TEST(models - simple) {
   }
   {
     MESSAGE("model composition - unnamed fields query");
-    auto exp = unbox(to<expression>("y == <bar: 2, baz: F>"));
+    auto exp = unbox(to<expression>("y == <bar: 2, baz: false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
           "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (    (a.bar == 2 || b.baR == 2)"
-               " && (a.BAZ == F || c.baz == F))"));
+               " && (a.BAZ == false || c.baz == false))"));
     // clang-format on
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
@@ -153,25 +153,25 @@ TEST(models - simple) {
   }
   {
     MESSAGE("model composition - named fields query");
-    auto exp = unbox(to<expression>("y == <_, 2, F>"));
+    auto exp = unbox(to<expression>("y == <_, 2, false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
           "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (   (a.bar == 2 || b.baR == 2)"
-              " && (a.BAZ == F || c.baz == F))"));
+              " && (a.BAZ == false || c.baz == false))"));
     // clang-format on
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
   }
   {
     MESSAGE("model composition - multiple nested models");
-    auto named = unbox(to<expression>("z == <bar: 2, baz: F>"));
-    auto unnamed = unbox(to<expression>("z == <_, 2, F>"));
+    auto named = unbox(to<expression>("z == <bar: 2, baz: false>"));
+    auto unnamed = unbox(to<expression>("z == <_, 2, false>"));
     // clang-format off
     auto ref = unbox(to<expression>(
           "(a.fo0 != nil || b.foO != nil || c.foe != nil)"
           " && (   (a.bar == 2 || b.baR == 2)"
-              " && (a.BAZ == F || c.baz == F))"));
+              " && (a.BAZ == false || c.baz == false))"));
     // clang-format on
     CHECK_EQUAL(resolve(t, named), ref);
     CHECK_EQUAL(resolve(t, unnamed), ref);

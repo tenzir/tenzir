@@ -13,6 +13,7 @@
 #include "vast/format/reader.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/module.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 
 #include <arrow/io/api.h>
@@ -47,12 +48,12 @@ public:
     out_ = std::move(ptr);
   }
 
-  bool layout(const std::shared_ptr<::arrow::Schema>& schema);
+  bool schema(const std::shared_ptr<::arrow::Schema>& schema);
 
 private:
   output_stream_ptr out_;
-  type current_layout_;
-  table_slice_builder_ptr current_builder_;
+  type current_schema_;
+  std::unique_ptr<table_slice_builder> current_builder_;
   batch_writer_ptr current_batch_writer_;
 };
 

@@ -17,7 +17,7 @@ namespace vast::plugins::web {
 // The configuration that can be set by the user via
 // YAML or command-line options.
 struct configuration {
-  static const record_type& layout() noexcept {
+  static const record_type& schema() noexcept {
     static auto result = vast::record_type{
       {"bind", vast::string_type{}},    {"port", vast::integer_type{}},
       {"mode", vast::string_type{}},    {"certfile", vast::string_type{}},

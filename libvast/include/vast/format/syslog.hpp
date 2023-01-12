@@ -19,7 +19,7 @@
 #include "vast/concepts.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
-#include "vast/format/multi_layout_reader.hpp"
+#include "vast/format/multi_schema_reader.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
@@ -251,9 +251,9 @@ struct message_parser : parser_base<message_parser> {
 };
 
 /// A reader for Syslog messages.
-class reader : public multi_layout_reader {
+class reader : public multi_schema_reader {
 public:
-  using super = multi_layout_reader;
+  using super = multi_schema_reader;
 
   /// Constructs a Syslog reader.
   /// @param options Additional options.

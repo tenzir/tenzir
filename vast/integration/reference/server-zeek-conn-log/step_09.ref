@@ -5,11 +5,10 @@
 {"path":["index","num-active-partitions"],"type":"number"}
 {"path":["index","num-cached-partitions"],"type":"number"}
 {"path":["index","num-unpersisted-partitions"],"type":"number"}
-{"path":["index","partitions","active",0,"id"],"type":"string"}
 {"path":["index","partitions","cached",0,"id"],"type":"string"}
 {"path":["index","statistics","events","total"],"type":"number"}
-{"path":["index","statistics","layouts","zeek.conn","count"],"type":"number"}
-{"path":["index","statistics","layouts","zeek.conn","percentage"],"type":"number"}
+{"path":["index","statistics","schemas","zeek.conn","count"],"type":"number"}
+{"path":["index","statistics","schemas","zeek.conn","percentage"],"type":"number"}
 {"path":["index","workers","busy"],"type":"number"}
 {"path":["index","workers","count"],"type":"number"}
 {"path":["index","workers","idle"],"type":"number"}

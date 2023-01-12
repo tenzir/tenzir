@@ -11,7 +11,6 @@
 #include "vast/format/arrow.hpp"
 
 #include "vast/arrow_table_slice.hpp"
-#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/config.hpp"
@@ -20,6 +19,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
@@ -72,8 +72,8 @@ TEST(arrow IPC write) {
   auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(&input_stream);
   REQUIRE_OK(reader_result);
   auto reader = *reader_result;
-  auto&& layout = zeek_conn_log[0].layout();
-  auto arrow_schema = layout.to_arrow_schema();
+  auto&& schema = zeek_conn_log[0].schema();
+  auto arrow_schema = schema.to_arrow_schema();
   size_t slice_id = 0;
   std::shared_ptr<arrow::RecordBatch> batch;
   while (reader->ReadNext(&batch).ok() && batch != nullptr) {

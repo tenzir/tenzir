@@ -1,16 +1,1 @@
-suricata.alert: 1
-suricata.alert: 1
-suricata.dns: 1
-suricata.dns: 1
-suricata.fileinfo: 1
-suricata.fileinfo: 1
-suricata.flow: 1
-suricata.flow: 1
-suricata.http: 1
-suricata.http: 1
-suricata.netflow: 1
-suricata.netflow: 1
-suricata.quic: 1
-suricata.quic: 1
-suricata.stats: 1
-suricata.stats: 1
+8

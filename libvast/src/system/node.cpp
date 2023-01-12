@@ -228,9 +228,10 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
 /// Registers (and monitors) a component through the node.
 caf::error
 register_component(node_actor::stateful_pointer<node_state> self,
-                   const caf::actor& component, const std::string& type,
-                   const std::string& label = {}) {
-  if (!self->state.registry.add(component, type, label)) {
+                   const caf::actor& component, std::string_view type,
+                   std::string_view label = {}) {
+  if (!self->state.registry.add(component, std::string{type},
+                                std::string{label})) {
     auto msg // separate variable for clang-format only
       = fmt::format("{} failed to add component to registry: {}", *self,
                     label.empty() ? type : label);
@@ -243,7 +244,7 @@ register_component(node_actor::stateful_pointer<node_state> self,
 /// Deregisters (and demonitors) a component through the node.
 caf::expected<caf::actor>
 deregister_component(node_actor::stateful_pointer<node_state> self,
-                     const std::string& label) {
+                     std::string_view label) {
   auto component = self->state.registry.remove(label);
   if (!component) {
     auto msg // separate variable for clang-format only
@@ -510,7 +511,7 @@ node_state::spawn_command(const invocation& inv,
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }
   // Spawn our new VAST component.
-  spawn_arguments args{spawn_inv, self->state.dir, label, std::nullopt};
+  spawn_arguments args{spawn_inv, self->state.dir, label};
   auto component = spawn_component(self, args.inv, args);
   if (!component) {
     if (component.error())
@@ -642,22 +643,20 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
     },
     [self](atom::internal, atom::spawn, atom::plugin) -> caf::result<void> {
       // Add all plugins to the component registry.
-      for (const auto& plugin : plugins::get()) {
-        if (const auto* component = plugin.as<component_plugin>()) {
-          if (auto handle = component->make_component(self); !handle)
-            return caf::make_error( //
-              ec::unspecified, fmt::format("{} failed to spawn component "
-                                           "plugin {}",
-                                           *self, component->name()));
-          else if (auto err = register_component(
-                     self, caf::actor_cast<caf::actor>(handle),
-                     component->name()))
-            return caf::make_error( //
-              ec::unspecified, fmt::format("{} failed to register component "
-                                           "plugin {} in component registry: "
-                                           "{}",
-                                           *self, component->name(), err));
-        }
+      for (const auto& component : plugins::get<component_plugin>()) {
+        auto handle = component->make_component(self);
+        if (!handle)
+          return caf::make_error( //
+            ec::unspecified, fmt::format("{} failed to spawn component "
+                                         "plugin {}",
+                                         *self, component->name()));
+        if (auto err = register_component(
+              self, caf::actor_cast<caf::actor>(handle), component->name()))
+          return caf::make_error( //
+            ec::unspecified, fmt::format("{} failed to register component "
+                                         "plugin {} in component registry: "
+                                         "{}",
+                                         *self, component->name(), err));
       }
       return {};
     },
@@ -739,9 +738,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       auto result = to_data(self->config().content);
       VAST_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
-    },
-    [self](atom::signal, int signal) {
-      VAST_WARN("{} got signal {}", *self, ::strsignal(signal));
     },
   };
 }

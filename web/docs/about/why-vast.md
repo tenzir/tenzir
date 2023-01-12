@@ -4,28 +4,41 @@ sidebar_position: 0
 
 # Why VAST
 
-VAST fills a gap when you need a highly embeddable data node for security
-telemetry data that powers detection and response use cases:
+VAST fills a gap in the market—powerful enough for data-intensive security use
+cases, but easy enough for security users that are not data engineers.
 
 ![Spectra](/img/spectra.light.png#gh-light-mode-only)
 ![Spectra](/img/spectra.dark.png#gh-dark-mode-only)
 
-You can come from the route of generic analytics engines that lack
-domain-specific features, but then need to bring together data engineers and
-security architects to build a custom system. You can also come from the
-traditional SIEM route that lack the embeddability to be placed at the edge
-close to high-volume data sources, or that are shielded behind an opaque cloud
-service with narrow API.
+One of the major challenges in cybersecurity is the increasing volume of data
+that organizations need to manage and analyze in order to protect their critical
+infrastructure and sensitive data from cyber threats. Traditional security
+information and event management (SIEM) systems are not designed to scale with
+this increasing volume of data, and can become costly and time-consuming to
+maintain. Additionally, cloud and data lakes are often geared towards data
+engineers rather than security professionals, leading to security teams having
+to spend valuable time and resources wrangling data instead of hunting for
+threats. This creates a significant barrier for organizations looking to
+effectively protect their data and infrastructure from cyber attacks.
 
-The raison d'être of VAST is that you can enjoy an open, embeddable security
-analytics engine that serves as a foundation for a sustainable detection and
-response architecture. We dread vendor lock-in and therefore only use open
-standards (e.g., Apache Arrow, Parquet, STIX) so that you remain in full
-control of your telemetry data and security content.
+What is needed is a security-native data architecture that enables security
+teams to take control of their data and easily deploy and manage data pipelines.
+This solution should be able to integrate seamlessly with existing data
+architectures, scale from single nodes to highly distributed data fabrics, and
+support a variety of deployment options including cloud, on-premises,
+decentralized, and even air-gapped environments.
 
-There exist a lot of other systems out there, and you may ask yourself the
-question: why not use *X* instead? To help answer this question, we offer a
-brief guidance below when other systems might be a better fit.
+Importantly, a security-native data architecture should be easy to deploy, use,
+and manage *without* the need for dedicated data engineering resources. It
+should also be built around security standards and integrate easily with
+security tools in a plug-and-play fashion. The security-native aspects manifest
+as specialized operators to interact with security data and tools.
+
+VAST is an open, embeddable security data platform and analytics engine for
+building large-scale, distributed detection and response architectures. VAST is
+built using open standards, such as Apache Arrow, Parquet, and STIX, to prevent
+vendor lock-in and promote full control of your telemetry data and security
+content.
 
 ## VAST vs. SIEMs
 

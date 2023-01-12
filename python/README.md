@@ -15,15 +15,7 @@ To get started, clone the VAST repository and install the Python package via
 ```bash
 git clone https://github.com/tenzir/vast.git
 cd vast/python
-poetry install --all-extras
-```
-
-Thereafter, you should be able to run files in the `examples` directory, e.g.,
-via a Poetry shell:
-
-```bash
-poetry shell
-python examples/misp.py
+poetry install
 ```
 
 ## Development

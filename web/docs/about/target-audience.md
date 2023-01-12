@@ -15,7 +15,7 @@ its constituency: the **SOC Analyst**, the **Detection Engineer**, and the
 
 In practice, the lines are blurred and a single person often has to wear
 multiple hats. We deem it still important to expose the key functional roles
-that that yield an optimal team for detection and response use cases.
+that yield an optimal team for detection and response use cases.
 
 ## SOC Analyst
 

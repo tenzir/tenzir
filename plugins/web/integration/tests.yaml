@@ -58,7 +58,13 @@ tests:
       - command: curl http://127.0.0.1:42025/api/v0/export?limit=20
         transformation: jq .events
         prepend_vast: false
-      - command: 'curl -XPOST -H"Content-Type: application/json" -d ''{"limit": "20"}'' http://127.0.0.1:42025/api/v0/export'
+      - command: 'curl -XPOST -H"Content-Type: application/json" -d ''{"limit": 20}'' http://127.0.0.1:42025/api/v0/export'
+        transformation: jq .events
+        prepend_vast: false
+      - command: 'curl -XPOST -H"Content-Type: application/json" -d ''{"limit": 20}'' http://127.0.0.1:42025/api/v0/export/with-schemas'
+        transformation: jq .events
+        prepend_vast: false
+      - command: 'curl -XPOST -H"Content-Type: application/json" -d ''{"limit": 20, "expression": "resp_h in 192.168.0.0/16"}'' http://127.0.0.1:42025/api/v0/export/with-schemas'
         transformation: jq .events
         prepend_vast: false
   Authenticated Endpoints:

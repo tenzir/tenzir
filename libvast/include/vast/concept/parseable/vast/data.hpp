@@ -73,7 +73,7 @@ private:
       | parsers::net
       | parsers::addr
       | parsers::number
-      | parsers::tf
+      | parsers::boolean
       | parsers::qqstr
       | parsers::pattern
       | '[' >> ~(x % ',') >> trailing_comma >> ']'

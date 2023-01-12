@@ -12,6 +12,9 @@
 
 #include "vast/test/test.hpp"
 
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
+
 namespace {
 
 template <bool IsLoading>
@@ -97,4 +100,54 @@ TEST(fields invocation returns false when callback returns false) {
     return true;
   }));
   CHECK_EQUAL(callback_calls_count, 1u);
+}
+
+TEST(on_save doesnt call callback when inspector has is_loading set to true) {
+  dummy_loading_inspector inspector;
+  std::size_t callback_calls_count{0u};
+  auto callback = [&] {
+    ++callback_calls_count;
+    return true;
+  };
+  auto sut = vast::detail::inspection_object{inspector};
+  auto& out = sut.on_save(callback);
+  // on_save should return reference of the sut if it can't use callback
+  static_assert(std::is_same_v<decltype(sut), std::decay_t<decltype(out)>>);
+  CHECK_EQUAL(std::addressof(sut), std::addressof(out));
+  CHECK(sut.fields([&](auto&) {
+    return true;
+  }));
+  CHECK_EQUAL(callback_calls_count, 0u);
+}
+
+TEST(on_load doesnt call callback when inspector has is_loading set to false) {
+  dummy_saving_inspector inspector;
+  std::size_t callback_calls_count{0u};
+  auto callback = [&] {
+    ++callback_calls_count;
+    return true;
+  };
+  auto sut = vast::detail::inspection_object{inspector};
+  auto& out = sut.on_load(callback);
+  // on_load should return reference of the sut if it can't use callback
+  static_assert(std::is_same_v<decltype(sut), std::decay_t<decltype(out)>>);
+  CHECK_EQUAL(std::addressof(sut), std::addressof(out));
+  CHECK(sut.fields([&](auto&) {
+    return true;
+  }));
+  CHECK_EQUAL(callback_calls_count, 0u);
+}
+
+TEST(inspect_enum with caf binary inspectors) {
+  enum class enum_example { value_1 = 5201, value_2 = 8 };
+  // serialize
+  auto in = enum_example::value_1;
+  caf::byte_buffer buf;
+  caf::binary_serializer serializer{nullptr, buf};
+  vast::detail::inspect_enum(serializer, in);
+  // deserialize
+  auto out = enum_example::value_2;
+  caf::binary_deserializer deserializer{nullptr, buf};
+  vast::detail::inspect_enum(deserializer, out);
+  CHECK_EQUAL(in, out);
 }

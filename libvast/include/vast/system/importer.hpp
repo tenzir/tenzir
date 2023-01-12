@@ -95,11 +95,13 @@ struct importer_state {
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
 /// @param index A handle to the INDEX.
+/// @param accountant A handle to the ACCOUNTANT.
 /// @param batch_size The initial number of IDs to request when replenishing.
 /// @param input_transformations The input transformations to apply.
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, index_actor index,
+         accountant_actor accountant,
          std::vector<pipeline>&& input_pipelines = {});
 
 } // namespace vast::system

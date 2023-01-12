@@ -46,12 +46,12 @@ template <class Reader>
 caf::expected<module>
 infer(const std::string& input, const caf::settings& options) {
   auto rec = std::optional<type>{};
-  auto layout = [&](auto x) {
-    rec = x.layout();
+  auto schema = [&](auto x) {
+    rec = x.schema();
   };
   auto stream = std::make_unique<std::istringstream>(input);
   auto reader = Reader{options, std::move(stream)};
-  auto [error, n] = reader.read(1, 1, layout);
+  auto [error, n] = reader.read(1, 1, schema);
   if (error)
     return error;
   VAST_ASSERT(n == 1);

@@ -59,7 +59,16 @@ void counter_state::process_done() {
 
 caf::behavior counter(caf::stateful_actor<counter_state>* self, expression expr,
                       index_actor index, bool skip_candidate_check) {
-  self->state.init(std::move(expr), std::move(index), skip_candidate_check);
+  auto normalized_expr = normalize_and_validate(std::move(expr));
+  if (!normalized_expr) {
+    self->quit(caf::make_error(ec::format_error,
+                               fmt::format("{} failed to normalize and "
+                                           "validate expression: {}",
+                                           *self, normalized_expr.error())));
+    return {};
+  }
+  self->state.init(std::move(*normalized_expr), std::move(index),
+                   skip_candidate_check);
   return self->state.behavior();
 }
 

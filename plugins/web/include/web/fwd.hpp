@@ -35,9 +35,12 @@ namespace vast::plugins::web {
 
 /// Server-side AUTHENTICATOR actor.
 using authenticator_actor = system::typed_actor_fwd<
-  caf::replies_to<atom::generate>::with<token_t>,
-  caf::replies_to<atom::validate, token_t>::with<bool>>::
-  extend_with<system::status_client_actor>::unwrap;
+  // Generate a token.
+  auto(atom::generate)->caf::result<token_t>,
+  // Validate a token.
+  auto(atom::validate, token_t)->caf::result<bool>>
+  // Conform to the protocol of a STATUS CLIENT actor.
+  ::extend_with<system::status_client_actor>::unwrap;
 
 } // namespace vast::plugins::web
 

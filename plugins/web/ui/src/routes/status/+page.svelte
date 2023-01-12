@@ -41,18 +41,20 @@
     [index: string]: { count: number; percentage: number };
   }
 
-  const getPluginRows = (plugins) =>
-    Object.keys(plugins).map((key) => ({ name: key, version: plugins[key] }));
+  const getPluginRows = (plugins: Record<string, string>) => {
+    console.log(plugins);
+    return Object.keys(plugins).map((key) => ({ name: key, version: plugins[key] }));
+  };
 
   let eventColumns = [
-    { header: 'Layout', accessor: 'layout' },
+    { header: 'Schema', accessor: 'schema' },
     { header: 'Count', accessor: 'count' },
     { header: 'Percentage', accessor: 'percentage' }
   ];
 
   const getEventsRows = (events: Events) => {
     return Object.keys(events).map((key) => ({
-      layout: key,
+      schema: key,
       count: events[key].count,
       percentage: new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(
         events[key].percentage
@@ -109,9 +111,9 @@
     {/if}
 
     <div class="py-6 text-left md:w-1/4">
-      {#if $queryResult.data?.index.statistics.layouts}
+      {#if $queryResult.data?.index.statistics.schemas}
         <Table
-          tableRows={getEventsRows($queryResult.data?.index.statistics.layouts)}
+          tableRows={getEventsRows($queryResult.data?.index.statistics.schemas)}
           columnDetails={eventColumns}
         />
       {:else}

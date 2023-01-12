@@ -55,21 +55,6 @@
 #include <utility>
 #include <vector>
 
-namespace caf {
-template <class Slot>
-struct inspector_access<caf::inbound_stream_slot<Slot>> {
-  template <class Inspector, class T>
-  static auto apply(Inspector& f, caf::inbound_stream_slot<T>& x) {
-    auto val = x.value();
-    auto result = f.apply(val);
-    if constexpr (Inspector::is_loading)
-      x = caf::inbound_stream_slot<T>{val};
-    return result;
-  }
-};
-
-} // namespace caf
-
 namespace vast::detail {
 
 void add_message_types() {

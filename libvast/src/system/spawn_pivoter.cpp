@@ -31,14 +31,10 @@ spawn_pivoter(node_actor::stateful_pointer<node_state> self,
   // Parse given expression.
   auto query_begin = std::next(arguments.begin());
   expression expr;
-  if (args.expr)
-    expr = *args.expr;
-  else {
-    auto expr_ = system::normalized_and_validated(query_begin, arguments.end());
-    if (!expr_)
-      return expr_.error();
-    expr = *expr_;
-  }
+  auto expr_ = system::parse_expression(query_begin, arguments.end());
+  if (!expr_)
+    return expr_.error();
+  expr = *expr_;
   auto handle = self->spawn(pivoter, self, target_name, expr);
   VAST_VERBOSE("{} spawned a pivoter for {}", *self, to_string(expr));
   return handle;

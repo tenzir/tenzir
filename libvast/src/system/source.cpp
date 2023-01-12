@@ -16,6 +16,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/detail/weak_run_delayed.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
@@ -43,10 +44,10 @@ namespace {
 template <class... Args>
 void send_to_accountant(caf::scheduled_actor* self, accountant_actor accountant,
                         Args&&... args) {
-  static_assert(
-    caf::detail::tl_count_type<accountant_actor::signatures,
-                               caf::reacts_to<std::decay_t<Args>...>>::value,
-    "Args are incompatible with accountant actor's API");
+  static_assert(caf::detail::tl_count_type<
+                  accountant_actor::signatures,
+                  auto(std::decay_t<Args>...)->caf::result<void>>::value,
+                "Args are incompatible with accountant actor's API");
   caf::unsafe_send_as(self, accountant, std::forward<Args>(args)...);
 }
 } // namespace
@@ -137,15 +138,15 @@ void source_state::filter_and_push(
     if (auto filtered_slice = vast::filter(std::move(slice), *filter)) {
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
-                 slice.layout());
+                 slice.schema());
       push_to_out(std::move(*filtered_slice));
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
-                 reader->name(), unfiltered_rows, slice.layout());
+                 reader->name(), unfiltered_rows, slice.schema());
     }
   } else {
     VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
-               unfiltered_rows, slice.layout());
+               unfiltered_rows, slice.schema());
     push_to_out(std::move(slice));
   }
 }
@@ -244,8 +245,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
         self->state.filter_and_push(std::move(slice), [&](table_slice slice) {
-          const auto& layout = slice.layout();
-          self->state.event_counters[std::string{layout.name()}]
+          const auto& schema = slice.schema();
+          self->state.event_counters[std::string{schema.name()}]
             += slice.rows();
           self->state.mgr->out().push(std::move(slice));
         });
@@ -281,7 +282,14 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
           // This pull handler was invoked while we were waiting for a wakeup
           // message. Sending another one would create a parallel wakeup cycle.
           self->state.waiting_for_input = true;
-          self->delayed_send(self, self->state.wakeup_delay, atom::wakeup_v);
+          detail::weak_run_delayed(self, self->state.wakeup_delay, [self] {
+            VAST_VERBOSE("{} wakes up to check for new input", *self);
+            self->state.waiting_for_input = false;
+            // If we are here, the reader returned with ec::stalled the last
+            // time it was called. Let's check if we can read something now.
+            if (self->state.mgr->generate_messages())
+              self->state.mgr->push();
+          });
           VAST_DEBUG("{} scheduled itself to resume after {}", *self,
                      self->state.wakeup_delay);
           // Exponential backoff for the wakeup calls.
@@ -346,8 +354,10 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       }
       // Start streaming.
       self->state.has_sink = true;
-      self->delayed_send<caf::message_priority::high>(
-        self, defaults::system::telemetry_rate, atom::telemetry_v);
+      detail::weak_run_delayed_loop(self, defaults::system::telemetry_rate,
+                                    [self] {
+                                      self->state.send_report();
+                                    });
       // Start streaming. Note that we add the outbound path only now,
       // otherwise for small imports the source might already shut down
       // before we receive a sink.
@@ -385,21 +395,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
           });
       }
       return rs->promise;
-    },
-    [self](atom::wakeup) {
-      VAST_VERBOSE("{} wakes up to check for new input", *self);
-      self->state.waiting_for_input = false;
-      // If we are here, the reader returned with ec::stalled the last time it
-      // was called. Let's check if we can read something now.
-      if (self->state.mgr->generate_messages())
-        self->state.mgr->push();
-    },
-    [self](atom::telemetry) {
-      VAST_DEBUG("{} got a telemetry atom", *self);
-      self->state.send_report();
-      if (!self->state.mgr->done())
-        self->delayed_send<caf::message_priority::high>(
-          self, defaults::system::telemetry_rate, atom::telemetry_v);
     },
   };
   // We cannot return the behavior directly and make the SOURCE a typed actor

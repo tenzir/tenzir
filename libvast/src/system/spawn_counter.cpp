@@ -32,7 +32,7 @@ spawn_counter(node_actor::stateful_pointer<node_state> self,
               spawn_arguments& args) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
   // Parse given expression.
-  auto expr = get_expression(args);
+  auto expr = parse_expression(args);
   if (!expr)
     return expr.error();
   auto [index] = self->state.registry.find<index_actor>();

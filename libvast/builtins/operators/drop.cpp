@@ -14,7 +14,6 @@
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
-#include <vast/table_slice_builder_factory.hpp>
 #include <vast/type.hpp>
 
 #include <arrow/type.h>
@@ -38,7 +37,7 @@ struct configuration {
   }
 
   /// Enable parsing from a record via convertible.
-  static inline const record_type& layout() noexcept {
+  static inline const record_type& schema() noexcept {
     static auto result = record_type{
       {"fields", list_type{string_type{}}},
       {"schemas", list_type{string_type{}}},
@@ -56,13 +55,13 @@ public:
   }
 
   caf::error
-  add(type layout, std::shared_ptr<arrow::RecordBatch> batch) override {
+  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
     VAST_DEBUG("drop operator adds batch");
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
       = std::any_of(config_.schemas.begin(), config_.schemas.end(),
                     [&](const auto& dropped_schema) {
-                      return dropped_schema == layout.name();
+                      return dropped_schema == schema.name();
                     });
     if (drop_schema)
       return caf::none;
@@ -75,19 +74,19 @@ public:
     };
     auto transformations = std::vector<indexed_transformation>{};
     for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(layout).resolve_key_suffix(
-             field, layout.name()))
+      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
+             field, schema.name()))
         transformations.push_back({std::move(index), transform_fn});
     // transform_columns requires the transformations to be sorted, and that may
     // not necessarily be true if we have multiple fields configured, so we sort
     // again in that case.
     if (config_.fields.size() > 1)
       std::sort(transformations.begin(), transformations.end());
-    auto [adjusted_layout, adjusted_batch]
-      = transform_columns(layout, batch, transformations);
-    if (adjusted_layout) {
+    auto [adjusted_schema, adjusted_batch]
+      = transform_columns(schema, batch, transformations);
+    if (adjusted_schema) {
       VAST_ASSERT(adjusted_batch);
-      transformed_.emplace_back(std::move(adjusted_layout),
+      transformed_.emplace_back(std::move(adjusted_schema),
                                 std::move(adjusted_batch));
     }
     return caf::none;
@@ -113,7 +112,7 @@ public:
     return {};
   }
 
-  [[nodiscard]] const char* name() const override {
+  [[nodiscard]] std::string name() const override {
     return "drop";
   };
 

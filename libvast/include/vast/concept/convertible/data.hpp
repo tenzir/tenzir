@@ -47,7 +47,7 @@
 /// };                              | };
 ///
 /// A suitable overload of `caf::inspect()` for `struct foo` that exposes
-/// the fields in the same order as the layout of `xs` is required
+/// the fields in the same order as the schema of `xs` is required
 /// for this machinery to work.
 ///
 /// If a member of `from` is missing in `to`, the value does not get
@@ -145,19 +145,20 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
   }
 
 template <class T>
-concept has_layout = requires {
-  { T::layout() }
-  noexcept->concepts::sameish<record_type>;
-};
+concept has_schema = requires {
+                       {
+                         T::schema()
+                         } noexcept -> concepts::sameish<record_type>;
+                     };
 
 // Overload for records.
 caf::error convert(const record& src, concepts::inspectable auto& dst,
-                   const record_type& layout);
+                   const record_type& schema);
 
-template <has_layout To>
+template <has_schema To>
 caf::error convert(const record& src, To& dst);
 
-template <has_layout To>
+template <has_schema To>
 caf::error convert(const data& src, To& dst);
 
 // Generic overload when `src` and `dst` are of the same type.
@@ -542,31 +543,31 @@ public:
     return detail::inspection_object(*this);
   }
 
-  const record_type& layout;
+  const record_type& schema;
   const record& src;
-  detail::generator<record_type::field_view> field_generator_ = layout.fields();
+  detail::generator<record_type::field_view> field_generator_ = schema.fields();
   detail::generator<record_type::field_view>::iterator current_iterator_
     = field_generator_.begin();
 };
 
 // Overload for records.
 caf::error convert(const record& src, concepts::inspectable auto& dst,
-                   const record_type& layout) {
-  auto ri = record_inspector{layout, src};
+                   const record_type& schema) {
+  auto ri = record_inspector{schema, src};
   if (auto result = inspect(ri, dst); !result)
     return caf::make_error(ec::convert_error,
                            fmt::format("record inspection failed for record {} "
-                                       "with layout {}",
-                                       src, layout));
+                                       "with schema {}",
+                                       src, schema));
   return {};
 }
 
-template <has_layout To>
+template <has_schema To>
 caf::error convert(const record& src, To& dst) {
-  return convert(src, dst, dst.layout());
+  return convert(src, dst, dst.schema());
 }
 
-template <has_layout To>
+template <has_schema To>
 caf::error convert(const data& src, To& dst) {
   if (const auto* r = caf::get_if<record>(&src))
     return convert(*r, dst);
