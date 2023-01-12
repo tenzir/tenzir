@@ -60,4 +60,6 @@ struct pipeline_parsing_result {
   caf::error parse_error;
 };
 
+pipeline_parsing_result parse_pipeline(std::string_view str);
+
 } // namespace vast::system

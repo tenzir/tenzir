@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/system/make_pipelines.hpp"
+
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -134,48 +136,13 @@ public:
                     caf::expected<std::unique_ptr<pipeline_operator>>>
   parse_pipeline_string(std::string_view str) const override {
     record options;
-    auto extractor_list = vast::list{};
-    auto parsing_word = false;
-    auto maybe_last_word = false;
-    std::string current_extractor;
-    auto str_r_it = str.begin();
-    for (auto str_l_it = str_r_it; str_l_it != str.end() && *str_l_it != '|';
-         ++str_r_it) {
-      if (std::isspace(*str_r_it)) {
-        if (parsing_word && !maybe_last_word) {
-          maybe_last_word = true;
-          current_extractor = {str_l_it, str_r_it};
-        }
-      } else if (*str_r_it == ','
-                 || (str_r_it == str.end() || *str_r_it == '|')) {
-        if (parsing_word) {
-          parsing_word = false;
-          if (maybe_last_word) {
-            maybe_last_word = false;
-          } else {
-            current_extractor = {str_l_it, str_r_it};
-          }
-          extractor_list.emplace_back(current_extractor);
-          str_l_it = str_r_it;
-        } else {
-          return {str_r_it, caf::make_error(ec::parse_error,
-                                            "comma not delimiting extractors")};
-        }
-      } else {
-        if (maybe_last_word) {
-          return {str_r_it, caf::make_error(ec::parse_error, "extractors must "
-                                                             "be separated by "
-                                                             "a comma")};
-        }
-        if (!parsing_word) {
-          str_l_it = str_r_it;
-          parsing_word = true;
-        }
-      }
+    auto parse_result = system::parse_pipeline(str);
+    if (parse_result.parse_error) {
+      return {parse_result.new_str_it, parse_result.parse_error};
     }
-    options["fields"] = extractor_list;
-    options["schemas"] = extractor_list;
-    return std::pair{str_r_it, make_pipeline_operator(options)};
+    options["fields"] = parse_result.extractors;
+    options["schemas"] = parse_result.extractors;
+    return {parse_result.new_str_it, make_pipeline_operator(options)};
   }
 };
 
