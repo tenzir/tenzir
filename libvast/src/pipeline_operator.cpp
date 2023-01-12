@@ -37,14 +37,16 @@ make_pipeline_operator(const std::string& name, const vast::record& options) {
                          fmt::format("unknown pipeline operator '{}'", name));
 }
 
-caf::expected<std::pair<std::string_view::iterator,
-                        caf::expected<std::unique_ptr<pipeline_operator>>>>
+std::pair<std::string_view::iterator,
+          caf::expected<std::unique_ptr<pipeline_operator>>>
 parse_pipeline_operator(std::string_view name, std::string_view str) {
   if (auto plugin = plugins::find<pipeline_operator_plugin>(name)) {
     return plugin->parse_pipeline_string(str);
   }
-  return caf::make_error(ec::parse_error,
-                         fmt::format("unknown pipeline operator '{}'", name));
+  return std::pair{
+    str.begin(),
+    caf::make_error(ec::parse_error,
+                    fmt::format("unknown pipeline operator '{}'", name))};
 }
 
 } // namespace vast

@@ -52,8 +52,8 @@ public:
 caf::expected<std::unique_ptr<pipeline_operator>>
 make_pipeline_operator(const std::string& name, const vast::record& options);
 
-caf::expected<std::pair<std::string_view::iterator,
-                        caf::expected<std::unique_ptr<pipeline_operator>>>>
+std::pair<std::string_view::iterator,
+          caf::expected<std::unique_ptr<pipeline_operator>>>
 parse_pipeline_operator(std::string_view name, std::string_view str);
 
 } // namespace vast
