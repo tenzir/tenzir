@@ -1,4 +1,11 @@
 {
   "memory-usage": 20448,
-  "num-partitions": 1
+  "num-events": 8462,
+  "num-partitions": 1,
+  "schemas": {
+    "zeek.conn": {
+      "num-events": 8462,
+      "num-partitions": 1
+    }
+  }
 }

@@ -33,8 +33,8 @@ table LegacyPartition {
   /// The UUID of this partition.
   uuid: LegacyUUID;
 
-  /// The first ID in the partition.
-  offset: uint64;
+  /// The first ID in the partition. Removed in VAST v3.0.
+  offset: uint64 (deprecated);
 
   /// The number of contained events.
   events: uint64;

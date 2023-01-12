@@ -13,7 +13,6 @@
 #include "vast/detail/lru_cache.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/fbs/index.hpp"
-#include "vast/index_statistics.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query_context.hpp"
 #include "vast/query_queue.hpp"
@@ -328,9 +327,6 @@ struct index_state {
 
   /// The directory for in-progress partition transforms.
   std::filesystem::path markersdir = {};
-
-  /// Statistics about processed data.
-  index_statistics stats = {};
 
   /// Timekeeper for the scheduling algorithm.
   struct measurement scheduler_measurement = {};

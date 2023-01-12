@@ -91,6 +91,7 @@ file(
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
      app=\"$<IF:$<BOOL:${VAST_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:vast::vast>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:vast::vast>>\"
+     update=\"$<IF:$<BOOL:${VAST_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
      set -e
      if [ ! -f \"$env_dir/bin/activate\" ]; then
        python3 -m venv \"$env_dir\"
@@ -102,6 +103,7 @@ file(
       --app \"$app\" \
       --directory vast-integration-test \
       --set \"$base_dir\"/vast_integration_suite.yaml \
+      \${update} \
       \"$@\"
      $<$<BOOL:${VAST_ENABLE_LSVAST}>:
      rm -rf \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\"
@@ -112,6 +114,7 @@ file(
       --app \"$<TARGET_FILE:lsvast>\" \
       --directory \"${CMAKE_CURRENT_BINARY_DIR}/lsvast-integration-test\" \
       --set \"$base_dir\"/lsvast_integration_suite.yaml \
+      \${update} \
       \"$@\">
     ")
 

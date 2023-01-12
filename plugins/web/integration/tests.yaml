@@ -44,7 +44,7 @@ tests:
       - command: flush
       - command: curl http://127.0.0.1:42025/api/v0/status
         prepend_vast: false
-        transformation: jq .catalog
+        transformation: jq '.catalog | del(.schemas."zeek.conn"."import-time")'
       # Invalid parameter
       - command: curl http://127.0.0.1:42025/api/v0/status?verbosity=!~asdf
         prepend_vast: false
@@ -79,7 +79,7 @@ tests:
       - command: web generate-token
         transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
       - command: curl -H @token.txt http://127.0.0.1:42025/api/v0/status
-        transformation: jq .catalog
+        transformation: jq '.catalog | del(.schemas."zeek.conn"."import-time")'
         prepend_vast: false
   TLS Endpoints:
     tags: [rest, tls]
@@ -97,5 +97,5 @@ tests:
       - command: web generate-token
         transformation: 'xargs printf "X-VAST-Token: %s\n" > token.txt'
       - command: curl -H @token.txt --cacert @./data/client.pem https://127.0.0.1:42025/api/v0/status
-        transformation: jq .catalog
+        transformation: jq '.catalog | del(.schemas."zeek.conn"."import-time")'
         prepend_vast: false

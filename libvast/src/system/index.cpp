@@ -240,19 +240,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
       return uuid_fb.error();
   }
   auto partitions = builder.CreateVector(partition_offsets);
-  std::vector<flatbuffers::Offset<fbs::schema_statistics::v0>> stats_offsets;
-  for (const auto& [name, schema_stats] : state.stats.schemas) {
-    auto name_fb = builder.CreateString(name);
-    fbs::schema_statistics::v0Builder stats_builder(builder);
-    stats_builder.add_name(name_fb);
-    stats_builder.add_count(schema_stats.count);
-    auto offset = stats_builder.Finish();
-    stats_offsets.push_back(offset);
-  }
-  auto stats = builder.CreateVector(stats_offsets);
   fbs::index::v0Builder v0_builder(builder);
   v0_builder.add_partitions(partitions);
-  v0_builder.add_stats(stats);
   auto index_v0 = v0_builder.Finish();
   fbs::IndexBuilder index_builder(builder);
   index_builder.add_index_type(vast::fbs::index::Index::v0);
@@ -509,7 +498,6 @@ caf::error index_state::load_from_disk() {
   for (auto& orphan : orphans)
     std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
   // Now try to load the partitions - with a progress indicator.
-  vast::index_statistics stats;
   for (size_t idx = 0; idx < partitions.size(); ++idx) {
     auto partition_uuid = partitions[idx];
     auto error = [&]() -> caf::error {
@@ -537,7 +525,6 @@ caf::error index_state::load_from_disk() {
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
       persisted_partitions.emplace(partition_uuid);
-      stats.schemas[std::string{ps->schema.name()}].count += ps->events;
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
     }();
@@ -597,14 +584,11 @@ caf::error index_state::load_from_disk() {
     caf::scoped_actor blocking{self->system()};
     blocking->request(transformer, caf::infinite, atom::persist_v)
       .receive(
-        [&synopses, &stats,
-         this](std::vector<partition_synopsis_pair>& result) {
+        [&synopses, this](std::vector<partition_synopsis_pair>& result) {
           VAST_INFO("recovered {} corrupted partitions on startup",
                     result.size());
           for (auto&& x : std::exchange(result, {})) {
             VAST_VERBOSE("adding newly created partition {}", x.uuid);
-            stats.schemas[std::string{x.synopsis->schema.name()}].count
-              += x.synopsis->events;
             persisted_partitions.emplace(x.uuid);
             synopses->emplace(x.uuid, std::move(x.synopsis));
           }
@@ -625,47 +609,6 @@ caf::error index_state::load_from_disk() {
     VAST_WARN("{} detected {}/{} outdated partitions; consider running 'vast "
               "rebuild' to upgrade existing partitions in the background",
               *self, num_outdated, synopses->size());
-  }
-  // Version '0' is the only partition version that admits inhomogeneous
-  // partitions.
-  const auto only_homogeneous_partitions = std::none_of(
-    synopses->begin(), synopses->end(), [](const auto& id_and_synopsis) {
-      return id_and_synopsis.second->version == 0;
-    });
-  if (!only_homogeneous_partitions) {
-    // If we have potentially heterogeneous partitions, load the statistics from
-    // the `index.bin`  file because we cannot reliably rebuild it from the
-    // partition synopses alone.
-    if (auto fname = index_filename(); std::filesystem::exists(fname, err)) {
-      VAST_VERBOSE("{} loads state from {}", *self, fname);
-      auto buffer = io::read(fname);
-      if (!buffer) {
-        VAST_ERROR("{} failed to read index file: {}", *self,
-                   render(buffer.error()));
-        return buffer.error();
-      }
-      // TODO: Create a `index_ondisk_state` struct and move this part of the
-      // code into an `unpack()` function.
-      const auto* index = fbs::GetIndex(buffer->data());
-      if (index->index_type() != fbs::index::Index::v0)
-        return caf::make_error(ec::format_error, "invalid index version");
-      const auto* index_v0 = index->index_as_v0();
-      const auto* stats = index_v0->stats();
-      if (!stats)
-        return caf::make_error(ec::format_error, "no stats in persisted index "
-                                                 "state");
-      for (const auto* const stat : *stats) {
-        this->stats.schemas[stat->name()->str()]
-          = schema_statistics{stat->count()};
-      }
-    } else if (!persisted_partitions.empty()) {
-      VAST_DEBUG("{} found existing database dir {} without index statefile, "
-                 "the "
-                 "index statistics in the status output will be incorrect",
-                 *self, dir);
-    }
-  } else { // Only homogeneous partitions.
-    this->stats = std::move(stats);
   }
   // We collect all synopses to send them in bulk, since the `await` interface
   // doesn't lend itself to a huge number of awaited messages: Only the tip of
@@ -1106,23 +1049,8 @@ index_state::status(status_verbosity v) const {
     }
   };
   auto rs = make_status_request_state<extra_state>(self);
-  auto stats_object = record{};
-  auto sum = uint64_t{0};
-  for (const auto& [_, schema_stats] : stats.schemas)
-    sum += schema_stats.count;
   auto xs = record{};
-  xs["total"] = count{sum};
-  stats_object["events"] = xs;
   if (v >= status_verbosity::detailed) {
-    auto schema_object = record{};
-    for (const auto& [name, schema_stats] : stats.schemas) {
-      auto xs = record{};
-      xs["count"] = count{schema_stats.count};
-      xs["percentage"] = 100.0 * detail::narrow_cast<real>(schema_stats.count)
-                         / detail::narrow_cast<real>(sum);
-      schema_object[name] = xs;
-    }
-    stats_object["schemas"] = std::move(schema_object);
     auto backlog_status = record{};
     auto query_counters = get_query_counters(pending_queries);
     backlog_status["num-custom-priority"] = query_counters.num_custom_prio;
@@ -1198,7 +1126,6 @@ index_state::status(status_verbosity v) const {
     rs->content["partitions"] = std::move(partitions);
     // General state such as open streams.
   }
-  rs->content["statistics"] = std::move(stats_object);
   if (v >= status_verbosity::debug)
     detail::fill_status_map(rs->content, self);
   return rs->promise;
@@ -1282,7 +1209,6 @@ index(index_actor::stateful_pointer<index_state> self,
       // TODO: Consider switching schemas to a robin map to take advantage of
       // transparent key lookup with string views, avoding the copy of the name
       // here.
-      self->state.stats.schemas[std::string{schema.name()}].count += x.rows();
       auto active_partition = self->state.active_partitions.find(schema);
       if (active_partition == self->state.active_partitions.end()) {
         auto part = self->state.create_active_partition(schema);
@@ -1645,7 +1571,6 @@ index(index_actor::stateful_pointer<index_state> self,
       auto rp = self->make_response_promise<atom::done>();
       auto path = self->state.partition_path(partition_id);
       auto synopsis_path = self->state.partition_synopsis_path(partition_id);
-      bool adjust_stats = true;
       if (self->state.persisted_partitions.count(partition_id) == 0u) {
         std::error_code err{};
         const auto file_exists = std::filesystem::exists(path, err);
@@ -1655,17 +1580,12 @@ index(index_actor::stateful_pointer<index_state> self,
                                          path, err.message())));
           return rp;
         }
-        // As a special case, if the partition exists on disk we just continue
-        // normally here, since this indicates a previous erasure did not go
-        // through cleanly.
-        adjust_stats = false;
       }
       self
         ->request<caf::message_priority::high>(
           self->state.catalog, caf::infinite, atom::erase_v, partition_id)
         .then(
-          [self, partition_id, path, synopsis_path, rp,
-           adjust_stats](atom::ok) mutable {
+          [self, partition_id, path, synopsis_path, rp](atom::ok) mutable {
             VAST_DEBUG("{} erased partition {} from catalog", *self,
                        partition_id);
             auto partition_actor
@@ -1692,8 +1612,6 @@ index(index_actor::stateful_pointer<index_state> self,
                                   path)));
                     return;
                   }
-                  // Adjust schema stats by subtracting the events of the
-                  // removed partition.
                   if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE
                       && flatbuffers::BufferHasIdentifier(
                         chunk->data(), fbs::PartitionIdentifier())) {
@@ -1744,20 +1662,6 @@ index(index_actor::stateful_pointer<index_state> self,
                                                "encountering a legacy "
                                                "oversized partition"));
                   } else {
-                    if (adjust_stats) {
-                      auto stats = partition_chunk::get_statistics(chunk);
-                      if (!stats) {
-                        rp.deliver(caf::make_error(
-                          ec::format_error, fmt::format("{} could not adjust "
-                                                        "index statistics for "
-                                                        "partition: {}",
-                                                        *self, stats.error())));
-                        return;
-                      } else {
-                        for (auto [name, stats] : stats->schemas)
-                          self->state.stats.schemas[name].count -= stats.count;
-                      }
-                    }
                     // TODO: We could send `all_ids` as the second argument
                     // here, which doesn't really make sense from an interface
                     // perspective but would save the partition from recomputing
@@ -1961,11 +1865,6 @@ index(index_actor::stateful_pointer<index_state> self,
                 aps.uuid,
                 *aps.synopsis,
               };
-              // Update the index statistics. We only need to add the events of
-              // the new partition here, the subtraction of the old events is
-              // done in `erase`.
-              auto name = std::string{info.schema.name()};
-              self->state.stats.schemas[name].count += info.events;
               result.emplace_back(std::move(info));
             }
             // Record in-progress marker.

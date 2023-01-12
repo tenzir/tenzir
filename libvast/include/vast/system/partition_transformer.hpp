@@ -11,7 +11,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/flat_map.hpp"
-#include "vast/index_statistics.hpp"
 #include "vast/system/active_partition.hpp"
 #include "vast/system/actors.hpp"
 
@@ -99,10 +98,6 @@ struct partition_transformer_state {
 
   /// Total number of rows in all transformed `slices`.
   size_t events = 0ull;
-
-  /// Number of rows per event type in the input and output.
-  index_statistics stats_in;
-  index_statistics stats_out;
 
   /// Oldest import timestamp of the input data.
   vast::time min_import_time = {};

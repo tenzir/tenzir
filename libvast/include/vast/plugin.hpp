@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/command.hpp"
+#include "vast/config_options.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/pp.hpp"
 #include "vast/detail/weak_handle.hpp"
@@ -203,7 +204,7 @@ public:
 
   /// Returns the options for the `vast import <format>` and `vast spawn source
   /// <format>` commands.
-  [[nodiscard]] virtual caf::config_option_set
+  [[nodiscard]] virtual config_options
   reader_options(command::opts_builder&& opts) const
     = 0;
 
@@ -229,7 +230,7 @@ public:
 
   /// Returns the options for the `vast export <format>` and `vast spawn sink
   /// <format>` commands.
-  [[nodiscard]] virtual caf::config_option_set
+  [[nodiscard]] virtual config_options
   writer_options(command::opts_builder&& opts) const
     = 0;
 
