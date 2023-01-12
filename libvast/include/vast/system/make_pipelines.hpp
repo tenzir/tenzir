@@ -53,4 +53,11 @@ caf::error parse_pipeline_operators(pipeline& pipeline,
 caf::expected<std::vector<std::unique_ptr<pipeline_operator>>>
 make_pipeline(std::string_view pipeline_string);
 
+struct pipeline_parsing_result {
+  vast::list extractors;
+  vast::list assignments;
+  std::string_view::iterator new_str_it;
+  caf::error parse_error;
+};
+
 } // namespace vast::system
