@@ -20,12 +20,25 @@ representations.
 
 ## Input
 
-The `import arrow` command imports [`Arrow IPC`][arrow-ipc] data. Since this
-format carries the schema alongside the data, `import arrow` is self-contained
-and does not require an additional schema.
+The `import arrow` command imports [`Arrow IPC`][arrow-ipc] data. This allows
+for transferring data between VAST nodes flexibly:
 
-To demonstrate how the `arrow` format works, consider this snippet of Python
-that generates an Arrow IPC stream to stdout:
+```bash
+VAST_SOURCE_HOST=localhost:42000
+VAST_DESTINATION_HOST=localhost:42001
+
+# Transfer all Zeek events from the VAST node at VAST_SOURCE_HOST to the VAST
+# node at VAST_DESTINATION_HOST.
+vast --endpoint=${VAST_SOURCE_HOST} export arrow '#type == /zeek.*/' \
+  | vast --endpoint=${VAST_DESTINATION_HOST} import arrow
+```
+
+:::caution Limited Compatibility
+Technically, this format carries the schema alongside the data: `import arrow`
+is self-contained and does not require an additional schema. However, the Arrow
+import is currently limited to Arrow data that was exported by VAST via the
+`export arrow` command. We plan to remove this restriction in the future,
+allowing the following Python code to work:
 
 ```python title=generate.py
 import pyarrow as pa
@@ -45,15 +58,9 @@ with pa.ipc.new_stream(sink, batch.schema) as writer:
       writer.write_batch(batch)
 ```
 
-You can import the output of this script into VAST as follows:
-
 ```bash
 python generate.py | vast import arrow
 ```
-
-:::caution Limited Compatibility
-VAST can currently only import Arrow data that it also exported. We are working
-on support for processing arbitrary Arrow data.
 :::
 
 ## Output
