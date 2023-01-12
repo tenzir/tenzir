@@ -1297,6 +1297,8 @@ bool congruent(const type& x, const type& y) noexcept {
       return std::is_same_v<T, U>;
     },
   };
+  if (!x || !y)
+    return true;
   return caf::visit(f, x, y);
 }
 
