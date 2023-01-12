@@ -307,7 +307,7 @@ tests:
       - command: -N export ascii 'src_ip == 147.32.84.165'
       - command: -N export csv '#type == /suricata.*/'
       - command: -N export zeek '#type == /suricata.alert/'
-      - command: -N export json --omit-nulls
+      - command: -N export json --omit-nulls --omit-empty-records
 
   Node suricata rrdata:
     tags: [node, import-export, suricata, eve]

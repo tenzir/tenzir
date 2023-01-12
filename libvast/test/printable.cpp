@@ -391,7 +391,7 @@ void check_to_json(Printer& p, const T& value, const char* expected) {
   }
 }
 
-TEST(JSON - omit - nulls) {
+TEST(JSON - omit nulls) {
   auto p = json_printer{json_printer::options{
     .oneline = true,
     .omit_nulls = true,
@@ -408,6 +408,77 @@ TEST(JSON - omit - nulls) {
                   {"e", record{{"f", record{{"g", caf::none}}}}},
                 },
                 R"__({"a": 42, "b": {}, "e": {"f": {}}})__");
+}
+
+TEST(JSON - omit empty records) {
+  auto p = json_printer{json_printer::options{
+    .oneline = true,
+    .omit_nulls = true,
+    .omit_empty_records = true,
+  }};
+  check_to_json(p, vast::record{{"a", 42u}, {"b", caf::none}, {"c", caf::none}},
+                "{\"a\": 42}");
+  check_to_json(
+    p, vast::record{{"a", vast::record{{"b", caf::none}}}, {"c", caf::none}},
+    "{}");
+  check_to_json(p,
+                vast::record{
+                  {"a", 42u},
+                  {"b", record{{"c", caf::none}, {"d", caf::none}}},
+                  {"e", record{{"f", record{{"g", caf::none}}}}},
+                },
+                R"__({"a": 42})__");
+}
+
+TEST(JSON - omit empty lists) {
+  {
+    auto p = json_printer{json_printer::options{
+      .oneline = true,
+      .omit_empty_records = true,
+      .omit_empty_lists = true,
+    }};
+    check_to_json(
+      p,
+      vast::record{{"a", vast::list{}}, {"b", vast::list{}}, {"c", caf::none}},
+      "{\"c\": null}");
+    check_to_json(p,
+                  vast::list{vast::record{{"a", vast::record{{"b", caf::none}}},
+                                          {"c", caf::none}},
+                             vast::record{}},
+                  R"__([{"a": {"b": null}, "c": null}])__");
+    check_to_json(
+      p,
+      vast::record{
+        {"a", 42u},
+        {"b", record{{"c", caf::none}, {"d", caf::none}}},
+        {"e", record{{"f", vast::list{record{{"g", caf::none}}}}}},
+      },
+      R"__({"a": 42, "b": {"c": null, "d": null}, "e": {"f": [{"g": null}]}})__");
+  }
+  {
+    auto p = json_printer{json_printer::options{
+      .oneline = true,
+      .omit_nulls = true,
+      .omit_empty_records = true,
+      .omit_empty_lists = true,
+    }};
+    check_to_json(
+      p,
+      vast::record{{"a", vast::list{}}, {"b", vast::list{}}, {"c", caf::none}},
+      "{}");
+    check_to_json(p,
+                  vast::list{vast::record{{"a", vast::record{{"b", caf::none}}},
+                                          {"c", caf::none}},
+                             vast::record{}},
+                  R"__([])__");
+    check_to_json(p,
+                  vast::record{
+                    {"a", 42u},
+                    {"b", record{{"c", caf::none}, {"d", caf::none}}},
+                    {"e", record{{"f", vast::list{record{{"g", caf::none}}}}}},
+                  },
+                  R"__({"a": 42})__");
+  }
 }
 
 TEST(JSON - remove trailing zeroes) {
