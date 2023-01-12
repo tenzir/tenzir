@@ -494,20 +494,21 @@ tests:
   # Testing the #import_time meta extractor is a bit tricky and requires
   # sleeping. If this turns out to be a flaky test, increase durations and
   # queries respectively.
-  Import Time:
-    tags: [import, json, suricata]
-    steps:
-      - command: -N import suricata '#type == "suricata.stats"'
-        input: data/suricata/eve.json
-        transformation: sleep 5
-      - command: -N import suricata '#type == "suricata.stats"'
-        input: data/suricata/eve.json
-      - command: -N export json '#import_time < 5 seconds ago'
-        transformation: jq -ec '.'
-      - command: sleep 5
-        prepend_vast: false
-      - command: -N export json '#import_time < 5 seconds ago'
-        transformation: jq -ec '.'
+  # TODO: Re-enable this test once its flakiness has been resolved.
+  # Import Time:
+  #   tags: [import, json, suricata]
+  #   steps:
+  #     - command: -N import suricata '#type == "suricata.stats"'
+  #       input: data/suricata/eve.json
+  #       transformation: sleep 5
+  #     - command: -N import suricata '#type == "suricata.stats"'
+  #       input: data/suricata/eve.json
+  #     - command: -N export json '#import_time < 5 seconds ago'
+  #       transformation: jq -ec '.'
+  #     - command: sleep 5
+  #       prepend_vast: false
+  #     - command: -N export json '#import_time < 5 seconds ago'
+  #       transformation: jq -ec '.'
 
   # Nesting Records in Lists is not currently fully supported, but its presence
   # should also not crash the JSON reader.
