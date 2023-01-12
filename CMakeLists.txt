@@ -934,8 +934,12 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
     file(
       COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
       DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+    # Poetry evaluates the top-level gitignore, which leads it to ignore
+    # everything in case the install prefix is in an ignored path. Setting the
+    # git directory explicitly works around the issue.
+    set(ENV{GIT_DIR} \"/dev/null\")
     execute_process(
-      COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel
+      COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel -vvv
       WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
       COMMAND_ERROR_IS_FATAL ANY)
     file(
@@ -954,9 +958,9 @@ if (VAST_ENABLE_PYTHON_BINDINGS)
     file(
       GLOB VAST_NEW_INSTALLED_BINS
       \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
-    foreach (new IN LISTS VAST_NEW_INSTALLED_BINS)
-      if (NOT \"\${new}\" IN_LIST VAST_OLD_INSTALLED_BINS)
-        file(REMOVE \"\${new}\")
+    foreach (bin IN LISTS VAST_NEW_INSTALLED_BINS)
+      if (NOT \"\${bin}\" IN_LIST VAST_OLD_INSTALLED_BINS)
+        file(REMOVE \"\${bin}\")
       endif ()
     endforeach ()"
     COMPONENT Runtime)
