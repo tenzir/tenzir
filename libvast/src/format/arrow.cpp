@@ -120,47 +120,49 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   // TODO: we currently ignore `max_slize_size` because we're just passing
   // through existing table slices / record batches from the producer system.
   VAST_ASSERT(max_slice_size > 0);
-  auto reader = ::arrow::ipc::RecordBatchStreamReader::Open(input_.get());
-  if (!reader.ok()) {
-    return caf::make_error(ec::logic_error,
-                           fmt::format("error creating stream reader: '{}'",
-                                       reader.status().ToString()));
-  }
   size_t produced = 0;
   while (produced < max_events) {
+    if (!reader_) {
+      auto open_result
+        = ::arrow::ipc::RecordBatchStreamReader::Open(input_.get());
+      if (!open_result.ok())
+        return caf::make_error(ec::logic_error,
+                               fmt::format("failed to open stream reader: '{}'",
+                                           open_result.status().ToString()));
+      reader_ = open_result.MoveValueUnsafe();
+    }
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
       return caf::make_error(ec::timeout, "reached batch timeout");
     }
-    if (const auto batch = (*reader)->ReadNext(); batch.ok()) {
-      // When the schema changes and a new IPC message begins, we see one
-      // record batch with status `OK` and `nullptr` as data and re-initialize
-      // the reader.
-      if (batch->batch != nullptr) {
-        const auto slice = table_slice{batch->batch};
-        f(slice);
-        produced += slice.rows();
-        ++batch_events_;
-        last_batch_sent_ = reader_clock::now();
-      } else {
-        reader = ::arrow::ipc::RecordBatchStreamReader::Open(input_.get());
-        if (!reader.ok()) {
-          return caf::make_error(
-            ec::logic_error, fmt::format("error creating stream reader: '{}'",
-                                         reader.status().ToString()));
-        }
-      }
-    } else {
+    const auto read_result = reader_->ReadNext();
+    if (!read_result.ok()) {
       // Reading the next record batch yields an error if the input stream ends.
       // We check if it's actually just eof or an actual error.
-      if (input_->closed()) {
+      if (input_->closed())
         return caf::make_error(ec::end_of_input, "input exhausted");
-      }
-      return caf::make_error(
-        ec::format_error, fmt::format("failed to read next record batch '{}'",
-                                      batch.status().ToString()));
+      return caf::make_error(ec::format_error,
+                             fmt::format("failed to read next record batch: {}",
+                                         read_result.status().ToString()));
     }
+    // When the schema changes and a new IPC message begins, we see one
+    // record batch with status `OK` and `nullptr` as data and re-initialize
+    // the reader.
+    if (!read_result->batch) {
+      const auto close_result = reader_->Close();
+      reader_ = nullptr;
+      if (!close_result.ok())
+        return caf::make_error(
+          ec::logic_error, fmt::format("failed to close stream reader: '{}'",
+                                       close_result.ToString()));
+      continue;
+    }
+    auto slice = table_slice{read_result->batch};
+    produced += slice.rows();
+    f(std::move(slice));
+    ++batch_events_;
+    last_batch_sent_ = reader_clock::now();
   }
   return caf::none;
 }
