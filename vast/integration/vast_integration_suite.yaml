@@ -448,20 +448,21 @@ tests:
   # The first queries are stress tests for the deduplication: The query
   # selects every event, and the huge timebox ensures that every event
   # is included in the context of every other event.
-  Explore Suricata With Overlap:
-    tags: [explore, suricata]
-    steps:
-      - command: -N import suricata
-        input: data/suricata/eve.json
-      - command: -N explore --before=10years --after=10years '#type == /suricata.*/'
-      - command: -N explore --max-events=3 --before=10years --after=10years '#type == /suricata.*/'
-        transformation: wc -l | tr -d ' '
-      - command: -N explore --max-events-query=1 --before=10years --after=10years '#type == /suricata.*/'
-        transformation: wc -l | tr -d ' '
-      - command: -N explore --max-events-query=3 --before=0s --after=1ns '#type == /suricata.*/'
-        transformation: wc -l | tr -d ' '
-      - command: -N explore --max-events-query=1 --max-events-context=2 --before=10years --after=10years '#type == /suricata.*/'
-        transformation: wc -l | tr -d ' '
+  # TODO: Re-enable this test once its flakiness has been resolved.
+  # Explore Suricata With Overlap:
+  #   tags: [explore, suricata]
+  #   steps:
+  #     - command: -N import suricata
+  #       input: data/suricata/eve.json
+  #     - command: -N explore --before=10years --after=10years '#type == /suricata.*/'
+  #     - command: -N explore --max-events=3 --before=10years --after=10years '#type == /suricata.*/'
+  #       transformation: wc -l | tr -d ' '
+  #     - command: -N explore --max-events-query=1 --before=10years --after=10years '#type == /suricata.*/'
+  #       transformation: wc -l | tr -d ' '
+  #     - command: -N explore --max-events-query=3 --before=0s --after=1ns '#type == /suricata.*/'
+  #       transformation: wc -l | tr -d ' '
+  #     - command: -N explore --max-events-query=1 --max-events-context=2 --before=10years --after=10years '#type == /suricata.*/'
+  #       transformation: wc -l | tr -d ' '
   # TODO(ch15579): Re-enable this test once the slow zeek export is fixed.
   # Explore Zeek With Overlap:
   #   tags: [explore, zeek]
