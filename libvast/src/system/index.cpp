@@ -712,24 +712,10 @@ index_state::create_active_partition(const type& schema) {
     = active_partitions.emplace(schema, active_partition_info{});
   VAST_ASSERT(inserted);
   VAST_ASSERT(active_partition != active_partitions.end());
-  auto store_name = std::string{store_actor_plugin->name()};
-  chunk_ptr store_header = chunk::make_empty();
-  auto builder_and_header
-    = store_actor_plugin->make_store_builder(accountant, filesystem, id);
-  if (!builder_and_header)
-    return builder_and_header.error();
-  auto& [builder, header] = *builder_and_header;
-  store_header = header;
-  active_partition->second.store = builder;
-  active_partition->second.store_slot
-    = stage->add_outbound_path(active_partition->second.store);
-  stage->out().set_filter(active_partition->second.store_slot, schema);
   active_partition->second.spawn_time = std::chrono::steady_clock::now();
   active_partition->second.actor
     = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
-                  index_opts, synopsis_opts,
-                  static_cast<store_actor>(active_partition->second.store),
-                  store_name, store_header, taxonomies);
+                  index_opts, synopsis_opts, store_actor_plugin, taxonomies);
   active_partition->second.stream_slot
     = stage->add_outbound_path(active_partition->second.actor);
   stage->out().set_filter(active_partition->second.stream_slot, schema);
@@ -755,7 +741,6 @@ void index_state::decommission_active_partition(
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
   stage->out().close(active_partition->second.stream_slot);
-  stage->out().close(active_partition->second.store_slot);
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
   VAST_ASSERT(!unpersisted.contains(id));

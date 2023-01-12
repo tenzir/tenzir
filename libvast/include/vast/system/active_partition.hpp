@@ -15,6 +15,7 @@
 #include "vast/ids.hpp"
 #include "vast/index_config.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/query_context.hpp"
 #include "vast/system/actors.hpp"
@@ -141,8 +142,11 @@ struct active_partition_state {
   /// with a serialized chunk.
   size_t persisted_indexers = {};
 
-  /// The store to retrieve the data from.
-  store_actor store = {};
+  /// The store backend.
+  const store_actor_plugin* store_plugin = {};
+
+  /// The store builder.
+  store_builder_actor store_builder = {};
 
   /// Temporary storage for the serialized indexers of this partition, before
   /// they get written into the flatbuffer.
@@ -174,12 +178,8 @@ pack_full(const active_partition_state::serialization_data& x,
 /// @param accountant The actor handle of the accountant.
 /// @param filesystem The actor handle of the filesystem.
 /// @param index_opts Settings that are forwarded when creating indexers.
-/// @param store The store to retrieve the events from.
-/// @param store_id The name of the store backend that should be stored
-///                      on disk.
-/// @param store_header A binary blob that allows reconstructing the store
-///                     plugin when reading this partition from disk.
 /// @param index_config The meta-index configuration of the false-positives
+/// @param store A pointer to the store impplementation.
 /// @param taxonomies The taxonomies for resolving expressions during a query.
 /// rates for the types and fields.
 // TODO: Bundle store, store_id and store_header in a single struct
@@ -187,7 +187,7 @@ active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
   caf::settings index_opts, const index_config& synopsis_opts,
-  store_actor store, std::string store_id, chunk_ptr store_header,
+  const store_actor_plugin* store_plugin,
   std::shared_ptr<vast::taxonomies> taxonomies);
 
 } // namespace vast::system

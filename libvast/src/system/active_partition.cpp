@@ -323,7 +323,7 @@ active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
   caf::settings index_opts, const index_config& synopsis_opts,
-  store_actor store, std::string store_id, chunk_ptr header,
+  const store_actor_plugin* store_plugin,
   std::shared_ptr<vast::taxonomies> taxonomies) {
   VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
                    VAST_ARG(id));
@@ -335,12 +335,10 @@ active_partition_actor::behavior_type active_partition(
   self->state.data.id = id;
   self->state.data.events = 0;
   self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
-  self->state.data.store_id = store_id;
-  self->state.data.store_header = std::move(header);
   self->state.partition_capacity
     = get_or(index_opts, "cardinality", defaults::system::max_partition_size);
-  self->state.store = std::move(store);
   self->state.synopsis_index_config = synopsis_opts;
+  self->state.store_plugin = store_plugin;
   self->state.taxonomies = taxonomies;
   self->state.stage = detail::attach_notifying_stream_stage(
     self, false,
@@ -420,6 +418,20 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     caf::policy::arg<caf::broadcast_downstream_manager<table_slice>>{});
+  self->state.data.store_id = self->state.store_plugin->name();
+  auto builder_and_header = self->state.store_plugin->make_store_builder(
+    self->state.accountant, self->state.filesystem, self->state.data.id);
+  if (!builder_and_header) {
+    VAST_ERROR("{} failed to create a store builder: {}", *self,
+               builder_and_header.error());
+    return active_partition_actor::behavior_type::make_empty_behavior();
+  }
+  auto& [builder, header] = *builder_and_header;
+  self->state.data.store_header = chunk::make_empty();
+  self->state.data.store_header = header;
+  self->state.store_builder = builder;
+  auto slot = self->state.stage->add_outbound_path(builder);
+  VAST_DEBUG("{} spawned new active store at slot {}", *self, slot);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                msg.reason);
@@ -565,7 +577,8 @@ active_partition_actor::behavior_type active_partition(
         // TODO: Depending on the selectivity of the query and the rank of the
         // ids, it may still be beneficial to load some of the indexers to prune
         // the ids before hitting the store.
-        rp.delegate(self->state.store, atom::query_v, std::move(query_context));
+        rp.delegate(self->state.store_builder, atom::query_v,
+                    std::move(query_context));
         return rp;
       }
       auto start = std::chrono::steady_clock::now();
@@ -608,7 +621,7 @@ active_partition_actor::behavior_type active_partition(
               rp.deliver(rank(hits));
             } else {
               query_context.ids = hits;
-              rp.delegate(self->state.store, atom::query_v,
+              rp.delegate(self->state.store_builder, atom::query_v,
                           std::move(query_context));
             }
           },
@@ -622,7 +635,7 @@ active_partition_actor::behavior_type active_partition(
       struct extra_state {
         size_t memory_usage = 0;
         void deliver(caf::typed_response_promise<record>&& promise,
-                     record&& content) {
+                     record&& content) const {
           content["memory-usage"] = count{memory_usage};
           promise.deliver(std::move(content));
         }
