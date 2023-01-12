@@ -154,6 +154,12 @@ extern bool has_undefined_behavior_sanitizer;
 #  define VAST_POSIX 0
 #endif
 
+#if (defined __cpp_consteval) && __cpp_consteval >= 201811
+#  define VAST_CONSTEVAL consteval
+#else
+#  define VAST_CONSTEVAL
+#endif
+
 #if !__SIZEOF_INT128__
 #  error VAST requires support for __int128.
 #endif
