@@ -392,8 +392,10 @@ void check_to_json(Printer& p, const T& value, const char* expected) {
 }
 
 TEST(JSON - omit - nulls) {
-  auto p = json_printer<policy::oneline, policy::human_readable_durations,
-                        policy::omit_nulls, 2>{};
+  auto p = json_printer{json_printer::options{
+    .oneline = true,
+    .omit_nulls = true,
+  }};
   check_to_json(p, vast::record{{"a", 42u}, {"b", caf::none}, {"c", caf::none}},
                 "{\"a\": 42}");
   check_to_json(
@@ -409,8 +411,10 @@ TEST(JSON - omit - nulls) {
 }
 
 TEST(JSON - remove trailing zeroes) {
-  auto p = json_printer<policy::oneline, policy::human_readable_durations,
-                        policy::omit_nulls, 2>{};
+  auto p = json_printer{json_printer::options{
+    .oneline = true,
+    .omit_nulls = true,
+  }};
   check_to_json(p, vast::real{5.0}, "5.0");
   check_to_json(p, vast::real{5.10}, "5.1");
 }

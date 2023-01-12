@@ -10,14 +10,12 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/line_range.hpp"
-#include "vast/error.hpp"
 #include "vast/format/json/selector.hpp"
 #include "vast/format/multi_schema_reader.hpp"
-#include "vast/format/ostream_writer.hpp"
+#include "vast/format/writer.hpp"
 #include "vast/module.hpp"
-#include "vast/policy/omit_nulls.hpp"
-#include "vast/view.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/settings.hpp>
@@ -34,20 +32,25 @@ namespace vast::format::json {
 caf::error
 add(const ::simdjson::dom::object& object, table_slice_builder& builder);
 
-class writer : public ostream_writer {
+class writer : public format::writer {
 public:
-  using super = ostream_writer;
+  using super = format::writer;
 
-  writer(ostream_ptr out, const caf::settings& options);
+  writer(std::unique_ptr<std::ostream> out, const caf::settings& options);
 
   caf::error write(const table_slice& x) override;
 
+  caf::expected<void> flush() override;
+
   [[nodiscard]] const char* name() const override;
 
+  /// @returns the managed output stream.
+  /// @pre `out_ != nullptr`
+  std::ostream& out();
+
 private:
-  bool flatten_ = false;
-  bool numeric_durations_ = false;
-  bool omit_nulls_ = false;
+  std::unique_ptr<std::ostream> out_;
+  json_printer printer_;
 };
 
 /// A reader for JSON data. It operates with a *selector* to determine the

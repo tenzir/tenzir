@@ -8,6 +8,7 @@
 
 #include "vast/format/json.hpp"
 
+#include "vast/arrow_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/integer.hpp"
@@ -18,7 +19,6 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
 #include "vast/format/json/default_selector.hpp"
 #include "vast/format/json/field_selector.hpp"
@@ -29,6 +29,7 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
+#include <arrow/table.h>
 #include <caf/detail/pretty_type_name.hpp>
 #include <caf/expected.hpp>
 #include <caf/none.hpp>
@@ -1094,41 +1095,44 @@ add(const ::simdjson::dom::object& object, table_slice_builder& builder) {
 
 // -- writer ------------------------------------------------------------------
 
-writer::writer(ostream_ptr out, const caf::settings& options)
-  : super{std::move(out)} {
-  flatten_ = get_or(options, "vast.export.json.flatten", false);
-  numeric_durations_
-    = get_or(options, "vast.export.json.numeric-durations", false);
-  omit_nulls_ = get_or(options, "vast.export.json.omit-nulls", false);
+writer::writer(std::unique_ptr<std::ostream> out, const caf::settings& options)
+  : super(),
+    out_{std::move(out)},
+    printer_{{
+      .oneline = true,
+      .flattened = get_or(options, "vast.export.json.flatten", false),
+      .numeric_durations
+      = get_or(options, "vast.export.json.numeric-durations", false),
+      .omit_nulls = get_or(options, "vast.export.json.omit-nulls", false),
+      .omit_empty_records = false,
+      .omit_empty_lists = false,
+      .omit_empty_maps = false,
+    }} {
+  // nop
 }
 
 caf::error writer::write(const table_slice& x) {
-  auto run = [&](const auto& printer) {
-    if (flatten_ && omit_nulls_)
-      return print<policy::include_field_names, policy::flatten_schema,
-                   policy::omit_nulls>(printer, x, {", ", ": ", "{", "}"});
-    if (flatten_ && !omit_nulls_)
-      return print<policy::include_field_names, policy::flatten_schema>(
-        printer, x, {", ", ": ", "{", "}"});
-    if (!flatten_ && omit_nulls_)
-      return print<policy::include_field_names, policy::omit_nulls>(
-        printer, x, {", ", ": ", "{", "}"});
-    VAST_ASSERT(!flatten_ && !omit_nulls_);
-    return print<policy::include_field_names>(printer, x,
-                                              {", ", ": ", "{", "}"});
-  };
-  if (numeric_durations_ && omit_nulls_)
-    return run(json_printer<policy::oneline, policy::numeric_durations,
-                            policy::omit_nulls>{});
-  if (numeric_durations_ && !omit_nulls_)
-    return run(json_printer<policy::oneline, policy::numeric_durations,
-                            policy::include_nulls>{});
-  if (!numeric_durations_ && omit_nulls_)
-    return run(json_printer<policy::oneline, policy::human_readable_durations,
-                            policy::omit_nulls>{});
-  VAST_ASSERT(!numeric_durations_ && !omit_nulls_);
-  return run(json_printer<policy::oneline, policy::human_readable_durations,
-                          policy::include_nulls>{});
+  auto resolved_slice = resolve_enumerations(x);
+  auto type = caf::get<record_type>(resolved_slice.schema());
+  auto array = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+  auto out_iter = std::ostream_iterator<char>{out()};
+  for (const auto& row : values(type, *array)) {
+    VAST_ASSERT_CHEAP(row);
+    const auto ok = printer_.print(out_iter, *row);
+    VAST_ASSERT_CHEAP(ok);
+    out_iter = fmt::format_to(out_iter, "\n");
+  }
+  return {};
+}
+
+caf::expected<void> writer::flush() {
+  out_->flush();
+  return {};
+}
+
+std::ostream& writer::out() {
+  VAST_ASSERT(out_ != nullptr);
+  return *out_;
 }
 
 const char* writer::name() const {
