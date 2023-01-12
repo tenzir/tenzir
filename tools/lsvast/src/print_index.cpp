@@ -25,12 +25,6 @@ void print_index_v0(const vast::fbs::index::v0* index, indentation& indent,
   indented_scope _(indent);
   // print schemas
   std::cout << indent << "schemas:\n";
-  if (auto stats = index->stats()) {
-    indented_scope _(indent);
-    for (auto stat : *stats)
-      std::cout << indent << stat->name()->c_str() << ": " << stat->count()
-                << std::endl;
-  }
   // print partitions
   std::cout << indent << "partitions: ";
   if (auto partitions = index->partitions()) {

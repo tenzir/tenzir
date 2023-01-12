@@ -11,7 +11,6 @@
 #include "vast/detail/friend_attribute.hpp"
 #include "vast/fbs/partition_synopsis.hpp"
 #include "vast/index_config.hpp"
-#include "vast/index_statistics.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/table_slice.hpp"
@@ -51,9 +50,6 @@ struct partition_synopsis final : public caf::ref_counted {
   /// @returns A best-effort estimate of the amount of memory used by this
   ///          synopsis.
   size_t memusage() const;
-
-  /// Id of the first event in the partition.
-  uint64_t offset = invalid_id;
 
   // Number of events in the partition.
   uint64_t events = 0;

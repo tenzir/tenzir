@@ -186,7 +186,6 @@ struct flow;
 struct integer;
 struct legacy_integer_type;
 struct invocation;
-struct index_statistics;
 struct legacy_list_type;
 struct legacy_map_type;
 struct model;

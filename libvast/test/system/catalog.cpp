@@ -55,7 +55,6 @@ partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
   auto result = partition_synopsis{};
   auto synopsis_opts = vast::index_config{};
   result.add(ts, defaults::system::max_partition_size, synopsis_opts);
-  result.offset = ts.offset();
   result.events = ts.rows();
   result.min_import_time = ts.import_time();
   result.max_import_time = ts.import_time();

@@ -20,7 +20,7 @@
       // under the current BASE_URL of the frontend deployment
       const API_BASE =
         import.meta.env.VITE_VAST_API_ENDPOINT ?? `${import.meta.env.BASE_URL}api/v0`;
-      const url = `${API_BASE}/status?verbosity=detailed`;
+      const url = `${API_BASE}/status`;
 
       const response = await fetch(url);
 
@@ -52,12 +52,12 @@
     { header: 'Percentage', accessor: 'percentage' }
   ];
 
-  const getEventsRows = (events: Events) => {
+  const getEventsRows = (events: Events, totalEvents: number) => {
     return Object.keys(events).map((key) => ({
       schema: key,
-      count: events[key].count,
+      count: events[key]['num-events'],
       percentage: new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(
-        events[key].percentage
+        events[key]['num-events'] / totalEvents * 100.0
       )
     }));
   };
@@ -111,9 +111,9 @@
     {/if}
 
     <div class="py-6 text-left md:w-1/4">
-      {#if $queryResult.data?.index.statistics.schemas}
+      {#if $queryResult.data?.catalog?.schemas}
         <Table
-          tableRows={getEventsRows($queryResult.data?.index.statistics.schemas)}
+          tableRows={getEventsRows($queryResult.data?.catalog?.schemas, $queryResult.data?.catalog['num-events'])}
           columnDetails={eventColumns}
         />
       {:else}

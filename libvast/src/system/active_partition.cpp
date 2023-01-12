@@ -87,7 +87,6 @@ void serialize(
   mutable_synopsis.shrink();
   // TODO: It would probably make more sense if the partition
   // synopsis keeps track of offset/events internally.
-  mutable_synopsis.offset = 0;
   mutable_synopsis.events = self->state.data.events;
   for (auto& [qf, actor] : self->state.indexers) {
     if (actor == nullptr) {
@@ -303,7 +302,6 @@ pack_full(const active_partition_state::serialization_data& x,
   store_header = store_builder.Finish();
   fbs::partition::LegacyPartitionBuilder legacy_builder(builder);
   legacy_builder.add_uuid(*uuid);
-  legacy_builder.add_offset(0);
   legacy_builder.add_events(x.events);
   legacy_builder.add_indexes(indexes);
   legacy_builder.add_partition_synopsis(*maybe_ps);
