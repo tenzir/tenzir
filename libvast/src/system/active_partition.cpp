@@ -340,84 +340,88 @@ active_partition_actor::behavior_type active_partition(
   self->state.synopsis_index_config = synopsis_opts;
   self->state.store_plugin = store_plugin;
   self->state.taxonomies = taxonomies;
-  self->state.stage = detail::attach_notifying_stream_stage(
-    self, false,
-    [=](caf::unit_t&) {
-      // nop
-    },
-    [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      VAST_TRACE_SCOPE("partition {} got table slice {} {}",
-                       self->state.data.id, VAST_ARG(out), VAST_ARG(x));
-      // The index already sets the correct offset for this slice, but in some
-      // unit tests we test this component separately, causing incoming table
-      // slices not to have an offset at all. We should fix the unit tests
-      // properly, but that takes time we did not want to spend when migrating
-      // to partition-local ids. -- DL
-      if (x.offset() == invalid_id)
-        x.offset(self->state.data.events);
-      VAST_ASSERT(x.offset() == self->state.data.events);
-      // Adjust the import time range iff necessary.
-      auto& mutable_synopsis = self->state.data.synopsis.unshared();
-      mutable_synopsis.min_import_time
-        = std::min(self->state.data.synopsis->min_import_time, x.import_time());
-      mutable_synopsis.max_import_time
-        = std::max(self->state.data.synopsis->max_import_time, x.import_time());
-      // We rely on `invalid_id` actually being the highest possible id
-      // when using `min()` below.
-      static_assert(invalid_id == std::numeric_limits<vast::id>::max());
-      auto first = x.offset();
-      auto last = x.offset() + x.rows();
-      const auto& schema = x.schema();
-      VAST_ASSERT(!schema.name().empty());
-      auto it = self->state.data.type_ids.emplace(schema.name(), ids{}).first;
-      auto& ids = it->second;
-      VAST_ASSERT(first >= ids.size());
-      // Mark the ids of this table slice for the current type.
-      ids.append_bits(false, first - ids.size());
-      ids.append_bits(true, last - first);
-      self->state.data.events += x.rows();
-      self->state.data.synopsis.unshared().add(
-        x, self->state.partition_capacity, self->state.synopsis_index_config);
-      size_t column_idx = -1;
-      for (const auto& [field, offset] :
-           caf::get<record_type>(schema).leaves()) {
-        column_idx++;
-        // TODO: The qualified record field is a leftover from heterogeneous
-        // partitions, the indexers can be indexed by the column instead.
-        const auto qf = qualified_record_field{schema, offset};
-        auto& idx = self->state.indexers[qf];
-        if (idx)
-          continue;
-        if (should_skip_index_creation(field.type, qf,
-                                       self->state.synopsis_index_config.rules))
-          continue;
-        auto value_index
-          = factory<vast::value_index>::make(field.type, index_opts);
-        if (!value_index) {
-          VAST_WARN("{} failed to spawn active indexer with options {} for "
-                    "field {}: value index missing",
-                    *self, index_opts, field);
-          continue;
+  auto make_stage = [&] {
+    return detail::attach_notifying_stream_stage(
+      self, false,
+      [=](caf::unit_t&) {
+        // nop
+      },
+      [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
+        VAST_TRACE_SCOPE("partition {} got table slice {} {}",
+                         self->state.data.id, VAST_ARG(out), VAST_ARG(x));
+        // The index already sets the correct offset for this slice, but in some
+        // unit tests we test this component separately, causing incoming table
+        // slices not to have an offset at all. We should fix the unit tests
+        // properly, but that takes time we did not want to spend when migrating
+        // to partition-local ids. -- DL
+        if (x.offset() == invalid_id)
+          x.offset(self->state.data.events);
+        VAST_ASSERT(x.offset() == self->state.data.events);
+        // Adjust the import time range iff necessary.
+        auto& mutable_synopsis = self->state.data.synopsis.unshared();
+        mutable_synopsis.min_import_time = std::min(
+          self->state.data.synopsis->min_import_time, x.import_time());
+        mutable_synopsis.max_import_time = std::max(
+          self->state.data.synopsis->max_import_time, x.import_time());
+        // We rely on `invalid_id` actually being the highest possible id
+        // when using `min()` below.
+        static_assert(invalid_id == std::numeric_limits<vast::id>::max());
+        auto first = x.offset();
+        auto last = x.offset() + x.rows();
+        const auto& schema = x.schema();
+        VAST_ASSERT(!schema.name().empty());
+        auto it = self->state.data.type_ids.emplace(schema.name(), ids{}).first;
+        auto& ids = it->second;
+        VAST_ASSERT(first >= ids.size());
+        // Mark the ids of this table slice for the current type.
+        ids.append_bits(false, first - ids.size());
+        ids.append_bits(true, last - first);
+        self->state.data.events += x.rows();
+        self->state.data.synopsis.unshared().add(
+          x, self->state.partition_capacity, self->state.synopsis_index_config);
+        size_t column_idx = -1;
+        for (const auto& [field, offset] :
+             caf::get<record_type>(schema).leaves()) {
+          column_idx++;
+          // TODO: The qualified record field is a leftover from heterogeneous
+          // partitions, the indexers can be indexed by the column instead.
+          const auto qf = qualified_record_field{schema, offset};
+          auto& idx = self->state.indexers[qf];
+          if (idx)
+            continue;
+          if (should_skip_index_creation(
+                field.type, qf, self->state.synopsis_index_config.rules))
+            continue;
+          auto value_index
+            = factory<vast::value_index>::make(field.type, index_opts);
+          if (!value_index) {
+            VAST_WARN("{} failed to spawn active indexer with options {} for "
+                      "field {}: value index missing",
+                      *self, index_opts, field);
+            continue;
+          }
+          idx = self->spawn(active_indexer, column_idx, std::move(value_index));
+          auto slot = self->state.stage->add_outbound_path(idx);
+          VAST_DEBUG("{} spawned new active indexer for field {} at slot {}",
+                     *self, field.name, slot);
         }
-        idx = self->spawn(active_indexer, column_idx, std::move(value_index));
-        auto slot = self->state.stage->add_outbound_path(idx);
-        VAST_DEBUG("{} spawned new active indexer for field {} at slot {}",
-                   *self, field.name, slot);
-      }
-      out.push(x);
-    },
-    [=](caf::unit_t&, const caf::error& err) {
-      VAST_DEBUG("active partition {} finalized streaming {}", id, render(err));
-      // We get an 'unreachable' error when the stream becomes unreachable
-      // because the actor was destroyed; in this case the state was already
-      // destroyed during `local_actor::on_exit()`.
-      if (err && err != caf::exit_reason::unreachable
-          && err != ec::end_of_input) {
-        VAST_ERROR("{} aborts with error: {}", *self, err);
-        return;
-      }
-    },
-    caf::policy::arg<caf::broadcast_downstream_manager<table_slice>>{});
+        out.push(x);
+      },
+      [=](caf::unit_t&, const caf::error& err) {
+        VAST_DEBUG("active partition {} finalized streaming {}", id,
+                   render(err));
+        // We get an 'unreachable' error when the stream becomes unreachable
+        // because the actor was destroyed; in this case the state was already
+        // destroyed during `local_actor::on_exit()`.
+        if (err && err != caf::exit_reason::unreachable
+            && err != ec::end_of_input) {
+          VAST_ERROR("{} aborts with error: {}", *self, err);
+          return;
+        }
+      },
+      caf::policy::arg<caf::broadcast_downstream_manager<table_slice>>{});
+  };
+  self->state.stage = make_stage();
   self->state.data.store_id = self->state.store_plugin->name();
   auto builder_and_header = self->state.store_plugin->make_store_builder(
     self->state.accountant, self->state.filesystem, self->state.data.id);
@@ -431,6 +435,8 @@ active_partition_actor::behavior_type active_partition(
   self->state.data.store_header = header;
   self->state.store_builder = builder;
   auto slot = self->state.stage->add_outbound_path(builder);
+  dynamic_cast<decltype(make_stage())::pointer>(self->state.stage.get())
+    ->set_notification_slot(slot);
   VAST_DEBUG("{} spawned new active store at slot {}", *self, slot);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
