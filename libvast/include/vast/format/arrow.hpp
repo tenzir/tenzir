@@ -17,6 +17,7 @@
 #include "vast/type.hpp"
 
 #include <arrow/io/api.h>
+#include <arrow/ipc/reader.h>
 #include <arrow/ipc/writer.h>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
@@ -104,6 +105,7 @@ private:
 
   vast::module module_;
   std::unique_ptr<arrow_istream_wrapper> input_;
+  std::shared_ptr<::arrow::ipc::RecordBatchReader> reader_;
 };
 
 } // namespace vast::format::arrow

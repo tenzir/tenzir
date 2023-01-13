@@ -423,14 +423,16 @@ tests:
   Arrow Import:
     condition: version | jq -e '."Apache Arrow"'
     tags: [import, arrow]
+    fixture: ServerTester
     steps:
-      - command: -N import --batch-encoding=arrow arrow
+      - command: import --batch-encoding=arrow arrow
         # the input corresponds to conn.log.gz + eve.json (see above)
         input: data/suricata/arrow_ipc.bin
-      - command: -N export -n 10 arrow '#type == "zeek.conn"'
+      - command: export -n 10 arrow '#type == "zeek.conn"'
         transformation: python @./misc/scripts/print-arrow.py
-      - command: -N export arrow '#type == "suricata.http"'
+      - command: export arrow '#type == "suricata.http"'
         transformation: python @./misc/scripts/print-arrow.py
+      - command: count
   Import syslog:
     tags: [syslog, import]
     steps:
