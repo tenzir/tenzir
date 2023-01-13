@@ -71,17 +71,17 @@ available types. Each letter in a cell denotes a set of operators:
 - **R**: range operators `<`, `<=`, `>=`, `>`
 - **M**: membership operators `in`, `!in`, `ni`, `!ni`
 
-| | **Bool** | **Integer** | **Count** | **Real** | **Duration** | **Time** | **String** | **Pattern** | **Address** | **Subnet** | **Enum** | **List** | **Map**
+| | **Bool** | **Int64** | **UInt64** | **Double** | **Duration** | **Time** | **String** | **Pattern** | **IP** | **Subnet** | **Enum** | **List** | **Map**
 ---|---|---|---|---|---|---|---|---|---|---|---|---|---
  **Bool** | E |  |  |  |  |  |  |  |  |  |  | M | M
- **Integer** |  | ER |  |  |  |  |  |  |  |  |  | M | M
- **Count** |  |  | ER |  |  |  |  |  |  |  |  | M | M
+ **Int64** |  | ER |  |  |  |  |  |  |  |  |  | M | M
+ **UInt64** |  |  | ER |  |  |  |  |  |  |  |  | M | M
  **Real** |  |  |  | ER |  |  |  |  |  |  |  | M | M
  **Duration** |  |  |  |  | ER |  |  |  |  |  |  | M | M
  **Time** |  |  |  |  |  | ER |  |  |  |  |  | M | M
  **String** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
  **Pattern** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
- **Address** |  |  |  |  |  |  |  |  | E | EM |  | M | M
+ **IP** |  |  |  |  |  |  |  |  | E | EM |  | M | M
  **Subnet** |  |  |  |  |  |  |  |  | EM | EM |  | M | M
  **Enum** |  |  |  |  |  |  |  |  |  |  | E | M | M
  **List** | M | M | M | M | M | M | M | M | M | M | M | EM | M
@@ -197,14 +197,14 @@ Here is an over view of basic types:
 | ---------- | --------------------------------------- | -------------
 | `none`     | Denotes an absent or invalid value      | `nil`
 | `bool`     | A boolean value                         | `true`, `false`
-| `int`      | A 64-bit signed integer                 | `-42`, `+3`
-| `count`    | A 64-bit unsigned integer               | `0`, `42`
-| `real`     | A 64-bit double (IEEE 754)              | `-0.7`, `1.337`
+| `int64`    | A 64-bit signed integer                 | `-42`, `+3`
+| `uint64`   | A 64-bit unsigned integer               | `0`, `42`
+| `double`   | A 64-bit double (IEEE 754)              | `-0.7`, `1.337`
 | `duration` | A time span (nanosecond granularity)    | `-3us`, `24h`
 | `time`     | A time point (nanosecond granularity)   | `now`, `1h ago`, `2020-01-01+10:42:00`
 | `string`   | A sequence of characters                | `"foo"`
 | `pattern`  | A regular expression                    | `/fo*.bar$/`
-| `addr`     | An IPv4 or IPv6 address                 | `::1`, `10.0.0.1`, `2001:db8::`
+| `ip`       | An IPv4 or IPv6 address                 | `::1`, `10.0.0.1`, `2001:db8::`
 | `subnet`   | An IPv4 or IPv6 subnet                  | `::1/128`, `10.0.0.0/8`, `2001:db8::/32`
 
 Complex types:
