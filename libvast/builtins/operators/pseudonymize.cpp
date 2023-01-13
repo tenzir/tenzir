@@ -198,6 +198,12 @@ public:
       auto value = option.second;
       options[key] = value;
     }
+    if (parse_result.short_form_options.contains("m")) {
+      options["method"] = parse_result.short_form_options["m"];
+    }
+    if (parse_result.short_form_options.contains("s")) {
+      options["seed"] = parse_result.short_form_options["s"];
+    }
 
     return {parse_result.new_str_it, make_pipeline_operator(options)};
   }
