@@ -140,21 +140,26 @@ in
   vast-source = inputs.nix-filter.lib.filter {
     root = ./..;
     include = [
-      (inputs.nix-filter.lib.inDirectory ../libvast_test)
+      (inputs.nix-filter.lib.inDirectory ../changelog)
+      (inputs.nix-filter.lib.inDirectory ../cmake)
+      (inputs.nix-filter.lib.inDirectory ../cmake)
+      (inputs.nix-filter.lib.inDirectory ../docs)
+      (inputs.nix-filter.lib.inDirectory ../docs)
       (inputs.nix-filter.lib.inDirectory ../libvast)
-      (inputs.nix-filter.lib.inDirectory ../vast)
-      (inputs.nix-filter.lib.inDirectory ../tools)
+      (inputs.nix-filter.lib.inDirectory ../libvast_test)
       (inputs.nix-filter.lib.inDirectory ../plugins)
+      (inputs.nix-filter.lib.inDirectory ../python)
       (inputs.nix-filter.lib.inDirectory ../schema)
       (inputs.nix-filter.lib.inDirectory ../scripts)
-      (inputs.nix-filter.lib.inDirectory ../docs)
-      (inputs.nix-filter.lib.inDirectory ../cmake)
-      (inputs.nix-filter.lib.inDirectory ../changelog)
+      (inputs.nix-filter.lib.inDirectory ../tools)
+      (inputs.nix-filter.lib.inDirectory ../vast)
       ../VERSIONING.md
       ../CMakeLists.txt
       ../LICENSE
       ../VAST.spdx
       ../README.md
+      ../VAST.spdx
+      ../VERSIONING.md
       ../vast.yaml.example
       ../version.json
     ];

@@ -17,7 +17,7 @@ jobs:
   code-coverage:
     name: Code Coverage
     runs-on: ubuntu-20.04
-    container: debian:bullseye-slim
+    container: python:3.10-slim-bullseye
     strategy:
       fail-fast: false
     env:

@@ -172,6 +172,7 @@ endif ()
 if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
   install(
     CODE "\
+    cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
     get_filename_component(build_time_prefix
       \"${CMAKE_INSTALL_PREFIX}\" ABSOLUTE)
     get_filename_component(install_time_prefix
@@ -485,6 +486,7 @@ if (VAST_ENABLE_CODE_COVERAGE)
   include(CodeCoverage)
   mark_as_advanced(CODE_COVERAGE)
   install(CODE "\
+    cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
     message(FATAL_ERROR \"Builds with code coverage must not be installed.\")")
 endif ()
 
@@ -897,6 +899,79 @@ install(
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
   DESTINATION "${CMAKE_INSTALL_DOCDIR}"
   COMPONENT Runtime)
+
+# -- python bindings ----------------------------------------------------------
+
+option(VAST_ENABLE_PYTHON_BINDINGS "Install Python bindings (requires poetry)"
+       ON)
+add_feature_info("VAST_ENABLE_PYTHON_BINDINGS" VAST_ENABLE_PYTHON_BINDINGS
+                 "install Python bindings (requires poetry).")
+# Currently, we install all dependencies for the Python bindings alongside the
+# Python bindings by default. We are not sure whether this is a good choice, or
+# whether it works well with the Nix sandbox, so this may change in the future.
+cmake_dependent_option(
+  VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
+  "Install Python bindings with dependencies" ON "VAST_ENABLE_PYTHON_BINDINGS"
+  OFF)
+add_feature_info(
+  "VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES"
+  VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
+  "install Python bindings with dependencies.")
+if (VAST_ENABLE_PYTHON_BINDINGS)
+  find_program(POETRY_PATH poetry)
+  if (NOT POETRY_PATH)
+    message(
+      FATAL_ERROR
+        "Cannot find 'poetry' in PATH, which is required for installing VAST Python bindings"
+    )
+  endif ()
+  # Poetry has no support for specifying a working directory for the build
+  # command, so in order to make the installation not modify the source directory
+  # we need to copy the Python bindings in their entirety into the build directory
+  # first.
+  unset(VAST_POETRY_EXTRA_INSTALL_ARGS)
+  if (NOT VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES)
+    list(APPEND VAST_POETRY_EXTRA_INSTALL_ARGS "--no-deps")
+  endif ()
+  install(
+    CODE "
+    cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
+    file(REMOVE_RECURSE \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+    file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+    file(
+      COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
+      DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\")
+    # Poetry evaluates the top-level gitignore, which leads it to ignore
+    # everything in case the install prefix is in an ignored path. Setting the
+    # git directory explicitly works around the issue.
+    set(ENV{GIT_DIR} \"/dev/null\")
+    execute_process(
+      COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel -vvv
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
+      COMMAND_ERROR_IS_FATAL ANY)
+    file(
+      GLOB VAST_PYTHON_WHL
+      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python/dist/*.whl\")
+    file(
+      GLOB VAST_OLD_INSTALLED_BINS
+      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
+    execute_process(
+      COMMAND \"${POETRY_PATH}\" run pip install
+        ${VAST_POETRY_EXTRA_INSTALL_ARGS}
+        --prefix \"\${CMAKE_INSTALL_PREFIX}\"
+        \"\${VAST_PYTHON_WHL}\"
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/python\"
+      COMMAND_ERROR_IS_FATAL ANY)
+    file(
+      GLOB VAST_NEW_INSTALLED_BINS
+      \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
+    foreach (bin IN LISTS VAST_NEW_INSTALLED_BINS)
+      if (NOT \"\${bin}\" IN_LIST VAST_OLD_INSTALLED_BINS)
+        file(REMOVE \"\${bin}\")
+      endif ()
+    endforeach ()"
+    COMPONENT Runtime)
+endif ()
 
 # -- packaging -----------------------------------------------------------------
 
