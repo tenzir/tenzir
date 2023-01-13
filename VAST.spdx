@@ -198,7 +198,646 @@ PackageName: restinio
 PackageHomePage: https://github.com/Stiffstream/restinio
 PackageLicenseConcluded: BSD-3-Clause
 
-## Frontend Dependencies
+
+## SBOM for the separate `vast` python package
+## -------------------------------------------
+
+
+PackageName: antlr4-python3-runtime
+SPDXID: SPDXRef-Package-python-antlr4-python3-runtime-67831d3deb93b3bc
+PackageVersion: 4.9.3
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/antlr4-python3-runtime@4.9.3
+
+
+PackageName: attrs
+SPDXID: SPDXRef-Package-python-attrs-73c5ca4f98e2a1c4
+PackageVersion: 22.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/attrs@22.1.0
+
+
+PackageName: certifi
+SPDXID: SPDXRef-Package-python-certifi-5925475d1fe560b9
+PackageVersion: 2022.9.14
+PackageLicenseConcluded: MPL-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/certifi@2022.9.14
+
+
+PackageName: cffi
+SPDXID: SPDXRef-Package-python-cffi-f703e272028e07cd
+PackageVersion: 1.15.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/cffi@1.15.1
+
+
+PackageName: charset-normalizer
+SPDXID: SPDXRef-Package-python-charset-normalizer-f4a158bd8e7cee9d
+PackageVersion: 2.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/charset-normalizer@2.1.1
+
+
+PackageName: colorama
+SPDXID: SPDXRef-Package-python-colorama-e9d7211d219b0544
+PackageVersion: 0.4.5
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/colorama@0.4.5
+
+
+PackageName: coloredlogs
+SPDXID: SPDXRef-Package-python-coloredlogs-9344d626d53aa32a
+PackageVersion: 15.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/coloredlogs@15.0.1
+
+
+PackageName: cybox
+SPDXID: SPDXRef-Package-python-cybox-2f6595a9dc877e39
+PackageVersion: 2.1.0.21
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/cybox@2.1.0.21
+
+
+PackageName: deprecated
+SPDXID: SPDXRef-Package-python-deprecated-c45dd422e2e5ac
+PackageVersion: 1.2.13
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/deprecated@1.2.13
+
+
+PackageName: dynaconf
+SPDXID: SPDXRef-Package-python-dynaconf-8190f66019a25861
+PackageVersion: 3.1.9
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/dynaconf@3.1.9
+
+
+PackageName: humanfriendly
+SPDXID: SPDXRef-Package-python-humanfriendly-e985d9bd777cd8be
+PackageVersion: 10.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/humanfriendly@10.0
+
+
+PackageName: idna
+SPDXID: SPDXRef-Package-python-idna-971f634eb6093ab9
+PackageVersion: 3.4
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/idna@3.4
+
+
+PackageName: iniconfig
+SPDXID: SPDXRef-Package-python-iniconfig-5862571bfa7198ea
+PackageVersion: 1.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/iniconfig@1.1.1
+
+
+PackageName: jsonschema
+SPDXID: SPDXRef-Package-python-jsonschema-1d43e276dab17e39
+PackageVersion: 4.16.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/jsonschema@4.16.0
+
+
+PackageName: lxml
+SPDXID: SPDXRef-Package-python-lxml-89342c4b101930f
+PackageVersion: 4.9.1
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/lxml@4.9.1
+
+
+PackageName: maec
+SPDXID: SPDXRef-Package-python-maec-5ce61091bc7e933c
+PackageVersion: 4.1.0.17
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/maec@4.1.0.17
+
+
+PackageName: misp-lib-stix2
+SPDXID: SPDXRef-Package-python-misp-lib-stix2-5ff8506c4c4f2a0b
+PackageVersion: 3.0.1.1
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/misp-lib-stix2@3.0.1.1
+
+
+PackageName: misp-stix
+SPDXID: SPDXRef-Package-python-misp-stix-cb1a1d58344035b
+PackageVersion: 2.4.162
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/misp-stix@2.4.162
+
+
+PackageName: mixbox
+SPDXID: SPDXRef-Package-python-mixbox-f24846841b45bbf3
+PackageVersion: 1.0.5
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/mixbox@1.0.5
+
+
+PackageName: numpy
+SPDXID: SPDXRef-Package-python-numpy-3af1663f3c3aa31
+PackageVersion: 1.23.3
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/numpy@1.23.3
+
+
+PackageName: ordered-set
+SPDXID: SPDXRef-Package-python-ordered-set-36c77e02e80b2b0f
+PackageVersion: 4.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/ordered-set@4.1.0
+
+
+PackageName: packaging
+SPDXID: SPDXRef-Package-python-packaging-a17c06eeab63b361
+PackageVersion: 21.3
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/packaging@21.3
+
+
+PackageName: pandas
+SPDXID: SPDXRef-Package-python-pandas-edd5bca1935dd26e
+PackageVersion: 1.5.0
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pandas@1.5.0
+
+
+PackageName: pluggy
+SPDXID: SPDXRef-Package-python-pluggy-fba6ad1cf78eae07
+PackageVersion: 1.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pluggy@1.0.0
+
+
+PackageName: publicsuffixlist
+SPDXID: SPDXRef-Package-python-publicsuffixlist-6aa74ffd9c0dcf5f
+PackageVersion: 0.7.14
+PackageLicenseConcluded: MPL-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/publicsuffixlist@0.7.14
+
+
+PackageName: py
+SPDXID: SPDXRef-Package-python-py-f5aff623bd248a45
+PackageVersion: 1.11.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/py@1.11.0
+
+
+PackageName: pyarrow
+SPDXID: SPDXRef-Package-python-pyarrow-3a5187c8ff7c896b
+PackageVersion: 9.0.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyarrow@9.0.0
+
+
+PackageName: pycparser
+SPDXID: SPDXRef-Package-python-pycparser-237354af89f2553d
+PackageVersion: 2.21
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pycparser@2.21
+
+
+PackageName: pymisp
+SPDXID: SPDXRef-Package-python-pymisp-a99aa3c774a75f7e
+PackageVersion: 2.4.160.1
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pymisp@2.4.160.1
+
+
+PackageName: pyparsing
+SPDXID: SPDXRef-Package-python-pyparsing-b1a66d988a4f24b7
+PackageVersion: 3.0.9
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyparsing@3.0.9
+
+
+PackageName: pyreadline3
+SPDXID: SPDXRef-Package-python-pyreadline3-4f7daaac7383c8a6
+PackageVersion: 3.4.1
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyreadline3@3.4.1
+
+
+PackageName: pyrsistent
+SPDXID: SPDXRef-Package-python-pyrsistent-47110e31edced5df
+PackageVersion: 0.18.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyrsistent@0.18.1
+
+
+PackageName: pytest
+SPDXID: SPDXRef-Package-python-pytest-6db316bf494101e3
+PackageVersion: 7.1.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pytest@7.1.3
+
+
+PackageName: pytest-asyncio
+SPDXID: SPDXRef-Package-python-pytest-asyncio-3bce7ce5b663d941
+PackageVersion: 0.19.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pytest-asyncio@0.19.0
+
+
+PackageName: python-dateutil
+SPDXID: SPDXRef-Package-python-python-dateutil-b705cf1f1eda8638
+PackageVersion: 2.8.2
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/python-dateutil@2.8.2
+
+
+PackageName: pytz
+SPDXID: SPDXRef-Package-python-pytz-840aabc95526d363
+PackageVersion: 2022.2.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pytz@2022.2.1
+
+
+PackageName: pyzmq
+SPDXID: SPDXRef-Package-python-pyzmq-983d962ec3e4c68b
+PackageVersion: 23.2.1
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyzmq@23.2.1
+
+
+PackageName: requests
+SPDXID: SPDXRef-Package-python-requests-47e5633cb11674d6
+PackageVersion: 2.28.1
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/requests@2.28.1
+
+
+PackageName: simplejson
+SPDXID: SPDXRef-Package-python-simplejson-dbc9ac85bc2adc0e
+PackageVersion: 3.17.6
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/simplejson@3.17.6
+
+
+PackageName: six
+SPDXID: SPDXRef-Package-python-six-adadf924eaa2005
+PackageVersion: 1.16.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/six@1.16.0
+
+
+PackageName: stix
+SPDXID: SPDXRef-Package-python-stix-eb6cc010d3493d36
+PackageVersion: 1.2.0.11
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/stix@1.2.0.11
+
+
+PackageName: stix2-patterns
+SPDXID: SPDXRef-Package-python-stix2-patterns-ba95ff15a14ffe94
+PackageVersion: 2.0.0
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/stix2-patterns@2.0.0
+
+
+PackageName: tomli
+SPDXID: SPDXRef-Package-python-tomli-db368895e990bedd
+PackageVersion: 2.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/tomli@2.0.1
+
+
+PackageName: urllib3
+SPDXID: SPDXRef-Package-python-urllib3-f7b5a88d00b3c24d
+PackageVersion: 1.26.12
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/urllib3@1.26.12
+
+
+PackageName: weakrefmethod
+SPDXID: SPDXRef-Package-python-weakrefmethod-f8d750730bc50052
+PackageVersion: 1.0.3
+PackageLicenseConcluded: PSF-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/weakrefmethod@1.0.3
+
+SPDXID: SPDXRef-DOCUMENT
+
+
+PackageName: antlr4-python3-runtime
+SPDXID: SPDXRef-Package-python-antlr4-python3-runtime-67831d3deb93b3bc
+PackageVersion: 4.9.3
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/antlr4-python3-runtime@4.9.3
+
+
+PackageName: attrs
+SPDXID: SPDXRef-Package-python-attrs-73c5ca4f98e2a1c4
+PackageVersion: 22.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/attrs@22.1.0
+
+
+PackageName: certifi
+SPDXID: SPDXRef-Package-python-certifi-5925475d1fe560b9
+PackageVersion: 2022.9.14
+PackageLicenseConcluded: MPL-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/certifi@2022.9.14
+
+
+PackageName: cffi
+SPDXID: SPDXRef-Package-python-cffi-f703e272028e07cd
+PackageVersion: 1.15.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/cffi@1.15.1
+
+
+PackageName: charset-normalizer
+SPDXID: SPDXRef-Package-python-charset-normalizer-f4a158bd8e7cee9d
+PackageVersion: 2.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/charset-normalizer@2.1.1
+
+
+PackageName: colorama
+SPDXID: SPDXRef-Package-python-colorama-e9d7211d219b0544
+PackageVersion: 0.4.5
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/colorama@0.4.5
+
+
+PackageName: coloredlogs
+SPDXID: SPDXRef-Package-python-coloredlogs-9344d626d53aa32a
+PackageVersion: 15.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/coloredlogs@15.0.1
+
+
+PackageName: cybox
+SPDXID: SPDXRef-Package-python-cybox-2f6595a9dc877e39
+PackageVersion: 2.1.0.21
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/cybox@2.1.0.21
+
+
+PackageName: deprecated
+SPDXID: SPDXRef-Package-python-deprecated-c45dd422e2e5ac
+PackageVersion: 1.2.13
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/deprecated@1.2.13
+
+
+PackageName: dynaconf
+SPDXID: SPDXRef-Package-python-dynaconf-8190f66019a25861
+PackageVersion: 3.1.9
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/dynaconf@3.1.9
+
+
+PackageName: humanfriendly
+SPDXID: SPDXRef-Package-python-humanfriendly-e985d9bd777cd8be
+PackageVersion: 10.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/humanfriendly@10.0
+
+
+PackageName: idna
+SPDXID: SPDXRef-Package-python-idna-971f634eb6093ab9
+PackageVersion: 3.4
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/idna@3.4
+
+
+PackageName: iniconfig
+SPDXID: SPDXRef-Package-python-iniconfig-5862571bfa7198ea
+PackageVersion: 1.1.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/iniconfig@1.1.1
+
+
+PackageName: jsonschema
+SPDXID: SPDXRef-Package-python-jsonschema-1d43e276dab17e39
+PackageVersion: 4.16.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/jsonschema@4.16.0
+
+
+PackageName: lxml
+SPDXID: SPDXRef-Package-python-lxml-89342c4b101930f
+PackageVersion: 4.9.1
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/lxml@4.9.1
+
+
+PackageName: maec
+SPDXID: SPDXRef-Package-python-maec-5ce61091bc7e933c
+PackageVersion: 4.1.0.17
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/maec@4.1.0.17
+
+
+PackageName: misp-lib-stix2
+SPDXID: SPDXRef-Package-python-misp-lib-stix2-5ff8506c4c4f2a0b
+PackageVersion: 3.0.1.1
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/misp-lib-stix2@3.0.1.1
+
+
+PackageName: misp-stix
+SPDXID: SPDXRef-Package-python-misp-stix-cb1a1d58344035b
+PackageVersion: 2.4.162
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/misp-stix@2.4.162
+
+
+PackageName: mixbox
+SPDXID: SPDXRef-Package-python-mixbox-f24846841b45bbf3
+PackageVersion: 1.0.5
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/mixbox@1.0.5
+
+
+PackageName: numpy
+SPDXID: SPDXRef-Package-python-numpy-3af1663f3c3aa31
+PackageVersion: 1.23.3
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/numpy@1.23.3
+
+
+PackageName: ordered-set
+SPDXID: SPDXRef-Package-python-ordered-set-36c77e02e80b2b0f
+PackageVersion: 4.1.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/ordered-set@4.1.0
+
+
+PackageName: packaging
+SPDXID: SPDXRef-Package-python-packaging-a17c06eeab63b361
+PackageVersion: 21.3
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/packaging@21.3
+
+
+PackageName: pandas
+SPDXID: SPDXRef-Package-python-pandas-edd5bca1935dd26e
+PackageVersion: 1.5.0
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pandas@1.5.0
+
+
+PackageName: pluggy
+SPDXID: SPDXRef-Package-python-pluggy-fba6ad1cf78eae07
+PackageVersion: 1.0.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pluggy@1.0.0
+
+
+PackageName: publicsuffixlist
+SPDXID: SPDXRef-Package-python-publicsuffixlist-6aa74ffd9c0dcf5f
+PackageVersion: 0.7.14
+PackageLicenseConcluded: MPL-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/publicsuffixlist@0.7.14
+
+
+PackageName: py
+SPDXID: SPDXRef-Package-python-py-f5aff623bd248a45
+PackageVersion: 1.11.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/py@1.11.0
+
+
+PackageName: pyarrow
+SPDXID: SPDXRef-Package-python-pyarrow-3a5187c8ff7c896b
+PackageVersion: 9.0.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyarrow@9.0.0
+
+
+PackageName: pycparser
+SPDXID: SPDXRef-Package-python-pycparser-237354af89f2553d
+PackageVersion: 2.21
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pycparser@2.21
+
+
+PackageName: pymisp
+SPDXID: SPDXRef-Package-python-pymisp-a99aa3c774a75f7e
+PackageVersion: 2.4.160.1
+PackageLicenseConcluded: BSD-2-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pymisp@2.4.160.1
+
+
+PackageName: pyparsing
+SPDXID: SPDXRef-Package-python-pyparsing-b1a66d988a4f24b7
+PackageVersion: 3.0.9
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyparsing@3.0.9
+
+
+PackageName: pyreadline3
+SPDXID: SPDXRef-Package-python-pyreadline3-4f7daaac7383c8a6
+PackageVersion: 3.4.1
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyreadline3@3.4.1
+
+
+PackageName: pyrsistent
+SPDXID: SPDXRef-Package-python-pyrsistent-47110e31edced5df
+PackageVersion: 0.18.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyrsistent@0.18.1
+
+
+PackageName: pytest
+SPDXID: SPDXRef-Package-python-pytest-6db316bf494101e3
+PackageVersion: 7.1.3
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pytest@7.1.3
+
+
+PackageName: pytest-asyncio
+SPDXID: SPDXRef-Package-python-pytest-asyncio-3bce7ce5b663d941
+PackageVersion: 0.19.0
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pytest-asyncio@0.19.0
+
+
+PackageName: python-dateutil
+SPDXID: SPDXRef-Package-python-python-dateutil-b705cf1f1eda8638
+PackageVersion: 2.8.2
+PackageLicenseConcluded: PSF
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/python-dateutil@2.8.2
+
+
+PackageName: pytz
+SPDXID: SPDXRef-Package-python-pytz-840aabc95526d363
+PackageVersion: 2022.2.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pytz@2022.2.1
+
+
+PackageName: pyzmq
+SPDXID: SPDXRef-Package-python-pyzmq-983d962ec3e4c68b
+PackageVersion: 23.2.1
+PackageLicenseConcluded: BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/pyzmq@23.2.1
+
+
+PackageName: requests
+SPDXID: SPDXRef-Package-python-requests-47e5633cb11674d6
+PackageVersion: 2.28.1
+PackageLicenseConcluded: Apache-2.0
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/requests@2.28.1
+
+
+PackageName: simplejson
+SPDXID: SPDXRef-Package-python-simplejson-dbc9ac85bc2adc0e
+PackageVersion: 3.17.6
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/simplejson@3.17.6
+
+
+PackageName: six
+SPDXID: SPDXRef-Package-python-six-adadf924eaa2005
+PackageVersion: 1.16.0
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/six@1.16.0
+
+
+PackageName: stix
+SPDXID: SPDXRef-Package-python-stix-eb6cc010d3493d36
+PackageVersion: 1.2.0.11
+PackageLicenseConcluded: 0BSD
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/stix@1.2.0.11
+
+
+PackageName: stix2-patterns
+SPDXID: SPDXRef-Package-python-stix2-patterns-ba95ff15a14ffe94
+PackageVersion: 2.0.0
+PackageLicenseConcluded: BSD-3-Clause
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/stix2-patterns@2.0.0
+
+
+PackageName: tomli
+SPDXID: SPDXRef-Package-python-tomli-db368895e990bedd
+PackageVersion: 2.0.1
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/tomli@2.0.1
+
+
+PackageName: urllib3
+SPDXID: SPDXRef-Package-python-urllib3-f7b5a88d00b3c24d
+PackageVersion: 1.26.12
+PackageLicenseConcluded: MIT
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/urllib3@1.26.12
+
+
+PackageName: weakrefmethod
+SPDXID: SPDXRef-Package-python-weakrefmethod-f8d750730bc50052
+PackageVersion: 1.0.3
+PackageLicenseConcluded: PSF
+ExternalRef: PACKAGE_MANAGER purl pkg:pypi/weakrefmethod@1.0.3
+
+
+## SBOM for the `web` plugin's frontend
+## ------------------------------------
+
 
 PackageName: abbrev
 SPDXID: SPDXRef-Package-npm-abbrev-7a0eda935af4e326
@@ -2536,4 +3175,5 @@ SPDXID: SPDXRef-Package-npm-yocto-queue-dc66df52dd693ee0
 PackageVersion: 0.1.0
 PackageLicenseConcluded: MIT
 ExternalRef: PACKAGE_MANAGER purl pkg:npm/yocto-queue@0.1.0
+>>>>>>> origin/master
 

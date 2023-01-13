@@ -19,6 +19,7 @@ COPY examples ./examples
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
 COPY plugins ./plugins
+COPY python ./python
 COPY schema ./schema
 COPY tools ./tools
 COPY vast ./vast
@@ -58,6 +59,7 @@ RUN cmake -B build -G Ninja \
       -D VAST_ENABLE_DEVELOPER_MODE:BOOL="OFF" \
       -D VAST_ENABLE_BUNDLED_CAF:BOOL="ON" \
       -D VAST_ENABLE_MANPAGES:BOOL="OFF" \
+      -D VAST_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       -D VAST_PLUGINS:STRING="plugins/*" && \
     cmake --build build --parallel && \
     cmake --install build --strip && \

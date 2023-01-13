@@ -17,6 +17,7 @@ brew install \
     ninja \
     openssl \
     pandoc \
+    poetry \
     pkg-config \
     rsync \
     simdjson \

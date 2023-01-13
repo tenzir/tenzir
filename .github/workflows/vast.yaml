@@ -144,7 +144,6 @@ jobs:
           echo "docker-build-args=${docker_build_args}" >> $GITHUB_OUTPUT
           echo "vast-container-ref=${vast_container_ref}" >> $GITHUB_OUTPUT
           # Decide what jobs to run
-          echo "run-python=true" >> $GITHUB_OUTPUT
           run_python_package=false
           if [[ $GITHUB_EVENT_NAME == "release" ]]; then
             run_python_package=true
@@ -157,6 +156,7 @@ jobs:
           echo "run-python-package=${run_python_package}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]] || ! is_unchanged .github/workflows/vast.yaml; then
             echo "run-changelog=true" >> $GITHUB_OUTPUT
+            echo "run-python=true" >> $GITHUB_OUTPUT
             echo "run-vast-io=true" >> $GITHUB_OUTPUT
             echo "run-docker-vast=true" >> $GITHUB_OUTPUT
             echo "run-docker-vast-slim=true" >> $GITHUB_OUTPUT
@@ -166,7 +166,12 @@ jobs:
             echo "run-vast-plugins=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          run_vast_io=false
+          run_python=false
+          if ! is_unchanged python/; then
+            run_python=true
+          fi
+          echo "run-python=${run_python}" >> $GITHUB_OUTPUT
+          run_vast_io=${run_python}
           if ! is_unchanged web/; then
             run_vast_io=true
           fi
@@ -199,7 +204,7 @@ jobs:
           run_docker_compose=${run_vast}
           if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
             run_docker_compose=false
-          elif ${run_vast_plugins} cmake/; then
+          elif [[ ${run_vast_plugins} == "true" || ${run_python} == "true" ]]; then
             run_docker_compose=true
           elif ! is_unchanged docker/ Dockerfile .dockerignore; then
             run_docker_compose=true
@@ -208,7 +213,7 @@ jobs:
           run_docker_vast=${run_docker_compose}
           if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
             run_docker_vast=false
-          elif ${run_vast_io}; then
+          elif [[ ${run_vast_io} == "true" || ${run_python} == "true" ]]; then
             run_docker_vast=true
           fi
           echo "run-docker-vast=${run_docker_vast}" >> $GITHUB_OUTPUT
@@ -233,7 +238,7 @@ jobs:
       - configure
     if: ${{ needs.configure.outputs.run-changelog == 'true' }}
     runs-on: ubuntu-20.04
-    container: debian:bullseye-slim
+    container: python:3.10-slim-bullseye
     steps:
       - name: Install git
         run: |
@@ -267,6 +272,7 @@ jobs:
       - configure
       - changelog
       - docker-vast
+      - python
     if: ${{ needs.configure.outputs.run-vast-io == 'true' }}
     name: vast.io
     runs-on: ubuntu-20.04
@@ -315,6 +321,7 @@ jobs:
   docker-vast:
     needs:
       - configure
+      - python
     if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
     name: Docker (tenzir/vast)
     runs-on: ubuntu-20.04
@@ -396,6 +403,7 @@ jobs:
     needs:
       - docker-vast
       - configure
+      - python
     if: ${{ needs.configure.outputs.run-docker-compose == 'true' }}
     name: Docker Compose
     runs-on: ubuntu-20.04
@@ -662,7 +670,7 @@ jobs:
       matrix:
         vast:
           - os: ubuntu-20.04
-            container: debian:bullseye-slim
+            container: python:3.10-slim-bullseye
             name: Debian
             compiler: GCC
             cc: gcc-10
@@ -869,7 +877,7 @@ jobs:
         setup:
           - os: ubuntu-20.04
             name: Debian
-            container: debian:bullseye-slim
+            container: python:3.10-slim-bullseye
             cc: gcc-10
             cxx: g++-10
             package-suffix: Release-GCC

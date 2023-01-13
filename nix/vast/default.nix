@@ -4,6 +4,7 @@
 , nix-gitignore
 , cmake
 , cmake-format
+, poetry
 , pkg-config
 , git
 , pandoc
@@ -75,6 +76,7 @@ stdenv.mkDerivation (rec {
     cmake
     cmake-format
     dpkg
+    poetry
   ];
   propagatedNativeBuildInputs = [ pkg-config pandoc ];
   buildInputs = [
@@ -105,6 +107,7 @@ stdenv.mkDerivation (rec {
     "-DVAST_ENABLE_JEMALLOC=ON"
     "-DVAST_ENABLE_LSVAST=ON"
     "-DVAST_ENABLE_VAST_REGENERATE=OFF"
+    "-DVAST_ENABLE_PYTHON_BINDINGS=OFF"
     "-DVAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
     "-DVAST_PLUGINS=${lib.concatStringsSep ";" plugins}"
     # TODO limit this to just web plugin
