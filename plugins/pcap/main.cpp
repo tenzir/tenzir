@@ -78,7 +78,7 @@ type make_packet_type() {
   // port alias type here. Until then, we create the alias manually.
   // See also:
   // - src/format/zeek.cpp
-  const auto port_type = type{"port", count_type{}};
+  const auto port_type = type{"port", uint64_type{}};
   const auto timestamp_type = type{"timestamp", time_type{}};
   return type{
     "pcap.packet",
@@ -90,8 +90,8 @@ type make_packet_type() {
       {"dport", port_type},
       {"vlan",
        record_type{
-         {"outer", count_type{}},
-         {"inner", count_type{}},
+         {"outer", uint64_type{}},
+         {"inner", uint64_type{}},
        }},
       {"community_id", type{string_type{}, {{"index", "hash"}}}},
       {"payload", type{string_type{}, {{"skip"}}}},

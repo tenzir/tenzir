@@ -91,8 +91,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   type schema = type{
     "test",
     record_type{
-      {"x", count_type{}},
-      {"y", count_type{}},
+      {"x", uint64_type{}},
+      {"y", uint64_type{}},
     },
   };
 

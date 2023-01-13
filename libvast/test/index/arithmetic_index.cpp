@@ -142,7 +142,7 @@ TEST(time) {
 }
 
 TEST(none values - arithmetic) {
-  auto idx = factory<value_index>::make(type{count_type{}}, caf::settings{});
+  auto idx = factory<value_index>::make(type{uint64_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(integer{42})));

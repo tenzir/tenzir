@@ -171,7 +171,7 @@ TEST(parseable - value predicate) {
   REQUIRE(pred != nullptr);
   auto extractor = caf::get_if<type_extractor>(&pred->lhs);
   REQUIRE(extractor != nullptr);
-  CHECK(caf::holds_alternative<count_type>(extractor->type));
+  CHECK(caf::holds_alternative<uint64_type>(extractor->type));
   CHECK(caf::holds_alternative<data>(pred->rhs));
   CHECK_EQUAL(pred->op, relational_operator::equal);
   CHECK(caf::get<data>(pred->rhs) == data{42u});

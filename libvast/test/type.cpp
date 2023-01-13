@@ -66,23 +66,23 @@ TEST(int64_type) {
   CHECK_EQUAL(it.to_definition(), expected_definition);
 }
 
-TEST(count_type) {
-  static_assert(concrete_type<count_type>);
-  static_assert(basic_type<count_type>);
-  static_assert(!complex_type<count_type>);
+TEST(uint64_type) {
+  static_assert(concrete_type<uint64_type>);
+  static_assert(basic_type<uint64_type>);
+  static_assert(!complex_type<uint64_type>);
   const auto t = type{};
-  const auto ct = type{count_type{}};
+  const auto ct = type{uint64_type{}};
   CHECK(ct);
-  CHECK_EQUAL(as_bytes(ct), as_bytes(count_type{}));
+  CHECK_EQUAL(as_bytes(ct), as_bytes(uint64_type{}));
   CHECK(t != ct);
   CHECK(t < ct);
   CHECK(t <= ct);
   CHECK_EQUAL(fmt::format("{}", ct), "count");
-  CHECK_EQUAL(fmt::format("{}", count_type{}), "count");
-  CHECK(!caf::holds_alternative<count_type>(t));
-  CHECK(caf::holds_alternative<count_type>(ct));
+  CHECK_EQUAL(fmt::format("{}", uint64_type{}), "count");
+  CHECK(!caf::holds_alternative<uint64_type>(t));
+  CHECK(caf::holds_alternative<uint64_type>(ct));
   const auto lct = type::from_legacy_type(legacy_count_type{});
-  CHECK(caf::holds_alternative<count_type>(lct));
+  CHECK(caf::holds_alternative<uint64_type>(lct));
   const auto expected_definition = data{"count"};
   CHECK_EQUAL(ct.to_definition(), expected_definition);
 }
@@ -440,9 +440,9 @@ TEST(record_type name resolving) {
         type{"zeek.conn_id",
              record_type{
                {"orig_h", address_type{}},
-               {"orig_p", type{"port", count_type{}}},
+               {"orig_p", type{"port", uint64_type{}}},
                {"resp_h", address_type{}},
-               {"resp_p", type{"port", count_type{}}},
+               {"resp_p", type{"port", uint64_type{}}},
              }},
       },
       {"proto", string_type{}},
@@ -590,7 +590,7 @@ TEST(record_type merging) {
      record_type{
        {"y",
         record_type{
-          {"a", count_type{}},
+          {"a", uint64_type{}},
           {"b", real_type{}},
           {"c", int64_type{}},
         }},
@@ -608,7 +608,7 @@ TEST(record_type merging) {
         }},
        {"y",
         record_type{
-          {"a", count_type{}},
+          {"a", uint64_type{}},
           {"b", real_type{}},
           {"c", int64_type{}},
         }},
@@ -629,7 +629,7 @@ TEST(record_type merging) {
         }},
        {"y",
         record_type{
-          {"a", count_type{}},
+          {"a", uint64_type{}},
           {"b", real_type{}},
           {"c", int64_type{}},
         }},
@@ -661,7 +661,7 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(caf::none), type{});
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
   CHECK_EQUAL(type::infer(integer{}), int64_type{});
-  CHECK_EQUAL(type::infer(count{}), count_type{});
+  CHECK_EQUAL(type::infer(count{}), uint64_type{});
   CHECK_EQUAL(type::infer(real{}), real_type{});
   CHECK_EQUAL(type::infer(duration{}), duration_type{});
   CHECK_EQUAL(type::infer(time{}), time_type{});
@@ -698,7 +698,7 @@ TEST(type inference) {
     {"b", int64_type{}},
     {"c",
      record_type{
-       {"d", count_type{}},
+       {"d", uint64_type{}},
      }},
   };
   CHECK_EQUAL(type::infer(r), rt);
@@ -913,7 +913,7 @@ TEST(construct) {
       {"n", list_type{int64_type{}}},
       {"b", type{bool_type{}, {{"default", "uniform(0,1)"}}}},
       {"i", type{int64_type{}, {{"default", "uniform(-42000,1337)"}}}},
-      {"c", type{count_type{}, {{"default", "pareto(0,1)"}}}},
+      {"c", type{uint64_type{}, {{"default", "pareto(0,1)"}}}},
       {"r", type{real_type{}, {{"default", "normal(0,1)"}}}},
       {"s", type{string_type{}, {{"default", "uniform(0,100)"}}}},
       {"t", type{time_type{}, {{"default", "uniform(0,10)"}}}},
@@ -957,8 +957,8 @@ TEST(hashes) {
                                                         "3");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(int64_type{})), "0x5B0D4F0B0B16740"
                                                          "4");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(count_type{})), "0x529C2667783DB09"
-                                                         "D");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(uint64_type{})), "0x529C2667783DB09"
+                                                          "D");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0x41615FDB30A38AA"
                                                         "F");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(duration_type{})), "0x6C3BE97C5D5B269"
@@ -992,7 +992,7 @@ TEST(congruence) {
   i = type{"i", i};
   j = type{"j", j};
   CHECK(i != j);
-  auto c = type{"c", count_type{}};
+  auto c = type{"c", uint64_type{}};
   CHECK(congruent(i, i));
   CHECK(congruent(i, j));
   CHECK(!congruent(i, c));
@@ -1006,12 +1006,12 @@ TEST(congruence) {
   auto r0 = type{record_type{
     {"a", address_type{}},
     {"b", bool_type{}},
-    {"c", count_type{}},
+    {"c", uint64_type{}},
   }};
   auto r1 = type{record_type{
     {"x", address_type{}},
     {"y", bool_type{}},
-    {"z", count_type{}},
+    {"z", uint64_type{}},
   }};
   CHECK(r0 != r1);
   CHECK(congruent(r0, r1));
@@ -1039,38 +1039,38 @@ TEST(subset) {
   i = type{"i", i};
   j = type{"j", j};
   CHECK(is_subset(i, j));
-  auto c = type{"c", count_type{}};
+  auto c = type{"c", uint64_type{}};
   CHECK(is_subset(i, i));
   CHECK(is_subset(i, j));
   CHECK(!is_subset(i, c));
   auto r0 = type{record_type{
     {"a", address_type{}},
     {"b", bool_type{}},
-    {"c", count_type{}},
+    {"c", uint64_type{}},
   }};
   // Rename a field.
   auto r1 = type{record_type{
     {"a", address_type{}},
     {"b", bool_type{}},
-    {"d", count_type{}},
+    {"d", uint64_type{}},
   }};
   // Add a field.
   auto r2 = type{record_type{
     {"a", address_type{}},
     {"b", bool_type{}},
-    {"c", count_type{}},
-    {"d", count_type{}},
+    {"c", uint64_type{}},
+    {"d", uint64_type{}},
   }};
   // Remove a field.
   auto r3 = type{record_type{
     {"a", address_type{}},
-    {"c", count_type{}},
+    {"c", uint64_type{}},
   }};
   // Change a field's type.
   auto r4 = type{record_type{
     {"a", pattern_type{}},
     {"b", bool_type{}},
-    {"c", count_type{}},
+    {"c", uint64_type{}},
   }};
   CHECK(is_subset(r0, r0));
   CHECK(!is_subset(r0, r1));
@@ -1095,7 +1095,7 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{});
   CHECK_ROUNDTRIP(type{bool_type{}});
   CHECK_ROUNDTRIP(type{int64_type{}});
-  CHECK_ROUNDTRIP(type{count_type{}});
+  CHECK_ROUNDTRIP(type{uint64_type{}});
   CHECK_ROUNDTRIP(type{real_type{}});
   CHECK_ROUNDTRIP(type{duration_type{}});
   CHECK_ROUNDTRIP(type{time_type{}});

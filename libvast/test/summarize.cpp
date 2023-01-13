@@ -30,7 +30,7 @@ const auto agg_test_schema = vast::type{
     // FIXME: Do we want to test for other types? integer type?
     {"time", vast::time_type{}},
     {"ip", vast::address_type{}},
-    {"port", vast::count_type{}},
+    {"port", vast::uint64_type{}},
     {"sum", vast::real_type{}},
     {"sum_null", vast::real_type{}},
     {"min", vast::int64_type{}},
@@ -39,8 +39,8 @@ const auto agg_test_schema = vast::type{
     {"all_true", vast::bool_type{}},
     {"any_false", vast::bool_type{}},
     {"all_false", vast::bool_type{}},
-    {"alternating_number", vast::count_type{}},
-    {"alternating_number_list", vast::list_type{vast::count_type{}}},
+    {"alternating_number", vast::uint64_type{}},
+    {"alternating_number_list", vast::list_type{vast::uint64_type{}}},
   },
 };
 

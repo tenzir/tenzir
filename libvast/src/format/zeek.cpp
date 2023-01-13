@@ -49,7 +49,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
   else if (zeek_type == "int")
     t = type{int64_type{}};
   else if (zeek_type == "count")
-    t = type{count_type{}};
+    t = type{uint64_type{}};
   else if (zeek_type == "double")
     t = type{real_type{}};
   else if (zeek_type == "time")
@@ -67,7 +67,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     // port alias type here. Until then, we create the alias manually.
     // See also:
     // - src/format/pcap.cpp
-    t = type{"port", count_type{}};
+    t = type{"port", uint64_type{}};
   if (!t
       && (zeek_type.starts_with("vector") || zeek_type.starts_with("set")
           || zeek_type.starts_with("table"))) {
@@ -100,7 +100,7 @@ std::string to_zeek_string(const type& t) {
     [](const int64_type&) -> std::string {
       return "int";
     },
-    [&](const count_type&) -> std::string {
+    [&](const uint64_type&) -> std::string {
       return t.name() == "port" ? "port" : "count";
     },
     [](const real_type&) -> std::string {

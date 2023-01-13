@@ -29,7 +29,7 @@ struct fixture : fixtures::deterministic_actor_system {
     record_type{
       {"ts", time_type{}},
       {"addr", address_type{}},
-      {"port", count_type{}},
+      {"port", uint64_type{}},
     },
   };
 
@@ -38,7 +38,7 @@ struct fixture : fixtures::deterministic_actor_system {
     record_type{
       {"s", string_type{}},
       {"ptn", pattern_type{}},
-      {"lis", list_type{count_type{}}},
+      {"lis", list_type{uint64_type{}}},
     },
   };
 
@@ -46,7 +46,7 @@ struct fixture : fixtures::deterministic_actor_system {
     "l2",
     record_type{
       {"b", bool_type{}},
-      {"c", count_type{}},
+      {"c", uint64_type{}},
       {"r", real_type{}},
       {"i", int64_type{}},
       {"s", string_type{}},
@@ -56,11 +56,11 @@ struct fixture : fixtures::deterministic_actor_system {
       {"d", duration_type{}},
       {"d2", duration_type{}},
       {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},
-      {"lc", list_type{count_type{}}},
+      {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
       {"r2", real_type{}},
       {"msa", map_type{string_type{}, address_type{}}},
-      {"mcs", map_type{count_type{}, string_type{}}},
+      {"mcs", map_type{uint64_type{}, string_type{}}},
     },
   };
 
@@ -138,7 +138,7 @@ TEST(csv reader - empty fields) {
   REQUIRE_EQUAL(slices[0].schema(), l0);
   CHECK(slices[1].at(0, 1, address_type{})
         == data{unbox(to<address>("147.32.84.165"))});
-  CHECK(slices[1].at(1, 2, count_type{}) == std::nullopt);
+  CHECK(slices[1].at(1, 2, uint64_type{}) == std::nullopt);
 }
 
 std::string_view l1_log_string = R"__(s
@@ -199,7 +199,7 @@ TEST(csv reader - schema with container) {
   auto xs = vast::list{};
   xs.emplace_back(data{count{42}});
   xs.emplace_back(data{count{1337}});
-  CHECK(slices[0].at(19, 2, list_type{count_type{}}) == make_view(xs));
+  CHECK(slices[0].at(19, 2, list_type{uint64_type{}}) == make_view(xs));
 }
 
 std::string_view l1_log1 = R"__(s,ptn
@@ -264,7 +264,7 @@ std::string_view l2_log_vp = R"__(lc
 
 TEST(csv reader - list of count) {
   auto slices = run(l2_log_vp, 2, 100);
-  auto t = type{list_type{count_type{}}};
+  auto t = type{list_type{uint64_type{}}};
   auto l2_vp = type{"l2", record_type{{"lc", t}}};
   REQUIRE_EQUAL(slices[0].schema(), l2_vp);
   CHECK((slices[0].at(0, 0, t) == data{list{1u, 2u, 3u, 4u, 5u}}));
@@ -315,7 +315,7 @@ TEST(csv reader - reordered schema) {
     "l2",
     record_type{
       {"msa", map_type{string_type{}, address_type{}}},
-      {"c", count_type{}},
+      {"c", uint64_type{}},
       {"r", real_type{}},
       {"i", int64_type{}},
       {"b", bool_type{}},
@@ -324,11 +324,11 @@ TEST(csv reader - reordered schema) {
       {"d", duration_type{}},
       {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},
       {"t", time_type{}},
-      {"lc", list_type{count_type{}}},
+      {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
       {"r2", real_type{}},
       // FIXME: Parsing maps in csv is broken, see ch12358.
-      // {"mcs", map_type{count_type{}, string_type{}}}
+      // {"mcs", map_type{uint64_type{}, string_type{}}}
     },
   };
   REQUIRE_EQUAL(slices[0].schema(), l2_sub);

@@ -36,7 +36,7 @@ TEST(json to data) {
     "schema",
     record_type{
       {"b", bool_type{}},
-      {"c", count_type{}},
+      {"c", uint64_type{}},
       {"r", real_type{}},
       {"i", int64_type{}},
       {"s", string_type{}},
@@ -47,11 +47,11 @@ TEST(json to data) {
       {"d", duration_type{}},
       {"d2", duration_type{}},
       {"e", enumeration_type{{"FOO"}, {"BAR"}, {"BAZ"}}},
-      {"lc", list_type{count_type{}}},
+      {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
-      {"rec", record_type{{"c", count_type{}}, {"s", string_type{}}}},
+      {"rec", record_type{{"c", uint64_type{}}, {"s", string_type{}}}},
       {"msa", map_type{string_type{}, address_type{}}},
-      {"mcs", map_type{count_type{}, string_type{}}},
+      {"mcs", map_type{uint64_type{}, string_type{}}},
     },
   };
   auto builder = std::make_shared<table_slice_builder>(schema);

@@ -52,7 +52,7 @@ caf::expected<distribution> make_distribution(const type& t) {
           static_cast<vast::integer::value_type>(p0),
           static_cast<vast::integer::value_type>(p1)}};
     if (caf::holds_alternative<bool_type>(t)
-        || caf::holds_alternative<count_type>(t)
+        || caf::holds_alternative<uint64_type>(t)
         || caf::holds_alternative<string_type>(t))
       return distribution{std::uniform_int_distribution<count>{
         static_cast<count>(p0), static_cast<count>(p1)}};
@@ -150,7 +150,7 @@ struct randomizer {
     x.value = static_cast<integer::value_type>(sample());
   }
 
-  void operator()(const count_type&, count& x) {
+  void operator()(const uint64_type&, count& x) {
     x = sample();
   }
 

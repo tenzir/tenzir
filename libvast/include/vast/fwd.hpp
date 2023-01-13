@@ -127,7 +127,7 @@ class bitmap;
 class bool_type;
 class chunk;
 class command;
-class count_type;
+class uint64_type;
 class data;
 class duration_type;
 class enumeration_type;

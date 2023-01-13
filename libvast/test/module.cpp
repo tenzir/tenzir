@@ -253,7 +253,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
     if (known_type_name == "integer")
       return type{name, int64_type{}};
     if (known_type_name == "count")
-      return type{name, count_type{}};
+      return type{name, uint64_type{}};
     if (known_type_name == "real")
       return type{name, real_type{}};
     if (known_type_name == "duration")
@@ -427,14 +427,14 @@ TEST(YAML Type - Parsing integer type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(YAML Type - Parsing count_type) {
+TEST(YAML Type - Parsing uint64_type) {
   std::vector<type> known_types;
-  auto count_type_wo_attrs = record::value_type{
+  auto uint64_type_wo_attrs = record::value_type{
     "count_field",
     record{{"type", "count"}},
   };
-  auto result = unbox(to_type(known_types, count_type_wo_attrs));
-  auto expected_type = type{"count_field", count_type{}};
+  auto result = unbox(to_type(known_types, uint64_type_wo_attrs));
+  auto expected_type = type{"count_field", uint64_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -534,7 +534,7 @@ TEST(YAML Type - Parsing list_type) {
     record{{"list", "count"}},
   };
   auto result = unbox(to_type(known_types, list_type_wo_attrs));
-  auto expected_type = type{"list_field", list_type{count_type{}}};
+  auto expected_type = type{"list_field", list_type{uint64_type{}}};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -549,7 +549,7 @@ TEST(YAML Type - Parsing map_type) {
   auto result = unbox(to_type(known_types, map_type_wo_attrs));
   auto expected_type = type{
     "map_field",
-    map_type{count_type{}, string_type{}},
+    map_type{uint64_type{}, string_type{}},
   };
   CHECK_EQUAL(result, expected_type);
 }

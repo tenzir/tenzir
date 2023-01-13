@@ -378,7 +378,7 @@ class plugin final : public virtual rest_endpoint_plugin {
         .path = "/query/:id/next",
         .params = vast::record_type{
           {"id", vast::string_type{}},
-          {"n", vast::count_type{}},
+          {"n", vast::uint64_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,

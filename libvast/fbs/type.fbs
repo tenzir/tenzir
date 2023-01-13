@@ -34,7 +34,7 @@ table BoolType {}
 table Int64Type {}
 
 /// An unsigned integer.
-table CountType {}
+table UInt64Type {}
 
 /// A floating-point value.
 table RealType {}
@@ -84,7 +84,7 @@ namespace vast.fbs.type;
 union Type {
   bool_type: BoolType,
   int64_type: Int64Type,
-  count_type: CountType,
+  uint64_type: UInt64Type,
   real_type: RealType,
   duration_type: DurationType,
   time_type: TimeType,

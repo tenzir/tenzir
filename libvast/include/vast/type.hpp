@@ -49,7 +49,7 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<bool_type, int64_type, count_type, real_type,
+  = caf::detail::type_list<bool_type, int64_type, uint64_type, real_type,
                            duration_type, time_type, string_type, pattern_type,
                            address_type, subnet_type, enumeration_type,
                            list_type, map_type, record_type>;
@@ -471,11 +471,11 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
-// -- count_type --------------------------------------------------------------
+// -- uint64_type --------------------------------------------------------------
 
 /// An unsigned integer.
 /// @relates type
-class count_type final {
+class uint64_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 3;
@@ -484,7 +484,7 @@ public:
   using arrow_type = arrow::UInt64Type;
 
   /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const count_type&) noexcept;
+  friend std::span<const std::byte> as_bytes(const uint64_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static count construct() noexcept;
@@ -2092,7 +2092,7 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const vast::count_type&, FormatContext& ctx) const
+  auto format(const vast::uint64_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "count");
   }

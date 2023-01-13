@@ -229,12 +229,12 @@ struct Complex {
       {"b",
        record_type{
          {"c", int64_type{}},
-         {"d", list_type{count_type{}}},
+         {"d", list_type{uint64_type{}}},
        }},
       {"e",
        record_type{
          {"f", int64_type{}},
-         {"g", count_type{}},
+         {"g", uint64_type{}},
        }},
       {"h", bool_type{}},
     };
@@ -390,7 +390,7 @@ struct Vec {
 
   inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"xs", list_type{count_type{}}},
+      {"xs", list_type{uint64_type{}}},
     };
     return result;
   }
@@ -437,7 +437,7 @@ TEST(list to vector of struct) {
 TEST(map to map) {
   using Map = vast::detail::flat_map<count, std::string>;
   auto x = Map{};
-  auto schema = map_type{count_type{}, string_type{}};
+  auto schema = map_type{uint64_type{}, string_type{}};
   auto r = map{{1u, "foo"}, {12u, "bar"}, {997u, "baz"}};
   REQUIRE_EQUAL(convert(r, x, schema), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
@@ -524,7 +524,7 @@ struct iList {
 
   inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"value", list_type{count_type{}}},
+      {"value", list_type{uint64_type{}}},
     };
     return result;
   }
@@ -596,7 +596,7 @@ struct OptVec {
   inline static const record_type& schema() noexcept {
     static const auto result = record_type{
       {"ovs", list_type{string_type{}}},
-      {"ou", count_type{}},
+      {"ou", uint64_type{}},
     };
     return result;
   }

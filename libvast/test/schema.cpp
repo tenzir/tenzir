@@ -103,7 +103,7 @@ TEST(serialization) {
     record_type{
       {"s1", string_type{}},
       {"d1", real_type{}},
-      {"c", type{count_type{}, {{"skip"}}}},
+      {"c", type{uint64_type{}, {{"skip"}}}},
       {"i", int64_type{}},
       {"s2", string_type{}},
       {"d2", real_type{}},
@@ -348,7 +348,7 @@ TEST(parseable - with context) {
       record_type{
         {"x",
          record_type{
-           {"y", type{"foo", count_type{}}},
+           {"y", type{"foo", uint64_type{}}},
          }},
       },
     };
@@ -546,11 +546,11 @@ TEST(parseable - with context) {
       record_type{
         {"a",
          record_type{
-           {"x", count_type{}},
+           {"x", uint64_type{}},
          }},
         {"b.c",
          record_type{
-           {"e", count_type{}},
+           {"e", uint64_type{}},
          }},
       },
     };
@@ -592,7 +592,7 @@ TEST(parseable - with context) {
       record_type{
         {"a",
          record_type{
-           {"x", count_type{}},
+           {"x", uint64_type{}},
            {"y", address_type{}},
          }},
         {"b", real_type{}},
@@ -630,7 +630,7 @@ TEST(parseable - overwriting with self reference) {
     auto expected = type{
       "foo",
       record_type{
-        {"x", count_type{}},
+        {"x", uint64_type{}},
         {"y", string_type{}},
       },
     };

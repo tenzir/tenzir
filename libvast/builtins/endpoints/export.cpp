@@ -657,7 +657,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   rest_endpoints() const override {
     static auto common_parameters = vast::record_type{
       {"expression", vast::string_type{}},
-      {"limit", vast::count_type{}},
+      {"limit", vast::uint64_type{}},
       {"pipeline", vast::string_type{}},
       {"flatten", vast::bool_type{}},
       {"omit-nulls", vast::bool_type{}},

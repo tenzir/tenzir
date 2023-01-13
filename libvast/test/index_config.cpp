@@ -35,8 +35,8 @@ rules:
 const vast::type schema{
   "y",
   vast::record_type{
-    {"x", vast::count_type{}},
-    {"y", vast::type{"foo", vast::count_type{}}},
+    {"x", vast::uint64_type{}},
+    {"y", vast::type{"foo", vast::uint64_type{}}},
   },
 };
 

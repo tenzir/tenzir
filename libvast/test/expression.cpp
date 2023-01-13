@@ -180,7 +180,7 @@ TEST(normalization) {
 }
 
 TEST(extractors) {
-  auto port = type{"port", count_type{}};
+  auto port = type{"port", uint64_type{}};
   auto subport = type{"subport", port};
   auto s = record_type{
     {"real", real_type{}}, {"bool", bool_type{}}, {"host", address_type{}},
@@ -349,7 +349,7 @@ TEST(resolve) {
   auto t = type{
     "foo",
     record_type{
-      {"x", count_type{}},
+      {"x", uint64_type{}},
       {"y", bool_type{}},
     },
   };

@@ -65,7 +65,7 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -99,7 +99,7 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -293,7 +293,7 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -378,7 +378,7 @@ type::type(std::string_view name, const type& nested,
         case fbs::type::Type::NONE:
         case fbs::type::Type::bool_type:
         case fbs::type::Type::int64_type:
-        case fbs::type::Type::count_type:
+        case fbs::type::Type::uint64_type:
         case fbs::type::Type::real_type:
         case fbs::type::Type::duration_type:
         case fbs::type::Type::time_type:
@@ -502,7 +502,7 @@ type type::infer(const data& value) noexcept {
       return type{int64_type{}};
     },
     [](const count&) noexcept -> type {
-      return type{count_type{}};
+      return type{uint64_type{}};
     },
     [](const real&) noexcept -> type {
       return type{real_type{}};
@@ -599,7 +599,7 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
       return type{other.name(), int64_type{}, std::move(attributes)};
     },
     [&](const legacy_count_type&) noexcept {
-      return type{other.name(), count_type{}, std::move(attributes)};
+      return type{other.name(), uint64_type{}, std::move(attributes)};
     },
     [&](const legacy_real_type&) noexcept {
       return type{other.name(), real_type{}, std::move(attributes)};
@@ -663,7 +663,7 @@ legacy_type type::to_legacy_type() const noexcept {
     [&](const int64_type&) noexcept -> legacy_type {
       return legacy_integer_type{};
     },
-    [&](const count_type&) noexcept -> legacy_type {
+    [&](const uint64_type&) noexcept -> legacy_type {
       return legacy_count_type{};
     },
     [&](const real_type&) noexcept -> legacy_type {
@@ -1017,7 +1017,7 @@ std::string_view type::name() const& noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -1050,7 +1050,7 @@ detail::generator<std::string_view> type::names() const& noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -1084,7 +1084,7 @@ type::attribute(const char* key) const& noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -1122,7 +1122,7 @@ bool type::has_attributes() const noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -1158,7 +1158,7 @@ type::attributes(type::recurse recurse) const& noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -1201,7 +1201,7 @@ detail::generator<type> type::aliases() const noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -1233,7 +1233,7 @@ bool is_container(const type& type) noexcept {
     case fbs::type::Type::NONE:
     case fbs::type::Type::bool_type:
     case fbs::type::Type::int64_type:
-    case fbs::type::Type::count_type:
+    case fbs::type::Type::uint64_type:
     case fbs::type::Type::real_type:
     case fbs::type::Type::duration_type:
     case fbs::type::Type::time_type:
@@ -1311,7 +1311,7 @@ bool congruent(const type& x, const data& y) noexcept {
     [](const int64_type&, integer) noexcept {
       return true;
     },
-    [](const count_type&, count) noexcept {
+    [](const uint64_type&, count) noexcept {
       return true;
     },
     [](const real_type&, real) noexcept {
@@ -1602,18 +1602,18 @@ int64_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
     to_arrow_type(), pool);
 }
 
-// -- count_type --------------------------------------------------------------
+// -- uint64_type --------------------------------------------------------------
 
-static_assert(count_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::count_type));
+static_assert(uint64_type::type_index
+              == static_cast<uint8_t>(fbs::type::Type::uint64_type));
 
-std::span<const std::byte> as_bytes(const count_type&) noexcept {
+std::span<const std::byte> as_bytes(const uint64_type&) noexcept {
   static const auto buffer = []() noexcept {
     constexpr auto reserved_size = 32;
     auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto count_type = fbs::type::CreateCountType(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::count_type,
-                                      count_type.Union());
+    const auto uint64_type = fbs::type::CreateUInt64Type(builder);
+    const auto type = fbs::CreateType(builder, fbs::type::Type::uint64_type,
+                                      uint64_type.Union());
     builder.Finish(type);
     auto result = builder.Release();
     VAST_ASSERT(result.size() == reserved_size);
@@ -1622,16 +1622,16 @@ std::span<const std::byte> as_bytes(const count_type&) noexcept {
   return as_bytes(buffer);
 }
 
-count count_type::construct() noexcept {
+count uint64_type::construct() noexcept {
   return {};
 }
 
-std::shared_ptr<count_type::arrow_type> count_type::to_arrow_type() noexcept {
+std::shared_ptr<uint64_type::arrow_type> uint64_type::to_arrow_type() noexcept {
   return std::static_pointer_cast<arrow_type>(arrow::uint64());
 }
 
-std::shared_ptr<typename arrow::TypeTraits<count_type::arrow_type>::BuilderType>
-count_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
+std::shared_ptr<typename arrow::TypeTraits<uint64_type::arrow_type>::BuilderType>
+uint64_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
   return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
     to_arrow_type(), pool);
 }
@@ -2572,7 +2572,7 @@ detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -2640,7 +2640,7 @@ size_t record_type::num_leaves() const noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -2695,7 +2695,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -2756,7 +2756,7 @@ record_type::resolve_key(std::string_view key) const noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -2848,7 +2848,7 @@ record_type::resolve_key_suffix(std::string_view key,
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
@@ -2997,7 +2997,7 @@ size_t record_type::flat_index(const offset& index) const noexcept {
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
-      case fbs::type::Type::count_type:
+      case fbs::type::Type::uint64_type:
       case fbs::type::Type::real_type:
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:

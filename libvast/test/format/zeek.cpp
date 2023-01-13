@@ -251,7 +251,7 @@ TEST(zeek data parsing) {
   CHECK(d == true);
   CHECK(zeek_parse(type{int64_type{}}, "-49329", d));
   CHECK(d == integer{-49329});
-  CHECK(zeek_parse(type{count_type{}}, "49329"s, d));
+  CHECK(zeek_parse(type{uint64_type{}}, "49329"s, d));
   CHECK(d == count{49329});
   CHECK(zeek_parse(type{time_type{}}, "1258594163.566694", d));
   auto ts = duration_cast<vast::duration>(double_seconds{1258594163.566694});

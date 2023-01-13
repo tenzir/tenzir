@@ -80,7 +80,7 @@ type deduce(simdjson::dom::element e) {
     case ::simdjson::dom::element_type::INT64:
       return type{int64_type{}};
     case ::simdjson::dom::element_type::UINT64:
-      return type{count_type{}};
+      return type{uint64_type{}};
     case ::simdjson::dom::element_type::DOUBLE:
       return type{real_type{}};
     case ::simdjson::dom::element_type::STRING: {

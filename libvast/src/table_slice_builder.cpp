@@ -307,8 +307,9 @@ append_builder(const int64_type&, type_to_arrow_builder_t<int64_type>& builder,
 }
 
 arrow::Status
-append_builder(const count_type&, type_to_arrow_builder_t<count_type>& builder,
-               const view<type_to_data_t<count_type>>& view) noexcept {
+append_builder(const uint64_type&,
+               type_to_arrow_builder_t<uint64_type>& builder,
+               const view<type_to_data_t<uint64_type>>& view) noexcept {
   return builder.Append(view);
 }
 

@@ -219,7 +219,7 @@ caf::error convert(const From& src, To& dst, const real_type&) {
 
 // Overload for counts.
 template <concepts::unsigned_integral To>
-caf::error convert(const count& src, To& dst, const count_type&) {
+caf::error convert(const count& src, To& dst, const uint64_type&) {
   if constexpr (sizeof(To) >= sizeof(count)) {
     dst = src;
   } else {
@@ -236,7 +236,7 @@ caf::error convert(const count& src, To& dst, const count_type&) {
 }
 
 template <concepts::unsigned_integral To>
-caf::error convert(const integer& src, To& dst, const count_type&) {
+caf::error convert(const integer& src, To& dst, const uint64_type&) {
   if (src.value < 0)
     return caf::make_error(
       ec::convert_error, fmt::format(": {} can not be negative ({})",
