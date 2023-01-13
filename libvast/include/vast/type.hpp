@@ -738,7 +738,7 @@ public:
   friend std::span<const std::byte> as_bytes(const ip_type&) noexcept;
 
   /// Constructs data from the type.
-  [[nodiscard]] static address construct() noexcept;
+  [[nodiscard]] static ip construct() noexcept;
 
   /// Converts the type into an Arrow DataType.
   [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
@@ -819,7 +819,7 @@ public:
     explicit builder_type(arrow::MemoryPool* pool
                           = arrow::default_memory_pool());
     [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
-    [[nodiscard]] ip_type::builder_type& address_builder() noexcept;
+    [[nodiscard]] ip_type::builder_type& ip_builder() noexcept;
     [[nodiscard]] arrow::UInt8Builder& length_builder() noexcept;
 
   private:

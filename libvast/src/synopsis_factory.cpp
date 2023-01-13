@@ -8,17 +8,17 @@
 
 #include "vast/synopsis_factory.hpp"
 
-#include "vast/address_synopsis.hpp"
 #include "vast/bool_synopsis.hpp"
 #include "vast/hash/hash_append.hpp"
 #include "vast/hash/legacy_hash.hpp"
+#include "vast/ip_synopsis.hpp"
 #include "vast/string_synopsis.hpp"
 #include "vast/time_synopsis.hpp"
 
 namespace vast {
 
 void factory_traits<synopsis>::initialize() {
-  factory<synopsis>::add(type{ip_type{}}, make_address_synopsis<legacy_hash>);
+  factory<synopsis>::add(type{ip_type{}}, make_ip_synopsis<legacy_hash>);
   factory<synopsis>::add<bool_type, bool_synopsis>();
   factory<synopsis>::add(type{string_type{}},
                          make_string_synopsis<legacy_hash>);

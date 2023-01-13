@@ -50,7 +50,7 @@ TEST(data) {
   MESSAGE("pattern");
   CHECK_EQUAL(to_data("/foo/"), pattern{"foo"});
   MESSAGE("IP address");
-  CHECK_EQUAL(to_data("10.0.0.1"), unbox(to<address>("10.0.0.1")));
+  CHECK_EQUAL(to_data("10.0.0.1"), unbox(to<ip>("10.0.0.1")));
   MESSAGE("list");
   CHECK_EQUAL(to_data("[]"), list{});
   CHECK_EQUAL(to_data("[42, 4.2, nil]"), (list{42u, 4.2, caf::none}));

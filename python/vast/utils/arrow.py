@@ -35,12 +35,17 @@ class PatternType(pa.ExtensionType):
         return PatternScalar
 
 
-class AddressScalar(pa.ExtensionScalar):
+class IPScalar(pa.ExtensionScalar):
     def as_py(self) -> ip.IPv4Address | ip.IPv6Address | None:
         return None if self.value is None else unpack_ip(self.value.as_py())
 
 
 class IPType(pa.ExtensionType):
+    # NOTE: The identifier for the extension type of VAST's ip type has not
+    # changed when the type was renamed from address to ip because that would be
+    # a breaking change. This is fixable by registering two separate extension
+    # types with the same functionality but different ids, but that's a lot of
+    # effort for something users don't usually see.
     ext_name = "vast.address"
     ext_type = pa.binary(16)
 
@@ -59,10 +64,10 @@ class IPType(pa.ExtensionType):
         return IPType()
 
     def __reduce__(self):
-        return AddressScalar, ()
+        return IPScalar, ()
 
     def __arrow_ext_scalar_class__(self):
-        return AddressScalar
+        return IPScalar
 
 
 class SubnetScalar(pa.ExtensionScalar):

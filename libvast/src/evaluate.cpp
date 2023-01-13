@@ -134,7 +134,7 @@ struct cell_evaluator<relational_operator::in> {
     return rhs.search(lhs);
   }
 
-  static bool evaluate(view<address> lhs, view<subnet> rhs) noexcept {
+  static bool evaluate(view<ip> lhs, view<subnet> rhs) noexcept {
     return rhs.contains(lhs);
   }
 

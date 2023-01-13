@@ -14,7 +14,7 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/vast/address.hpp"
+#include "vast/concept/printable/vast/ip.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/port.hpp"
 #include "vast/concept/printable/vast/subnet.hpp"

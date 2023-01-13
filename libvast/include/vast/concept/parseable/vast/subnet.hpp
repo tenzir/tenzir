@@ -10,7 +10,7 @@
 
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/subnet.hpp"
 
 namespace vast {
@@ -19,10 +19,9 @@ struct subnet_parser : vast::parser_base<subnet_parser> {
   using attribute = subnet;
 
   static auto make() {
-    using namespace parsers;
-    auto addr = make_parser<address>{};
+    using parsers::ip, parsers::u8;
     auto prefix = u8.with([](auto x) { return x <= 128; });
-    return addr >> '/' >> prefix;
+    return ip >> '/' >> prefix;
   }
 
   template <class Iterator>
@@ -34,7 +33,7 @@ struct subnet_parser : vast::parser_base<subnet_parser> {
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, subnet& a) const {
     static auto p = make();
-    address network;
+    ip network;
     uint8_t length;
     if (!p(f, l, network, length))
       return false;

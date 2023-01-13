@@ -519,7 +519,7 @@ type type::infer(const data& value) noexcept {
     [](const pattern&) noexcept -> type {
       return type{pattern_type{}};
     },
-    [](const address&) noexcept -> type {
+    [](const ip&) noexcept -> type {
       return type{ip_type{}};
     },
     [](const subnet&) noexcept -> type {
@@ -1329,7 +1329,7 @@ bool congruent(const type& x, const data& y) noexcept {
     [](const pattern_type&, const pattern&) noexcept {
       return true;
     },
-    [](const ip_type&, const address&) noexcept {
+    [](const ip_type&, const ip&) noexcept {
       return true;
     },
     [](const subnet_type&, const subnet&) noexcept {
@@ -1409,7 +1409,7 @@ bool compatible(const type& lhs, relational_operator op,
     case relational_operator::not_ni:
       if (caf::holds_alternative<std::string>(rhs))
         return caf::holds_alternative<string_type>(lhs) || is_container(lhs);
-      else if (caf::holds_alternative<address>(rhs)
+      else if (caf::holds_alternative<ip>(rhs)
                || caf::holds_alternative<subnet>(rhs))
         return caf::holds_alternative<subnet_type>(lhs) || is_container(lhs);
       else
@@ -1885,7 +1885,7 @@ std::span<const std::byte> as_bytes(const ip_type&) noexcept {
   return as_bytes(buffer);
 }
 
-address ip_type::construct() noexcept {
+ip ip_type::construct() noexcept {
   return {};
 }
 
@@ -2009,7 +2009,7 @@ std::shared_ptr<arrow::DataType> subnet_type::builder_type::type() const {
   return subnet_type::to_arrow_type();
 }
 
-ip_type::builder_type& subnet_type::builder_type::address_builder() noexcept {
+ip_type::builder_type& subnet_type::builder_type::ip_builder() noexcept {
   return static_cast<ip_type::builder_type&>(*field_builder(0));
 }
 

@@ -10,9 +10,9 @@
 
 #include "vast/pipeline.hpp"
 
-#include "vast/address.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
+#include "vast/ip.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/test/test.hpp"
@@ -139,9 +139,9 @@ struct pipelines_fixture {
     auto builder
       = std::make_shared<vast::table_slice_builder>(testdata_schema3);
     REQUIRE(builder);
-    REQUIRE(builder->add(*vast::to<vast::address>(orig_ip), int64_t{40002},
-                         *vast::to<vast::address>(dest_ip),
-                         *vast::to<vast::address>(non_anon_ip)));
+    REQUIRE(builder->add(*vast::to<vast::ip>(orig_ip), int64_t{40002},
+                         *vast::to<vast::ip>(dest_ip),
+                         *vast::to<vast::ip>(non_anon_ip)));
     return builder->finish();
   }
 
@@ -231,7 +231,7 @@ TEST(replace operator) {
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(materialize(table_slice.at(0, 0)), "xxx");
   CHECK_EQUAL(materialize(table_slice.at(0, 1)),
-              unbox(vast::to<vast::address>("1.2.3.4")));
+              unbox(vast::to<vast::ip>("1.2.3.4")));
 }
 
 TEST(extend operator) {
@@ -256,7 +256,7 @@ TEST(extend operator) {
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(materialize(table_slice.at(0, 3)), "xxx");
   CHECK_EQUAL(materialize(table_slice.at(0, 4)),
-              unbox(vast::to<vast::address>("1.2.3.4")));
+              unbox(vast::to<vast::ip>("1.2.3.4")));
 }
 
 TEST(where operator) {
@@ -373,12 +373,12 @@ TEST(pseudonymize - seed input too short and odd amount of chars) {
     = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *vast::to<vast::address>("20.251.116.68"));
+                *vast::to<vast::ip>("20.251.116.68"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *vast::to<vast::address>("72.57.233.231"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *vast::to<vast::address>("0.0.0.0"));
+                *vast::to<vast::ip>("72.57.233.231"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *vast::to<vast::ip>("0.0.0."
+                                                                       "0"));
 }
 
 TEST(pseudonymize - seed input too long) {
@@ -399,12 +399,12 @@ TEST(pseudonymize - seed input too long) {
     = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *vast::to<vast::address>("117.8.135.123"));
+                *vast::to<vast::ip>("117.8.135.123"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *vast::to<vast::address>("55.21.62.136"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *vast::to<vast::address>("0.0.0.0"));
+                *vast::to<vast::ip>("55.21.62.136"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *vast::to<vast::ip>("0.0.0."
+                                                                       "0"));
 }
 
 TEST(pseudonymize - IPv4 address batch pseudonymizing) {
@@ -424,12 +424,12 @@ TEST(pseudonymize - IPv4 address batch pseudonymizing) {
     = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *vast::to<vast::address>("117.8.135.123"));
+                *vast::to<vast::ip>("117.8.135.123"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *vast::to<vast::address>("55.21.62.136"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *vast::to<vast::address>("0.0.0.0"));
+                *vast::to<vast::ip>("55.21.62.136"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *vast::to<vast::ip>("0.0.0."
+                                                                       "0"));
 }
 
 TEST(pseudonymize - IPv6 address batch pseudonymizing) {
@@ -450,17 +450,17 @@ TEST(pseudonymize - IPv6 address batch pseudonymizing) {
     = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *vast::to<vast::address>("1482:f447:75b3:f1f9:"
-                                         "fbdf:622e:34f:"
-                                         "ff7b"));
+                *vast::to<vast::ip>("1482:f447:75b3:f1f9:"
+                                    "fbdf:622e:34f:"
+                                    "ff7b"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *vast::to<vast::address>("f33c:8ca3:ef0f:e019:"
-                                         "e7ff:f1e3:f91f:"
-                                         "f800"));
+                *vast::to<vast::ip>("f33c:8ca3:ef0f:e019:"
+                                    "e7ff:f1e3:f91f:"
+                                    "f800"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *vast::to<vast::address>("2a02:db8:85a3::8a2e:"
-                                         "370:7344"));
+                *vast::to<vast::ip>("2a02:db8:85a3::8a2e:"
+                                    "370:7344"));
 }
 
 TEST(pipeline with multiple steps) {

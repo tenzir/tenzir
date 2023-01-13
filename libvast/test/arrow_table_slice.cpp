@@ -376,12 +376,12 @@ TEST(single column - duration) {
 }
 
 TEST(single column - address) {
-  using vast::address;
+  using vast::ip;
   using vast::to;
   auto t = ip_type{};
-  auto a1 = unbox(to<address>("172.16.7.1"));
-  auto a2 = unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329"));
-  auto a3 = unbox(to<address>("2001:db8::"));
+  auto a1 = unbox(to<ip>("172.16.7.1"));
+  auto a2 = unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329"));
+  auto a3 = unbox(to<ip>("2001:db8::"));
   auto slice = make_single_column_slice(t, caf::none, a1, a2, a3);
   REQUIRE_EQUAL(slice.rows(), 4u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), std::nullopt);
@@ -812,10 +812,10 @@ TEST(full_table_slice) {
   auto f2_count = list{1_c, {}, 3_c, 4_c};
   auto f3_pattern = list{pattern("p1"), {}, pattern("p3"), {}};
   auto f4_address = list{
-    unbox(to<address>("172.16.7.29")),
+    unbox(to<ip>("172.16.7.29")),
     {},
-    unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")),
-    unbox(to<address>("2001:db8::")),
+    unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")),
+    unbox(to<ip>("2001:db8::")),
   };
   auto f5_subnet = list{
     unbox(to<subnet>("172.16.7.0/8")),

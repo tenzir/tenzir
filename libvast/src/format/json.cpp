@@ -9,7 +9,7 @@
 #include "vast/format/json.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
@@ -453,7 +453,7 @@ data extract(std::string_view value, const type& type) {
       return caf::none;
     },
     [&](const ip_type&) noexcept -> data {
-      if (auto result = to<address>(value))
+      if (auto result = to<ip>(value))
         return *result;
       return caf::none;
     },
@@ -970,7 +970,7 @@ void add(std::string_view value, const type& type,
       VAST_ASSERT(added);
     },
     [&](const ip_type&) noexcept {
-      if (auto result = to<address>(value)) {
+      if (auto result = to<ip>(value)) {
         const auto added = builder.add(*result);
         VAST_ASSERT(added);
         return;

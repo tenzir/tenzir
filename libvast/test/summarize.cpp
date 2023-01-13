@@ -51,7 +51,7 @@ table_slice make_testdata() {
   for (int i = 0; i < 10; ++i) {
     // 2009-11-16 12 AM
     auto time = vast::time{std::chrono::seconds(1258329600 + i)};
-    auto ip = address::v4(0xC0A80101); // 192, 168, 1, 1
+    auto ip = ip::v4(0xC0A80101); // 192, 168, 1, 1
     auto port = uint64_t{443};
     // We inject a gap here at index 1 to make sure that we test both the slow-
     // and fast-paths for aggregation_function::add(...).
@@ -186,7 +186,7 @@ TEST(summarize test) {
   const auto summarized_slice = table_slice{result[0].batch};
   CHECK_EQUAL(materialize(summarized_slice.at(0, 0)),
               data{vast::time{std::chrono::seconds(1258329600)}});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), address::v4(0xC0A80101));
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), ip::v4(0xC0A80101));
   CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), uint64_t{443});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), double{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
@@ -246,7 +246,7 @@ TEST(summarize test fully qualified field names) {
   REQUIRE_EQUAL(summarized_slice.columns(), 11u);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 0)),
               vast::time{std::chrono::seconds(1258329600)});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), address::v4(0xC0A80101));
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), ip::v4(0xC0A80101));
   CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), uint64_t{443});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), double{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);

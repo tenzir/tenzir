@@ -32,12 +32,12 @@ table Pattern {
   value: string;
 }
 
-struct Address {
+struct IP {
   bytes: [ubyte:16];
 }
 
 struct Subnet {
-  address: Address;
+  ip: IP;
   length: ubyte;
 }
 
@@ -77,7 +77,7 @@ union Data {
   time: Time,
   string: String,
   pattern: Pattern,
-  address: Address,
+  ip: IP,
   subnet: Subnet,
   enumeration: Enumeration,
   list: List,

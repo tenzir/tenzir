@@ -13,10 +13,10 @@
 #include "vast/concept/parseable/vast/base.hpp"
 #include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/index/address_index.hpp"
 #include "vast/index/arithmetic_index.hpp"
 #include "vast/index/enumeration_index.hpp"
 #include "vast/index/hash_index.hpp"
+#include "vast/index/ip_index.hpp"
 #include "vast/index/list_index.hpp"
 #include "vast/index/string_index.hpp"
 #include "vast/index/subnet_index.hpp"
@@ -139,7 +139,7 @@ void factory_traits<value_index>::initialize() {
   add_arithmetic_index_factory<double_type>();
   add_arithmetic_index_factory<duration_type>();
   add_arithmetic_index_factory<time_type>();
-  add_value_index_factory<ip_type, address_index>();
+  add_value_index_factory<ip_type, ip_index>();
   add_value_index_factory<subnet_type, subnet_index>();
   add_value_index_factory<string_type, string_index>();
   // List and enumeration types are not default-constructible, but their

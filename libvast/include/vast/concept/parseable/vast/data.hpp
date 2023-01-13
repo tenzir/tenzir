@@ -13,8 +13,8 @@
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/parseable/string/string.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
@@ -70,7 +70,7 @@ private:
     p = parsers::time
       | parsers::duration
       | parsers::net
-      | parsers::addr
+      | parsers::ip
       | parsers::number
       | parsers::boolean
       | parsers::qqstr

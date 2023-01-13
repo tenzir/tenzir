@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/address_synopsis.hpp"
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -31,6 +30,7 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/hash/xxhash.hpp"
 #include "vast/ids.hpp"
+#include "vast/ip_synopsis.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"

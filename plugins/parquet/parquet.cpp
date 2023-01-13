@@ -131,11 +131,11 @@ align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
       if (subnet_type::to_arrow_type()->Equals(array->type()))
         return {};
       auto sa = std::static_pointer_cast<arrow::StructArray>(array);
-      auto address_array = std::make_shared<ip_type::array_type>(
+      auto ip_array = std::make_shared<ip_type::array_type>(
         ip_type::to_arrow_type(), sa->field(0));
       auto inner_type = subnet_type::to_arrow_type()->storage_type();
       auto children = std::vector<std::shared_ptr<arrow::Array>>{
-        address_array,
+        ip_array,
         sa->field(1),
       };
       auto struct_array

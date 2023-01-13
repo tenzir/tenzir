@@ -96,18 +96,17 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::pattern,
                              value_offset.Union());
     },
-    [&](const address& value) -> flatbuffers::Offset<fbs::Data> {
-      auto address_buffer = fbs::data::Address{};
-      std::memcpy(address_buffer.mutable_bytes()->data(),
-                  as_bytes(value).data(), 16);
-      const auto value_offset = builder.CreateStruct(address_buffer);
-      return fbs::CreateData(builder, fbs::data::Data::address,
+    [&](const ip& value) -> flatbuffers::Offset<fbs::Data> {
+      auto ip_buffer = fbs::data::IP{};
+      std::memcpy(ip_buffer.mutable_bytes()->data(), as_bytes(value).data(),
+                  16);
+      const auto value_offset = builder.CreateStruct(ip_buffer);
+      return fbs::CreateData(builder, fbs::data::Data::ip,
                              value_offset.Union());
     },
     [&](const subnet& value) -> flatbuffers::Offset<fbs::Data> {
-      auto subnet_buffer
-        = fbs::data::Subnet{fbs::data::Address{}, value.length()};
-      std::memcpy(subnet_buffer.mutable_address().mutable_bytes()->data(),
+      auto subnet_buffer = fbs::data::Subnet{fbs::data::IP{}, value.length()};
+      std::memcpy(subnet_buffer.mutable_ip().mutable_bytes()->data(),
                   as_bytes(value.network()).data(), 16);
       const auto value_offset = builder.CreateStruct(subnet_buffer);
       return fbs::CreateData(builder, fbs::data::Data::subnet,
@@ -201,22 +200,18 @@ caf::error unpack(const fbs::Data& from, data& to) {
       to = pattern{from.data_as_pattern()->value()->str()};
       return caf::none;
     }
-    case fbs::data::Data::address: {
-      auto address_buffer = address{};
-      static_assert(sizeof(address)
-                    == sizeof(*from.data_as_address()->bytes()));
-      std::memcpy(&address_buffer, from.data_as_address()->bytes()->data(),
-                  sizeof(address));
-      to = address_buffer;
+    case fbs::data::Data::ip: {
+      auto ip_buffer = ip{};
+      static_assert(sizeof(ip) == sizeof(*from.data_as_ip()->bytes()));
+      std::memcpy(&ip_buffer, from.data_as_ip()->bytes()->data(), sizeof(ip));
+      to = ip_buffer;
       return caf::none;
     }
     case fbs::data::Data::subnet: {
-      auto address_buffer = address{};
-      static_assert(sizeof(address)
-                    == sizeof(*from.data_as_subnet()->address().bytes()));
-      std::memcpy(&address_buffer,
-                  from.data_as_subnet()->address().bytes()->data(),
-                  sizeof(address));
+      auto address_buffer = ip{};
+      static_assert(sizeof(ip) == sizeof(*from.data_as_subnet()->ip().bytes()));
+      std::memcpy(&address_buffer, from.data_as_subnet()->ip().bytes()->data(),
+                  sizeof(ip));
       to = subnet{address_buffer, from.data_as_subnet()->length()};
       return caf::none;
     }
@@ -299,7 +294,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
                         [](const std::string& lhs, const pattern& rhs) {
                           return rhs.search(lhs);
                         },
-                        [](const address& lhs, const subnet& rhs) {
+                        [](const ip& lhs, const subnet& rhs) {
                           return rhs.contains(lhs);
                         },
                         [](const subnet& lhs, const subnet& rhs) {
@@ -883,7 +878,7 @@ void print(YAML::Emitter& out, const data& x) {
     [&out](const pattern& x) {
       out << to_string(x);
     },
-    [&out](const address& x) {
+    [&out](const ip& x) {
       out << to_string(x);
     },
     [&out](const subnet& x) {

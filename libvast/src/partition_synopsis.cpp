@@ -104,7 +104,7 @@ void partition_synopsis::add(const table_slice& slice,
   auto each = caf::get<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
-  // These options must be kept in sync with vast/address_synopsis.hpp and
+  // These options must be kept in sync with vast/ip_synopsis.hpp and
   // vast/string_synopsis.hpp respectively.
   synopsis_opts["buffer-input-data"] = true;
   synopsis_opts["max-partition-size"] = partition_capacity;

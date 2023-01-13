@@ -666,7 +666,7 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(time{}), time_type{});
   CHECK_EQUAL(type::infer(std::string{}), string_type{});
   CHECK_EQUAL(type::infer(pattern{}), pattern_type{});
-  CHECK_EQUAL(type::infer(address{}), ip_type{});
+  CHECK_EQUAL(type::infer(ip{}), ip_type{});
   CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
   // Enumeration types cannot be inferred.
   CHECK_EQUAL(type::infer(enumeration{0}), type{});
@@ -926,7 +926,7 @@ TEST(construct) {
     {"i", data{int64_t{}}}, {"c", data{uint64_t{}}},
     {"r", data{double{}}},  {"s", data{std::string{}}},
     {"t", data{time{}}},    {"d", data{duration{}}},
-    {"a", data{address{}}}, {"s", data{subnet{}}},
+    {"a", data{ip{}}},      {"s", data{subnet{}}},
   };
   CHECK_EQUAL(t.construct(), record::make_unsafe(expected));
 }

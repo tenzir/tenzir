@@ -364,7 +364,7 @@ append_builder(const subnet_type&,
   if (auto status = builder.Append(); !status.ok())
     return status;
   if (auto status
-      = append_builder(ip_type{}, builder.address_builder(), view.network());
+      = append_builder(ip_type{}, builder.ip_builder(), view.network());
       !status.ok())
     return status;
   return builder.length_builder().Append(view.length());

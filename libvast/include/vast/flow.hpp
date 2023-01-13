@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "vast/address.hpp"
 #include "vast/detail/inspection_common.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/hash/uniquely_represented.hpp"
+#include "vast/ip.hpp"
 #include "vast/port.hpp"
 
 #include <functional>
@@ -23,18 +23,17 @@ namespace vast {
 /// A connection 5-tuple, consisting of IP addresses and transport-layer ports
 /// for originator and resopnder. The protocol type is encoded in the ports.
 struct flow {
-  address src_addr;
-  address dst_addr;
+  ip src_addr;
+  ip dst_addr;
   port src_port;
   port dst_port;
 };
 
 template <>
 struct is_uniquely_represented<flow>
-  : std::bool_constant<is_uniquely_represented<address>::value
-                       && is_uniquely_represented<port>::value
-                       && sizeof(flow)
-                            == ((2 * sizeof(address)) + (2 * sizeof(port)))> {};
+  : std::bool_constant<
+      is_uniquely_represented<ip>::value && is_uniquely_represented<port>::value
+      && sizeof(flow) == ((2 * sizeof(ip)) + (2 * sizeof(port)))> {};
 
 /// Factory function to construct a flow.
 /// @param src_addr The IP address of the flow source.
@@ -44,7 +43,7 @@ struct is_uniquely_represented<flow>
 /// @param protocol The transport-layer protocol in use.
 /// @return An instance of a flow.
 /// @relates flow
-inline flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
+inline flow make_flow(ip src_addr, ip dst_addr, uint16_t src_port,
                       uint16_t dst_port, port_type protocol) {
   return {src_addr, dst_addr, port{src_port, protocol},
           port{dst_port, protocol}};
@@ -58,8 +57,7 @@ inline flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
 /// @return An instance of a flow.
 /// @relates flow
 template <port_type Protocol>
-flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
-               uint16_t dst_port) {
+flow make_flow(ip src_addr, ip dst_addr, uint16_t src_port, uint16_t dst_port) {
   return make_flow(src_addr, dst_addr, src_port, dst_port, Protocol);
 }
 

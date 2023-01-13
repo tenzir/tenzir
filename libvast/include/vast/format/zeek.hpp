@@ -13,7 +13,7 @@
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/any.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
@@ -106,7 +106,7 @@ struct zeek_parser {
   }
 
   bool operator()(const ip_type&) const {
-    static auto p = parsers::addr->*[](address x) {
+    static auto p = parsers::ip->*[](ip x) {
       return x;
     };
     return parse(p);
@@ -196,7 +196,7 @@ struct zeek_parser_factory {
   }
 
   result_type operator()(const ip_type&) const {
-    return parsers::addr->*[](address x) {
+    return parsers::ip->*[](ip x) {
       return x;
     };
   }

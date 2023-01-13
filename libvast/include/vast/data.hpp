@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "vast/address.hpp"
 #include "vast/aliases.hpp"
 #include "vast/concept/printable/print.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/ip.hpp"
 #include "vast/pattern.hpp"
 #include "vast/policy/merge_lists.hpp"
 #include "vast/subnet.hpp"
@@ -57,8 +57,7 @@ constexpr auto to_data_type() {
   } else if constexpr (std::is_convertible_v<T, std::string>)
     return std::string{};
   else if constexpr (detail::is_any_v<T, caf::none_t, int64_t, duration, time,
-                                      pattern, address, subnet, list, map,
-                                      record>)
+                                      pattern, ip, subnet, list, map, record>)
     return T{};
   else
     return invalid_data_type{};
@@ -96,7 +95,7 @@ public:
     time,
     std::string,
     pattern,
-    address,
+    ip,
     subnet,
     enumeration,
     list,

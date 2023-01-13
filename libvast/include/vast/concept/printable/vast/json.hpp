@@ -60,8 +60,8 @@ struct json_printer
       return printers::str.print(out_, std::to_string(x));
     }
 
-    bool operator()(const address& x) {
-      static auto p = '"' << make_printer<address>{} << '"';
+    bool operator()(const ip& x) {
+      static auto p = '"' << make_printer<ip>{} << '"';
       return p.print(out_, x);
     }
 

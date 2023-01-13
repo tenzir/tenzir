@@ -167,7 +167,7 @@ value_at([[maybe_unused]] const Type& type,
     VAST_ASSERT(arr.byte_width() == 16);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     const auto* bytes = arr.raw_values() + (row * 16);
-    return address::v6(std::span<const uint8_t, 16>{bytes, 16});
+    return ip::v6(std::span<const uint8_t, 16>{bytes, 16});
   } else if constexpr (std::is_same_v<Type, subnet_type>) {
     VAST_ASSERT(arr.num_fields() == 2);
     auto network = value_at(

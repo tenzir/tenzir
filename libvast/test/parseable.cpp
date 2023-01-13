@@ -8,17 +8,17 @@
 
 #define SUITE parseable
 
-#include "vast/address.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/stream.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/ip.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/test/test.hpp"
 
@@ -121,14 +121,13 @@ TEST(container attribute folding) {
 }
 
 TEST(action) {
-  using namespace parsers;
   auto make_v4 = [](uint32_t a) {
-    return address::v4(a);
+    return ip::v4(a);
   };
-  auto ipv4_addr = b32be->*make_v4;
-  address x;
+  auto ipv4_addr = parsers::b32be->*make_v4;
+  ip x;
   CHECK(ipv4_addr("\x0A\x00\x00\x01", x));
-  CHECK_EQUAL(x, unbox(to<address>("10.0.0.1")));
+  CHECK_EQUAL(x, unbox(to<ip>("10.0.0.1")));
 }
 
 TEST(end of input) {

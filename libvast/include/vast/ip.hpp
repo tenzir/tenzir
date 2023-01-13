@@ -26,7 +26,7 @@
 namespace vast {
 
 /// An IP address.
-class address : detail::totally_ordered<address>, detail::bitwise<address> {
+class ip : detail::totally_ordered<ip>, detail::bitwise<ip> {
 public:
   using byte_type = uint8_t;
   using byte_array = std::array<byte_type, 16>;
@@ -45,8 +45,8 @@ public:
   /// @returns An IPv4 address constructed from *bytes*.
   template <class Byte>
     requires(sizeof(Byte) == 1)
-  static address v4(std::span<Byte, 4> bytes) {
-    address result;
+  static ip v4(std::span<Byte, 4> bytes) {
+    ip result;
     std::memcpy(&result.bytes_[0], v4_mapped_prefix.data(), 12);
     std::memcpy(&result.bytes_[12], bytes.data(), 4);
     return result;
@@ -57,7 +57,7 @@ public:
   /// @param bytes The 32-bit integer representing an IPv4 address.
   /// @returns The IP address.
   template <detail::endian Endian = detail::endian::native>
-  static address v4(uint32_t bytes) {
+  static ip v4(uint32_t bytes) {
     if constexpr (Endian == detail::endian::little)
       bytes = detail::byte_swap(bytes);
     auto ptr = reinterpret_cast<const byte_type*>(&bytes);
@@ -69,15 +69,15 @@ public:
   /// @returns An IPv6 address constructed from *bytes*.
   template <class Byte>
     requires(sizeof(Byte) == 1)
-  static address v6(std::span<Byte, 16> bytes) {
-    address result;
+  static ip v6(std::span<Byte, 16> bytes) {
+    ip result;
     std::memcpy(result.bytes_.data(), bytes.data(), 16);
     return result;
   }
 
   template <detail::endian Endian = detail::endian::native>
-  static address v6(std::span<uint32_t, 4> bytes) {
-    address result;
+  static ip v6(std::span<uint32_t, 4> bytes) {
+    ip result;
     std::memcpy(result.bytes_.data(), bytes.data(), 16);
     if constexpr (Endian == detail::endian::little) {
       auto ptr = reinterpret_cast<uint32_t*>(result.bytes_.data());
@@ -92,23 +92,23 @@ public:
   /// @param original The address to be pseudonymized.
   /// @param seed 256-bit seed for the cipher and padding.
   /// @returns A copy of the `original` address with pseudonymized bytes.
-  static address pseudonymize(
-    const address& original,
+  static ip pseudonymize(
+    const ip& original,
     const std::array<byte_type, pseudonymization_seed_array_size>& seed);
 
   /// Default-constructs an (invalid) address.
-  constexpr address() {
+  constexpr ip() {
     bytes_.fill(0);
   }
 
   /// Constructs an IP address from 16 bytes in network byte order.
   /// @param bytes The 16 bytes representing the IP address.
-  constexpr explicit address(byte_array bytes) : bytes_{bytes} {
+  constexpr explicit ip(byte_array bytes) : bytes_{bytes} {
   }
 
   template <class Byte>
     requires(sizeof(Byte) == 1)
-  explicit address(std::span<Byte, 16> bytes) {
+  explicit ip(std::span<Byte, 16> bytes) {
     std::memcpy(bytes_.data(), bytes.data(), 16);
   }
 
@@ -149,39 +149,39 @@ public:
   /// AND's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  address& operator&=(const address& other);
+  ip& operator&=(const ip& other);
 
   /// OR's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  address& operator|=(const address& other);
+  ip& operator|=(const ip& other);
 
   /// XOR's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  address& operator^=(const address& other);
+  ip& operator^=(const ip& other);
 
   /// Compares the top-k bits of this address with another one.
   /// @param other The other address.
   /// @param k The number of bits to compare, starting from the top.
   /// @returns `true` if the first *k* bits of both addresses are equal
   /// @pre `k > 0 && k <= 128`
-  [[nodiscard]] bool compare(const address& other, size_t k) const;
+  [[nodiscard]] bool compare(const ip& other, size_t k) const;
 
   explicit constexpr operator byte_array() const {
     return bytes_;
   }
 
-  friend bool operator==(const address& x, const address& y);
-  friend bool operator<(const address& x, const address& y);
+  friend bool operator==(const ip& x, const ip& y);
+  friend bool operator<(const ip& x, const ip& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, address& x) {
+  friend auto inspect(Inspector& f, ip& x) {
     return f.apply(x.bytes_);
   }
 
   template <class Byte = std::byte>
-  friend std::span<const Byte, 16> as_bytes(const address& x) {
+  friend std::span<const Byte, 16> as_bytes(const ip& x) {
     auto ptr = reinterpret_cast<const Byte*>(x.bytes_.data());
     return std::span<const Byte, 16>{ptr, 16};
   }
@@ -191,8 +191,8 @@ private:
 };
 
 template <>
-struct is_uniquely_represented<address>
-  : std::bool_constant<sizeof(address) == sizeof(address::byte_array)> {};
+struct is_uniquely_represented<ip>
+  : std::bool_constant<sizeof(ip) == sizeof(ip::byte_array)> {};
 
 // TODO: this specialization disables oneshot hashing for addresses to force
 // hashing of addresses via hash_append when using the legacy hash function.
@@ -201,9 +201,9 @@ struct is_uniquely_represented<address>
 // persistent data.
 
 template <>
-struct is_uniquely_hashable<address, legacy_hash> : std::false_type {};
+struct is_uniquely_hashable<ip, legacy_hash> : std::false_type {};
 
-inline auto hash_append(legacy_hash& h, const address& x) {
+inline auto hash_append(legacy_hash& h, const ip& x) {
   if (x.is_v4())
     hash_append(h, as_bytes(x).subspan<12, 4>());
   else
@@ -215,8 +215,8 @@ inline auto hash_append(legacy_hash& h, const address& x) {
 namespace std {
 
 template <>
-struct hash<vast::address> {
-  size_t operator()(const vast::address& x) const {
+struct hash<vast::ip> {
+  size_t operator()(const vast::ip& x) const {
     return vast::hash(x);
   }
 };

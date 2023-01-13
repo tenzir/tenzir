@@ -213,10 +213,10 @@ struct table_slice_fixture {
   list f2_count = list{1_c, {}, 3_c, 4_c};
   list f3_pattern = list{pattern("p1"), {}, pattern("p3"), {}};
   list f4_address = list{
-    unbox(to<address>("172.16.7.29")),
+    unbox(to<ip>("172.16.7.29")),
     {},
-    unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")),
-    unbox(to<address>("2001:db8::")),
+    unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")),
+    unbox(to<ip>("2001:db8::")),
   };
   list f5_subnet = list{
     unbox(to<subnet>("172.16.7.0/8")),
@@ -244,12 +244,12 @@ struct table_slice_fixture {
     list{{0_e, 2_e, caf::none}},
   };
   list f10_map_addr_enum = list{
-    map{{unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")), 0_e},
-        {unbox(to<address>("2001:db8::")), caf::none}},
+    map{{unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")), 0_e},
+        {unbox(to<ip>("2001:db8::")), caf::none}},
     map{},
     caf::none,
-    map{{unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")), 1_e},
-        {unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")), caf::none}},
+    map{{unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")), 1_e},
+        {unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")), caf::none}},
   };
   list f11_map_pattern_subnet = list{
     map{{pattern("l8"), unbox(to<subnet>("172.16.7.0/8"))},

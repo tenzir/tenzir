@@ -6,13 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/address.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/detail/inspection_common.hpp>
+#include <vast/ip.hpp>
 #include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
 #include <vast/table_slice_builder.hpp>
@@ -27,7 +27,7 @@ struct configuration {
   // field for future extensibility; currently we only use the Crypto-PAn method
   std::string method;
   std::string seed;
-  std::array<address::byte_type, vast::address::pseudonymization_seed_array_size>
+  std::array<ip::byte_type, vast::ip::pseudonymization_seed_array_size>
     seed_bytes{};
   std::vector<std::string> fields;
 
@@ -68,7 +68,7 @@ public:
         auto append_status = arrow::Status{};
         if (address) {
           auto pseudonymized_address
-            = vast::address::pseudonymize(*address, config_.seed_bytes);
+            = vast::ip::pseudonymize(*address, config_.seed_bytes);
           append_status
             = append_builder(ip_type{}, *builder, pseudonymized_address);
         } else {
@@ -119,7 +119,7 @@ private:
 
   void parse_seed_string() {
     auto max_seed_size = std::min(
-      vast::address::pseudonymization_seed_array_size * 2, config_.seed.size());
+      vast::ip::pseudonymization_seed_array_size * 2, config_.seed.size());
     for (auto i = size_t{0}; (i * 2) < max_seed_size; ++i) {
       auto byte_string_pos = i * 2;
       auto byte_size = (byte_string_pos + 2 > config_.seed.size()) ? 1 : 2;

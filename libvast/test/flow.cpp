@@ -10,10 +10,10 @@
 
 #include "vast/flow.hpp"
 
-#include "vast/address.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
+#include "vast/ip.hpp"
 #include "vast/port.hpp"
 #include "vast/test/test.hpp"
 
@@ -24,12 +24,10 @@ using namespace vast;
 namespace {
 
 struct fixture {
-  flow tcp_flow = flow{unbox(to<address>("10.10.0.1")),
-                       unbox(to<address>("10.10.0.2")),
+  flow tcp_flow = flow{unbox(to<ip>("10.10.0.1")), unbox(to<ip>("10.10.0.2")),
                        unbox(to<port>("123/tcp")), unbox(to<port>("321/tcp"))};
 
-  flow udp_flow = flow{unbox(to<address>("10.10.0.1")),
-                       unbox(to<address>("10.10.0.2")),
+  flow udp_flow = flow{unbox(to<ip>("10.10.0.1")), unbox(to<ip>("10.10.0.2")),
                        unbox(to<port>("123/udp")), unbox(to<port>("321/udp"))};
 };
 

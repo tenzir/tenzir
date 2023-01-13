@@ -8,7 +8,6 @@
 
 #include "vast/detail/add_message_types.hpp"
 
-#include "vast/address.hpp"
 #include "vast/atoms.hpp"
 #include "vast/bitmap.hpp"
 #include "vast/chunk.hpp"
@@ -19,6 +18,7 @@
 #include "vast/die.hpp"
 #include "vast/expression.hpp"
 #include "vast/http_api.hpp"
+#include "vast/ip.hpp"
 #include "vast/module.hpp"
 #include "vast/operator.hpp"
 #include "vast/partition_synopsis.hpp"

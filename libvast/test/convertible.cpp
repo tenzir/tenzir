@@ -11,7 +11,7 @@
 
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/data.hpp"
@@ -71,7 +71,7 @@ BASIC(duration, std::chrono::minutes{55})
 BASIC(vast::time, unbox(to<vast::time>("2012-08-12+23:55-0130")))
 BASIC(std::string, "test")
 BASIC(pattern, "pat")
-BASIC(address, unbox(to<address>("44.0.0.1")))
+BASIC(ip, unbox(to<ip>("44.0.0.1")))
 BASIC(subnet, unbox(to<subnet>("44.0.0.1/20")))
 #undef BASIC
 

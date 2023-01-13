@@ -302,7 +302,7 @@ struct contains_predicate {
     return rhs.search(lhs);
   }
 
-  bool operator()(const view<address>& lhs, const view<subnet>& rhs) const {
+  bool operator()(const view<ip>& lhs, const view<subnet>& rhs) const {
     return rhs.contains(lhs);
   }
 

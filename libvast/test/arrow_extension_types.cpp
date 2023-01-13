@@ -44,13 +44,13 @@ void serde_roundtrip(const Type& type,
 }
 
 template <class Builder, class T = typename Builder::value_type>
-std::shared_ptr<arrow::Array> makeArrowArray(std::vector<T> xs) {
+std::shared_ptr<arrow::Array> make_arrow_array(std::vector<T> xs) {
   Builder b{};
   CHECK(b.AppendValues(xs).ok());
   return b.Finish().ValueOrDie();
 }
 
-std::shared_ptr<arrow::Array> makeAddressArray() {
+std::shared_ptr<arrow::Array> make_ip_array() {
   arrow::FixedSizeBinaryBuilder b{arrow::fixed_size_binary(16)};
   return std::make_shared<ip_type::array_type>(
     std::make_shared<ip_type::arrow_type>(), b.Finish().ValueOrDie());
@@ -116,10 +116,11 @@ TEST(arrow::DataType sum type) {
 }
 
 TEST(arrow::Array sum type) {
-  auto str_arr = makeArrowArray<arrow::StringBuilder, std::string>({"a", "b"});
-  auto uint_arr = makeArrowArray<arrow::UInt64Builder>({7, 8});
-  auto int_arr = makeArrowArray<arrow::Int64Builder>({3, 2, 1});
-  auto addr_arr = makeAddressArray();
+  auto str_arr
+    = make_arrow_array<arrow::StringBuilder, std::string>({"a", "b"});
+  auto uint_arr = make_arrow_array<arrow::UInt64Builder>({7, 8});
+  auto int_arr = make_arrow_array<arrow::Int64Builder>({3, 2, 1});
+  auto addr_arr = make_ip_array();
   const auto& pattern_arr = std::static_pointer_cast<arrow::Array>(
     std::make_shared<pattern_type::array_type>(
       std::make_shared<pattern_type::arrow_type>(), str_arr));

@@ -185,7 +185,7 @@ struct randomizer {
     p = pattern{std::move(intermediate)};
   }
 
-  void operator()(const ip_type&, address& addr) {
+  void operator()(const ip_type&, ip& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.
     lcg gen{static_cast<lcg::result_type>(sample())};
@@ -195,11 +195,11 @@ struct randomizer {
       byte = unif0(gen);
     auto ptr = reinterpret_cast<const uint8_t*>(bytes);
     auto span = std::span<const uint8_t, 16>{ptr, 16};
-    addr = address{span};
+    addr = ip{span};
   }
 
   void operator()(const subnet_type&, subnet& sn) {
-    address addr;
+    ip addr;
     (*this)(ip_type{}, addr);
     std::uniform_int_distribution<uint8_t> unif{0, 128};
     sn = {addr, unif(gen_)};

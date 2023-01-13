@@ -133,7 +133,7 @@ TEST(construction) {
   CHECK(caf::holds_alternative<std::string>(data{"foo"}));
   CHECK(caf::holds_alternative<std::string>(data{std::string{"foo"}}));
   CHECK(caf::holds_alternative<pattern>(data{pattern{"foo"}}));
-  CHECK(caf::holds_alternative<address>(data{address{}}));
+  CHECK(caf::holds_alternative<ip>(data{ip{}}));
   CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
   CHECK(caf::holds_alternative<list>(data{list{}}));
   CHECK(caf::holds_alternative<map>(data{map{}}));
@@ -187,7 +187,7 @@ TEST(evaluation) {
   CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
   CHECK(!evaluate(lhs, relational_operator::equal, rhs));
   MESSAGE("network types");
-  lhs = *to<address>("10.0.0.1");
+  lhs = *to<ip>("10.0.0.1");
   rhs = *to<subnet>("10.0.0.0/8");
   CHECK(evaluate(lhs, relational_operator::in, rhs));
   lhs = *to<subnet>("10.0.42.0/16");
@@ -275,7 +275,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == *to<address>("10.0.0.1"));
+  CHECK(d == *to<ip>("10.0.0.1"));
   MESSAGE("list");
   str = "[42,4.2,nil]"s;
   f = str.begin();
@@ -378,7 +378,7 @@ TEST(pack / unpack) {
     {"time", vast::time{} + duration{6}},
     {"string", std::string{"7"}},
     {"pattern", pattern{"7"}},
-    {"address", unbox(to<address>("0.0.0.8"))},
+    {"address", unbox(to<ip>("0.0.0.8"))},
     {"subnet", unbox(to<subnet>("0.0.0.9/24"))},
     {"enumeration", enumeration{10}},
     {"list", list{uint64_t{11}}},

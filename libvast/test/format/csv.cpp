@@ -136,8 +136,7 @@ std::string_view l0_log1 = R"__(ts,addr,port
 TEST(csv reader - empty fields) {
   auto slices = run(l0_log1, 8, 5);
   REQUIRE_EQUAL(slices[0].schema(), l0);
-  CHECK(slices[1].at(0, 1, ip_type{})
-        == data{unbox(to<address>("147.32.84.165"))});
+  CHECK(slices[1].at(0, 1, ip_type{}) == data{unbox(to<ip>("147.32.84.165"))});
   CHECK(slices[1].at(1, 2, uint64_type{}) == std::nullopt);
 }
 
@@ -253,8 +252,8 @@ TEST(csv reader - map string->address) {
   auto l2_msa = type{"l2", record_type{{"msa", t}}};
   REQUIRE_EQUAL(slices[0].schema(), l2_msa);
   auto m = vast::map{};
-  m.emplace(data{"foo"}, unbox(to<address>("1.2.3.4")));
-  m.emplace(data{"bar"}, unbox(to<address>("2001:db8::")));
+  m.emplace(data{"foo"}, unbox(to<ip>("1.2.3.4")));
+  m.emplace(data{"bar"}, unbox(to<ip>("2001:db8::")));
   CHECK_EQUAL(materialize(slices[0].at(0, 0)), data{m});
 }
 
@@ -333,13 +332,13 @@ TEST(csv reader - reordered schema) {
   };
   REQUIRE_EQUAL(slices[0].schema(), l2_sub);
   CHECK((slices[0].at(0, 0)
-         == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
-                     {data{"bar"}, unbox(to<address>("2001:db8::"))}}}));
+         == data{map{{data{"foo"}, unbox(to<ip>("1.2.3.4"))},
+                     {data{"bar"}, unbox(to<ip>("2001:db8::"))}}}));
   CHECK(slices[0].at(0, 1) == data{uint64_t{424242}});
   CHECK(slices[0].at(0, 2) == data{double{4.2}});
   CHECK(slices[0].at(0, 3) == data{int64_t{-1337}});
   CHECK(slices[0].at(0, 4) == data{true});
-  CHECK(slices[0].at(0, 5) == data{unbox(to<address>("147.32.84.165"))});
+  CHECK(slices[0].at(0, 5) == data{unbox(to<ip>("147.32.84.165"))});
   CHECK(slices[0].at(0, 6) == data{unbox(to<subnet>("192.168.0.1/24"))});
   CHECK(slices[0].at(0, 7) == data{unbox(to<duration>("42s"))});
   CHECK(slices[0].at(0, 8) == data{enumeration{2}});

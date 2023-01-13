@@ -8,7 +8,7 @@
 
 #include "vast/flow.hpp"
 
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/detail/assert.hpp"
 
 #include <optional>
@@ -18,9 +18,9 @@ namespace vast {
 std::optional<flow>
 make_flow(std::string_view src_addr, std::string_view dst_addr,
           uint16_t src_port, uint16_t dst_port, port_type protocol) {
-  using parsers::addr;
+  using parsers::ip;
   flow result;
-  if (!addr(src_addr, result.src_addr) || !addr(dst_addr, result.dst_addr))
+  if (!ip(src_addr, result.src_addr) || !ip(dst_addr, result.dst_addr))
     return {};
   result.src_port = port{src_port, protocol};
   result.dst_port = port{dst_port, protocol};

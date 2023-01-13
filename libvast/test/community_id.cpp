@@ -11,7 +11,7 @@
 #include "vast/community_id.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>

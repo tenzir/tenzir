@@ -204,8 +204,8 @@ struct packet {
         size_t header_length = (std::to_integer<uint8_t>(bytes[0]) & 0x0f) * 4;
         if (bytes.size() < header_length)
           return std::nullopt;
-        result.src = address::v4(bytes.subspan<12, 4>());
-        result.dst = address::v4(bytes.subspan<16, 4>());
+        result.src = ip::v4(bytes.subspan<12, 4>());
+        result.dst = ip::v4(bytes.subspan<16, 4>());
         result.type = std::to_integer<uint8_t>(bytes[9]);
         result.payload = bytes.subspan(header_length);
         return result;
@@ -214,8 +214,8 @@ struct packet {
         constexpr size_t ipv6_header_size = 40;
         if (bytes.size() < ipv6_header_size)
           return std::nullopt;
-        result.src = address::v6(bytes.subspan<8, 16>());
-        result.dst = address::v6(bytes.subspan<24, 16>());
+        result.src = ip::v6(bytes.subspan<8, 16>());
+        result.dst = ip::v6(bytes.subspan<24, 16>());
         result.type = std::to_integer<uint8_t>(bytes[6]);
         result.payload = bytes.subspan(40);
         return result;
@@ -224,8 +224,8 @@ struct packet {
     return std::nullopt;
   }
 
-  address src;
-  address dst;
+  ip src;
+  ip dst;
   uint8_t type;
   std::span<const std::byte> payload;
 };

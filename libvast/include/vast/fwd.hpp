@@ -120,7 +120,7 @@ class stringification_inspector;
 namespace vast {
 
 class active_store;
-class address;
+class ip;
 class ip_type;
 class aggregation_function;
 class bitmap;
@@ -292,10 +292,10 @@ struct v2;
 
 namespace value_index {
 
-struct AddressIndex;
 struct ArithmeticIndex;
 struct EnumerationIndex;
 struct HashIndex;
+struct IPIndex;
 struct ListIndex;
 struct StringIndex;
 struct SubnetIndex;
@@ -375,7 +375,7 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
-  VAST_ADD_TYPE_ID((vast::address))
+  VAST_ADD_TYPE_ID((vast::ip))
   VAST_ADD_TYPE_ID((vast::rest_endpoint))
   VAST_ADD_TYPE_ID((vast::meta_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))

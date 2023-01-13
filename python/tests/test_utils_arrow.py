@@ -16,7 +16,7 @@ def test_pattern_extension_type():
     assert arr[2].as_py() == None
 
 
-def test_ip_address_extension_type():
+def test_ip_ip_extension_type():
     ty = vua.IPType()
     arr = vua.extension_array(["10.1.21.165", None], ty)
     arr.validate()
@@ -110,7 +110,7 @@ def test_ipc():
         ipaddress.IPv6Address("2001:200:e000::100"),
     ]
     ip_type = vua.IPType()
-    address_array = vua.extension_array(addresses, ip_type)
+    ip_array = vua.extension_array(addresses, ip_type)
     # Create sample subnets.
     networks = [
         ipaddress.IPv4Network("10.1.21.0/24"),
@@ -131,7 +131,7 @@ def test_ipc():
         [("p", pattern_type), ("a", ip_type), ("s", subnet_type), ("e", enum_type)]
     )
     batch = pa.record_batch(
-        [pattern_array, address_array, subnet_array, enum_array], schema=schema
+        [pattern_array, ip_array, subnet_array, enum_array], schema=schema
     )
 
     # Perform a roundtrip (logic lifted from Arrow's test_extension_type.py.

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "vast/address.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/base64.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -19,6 +18,7 @@
 #include "vast/hash/hash_append.hpp"
 #include "vast/hash/sha1.hpp"
 #include "vast/icmp.hpp"
+#include "vast/ip.hpp"
 #include "vast/port.hpp"
 
 #include <caf/optional.hpp>
@@ -47,7 +47,7 @@ namespace community_id {
 constexpr char version = '1';
 
 template <incremental_hash HashAlgorithm>
-void community_id_hash_append(HashAlgorithm& h, const address& x) {
+void community_id_hash_append(HashAlgorithm& h, const ip& x) {
   if (x.is_v4())
     hash_append(h, as_bytes(x).subspan<12, 4>());
   else
