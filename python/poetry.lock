@@ -289,10 +289,7 @@ optional = false
 python-versions = ">=3.8"
 
 [package.dependencies]
-numpy = [
-    {version = ">=1.20.3", markers = "python_version < \"3.10\""},
-    {version = ">=1.21.0", markers = "python_version >= \"3.10\""},
-]
+numpy = {version = ">=1.21.0", markers = "python_version >= \"3.10\""}
 python-dateutil = ">=2.8.1"
 pytz = ">=2020.1"
 
@@ -593,8 +590,8 @@ fabric = ["pyzmq", "misp-stix"]
 
 [metadata]
 lock-version = "1.1"
-python-versions = "^3.9"
-content-hash = "1375913645fdfb1ec6344b3b8b9b14a3afcbd3bb8ea744b2204b9f186178cb70"
+python-versions = "^3.10"
+content-hash = "e10c953eed529bfdddab522fa4e394dc1a50684610ff0194a72493e733dc1164"
 
 [metadata.files]
 antlr4-python3-runtime = [
