@@ -37,7 +37,7 @@ table Int64Type {}
 table UInt64Type {}
 
 /// A floating-point value.
-table RealType {}
+table DoubleType {}
 
 /// A time interval.
 table DurationType {}
@@ -85,7 +85,7 @@ union Type {
   bool_type: BoolType,
   int64_type: Int64Type,
   uint64_type: UInt64Type,
-  real_type: RealType,
+  double_type: DoubleType,
   duration_type: DurationType,
   time_type: TimeType,
   string_type: StringType,

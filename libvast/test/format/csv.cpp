@@ -47,7 +47,7 @@ struct fixture : fixtures::deterministic_actor_system {
     record_type{
       {"b", bool_type{}},
       {"c", uint64_type{}},
-      {"r", real_type{}},
+      {"r", double_type{}},
       {"i", int64_type{}},
       {"s", string_type{}},
       {"a", address_type{}},
@@ -58,7 +58,7 @@ struct fixture : fixtures::deterministic_actor_system {
       {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},
       {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
-      {"r2", real_type{}},
+      {"r2", double_type{}},
       {"msa", map_type{string_type{}, address_type{}}},
       {"mcs", map_type{uint64_type{}, string_type{}}},
     },
@@ -316,7 +316,7 @@ TEST(csv reader - reordered schema) {
     record_type{
       {"msa", map_type{string_type{}, address_type{}}},
       {"c", uint64_type{}},
-      {"r", real_type{}},
+      {"r", double_type{}},
       {"i", int64_type{}},
       {"b", bool_type{}},
       {"a", address_type{}},
@@ -326,7 +326,7 @@ TEST(csv reader - reordered schema) {
       {"t", time_type{}},
       {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
-      {"r2", real_type{}},
+      {"r2", double_type{}},
       // FIXME: Parsing maps in csv is broken, see ch12358.
       // {"mcs", map_type{uint64_type{}, string_type{}}}
     },

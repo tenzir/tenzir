@@ -203,7 +203,7 @@ caf::error convert(const From& src, To& dst, const Type&) {
 
 // Overload for reals.
 template <concepts::floating_point To>
-caf::error convert(const integer& src, To& dst, const real_type&) {
+caf::error convert(const integer& src, To& dst, const double_type&) {
   dst = src.value;
   return caf::none;
 }
@@ -212,7 +212,7 @@ caf::error convert(const integer& src, To& dst, const real_type&) {
 //  We need to exclude `From == To` to disambiguate overloads.
 template <concepts::arithmetic From, concepts::floating_point To>
   requires(!std::same_as<From, To>)
-caf::error convert(const From& src, To& dst, const real_type&) {
+caf::error convert(const From& src, To& dst, const double_type&) {
   dst = src;
   return caf::none;
 }

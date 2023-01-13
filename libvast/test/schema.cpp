@@ -44,7 +44,7 @@ TEST(offset finding) {
   const auto& foo_record = get<record_type>(*foo_type);
   CHECK_EQUAL(foo_record.num_fields(), 4u);
   CHECK_EQUAL(foo_record.field(offset{0}).type, int64_type{});
-  CHECK_EQUAL(foo_record.field(offset{1}).type, real_type{});
+  CHECK_EQUAL(foo_record.field(offset{1}).type, double_type{});
   CHECK_EQUAL(foo_record.field(offset{2}).name, "c");
   CHECK(caf::holds_alternative<record_type>(foo_record.field(offset{2}).type));
   CHECK_EQUAL(
@@ -56,7 +56,7 @@ TEST(offset finding) {
   CHECK_EQUAL(foo_record.field(offset{3, 0}).type, int64_type{});
   CHECK_EQUAL(foo_record.field(offset{3, 1}).name, "b");
   CHECK_EQUAL(foo_record.field(offset{3, 1, 0}).type, int64_type{});
-  CHECK_EQUAL(foo_record.field(offset{3, 1, 1}).type, real_type{});
+  CHECK_EQUAL(foo_record.field(offset{3, 1, 1}).type, double_type{});
 }
 
 TEST(combining) {
@@ -72,7 +72,7 @@ TEST(combining) {
   auto z = module::combine(x, y);
   CHECK_EQUAL(unbox(z.find("a")),
               (type{"a", type{"int_custom", int64_type{}}}));
-  CHECK_EQUAL(unbox(z.find("b")), (type{"b", real_type{}}));
+  CHECK_EQUAL(unbox(z.find("b")), (type{"b", double_type{}}));
   CHECK_EQUAL(unbox(z.find("c")), (type{"c", address_type{}}));
   CHECK_EQUAL(unbox(z.find("d")), (type{"d", pattern_type{}}));
   CHECK_EQUAL(unbox(z.find("int_custom")), (type{"int_custom", int64_type{}}));
@@ -102,11 +102,11 @@ TEST(serialization) {
     "foo",
     record_type{
       {"s1", string_type{}},
-      {"d1", real_type{}},
+      {"d1", double_type{}},
       {"c", type{uint64_type{}, {{"skip"}}}},
       {"i", int64_type{}},
       {"s2", string_type{}},
-      {"d2", real_type{}},
+      {"d2", double_type{}},
     },
   };
   mod.add(t);
@@ -493,7 +493,7 @@ TEST(parseable - with context) {
       record_type{
         {"a", int64_type{}},
         {"b", int64_type{}},
-        {"c", real_type{}},
+        {"c", double_type{}},
       },
       {
         {"attr_one"},
@@ -503,9 +503,9 @@ TEST(parseable - with context) {
     auto expected_rplus = type{
       "rplus",
       record_type{
-        {"a", real_type{}},
+        {"a", double_type{}},
         {"b", int64_type{}},
-        {"c", real_type{}},
+        {"c", double_type{}},
       },
       {
         {"attr_one", "val"},
@@ -595,7 +595,7 @@ TEST(parseable - with context) {
            {"x", uint64_type{}},
            {"y", address_type{}},
          }},
-        {"b", real_type{}},
+        {"b", double_type{}},
         {"d", time_type{}},
       },
     };

@@ -82,7 +82,7 @@ type deduce(simdjson::dom::element e) {
     case ::simdjson::dom::element_type::UINT64:
       return type{uint64_type{}};
     case ::simdjson::dom::element_type::DOUBLE:
-      return type{real_type{}};
+      return type{double_type{}};
     case ::simdjson::dom::element_type::STRING: {
       const std::string x{e.get_string().value()};
       if (parsers::net(x))

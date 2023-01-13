@@ -240,7 +240,7 @@ TEST(record_type) {
             record_type{
               {"a", address_type{}},
             }},
-           {"f", real_type{}},
+           {"f", double_type{}},
          }},
         {"b", bool_type{}},
       },

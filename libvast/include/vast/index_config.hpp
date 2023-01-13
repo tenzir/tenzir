@@ -37,7 +37,7 @@ struct index_config {
     static inline const record_type& schema() noexcept {
       static auto result = record_type{
         {"targets", list_type{string_type{}}},
-        {"fp-rate", real_type{}},
+        {"fp-rate", double_type{}},
         {"partition-index", bool_type{}},
       };
       return result;
@@ -55,7 +55,7 @@ struct index_config {
   static inline const record_type& schema() noexcept {
     static auto result = record_type{
       {"rules", list_type{rule::schema()}},
-      {"default-fp-rate", real_type{}},
+      {"default-fp-rate", double_type{}},
     };
     return result;
   }

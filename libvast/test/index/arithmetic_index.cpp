@@ -44,7 +44,7 @@ TEST(real with custom binner) {
   using index_type = arithmetic_index<real, precision_binner<6, 2>>;
   caf::settings opts;
   opts["base"] = "uniform64(10)";
-  auto idx = index_type{type{real_type{}}, opts};
+  auto idx = index_type{type{double_type{}}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(-7.8)));
   REQUIRE(idx.append(make_data_view(42.123)));
@@ -65,7 +65,7 @@ TEST(real with custom binner) {
   MESSAGE("serialization");
   caf::byte_buffer buf;
   CHECK(detail::serialize(buf, idx));
-  auto idx2 = index_type{type{real_type{}}, opts};
+  auto idx2 = index_type{type{double_type{}}, opts};
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");

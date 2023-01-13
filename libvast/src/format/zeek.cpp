@@ -51,7 +51,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
   else if (zeek_type == "count")
     t = type{uint64_type{}};
   else if (zeek_type == "double")
-    t = type{real_type{}};
+    t = type{double_type{}};
   else if (zeek_type == "time")
     t = type{time_type{}};
   else if (zeek_type == "interval")
@@ -103,7 +103,7 @@ std::string to_zeek_string(const type& t) {
     [&](const uint64_type&) -> std::string {
       return t.name() == "port" ? "port" : "count";
     },
-    [](const real_type&) -> std::string {
+    [](const double_type&) -> std::string {
       return "double";
     },
     [](const duration_type&) -> std::string {

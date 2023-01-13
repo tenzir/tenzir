@@ -87,23 +87,23 @@ TEST(uint64_type) {
   CHECK_EQUAL(ct.to_definition(), expected_definition);
 }
 
-TEST(real_type) {
-  static_assert(concrete_type<real_type>);
-  static_assert(basic_type<real_type>);
-  static_assert(!complex_type<real_type>);
+TEST(double_type) {
+  static_assert(concrete_type<double_type>);
+  static_assert(basic_type<double_type>);
+  static_assert(!complex_type<double_type>);
   const auto t = type{};
-  const auto rt = type{real_type{}};
+  const auto rt = type{double_type{}};
   CHECK(rt);
-  CHECK_EQUAL(as_bytes(rt), as_bytes(real_type{}));
+  CHECK_EQUAL(as_bytes(rt), as_bytes(double_type{}));
   CHECK(t != rt);
   CHECK(t < rt);
   CHECK(t <= rt);
   CHECK_EQUAL(fmt::format("{}", rt), "real");
-  CHECK_EQUAL(fmt::format("{}", real_type{}), "real");
-  CHECK(!caf::holds_alternative<real_type>(t));
-  CHECK(caf::holds_alternative<real_type>(rt));
+  CHECK_EQUAL(fmt::format("{}", double_type{}), "real");
+  CHECK(!caf::holds_alternative<double_type>(t));
+  CHECK(caf::holds_alternative<double_type>(rt));
   const auto lrt = type::from_legacy_type(legacy_real_type{});
-  CHECK(caf::holds_alternative<real_type>(lrt));
+  CHECK(caf::holds_alternative<double_type>(lrt));
   const auto expected_definition = data{"real"};
   CHECK_EQUAL(rt.to_definition(), expected_definition);
 }
@@ -479,7 +479,7 @@ TEST(record_type flat index computation) {
            record_type{
              {"a", address_type{}},
            }},
-          {"f", real_type{}},
+          {"f", double_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -517,7 +517,7 @@ TEST(record type transformation) {
            record_type{
              {"a", address_type{}},
            }},
-          {"f", real_type{}},
+          {"f", double_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -538,7 +538,7 @@ TEST(record type transformation) {
         }},
        {"m",
         record_type{
-          {"f", real_type{}},
+          {"f", double_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -591,7 +591,7 @@ TEST(record_type merging) {
        {"y",
         record_type{
           {"a", uint64_type{}},
-          {"b", real_type{}},
+          {"b", double_type{}},
           {"c", int64_type{}},
         }},
        {"b", bool_type{}},
@@ -609,7 +609,7 @@ TEST(record_type merging) {
        {"y",
         record_type{
           {"a", uint64_type{}},
-          {"b", real_type{}},
+          {"b", double_type{}},
           {"c", int64_type{}},
         }},
        {"b", bool_type{}},
@@ -630,7 +630,7 @@ TEST(record_type merging) {
        {"y",
         record_type{
           {"a", uint64_type{}},
-          {"b", real_type{}},
+          {"b", double_type{}},
           {"c", int64_type{}},
         }},
        {"b", bool_type{}},
@@ -662,7 +662,7 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
   CHECK_EQUAL(type::infer(integer{}), int64_type{});
   CHECK_EQUAL(type::infer(count{}), uint64_type{});
-  CHECK_EQUAL(type::infer(real{}), real_type{});
+  CHECK_EQUAL(type::infer(real{}), double_type{});
   CHECK_EQUAL(type::infer(duration{}), duration_type{});
   CHECK_EQUAL(type::infer(time{}), time_type{});
   CHECK_EQUAL(type::infer(std::string{}), string_type{});
@@ -914,7 +914,7 @@ TEST(construct) {
       {"b", type{bool_type{}, {{"default", "uniform(0,1)"}}}},
       {"i", type{int64_type{}, {{"default", "uniform(-42000,1337)"}}}},
       {"c", type{uint64_type{}, {{"default", "pareto(0,1)"}}}},
-      {"r", type{real_type{}, {{"default", "normal(0,1)"}}}},
+      {"r", type{double_type{}, {{"default", "normal(0,1)"}}}},
       {"s", type{string_type{}, {{"default", "uniform(0,100)"}}}},
       {"t", type{time_type{}, {{"default", "uniform(0,10)"}}}},
       {"d", type{duration_type{}, {{"default", "uniform(100,200)"}}}},
@@ -959,8 +959,8 @@ TEST(hashes) {
                                                          "4");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(uint64_type{})), "0x529C2667783DB09"
                                                           "D");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0x41615FDB30A38AA"
-                                                        "F");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(double_type{})), "0x41615FDB30A38AA"
+                                                          "F");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(duration_type{})), "0x6C3BE97C5D5B269"
                                                             "A");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(time_type{})), "0xAD8E364A7A3BFE7"
@@ -1096,7 +1096,7 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{bool_type{}});
   CHECK_ROUNDTRIP(type{int64_type{}});
   CHECK_ROUNDTRIP(type{uint64_type{}});
-  CHECK_ROUNDTRIP(type{real_type{}});
+  CHECK_ROUNDTRIP(type{double_type{}});
   CHECK_ROUNDTRIP(type{duration_type{}});
   CHECK_ROUNDTRIP(type{time_type{}});
   CHECK_ROUNDTRIP(type{string_type{}});

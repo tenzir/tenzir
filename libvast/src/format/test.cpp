@@ -154,7 +154,7 @@ struct randomizer {
     x = sample();
   }
 
-  void operator()(const real_type&, real& x) {
+  void operator()(const double_type&, real& x) {
     x = sample();
   }
 

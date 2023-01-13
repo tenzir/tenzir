@@ -141,8 +141,9 @@ append_builder(const uint64_type&,
                const view<type_to_data_t<uint64_type>>& view) noexcept;
 
 arrow::Status
-append_builder(const real_type&, type_to_arrow_builder_t<real_type>& builder,
-               const view<type_to_data_t<real_type>>& view) noexcept;
+append_builder(const double_type&,
+               type_to_arrow_builder_t<double_type>& builder,
+               const view<type_to_data_t<double_type>>& view) noexcept;
 
 arrow::Status
 append_builder(const duration_type&,

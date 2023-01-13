@@ -53,7 +53,7 @@ struct fixture {
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
     // expr0 || :real > 4.2
-    auto p2 = predicate{type_extractor{type{real_type{}}},
+    auto p2 = predicate{type_extractor{type{double_type{}}},
                         relational_operator::greater_equal, data{4.2}};
     expr1 = disjunction{expr0, p2};
   }
@@ -183,8 +183,8 @@ TEST(extractors) {
   auto port = type{"port", uint64_type{}};
   auto subport = type{"subport", port};
   auto s = record_type{
-    {"real", real_type{}}, {"bool", bool_type{}}, {"host", address_type{}},
-    {"port", port},        {"subport", subport},
+    {"real", double_type{}}, {"bool", bool_type{}}, {"host", address_type{}},
+    {"port", port},          {"subport", subport},
   };
   auto r = type{flatten(record_type{{"orig", s}, {"resp", s}})};
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
@@ -279,7 +279,7 @@ TEST(matcher) {
     return caf::visit(matcher{type{t}}, *resolved);
   };
   auto r = type{record_type{
-    {"x", real_type{}},
+    {"x", double_type{}},
     {"y", bool_type{}},
     {"z", address_type{}},
   }};

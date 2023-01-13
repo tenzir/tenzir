@@ -255,7 +255,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
     if (known_type_name == "count")
       return type{name, uint64_type{}};
     if (known_type_name == "real")
-      return type{name, real_type{}};
+      return type{name, double_type{}};
     if (known_type_name == "duration")
       return type{name, duration_type{}};
     if (known_type_name == "time")
@@ -438,14 +438,14 @@ TEST(YAML Type - Parsing uint64_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(YAML Type - Parsing real_type) {
+TEST(YAML Type - Parsing double_type) {
   std::vector<type> known_types;
-  auto real_type_wo_attrs = record::value_type{
+  auto double_type_wo_attrs = record::value_type{
     "real_field",
     record{{"type", "real"}},
   };
-  auto result = unbox(to_type(known_types, real_type_wo_attrs));
-  auto expected_type = type{"real_field", real_type{}};
+  auto result = unbox(to_type(known_types, double_type_wo_attrs));
+  auto expected_type = type{"real_field", double_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 

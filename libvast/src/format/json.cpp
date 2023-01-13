@@ -86,7 +86,7 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
     [&](const uint64_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return caf::none;
     },
     [&](const duration_type&) noexcept -> data {
@@ -141,7 +141,7 @@ data extract(int64_t value, const type& type) {
         return detail::narrow_cast<count>(value);
       return caf::none;
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return detail::narrow_cast<real>(value);
     },
     [&](const duration_type&) noexcept -> data {
@@ -199,7 +199,7 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
     [&](const uint64_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return caf::none;
     },
     [&](const duration_type&) noexcept -> data {
@@ -300,7 +300,7 @@ data extract(uint64_t value, const type& type) {
     [&](const uint64_type&) noexcept -> data {
       return count{value};
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return detail::narrow_cast<real>(value);
     },
     [&](const duration_type&) noexcept -> data {
@@ -358,7 +358,7 @@ data extract(double value, const type& type) {
     [&](const uint64_type&) noexcept -> data {
       return detail::narrow_cast<count>(value);
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return value;
     },
     [&](const duration_type&) noexcept -> data {
@@ -423,7 +423,7 @@ data extract(std::string_view value, const type& type) {
         return detail::narrow_cast<count>(result);
       return caf::none;
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       if (real result = {}; parsers::json_number(value, result))
         return result;
       return caf::none;
@@ -496,7 +496,7 @@ data extract(bool value, const type& type) {
     [&](const uint64_type&) noexcept -> data {
       return value ? count{1} : count{0};
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return caf::none;
     },
     [&](const duration_type&) noexcept -> data {
@@ -620,7 +620,7 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
+    [&](const double_type&) noexcept {
       const auto added = builder.add(detail::narrow_cast<view<real>>(value));
       VAST_ASSERT(added);
     },
@@ -697,7 +697,7 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(view<count>{value});
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
+    [&](const double_type&) noexcept {
       const auto added = builder.add(detail::narrow_cast<view<real>>(value));
       VAST_ASSERT(added);
     },
@@ -768,7 +768,7 @@ void add(double value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(detail::narrow_cast<count>(value));
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
+    [&](const double_type&) noexcept {
       const auto added = builder.add(value);
       VAST_ASSERT(added);
     },
@@ -832,7 +832,7 @@ void add(bool value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value ? count{1} : count{0});
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
+    [&](const double_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -921,7 +921,7 @@ void add(std::string_view value, const type& type,
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
+    [&](const double_type&) noexcept {
       if (real result = {}; parsers::json_number(value, result)) {
         const auto added = builder.add(result);
         VAST_ASSERT(added);

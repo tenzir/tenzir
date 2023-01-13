@@ -313,7 +313,7 @@ TEST(single column - boolean) {
 }
 
 TEST(single column - real) {
-  auto t = real_type{};
+  auto t = double_type{};
   auto slice = make_single_column_slice(t, 1.23, 3.21, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 1.23);
@@ -663,7 +663,7 @@ TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{bool_type{}});
   field_roundtrip(type{int64_type{}});
   field_roundtrip(type{uint64_type{}});
-  field_roundtrip(type{real_type{}});
+  field_roundtrip(type{double_type{}});
   field_roundtrip(type{duration_type{}});
   field_roundtrip(type{time_type{}});
   field_roundtrip(type{string_type{}});
@@ -722,7 +722,7 @@ TEST(arrow record type to schema roundtrip tp) {
       {"b", bool_type{}},
       {"c", int64_type{}},
       {"d", uint64_type{}},
-      {"e", real_type{}},
+      {"e", double_type{}},
       {"f", duration_type{}},
       {"g", time_type{}},
       {"h", string_type{}},

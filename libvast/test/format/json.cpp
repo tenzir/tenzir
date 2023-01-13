@@ -37,7 +37,7 @@ TEST(json to data) {
     record_type{
       {"b", bool_type{}},
       {"c", uint64_type{}},
-      {"r", real_type{}},
+      {"r", double_type{}},
       {"i", int64_type{}},
       {"s", string_type{}},
       {"snum", string_type{}},

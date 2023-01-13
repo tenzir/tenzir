@@ -147,7 +147,7 @@ class pattern_type;
 class plugin;
 class plugin_ptr;
 class port;
-class real_type;
+class double_type;
 class record_type;
 class segment;
 class string_type;

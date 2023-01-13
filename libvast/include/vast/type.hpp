@@ -49,7 +49,7 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<bool_type, int64_type, uint64_type, real_type,
+  = caf::detail::type_list<bool_type, int64_type, uint64_type, double_type,
                            duration_type, time_type, string_type, pattern_type,
                            address_type, subnet_type, enumeration_type,
                            list_type, map_type, record_type>;
@@ -498,11 +498,11 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
-// -- real_type ---------------------------------------------------------------
+// -- double_type ---------------------------------------------------------------
 
 /// A floating-point value.
 /// @relates type
-class real_type final {
+class double_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 4;
@@ -511,7 +511,7 @@ public:
   using arrow_type = arrow::DoubleType;
 
   /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const real_type&) noexcept;
+  friend std::span<const std::byte> as_bytes(const double_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static real construct() noexcept;
@@ -2098,7 +2098,7 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const vast::real_type&, FormatContext& ctx) const
+  auto format(const vast::double_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "real");
   }

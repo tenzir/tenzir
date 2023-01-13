@@ -142,7 +142,7 @@ struct zeek_parser_factory {
     return parsers::tf;
   }
 
-  result_type operator()(const real_type&) const {
+  result_type operator()(const double_type&) const {
     return parsers::real->*[](real x) {
       return x;
     };

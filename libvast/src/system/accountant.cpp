@@ -129,7 +129,7 @@ struct accountant_state_impl {
                     {"version", string_type{}},
                     {"actor", string_type{}},
                     {"key", string_type{}},
-                    {"value", real_type{}},
+                    {"value", double_type{}},
                     {"metadata", map_type{string_type{}, string_type{}}}},
       };
       builder = std::make_shared<table_slice_builder>(schema);
