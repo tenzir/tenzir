@@ -132,7 +132,29 @@ public:
   virtual std::pair<std::string_view::iterator,
                     caf::expected<std::unique_ptr<pipeline_operator>>>
   parse_pipeline_string(std::string_view str) const override {
-    return {str.begin() + str.find_first_of('|'), make_pipeline_operator({})};
+    auto str_l_it = str.begin();
+    while (std::isspace(*str_l_it)) {
+      ++str_l_it;
+      if (str_l_it == str.end() || *str_l_it == '|') {
+        return {str_l_it, caf::make_error(ec::parse_error, "no valid "
+                                                           "expression start")};
+      }
+    }
+    auto str_r_it = str_l_it;
+    for (; str_r_it != str.end(); ++str_r_it) {
+      if (*str_r_it == '|') {
+        auto peek_ahead = str_r_it + 1;
+        if (peek_ahead != str.end() && *peek_ahead != '|') {
+          break;
+        } else {
+          str_r_it = peek_ahead;
+        }
+      }
+    }
+    auto exp_str = std::string{str_l_it, str_r_it};
+    vast::record options;
+    options["expression"] = exp_str;
+    return {str_r_it, make_pipeline_operator({options})};
   }
 };
 
