@@ -195,7 +195,7 @@ make_pipeline(std::string_view pipeline_string) {
   std::vector<std::unique_ptr<pipeline_operator>> pipeline;
   for (auto pl_str_it = pipeline_string.begin();
        pl_str_it != pipeline_string.end();) {
-    if (std::isspace(*pl_str_it)) {
+    if (std::isspace(*pl_str_it) || *pl_str_it == '|') {
       ++pl_str_it;
       continue;
     }
@@ -257,6 +257,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         }
         current_mode = parsing_mode::NONE;
         maybe_last_extractor = false;
+        str_l_it = str_r_it;
       }
       ++str_r_it;
     } else if (*str_r_it == ','
