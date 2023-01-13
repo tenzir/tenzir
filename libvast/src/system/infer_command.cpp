@@ -88,7 +88,7 @@ type deduce(simdjson::dom::element e) {
       if (parsers::net(x))
         return type{subnet_type{}};
       if (parsers::addr(x))
-        return type{address_type{}};
+        return type{ip_type{}};
       if (parsers::ymdhms(x))
         return type{time_type{}};
       if (parsers::duration(x))

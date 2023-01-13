@@ -349,9 +349,8 @@ append_builder(const pattern_type&,
 }
 
 arrow::Status
-append_builder(const address_type&,
-               type_to_arrow_builder_t<address_type>& builder,
-               const view<type_to_data_t<address_type>>& view) noexcept {
+append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
+               const view<type_to_data_t<ip_type>>& view) noexcept {
   const auto bytes = as_bytes(view);
   VAST_ASSERT(bytes.size() == 16);
   return builder.Append(arrow_compat::string_view{
@@ -364,8 +363,8 @@ append_builder(const subnet_type&,
                const view<type_to_data_t<subnet_type>>& view) noexcept {
   if (auto status = builder.Append(); !status.ok())
     return status;
-  if (auto status = append_builder(address_type{}, builder.address_builder(),
-                                   view.network());
+  if (auto status
+      = append_builder(ip_type{}, builder.address_builder(), view.network());
       !status.ok())
     return status;
   return builder.length_builder().Append(view.length());

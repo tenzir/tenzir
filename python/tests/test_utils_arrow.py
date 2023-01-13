@@ -17,7 +17,7 @@ def test_pattern_extension_type():
 
 
 def test_ip_address_extension_type():
-    ty = vua.AddressType()
+    ty = vua.IPType()
     arr = vua.extension_array(["10.1.21.165", None], ty)
     arr.validate()
     assert arr.type is ty
@@ -67,8 +67,8 @@ def test_enum_extension_type():
 def test_extension_type_in_struct():
     src_ips = ["10.1.0.2", None, "10.1.0.4"]
     dst_ips = ["10.2.0.2", None, None]
-    srcs = vua.extension_array(src_ips, vua.AddressType())
-    dsts = vua.extension_array(dst_ips, vua.AddressType())
+    srcs = vua.extension_array(src_ips, vua.IPType())
+    dsts = vua.extension_array(dst_ips, vua.IPType())
 
     struct_array = pa.StructArray.from_arrays(
         [srcs, dsts],
@@ -109,8 +109,8 @@ def test_ipc():
         ipaddress.IPv4Address("10.1.21.165"),
         ipaddress.IPv6Address("2001:200:e000::100"),
     ]
-    address_type = vua.AddressType()
-    address_array = vua.extension_array(addresses, address_type)
+    ip_type = vua.IPType()
+    address_array = vua.extension_array(addresses, ip_type)
     # Create sample subnets.
     networks = [
         ipaddress.IPv4Network("10.1.21.0/24"),
@@ -128,7 +128,7 @@ def test_ipc():
     enum_array = vua.extension_array(enums, enum_type)
     # Assemble a record batch.
     schema = pa.schema(
-        [("p", pattern_type), ("a", address_type), ("s", subnet_type), ("e", enum_type)]
+        [("p", pattern_type), ("a", ip_type), ("s", subnet_type), ("e", enum_type)]
     )
     batch = pa.record_batch(
         [pattern_array, address_array, subnet_array, enum_array], schema=schema
@@ -148,7 +148,7 @@ def test_ipc():
     # Validate addresses.
     a = batch.column("a")
     assert isinstance(a, pa.ExtensionArray)
-    assert a.type == address_type
+    assert a.type == ip_type
     assert a.to_pylist() == addresses
     # Validate subnets.
     s = batch.column("s")

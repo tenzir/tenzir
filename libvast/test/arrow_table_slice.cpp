@@ -378,7 +378,7 @@ TEST(single column - duration) {
 TEST(single column - address) {
   using vast::address;
   using vast::to;
-  auto t = address_type{};
+  auto t = ip_type{};
   auto a1 = unbox(to<address>("172.16.7.1"));
   auto a2 = unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329"));
   auto a3 = unbox(to<address>("2001:db8::"));
@@ -668,15 +668,14 @@ TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{time_type{}});
   field_roundtrip(type{string_type{}});
   field_roundtrip(type{pattern_type{}});
-  field_roundtrip(type{address_type{}});
+  field_roundtrip(type{ip_type{}});
   field_roundtrip(type{subnet_type{}});
   field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
   field_roundtrip(type{list_type{int64_type{}}});
-  field_roundtrip(type{map_type{int64_type{}, address_type{}}});
+  field_roundtrip(type{map_type{int64_type{}, ip_type{}}});
   field_roundtrip(
-    type{record_type{{"key", int64_type{}}, {"value", address_type{}}}});
-  field_roundtrip(
-    type{record_type{{"a", string_type{}}, {"b", address_type{}}}});
+    type{record_type{{"key", int64_type{}}, {"value", ip_type{}}}});
+  field_roundtrip(type{record_type{{"a", string_type{}}, {"b", ip_type{}}}});
   field_roundtrip(type{record_type{
     {"a", string_type{}},
     {"b", record_type{{"hits", uint64_type{}}, {"net", subnet_type{}}}}}});
@@ -726,7 +725,7 @@ TEST(arrow record type to schema roundtrip tp) {
       {"f", duration_type{}},
       {"g", time_type{}},
       {"h", string_type{}},
-      {"i", address_type{}},
+      {"i", ip_type{}},
       {"j", subnet_type{}},
       {"k", list_type{int64_type{}}},
     },
@@ -791,7 +790,7 @@ TEST(full_table_slice) {
      }},
     {"f11_2",
      record_type{
-       {"f11_2_1", address_type{}},
+       {"f11_2_1", ip_type{}},
        {"f11_2_2", pattern_type{}},
      }},
   };
@@ -800,7 +799,7 @@ TEST(full_table_slice) {
     {"f1", type{string_type{}, {{"key", "value"}}}},
     {"f2", uint64_type{}},
     {"f3", pattern_type{}},
-    {"f4", address_type{}},
+    {"f4", ip_type{}},
     {"f5", subnet_type{}},
     {"f6", et},
     {"f7", lt},
@@ -857,7 +856,7 @@ TEST(full_table_slice) {
   check_column(slice, 0, string_type{}, f1_string);
   check_column(slice, 1, uint64_type{}, f2_count);
   check_column(slice, 2, pattern_type{}, f3_pattern);
-  check_column(slice, 3, address_type{}, f4_address);
+  check_column(slice, 3, ip_type{}, f4_address);
   check_column(slice, 4, subnet_type{}, f5_subnet);
   check_column(slice, 5, et, f6_enum);
   check_column(slice, 6, lt, f7_list_subnet);
@@ -867,7 +866,7 @@ TEST(full_table_slice) {
   check_column(slice, 10, lrt, f10_list_record);
   check_column(slice, 11, et, f6_enum);                // f11_1_1
   check_column(slice, 12, uint64_type{}, f2_count);    // f11_1_2
-  check_column(slice, 13, address_type{}, f4_address); // f11_2_1
+  check_column(slice, 13, ip_type{}, f4_address);      // f11_2_1
   check_column(slice, 14, pattern_type{}, f3_pattern); // f11_2_2
   MESSAGE("test is_serilaized");
   CHECK(slice.is_serialized());

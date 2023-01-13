@@ -35,11 +35,11 @@ class address_synopsis final
 public:
   using super = bloom_filter_synopsis<address, HashFunction>;
 
-  /// Constructs an IP address synopsis from an `address_type` and a
+  /// Constructs an IP address synopsis from an `ip_type` and a
   /// Bloom filter.
   address_synopsis(type x, typename super::bloom_filter_type bf)
     : super{std::move(x), std::move(bf)} {
-    VAST_ASSERT_CHEAP(caf::holds_alternative<address_type>(this->type()));
+    VAST_ASSERT_CHEAP(caf::holds_alternative<ip_type>(this->type()));
   }
 
   [[nodiscard]] synopsis_ptr clone() const override {
@@ -78,17 +78,17 @@ using buffered_address_synopsis
 
 /// Factory to construct an IP address synopsis.
 /// @tparam HashFunction The hash function to use for the Bloom filter.
-/// @param type A type instance carrying an `address_type`.
+/// @param type A type instance carrying an `ip_type`.
 /// @param params The Bloom filter parameters.
 /// @param seeds The seeds for the Bloom filter hasher.
 /// @returns A type-erased pointer to a synopsis.
-/// @pre `caf::holds_alternative<address_type>(type)`.
+/// @pre `caf::holds_alternative<ip_type>(type)`.
 /// @relates address_synopsis
 template <class HashFunction>
 synopsis_ptr
 make_address_synopsis(vast::type type, bloom_filter_parameters params,
                       std::vector<size_t> seeds) {
-  VAST_ASSERT_CHEAP(caf::holds_alternative<address_type>(type));
+  VAST_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
   auto x = make_bloom_filter<HashFunction>(params, std::move(seeds));
   if (!x) {
     VAST_WARN("{} failed to construct Bloom filter", __func__);
@@ -100,16 +100,16 @@ make_address_synopsis(vast::type type, bloom_filter_parameters params,
 
 /// Factory to construct a buffered IP address synopsis.
 /// @tparam HashFunction The hash function to use for the Bloom filter.
-/// @param type A type instance carrying an `address_type`.
+/// @param type A type instance carrying an `ip_type`.
 /// @param params The Bloom filter parameters.
 /// @param seeds The seeds for the Bloom filter hasher.
 /// @returns A type-erased pointer to a synopsis.
-/// @pre `caf::holds_alternative<address_type>(type)`.
+/// @pre `caf::holds_alternative<ip_type>(type)`.
 /// @relates address_synopsis
 template <class HashFunction>
 synopsis_ptr make_buffered_address_synopsis(vast::type type,
                                             bloom_filter_parameters params) {
-  VAST_ASSERT_CHEAP(caf::holds_alternative<address_type>(type));
+  VAST_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
   if (!params.p) {
     return nullptr;
   }
@@ -120,12 +120,12 @@ synopsis_ptr make_buffered_address_synopsis(vast::type type,
 /// Factory to construct an IP address synopsis. This overload looks for a type
 /// attribute containing the Bloom filter parameters and hash function seeds.
 /// @tparam HashFunction The hash function to use for the Bloom filter.
-/// @param type A type instance carrying an `address_type`.
+/// @param type A type instance carrying an `ip_type`.
 /// @returns A type-erased pointer to a synopsis.
 /// @relates address_synopsis
 template <class HashFunction>
 synopsis_ptr make_address_synopsis(vast::type type, const caf::settings& opts) {
-  VAST_ASSERT_CHEAP(caf::holds_alternative<address_type>(type));
+  VAST_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
   if (auto xs = parse_parameters(type))
     return make_address_synopsis<HashFunction>(std::move(type), *xs);
   // If no explicit Bloom filter parameters were attached to the type, we try

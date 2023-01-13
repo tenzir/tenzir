@@ -81,7 +81,7 @@ double get_type_fprate(const index_config& config, const type& type) {
     for (const auto& name : targets) {
       if (name == ":string" && type == string_type{})
         return fprate;
-      else if (name == ":addr" && type == address_type{})
+      else if (name == ":addr" && type == ip_type{})
         return fprate;
     }
   }
@@ -111,7 +111,7 @@ void partition_synopsis::add(const table_slice& slice,
   synopsis_opts["string-synopsis-fp-rate"]
     = get_type_fprate(fp_rates, vast::type{string_type{}});
   synopsis_opts["address-synopsis-fp-rate"]
-    = get_type_fprate(fp_rates, vast::type{address_type{}});
+    = get_type_fprate(fp_rates, vast::type{ip_type{}});
   for (size_t col = 0; col < slice.columns(); ++col, ++leaf_it) {
     auto&& leaf = *leaf_it;
     auto add_column = [&](const synopsis_ptr& syn) {

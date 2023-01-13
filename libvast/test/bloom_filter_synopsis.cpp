@@ -23,7 +23,7 @@ using namespace si_literals;
 using namespace test;
 
 TEST(bloom filter parameters : from type) {
-  auto t = type{address_type{}, {{"synopsis", "bloomfilter(1000,0.01)"}}};
+  auto t = type{ip_type{}, {{"synopsis", "bloomfilter(1000,0.01)"}}};
   auto xs = unbox(parse_parameters(t));
   CHECK_EQUAL(*xs.n, 1000u);
   CHECK_EQUAL(*xs.p, 0.01);

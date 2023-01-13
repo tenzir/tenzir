@@ -238,7 +238,7 @@ TEST(record_type) {
          record_type{
            {"y",
             record_type{
-              {"a", address_type{}},
+              {"a", ip_type{}},
             }},
            {"f", double_type{}},
          }},
@@ -264,7 +264,7 @@ TEST(qualified_record_field) {
   const auto field = qualified_record_field{
     "zeek.conn",
     "conn.id",
-    type{address_type{}},
+    type{ip_type{}},
   };
 
   caf::byte_buffer buf;
@@ -322,7 +322,7 @@ TEST(bool_synopsis) {
 
 TEST(address_synopsis) {
   factory<synopsis>::initialize();
-  auto lat = type{address_type{}, {{"synopsis", "bloomfilter(1,0.1)"}}};
+  auto lat = type{ip_type{}, {{"synopsis", "bloomfilter(1,0.1)"}}};
   auto as = factory<synopsis>::make(lat, caf::settings{});
   REQUIRE_NOT_EQUAL(as, nullptr);
   as->add(to_addr_view("192.168.0.1"));

@@ -28,7 +28,7 @@ using namespace vast;
 using namespace std::string_literals;
 
 TEST(address) {
-  address_index idx{type{address_type{}}};
+  address_index idx{type{ip_type{}}};
   MESSAGE("append");
   auto x = *to<address>("192.168.0.1");
   REQUIRE(idx.append(make_data_view(x)));
@@ -92,7 +92,7 @@ TEST(address) {
   MESSAGE("serialization");
   caf::byte_buffer buf;
   CHECK(detail::serialize(buf, idx));
-  address_index idx2{type{address_type{}}};
+  address_index idx2{type{ip_type{}}};
   CHECK_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   CHECK_EQUAL(to_string(unbox(
                 idx2.lookup(relational_operator::equal, make_data_view(x)))),
@@ -107,7 +107,7 @@ FIXTURE_SCOPE(value_index_tests, fixtures::events)
 // made the bug disappear.
 TEST(regression - build an address index from zeek events) {
   // Populate the index with data up to the critical point.
-  address_index idx{type{address_type{}}};
+  address_index idx{type{ip_type{}}};
   size_t row_id = 0;
   for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice.rows(); ++row) {

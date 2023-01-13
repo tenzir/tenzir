@@ -174,7 +174,7 @@ namespace {
 struct table_slice_fixture {
   enumeration_type et = enumeration_type{{"foo"}, {"bar"}, {"bank"}};
   map_type mt_et_count = map_type{et, uint64_type{}};
-  map_type mt_addr_et = map_type{address_type{}, et};
+  map_type mt_addr_et = map_type{ip_type{}, et};
   map_type mt_pattern_subnet = map_type{pattern_type{}, subnet_type{}};
   list_type lt = list_type{subnet_type{}};
   list_type elt = list_type{et};
@@ -191,7 +191,7 @@ struct table_slice_fixture {
      }},
     {"f11_2",
      record_type{
-       {"f11_2_1", address_type{}},
+       {"f11_2_1", ip_type{}},
        {"f11_2_2", pattern_type{}},
      }},
   };
@@ -200,7 +200,7 @@ struct table_slice_fixture {
     {"f1", type{string_type{}, {{"key", "value"}}}},
     {"f2", uint64_type{}},
     {"f3", pattern_type{}},
-    {"f4", address_type{}},
+    {"f4", ip_type{}},
     {"f5", subnet_type{}},
     {"f6", et},
     {"f7", lt},

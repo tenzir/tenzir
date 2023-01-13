@@ -192,23 +192,23 @@ TEST(pattern_type) {
   CHECK_EQUAL(pt.to_definition(), expected_definition);
 }
 
-TEST(address_type) {
-  static_assert(concrete_type<address_type>);
-  static_assert(basic_type<address_type>);
-  static_assert(!complex_type<address_type>);
+TEST(ip_type) {
+  static_assert(concrete_type<ip_type>);
+  static_assert(basic_type<ip_type>);
+  static_assert(!complex_type<ip_type>);
   const auto t = type{};
-  const auto at = type{address_type{}};
+  const auto at = type{ip_type{}};
   CHECK(at);
-  CHECK_EQUAL(as_bytes(at), as_bytes(address_type{}));
+  CHECK_EQUAL(as_bytes(at), as_bytes(ip_type{}));
   CHECK(t != at);
   CHECK(t < at);
   CHECK(t <= at);
   CHECK_EQUAL(fmt::format("{}", at), "addr");
-  CHECK_EQUAL(fmt::format("{}", address_type{}), "addr");
-  CHECK(!caf::holds_alternative<address_type>(t));
-  CHECK(caf::holds_alternative<address_type>(at));
+  CHECK_EQUAL(fmt::format("{}", ip_type{}), "addr");
+  CHECK(!caf::holds_alternative<ip_type>(t));
+  CHECK(caf::holds_alternative<ip_type>(at));
   const auto lat = type::from_legacy_type(legacy_address_type{});
-  CHECK(caf::holds_alternative<address_type>(lat));
+  CHECK(caf::holds_alternative<ip_type>(lat));
   const auto expected_definition = data{"addr"};
   CHECK_EQUAL(at.to_definition(), expected_definition);
 }
@@ -313,7 +313,7 @@ TEST(map_type) {
   const auto lmabt = type::from_legacy_type(
     legacy_map_type{legacy_address_type{}, legacy_bool_type{}});
   CHECK(caf::holds_alternative<map_type>(lmabt));
-  CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{address_type{}});
+  CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{ip_type{}});
   CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
   const auto expected_definition
     = data{record{{"map", record{{"key", "string"}, {"value", "int"}}}}};
@@ -330,7 +330,7 @@ TEST(record_type) {
     {"r1",
      record_type{
        {"p", type{"port", int64_type{}}},
-       {"a", address_type{}},
+       {"a", ip_type{}},
      }},
     {"b", bool_type{}},
     {"r2",
@@ -343,7 +343,7 @@ TEST(record_type) {
                                      "subnet}}");
   const auto& r = caf::get<record_type>(rt);
   CHECK_EQUAL(r.field(2).type, bool_type{});
-  CHECK_EQUAL(r.field({1, 1}).type, address_type{});
+  CHECK_EQUAL(r.field({1, 1}).type, ip_type{});
   CHECK_EQUAL(r.field({3, 0}).name, "s");
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
   const auto expected_definition = data{record{
@@ -388,7 +388,7 @@ TEST(record_type name resolving) {
     {"r",
      record_type{
        {"p", type{"port", int64_type{}}},
-       {"a", address_type{}},
+       {"a", ip_type{}},
        {"not_i", int64_type{}},
      }},
     {"b", type{bool_type{}, {{"key"}}}},
@@ -397,7 +397,7 @@ TEST(record_type name resolving) {
        {"s", type{subnet_type{}, {{"key", "value"}}}},
        {"r",
         record_type{
-          {"a", address_type{}},
+          {"a", ip_type{}},
         }},
      }},
   };
@@ -439,9 +439,9 @@ TEST(record_type name resolving) {
         "id",
         type{"zeek.conn_id",
              record_type{
-               {"orig_h", address_type{}},
+               {"orig_h", ip_type{}},
                {"orig_p", type{"port", uint64_type{}}},
-               {"resp_h", address_type{}},
+               {"resp_h", ip_type{}},
                {"resp_p", type{"port", uint64_type{}}},
              }},
       },
@@ -477,7 +477,7 @@ TEST(record_type flat index computation) {
         record_type{
           {"y",
            record_type{
-             {"a", address_type{}},
+             {"a", ip_type{}},
            }},
           {"f", double_type{}},
         }},
@@ -515,7 +515,7 @@ TEST(record type transformation) {
         record_type{
           {"y",
            record_type{
-             {"a", address_type{}},
+             {"a", ip_type{}},
            }},
           {"f", double_type{}},
         }},
@@ -533,7 +533,7 @@ TEST(record type transformation) {
         record_type{
           {"z", int64_type{}},
           {"t", type{}},
-          {"u", address_type{}},
+          {"u", ip_type{}},
           {"k", bool_type{}},
         }},
        {"m",
@@ -548,8 +548,7 @@ TEST(record type transformation) {
      }},
   };
   const auto result = old.transform({
-    {{0, 0, 1},
-     record_type::insert_before({{"t", type{}}, {"u", address_type{}}})},
+    {{0, 0, 1}, record_type::insert_before({{"t", type{}}, {"u", ip_type{}}})},
     {{0, 1, 0, 0}, record_type::drop()},
     {{1, 0}, record_type::assign({{"b2", bool_type{}}})},
   });
@@ -667,7 +666,7 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(time{}), time_type{});
   CHECK_EQUAL(type::infer(std::string{}), string_type{});
   CHECK_EQUAL(type::infer(pattern{}), pattern_type{});
-  CHECK_EQUAL(type::infer(address{}), address_type{});
+  CHECK_EQUAL(type::infer(address{}), ip_type{});
   CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
   // Enumeration types cannot be inferred.
   CHECK_EQUAL(type::infer(enumeration{0}), type{});
@@ -710,7 +709,7 @@ TEST(legacy_type conversion) {
     {"r1",
      record_type{
        {"p", type{"port", int64_type{}}},
-       {"a", address_type{}},
+       {"a", ip_type{}},
      }},
     {"b", type{bool_type{}, {{"key"}}}},
     {"r2",
@@ -918,7 +917,7 @@ TEST(construct) {
       {"s", type{string_type{}, {{"default", "uniform(0,100)"}}}},
       {"t", type{time_type{}, {{"default", "uniform(0,10)"}}}},
       {"d", type{duration_type{}, {{"default", "uniform(100,200)"}}}},
-      {"a", type{address_type{}, {{"default", "uniform(0,2000000)"}}}},
+      {"a", type{ip_type{}, {{"default", "uniform(0,2000000)"}}}},
       {"s", type{subnet_type{}, {{"default", "uniform(1000,2000)"}}}},
     },
   };
@@ -939,7 +938,7 @@ TEST(sum type) {
       return (std::is_same_v<T, U> && ...);
     };
   };
-  CHECK(caf::visit(is_type(address_type{}), type{address_type{}}));
+  CHECK(caf::visit(is_type(ip_type{}), type{ip_type{}}));
   CHECK(caf::visit(is_type(bool_type{}), type{bool_type{}}));
   CHECK(caf::visit(is_type(bool_type{}, int64_type{}), type{bool_type{}},
                    type{int64_type{}}));
@@ -969,8 +968,8 @@ TEST(hashes) {
                                                           "5");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(pattern_type{})), "0xE5A24AB16469BBD"
                                                            "B");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(address_type{})), "0xD1678F8D9318E8B"
-                                                           "2");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(ip_type{})), "0xD1678F8D9318E8B"
+                                                      "2");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(subnet_type{})), "0xA927755C100351"
                                                           "93");
   CHECK_EQUAL(fmt::format("0x{:X}",
@@ -980,7 +979,7 @@ TEST(hashes) {
                                                                     "223CA310");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(map_type{time_type{}, string_type{}})),
               "0x355D5293D16CC7CD");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(record_type{{"a", address_type{}},
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(record_type{{"a", ip_type{}},
                                                      {"b", bool_type{}}})),
               "0xC262CE1B00968C16");
 }
@@ -1004,12 +1003,12 @@ TEST(congruence) {
   CHECK(congruent(l0, l1));
   CHECK(!congruent(l1, l2));
   auto r0 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"b", bool_type{}},
     {"c", uint64_type{}},
   }};
   auto r1 = type{record_type{
-    {"x", address_type{}},
+    {"x", ip_type{}},
     {"y", bool_type{}},
     {"z", uint64_type{}},
   }};
@@ -1024,9 +1023,9 @@ TEST(congruence) {
 }
 
 TEST(compatibility) {
-  CHECK(compatible(type{address_type{}}, relational_operator::in,
-                   type{subnet_type{}}));
-  CHECK(compatible(type{address_type{}}, relational_operator::in, subnet{}));
+  CHECK(
+    compatible(type{ip_type{}}, relational_operator::in, type{subnet_type{}}));
+  CHECK(compatible(type{ip_type{}}, relational_operator::in, subnet{}));
   CHECK(compatible(type{subnet_type{}}, relational_operator::in,
                    type{subnet_type{}}));
   CHECK(compatible(type{subnet_type{}}, relational_operator::in, subnet{}));
@@ -1044,26 +1043,26 @@ TEST(subset) {
   CHECK(is_subset(i, j));
   CHECK(!is_subset(i, c));
   auto r0 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"b", bool_type{}},
     {"c", uint64_type{}},
   }};
   // Rename a field.
   auto r1 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"b", bool_type{}},
     {"d", uint64_type{}},
   }};
   // Add a field.
   auto r2 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"b", bool_type{}},
     {"c", uint64_type{}},
     {"d", uint64_type{}},
   }};
   // Remove a field.
   auto r3 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"c", uint64_type{}},
   }};
   // Change a field's type.
@@ -1101,17 +1100,17 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{time_type{}});
   CHECK_ROUNDTRIP(type{string_type{}});
   CHECK_ROUNDTRIP(type{pattern_type{}});
-  CHECK_ROUNDTRIP(type{address_type{}});
+  CHECK_ROUNDTRIP(type{ip_type{}});
   CHECK_ROUNDTRIP(type{subnet_type{}});
   CHECK_ROUNDTRIP(type{enumeration_type{{"a"}, {"b"}, {"c"}}});
   CHECK_ROUNDTRIP(type{list_type{int64_type{}}});
-  CHECK_ROUNDTRIP(type{map_type{address_type{}, subnet_type{}}});
+  CHECK_ROUNDTRIP(type{map_type{ip_type{}, subnet_type{}}});
   const auto rt = type{record_type{
     {"i", int64_type{}},
     {"r1",
      record_type{
        {"p", type{"port", int64_type{}}},
-       {"a", address_type{}},
+       {"a", ip_type{}},
      }},
     {"b", bool_type{}},
     {"r2",

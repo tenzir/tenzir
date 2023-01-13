@@ -101,7 +101,7 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -159,7 +159,7 @@ data extract(int64_t value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -214,7 +214,7 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -318,7 +318,7 @@ data extract(uint64_t value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -376,7 +376,7 @@ data extract(double value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -453,7 +453,7 @@ data extract(std::string_view value, const type& type) {
         return *result;
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       if (auto result = to<address>(value))
         return *result;
       return caf::none;
@@ -511,7 +511,7 @@ data extract(bool value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -644,7 +644,7 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -720,7 +720,7 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -791,7 +791,7 @@ void add(double value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -852,7 +852,7 @@ void add(bool value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -969,7 +969,7 @@ void add(std::string_view value, const type& type,
       const auto added = builder.add(view<pattern>{value});
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       if (auto result = to<address>(value)) {
         const auto added = builder.add(*result);
         VAST_ASSERT(added);

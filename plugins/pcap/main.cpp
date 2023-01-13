@@ -84,8 +84,8 @@ type make_packet_type() {
     "pcap.packet",
     record_type{
       {"time", timestamp_type},
-      {"src", address_type{}},
-      {"dst", address_type{}},
+      {"src", ip_type{}},
+      {"dst", ip_type{}},
       {"sport", port_type},
       {"dport", port_type},
       {"vlan",

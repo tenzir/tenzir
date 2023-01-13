@@ -260,7 +260,7 @@ TEST(zeek data parsing) {
   CHECK(d == ts);
   CHECK(zeek_parse(type{string_type{}}, "\\x2afoo*"s, d));
   CHECK(d == "*foo*");
-  CHECK(zeek_parse(type{address_type{}}, "192.168.1.103", d));
+  CHECK(zeek_parse(type{ip_type{}}, "192.168.1.103", d));
   CHECK(d == *to<address>("192.168.1.103"));
   CHECK(zeek_parse(type{subnet_type{}}, "10.0.0.0/24", d));
   CHECK(d == *to<subnet>("10.0.0.0/24"));

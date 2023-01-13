@@ -24,7 +24,7 @@ TEST(lifetime) {
   int counter = 0;
   {
     auto rt = record_type{
-      {"foo", address_type{}},
+      {"foo", ip_type{}},
     };
     auto chunk = chunk::copy(rt);
     chunk->add_deletion_step([&]() noexcept {
@@ -40,7 +40,7 @@ TEST(lifetime) {
   auto fbrtf = fbrt.slice(*fbrt->fields()->Get(0));
   CHECK_EQUAL(fbrtf->name()->string_view(), "foo");
   auto fbrtft = fbrtf.slice(*fbrtf->type_nested_root(), *fbrtf->type());
-  CHECK_EQUAL(as_bytes(fbrtft.chunk()), as_bytes(address_type{}));
+  CHECK_EQUAL(as_bytes(fbrtft.chunk()), as_bytes(ip_type{}));
   CHECK_EQUAL(counter, 0);
   fbt = {};
   CHECK_EQUAL(counter, 0);
@@ -67,7 +67,7 @@ TEST(serialization) {
   auto fbt = flatbuffer<fbs::Type>{};
   {
     auto rt = record_type{
-      {"foo", address_type{}},
+      {"foo", ip_type{}},
     };
     auto chunk = chunk::copy(rt);
     auto maybe_fbt = flatbuffer<fbs::Type>::make(std::move(chunk));

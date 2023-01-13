@@ -52,7 +52,7 @@ table StringType {}
 table PatternType {}
 
 /// An IP address (v4 or v6).
-table AddressType {}
+table IPType {}
 
 /// A CIDR subnet.
 table SubnetType {}
@@ -90,7 +90,7 @@ union Type {
   time_type: TimeType,
   string_type: StringType,
   pattern_type: PatternType,
-  address_type: AddressType,
+  ip_type: IPType,
   subnet_type: SubnetType,
   enumeration_type: EnumerationType,
   list_type: ListType,

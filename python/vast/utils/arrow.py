@@ -40,7 +40,7 @@ class AddressScalar(pa.ExtensionScalar):
         return None if self.value is None else unpack_ip(self.value.as_py())
 
 
-class AddressType(pa.ExtensionType):
+class IPType(pa.ExtensionType):
     ext_name = "vast.address"
     ext_type = pa.binary(16)
 
@@ -56,7 +56,7 @@ class AddressType(pa.ExtensionType):
             raise TypeError("type identifier does not match")
         if storage_type != self.ext_type:
             raise TypeError("storage type does not match")
-        return AddressType()
+        return IPType()
 
     def __reduce__(self):
         return AddressScalar, ()
@@ -76,7 +76,7 @@ class SubnetScalar(pa.ExtensionScalar):
 
 class SubnetType(pa.ExtensionType):
     ext_name = "vast.subnet"
-    ext_type = pa.struct([("address", AddressType()), ("length", pa.uint8())])
+    ext_type = pa.struct([("address", IPType()), ("length", pa.uint8())])
 
     def __init__(self):
         pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
@@ -192,7 +192,7 @@ def pack_subnet(
             return (subnet.network_address.packed, subnet.prefixlen)
 
 
-VastExtensionType = PatternType | AddressType | EnumType | SubnetType
+VastExtensionType = PatternType | IPType | EnumType | SubnetType
 
 
 def py_dict_to_arrow_dict(dict: dict[str, int]) -> pa.StringArray:
@@ -211,14 +211,14 @@ def extension_array(obj: Sequence, type: pa.DataType) -> pa.Array:
     """Create a `pyarrow.Array` from a Python object, using an
     `pyarrow.ExtensionArray` if the type is an extension type."""
     match type:
-        case AddressType():
+        case IPType():
             arr = [pack_ip(e) for e in obj]
             storage = pa.array(arr, pa.binary(16))
             return pa.ExtensionArray.from_storage(type, storage)
         case SubnetType():
             arrs = list(zip(*[pack_subnet(e) for e in obj]))
             addr_storage = pa.array(arrs[0], pa.binary(16))
-            addr_array = pa.ExtensionArray.from_storage(AddressType(), addr_storage)
+            addr_array = pa.ExtensionArray.from_storage(IPType(), addr_storage)
             prefix_array = pa.array(arrs[1], pa.uint8())
             storage = pa.StructArray.from_arrays(
                 [
@@ -245,6 +245,6 @@ def extension_array(obj: Sequence, type: pa.DataType) -> pa.Array:
 
 # Modules are intialized exactly once, so we can perform the registration here.
 pa.register_extension_type(PatternType())
-pa.register_extension_type(AddressType())
+pa.register_extension_type(IPType())
 pa.register_extension_type(SubnetType())
 pa.register_extension_type(EnumType({"stub": 0}))

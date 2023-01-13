@@ -61,17 +61,16 @@ public:
                               std::shared_ptr<arrow::Array> array) noexcept
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-      auto builder
-        = address_type::make_arrow_builder(arrow::default_memory_pool());
-      auto address_view_generator = values(
-        address_type{}, caf::get<type_to_arrow_array_t<address_type>>(*array));
+      auto builder = ip_type::make_arrow_builder(arrow::default_memory_pool());
+      auto address_view_generator
+        = values(ip_type{}, caf::get<type_to_arrow_array_t<ip_type>>(*array));
       for (const auto& address : address_view_generator) {
         auto append_status = arrow::Status{};
         if (address) {
           auto pseudonymized_address
             = vast::address::pseudonymize(*address, config_.seed_bytes);
           append_status
-            = append_builder(address_type{}, *builder, pseudonymized_address);
+            = append_builder(ip_type{}, *builder, pseudonymized_address);
         } else {
           append_status = builder->AppendNull();
         }
@@ -86,7 +85,7 @@ public:
       for (const auto& index : caf::get<record_type>(schema).resolve_key_suffix(
              field_name, schema.name())) {
         auto index_type = caf::get<record_type>(schema).field(index).type;
-        if (!caf::holds_alternative<address_type>(index_type)) {
+        if (!caf::holds_alternative<ip_type>(index_type)) {
           VAST_DEBUG("pseudonymize operator skips field '{}' of unsupported "
                      "type '{}'",
                      field_name, index_type.name());

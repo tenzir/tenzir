@@ -163,7 +163,7 @@ value_at([[maybe_unused]] const Type& type,
   } else if constexpr (std::is_same_v<Type, pattern_type>) {
     return view<type_to_data_t<pattern_type>>{
       value_at(string_type{}, arr, row)};
-  } else if constexpr (std::is_same_v<Type, address_type>) {
+  } else if constexpr (std::is_same_v<Type, ip_type>) {
     VAST_ASSERT(arr.byte_width() == 16);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     const auto* bytes = arr.raw_values() + (row * 16);
@@ -171,9 +171,8 @@ value_at([[maybe_unused]] const Type& type,
   } else if constexpr (std::is_same_v<Type, subnet_type>) {
     VAST_ASSERT(arr.num_fields() == 2);
     auto network = value_at(
-      address_type{},
-      *caf::get<type_to_arrow_array_t<address_type>>(*arr.field(0)).storage(),
-      row);
+      ip_type{},
+      *caf::get<type_to_arrow_array_t<ip_type>>(*arr.field(0)).storage(), row);
     auto length
       = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
     return {network, length};

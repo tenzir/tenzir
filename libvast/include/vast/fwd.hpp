@@ -121,7 +121,7 @@ namespace vast {
 
 class active_store;
 class address;
-class address_type;
+class ip_type;
 class aggregation_function;
 class bitmap;
 class bool_type;

@@ -117,7 +117,7 @@ TEST(hash index for integer) {
 
 TEST(hash index for list) {
   factory<value_index>::initialize();
-  auto t = type{list_type{address_type{}}, {{"index", "hash"}}};
+  auto t = type{list_type{ip_type{}}, {{"index", "hash"}}};
   auto idx = factory<value_index>::make(t, caf::settings{});
   REQUIRE(idx != nullptr);
   auto xs = list{integer{1}, integer{2}, integer{3}};

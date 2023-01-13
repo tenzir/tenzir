@@ -73,7 +73,7 @@ TEST(combining) {
   CHECK_EQUAL(unbox(z.find("a")),
               (type{"a", type{"int_custom", int64_type{}}}));
   CHECK_EQUAL(unbox(z.find("b")), (type{"b", double_type{}}));
-  CHECK_EQUAL(unbox(z.find("c")), (type{"c", address_type{}}));
+  CHECK_EQUAL(unbox(z.find("c")), (type{"c", ip_type{}}));
   CHECK_EQUAL(unbox(z.find("d")), (type{"d", pattern_type{}}));
   CHECK_EQUAL(unbox(z.find("int_custom")), (type{"int_custom", int64_type{}}));
 }
@@ -197,7 +197,7 @@ TEST(schema : aliases) {
   CHECK(parsers::module(std::string{str}, mod));
   auto foo = mod.find("foo");
   REQUIRE(foo);
-  CHECK(holds_alternative<address_type>(*foo));
+  CHECK(holds_alternative<ip_type>(*foo));
   CHECK(mod.find("bar"));
   CHECK(mod.find("baz"));
   CHECK(mod.find("x"));
@@ -593,7 +593,7 @@ TEST(parseable - with context) {
         {"a",
          record_type{
            {"x", uint64_type{}},
-           {"y", address_type{}},
+           {"y", ip_type{}},
          }},
         {"b", double_type{}},
         {"d", time_type{}},

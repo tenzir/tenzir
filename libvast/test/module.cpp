@@ -265,7 +265,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
     if (known_type_name == "pattern")
       return type{name, pattern_type{}};
     if (known_type_name == "address")
-      return type{name, address_type{}};
+      return type{name, ip_type{}};
     if (known_type_name == "subnet")
       return type{name, subnet_type{}};
     // Check type aliases aka. known types
@@ -493,14 +493,14 @@ TEST(YAML Type - Parsing pattern_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(YAML Type - Parsing address_type) {
+TEST(YAML Type - Parsing ip_type) {
   std::vector<type> known_types;
-  auto address_type_wo_attrs = record::value_type{
+  auto ip_type_wo_attrs = record::value_type{
     "address_field",
     record{{"type", "address"}},
   };
-  auto result = unbox(to_type(known_types, address_type_wo_attrs));
-  auto expected_type = type{"address_field", address_type{}};
+  auto result = unbox(to_type(known_types, ip_type_wo_attrs));
+  auto expected_type = type{"address_field", ip_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 

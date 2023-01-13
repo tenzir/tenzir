@@ -41,7 +41,7 @@ TEST(json to data) {
       {"i", int64_type{}},
       {"s", string_type{}},
       {"snum", string_type{}},
-      {"a", address_type{}},
+      {"a", ip_type{}},
       {"sn", subnet_type{}},
       {"t", time_type{}},
       {"d", duration_type{}},
@@ -50,7 +50,7 @@ TEST(json to data) {
       {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
       {"rec", record_type{{"c", uint64_type{}}, {"s", string_type{}}}},
-      {"msa", map_type{string_type{}, address_type{}}},
+      {"msa", map_type{string_type{}, ip_type{}}},
       {"mcs", map_type{uint64_type{}, string_type{}}},
     },
   };

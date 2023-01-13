@@ -28,7 +28,7 @@ struct fixture : fixtures::deterministic_actor_system {
     "l0",
     record_type{
       {"ts", time_type{}},
-      {"addr", address_type{}},
+      {"addr", ip_type{}},
       {"port", uint64_type{}},
     },
   };
@@ -50,7 +50,7 @@ struct fixture : fixtures::deterministic_actor_system {
       {"r", double_type{}},
       {"i", int64_type{}},
       {"s", string_type{}},
-      {"a", address_type{}},
+      {"a", ip_type{}},
       {"sn", subnet_type{}},
       {"t", time_type{}},
       {"d", duration_type{}},
@@ -59,7 +59,7 @@ struct fixture : fixtures::deterministic_actor_system {
       {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
       {"r2", double_type{}},
-      {"msa", map_type{string_type{}, address_type{}}},
+      {"msa", map_type{string_type{}, ip_type{}}},
       {"mcs", map_type{uint64_type{}, string_type{}}},
     },
   };
@@ -136,7 +136,7 @@ std::string_view l0_log1 = R"__(ts,addr,port
 TEST(csv reader - empty fields) {
   auto slices = run(l0_log1, 8, 5);
   REQUIRE_EQUAL(slices[0].schema(), l0);
-  CHECK(slices[1].at(0, 1, address_type{})
+  CHECK(slices[1].at(0, 1, ip_type{})
         == data{unbox(to<address>("147.32.84.165"))});
   CHECK(slices[1].at(1, 2, uint64_type{}) == std::nullopt);
 }
@@ -249,7 +249,7 @@ std::string_view l2_log_msa = R"__(msa
 
 TEST(csv reader - map string->address) {
   auto slices = run(l2_log_msa, 1, 1);
-  auto t = map_type{string_type{}, address_type{}};
+  auto t = map_type{string_type{}, ip_type{}};
   auto l2_msa = type{"l2", record_type{{"msa", t}}};
   REQUIRE_EQUAL(slices[0].schema(), l2_msa);
   auto m = vast::map{};
@@ -314,12 +314,12 @@ TEST(csv reader - reordered schema) {
   auto l2_sub = type{
     "l2",
     record_type{
-      {"msa", map_type{string_type{}, address_type{}}},
+      {"msa", map_type{string_type{}, ip_type{}}},
       {"c", uint64_type{}},
       {"r", double_type{}},
       {"i", int64_type{}},
       {"b", bool_type{}},
-      {"a", address_type{}},
+      {"a", ip_type{}},
       {"sn", subnet_type{}},
       {"d", duration_type{}},
       {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},

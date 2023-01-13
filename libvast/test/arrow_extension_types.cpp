@@ -52,8 +52,8 @@ std::shared_ptr<arrow::Array> makeArrowArray(std::vector<T> xs) {
 
 std::shared_ptr<arrow::Array> makeAddressArray() {
   arrow::FixedSizeBinaryBuilder b{arrow::fixed_size_binary(16)};
-  return std::make_shared<address_type::array_type>(
-    std::make_shared<address_type::arrow_type>(), b.Finish().ValueOrDie());
+  return std::make_shared<ip_type::array_type>(
+    std::make_shared<ip_type::arrow_type>(), b.Finish().ValueOrDie());
 }
 
 // Returns a visitor that checks whether the expected concrete types are the
@@ -82,7 +82,7 @@ TEST(enumeration type serde roundtrip) {
 }
 
 TEST(address type serde roundtrip) {
-  serde_roundtrip(address_type{});
+  serde_roundtrip(ip_type{});
 }
 
 TEST(subnet type serde roundtrip) {
@@ -95,9 +95,8 @@ TEST(pattern type serde roundtrip) {
 
 TEST(arrow::DataType sum type) {
   CHECK(caf::visit(is_type<arrow::Int64Type>(), *arrow::int64()));
-  CHECK(caf::visit(
-    is_type<address_type::arrow_type>(),
-    static_cast<const arrow::DataType&>(address_type::arrow_type())));
+  CHECK(caf::visit(is_type<ip_type::arrow_type>(),
+                   static_cast<const arrow::DataType&>(ip_type::arrow_type())));
   CHECK(caf::visit(
     is_type<pattern_type::arrow_type>(),
     static_cast<const arrow::DataType&>(pattern_type::arrow_type())));
@@ -128,17 +127,17 @@ TEST(arrow::Array sum type) {
   CHECK(!caf::get_if<arrow::UInt64Array>(&*str_arr));
   CHECK(!caf::get_if<arrow::StringArray>(&*uint_arr));
   CHECK(caf::get_if<arrow::UInt64Array>(&*uint_arr));
-  CHECK(!caf::get_if<address_type::array_type>(&*uint_arr));
+  CHECK(!caf::get_if<ip_type::array_type>(&*uint_arr));
   CHECK(!caf::get_if<pattern_type::array_type>(&*addr_arr));
-  CHECK(caf::get_if<address_type::array_type>(&*addr_arr));
-  CHECK(!caf::get_if<address_type::array_type>(&*pattern_arr));
+  CHECK(caf::get_if<ip_type::array_type>(&*addr_arr));
+  CHECK(!caf::get_if<ip_type::array_type>(&*pattern_arr));
   CHECK(caf::get_if<pattern_type::array_type>(&*pattern_arr));
   CHECK(caf::get_if<pattern_type::array_type>(&*pattern_arr));
   caf::visit(is_type<arrow::StringArray>(), *str_arr);
   caf::visit(is_type<pattern_type::array_type>(), *pattern_arr);
   caf::visit(is_type<pattern_type::array_type>(), *str_arr);
   auto f = detail::overload{
-    [](const address_type::array_type&) {
+    [](const ip_type::array_type&) {
       return 99;
     },
     [](const pattern_type::array_type&) {

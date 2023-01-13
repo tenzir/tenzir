@@ -75,8 +75,7 @@ TEST(parseable / printable - predicate) {
   CHECK(caf::holds_alternative<type_extractor>(pred.rhs));
   CHECK(caf::get<data>(pred.lhs) == data{*to<subnet>("10.0.0.0/8")});
   CHECK(pred.op == relational_operator::ni);
-  CHECK(caf::get<type_extractor>(pred.rhs)
-        == type_extractor{type{address_type{}}});
+  CHECK(caf::get<type_extractor>(pred.rhs) == type_extractor{type{ip_type{}}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
   MESSAGE(":real >= -4.8");

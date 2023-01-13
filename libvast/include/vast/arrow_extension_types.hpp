@@ -198,7 +198,7 @@ struct pattern_array : arrow::ExtensionArray {
 /// Register all VAST-defined Arrow extension types in the global registry.
 void register_extension_types();
 
-/// Creates an `address_extension_type` for VAST `address_type.
+/// Creates an `address_extension_type` for VAST `ip_type.
 /// @returns An arrow extension type for address.
 std::shared_ptr<arrow::ExtensionType> make_arrow_address();
 

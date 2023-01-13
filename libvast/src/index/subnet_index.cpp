@@ -35,8 +35,7 @@ bool serialize(auto& serializer, value_index& network,
 
 bool deserialize(auto& deserializer, value_index_ptr& network,
                  subnet_index::prefix_index& length) {
-  network
-    = factory<value_index>::make(vast::type{address_type{}}, caf::settings{});
+  network = factory<value_index>::make(vast::type{ip_type{}}, caf::settings{});
   auto* network_as_address = dynamic_cast<address_index*>(network.get());
   VAST_ASSERT(network_as_address);
   return deserializer.apply(*network_as_address) && deserializer.apply(length);
@@ -47,7 +46,7 @@ bool deserialize(auto& deserializer, value_index_ptr& network,
 subnet_index::subnet_index(vast::type x, caf::settings opts)
   : value_index{std::move(x), std::move(opts)},
     network_{
-      factory<value_index>::make(vast::type{address_type{}}, caf::settings{})},
+      factory<value_index>::make(vast::type{ip_type{}}, caf::settings{})},
     length_{128 + 1} {
   // nop
 }

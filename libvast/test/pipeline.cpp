@@ -59,10 +59,10 @@ const auto testresult_schema2 = vast::type{
 const auto testdata_schema3 = vast::type{
   "testdata",
   vast::record_type{
-    {"orig_addr", vast::address_type{}},
+    {"orig_addr", vast::ip_type{}},
     {"orig_port", vast::int64_type{}},
-    {"dest_addr", vast::address_type{}},
-    {"non_anon_addr", vast::address_type{}},
+    {"dest_addr", vast::ip_type{}},
+    {"non_anon_addr", vast::ip_type{}},
   },
 };
 

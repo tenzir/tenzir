@@ -29,7 +29,7 @@ const auto agg_test_schema = vast::type{
   vast::record_type{
     // FIXME: Do we want to test for other types? integer type?
     {"time", vast::time_type{}},
-    {"ip", vast::address_type{}},
+    {"ip", vast::ip_type{}},
     {"port", vast::uint64_type{}},
     {"sum", vast::double_type{}},
     {"sum_null", vast::double_type{}},

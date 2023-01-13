@@ -18,8 +18,7 @@
 namespace vast {
 
 void factory_traits<synopsis>::initialize() {
-  factory<synopsis>::add(type{address_type{}},
-                         make_address_synopsis<legacy_hash>);
+  factory<synopsis>::add(type{ip_type{}}, make_address_synopsis<legacy_hash>);
   factory<synopsis>::add<bool_type, bool_synopsis>();
   factory<synopsis>::add(type{string_type{}},
                          make_string_synopsis<legacy_hash>);

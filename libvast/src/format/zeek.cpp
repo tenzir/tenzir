@@ -59,7 +59,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
   else if (zeek_type == "pattern")
     t = type{pattern_type{}};
   else if (zeek_type == "addr")
-    t = type{address_type{}};
+    t = type{ip_type{}};
   else if (zeek_type == "subnet")
     t = type{subnet_type{}};
   else if (zeek_type == "port")
@@ -118,7 +118,7 @@ std::string to_zeek_string(const type& t) {
     [](const pattern_type&) -> std::string {
       return "pattern";
     },
-    [](const address_type&) -> std::string {
+    [](const ip_type&) -> std::string {
       return "addr";
     },
     [](const subnet_type&) -> std::string {

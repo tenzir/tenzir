@@ -105,7 +105,7 @@ struct zeek_parser {
     return parse(p);
   }
 
-  bool operator()(const address_type&) const {
+  bool operator()(const ip_type&) const {
     static auto p = parsers::addr->*[](address x) {
       return x;
     };
@@ -195,7 +195,7 @@ struct zeek_parser_factory {
       };
   }
 
-  result_type operator()(const address_type&) const {
+  result_type operator()(const ip_type&) const {
     return parsers::addr->*[](address x) {
       return x;
     };

@@ -183,15 +183,15 @@ TEST(extractors) {
   auto port = type{"port", uint64_type{}};
   auto subport = type{"subport", port};
   auto s = record_type{
-    {"real", double_type{}}, {"bool", bool_type{}}, {"host", address_type{}},
+    {"real", double_type{}}, {"bool", bool_type{}}, {"host", ip_type{}},
     {"port", port},          {"subport", subport},
   };
   auto r = type{flatten(record_type{{"orig", s}, {"resp", s}})};
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
-    auto pred0 = predicate{data_extractor{type{address_type{}}, 2},
+    auto pred0 = predicate{data_extractor{type{ip_type{}}, 2},
                            relational_operator::in, data{sn}};
-    auto pred1 = predicate{data_extractor{type{address_type{}}, 7},
+    auto pred1 = predicate{data_extractor{type{ip_type{}}, 7},
                            relational_operator::in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
@@ -204,9 +204,9 @@ TEST(extractors) {
     CHECK_EQUAL(resolved, normalized);
   }
   {
-    auto pred0 = predicate{data_extractor{type{address_type{}}, 2},
+    auto pred0 = predicate{data_extractor{type{ip_type{}}, 2},
                            relational_operator::not_in, data{sn}};
-    auto pred1 = predicate{data_extractor{type{address_type{}}, 7},
+    auto pred1 = predicate{data_extractor{type{ip_type{}}, 7},
                            relational_operator::not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
@@ -281,7 +281,7 @@ TEST(matcher) {
   auto r = type{record_type{
     {"x", double_type{}},
     {"y", bool_type{}},
-    {"z", address_type{}},
+    {"z", ip_type{}},
   }};
   CHECK(match(":count == 42 || :real < 4.2", r));
   CHECK(match(":bool == true && :real < 4.2", r));

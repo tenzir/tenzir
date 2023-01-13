@@ -143,7 +143,7 @@ void factory_traits<value_index>::initialize() {
   add_arithmetic_index_factory<double_type>();
   add_arithmetic_index_factory<duration_type>();
   add_arithmetic_index_factory<time_type>();
-  add_value_index_factory<address_type, address_index>();
+  add_value_index_factory<ip_type, address_index>();
   add_value_index_factory<subnet_type, subnet_index>();
   add_value_index_factory<string_type, string_index>();
   // List and enumeration types are not default-constructible, but their
