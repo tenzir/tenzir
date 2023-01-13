@@ -185,6 +185,7 @@ public:
   virtual std::pair<std::string_view::iterator,
                     caf::expected<std::unique_ptr<pipeline_operator>>>
   parse_pipeline_string(std::string_view str) const override {
+    // TODO: "Replace" will be superseded by the "put" pipeline operator.
     return {str.begin() + str.find_first_of('|'), make_pipeline_operator({})};
   }
 };
