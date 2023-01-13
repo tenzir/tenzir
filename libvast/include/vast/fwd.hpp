@@ -183,7 +183,6 @@ struct legacy_duration_type;
 struct legacy_enumeration_type;
 struct field_extractor;
 struct flow;
-struct integer;
 struct legacy_integer_type;
 struct invocation;
 struct legacy_list_type;
@@ -392,7 +391,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
   VAST_ADD_TYPE_ID((vast::http_request))
-  VAST_ADD_TYPE_ID((vast::integer))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::partition_info))

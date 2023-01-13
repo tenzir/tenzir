@@ -336,7 +336,7 @@ TEST(data) {
   CHECK_TO_STRING(b, "true");
   data c{uint64_t{23}};
   CHECK_TO_STRING(c, "23");
-  data i{integer{42}};
+  data i{int64_t{42}};
   CHECK_TO_STRING(i, "+42");
   data s{std::string{"foobar"}};
   CHECK_TO_STRING(s, "\"foobar\"");

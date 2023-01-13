@@ -15,7 +15,6 @@
 #include "vast/concept/parseable/string/string.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
-#include "vast/concept/parseable/vast/integer.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"

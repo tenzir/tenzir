@@ -47,7 +47,7 @@ public:
       detail::is_any_v<T, time, duration>,
       duration::rep,
       std::conditional_t<
-        detail::is_any_v<T, bool, integer::value_type, uint64_t, double>,
+        detail::is_any_v<T, bool, int64_t, uint64_t, double>,
         T,
         std::false_type
       >
@@ -136,8 +136,8 @@ private:
       [&](view<bool> x) {
         return append(x);
       },
-      [&](view<integer> x) {
-        return append(x.value);
+      [&](view<int64_t> x) {
+        return append(x);
       },
       [&](view<uint64_t> x) {
         return append(x);
@@ -164,8 +164,8 @@ private:
       [&](view<bool> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x);
       },
-      [&](view<integer> x) -> caf::expected<ids> {
-        return bmi_.lookup(op, x.value);
+      [&](view<int64_t> x) -> caf::expected<ids> {
+        return bmi_.lookup(op, x);
       },
       [&](view<uint64_t> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x);

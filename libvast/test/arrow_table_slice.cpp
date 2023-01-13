@@ -92,8 +92,8 @@ enumeration operator"" _e(unsigned long long int x) {
   return static_cast<enumeration>(x);
 }
 
-integer operator"" _i(unsigned long long int x) {
-  return integer{detail::narrow<integer::value_type>(x)};
+int64_t operator"" _i(unsigned long long int x) {
+  return int64_t{detail::narrow<int64_t>(x)};
 }
 
 #define CHECK_OK(expression)                                                   \
@@ -150,7 +150,7 @@ TEST(batch transform nested column) {
   auto f2s = std::vector<uint64_t>{1_c, 2_c, 3_c, 4_c};
   auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
                                   pattern("p4")};
-  auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
+  auto f4s = std::vector<int64_t>{8_i, 7_i, 6_i, 5_i};
   auto slice = make_slice(t, f1s, f2s, f3s, f4s);
   auto transform_fn =
     [](struct record_type::field field, std::shared_ptr<arrow::Array>) noexcept
@@ -210,7 +210,7 @@ TEST(batch project nested column) {
   auto f2s = std::vector<uint64_t>{1_c, 2_c, 3_c, 4_c};
   auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
                                   pattern("p4")};
-  auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
+  auto f4s = std::vector<int64_t>{8_i, 7_i, 6_i, 5_i};
   auto slice = make_slice(t, f1s, f2s, f3s, f4s);
   auto [schema, batch]
     = select_columns(slice.schema(), to_record_batch(slice), {{0}, {2, 1}});

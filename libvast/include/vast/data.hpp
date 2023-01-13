@@ -11,7 +11,6 @@
 #include "vast/address.hpp"
 #include "vast/aliases.hpp"
 #include "vast/concept/printable/print.hpp"
-#include "vast/data/integer.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -57,7 +56,7 @@ constexpr auto to_data_type() {
       return uint64_t{};
   } else if constexpr (std::is_convertible_v<T, std::string>)
     return std::string{};
-  else if constexpr (detail::is_any_v<T, caf::none_t, integer, duration, time,
+  else if constexpr (detail::is_any_v<T, caf::none_t, int64_t, duration, time,
                                       pattern, address, subnet, list, map,
                                       record>)
     return T{};
@@ -90,7 +89,7 @@ public:
   using types = caf::detail::type_list<
     caf::none_t,
     bool,
-    integer,
+    int64_t,
     uint64_t,
     double,
     duration,
@@ -336,8 +335,5 @@ struct formatter<vast::data> {
     return out;
   }
 };
-
-template <>
-struct formatter<vast::integer> : formatter<vast::data> {};
 
 } // namespace fmt

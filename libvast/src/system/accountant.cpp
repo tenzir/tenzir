@@ -393,13 +393,12 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       self->state->record(self->current_sender()->id(), key, value, metadata,
                           {});
     },
-    [self](atom::metrics, const std::string& key, integer value,
+    [self](atom::metrics, const std::string& key, int64_t value,
            metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());
       self->state->record(self->current_sender()->id(), key,
-                          detail::narrow_cast<double>(value.value), metadata,
-                          {});
+                          detail::narrow_cast<double>(value), metadata, {});
     },
     [self](atom::metrics, const std::string& key, uint64_t value,
            metrics_metadata& metadata) {

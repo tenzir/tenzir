@@ -50,6 +50,7 @@ struct si_parser : parser_base<si_parser<T>> {
 
 namespace parsers {
 
+static auto const integer = si_parser<int64_t>{};
 static auto const count = si_parser<uint64_t>{};
 static auto const bytesize = count >> ~ch<'B'>;
 

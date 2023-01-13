@@ -15,7 +15,6 @@
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/integer.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
@@ -845,7 +844,7 @@ T to_si(std::string_view str) {
   auto parse_si = [&](auto input, auto& x) {
     if constexpr (std::is_same_v<T, uint64_t>)
       return parsers::count(input, x);
-    else if constexpr (std::is_same_v<T, integer>)
+    else if constexpr (std::is_same_v<T, int64_t>)
       return parsers::integer(input, x);
   };
   T x;
@@ -876,9 +875,9 @@ TEST(si count) {
 }
 
 TEST(si int) {
-  auto to_int = to_si<integer>;
+  auto to_int = to_si<int64_t>;
   auto as_int = [](auto x) {
-    return integer{detail::narrow_cast<integer::value_type>(x)};
+    return int64_t{detail::narrow_cast<int64_t>(x)};
   };
   using namespace si_literals;
   CHECK_EQUAL(to_int("-42"), -as_int(42));

@@ -147,7 +147,7 @@ value_at([[maybe_unused]] const Type& type,
   if constexpr (detail::is_any_v<Type, bool_type, uint64_type, double_type>) {
     return arr.GetView(row);
   } else if constexpr (std::is_same_v<Type, int64_type>) {
-    return integer{arr.GetView(row)};
+    return int64_t{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, duration_type>) {
     VAST_ASSERT(
       caf::get<type_to_arrow_type_t<duration_type>>(*arr.type()).unit()

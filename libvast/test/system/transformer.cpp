@@ -94,7 +94,7 @@ struct transformer_fixture
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
       auto str = fmt::format("{}", uuid);
-      REQUIRE(builder->add(str, vast::integer{i}));
+      REQUIRE(builder->add(str, int64_t{i}));
     }
     return {builder->finish()};
   }

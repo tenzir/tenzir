@@ -57,8 +57,8 @@ table_slice make_testdata() {
     // and fast-paths for aggregation_function::add(...).
     auto sum = i == 2 ? data{caf::none} : data{double{1. * i}};
     auto sum_null = caf::none;
-    auto min = integer{i};
-    auto max = integer{i};
+    auto min = int64_t{i};
+    auto max = int64_t{i};
     auto any_true = i == 0;
     auto all_true = true;
     auto any_false = false;
@@ -190,8 +190,8 @@ TEST(summarize test) {
   CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), uint64_t{443});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), double{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), integer{0});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), integer{9});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), int64_t{0});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), int64_t{9});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 7)), true);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 8)), false);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 9)), true);
@@ -250,8 +250,8 @@ TEST(summarize test fully qualified field names) {
   CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), uint64_t{443});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), double{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), integer{0});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), integer{9});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), int64_t{0});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), int64_t{9});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 7)), true);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 8)), false);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 9)), true);

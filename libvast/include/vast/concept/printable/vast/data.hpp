@@ -14,7 +14,6 @@
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/vast/address.hpp"
-#include "vast/concept/printable/vast/integer.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/pattern.hpp"
 #include "vast/concept/printable/vast/subnet.hpp"
@@ -34,6 +33,11 @@ struct data_printer : printer_base<data_printer> {
       detail::overload{
         [&](const auto& x) {
           return make_printer<std::decay_t<decltype(x)>>{}(out, x);
+        },
+        [&](int64_t x) {
+          // Force a sign to be printed even for positive integers.
+          out = fmt::format_to(out, "{:+}", x);
+          return true;
         },
         [&](const std::string& x) {
           static auto escaper = detail::make_extra_print_escaper("\"");

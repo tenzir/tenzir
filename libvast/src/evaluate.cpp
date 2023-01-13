@@ -41,7 +41,7 @@ struct cell_evaluator<relational_operator::equal> {
                { lhs == rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs == rhs;
+    return lhs == rhs; // NOLINT
   }
 
   static bool evaluate(std::string_view lhs, view<pattern> rhs) noexcept {
@@ -71,7 +71,7 @@ struct cell_evaluator<relational_operator::less> {
                { lhs < rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs < rhs;
+    return lhs < rhs; // NOLINT
   }
 };
 
@@ -86,7 +86,7 @@ struct cell_evaluator<relational_operator::less_equal> {
                { lhs <= rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs <= rhs;
+    return lhs <= rhs; // NOLINT
   }
 };
 
@@ -101,7 +101,7 @@ struct cell_evaluator<relational_operator::greater> {
                { lhs > rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs > rhs;
+    return lhs > rhs; // NOLINT
   }
 };
 
@@ -116,7 +116,7 @@ struct cell_evaluator<relational_operator::greater_equal> {
                { lhs >= rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs >= rhs;
+    return lhs >= rhs; // NOLINT
   }
 };
 

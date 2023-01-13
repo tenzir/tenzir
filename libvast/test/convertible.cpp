@@ -64,7 +64,7 @@ auto test_basic = [](auto v) {
   }
 
 BASIC(bool, true)
-BASIC(integer, 42)
+BASIC(int64_t, 42)
 BASIC(uint64_t, 56u)
 BASIC(double, 0.42)
 BASIC(duration, std::chrono::minutes{55})
@@ -88,10 +88,10 @@ auto test_narrow = [](auto v) {
     test_narrow<from_, to_>(v);                                                \
   }
 
-NARROW(integer, int8_t, 42)
-NARROW(integer, int16_t, 42)
-NARROW(integer, int32_t, 42)
-NARROW(integer, int64_t, 42)
+NARROW(int64_t, int8_t, 42)
+NARROW(int64_t, int16_t, 42)
+NARROW(int64_t, int32_t, 42)
+NARROW(int64_t, int64_t, 42)
 NARROW(uint64_t, uint8_t, 56u)
 NARROW(uint64_t, uint16_t, 56u)
 NARROW(uint64_t, uint32_t, 56u)
@@ -111,43 +111,44 @@ auto test_oob = [](auto v) {
     test_oob<from_, to_>(v);                                                   \
   }
 
-OUT_OF_BOUNDS(integer, int8_t, 1 << 7)
-OUT_OF_BOUNDS(integer, int8_t, -(1 << 7) - 1)
-OUT_OF_BOUNDS(integer, int16_t, 1 << 15)
-OUT_OF_BOUNDS(integer, int16_t, -(1 << 15) - 1)
-OUT_OF_BOUNDS(integer, int32_t, 1ll << 31)
-OUT_OF_BOUNDS(integer, int32_t, -(1ll << 31) - 1)
+OUT_OF_BOUNDS(int64_t, int8_t, 1 << 7)
+OUT_OF_BOUNDS(int64_t, int8_t, -(1 << 7) - 1)
+OUT_OF_BOUNDS(int64_t, int16_t, 1 << 15)
+OUT_OF_BOUNDS(int64_t, int16_t, -(1 << 15) - 1)
+OUT_OF_BOUNDS(int64_t, int32_t, 1ll << 31)
+OUT_OF_BOUNDS(int64_t, int32_t, -(1ll << 31) - 1)
 OUT_OF_BOUNDS(uint64_t, uint8_t, 1u << 8)
 OUT_OF_BOUNDS(uint64_t, uint16_t, 1u << 16)
 OUT_OF_BOUNDS(uint64_t, uint32_t, 1ull << 32)
 #undef OUT_OF_BOUNDS
 
 TEST(data overload) {
-  auto val = integer{42};
-  auto x = X<integer, int>{};
+  auto val = int64_t{42};
+  auto x = X<int64_t, int>{};
   auto d = data{record{{"value", val}}};
   CHECK_EQUAL(convert(d, x), ec::no_error);
   d = val;
   CHECK_EQUAL(convert(d, x), ec::convert_error);
 }
 
-TEST(failing) {
-  auto r = record{{"value", integer{42}}};
-  auto x = X<integer>{};
-  x.value.value = 1337;
-  r = record{{"foo", integer{42}}};
+TEST(integer conversion) {
+  auto r = record{{"value", int64_t{42}}};
+  auto x = X<int64_t>{};
+  x.value = 1337;
+  r = record{{"foo", int64_t{42}}};
   CHECK_EQUAL(convert(r, x), ec::no_error);
-  x.value.value = 1337;
+  x.value = 1337;
   r = record{{"value", uint64_t{666}}};
-  CHECK_EQUAL(convert(r, x), ec::convert_error);
-  x.value.value = 1337;
+  CHECK_EQUAL(convert(r, x), ec::no_error);
+  CHECK_EQUAL(x.value, 666);
+  x.value = 1337;
   r = record{{"value", caf::none}};
   CHECK_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value.value, 1337);
+  CHECK_EQUAL(x.value, 1337);
 }
 
 struct MultiMember {
-  integer x;
+  int64_t x;
   bool y;
   duration z;
 
@@ -169,15 +170,15 @@ struct MultiMember {
 TEST(multiple members) {
   using namespace std::chrono_literals;
   auto x = MultiMember{};
-  auto r = record{{"x", integer{42}}, {"y", bool{true}}, {"z", duration{42ns}}};
+  auto r = record{{"x", int64_t{42}}, {"y", bool{true}}, {"z", duration{42ns}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.x.value, 42);
+  CHECK_EQUAL(x.x, 42);
   CHECK_EQUAL(x.y, true);
   CHECK_EQUAL(x.z, 42ns);
 }
 
 struct Nest {
-  X<integer> inner;
+  X<int64_t> inner;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, Nest& b) {
@@ -186,7 +187,7 @@ struct Nest {
 
   inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"inner", X<integer>::schema()},
+      {"inner", X<int64_t>::schema()},
     };
     return result;
   }
@@ -194,15 +195,15 @@ struct Nest {
 
 TEST(nested struct) {
   auto x = Nest{};
-  auto r = record{{"inner", record{{"value", integer{23}}}}};
+  auto r = record{{"inner", record{{"value", int64_t{23}}}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.inner.value.value, 23);
+  CHECK_EQUAL(x.inner.value, 23);
 }
 
 struct Complex {
   std::string a;
   struct b_t {
-    integer c;
+    int64_t c;
     std::vector<uint64_t> d;
 
     friend auto inspect(auto& f, b_t& x) {
@@ -210,7 +211,7 @@ struct Complex {
     }
   } b;
   struct e_t {
-    integer f;
+    int64_t f;
     std::optional<uint64_t> g;
 
     friend auto inspect(auto& f, e_t& x) {
@@ -245,10 +246,10 @@ struct Complex {
 TEST(nested struct - single schema) {
   auto x = Complex{};
   auto r = record{{"a", "c3po"},
-                  {"b", record{{"c", integer{23}}, {"d", list{1u, 2u, 3u}}}}};
+                  {"b", record{{"c", int64_t{23}}, {"d", list{1u, 2u, 3u}}}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.a, "c3po");
-  CHECK_EQUAL(x.b.c, integer{23});
+  CHECK_EQUAL(x.b.c, int64_t{23});
   CHECK_EQUAL(x.b.d[0], uint64_t{1u});
   CHECK_EQUAL(x.b.d[1], uint64_t{2u});
   CHECK_EQUAL(x.b.d[2], uint64_t{3u});
@@ -320,7 +321,7 @@ TEST(complex - enum class) {
 }
 
 struct StdOpt {
-  std::optional<integer> value;
+  std::optional<int64_t> value;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, StdOpt& c) {
@@ -336,7 +337,7 @@ struct StdOpt {
 };
 
 struct CafOpt {
-  caf::optional<integer> value;
+  caf::optional<int64_t> value;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, CafOpt& c) {
@@ -352,32 +353,32 @@ struct CafOpt {
 };
 
 TEST(std::optional member variable) {
-  auto x = StdOpt{integer{42}};
+  auto x = StdOpt{int64_t{42}};
   auto r = record{{"value", caf::none}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value, integer{42});
-  r = record{{"value", integer{22}}};
+  CHECK_EQUAL(x.value, int64_t{42});
+  r = record{{"value", int64_t{22}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value->value, 22);
+  CHECK_EQUAL(*x.value, 22);
 }
 
 TEST(caf::optional member variable) {
-  auto x = CafOpt{integer{42}};
+  auto x = CafOpt{int64_t{42}};
   auto r = record{{"value", caf::none}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value, integer{42});
-  r = record{{"value", integer{22}}};
+  CHECK_EQUAL(x.value, int64_t{42});
+  r = record{{"value", int64_t{22}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
-  CHECK_EQUAL(x.value->value, 22);
+  CHECK_EQUAL(*x.value, 22);
 }
 
-struct Derived : X<integer> {};
+struct Derived : X<int64_t> {};
 
 TEST(inherited member variable) {
   auto d = Derived{};
-  auto r = record{{"value", integer{42}}};
+  auto r = record{{"value", int64_t{42}}};
   REQUIRE_EQUAL(convert(r, d), ec::no_error);
-  CHECK_EQUAL(d.value.value, 42);
+  CHECK_EQUAL(d.value, 42);
 }
 
 struct Vec {
@@ -409,7 +410,7 @@ TEST(list to vector of unsigned) {
 }
 
 struct VecS {
-  std::vector<X<integer>> xs;
+  std::vector<X<int64_t>> xs;
 
   template <class Inspector>
   friend auto inspect(Inspector& fun, VecS& f) {
@@ -418,7 +419,7 @@ struct VecS {
 
   inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"xs", list_type{X<integer>::schema()}},
+      {"xs", list_type{X<int64_t>::schema()}},
     };
     return result;
   }
@@ -426,12 +427,12 @@ struct VecS {
 
 TEST(list to vector of struct) {
   auto x = VecS{};
-  auto r = record{{"xs", list{record{{"value", integer{-42}}},
-                              record{{"value", integer{1337}}}}}};
+  auto r = record{{"xs", list{record{{"value", int64_t{-42}}},
+                              record{{"value", int64_t{1337}}}}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   REQUIRE_EQUAL(x.xs.size(), 2u);
-  CHECK_EQUAL(x.xs[0].value.value, -42);
-  CHECK_EQUAL(x.xs[1].value.value, 1337);
+  CHECK_EQUAL(x.xs[0].value, -42);
+  CHECK_EQUAL(x.xs[1].value, 1337);
 }
 
 TEST(map to map) {
@@ -447,21 +448,21 @@ TEST(map to map) {
 }
 
 TEST(record to map) {
-  using Map = vast::detail::stable_map<std::string, X<integer>>;
+  using Map = vast::detail::stable_map<std::string, X<int64_t>>;
   auto x = Map{};
   auto schema = map_type{string_type{}, record_type{{"value", int64_type{}}}};
-  auto r = record{{"foo", record{{"value", integer{-42}}}},
-                  {"bar", record{{"value", integer{1337}}}},
-                  {"baz", record{{"value", integer{997}}}}};
+  auto r = record{{"foo", record{{"value", int64_t{-42}}}},
+                  {"bar", record{{"value", int64_t{1337}}}},
+                  {"baz", record{{"value", int64_t{997}}}}};
   REQUIRE_EQUAL(convert(r, x, schema), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(x["foo"].value.value, -42);
-  CHECK_EQUAL(x["bar"].value.value, 1337);
-  CHECK_EQUAL(x["baz"].value.value, 997);
+  CHECK_EQUAL(x["foo"].value, -42);
+  CHECK_EQUAL(x["bar"].value, 1337);
+  CHECK_EQUAL(x["baz"].value, 997);
 }
 
 TEST(list of record to map) {
-  using T = X<integer>;
+  using T = X<int64_t>;
   auto x = vast::detail::stable_map<std::string, T>{};
   auto schema = map_type{
     type{string_type{}, {{"key", "outer.name"}}},
@@ -477,14 +478,14 @@ TEST(list of record to map) {
       {"outer",
        record{
          {"name", "x"},
-         {"value", integer{1}},
+         {"value", int64_t{1}},
        }},
     },
     record{
       {"outer",
        record{
          {"name", "y"},
-         {"value", integer{82}},
+         {"value", int64_t{82}},
        }},
     },
   };
@@ -494,15 +495,15 @@ TEST(list of record to map) {
       {"outer",
        record{
          {"name", "z"},
-         {"value", integer{-42}},
+         {"value", int64_t{-42}},
        }},
     },
   };
   REQUIRE_EQUAL(convert(l2, x, schema), ec::no_error);
   REQUIRE_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(x["x"].value.value, 1);
-  CHECK_EQUAL(x["y"].value.value, 82);
-  CHECK_EQUAL(x["z"].value.value, -42);
+  CHECK_EQUAL(x["x"].value, 1);
+  CHECK_EQUAL(x["y"].value, 82);
+  CHECK_EQUAL(x["z"].value, -42);
   // Assigning the same keys again should fail.
   REQUIRE_EQUAL(convert(l2, x, schema), ec::convert_error);
 }
@@ -625,7 +626,7 @@ TEST(record with list to optional vector) {
   auto r = record{{"xs", record{{"foo", record{{"ovs", list{"a", "b", "c"}},
                                                {"ou", caf::none}}},
                                 {"bar", record{{"ovs", list{"x", "y", "z"}}}},
-                                {"baz", record{{"ou", integer{42}}}}}}};
+                                {"baz", record{{"ou", int64_t{42}}}}}}};
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK(x.xs.contains("foo"));
   CHECK(x.xs.contains("bar"));
@@ -643,8 +644,8 @@ TEST(record with list to optional vector) {
 TEST(conversion to float) {
   float fdest = 0;
   double ddest = 0;
-  CHECK_EQUAL(convert(integer{42}, fdest, double_type{}), caf::none);
-  CHECK_EQUAL(convert(integer{42}, ddest, double_type{}), caf::none);
+  CHECK_EQUAL(convert(int64_t{42}, fdest, double_type{}), caf::none);
+  CHECK_EQUAL(convert(int64_t{42}, ddest, double_type{}), caf::none);
   CHECK_EQUAL(convert(42, fdest, double_type{}), caf::none);
   CHECK_EQUAL(convert(-42, ddest, double_type{}), caf::none);
   CHECK_EQUAL(convert(42u, fdest, double_type{}), caf::none);

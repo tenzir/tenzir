@@ -303,7 +303,7 @@ append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,
 arrow::Status
 append_builder(const int64_type&, type_to_arrow_builder_t<int64_type>& builder,
                const view<type_to_data_t<int64_type>>& view) noexcept {
-  return builder.Append(view.value);
+  return builder.Append(view);
 }
 
 arrow::Status

@@ -56,8 +56,8 @@ struct json_printer
       return printers::str.print(out_, "null");
     }
 
-    bool operator()(const integer& x) {
-      return printers::str.print(out_, std::to_string(x.value));
+    bool operator()(const int64_t& x) {
+      return printers::str.print(out_, std::to_string(x));
     }
 
     bool operator()(const address& x) {

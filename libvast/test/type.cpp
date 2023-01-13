@@ -659,7 +659,7 @@ TEST(record_type merging) {
 TEST(type inference) {
   CHECK_EQUAL(type::infer(caf::none), type{});
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
-  CHECK_EQUAL(type::infer(integer{}), int64_type{});
+  CHECK_EQUAL(type::infer(int64_t{}), int64_type{});
   CHECK_EQUAL(type::infer(uint64_t{}), uint64_type{});
   CHECK_EQUAL(type::infer(double{}), double_type{});
   CHECK_EQUAL(type::infer(duration{}), duration_type{});
@@ -678,15 +678,15 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(map{}), (map_type{type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}),
               (map_type{type{}, type{}}));
-  CHECK_EQUAL(type::infer(map{{caf::none, integer{}}}),
+  CHECK_EQUAL(type::infer(map{{caf::none, int64_t{}}}),
               (map_type{type{}, int64_type{}}));
   CHECK_EQUAL(type::infer(map{{bool{}, caf::none}}),
               (map_type{bool_type{}, type{}}));
-  CHECK_EQUAL(type::infer(map{{bool{}, integer{}}}),
+  CHECK_EQUAL(type::infer(map{{bool{}, int64_t{}}}),
               (map_type{bool_type{}, int64_type{}}));
   const auto r = record{
     {"a", bool{}},
-    {"b", integer{}},
+    {"b", int64_t{}},
     {"c",
      record{
        {"d", uint64_t{}},
@@ -923,7 +923,7 @@ TEST(construct) {
   };
   const auto expected = record::vector_type{
     {"n", data{list{}}},    {"b", data{bool{}}},
-    {"i", data{integer{}}}, {"c", data{uint64_t{}}},
+    {"i", data{int64_t{}}}, {"c", data{uint64_t{}}},
     {"r", data{double{}}},  {"s", data{std::string{}}},
     {"t", data{time{}}},    {"d", data{duration{}}},
     {"a", data{address{}}}, {"s", data{subnet{}}},

@@ -76,9 +76,9 @@ record fill_status_map(caf::stream_manager& mgr) {
     slot["pending"] = opath.pending();
     slot["clean"] = opath.clean();
     slot["closing"] = opath.closing;
-    slot["next-batch-id"] = integer{opath.next_batch_id};
-    slot["open-credit"] = integer{opath.open_credit};
-    slot["desired-batch-size"] = integer{opath.desired_batch_size};
+    slot["next-batch-id"] = int64_t{opath.next_batch_id};
+    slot["open-credit"] = int64_t{opath.open_credit};
+    slot["desired-batch-size"] = int64_t{opath.desired_batch_size};
     downstream[name] = std::move(slot);
   });
   xs["downstream"] = std::move(downstream);
@@ -91,8 +91,8 @@ record fill_status_map(caf::stream_manager& mgr) {
     auto name = "slot-" + std::to_string(ipath->slots.receiver);
     auto slot = record{};
     slot["priority"] = to_string(ipath->prio);
-    slot["assigned-credit"] = integer{ipath->assigned_credit};
-    slot["last-acked-batch-id"] = integer{ipath->last_acked_batch_id};
+    slot["assigned-credit"] = int64_t{ipath->assigned_credit};
+    slot["last-acked-batch-id"] = int64_t{ipath->last_acked_batch_id};
     slot["congested"] = mgr.congested(*ipath);
     upstream[name] = std::move(slot);
   }
@@ -104,7 +104,7 @@ void fill_status_map(record& xs, caf::scheduled_actor* self) {
   xs["actor-id"] = uint64_t{self->id()};
   xs["thread-id"] = thread_id();
 #if VAST_LINUX
-  xs["pthread-id"] = integer{pthread_id()};
+  xs["pthread-id"] = int64_t{pthread_id()};
 #endif // VAST_LINUX
   xs["name"] = self->name();
   xs["mailbox-size"] = uint64_t{self->mailbox().size()};

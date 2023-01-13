@@ -52,8 +52,8 @@ TEST(merge) {
   const auto xs = record{
     {"a", "foo"},
     {"b", record{
-      {"c", integer{-42}},
-      {"d", list{integer{1}, integer{2}, integer{3}}}
+      {"c", int64_t{-42}},
+      {"d", list{int64_t{1}, int64_t{2}, int64_t{3}}}
     }},
     {"c", record{
       {"a", "bar"}
@@ -62,8 +62,8 @@ TEST(merge) {
   const auto ys = record{
     {"a", "bar"},
     {"b", record{
-      {"a", integer{42}},
-      {"d", list{integer{4}, integer{5}, integer{6}}}
+      {"a", int64_t{42}},
+      {"d", list{int64_t{4}, int64_t{5}, int64_t{6}}}
     }},
     {"c", "not a record yet"}
   };
@@ -71,9 +71,9 @@ TEST(merge) {
     auto expected = record{
       {"a", "foo"},
       {"b", record{
-        {"a", integer{42}},
-        {"d", list{integer{1}, integer{2}, integer{3}}},
-        {"c", integer{-42}}
+        {"a", int64_t{42}},
+        {"d", list{int64_t{1}, int64_t{2}, int64_t{3}}},
+        {"c", int64_t{-42}}
       }},
       {"c", record{
         {"a", "bar"}
@@ -87,10 +87,10 @@ TEST(merge) {
     auto expected = record{
       {"a", "foo"},
       {"b", record{
-        {"a", integer{42}},
-        {"d", list{integer{4}, integer{5}, integer{6},
-                   integer{1}, integer{2}, integer{3}}},
-        {"c", integer{-42}}
+        {"a", int64_t{42}},
+        {"d", list{int64_t{4}, int64_t{5}, int64_t{6},
+                   int64_t{1}, int64_t{2}, int64_t{3}}},
+        {"c", int64_t{-42}}
       }},
       {"c", record{
         {"a", "bar"}
@@ -125,9 +125,9 @@ TEST(construction) {
   CHECK(caf::holds_alternative<caf::none_t>(data{}));
   CHECK(caf::holds_alternative<bool>(data{true}));
   CHECK(caf::holds_alternative<bool>(data{false}));
-  CHECK(caf::holds_alternative<integer>(data{integer{0}}));
-  CHECK(caf::holds_alternative<integer>(data{integer{42}}));
-  CHECK(caf::holds_alternative<integer>(data{integer{-42}}));
+  CHECK(caf::holds_alternative<int64_t>(data{int64_t{0}}));
+  CHECK(caf::holds_alternative<int64_t>(data{int64_t{42}}));
+  CHECK(caf::holds_alternative<int64_t>(data{int64_t{-42}}));
   CHECK(caf::holds_alternative<uint64_t>(data{42u}));
   CHECK(caf::holds_alternative<double>(data{4.2}));
   CHECK(caf::holds_alternative<std::string>(data{"foo"}));
@@ -148,14 +148,14 @@ TEST(relational_operators) {
   CHECK(d1 >= d2);
   CHECK(!(d1 > d2));
 
-  d2 = integer{42};
+  d2 = int64_t{42};
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
   CHECK(!(d1 >= d2));
   CHECK(!(d1 > d2));
 
-  d1 = integer{42};
+  d1 = int64_t{42};
   d2 = caf::none;
   CHECK(d1 != d2);
   CHECK(!(d1 < d2));
@@ -163,7 +163,7 @@ TEST(relational_operators) {
   CHECK(d1 >= d2);
   CHECK(d1 > d2);
 
-  d2 = integer{1377};
+  d2 = int64_t{1377};
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
@@ -242,7 +242,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK_EQUAL(f, l);
-  CHECK_EQUAL(d, integer{1001});
+  CHECK_EQUAL(d, int64_t{1001});
   str = "1001"s;
   f = str.begin();
   l = str.end();
@@ -297,7 +297,7 @@ TEST(convert - caf::config_value) {
   auto x = record{
     {"x", "foo"},
     {"r", record{
-      {"i", integer{-42}},
+      {"i", int64_t{-42}},
       {"u", 42u},
       {"r", record{
         {"u", 3.14}
@@ -305,8 +305,8 @@ TEST(convert - caf::config_value) {
     }},
     {"delta", 12ms},
     {"uri", "https://tenzir.com/"},
-    {"xs", list{integer{1}, integer{2}, integer{3}}},
-    {"ys", list{integer{1}, "foo", 3.14}},
+    {"xs", list{int64_t{1}, int64_t{2}, int64_t{3}}},
+    {"ys", list{int64_t{1}, "foo", 3.14}},
     {"zs", list{record{{"z", true}}, map{{42u, 4.2}}}}
   };
   // clang-format on
@@ -356,12 +356,12 @@ TEST(convert - caf::config_value - null) {
 // instead we test here that the fields that are nested deeper than
 // `max_recursion_depth` are cut off during `flatten()`.
 TEST(nesting depth) {
-  auto x = record{{"leaf", integer{1}}};
+  auto x = record{{"leaf", int64_t{1}}};
   for (size_t i = 0; i < defaults::max_recursion; ++i) {
     auto tmp = record{{"nested", std::exchange(x, {})}};
     x = tmp;
   }
-  auto final = record{{"branch1", x}, {"branch2", integer{4}}};
+  auto final = record{{"branch1", x}, {"branch2", int64_t{4}}};
   CHECK_EQUAL(depth(final), defaults::max_recursion + 2);
   auto flattened = flatten(final);
   CHECK_EQUAL(depth(flattened), 1ull);
@@ -371,7 +371,7 @@ TEST(pack / unpack) {
   auto x = data{record{
     {"none", caf::none},
     {"bool", bool{true}},
-    {"integer", integer{2}},
+    {"integer", int64_t{2}},
     {"count", uint64_t{3u}},
     {"real", double{4.0}},
     {"duration", duration{5}},

@@ -63,8 +63,8 @@ struct zeek_parser {
   }
 
   bool operator()(const int64_type&) const {
-    static auto p = parsers::i64->*[](integer::value_type x) { //
-      return integer{x};
+    static auto p = parsers::i64->*[](int64_t x) { //
+      return int64_t{x};
     };
     return parse(p);
   }
@@ -149,8 +149,8 @@ struct zeek_parser_factory {
   }
 
   result_type operator()(const int64_type&) const {
-    return parsers::i64->*[](integer::value_type x) {
-      return integer{x};
+    return parsers::i64->*[](int64_t x) {
+      return int64_t{x};
     };
   }
 

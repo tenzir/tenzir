@@ -77,7 +77,7 @@ struct pipelines_fixture {
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
       auto str = fmt::format("{}", uuid);
-      REQUIRE(builder->add(str, "test-datum", vast::integer{i}));
+      REQUIRE(builder->add(str, "test-datum", int64_t{i}));
     }
     vast::table_slice slice = builder->finish();
     return slice;
@@ -98,8 +98,8 @@ struct pipelines_fixture {
       auto str = fmt::format("{}", uuid);
       auto str2 = fmt::format("test-datum {}", i);
       auto str3 = fmt::format("note {}", i);
-      REQUIRE(builder->add(str, str2, vast::integer{i}, str3));
-      REQUIRE(builder2->add(str, vast::integer{i}));
+      REQUIRE(builder->add(str, str2, int64_t{i}, str3));
+      REQUIRE(builder2->add(str, int64_t{i}));
     }
     return {builder->finish(), builder2->finish()};
   }
@@ -120,12 +120,12 @@ struct pipelines_fixture {
       auto uuid = vast::uuid::random();
       auto str = fmt::format("{}", uuid);
       auto str2 = fmt::format("test-datum {}", i);
-      REQUIRE(builder->add(str, str2, vast::integer{i}));
+      REQUIRE(builder->add(str, str2, int64_t{i}));
       if (i == 2) {
-        REQUIRE(builder2->add(str, str2, vast::integer{i}));
+        REQUIRE(builder2->add(str, str2, int64_t{i}));
       }
       if (i > 5) {
-        REQUIRE(builder3->add(str, str2, vast::integer{i}));
+        REQUIRE(builder3->add(str, str2, int64_t{i}));
       }
     }
     return {builder->finish(), builder2->finish(), builder3->finish()};
@@ -139,8 +139,7 @@ struct pipelines_fixture {
     auto builder
       = std::make_shared<vast::table_slice_builder>(testdata_schema3);
     REQUIRE(builder);
-    REQUIRE(builder->add(*vast::to<vast::address>(orig_ip),
-                         vast::integer{40002},
+    REQUIRE(builder->add(*vast::to<vast::address>(orig_ip), int64_t{40002},
                          *vast::to<vast::address>(dest_ip),
                          *vast::to<vast::address>(non_anon_ip)));
     return builder->finish();
@@ -375,7 +374,7 @@ TEST(pseudonymize - seed input too short and odd amount of chars) {
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
                 *vast::to<vast::address>("20.251.116.68"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
                 *vast::to<vast::address>("72.57.233.231"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
@@ -401,7 +400,7 @@ TEST(pseudonymize - seed input too long) {
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
                 *vast::to<vast::address>("117.8.135.123"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
                 *vast::to<vast::address>("55.21.62.136"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
@@ -426,7 +425,7 @@ TEST(pseudonymize - IPv4 address batch pseudonymizing) {
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
                 *vast::to<vast::address>("117.8.135.123"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
                 *vast::to<vast::address>("55.21.62.136"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
@@ -454,7 +453,7 @@ TEST(pseudonymize - IPv6 address batch pseudonymizing) {
                 *vast::to<vast::address>("1482:f447:75b3:f1f9:"
                                          "fbdf:622e:34f:"
                                          "ff7b"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
                 *vast::to<vast::address>("f33c:8ca3:ef0f:e019:"
                                          "e7ff:f1e3:f91f:"
@@ -485,7 +484,7 @@ TEST(pipeline with multiple steps) {
   auto wrong_schema = vast::type{"stub", testdata_schema};
   wrong_schema.assign_metadata(vast::type{"foo", vast::type{}});
   auto builder = std::make_shared<vast::table_slice_builder>(wrong_schema);
-  REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));
+  REQUIRE(builder->add("asdf", "jklo", int64_t{23}));
   auto wrong_slice = builder->finish();
   auto add2_failed = pipeline.add(std::move(wrong_slice));
   REQUIRE(!add2_failed);
@@ -506,7 +505,7 @@ TEST(pipeline with multiple steps) {
     "index");
   CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 0)), "asdf");
   CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 1)), "jklo");
-  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), vast::integer{23});
+  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), int64_t{23});
 }
 
 TEST(pipeline rename schema) {

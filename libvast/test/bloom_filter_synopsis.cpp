@@ -35,16 +35,16 @@ TEST(bloom filter synopsis) {
   xs.m = 1_k;
   xs.p = 0.1;
   auto bf = unbox(make_bloom_filter<xxh64>(std::move(xs)));
-  bloom_filter_synopsis<integer, xxh64> x{type{int64_type{}}, std::move(bf)};
-  x.add(make_data_view(integer{0}));
-  x.add(make_data_view(integer{1}));
-  x.add(make_data_view(integer{2}));
+  bloom_filter_synopsis<int64_t, xxh64> x{type{int64_type{}}, std::move(bf)};
+  x.add(make_data_view(int64_t{0}));
+  x.add(make_data_view(int64_t{1}));
+  x.add(make_data_view(int64_t{2}));
   auto verify = verifier{&x};
   MESSAGE("{0, 1, 2}");
-  verify(make_data_view(integer{0}), {N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(integer{1}), {N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(integer{2}), {N, N, N, N, T, N, N, N, N, N});
-  verify(make_data_view(integer{42}), {N, N, N, N, F, N, N, N, N, N});
+  verify(make_data_view(int64_t{0}), {N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(int64_t{1}), {N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(int64_t{2}), {N, N, N, N, T, N, N, N, N, N});
+  verify(make_data_view(int64_t{42}), {N, N, N, N, F, N, N, N, N, N});
 }
 
 TEST(bloom filter synopsis - wrong lookup type) {
@@ -58,6 +58,6 @@ TEST(bloom filter synopsis - wrong lookup type) {
     = synopsis.lookup(relational_operator::equal, make_data_view(caf::none));
   CHECK_EQUAL(r1, std::nullopt);
   auto r2
-    = synopsis.lookup(relational_operator::equal, make_data_view(integer{17}));
+    = synopsis.lookup(relational_operator::equal, make_data_view(int64_t{17}));
   CHECK_EQUAL(r2, false);
 }

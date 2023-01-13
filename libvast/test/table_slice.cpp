@@ -55,13 +55,13 @@ TEST(random integer slices) {
   CHECK(std::all_of(slices.begin(), slices.end(), [](auto& slice) {
     return slice.rows() == 10;
   }));
-  std::vector<integer> values;
+  std::vector<int64_t> values;
   for (auto& slice : slices)
     for (size_t row = 0; row < slice.rows(); ++row)
-      values.emplace_back(get<integer>(slice.at(row, 0, t)));
+      values.emplace_back(get<int64_t>(slice.at(row, 0, t)));
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
-  CHECK_GREATER_EQUAL(*lowest, integer{100});
-  CHECK_LESS_EQUAL(*highest, integer{200});
+  CHECK_GREATER_EQUAL(*lowest, int64_t{100});
+  CHECK_LESS_EQUAL(*highest, int64_t{200});
 }
 
 TEST(column view) {

@@ -337,7 +337,7 @@ TEST(csv reader - reordered schema) {
                      {data{"bar"}, unbox(to<address>("2001:db8::"))}}}));
   CHECK(slices[0].at(0, 1) == data{uint64_t{424242}});
   CHECK(slices[0].at(0, 2) == data{double{4.2}});
-  CHECK(slices[0].at(0, 3) == data{integer{-1337}});
+  CHECK(slices[0].at(0, 3) == data{int64_t{-1337}});
   CHECK(slices[0].at(0, 4) == data{true});
   CHECK(slices[0].at(0, 5) == data{unbox(to<address>("147.32.84.165"))});
   CHECK(slices[0].at(0, 6) == data{unbox(to<subnet>("192.168.0.1/24"))});

@@ -250,7 +250,7 @@ TEST(zeek data parsing) {
   CHECK(zeek_parse(type{bool_type{}}, "T", d));
   CHECK(d == true);
   CHECK(zeek_parse(type{int64_type{}}, "-49329", d));
-  CHECK(d == integer{-49329});
+  CHECK(d == int64_t{-49329});
   CHECK(zeek_parse(type{uint64_type{}}, "49329"s, d));
   CHECK(d == uint64_t{49329});
   CHECK(zeek_parse(type{time_type{}}, "1258594163.566694", d));
@@ -265,7 +265,7 @@ TEST(zeek data parsing) {
   CHECK(zeek_parse(type{subnet_type{}}, "10.0.0.0/24", d));
   CHECK(d == *to<subnet>("10.0.0.0/24"));
   CHECK(zeek_parse(type{list_type{int64_type{}}}, "49329", d));
-  CHECK(d == list{integer{49329}});
+  CHECK(d == list{int64_t{49329}});
   CHECK(zeek_parse(type{list_type{string_type{}}}, "49329,42", d));
   CHECK((d == list{"49329", "42"}));
 }
