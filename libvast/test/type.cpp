@@ -56,13 +56,13 @@ TEST(int64_type) {
   CHECK(t != it);
   CHECK(t < it);
   CHECK(t <= it);
-  CHECK_EQUAL(fmt::format("{}", it), "int");
-  CHECK_EQUAL(fmt::format("{}", int64_type{}), "int");
+  CHECK_EQUAL(fmt::format("{}", it), "int64");
+  CHECK_EQUAL(fmt::format("{}", int64_type{}), "int64");
   CHECK(!caf::holds_alternative<int64_type>(t));
   CHECK(caf::holds_alternative<int64_type>(it));
   const auto lit = type::from_legacy_type(legacy_integer_type{});
   CHECK(caf::holds_alternative<int64_type>(lit));
-  const auto expected_definition = data{"int"};
+  const auto expected_definition = data{"int64"};
   CHECK_EQUAL(it.to_definition(), expected_definition);
 }
 
@@ -77,13 +77,13 @@ TEST(uint64_type) {
   CHECK(t != ct);
   CHECK(t < ct);
   CHECK(t <= ct);
-  CHECK_EQUAL(fmt::format("{}", ct), "count");
-  CHECK_EQUAL(fmt::format("{}", uint64_type{}), "count");
+  CHECK_EQUAL(fmt::format("{}", ct), "uint64");
+  CHECK_EQUAL(fmt::format("{}", uint64_type{}), "uint64");
   CHECK(!caf::holds_alternative<uint64_type>(t));
   CHECK(caf::holds_alternative<uint64_type>(ct));
   const auto lct = type::from_legacy_type(legacy_count_type{});
   CHECK(caf::holds_alternative<uint64_type>(lct));
-  const auto expected_definition = data{"count"};
+  const auto expected_definition = data{"uint64"};
   CHECK_EQUAL(ct.to_definition(), expected_definition);
 }
 
@@ -98,13 +98,13 @@ TEST(double_type) {
   CHECK(t != rt);
   CHECK(t < rt);
   CHECK(t <= rt);
-  CHECK_EQUAL(fmt::format("{}", rt), "real");
-  CHECK_EQUAL(fmt::format("{}", double_type{}), "real");
+  CHECK_EQUAL(fmt::format("{}", rt), "double");
+  CHECK_EQUAL(fmt::format("{}", double_type{}), "double");
   CHECK(!caf::holds_alternative<double_type>(t));
   CHECK(caf::holds_alternative<double_type>(rt));
   const auto lrt = type::from_legacy_type(legacy_real_type{});
   CHECK(caf::holds_alternative<double_type>(lrt));
-  const auto expected_definition = data{"real"};
+  const auto expected_definition = data{"double"};
   CHECK_EQUAL(rt.to_definition(), expected_definition);
 }
 
@@ -203,13 +203,13 @@ TEST(ip_type) {
   CHECK(t != at);
   CHECK(t < at);
   CHECK(t <= at);
-  CHECK_EQUAL(fmt::format("{}", at), "addr");
-  CHECK_EQUAL(fmt::format("{}", ip_type{}), "addr");
+  CHECK_EQUAL(fmt::format("{}", at), "ip");
+  CHECK_EQUAL(fmt::format("{}", ip_type{}), "ip");
   CHECK(!caf::holds_alternative<ip_type>(t));
   CHECK(caf::holds_alternative<ip_type>(at));
   const auto lat = type::from_legacy_type(legacy_address_type{});
   CHECK(caf::holds_alternative<ip_type>(lat));
-  const auto expected_definition = data{"addr"};
+  const auto expected_definition = data{"ip"};
   CHECK_EQUAL(at.to_definition(), expected_definition);
 }
 
@@ -279,7 +279,7 @@ TEST(list_type) {
   CHECK(t != tlit);
   CHECK(t < tlit);
   CHECK(t <= tlit);
-  CHECK_EQUAL(fmt::format("{}", tlit), "list<int>");
+  CHECK_EQUAL(fmt::format("{}", tlit), "list<int64>");
   CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<none>");
   CHECK(!caf::holds_alternative<list_type>(t));
   CHECK(caf::holds_alternative<list_type>(tlit));
@@ -288,7 +288,7 @@ TEST(list_type) {
     = type::from_legacy_type(legacy_list_type{legacy_bool_type{}});
   CHECK(caf::holds_alternative<list_type>(llbt));
   CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
-  const auto expected_definition = data{record{{"list", "int"}}};
+  const auto expected_definition = data{record{{"list", "int64"}}};
   CHECK_EQUAL(tlit.to_definition(), expected_definition);
 }
 
@@ -304,7 +304,7 @@ TEST(map_type) {
   CHECK(t != tmsit);
   CHECK(t < tmsit);
   CHECK(t <= tmsit);
-  CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int>");
+  CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int64>");
   CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<none, none>");
   CHECK(!caf::holds_alternative<map_type>(t));
   CHECK(caf::holds_alternative<map_type>(tmsit));
@@ -316,7 +316,7 @@ TEST(map_type) {
   CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{ip_type{}});
   CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
   const auto expected_definition
-    = data{record{{"map", record{{"key", "string"}, {"value", "int"}}}}};
+    = data{record{{"map", record{{"key", "string"}, {"value", "int64"}}}}};
   CHECK_EQUAL(tmsit.to_definition(), expected_definition);
 }
 
@@ -338,8 +338,8 @@ TEST(record_type) {
        {"s", subnet_type{}},
      }},
   }};
-  CHECK_EQUAL(fmt::format("{}", rt), "record {i: int, r1: record {p: port, "
-                                     "a: addr}, b: bool, r2: record {s: "
+  CHECK_EQUAL(fmt::format("{}", rt), "record {i: int64, r1: record {p: port, "
+                                     "a: ip}, b: bool, r2: record {s: "
                                      "subnet}}");
   const auto& r = caf::get<record_type>(rt);
   CHECK_EQUAL(r.field(2).type, bool_type{});
@@ -349,7 +349,7 @@ TEST(record_type) {
   const auto expected_definition = data{record{
     {"record",
      list{
-       record{{"i", "int"}},
+       record{{"i", "int64"}},
        record{
          {"r1",
           record{
@@ -359,10 +359,10 @@ TEST(record_type) {
                 record{
                   {"p",
                    record{
-                     {"port", "int"},
+                     {"port", "int64"},
                    }},
                 },
-                record{{"a", "addr"}},
+                record{{"a", "ip"}},
               },
             },
           }},
@@ -893,7 +893,8 @@ TEST(sorting) {
   };
   std::shuffle(ts.begin(), ts.end(), std::random_device());
   std::sort(ts.begin(), ts.end());
-  const char* expected = "none bool int custom_bool custom_none custom_integer";
+  const char* expected
+    = "none bool int64 custom_bool custom_none custom_integer";
   CHECK_EQUAL(fmt::format("{}", fmt::join(ts, " ")), expected);
 }
 

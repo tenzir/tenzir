@@ -40,11 +40,11 @@ static auto const* SPEC_V0 = R"_(
           default: A query matching every event.
         required: true
         description: The query expression to execute.
-        example: ":addr in 10.42.0.0/16"
+        example: ":ip in 10.42.0.0/16"
       - in: query
         name: limit
         schema:
-          type: integer
+          type: int64
           default: 50
         required: false
         description: Maximum number of returned events.
@@ -93,7 +93,7 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:
@@ -127,10 +127,10 @@ static auto const* SPEC_V0 = R"_(
               expression:
                 type: string
                 description: The query expression to execute.
-                example: ":addr in 10.42.0.0/16"
+                example: ":ip in 10.42.0.0/16"
                 default: A query matching every event.
               limit:
-                type: integer
+                type: int64
                 default: 50
                 description: Maximum number of returned events
                 example: 3
@@ -166,7 +166,7 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:
@@ -204,10 +204,10 @@ static auto const* SPEC_V0 = R"_(
               expression:
                 type: string
                 description: The query expression to execute.
-                example: ":addr in 10.42.0.0/16"
+                example: ":ip in 10.42.0.0/16"
                 default: A query matching every event.
               limit:
-                type: integer
+                type: int64
                 default: 50
                 description: Maximum number of returned events
                 example: 3
@@ -244,7 +244,7 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:

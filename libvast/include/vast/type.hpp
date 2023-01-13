@@ -2087,20 +2087,19 @@ struct formatter<T> {
   template <class FormatContext>
   auto format(const vast::int64_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    // TODO: Rename to "integer" when switching to YAML schemas.
-    return format_to(ctx.out(), "int");
+    return format_to(ctx.out(), "int64");
   }
 
   template <class FormatContext>
   auto format(const vast::uint64_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "count");
+    return format_to(ctx.out(), "uint64");
   }
 
   template <class FormatContext>
   auto format(const vast::double_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "real");
+    return format_to(ctx.out(), "double");
   }
 
   template <class FormatContext>
@@ -2130,8 +2129,7 @@ struct formatter<T> {
   template <class FormatContext>
   auto format(const vast::ip_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    // TODO: Rename to "address" when switching to YAML schemas.
-    return format_to(ctx.out(), "addr");
+    return format_to(ctx.out(), "ip");
   }
 
   template <class FormatContext>

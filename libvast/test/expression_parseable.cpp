@@ -68,8 +68,8 @@ TEST(parseable / printable - predicate) {
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: type
-  MESSAGE("10.0.0.0/8 ni :addr");
-  str = "10.0.0.0/8 ni :addr";
+  MESSAGE("10.0.0.0/8 ni :ip");
+  str = "10.0.0.0/8 ni :ip";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<type_extractor>(pred.rhs));
@@ -78,8 +78,8 @@ TEST(parseable / printable - predicate) {
   CHECK(caf::get<type_extractor>(pred.rhs) == type_extractor{type{ip_type{}}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
-  MESSAGE(":real >= -4.8");
-  str = ":real >= -4.8";
+  MESSAGE(":double >= -4.8");
+  str = ":double >= -4.8";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<type_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
@@ -120,11 +120,11 @@ TEST(parseable - expression) {
   predicate p3{field_extractor{"a"}, relational_operator::greater,
                field_extractor{"b"}};
   MESSAGE("conjunction");
-  CHECK(parsers::expr("x == 42 && :real == 5.3"s, expr));
+  CHECK(parsers::expr("x == 42 && :double == 5.3"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2}));
-  CHECK(parsers::expr("x == 42 && :real == 5.3 && x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 && :double == 5.3 && x == 42"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2, p1}));
-  CHECK(parsers::expr("x == 42 && ! :real == 5.3 && x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 && ! :double == 5.3 && x == 42"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y"s, expr));
   CHECK(parsers::expr(
@@ -138,13 +138,13 @@ TEST(parseable - expression) {
   CHECK(caf::holds_alternative<type_extractor>(x0->lhs));
   CHECK(caf::holds_alternative<type_extractor>(x1->lhs));
   MESSAGE("disjunction");
-  CHECK(parsers::expr("x == 42 || :real == 5.3 || x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 || :double == 5.3 || x == 42"s, expr));
   CHECK_EQUAL(expr, expression(disjunction{p1, p2, p1}));
   CHECK(parsers::expr("a==b || b==c || c==d"s, expr));
   MESSAGE("negation");
   CHECK(parsers::expr("! x == 42"s, expr));
   CHECK_EQUAL(expr, expression(negation{p1}));
-  CHECK(parsers::expr("!(x == 42 || :real == 5.3)"s, expr));
+  CHECK(parsers::expr("!(x == 42 || :double == 5.3)"s, expr));
   CHECK_EQUAL(expr, expression(negation{disjunction{p1, p2}}));
   MESSAGE("parentheses");
   CHECK(parsers::expr("(x == 42)"s, expr));

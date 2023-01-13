@@ -304,9 +304,9 @@ TEST(zeek reader - custom module) {
     type zeek.conn = record{
       ts: timestamp #test,
       uid: string #index=string, // clashing user attribute
-      id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
+      id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
       proto: string #foo=bar, // user attribute
-      service: count, // type mismatch
+      service: uint64, // type mismatch
       community_id: string // not present in the data
     }
   )__";
@@ -327,21 +327,21 @@ TEST(zeek reader - custom module) {
     type zeek.conn = record{
       ts: timestamp #test,
       uid: string #index=string,
-      id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
+      id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
       proto: string #foo=bar,
       service: string,
       duration: duration,
-      orig_bytes: count,
-      resp_bytes: count,
+      orig_bytes: uint64,
+      resp_bytes: uint64,
       conn_state: string,
       local_orig: bool,
       //local_resp: bool,
-      missed_bytes: count,
+      missed_bytes: uint64,
       history: string,
-      orig_pkts: count,
-      orig_ip_bytes: count,
-      resp_pkts: count,
-      resp_ip_bytes: count,
+      orig_pkts: uint64,
+      orig_ip_bytes: uint64,
+      resp_pkts: uint64,
+      resp_ip_bytes: uint64,
       tunnel_parents: list<string>,
     })__";
   auto expected = unbox(to<module>(ref_module));

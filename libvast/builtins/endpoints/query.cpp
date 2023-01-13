@@ -36,7 +36,7 @@ static auto const* SPEC_V0 = R"_(
         name: expression
         schema:
           type: string
-          example: ":addr in 10.42.0.0/16"
+          example: ":ip in 10.42.0.0/16"
         required: true
         description: Query string.
     responses:
@@ -71,7 +71,7 @@ static auto const* SPEC_V0 = R"_(
       - in: query
         name: n
         schema:
-          type: integer
+          type: int64
         required: false
         example: 10
         description: Maximum number of returned events
@@ -84,7 +84,7 @@ static auto const* SPEC_V0 = R"_(
               type: object
               properties:
                 position:
-                  type: integer
+                  type: int64
                   description: The total number of events that has been returned by previous calls to this endpoint.
                 events:
                   type: array

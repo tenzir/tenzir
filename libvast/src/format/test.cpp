@@ -229,13 +229,13 @@ std::string_view builtin_module = R"__(
   type test.full = record{
     n: list<int>,
     b: bool #default="uniform(0,1)",
-    i: int #default="uniform(-42000,1337)",
-    c: count #default="pareto(0,1)",
-    r: real #default="normal(0,1)",
+    i: int64 #default="uniform(-42000,1337)",
+    c: uint64 #default="pareto(0,1)",
+    r: double #default="normal(0,1)",
     s: string #default="uniform(0,100)",
     t: time #default="uniform(0,10)",
     d: duration #default="uniform(100,200)",
-    a: addr #default="uniform(0,2000000)",
+    a: ip #default="uniform(0,2000000)",
     u: subnet #default="uniform(1000,2000)",
   }
 )__";

@@ -81,7 +81,7 @@ double get_type_fprate(const index_config& config, const type& type) {
     for (const auto& name : targets) {
       if (name == ":string" && type == string_type{})
         return fprate;
-      else if (name == ":addr" && type == ip_type{})
+      else if (name == ":ip" && type == ip_type{})
         return fprate;
     }
   }

@@ -13,7 +13,7 @@ type aws.cloudtrail = record {
   eventSource: string,
   eventName: string,
   awsRegion: string,
-  sourceIPAddress: addr, // warning, this can be a domain
+  sourceIPAddress: ip, // warning, this can be a domain
   requestID: string,
   // type of event that generated this record
   // most of the events are triggered through the API, even if it originates from an interaction with the console or another service

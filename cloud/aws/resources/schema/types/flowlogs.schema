@@ -3,16 +3,16 @@
 
 type aws.flowlogs = record {
   // from v2:
-  version: int,
+  version: int64,
   "account-id": string,
   "interface-id": string,
-  srcaddr: addr,
-  dstaddr: addr,
-  srcport: int,
-  dstport: int,
-  protocol: int,
-  packets: int,
-  bytes: int,
+  srcaddr: ip,
+  dstaddr: ip,
+  srcport: int64,
+  dstport: int64,
+  protocol: int64,
+  packets: int64,
+  bytes: int64,
   start: timestamp,
   end: time,
   action: enum{
@@ -28,14 +28,14 @@ type aws.flowlogs = record {
   "vpc-id": string,
   "subnet-id": string,
   "instance-id": string,
-  "tcp-flags": int,
+  "tcp-flags": int64,
   type: enum{
     IPv4,
     IPv6,
     EFA,
   },
-  "pkt-srcaddr": addr,
-  "pkt-dstaddr": addr,
+  "pkt-srcaddr": ip,
+  "pkt-dstaddr": ip,
   // from v4:
   region: string,
   "az-id": string,
@@ -48,5 +48,5 @@ type aws.flowlogs = record {
     ingress,
     egress,
   },
-  "traffic-path": int,
+  "traffic-path": int64,
 }

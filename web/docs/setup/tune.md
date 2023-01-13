@@ -198,7 +198,7 @@ vast:
           - suricata.http.http.url
         fp-rate: 0.005
       - targets:
-          - :addr
+          - :ip
         fp-rate: 0.1
 ```
 
@@ -226,7 +226,7 @@ vast:
         partition-index: false
         # Don't create partition indexes for fields of type addr.
       - targets:
-          - :addr
+          - :ip
         partition-index: false
 ```
 

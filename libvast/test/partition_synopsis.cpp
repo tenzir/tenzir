@@ -36,7 +36,7 @@ TEST(custom index_config) {
         .fp_rate = 0.001,
       },
       {
-        .targets = {":addr"s},
+        .targets = {":ip"s},
         .fp_rate = 0.05,
       },
     },

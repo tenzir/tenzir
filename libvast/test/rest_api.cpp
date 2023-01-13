@@ -137,7 +137,7 @@ TEST(export endpoint) {
     auto response = std::make_shared<test_response>();
     auto request = vast::http_request{
       .params = {
-        {"expression", ":addr in 192.168.0.0/16"},
+        {"expression", ":ip in 192.168.0.0/16"},
         {"limit", uint64_t{16}},
       },
       .response = response,
@@ -182,7 +182,7 @@ TEST(export endpoint) {
     auto response = std::make_shared<test_response>();
     auto request = vast::http_request{
       .params = {
-        {"expression", ":addr in 192.168.0.0/16"},
+        {"expression", ":ip in 192.168.0.0/16"},
         {"limit", uint64_t{16}},
       },
       .response = response,
@@ -206,7 +206,7 @@ TEST(export endpoint) {
     auto response = std::make_shared<test_response>();
     auto request = vast::http_request{
       .params = {
-        {"expression", ":addr in 192.168.0.0/16"},
+        {"expression", ":ip in 192.168.0.0/16"},
         {"limit", uint64_t{16}},
       },
       .response = response,

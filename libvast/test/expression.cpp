@@ -52,7 +52,7 @@ struct fixture {
                         relational_operator::equal, data{"foo"}};
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
-    // expr0 || :real > 4.2
+    // expr0 || :double > 4.2
     auto p2 = predicate{type_extractor{type{double_type{}}},
                         relational_operator::greater_equal, data{4.2}};
     expr1 = disjunction{expr0, p2};
@@ -105,7 +105,7 @@ TEST(serialization) {
 TEST(predicate expansion) {
   auto expr = to<expression>("10.0.0.0/8");
   auto normalized
-    = to<expression>(":subnet == 10.0.0.0/8 || :addr in 10.0.0.0/8");
+    = to<expression>(":subnet == 10.0.0.0/8 || :ip in 10.0.0.0/8");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK_EQUAL(normalize(*expr), *normalized);
@@ -195,7 +195,7 @@ TEST(extractors) {
                            relational_operator::in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
-    auto expr = unbox(to<expression>(":addr in 192.168.0.0/24"));
+    auto expr = unbox(to<expression>(":ip in 192.168.0.0/24"));
     auto resolved = caf::visit(type_resolver(r), expr);
     CHECK_EQUAL(resolved, normalized);
     MESSAGE("field extractor - distribution");
@@ -210,7 +210,7 @@ TEST(extractors) {
                            relational_operator::not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
-    auto expr = unbox(to<expression>(":addr !in 192.168.0.0/24"));
+    auto expr = unbox(to<expression>(":ip !in 192.168.0.0/24"));
     auto resolved = caf::visit(type_resolver(r), expr);
     CHECK_EQUAL(resolved, normalized);
     MESSAGE("field extractor - distribution with negation");
@@ -232,7 +232,7 @@ TEST(extractors) {
     auto expr = unbox(to<expression>(":port == 80"));
     auto resolved = caf::visit(type_resolver(r), expr);
     CHECK_EQUAL(resolved, normalized);
-    expr = unbox(to<expression>(":count == 80"));
+    expr = unbox(to<expression>(":uint64 == 80"));
     resolved = caf::visit(type_resolver(r), expr);
     CHECK_EQUAL(resolved, normalized);
   }
@@ -256,7 +256,7 @@ TEST(validation - type extractor) {
   auto expr = to<expression>(":bool == true");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>(":addr in 10.0.0.0/8");
+  expr = to<expression>(":ip in 10.0.0.0/8");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
   expr = to<expression>(":bool > -42");
@@ -283,8 +283,8 @@ TEST(matcher) {
     {"y", bool_type{}},
     {"z", ip_type{}},
   }};
-  CHECK(match(":count == 42 || :real < 4.2", r));
-  CHECK(match(":bool == true && :real < 4.2", r));
+  CHECK(match(":uint64 == 42 || :double < 4.2", r));
+  CHECK(match(":bool == true && :double < 4.2", r));
   MESSAGE("field extractors");
   CHECK(match("x < 4.2 || (y == true && z in 10.0.0.0/8)", r));
   CHECK(match("x < 4.2 && (y == false || :bool == false)", r));

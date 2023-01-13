@@ -25,9 +25,9 @@ class VastAnalyzer(Analyzer):
 
             query = ""
             if self.data_type == "ip":
-                query = f":addr == {self.get_data()}"
+                query = f":ip == {self.get_data()}"
             elif self.data_type == "subnet":
-                query = f":addr in {self.get_data()}"
+                query = f":ip in {self.get_data()}"
             elif self.data_type in ["hash", "domain"]:
                 query = f"{self.get_data()}"
 

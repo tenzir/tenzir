@@ -3,13 +3,13 @@ type argus.argus = record{
   StartTime: timestamp,
   Flgs: string,
   Proto: string,
-  SrcAddr: addr,
-  Sport: count,
+  SrcAddr: ip,
+  Sport: uint64,
   Dir: string,
-  DstAddr: addr,
-  Dport: count,
-  TotPkts: count,
-  TotBytes: count,
+  DstAddr: ip,
+  Dport: uint64,
+  TotPkts: uint64,
+  TotBytes: uint64,
   State: string,
-  TcpRtt: real
+  TcpRtt: double
 }
