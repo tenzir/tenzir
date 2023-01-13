@@ -55,6 +55,9 @@ struct spawn_arguments {
   }
 };
 
+/// Attempts to parse `query` as ::expression.
+caf::expected<expression> parse_expression(const std::string& query);
+
 /// Attempts to parse `[begin, end)` as ::expression.
 caf::expected<expression>
 parse_expression(std::vector<std::string>::const_iterator begin,

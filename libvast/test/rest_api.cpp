@@ -155,6 +155,27 @@ TEST(export endpoint) {
     CHECK_EQUAL(int64_t{doc["num_events"]}, 16);
     CHECK_EQUAL(doc["events"].get_array().size(), 16ull);
   }
+  //
+  { // GET with unnormalized expression
+    auto const& export_endpoint = endpoints[0];
+    auto handler = plugin->handler(self->system(), test_node);
+    auto response = std::make_shared<test_response>();
+    auto request = vast::http_request{
+      .params = {
+        // The expression is syntactically valid but semantically
+        // invalid (field_extractor in field_extractor)
+        {"expression", "net.src.ip in asdf"},
+        {"limit", vast::count{16}},
+      },
+      .response = response,
+    };
+    self->send(handler, vast::atom::http_request_v, export_endpoint.endpoint_id,
+               std::move(request));
+    run();
+    CHECK_NOT_EQUAL(response->error_, caf::error{});
+    CHECK(
+      to_string(response->error_).starts_with("unspecified(\"http error 400"));
+  }
   { // POST /export
     auto const& export_endpoint = endpoints[1];
     auto handler = plugin->handler(self->system(), test_node);

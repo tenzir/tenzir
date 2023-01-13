@@ -18,6 +18,7 @@
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
+#include <vast/system/spawn_arguments.hpp>
 #include <vast/table_slice.hpp>
 
 #include <caf/stateful_actor.hpp>
@@ -286,12 +287,17 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         } else {
           return rq.response->abort(422, "missing parameter 'expression'\n");
         }
-        auto expr = to<vast::expression>(*query_string);
+        auto expr = system::parse_expression(*query_string);
         if (!expr)
-          return rq.response->abort(400, "couldn't parse expression\n");
+          return rq.response->abort(400, fmt::format("unparseable query: {}\n",
+                                                     expr.error()));
+        auto normalized_expr = normalize_and_validate(*expr);
+        if (!normalized_expr)
+          return rq.response->abort(400, fmt::format("invalid query: {}\n",
+                                                     normalized_expr.error()));
         auto handler = self->spawn(query_manager, self->state.index_);
-        auto query = vast::query_context::make_extract("http-request", handler,
-                                                       std::move(*expr));
+        auto query = vast::query_context::make_extract(
+          "http-request", handler, std::move(*normalized_expr));
         query.taste = 0;
         self
           ->request(self->state.index_, caf::infinite, atom::evaluate_v, query)
