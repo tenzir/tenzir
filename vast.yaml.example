@@ -276,6 +276,9 @@ vast:
       # Omit empty maps in JSON objects.
       omit-empty-maps: false
 
+      # Set a default value for the omit-nulls and omit-empty-* options.
+      omit-empty: false
+
     # The `vast export pcap` command exports events in the PCAP format.
     pcap:
       # Flush to disk after this many packets.
