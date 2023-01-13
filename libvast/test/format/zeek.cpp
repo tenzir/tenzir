@@ -249,7 +249,7 @@ TEST(zeek data parsing) {
   data d;
   CHECK(zeek_parse(type{bool_type{}}, "T", d));
   CHECK(d == true);
-  CHECK(zeek_parse(type{integer_type{}}, "-49329", d));
+  CHECK(zeek_parse(type{int64_type{}}, "-49329", d));
   CHECK(d == integer{-49329});
   CHECK(zeek_parse(type{count_type{}}, "49329"s, d));
   CHECK(d == count{49329});
@@ -264,7 +264,7 @@ TEST(zeek data parsing) {
   CHECK(d == *to<address>("192.168.1.103"));
   CHECK(zeek_parse(type{subnet_type{}}, "10.0.0.0/24", d));
   CHECK(d == *to<subnet>("10.0.0.0/24"));
-  CHECK(zeek_parse(type{list_type{integer_type{}}}, "49329", d));
+  CHECK(zeek_parse(type{list_type{int64_type{}}}, "49329", d));
   CHECK(d == list{integer{49329}});
   CHECK(zeek_parse(type{list_type{string_type{}}}, "49329,42", d));
   CHECK((d == list{"49329", "42"}));

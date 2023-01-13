@@ -112,7 +112,7 @@ TEST(nested multi - column roundtrip) {
         "nested",
         record_type{
           {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
-          {"f3.2", integer_type{}},
+          {"f3.2", int64_type{}},
         },
         {{"attr"}, {"other_attr", "val"}},
       },
@@ -126,7 +126,7 @@ TEST(nested multi - column roundtrip) {
   check_column(slice, 0, string_type{}, f1s);
   check_column(slice, 1, count_type{}, f2s);
   check_column(slice, 2, pattern_type{}, f3s);
-  check_column(slice, 3, integer_type{}, f4s);
+  check_column(slice, 3, int64_type{}, f4s);
   record_batch_roundtrip(slice);
 }
 
@@ -140,7 +140,7 @@ TEST(batch transform nested column) {
         "nested",
         record_type{
           {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
-          {"f3.2", integer_type{}},
+          {"f3.2", int64_type{}},
         },
         {{"attr"}, {"other_attr", "val"}},
       },
@@ -172,7 +172,7 @@ TEST(batch transform nested column) {
   REQUIRE(caf::holds_alternative<record_type>(schema));
   const auto expected_t = record_type{
     {"f3.1", string_type{}},
-    {"f3.2", integer_type{}},
+    {"f3.2", int64_type{}},
   };
   CHECK_EQUAL(caf::get<record_type>(schema).field(2).name, "f3_rec");
   CHECK_EQUAL(
@@ -200,7 +200,7 @@ TEST(batch project nested column) {
         "nested",
         record_type{
           {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
-          {"f3.2", integer_type{}},
+          {"f3.2", int64_type{}},
         },
         {{"attr"}, {"other_attr", "val"}},
       },
@@ -222,7 +222,7 @@ TEST(batch project nested column) {
       type{
         "nested",
         record_type{
-          {"f3.2", integer_type{}},
+          {"f3.2", int64_type{}},
         },
         {{"attr"}, {"other_attr", "val"}},
       },
@@ -291,7 +291,7 @@ TEST(single column - enum2) {
 }
 
 TEST(single column - integer) {
-  auto t = integer_type{};
+  auto t = int64_type{};
   auto slice = make_single_column_slice(t, caf::none, 1_i, 2_i);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), std::nullopt);
@@ -410,7 +410,7 @@ TEST(single column - subnet) {
 }
 
 TEST(single column - list of integers) {
-  auto t = list_type{integer_type{}};
+  auto t = list_type{int64_type{}};
   record_type schema{{"values", t}};
   list list1{1_i, 2_i, 3_i};
   list list2{10_i, 20_i};
@@ -567,7 +567,7 @@ TEST(single column - list of strings) {
 }
 
 TEST(single column - list of list of integers) {
-  auto t = list_type{integer_type{}};
+  auto t = list_type{int64_type{}};
   // Note: we call the copy ctor if we don't wrap legacy_list_type into a type.
   auto llt = list_type{type{t}};
   record_type schema{{"values", llt}};
@@ -661,7 +661,7 @@ auto field_roundtrip(const type& t) {
 
 TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{bool_type{}});
-  field_roundtrip(type{integer_type{}});
+  field_roundtrip(type{int64_type{}});
   field_roundtrip(type{count_type{}});
   field_roundtrip(type{real_type{}});
   field_roundtrip(type{duration_type{}});
@@ -671,10 +671,10 @@ TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{address_type{}});
   field_roundtrip(type{subnet_type{}});
   field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
-  field_roundtrip(type{list_type{integer_type{}}});
-  field_roundtrip(type{map_type{integer_type{}, address_type{}}});
+  field_roundtrip(type{list_type{int64_type{}}});
+  field_roundtrip(type{map_type{int64_type{}, address_type{}}});
   field_roundtrip(
-    type{record_type{{"key", integer_type{}}, {"value", address_type{}}}});
+    type{record_type{{"key", int64_type{}}, {"value", address_type{}}}});
   field_roundtrip(
     type{record_type{{"a", string_type{}}, {"b", address_type{}}}});
   field_roundtrip(type{record_type{
@@ -714,13 +714,13 @@ auto schema_roundtrip(const type& t) {
 }
 
 TEST(arrow record type to schema roundtrip tp) {
-  schema_roundtrip(type{"somename", record_type{{"a", integer_type{}}}});
+  schema_roundtrip(type{"somename", record_type{{"a", int64_type{}}}});
   schema_roundtrip(type{
     "alias",
     record_type{
-      {"a", integer_type{}},
+      {"a", int64_type{}},
       {"b", bool_type{}},
-      {"c", integer_type{}},
+      {"c", int64_type{}},
       {"d", count_type{}},
       {"e", real_type{}},
       {"f", duration_type{}},
@@ -728,7 +728,7 @@ TEST(arrow record type to schema roundtrip tp) {
       {"h", string_type{}},
       {"i", address_type{}},
       {"j", subnet_type{}},
-      {"k", list_type{integer_type{}}},
+      {"k", list_type{int64_type{}}},
     },
     {{"top_level_key", "top_level_value"}},
   });
@@ -747,7 +747,7 @@ TEST(arrow record type to schema roundtrip tp) {
   auto inner = type{
     "inner_rec",
     record_type{
-      {"a", integer_type{}},
+      {"a", int64_type{}},
       {"b", string_type{}},
     },
     {{"key0", "value0"}, {"key1"}},

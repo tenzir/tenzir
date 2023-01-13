@@ -42,7 +42,7 @@ struct alternating {};
 
 template <class Policy>
 std::vector<table_slice> make_integers(size_t count) {
-  auto schema = type{"test.int", record_type{{"value", integer_type{}}}};
+  auto schema = type{"test.int", record_type{{"value", int64_type{}}}};
   auto builder = std::make_shared<table_slice_builder>(schema);
   VAST_ASSERT(builder != nullptr);
   std::vector<table_slice> result;

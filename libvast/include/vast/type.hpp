@@ -49,7 +49,7 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<bool_type, integer_type, count_type, real_type,
+  = caf::detail::type_list<bool_type, int64_type, count_type, real_type,
                            duration_type, time_type, string_type, pattern_type,
                            address_type, subnet_type, enumeration_type,
                            list_type, map_type, record_type>;
@@ -444,11 +444,11 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
-// -- integer_type ------------------------------------------------------------
+// -- int64_type ------------------------------------------------------------
 
 /// A signed integer.
 /// @relates type
-class integer_type final {
+class int64_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 2;
@@ -457,7 +457,7 @@ public:
   using arrow_type = arrow::Int64Type;
 
   /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const integer_type&) noexcept;
+  friend std::span<const std::byte> as_bytes(const int64_type&) noexcept;
 
   /// Constructs data from the type.
   [[nodiscard]] static integer construct() noexcept;
@@ -2085,7 +2085,7 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const vast::integer_type&, FormatContext& ctx) const
+  auto format(const vast::int64_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     // TODO: Rename to "integer" when switching to YAML schemas.
     return format_to(ctx.out(), "int");

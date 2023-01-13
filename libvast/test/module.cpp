@@ -251,7 +251,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
     if (known_type_name == "bool")
       return type{name, bool_type{}};
     if (known_type_name == "integer")
-      return type{name, integer_type{}};
+      return type{name, int64_type{}};
     if (known_type_name == "count")
       return type{name, count_type{}};
     if (known_type_name == "real")
@@ -418,12 +418,12 @@ TEST(YAML Type - parsing bool type) {
 
 TEST(YAML Type - Parsing integer type) {
   std::vector<type> known_types;
-  auto integer_type_wo_attrs = record::value_type{
+  auto int64_type_wo_attrs = record::value_type{
     "int_field",
     record{{"type", "integer"}},
   };
-  auto result = unbox(to_type(known_types, integer_type_wo_attrs));
-  auto expected_type = type{"int_field", integer_type{}};
+  auto result = unbox(to_type(known_types, int64_type_wo_attrs));
+  auto expected_type = type{"int_field", int64_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 

@@ -258,7 +258,7 @@ caf::error convert(const integer& src, To& dst, const count_type&) {
 
 // Overload for integers.
 template <concepts::signed_integral To>
-caf::error convert(const integer& src, To& dst, const integer_type&) {
+caf::error convert(const integer& src, To& dst, const int64_type&) {
   if constexpr (sizeof(To) >= sizeof(integer::value)) {
     dst = src.value;
   } else {

@@ -41,7 +41,7 @@ struct configuration {
   static const record_type& schema() noexcept {
     static auto result = record_type{
       {"row-group-size", count_type{}},
-      {"zstd-compression-level", integer_type{}},
+      {"zstd-compression-level", int64_type{}},
     };
     return result;
   }

@@ -108,7 +108,7 @@ private:
     "test",
     record_type{
       {"a", bool_type{}},
-      {"b", integer_type{}},
+      {"b", int64_type{}},
       {"c", count_type{}},
       {"d", real_type{}},
       {"e", duration_type{}},
@@ -121,7 +121,7 @@ private:
       {"n", map_type{count_type{}, bool_type{}}},
       // test_lists
       {"va", list_type{bool_type{}}},
-      {"vb", list_type{integer_type{}}},
+      {"vb", list_type{int64_type{}}},
       {"vc", list_type{count_type{}}},
       {"vd", list_type{real_type{}}},
       {"ve", list_type{duration_type{}}},
@@ -134,7 +134,7 @@ private:
       // {"vm", list_type{map_type{count_type{}, bool_type{}}}},
       // -- test_maps_left
       {"maa", map_type{bool_type{}, bool_type{}}},
-      {"mba", map_type{integer_type{}, bool_type{}}},
+      {"mba", map_type{int64_type{}, bool_type{}}},
       {"mca", map_type{count_type{}, bool_type{}}},
       {"mda", map_type{real_type{}, bool_type{}}},
       {"mea", map_type{duration_type{}, bool_type{}}},
@@ -146,7 +146,7 @@ private:
       // {"mla", map_type{list_type{count_type{}}, bool_type{}}},
       // {"mna", map_type{map_type{count_type{}, bool_type{}}, bool_type{}}},
       // -- test_maps_right (intentionally no maa)
-      {"mab", map_type{bool_type{}, integer_type{}}},
+      {"mab", map_type{bool_type{}, int64_type{}}},
       {"mac", map_type{bool_type{}, count_type{}}},
       {"mad", map_type{bool_type{}, real_type{}}},
       {"mae", map_type{bool_type{}, duration_type{}}},

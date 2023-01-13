@@ -46,7 +46,7 @@ caf::expected<distribution> make_distribution(const type& t) {
                                             "specification");
   VAST_DEBUG("generating distribution {} in [{}, {})", name, p0, p1);
   if (name == "uniform") {
-    if (caf::holds_alternative<integer_type>(t))
+    if (caf::holds_alternative<int64_type>(t))
       return distribution{
         std::uniform_int_distribution<vast::integer::value_type>{
           static_cast<vast::integer::value_type>(p0),
@@ -146,7 +146,7 @@ struct randomizer {
     // Do nothing.
   }
 
-  void operator()(const integer_type&, integer& x) {
+  void operator()(const int64_type&, integer& x) {
     x.value = static_cast<integer::value_type>(sample());
   }
 

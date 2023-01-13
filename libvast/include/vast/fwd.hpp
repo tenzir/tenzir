@@ -134,7 +134,7 @@ class enumeration_type;
 class expression;
 class ewah_bitmap;
 class http_request;
-class integer_type;
+class int64_type;
 class legacy_abstract_type;
 class legacy_type;
 class list_type;

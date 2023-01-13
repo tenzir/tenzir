@@ -78,7 +78,7 @@ type deduce(simdjson::dom::element e) {
       return type{record_type{fields}};
     }
     case ::simdjson::dom::element_type::INT64:
-      return type{integer_type{}};
+      return type{int64_type{}};
     case ::simdjson::dom::element_type::UINT64:
       return type{count_type{}};
     case ::simdjson::dom::element_type::DOUBLE:

@@ -31,7 +31,7 @@ namespace vast.fbs.type;
 table BoolType {}
 
 /// A signed integer.
-table IntegerType {}
+table Int64Type {}
 
 /// An unsigned integer.
 table CountType {}
@@ -83,7 +83,7 @@ namespace vast.fbs.type;
 /// The sum type of all possible types.
 union Type {
   bool_type: BoolType,
-  integer_type: IntegerType,
+  int64_type: Int64Type,
   count_type: CountType,
   real_type: RealType,
   duration_type: DurationType,

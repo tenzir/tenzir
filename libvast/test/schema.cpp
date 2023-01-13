@@ -43,7 +43,7 @@ TEST(offset finding) {
   REQUIRE(holds_alternative<record_type>(*foo_type));
   const auto& foo_record = get<record_type>(*foo_type);
   CHECK_EQUAL(foo_record.num_fields(), 4u);
-  CHECK_EQUAL(foo_record.field(offset{0}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{0}).type, int64_type{});
   CHECK_EQUAL(foo_record.field(offset{1}).type, real_type{});
   CHECK_EQUAL(foo_record.field(offset{2}).name, "c");
   CHECK(caf::holds_alternative<record_type>(foo_record.field(offset{2}).type));
@@ -51,11 +51,11 @@ TEST(offset finding) {
     caf::get<record_type>(foo_record.field(offset{2}).type).num_fields(), 3u);
   CHECK_EQUAL(foo_record.field(offset{2, 0}).name, "a");
   CHECK_EQUAL(foo_record.field(offset{2, 1, 0}).type, string_type{});
-  CHECK_EQUAL(foo_record.field(offset{2, 2}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{2, 2}).type, int64_type{});
   CHECK_EQUAL(foo_record.field(offset{3}).name, "d");
-  CHECK_EQUAL(foo_record.field(offset{3, 0}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{3, 0}).type, int64_type{});
   CHECK_EQUAL(foo_record.field(offset{3, 1}).name, "b");
-  CHECK_EQUAL(foo_record.field(offset{3, 1, 0}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{3, 1, 0}).type, int64_type{});
   CHECK_EQUAL(foo_record.field(offset{3, 1, 1}).type, real_type{});
 }
 
@@ -71,12 +71,11 @@ TEST(combining) {
   )__"));
   auto z = module::combine(x, y);
   CHECK_EQUAL(unbox(z.find("a")),
-              (type{"a", type{"int_custom", integer_type{}}}));
+              (type{"a", type{"int_custom", int64_type{}}}));
   CHECK_EQUAL(unbox(z.find("b")), (type{"b", real_type{}}));
   CHECK_EQUAL(unbox(z.find("c")), (type{"c", address_type{}}));
   CHECK_EQUAL(unbox(z.find("d")), (type{"d", pattern_type{}}));
-  CHECK_EQUAL(unbox(z.find("int_custom")),
-              (type{"int_custom", integer_type{}}));
+  CHECK_EQUAL(unbox(z.find("int_custom")), (type{"int_custom", int64_type{}}));
 }
 
 TEST(merging) {
@@ -105,7 +104,7 @@ TEST(serialization) {
       {"s1", string_type{}},
       {"d1", real_type{}},
       {"c", type{count_type{}, {{"skip"}}}},
-      {"i", integer_type{}},
+      {"i", int64_type{}},
       {"s2", string_type{}},
       {"d2", real_type{}},
     },
@@ -312,7 +311,7 @@ TEST(parseable - out of order definitions) {
       type{
         "bar",
         record_type{
-          {"x", type{"foo", integer_type{}}},
+          {"x", type{"foo", int64_type{}}},
         },
       },
     },
@@ -374,7 +373,7 @@ TEST(parseable - with context) {
       record_type{
         {"x",
          record_type{
-           {"y", type{"foo", integer_type{}}},
+           {"y", type{"foo", int64_type{}}},
          }},
       },
     };
@@ -399,7 +398,7 @@ TEST(parseable - with context) {
       record_type{
         {"x",
          record_type{
-           {"y", type{"foo", integer_type{}}},
+           {"y", type{"foo", int64_type{}}},
          }},
       },
     };
@@ -448,9 +447,9 @@ TEST(parseable - with context) {
     auto expected = type{
       "gob",
       record_type{
-        {"x", integer_type{}},
-        {"y", integer_type{}},
-        {"z", integer_type{}},
+        {"x", int64_type{}},
+        {"y", int64_type{}},
+        {"z", int64_type{}},
       },
     };
     CHECK_EQUAL(gob, expected);
@@ -492,8 +491,8 @@ TEST(parseable - with context) {
     auto expected_lplus = type{
       "lplus",
       record_type{
-        {"a", integer_type{}},
-        {"b", integer_type{}},
+        {"a", int64_type{}},
+        {"b", int64_type{}},
         {"c", real_type{}},
       },
       {
@@ -505,7 +504,7 @@ TEST(parseable - with context) {
       "rplus",
       record_type{
         {"a", real_type{}},
-        {"b", integer_type{}},
+        {"b", int64_type{}},
         {"c", real_type{}},
       },
       {

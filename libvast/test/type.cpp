@@ -45,23 +45,23 @@ TEST(bool_type) {
   CHECK_EQUAL(bt.to_definition(), expected_definition);
 }
 
-TEST(integer_type) {
-  static_assert(concrete_type<integer_type>);
-  static_assert(basic_type<integer_type>);
-  static_assert(!complex_type<integer_type>);
+TEST(int64_type) {
+  static_assert(concrete_type<int64_type>);
+  static_assert(basic_type<int64_type>);
+  static_assert(!complex_type<int64_type>);
   const auto t = type{};
-  const auto it = type{integer_type{}};
+  const auto it = type{int64_type{}};
   CHECK(it);
-  CHECK_EQUAL(as_bytes(it), as_bytes(integer_type{}));
+  CHECK_EQUAL(as_bytes(it), as_bytes(int64_type{}));
   CHECK(t != it);
   CHECK(t < it);
   CHECK(t <= it);
   CHECK_EQUAL(fmt::format("{}", it), "int");
-  CHECK_EQUAL(fmt::format("{}", integer_type{}), "int");
-  CHECK(!caf::holds_alternative<integer_type>(t));
-  CHECK(caf::holds_alternative<integer_type>(it));
+  CHECK_EQUAL(fmt::format("{}", int64_type{}), "int");
+  CHECK(!caf::holds_alternative<int64_type>(t));
+  CHECK(caf::holds_alternative<int64_type>(it));
   const auto lit = type::from_legacy_type(legacy_integer_type{});
-  CHECK(caf::holds_alternative<integer_type>(lit));
+  CHECK(caf::holds_alternative<int64_type>(lit));
   const auto expected_definition = data{"int"};
   CHECK_EQUAL(it.to_definition(), expected_definition);
 }
@@ -272,8 +272,8 @@ TEST(list_type) {
   static_assert(!basic_type<list_type>);
   static_assert(complex_type<list_type>);
   const auto t = type{};
-  const auto tlit = type{list_type{integer_type{}}};
-  const auto lit = list_type{integer_type{}};
+  const auto tlit = type{list_type{int64_type{}}};
+  const auto lit = list_type{int64_type{}};
   CHECK(tlit);
   CHECK_EQUAL(as_bytes(tlit), as_bytes(lit));
   CHECK(t != tlit);
@@ -283,7 +283,7 @@ TEST(list_type) {
   CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<none>");
   CHECK(!caf::holds_alternative<list_type>(t));
   CHECK(caf::holds_alternative<list_type>(tlit));
-  CHECK_EQUAL(caf::get<list_type>(tlit).value_type(), type{integer_type{}});
+  CHECK_EQUAL(caf::get<list_type>(tlit).value_type(), type{int64_type{}});
   const auto llbt
     = type::from_legacy_type(legacy_list_type{legacy_bool_type{}});
   CHECK(caf::holds_alternative<list_type>(llbt));
@@ -297,8 +297,8 @@ TEST(map_type) {
   static_assert(!basic_type<map_type>);
   static_assert(complex_type<map_type>);
   const auto t = type{};
-  const auto tmsit = type{map_type{string_type{}, integer_type{}}};
-  const auto msit = map_type{string_type{}, integer_type{}};
+  const auto tmsit = type{map_type{string_type{}, int64_type{}}};
+  const auto msit = map_type{string_type{}, int64_type{}};
   CHECK(tmsit);
   CHECK_EQUAL(as_bytes(tmsit), as_bytes(msit));
   CHECK(t != tmsit);
@@ -309,7 +309,7 @@ TEST(map_type) {
   CHECK(!caf::holds_alternative<map_type>(t));
   CHECK(caf::holds_alternative<map_type>(tmsit));
   CHECK_EQUAL(caf::get<map_type>(tmsit).key_type(), type{string_type{}});
-  CHECK_EQUAL(caf::get<map_type>(tmsit).value_type(), type{integer_type{}});
+  CHECK_EQUAL(caf::get<map_type>(tmsit).value_type(), type{int64_type{}});
   const auto lmabt = type::from_legacy_type(
     legacy_map_type{legacy_address_type{}, legacy_bool_type{}});
   CHECK(caf::holds_alternative<map_type>(lmabt));
@@ -326,10 +326,10 @@ TEST(record_type) {
   static_assert(complex_type<record_type>);
   const auto t = type{};
   const auto rt = type{record_type{
-    {"i", integer_type{}},
+    {"i", int64_type{}},
     {"r1",
      record_type{
-       {"p", type{"port", integer_type{}}},
+       {"p", type{"port", int64_type{}}},
        {"a", address_type{}},
      }},
     {"b", bool_type{}},
@@ -384,12 +384,12 @@ TEST(record_type) {
 
 TEST(record_type name resolving) {
   const auto rt = record_type{
-    {"i", integer_type{}},
+    {"i", int64_type{}},
     {"r",
      record_type{
-       {"p", type{"port", integer_type{}}},
+       {"p", type{"port", int64_type{}}},
        {"a", address_type{}},
-       {"not_i", integer_type{}},
+       {"not_i", int64_type{}},
      }},
     {"b", type{bool_type{}, {{"key"}}}},
     {"r2",
@@ -470,7 +470,7 @@ TEST(record_type flat index computation) {
      record_type{
        {"y",
         record_type{
-          {"z", integer_type{}},
+          {"z", int64_type{}},
           {"k", bool_type{}},
         }},
        {"m",
@@ -508,7 +508,7 @@ TEST(record type transformation) {
      record_type{
        {"y",
         record_type{
-          {"z", integer_type{}},
+          {"z", int64_type{}},
           {"k", bool_type{}},
         }},
        {"m",
@@ -531,7 +531,7 @@ TEST(record type transformation) {
      record_type{
        {"y",
         record_type{
-          {"z", integer_type{}},
+          {"z", int64_type{}},
           {"t", type{}},
           {"u", address_type{}},
           {"k", bool_type{}},
@@ -561,7 +561,7 @@ TEST(record type transformation) {
     record_type{{
       "y",
       record_type{
-        {"z", integer_type{}},
+        {"z", int64_type{}},
       },
     }},
   }};
@@ -576,7 +576,7 @@ TEST(record_type merging) {
      record_type{
        {"u",
         record_type{
-          {"a", integer_type{}},
+          {"a", int64_type{}},
           {"b", bool_type{}},
         }},
      }},
@@ -592,7 +592,7 @@ TEST(record_type merging) {
         record_type{
           {"a", count_type{}},
           {"b", real_type{}},
-          {"c", integer_type{}},
+          {"c", int64_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -603,14 +603,14 @@ TEST(record_type merging) {
      record_type{
        {"u",
         record_type{
-          {"a", integer_type{}},
+          {"a", int64_type{}},
           {"b", bool_type{}},
         }},
        {"y",
         record_type{
           {"a", count_type{}},
           {"b", real_type{}},
-          {"c", integer_type{}},
+          {"c", int64_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -624,14 +624,14 @@ TEST(record_type merging) {
      record_type{
        {"u",
         record_type{
-          {"a", integer_type{}},
+          {"a", int64_type{}},
           {"b", bool_type{}},
         }},
        {"y",
         record_type{
           {"a", count_type{}},
           {"b", real_type{}},
-          {"c", integer_type{}},
+          {"c", int64_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -660,7 +660,7 @@ TEST(record_type merging) {
 TEST(type inference) {
   CHECK_EQUAL(type::infer(caf::none), type{});
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
-  CHECK_EQUAL(type::infer(integer{}), integer_type{});
+  CHECK_EQUAL(type::infer(integer{}), int64_type{});
   CHECK_EQUAL(type::infer(count{}), count_type{});
   CHECK_EQUAL(type::infer(real{}), real_type{});
   CHECK_EQUAL(type::infer(duration{}), duration_type{});
@@ -680,11 +680,11 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}),
               (map_type{type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{caf::none, integer{}}}),
-              (map_type{type{}, integer_type{}}));
+              (map_type{type{}, int64_type{}}));
   CHECK_EQUAL(type::infer(map{{bool{}, caf::none}}),
               (map_type{bool_type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{bool{}, integer{}}}),
-              (map_type{bool_type{}, integer_type{}}));
+              (map_type{bool_type{}, int64_type{}}));
   const auto r = record{
     {"a", bool{}},
     {"b", integer{}},
@@ -695,7 +695,7 @@ TEST(type inference) {
   };
   const auto rt = record_type{
     {"a", bool_type{}},
-    {"b", integer_type{}},
+    {"b", int64_type{}},
     {"c",
      record_type{
        {"d", count_type{}},
@@ -706,10 +706,10 @@ TEST(type inference) {
 
 TEST(legacy_type conversion) {
   const auto rt = type{record_type{
-    {"i", integer_type{}},
+    {"i", int64_type{}},
     {"r1",
      record_type{
-       {"p", type{"port", integer_type{}}},
+       {"p", type{"port", int64_type{}}},
        {"a", address_type{}},
      }},
     {"b", type{bool_type{}, {{"key"}}}},
@@ -887,10 +887,10 @@ TEST(sorting) {
   auto ts = std::vector<type>{
     type{},
     type{bool_type{}},
-    type{integer_type{}},
+    type{int64_type{}},
     type{"custom_none", type{}},
     type{"custom_bool", bool_type{}},
-    type{"custom_integer", integer_type{}},
+    type{"custom_integer", int64_type{}},
   };
   std::shuffle(ts.begin(), ts.end(), std::random_device());
   std::sort(ts.begin(), ts.end());
@@ -910,9 +910,9 @@ TEST(construct) {
   const auto t = type{
     "test.full",
     record_type{
-      {"n", list_type{integer_type{}}},
+      {"n", list_type{int64_type{}}},
       {"b", type{bool_type{}, {{"default", "uniform(0,1)"}}}},
-      {"i", type{integer_type{}, {{"default", "uniform(-42000,1337)"}}}},
+      {"i", type{int64_type{}, {{"default", "uniform(-42000,1337)"}}}},
       {"c", type{count_type{}, {{"default", "pareto(0,1)"}}}},
       {"r", type{real_type{}, {{"default", "normal(0,1)"}}}},
       {"s", type{string_type{}, {{"default", "uniform(0,100)"}}}},
@@ -941,8 +941,8 @@ TEST(sum type) {
   };
   CHECK(caf::visit(is_type(address_type{}), type{address_type{}}));
   CHECK(caf::visit(is_type(bool_type{}), type{bool_type{}}));
-  CHECK(caf::visit(is_type(bool_type{}, integer_type{}), type{bool_type{}},
-                   type{integer_type{}}));
+  CHECK(caf::visit(is_type(bool_type{}, int64_type{}), type{bool_type{}},
+                   type{int64_type{}}));
 }
 
 TEST(hashes) {
@@ -955,8 +955,8 @@ TEST(hashes) {
   CHECK_EQUAL(fmt::format("0x{:X}", hash(type{})), "0xB51ACBDD64EF56FF");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(bool_type{})), "0x295A1E349D71CC2"
                                                         "3");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(integer_type{})), "0x5B0D4F0B0B16740"
-                                                           "4");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(int64_type{})), "0x5B0D4F0B0B16740"
+                                                         "4");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(count_type{})), "0x529C2667783DB09"
                                                          "D");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0x41615FDB30A38AA"
@@ -976,8 +976,8 @@ TEST(hashes) {
   CHECK_EQUAL(fmt::format("0x{:X}",
                           hash(enumeration_type{{"a"}, {"b"}, {"c"}})),
               "0xFFF139D14A6FFAA4");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(list_type{integer_type{}})),
-              "0x2F697BD2223CA310");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(list_type{int64_type{}})), "0x2F697BD2"
+                                                                    "223CA310");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(map_type{time_type{}, string_type{}})),
               "0x355D5293D16CC7CD");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(record_type{{"a", address_type{}},
@@ -986,8 +986,8 @@ TEST(hashes) {
 }
 
 TEST(congruence) {
-  auto i = type{integer_type{}};
-  auto j = type{integer_type{}};
+  auto i = type{int64_type{}};
+  auto j = type{int64_type{}};
   CHECK(i == j);
   i = type{"i", i};
   j = type{"j", j};
@@ -1033,8 +1033,8 @@ TEST(compatibility) {
 }
 
 TEST(subset) {
-  auto i = type{integer_type{}};
-  auto j = type{integer_type{}};
+  auto i = type{int64_type{}};
+  auto j = type{int64_type{}};
   CHECK(is_subset(i, j));
   i = type{"i", i};
   j = type{"j", j};
@@ -1094,7 +1094,7 @@ FIXTURE_SCOPE(type_fixture, fixture)
 TEST(serialization) {
   CHECK_ROUNDTRIP(type{});
   CHECK_ROUNDTRIP(type{bool_type{}});
-  CHECK_ROUNDTRIP(type{integer_type{}});
+  CHECK_ROUNDTRIP(type{int64_type{}});
   CHECK_ROUNDTRIP(type{count_type{}});
   CHECK_ROUNDTRIP(type{real_type{}});
   CHECK_ROUNDTRIP(type{duration_type{}});
@@ -1104,13 +1104,13 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{address_type{}});
   CHECK_ROUNDTRIP(type{subnet_type{}});
   CHECK_ROUNDTRIP(type{enumeration_type{{"a"}, {"b"}, {"c"}}});
-  CHECK_ROUNDTRIP(type{list_type{integer_type{}}});
+  CHECK_ROUNDTRIP(type{list_type{int64_type{}}});
   CHECK_ROUNDTRIP(type{map_type{address_type{}, subnet_type{}}});
   const auto rt = type{record_type{
-    {"i", integer_type{}},
+    {"i", int64_type{}},
     {"r1",
      record_type{
-       {"p", type{"port", integer_type{}}},
+       {"p", type{"port", int64_type{}}},
        {"a", address_type{}},
      }},
     {"b", bool_type{}},

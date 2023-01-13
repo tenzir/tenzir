@@ -89,7 +89,7 @@ TEST(bool) {
 TEST(integer) {
   caf::settings opts;
   opts["base"] = "uniform(10, 20)";
-  auto idx = factory<value_index>::make(type{integer_type{}}, std::move(opts));
+  auto idx = factory<value_index>::make(type{int64_type{}}, std::move(opts));
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(integer{-7})));

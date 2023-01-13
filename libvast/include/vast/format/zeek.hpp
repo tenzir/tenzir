@@ -62,7 +62,7 @@ struct zeek_parser {
     return parse(parsers::tf);
   }
 
-  bool operator()(const integer_type&) const {
+  bool operator()(const int64_type&) const {
     static auto p = parsers::i64->*[](integer::value_type x) { //
       return integer{x};
     };
@@ -148,7 +148,7 @@ struct zeek_parser_factory {
     };
   }
 
-  result_type operator()(const integer_type&) const {
+  result_type operator()(const int64_type&) const {
     return parsers::i64->*[](integer::value_type x) {
       return integer{x};
     };

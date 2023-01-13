@@ -86,7 +86,7 @@ TEST(factory construction and parameterization) {
 
 TEST(hash index for integer) {
   factory<value_index>::initialize();
-  auto t = type{integer_type{}, {{"index", "hash"}}};
+  auto t = type{int64_type{}, {{"index", "hash"}}};
   caf::settings opts;
   opts["cardinality"] = 1_Ki;
   auto idx = factory<value_index>::make(t, opts);

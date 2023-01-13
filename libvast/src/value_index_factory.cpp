@@ -124,7 +124,7 @@ auto add_value_index_factory(T&& x = {}) {
 
 template <class T>
 auto add_arithmetic_index_factory() {
-  static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
+  static_assert(detail::is_any_v<T, int64_type, count_type, enumeration_type,
                                  real_type, duration_type, time_type>);
   using concrete_data = type_to_data_t<T>;
   if constexpr (detail::is_any_v<concrete_data, integer>)
@@ -138,7 +138,7 @@ auto add_arithmetic_index_factory() {
 
 void factory_traits<value_index>::initialize() {
   add_value_index_factory<bool_type, arithmetic_index<bool>>();
-  add_arithmetic_index_factory<integer_type>();
+  add_arithmetic_index_factory<int64_type>();
   add_arithmetic_index_factory<count_type>();
   add_arithmetic_index_factory<real_type>();
   add_arithmetic_index_factory<duration_type>();

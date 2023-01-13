@@ -38,7 +38,7 @@ TEST(json to data) {
       {"b", bool_type{}},
       {"c", count_type{}},
       {"r", real_type{}},
-      {"i", integer_type{}},
+      {"i", int64_type{}},
       {"s", string_type{}},
       {"snum", string_type{}},
       {"a", address_type{}},

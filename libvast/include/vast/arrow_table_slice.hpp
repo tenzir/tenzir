@@ -146,7 +146,7 @@ value_at([[maybe_unused]] const Type& type,
   VAST_ASSERT(!arr.IsNull(row));
   if constexpr (detail::is_any_v<Type, bool_type, count_type, real_type>) {
     return arr.GetView(row);
-  } else if constexpr (std::is_same_v<Type, integer_type>) {
+  } else if constexpr (std::is_same_v<Type, int64_type>) {
     return integer{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, duration_type>) {
     VAST_ASSERT(

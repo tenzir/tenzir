@@ -158,7 +158,7 @@ struct MultiMember {
 
   inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"x", integer_type{}},
+      {"x", int64_type{}},
       {"y", bool_type{}},
       {"z", duration_type{}},
     };
@@ -228,12 +228,12 @@ struct Complex {
       {"a", string_type{}},
       {"b",
        record_type{
-         {"c", integer_type{}},
+         {"c", int64_type{}},
          {"d", list_type{count_type{}}},
        }},
       {"e",
        record_type{
-         {"f", integer_type{}},
+         {"f", int64_type{}},
          {"g", count_type{}},
        }},
       {"h", bool_type{}},
@@ -329,7 +329,7 @@ struct StdOpt {
 
   inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"value", integer_type{}},
+      {"value", int64_type{}},
     };
     return result;
   }
@@ -345,7 +345,7 @@ struct CafOpt {
 
   inline static const record_type& schema() noexcept {
     static const auto result = record_type{
-      {"value", integer_type{}},
+      {"value", int64_type{}},
     };
     return result;
   }
@@ -449,7 +449,7 @@ TEST(map to map) {
 TEST(record to map) {
   using Map = vast::detail::stable_map<std::string, X<integer>>;
   auto x = Map{};
-  auto schema = map_type{string_type{}, record_type{{"value", integer_type{}}}};
+  auto schema = map_type{string_type{}, record_type{{"value", int64_type{}}}};
   auto r = record{{"foo", record{{"value", integer{-42}}}},
                   {"bar", record{{"value", integer{1337}}}},
                   {"baz", record{{"value", integer{997}}}}};
@@ -468,7 +468,7 @@ TEST(list of record to map) {
     record_type{
       {"outer",
        record_type{
-         {"value", integer_type{}},
+         {"value", int64_type{}},
        }},
     },
   };

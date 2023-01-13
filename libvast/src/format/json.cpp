@@ -80,7 +80,7 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       return caf::none;
     },
     [&](const count_type&) noexcept -> data {
@@ -133,7 +133,7 @@ data extract(int64_t value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return value != 0;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       return integer{value};
     },
     [&](const count_type&) noexcept -> data {
@@ -193,7 +193,7 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       return caf::none;
     },
     [&](const count_type&) noexcept -> data {
@@ -292,7 +292,7 @@ data extract(uint64_t value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return value != 0;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       if (value <= std::numeric_limits<integer::value_type>::max())
         return integer{detail::narrow_cast<integer::value_type>(value)};
       return caf::none;
@@ -352,7 +352,7 @@ data extract(double value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return value != 0.0;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       return integer{detail::narrow_cast<integer::value_type>(value)};
     },
     [&](const count_type&) noexcept -> data {
@@ -409,7 +409,7 @@ data extract(std::string_view value, const type& type) {
         return result;
       return caf::none;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       if (integer::value_type result = {}; parsers::json_int(value, result))
         return integer{result};
       if (real result = {}; parsers::json_number(value, result))
@@ -490,7 +490,7 @@ data extract(bool value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return value;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       return value ? integer{1} : integer{0};
     },
     [&](const count_type&) noexcept -> data {
@@ -607,7 +607,7 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value != 0);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
+    [&](const int64_type&) noexcept {
       const auto added = builder.add(view<integer>{value});
       VAST_ASSERT(added);
     },
@@ -683,7 +683,7 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value != 0);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
+    [&](const int64_type&) noexcept {
       if (value <= std::numeric_limits<int64_t>::max()) {
         const auto added = builder.add(
           view<integer>{detail::narrow_cast<integer::value_type>(value)});
@@ -759,7 +759,7 @@ void add(double value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value != 0);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
+    [&](const int64_type&) noexcept {
       const auto added = builder.add(
         view<integer>{detail::narrow_cast<integer::value_type>(value)});
       VAST_ASSERT(added);
@@ -824,7 +824,7 @@ void add(bool value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
+    [&](const int64_type&) noexcept {
       const auto added = builder.add(value ? integer{1} : integer{0});
       VAST_ASSERT(added);
     },
@@ -891,7 +891,7 @@ void add(std::string_view value, const type& type,
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
+    [&](const int64_type&) noexcept {
       if (integer::value_type result = {}; parsers::json_int(value, result)) {
         const auto added = builder.add(view<integer>{result});
         VAST_ASSERT(added);

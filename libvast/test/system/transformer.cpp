@@ -86,7 +86,7 @@ struct transformer_fixture
       "vast.test",
       vast::record_type{
         {"uid", vast::string_type{}},
-        {"index", vast::integer_type{}},
+        {"index", vast::int64_type{}},
       },
     };
     auto builder = std::make_shared<vast::table_slice_builder>(schema);
@@ -152,7 +152,7 @@ TEST(transformer) {
   auto schema_after_delete = vast::type{
     "vast.test",
     vast::record_type{
-      {"index", vast::integer_type{}},
+      {"index", vast::int64_type{}},
     },
   };
   auto& slice = slices[0];

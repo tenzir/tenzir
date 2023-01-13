@@ -47,7 +47,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
   else if (zeek_type == "bool")
     t = type{bool_type{}};
   else if (zeek_type == "int")
-    t = type{integer_type{}};
+    t = type{int64_type{}};
   else if (zeek_type == "count")
     t = type{count_type{}};
   else if (zeek_type == "double")
@@ -97,7 +97,7 @@ std::string to_zeek_string(const type& t) {
     [](const bool_type&) -> std::string {
       return "bool";
     },
-    [](const integer_type&) -> std::string {
+    [](const int64_type&) -> std::string {
       return "int";
     },
     [&](const count_type&) -> std::string {

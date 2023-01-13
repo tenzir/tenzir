@@ -231,7 +231,7 @@ TEST(record_type) {
       record_type{
         {"y",
          record_type{
-           {"z", integer_type{}},
+           {"z", int64_type{}},
            {"k", bool_type{}},
          }},
         {"m",

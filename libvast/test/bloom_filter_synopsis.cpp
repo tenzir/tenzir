@@ -35,7 +35,7 @@ TEST(bloom filter synopsis) {
   xs.m = 1_k;
   xs.p = 0.1;
   auto bf = unbox(make_bloom_filter<xxh64>(std::move(xs)));
-  bloom_filter_synopsis<integer, xxh64> x{type{integer_type{}}, std::move(bf)};
+  bloom_filter_synopsis<integer, xxh64> x{type{int64_type{}}, std::move(bf)};
   x.add(make_data_view(integer{0}));
   x.add(make_data_view(integer{1}));
   x.add(make_data_view(integer{2}));

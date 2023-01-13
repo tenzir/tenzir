@@ -43,7 +43,7 @@ public:
 FIXTURE_SCOPE(table_slice_tests, fixture)
 
 TEST(random integer slices) {
-  auto t = type{integer_type{}, {{"default", "uniform(100,200)"}}};
+  auto t = type{int64_type{}, {{"default", "uniform(100,200)"}}};
   auto schema = type{
     "test.integers",
     record_type{

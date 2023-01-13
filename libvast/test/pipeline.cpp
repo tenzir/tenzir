@@ -34,7 +34,7 @@ const auto testdata_schema = vast::type{
   vast::record_type{
     {"uid", vast::string_type{}},
     {"desc", vast::string_type{}},
-    {"index", vast::integer_type{}},
+    {"index", vast::int64_type{}},
   },
 };
 
@@ -43,7 +43,7 @@ const auto testdata_schema2 = vast::type{
   vast::record_type{
     {"uid", vast::string_type{}},
     {"desc", vast::string_type{}},
-    {"index", vast::integer_type{}},
+    {"index", vast::int64_type{}},
     {"note", vast::string_type{}},
   },
 };
@@ -52,7 +52,7 @@ const auto testresult_schema2 = vast::type{
   "testdata",
   vast::record_type{
     {"uid", vast::string_type{}},
-    {"index", vast::integer_type{}},
+    {"index", vast::int64_type{}},
   },
 };
 
@@ -60,7 +60,7 @@ const auto testdata_schema3 = vast::type{
   "testdata",
   vast::record_type{
     {"orig_addr", vast::address_type{}},
-    {"orig_port", vast::integer_type{}},
+    {"orig_port", vast::int64_type{}},
     {"dest_addr", vast::address_type{}},
     {"non_anon_addr", vast::address_type{}},
   },
