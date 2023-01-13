@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/system/make_pipelines.hpp"
 #include <vast/aggregation_function.hpp>
 #include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
@@ -821,7 +822,29 @@ public:
   virtual std::pair<std::string_view::iterator,
                     caf::expected<std::unique_ptr<pipeline_operator>>>
   parse_pipeline_string(std::string_view str) const override {
-    return {str.begin() + str.find_first_of('|'), make_pipeline_operator({})};
+    auto parse_result = system::parse_pipeline(str);
+    if (parse_result.parse_error) {
+      return {parse_result.new_str_it, parse_result.parse_error};
+    }
+    record options;
+    record aggregations;
+    for (const auto& aggregation : parse_result.aggregators) {
+      const auto* aggregation_pair = caf::get_if<list>(&aggregation);
+      const auto* extractor
+        = caf::get_if<std::string>(&aggregation_pair->front());
+      const auto* aggregator
+        = caf::get_if<std::string>(&aggregation_pair->back());
+      aggregations[*extractor] = *aggregator;
+    }
+    options["aggregate"] = aggregations;
+    if (!parse_result.aggregator_groups.empty()) {
+      options["group-by"] = parse_result.aggregator_groups;
+    }
+    if (parse_result.long_form_options.contains("time-resolution")) {
+      options["time-resolution"]
+        = parse_result.long_form_options["time-resolution"];
+    }
+    return {parse_result.new_str_it, make_pipeline_operator(options)};
   }
 };
 
