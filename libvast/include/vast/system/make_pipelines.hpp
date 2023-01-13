@@ -56,6 +56,13 @@ make_pipeline(std::string_view pipeline_string);
 enum class parsing_mode {
   NONE,
   EXTRACTOR,
+  AGGREGATOR,
+  AGGREGATOR_EXTRACTOR,
+  AGGREGATOR_LIST,
+  AGGREGATOR_LIST_END,
+  AGGREGATOR_GROUP_LIST,
+  AGGREGATOR_GROUP,
+  AGGREGATOR_TIME_RESOLUTION,
   SHORT_OPTION_KEY,
   LONG_OPTION_KEY,
   EXTRACTOR_ASSIGNMENT,
@@ -69,6 +76,8 @@ enum class parsing_mode {
 struct pipeline_parsing_result {
   vast::list extractors;
   vast::list assignments;
+  vast::list aggregators;
+  vast::list aggregator_groups;
   record long_form_options;
   record short_form_options;
   std::string_view::iterator new_str_it;

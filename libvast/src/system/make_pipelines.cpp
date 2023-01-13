@@ -231,6 +231,10 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       if (current_mode == parsing_mode::EXTRACTOR && !maybe_last_extractor) {
         maybe_last_extractor = true;
         current_token = {str_l_it, str_r_it};
+      } else if (current_mode == parsing_mode::AGGREGATOR_GROUP) {
+        current_token = {str_l_it, str_r_it};
+        result.aggregator_groups.emplace_back(current_token);
+        current_mode = parsing_mode::AGGREGATOR_TIME_RESOLUTION;
       } else if (current_mode == parsing_mode::SHORT_OPTION_KEY
                  || current_mode == parsing_mode::LONG_OPTION_KEY) {
         maybe_last_extractor = true;
@@ -262,6 +266,9 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       ++str_r_it;
     } else if (*str_r_it == ','
                || (str_r_it == str.end() || *str_r_it == '|')) {
+      if (current_mode == parsing_mode::NONE) {
+        break;
+      }
       if (complex_value_level > 0) {
         if (*str_r_it == ',' && current_mode == parsing_mode::EXTRACTOR_VALUE) {
           ++str_r_it;
@@ -274,8 +281,11 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         break;
       }
       if (current_mode == parsing_mode::EXTRACTOR
-          || current_mode == parsing_mode::EXTRACTOR_VALUE) {
-        current_mode = parsing_mode::NONE;
+          || current_mode == parsing_mode::EXTRACTOR_VALUE
+          || current_mode == parsing_mode::AGGREGATOR_GROUP) {
+        if (current_mode != parsing_mode::AGGREGATOR_GROUP) {
+          current_mode = parsing_mode::NONE;
+        }
         if (maybe_last_extractor) {
           maybe_last_extractor = false;
         } else {
@@ -283,14 +293,16 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         }
         if (current_mode == parsing_mode::EXTRACTOR) {
           result.extractors.emplace_back(current_token);
-        } else {
+        } else if (current_mode == parsing_mode::EXTRACTOR_VALUE) {
           result.assignments.emplace_back(
             vast::list{current_assignment_key, current_token});
+        } else {
+          result.aggregator_groups.emplace_back(current_token);
+          current_mode = parsing_mode::AGGREGATOR_GROUP_LIST;
         }
         str_l_it = str_r_it;
-        if (str_r_it != str.end()) {
-          ++str_r_it;
-        }
+      } else if (current_mode == parsing_mode::AGGREGATOR_LIST_END) {
+        current_mode = parsing_mode::AGGREGATOR_LIST;
       } else if (current_mode == parsing_mode::SHORT_OPTION_ASSIGNMENT
                  || current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT
                  || current_mode == parsing_mode::EXTRACTOR_ASSIGNMENT) {
@@ -298,6 +310,9 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
           = caf::make_error(ec::parse_error, "option assignment disrupted by "
                                              "delimiter");
         break;
+      }
+      if (str_r_it != str.end()) {
+        ++str_r_it;
       }
     } else if (*str_r_it == '-') {
       if (current_mode == parsing_mode::NONE) {
@@ -339,26 +354,112 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       }
       ++str_r_it;
     } else {
-      if (current_mode == parsing_mode::EXTRACTOR && maybe_last_extractor) {
-        result.parse_error = caf::make_error(ec::parse_error, "extractors must "
-                                                              "be separated by "
-                                                              "a comma");
-        break;
-      }
-      if (*str_r_it == '[' || *str_r_it == '{' || *str_r_it == '<') {
-        ++complex_value_level;
-      } else if (*str_r_it == ']' || *str_r_it == '}' || *str_r_it == '>') {
-        if (complex_value_level == 0) {
-          result.parse_error
-            = caf::make_error(ec::parse_error, "missing opening bracket for "
-                                               "complex value");
+      if (current_mode == parsing_mode::EXTRACTOR) {
+        if (maybe_last_extractor) {
+          result.parse_error = caf::make_error(ec::parse_error, "extractors must "
+                                                                "be separated by "
+                                                                "a comma");
           break;
         }
-        --complex_value_level;
+        if (*str_r_it == '(') {
+          current_assignment_key = {str_l_it, str_r_it};
+          current_mode = parsing_mode::AGGREGATOR_EXTRACTOR;
+          str_l_it = str_r_it;
+        } else if (*str_r_it == ')') {
+          result.parse_error
+            = caf::make_error(ec::parse_error, "missing opening bracket for "
+                                               "aggregator function");
+          break;
+        }
+      } else if (current_mode == parsing_mode::AGGREGATOR_EXTRACTOR) {
+        if (*str_r_it == '(') {
+          result.parse_error
+            = caf::make_error(ec::parse_error, "duplicate opening bracket for "
+                                               "aggregator function");
+          break;
+        } else if (*str_r_it == ')') {
+          current_token = {str_l_it + 1, str_r_it};
+          result.aggregators.emplace_back(vast::list{current_assignment_key, current_token});
+          current_mode = parsing_mode::AGGREGATOR_LIST_END;
+          str_l_it = str_r_it;
+        }
+      } else if (current_mode == parsing_mode::AGGREGATOR_LIST) {
+        str_l_it = str_r_it;
+        current_mode = parsing_mode::AGGREGATOR;
+      } else if (current_mode == parsing_mode::AGGREGATOR_LIST_END) {
+        if (*str_r_it == 'b') {
+          auto peek_ahead = str_r_it + 1;
+          if (peek_ahead != str.end() && *peek_ahead == 'y') {
+            ++peek_ahead;
+            if (peek_ahead != str.end() && std::isspace(*peek_ahead)) {
+              str_r_it = peek_ahead;
+              current_mode = parsing_mode::AGGREGATOR_GROUP_LIST;
+              str_l_it = str_r_it;
+              continue;
+            }
+          }
+        }
+        result.parse_error
+          = caf::make_error(ec::parse_error, "missing 'by' keyword for "
+                                             "aggregator groups");
+        break;
+      } else if (current_mode == parsing_mode::AGGREGATOR) {
+        if (*str_r_it == '(') {
+          current_assignment_key = {str_l_it, str_r_it};
+          current_mode = parsing_mode::AGGREGATOR_EXTRACTOR;
+          str_l_it = str_r_it;
+        } else if (*str_r_it == ')') {
+          result.parse_error
+            = caf::make_error(ec::parse_error, "missing opening bracket for "
+                                               "aggregator function");
+          break;
+        }
+
       }
-      if (current_mode == parsing_mode::NONE) {
+      else if (current_mode == parsing_mode::EXTRACTOR_VALUE) {
+        if (*str_r_it == '[' || *str_r_it == '{' || *str_r_it == '<') {
+          ++complex_value_level;
+        } else if (*str_r_it == ']' || *str_r_it == '}' || *str_r_it == '>') {
+          if (complex_value_level == 0) {
+            result.parse_error
+              = caf::make_error(ec::parse_error, "missing opening bracket for "
+                                                 "complex value");
+            break;
+          }
+          --complex_value_level;
+        }
+      } else if (current_mode == parsing_mode::AGGREGATOR_TIME_RESOLUTION) {
+        str_l_it = str_r_it;
+        while (str_r_it != str.end() && !std::isspace(*str_r_it)) {
+          ++str_r_it;
+        }
+        current_token = {str_l_it, str_r_it};
+        if (current_token != "resolution") {
+          result.parse_error
+            = caf::make_error(ec::parse_error, "invalid keyword in palce of "
+                                               "'resolution' keyword");
+          break;
+        }
+        if (str_r_it == str.end()) {
+          result.parse_error
+            = caf::make_error(ec::parse_error, "resolution option needs "
+                                               "duration value");
+          break;
+        }
+        ++str_r_it;
+        str_l_it = str_r_it;
+        while (str_r_it != str.end() && !std::isspace(*str_r_it)) {
+          ++str_r_it;
+        }
+        current_token = {str_l_it, str_r_it};
+        result.long_form_options["time-resolution"] = current_token;
+        str_l_it = str_r_it;
+      } else if (current_mode == parsing_mode::NONE) {
         str_l_it = str_r_it;
         current_mode = parsing_mode::EXTRACTOR;
+      } else if (current_mode == parsing_mode::AGGREGATOR_GROUP_LIST) {
+        str_l_it = str_r_it;
+        current_mode = parsing_mode::AGGREGATOR_GROUP;
       } else if (current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT) {
         str_l_it = str_r_it;
         current_mode = parsing_mode::LONG_OPTION_VALUE;
@@ -369,7 +470,9 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         str_l_it = str_r_it;
         current_mode = parsing_mode::EXTRACTOR_VALUE;
       }
-      ++str_r_it;
+      if (str_r_it != str.end()) {
+        ++str_r_it;
+      }
     }
   }
   result.new_str_it = str_r_it;
