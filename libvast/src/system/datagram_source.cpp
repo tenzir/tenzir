@@ -59,7 +59,7 @@ caf::behavior datagram_source(
     self->quit(std::move(udp_res.error()));
     return {};
   }
-  VAST_DEBUG("{} starts listening at port {}", *self, udp_res->second);
+  VAST_DEBUG("{} sztyglic starts listening at port {}", *self, udp_res->second);
   // Initialize state.
   self->state.self = self;
   self->state.name = reader->name();
@@ -73,7 +73,8 @@ caf::behavior datagram_source(
   self->send(self->state.accountant, atom::announce_v, self->state.name);
   self->state.initialize(catalog, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
+    VAST_VERBOSE("{} sztyglic datagram source received EXIT from {}", *self,
+                 msg.source);
     self->state.done = true;
     if (self->state.mgr)
       self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
@@ -101,6 +102,7 @@ caf::behavior datagram_source(
       auto t = timer::start(self->state.metrics);
       auto capacity = self->state.mgr->out().capacity();
       if (capacity == 0) {
+        VAST_WARN("dropping packets datagram src");
         self->state.dropped_packets++;
         return;
       }

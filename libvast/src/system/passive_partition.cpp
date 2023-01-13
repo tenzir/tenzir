@@ -351,6 +351,7 @@ partition_actor::behavior_type passive_partition(
     }
     VAST_ERROR("{} shuts down after DOWN from {} store: {}", *self,
                self->state.store_id, msg.reason);
+    deliver_error_to_deferred_requests(self->state, msg.reason);
     self->quit(msg.reason);
   });
   self->set_exit_handler([=](const caf::exit_msg& msg) {

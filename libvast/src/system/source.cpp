@@ -179,7 +179,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->send(self->state.accountant, atom::announce_v, self->state.name);
   self->state.initialize(catalog, std::move(type_filter));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
+    VAST_VERBOSE("{} source received EXIT from {}", *self, msg.source);
     self->state.done = true;
     if (self->state.mgr) {
       self->state.mgr->shutdown();
@@ -258,7 +258,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto t = timer::start(self->state.metrics);
       auto [err, produced] = self->state.reader->read(
         events, self->state.table_slice_size, push_slice);
-      VAST_DEBUG("{} read {} events", *self, produced);
+      VAST_DEBUG("{} source read {} events", *self, produced);
       // TODO: We use the produced number in metrics and INFO logs, but it is
       // the number _before_ filtering which may be a bit unexpected to the
       // user. Because we filter the slices 1-by-1 this isn't an easy change to
@@ -274,7 +274,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       };
       if (self->state.requested
           && self->state.count >= *self->state.requested) {
-        VAST_DEBUG("{} finished with {} events", *self, self->state.count);
+        VAST_DEBUG("{} source finished with {} events", *self,
+                   self->state.count);
         return finish();
       }
       if (err == ec::stalled) {

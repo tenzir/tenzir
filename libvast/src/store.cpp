@@ -260,6 +260,7 @@ default_passive_store(system::default_passive_store_actor::stateful_pointer<
           self->quit(std::move(load_error));
       },
       [self](caf::error& error) {
+        VAST_WARN("{} error mmap: {}", *self, error);
         self->quit(std::move(error));
       });
   // We monitor all query sinks, and remove queries associated with the sink.

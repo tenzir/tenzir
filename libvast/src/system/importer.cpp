@@ -53,6 +53,7 @@ public:
 
   void process(caf::downstream<detail::framed<table_slice>>& out,
                std::vector<table_slice>& slices) override {
+    VAST_INFO("process importer driver");
     VAST_TRACE_SCOPE("{}", VAST_ARG(slices));
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
@@ -68,11 +69,13 @@ public:
       slice.import_time(time::clock::now());
       out.push(std::move(slice));
     }
+    VAST_INFO("process importer events: ", events);
     t.stop(events);
   }
 
   void finalize(const caf::error& err) override {
-    VAST_DEBUG("{} stopped with message: {}", *state.self, render(err));
+    VAST_DEBUG("{} importer driver stopped with message: {}", *state.self,
+               render(err));
   }
 
   importer_state& state;
@@ -202,6 +205,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
     if (self->state.stage) {
+      VAST_INFO("shutting down importer {}", *self);
       self->state.stage->out().push(detail::framed<table_slice>::make_eof());
       detail::shutdown_stream_stage(self->state.stage);
       // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`

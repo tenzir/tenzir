@@ -63,6 +63,7 @@ make_source(caf::actor_system& sys, const std::string& format,
             catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
             std::vector<pipeline>&& pipelines, bool detached) {
+  VAST_INFO("make source");
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
   // Placeholder thingies.

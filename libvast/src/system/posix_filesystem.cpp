@@ -145,6 +145,7 @@ filesystem_actor::behavior_type posix_filesystem(
         ++self->state.stats.checks.successful;
       } else {
         ++self->state.stats.checks.failed;
+        VAST_INFO("mmap no such file in filesystem");
         return caf::make_error(ec::no_such_file,
                                fmt::format("{} {}: {}", *self, path,
                                            err.message()));
@@ -160,6 +161,7 @@ filesystem_actor::behavior_type posix_filesystem(
     },
     [self](atom::erase,
            const std::filesystem::path& filename) -> caf::result<atom::done> {
+      VAST_INFO("removing file {}", filename);
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
       std::error_code err;
