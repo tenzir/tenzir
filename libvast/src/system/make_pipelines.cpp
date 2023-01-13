@@ -222,6 +222,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
   pipeline_parsing_result result;
   parsing_mode current_mode = parsing_mode::NONE;
   auto maybe_last_extractor = false;
+  auto list_level = 0;
   std::string current_token;
   std::string current_assignment_key;
   auto str_r_it = str.begin();
@@ -260,6 +261,16 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       ++str_r_it;
     } else if (*str_r_it == ','
                || (str_r_it == str.end() || *str_r_it == '|')) {
+      if (list_level > 0) {
+        if (*str_r_it == ',' && current_mode == parsing_mode::EXTRACTOR_VALUE) {
+          ++str_r_it;
+          continue;
+        }
+        result.parse_error
+          = caf::make_error(ec::parse_error, "missing opening bracket for list "
+                                             "value");
+        break;
+      }
       if (current_mode == parsing_mode::EXTRACTOR
           || current_mode == parsing_mode::EXTRACTOR_VALUE) {
         current_mode = parsing_mode::NONE;
@@ -284,9 +295,6 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         result.parse_error
           = caf::make_error(ec::parse_error, "option assignment disrupted by "
                                              "delimiter");
-        break;
-        result.parse_error
-          = caf::make_error(ec::parse_error, "comma not delimiting extractors");
         break;
       }
     } else if (*str_r_it == '-') {
@@ -334,6 +342,17 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
                                                               "be separated by "
                                                               "a comma");
         break;
+      }
+      if (*str_r_it == '[') {
+        ++list_level;
+      } else if (*str_r_it == ']') {
+        if (list_level == 0) {
+          result.parse_error
+            = caf::make_error(ec::parse_error, "missing opening bracket for "
+                                               "list value");
+          break;
+        }
+        --list_level;
       }
       if (current_mode == parsing_mode::NONE) {
         str_l_it = str_r_it;
