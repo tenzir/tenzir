@@ -103,13 +103,13 @@ catalog_state::lookup(const expression& expr) const {
               [&](const partition_info& lhs, const partition_info& rhs) {
                 return lhs.max_import_time > rhs.max_import_time;
               });
-    total_candidates.candidate_infos[type] = candidates_per_type;
+    auto num_candidates = candidates_per_type.partition_infos.size();
+    total_candidates.candidate_infos[type] = std::move(candidates_per_type);
     auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
       system::stopwatch::now() - start);
     VAST_DEBUG("catalog lookup found {} candidates in {} microseconds",
-               candidates_per_type.partition_infos.size(), delta.count());
-    VAST_TRACEPOINT(catalog_lookup, delta.count(),
-                    candidates_per_type.partition_infos.size());
+               num_candidates, delta.count());
+    VAST_TRACEPOINT(catalog_lookup, delta.count(), num_candidates);
   }
   return total_candidates;
 }
