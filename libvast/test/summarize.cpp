@@ -55,7 +55,7 @@ table_slice make_testdata() {
     auto port = uint64_t{443};
     // We inject a gap here at index 1 to make sure that we test both the slow-
     // and fast-paths for aggregation_function::add(...).
-    auto sum = i == 2 ? data{caf::none} : data{real{1. * i}};
+    auto sum = i == 2 ? data{caf::none} : data{double{1. * i}};
     auto sum_null = caf::none;
     auto min = integer{i};
     auto max = integer{i};
@@ -188,7 +188,7 @@ TEST(summarize test) {
               data{vast::time{std::chrono::seconds(1258329600)}});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), address::v4(0xC0A80101));
   CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), uint64_t{443});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), real{43.});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), double{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), integer{0});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), integer{9});
@@ -248,7 +248,7 @@ TEST(summarize test fully qualified field names) {
               vast::time{std::chrono::seconds(1258329600)});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), address::v4(0xC0A80101));
   CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), uint64_t{443});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), real{43.});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), double{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), integer{0});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), integer{9});

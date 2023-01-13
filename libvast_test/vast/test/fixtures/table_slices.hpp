@@ -82,7 +82,7 @@ public:
   void run();
 
 private:
-  using triple = std::tuple<vast::integer, std::string, vast::real>;
+  using triple = std::tuple<vast::integer, std::string, double>;
 
   caf::binary_serializer make_sink();
 

@@ -504,7 +504,7 @@ type type::infer(const data& value) noexcept {
     [](const uint64_t&) noexcept -> type {
       return type{uint64_type{}};
     },
-    [](const real&) noexcept -> type {
+    [](const double&) noexcept -> type {
       return type{double_type{}};
     },
     [](const duration&) noexcept -> type {
@@ -1314,7 +1314,7 @@ bool congruent(const type& x, const data& y) noexcept {
     [](const uint64_type&, uint64_t) noexcept {
       return true;
     },
-    [](const double_type&, real) noexcept {
+    [](const double_type&, double) noexcept {
       return true;
     },
     [](const duration_type&, duration) noexcept {
@@ -1657,7 +1657,7 @@ std::span<const std::byte> as_bytes(const double_type&) noexcept {
   return as_bytes(buffer);
 }
 
-real double_type::construct() noexcept {
+double double_type::construct() noexcept {
   return {};
 }
 

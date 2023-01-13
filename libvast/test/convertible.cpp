@@ -66,7 +66,7 @@ auto test_basic = [](auto v) {
 BASIC(bool, true)
 BASIC(integer, 42)
 BASIC(uint64_t, 56u)
-BASIC(real, 0.42)
+BASIC(double, 0.42)
 BASIC(duration, std::chrono::minutes{55})
 BASIC(vast::time, unbox(to<vast::time>("2012-08-12+23:55-0130")))
 BASIC(std::string, "test")
@@ -95,7 +95,7 @@ NARROW(integer, int64_t, 42)
 NARROW(uint64_t, uint8_t, 56u)
 NARROW(uint64_t, uint16_t, 56u)
 NARROW(uint64_t, uint32_t, 56u)
-NARROW(real, float, 0.42)
+NARROW(double, float, 0.42)
 #undef NARROW
 
 template <class From, class To>

@@ -116,7 +116,7 @@ TEST(parseable - expression) {
   expression expr;
   predicate p1{field_extractor{"x"}, relational_operator::equal, data{42u}};
   predicate p2{type_extractor{type{double_type{}}}, relational_operator::equal,
-               data{real{5.3}}};
+               data{double{5.3}}};
   predicate p3{field_extractor{"a"}, relational_operator::greater,
                field_extractor{"b"}};
   MESSAGE("conjunction");

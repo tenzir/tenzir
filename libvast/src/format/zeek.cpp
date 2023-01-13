@@ -518,7 +518,7 @@ public:
     return printers::any.print(out, x ? 'T' : 'F');
   }
 
-  bool operator()(Iterator& out, const view<real>& x) const {
+  bool operator()(Iterator& out, const view<double>& x) const {
     return zeek_real.print(out, x);
   }
 
@@ -556,7 +556,7 @@ public:
   }
 
 private:
-  static constexpr inline auto zeek_real = real_printer<real, 6, 6>{};
+  static constexpr inline auto zeek_real = real_printer<double, 6, 6>{};
 };
 
 /// Owns an `std::ostream` and prints to it for a single schema.

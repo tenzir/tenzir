@@ -661,7 +661,7 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
   CHECK_EQUAL(type::infer(integer{}), int64_type{});
   CHECK_EQUAL(type::infer(uint64_t{}), uint64_type{});
-  CHECK_EQUAL(type::infer(real{}), double_type{});
+  CHECK_EQUAL(type::infer(double{}), double_type{});
   CHECK_EQUAL(type::infer(duration{}), duration_type{});
   CHECK_EQUAL(type::infer(time{}), time_type{});
   CHECK_EQUAL(type::infer(std::string{}), string_type{});
@@ -924,7 +924,7 @@ TEST(construct) {
   const auto expected = record::vector_type{
     {"n", data{list{}}},    {"b", data{bool{}}},
     {"i", data{integer{}}}, {"c", data{uint64_t{}}},
-    {"r", data{real{}}},    {"s", data{std::string{}}},
+    {"r", data{double{}}},  {"s", data{std::string{}}},
     {"t", data{time{}}},    {"d", data{duration{}}},
     {"a", data{address{}}}, {"s", data{subnet{}}},
   };

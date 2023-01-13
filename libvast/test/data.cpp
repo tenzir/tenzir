@@ -129,7 +129,7 @@ TEST(construction) {
   CHECK(caf::holds_alternative<integer>(data{integer{42}}));
   CHECK(caf::holds_alternative<integer>(data{integer{-42}}));
   CHECK(caf::holds_alternative<uint64_t>(data{42u}));
-  CHECK(caf::holds_alternative<real>(data{4.2}));
+  CHECK(caf::holds_alternative<double>(data{4.2}));
   CHECK(caf::holds_alternative<std::string>(data{"foo"}));
   CHECK(caf::holds_alternative<std::string>(data{std::string{"foo"}}));
   CHECK(caf::holds_alternative<pattern>(data{pattern{"foo"}}));
@@ -195,7 +195,7 @@ TEST(evaluation) {
   rhs = *to<subnet>("10.0.42.0/17");
   CHECK(!evaluate(lhs, relational_operator::in, rhs));
   MESSAGE("mixed types");
-  rhs = real{4.2};
+  rhs = double{4.2};
   CHECK(!evaluate(lhs, relational_operator::equal, rhs));
   CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
 }
@@ -373,7 +373,7 @@ TEST(pack / unpack) {
     {"bool", bool{true}},
     {"integer", integer{2}},
     {"count", uint64_t{3u}},
-    {"real", real{4.0}},
+    {"real", double{4.0}},
     {"duration", duration{5}},
     {"time", vast::time{} + duration{6}},
     {"string", std::string{"7"}},
@@ -385,7 +385,7 @@ TEST(pack / unpack) {
     {"map", map{{std::string{"key"}, uint64_t{12}}}},
     {"record",
      record{
-       {"nested_real", real{13.0}},
+       {"nested_real", double{13.0}},
        {"nested_record", record{}},
      }},
   }};

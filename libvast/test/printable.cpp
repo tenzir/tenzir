@@ -330,7 +330,7 @@ TEST(not ) {
 // -- VAST types ---------------------------------------------------------------
 
 TEST(data) {
-  data r{real{12.21}};
+  data r{double{12.21}};
   CHECK_TO_STRING(r, "12.21");
   data b{true};
   CHECK_TO_STRING(b, "true");
@@ -411,8 +411,8 @@ TEST(JSON - omit - nulls) {
 TEST(JSON - remove trailing zeroes) {
   auto p = json_printer<policy::oneline, policy::human_readable_durations,
                         policy::omit_nulls, 2>{};
-  check_to_json(p, vast::real{5.0}, "5.0");
-  check_to_json(p, vast::real{5.10}, "5.1");
+  check_to_json(p, double{5.0}, "5.0");
+  check_to_json(p, double{5.10}, "5.1");
 }
 
 // -- API ---------------------------------------------------------------------

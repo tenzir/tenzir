@@ -599,11 +599,11 @@ TEST(real) {
 }
 
 TEST(real - scientific) {
-  auto p = make_parser<real>{};
+  auto p = make_parser<double>{};
   {
     MESSAGE("null exponent");
     auto str = ".456789e0"s;
-    real d = 0;
+    double d = 0;
     auto f = str.begin();
     auto l = str.end();
     CHECK(p(f, l, d));
@@ -613,7 +613,7 @@ TEST(real - scientific) {
   {
     MESSAGE("positive exponent");
     auto str = ".456789e43"s;
-    real d = 0;
+    double d = 0;
     auto f = str.begin();
     auto l = str.end();
     CHECK(p(f, l, d));
@@ -623,7 +623,7 @@ TEST(real - scientific) {
   {
     MESSAGE("explicit positive exponent");
     auto str = ".456789e+43"s;
-    real d = 0;
+    double d = 0;
     auto f = str.begin();
     auto l = str.end();
     CHECK(p(f, l, d));
@@ -633,7 +633,7 @@ TEST(real - scientific) {
   {
     MESSAGE("negative exponent");
     auto str = ".456789e-322"s;
-    real d = 0;
+    double d = 0;
     auto f = str.begin();
     auto l = str.end();
     CHECK(p(f, l, d));

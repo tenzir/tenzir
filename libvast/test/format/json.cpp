@@ -84,11 +84,11 @@ TEST(json to data) {
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
   CHECK(slice.at(0, 1) == data{uint64_t{424242}});
-  CHECK(slice.at(0, 2).is<real>());
+  CHECK(slice.at(0, 2).is<double>());
   const auto r = slice.at(0, 2).get_data().get(
     std::integral_constant<
-      int, caf::detail::tl_index_of<data::types, real>::value>());
-  CHECK(std::abs(r - real{4.2}) < 0.000001);
+      int, caf::detail::tl_index_of<data::types, double>::value>());
+  CHECK(std::abs(r - double{4.2}) < 0.000001);
   CHECK_EQUAL(materialize(slice.at(0, 3)), integer{-1337});
   CHECK_EQUAL(materialize(slice.at(0, 4)), "0123456789®\r\n");
   CHECK_EQUAL(materialize(slice.at(0, 5)), "42.42");

@@ -255,9 +255,6 @@ using duration = caf::timespan;
 /// represent +/- 292 years around the UNIX epoch.
 using time = caf::timestamp;
 
-/// Floating point type.
-using real [[deprecated("use double instead")]] = double;
-
 /// Enumeration type.
 using enumeration = uint8_t;
 

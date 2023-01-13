@@ -45,7 +45,7 @@ struct invalid_data_type {};
 template <class T>
 constexpr auto to_data_type() {
   if constexpr (std::is_floating_point_v<T>)
-    return real{};
+    return double{};
   else if constexpr (std::is_same_v<T, bool>)
     return bool{};
   else if constexpr (std::is_unsigned_v<T>) {
@@ -92,7 +92,7 @@ public:
     bool,
     integer,
     uint64_t,
-    real,
+    double,
     duration,
     time,
     std::string,

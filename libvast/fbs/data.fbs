@@ -12,7 +12,7 @@ struct UInt64 {
   value: ulong;
 }
 
-struct Real {
+struct Double {
   value: double;
 }
 
@@ -72,7 +72,7 @@ union Data {
   boolean: Boolean,
   integer: Integer,
   uint64: UInt64,
-  real: Real,
+  double_: Double,
   duration: Duration,
   time: Time,
   string: String,

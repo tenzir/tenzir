@@ -336,7 +336,7 @@ TEST(csv reader - reordered schema) {
          == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
                      {data{"bar"}, unbox(to<address>("2001:db8::"))}}}));
   CHECK(slices[0].at(0, 1) == data{uint64_t{424242}});
-  CHECK(slices[0].at(0, 2) == data{real{4.2}});
+  CHECK(slices[0].at(0, 2) == data{double{4.2}});
   CHECK(slices[0].at(0, 3) == data{integer{-1337}});
   CHECK(slices[0].at(0, 4) == data{true});
   CHECK(slices[0].at(0, 5) == data{unbox(to<address>("147.32.84.165"))});
@@ -348,7 +348,7 @@ TEST(csv reader - reordered schema) {
   CHECK((slices[0].at(0, 10) == data{list{5555u, 0u}}));
   CHECK(slices[0].at(0, 11)
         == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
-  CHECK(slices[0].at(0, 12) == data{real{3.}});
+  CHECK(slices[0].at(0, 12) == data{double{3.}});
   // FIXME: Parsing maps in csv is broken, see ch12358.
   // auto m = map{};
   // m[1u] = data{"FOO"};

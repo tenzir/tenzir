@@ -41,7 +41,7 @@ struct fixture {
 FIXTURE_SCOPE(value_index_tests, fixture)
 
 TEST(real with custom binner) {
-  using index_type = arithmetic_index<real, precision_binner<6, 2>>;
+  using index_type = arithmetic_index<double, precision_binner<6, 2>>;
   caf::settings opts;
   opts["base"] = "uniform64(10)";
   auto idx = index_type{type{double_type{}}, opts};

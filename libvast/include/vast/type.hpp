@@ -514,7 +514,7 @@ public:
   friend std::span<const std::byte> as_bytes(const double_type&) noexcept;
 
   /// Constructs data from the type.
-  [[nodiscard]] static real construct() noexcept;
+  [[nodiscard]] static double construct() noexcept;
 
   /// Converts the type into an Arrow DataType.
   [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;

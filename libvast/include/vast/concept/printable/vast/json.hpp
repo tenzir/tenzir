@@ -87,7 +87,7 @@ struct json_printer
         auto str = std::to_string(x);
         if constexpr (std::is_floating_point_v<T>) {
           // Avoid trailing zeros.
-          if (real i; std::modf(x, &i) == 0.0)
+          if (double i; std::modf(x, &i) == 0.0)
             str.erase(str.find('.') + 2, std::string::npos);
           else
             str.erase(str.find_last_not_of('0') + 1, std::string::npos);

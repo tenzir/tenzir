@@ -68,9 +68,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::uint64,
                              value_offset.Union());
     },
-    [&](const real& value) -> flatbuffers::Offset<fbs::Data> {
-      const auto value_offset = builder.CreateStruct(fbs::data::Real{value});
-      return fbs::CreateData(builder, fbs::data::Data::real,
+    [&](const double& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(fbs::data::Double{value});
+      return fbs::CreateData(builder, fbs::data::Data::double_,
                              value_offset.Union());
     },
     [&](const duration& value) -> flatbuffers::Offset<fbs::Data> {
@@ -182,8 +182,8 @@ caf::error unpack(const fbs::Data& from, data& to) {
       to = uint64_t{from.data_as_uint64()->value()};
       return caf::none;
     }
-    case fbs::data::Data::real: {
-      to = real{from.data_as_real()->value()};
+    case fbs::data::Data::double_: {
+      to = double{from.data_as_double_()->value()};
       return caf::none;
     }
     case fbs::data::Data::duration: {
@@ -570,8 +570,8 @@ caf::error convert(const data& d, caf::config_value& cv) {
   auto f = detail::overload{
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
-      if constexpr (detail::is_any_v<value_type, bool, uint64_t, real, duration,
-                                     std::string>)
+      if constexpr (detail::is_any_v<value_type, bool, uint64_t, double,
+                                     duration, std::string>)
         cv = x;
       else if constexpr (std::is_same_v<value_type, integer>)
         cv = x.value;
@@ -701,7 +701,7 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
     case simdjson::dom::element_type::NULL_VALUE:
       return data{};
     case simdjson::dom::element_type::DOUBLE:
-      return real{elem.get_double()};
+      return double{elem.get_double()};
     case simdjson::dom::element_type::UINT64:
       return uint64_t{elem.get_uint64()};
     case simdjson::dom::element_type::INT64:
@@ -871,7 +871,7 @@ void print(YAML::Emitter& out, const data& x) {
     [&out](uint64_t x) {
       out << x;
     },
-    [&out](real x) {
+    [&out](double x) {
       out << to_string(x);
     },
     [&out](duration x) {
