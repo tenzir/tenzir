@@ -245,6 +245,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         current_token = {str_l_it, str_r_it};
         result.options[current_option_key] = current_token;
         result.current_mode = parsing_mode::NONE;
+        maybe_last_word = false;
       }
       ++str_r_it;
     } else if (*str_r_it == ','
@@ -306,7 +307,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       }
       ++str_r_it;
     } else {
-      if (maybe_last_word) {
+      if (result.current_mode == parsing_mode::EXTRACTOR && maybe_last_word) {
         result.parse_error = caf::make_error(ec::parse_error, "extractors must "
                                                               "be separated by "
                                                               "a comma");
