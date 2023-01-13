@@ -28,10 +28,34 @@
 #include <caf/openssl/all.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <csignal>
 
 namespace vast::system {
+
+namespace {
+
+/// Actor to run one of the additional commands given as
+/// parameters to the VAST node.
+using command_runner_actor = system::typed_actor_fwd<
+  // Handle a request.
+  auto(atom::run, invocation)->caf::result<void>>::unwrap;
+
+command_runner_actor::behavior_type
+command_runner(command_runner_actor::pointer self) {
+  return {
+    [self](atom::run, vast::invocation& hook_invocation) -> caf::result<void> {
+      auto [root, root_factory] = make_application("vast");
+      auto result = run(hook_invocation, self->home_system(), root_factory);
+      if (!result)
+        return result.error();
+      return {};
+    },
+  };
+}
+
+} // namespace
 
 using namespace std::chrono_literals;
 
@@ -98,6 +122,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
           &inv.options, "vast.start.commands"))
       commands.push_back(std::move(*command));
   }
+  std::vector<command_runner_actor> command_runners;
   if (!commands.empty()) {
     auto [root, root_factory] = make_application("vast");
     // We're already in the start command, so we can safely assert that
@@ -118,9 +143,9 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         return caf::make_message(hook_invocation.error());
       detail::merge_settings(inv.options, hook_invocation->options,
                              policy::merge_lists::yes);
-      auto result = run(*hook_invocation, sys, root_factory);
-      if (!result)
-        return caf::make_message(result.error());
+      auto runner = self->spawn(command_runner);
+      command_runners.push_back(runner);
+      self->send(runner, atom::run_v, *hook_invocation);
     }
   }
   self
