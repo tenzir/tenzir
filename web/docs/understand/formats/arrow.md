@@ -21,7 +21,7 @@ representations.
 ## Input
 
 The `import arrow` command imports [`Arrow IPC`][arrow-ipc] data. This allows
-for transferring data between VAST nodes flexibly:
+for efficiently transferring data between VAST nodes:
 
 ```bash
 VAST_SOURCE_HOST=localhost:42000

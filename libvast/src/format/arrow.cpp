@@ -165,7 +165,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     // record batch.
     if (read_result->batch->schema()->metadata()->FindKey("VAST:name:0")
         == -1) {
-      VAST_ERROR("{} skips record batch with {} rows: metadata is "
+      VAST_WARN("{} skips record batch with {} rows: metadata is "
                  "incomaptible with VAST",
                  detail::pretty_type_name(*this),
                  read_result->batch->num_rows());
