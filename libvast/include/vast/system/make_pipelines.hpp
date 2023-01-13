@@ -68,10 +68,10 @@ enum class parsing_mode {
 struct pipeline_parsing_result {
   vast::list extractors;
   vast::list assignments;
-  record options;
+  record long_form_options;
+  record short_form_options;
   std::string_view::iterator new_str_it;
   caf::error parse_error;
-  parsing_mode current_mode{parsing_mode::NONE};
 };
 
 pipeline_parsing_result parse_pipeline(std::string_view str);

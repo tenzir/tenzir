@@ -169,7 +169,7 @@ public:
       options["field"] = field;
       options["out"] = field;
     }
-    for (const auto &option : parse_result.options) {
+    for (const auto &option : parse_result.long_form_options) {
       auto key = option.first;
       auto value = option.second;
       options[key] = value;
