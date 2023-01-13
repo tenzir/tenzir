@@ -67,7 +67,7 @@ TEST(min - max synopsis) {
   verify(zero_nine_view, {F, T, N, N, N, N, N, N, N, N});
   // Check that we don't do any implicit conversions.
   MESSAGE("[4,7] op count{5}");
-  count c = 5;
+  uint64_t c = 5;
   verify(c, {N, N, N, N, N, N, N, N, N, N});
   MESSAGE("[4,7] op [count{5}, 7]");
   auto heterogeneous = data{list{c, seven}};

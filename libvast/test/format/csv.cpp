@@ -120,7 +120,7 @@ TEST(csv reader - simple) {
   REQUIRE_EQUAL(slices[0].schema(), l0);
   CHECK(slices[1].at(0, 0)
         == data{unbox(to<vast::time>("2011-08-12T14:59:11.994970Z"))});
-  CHECK(slices[1].at(1, 2) == data{count{1047}});
+  CHECK(slices[1].at(1, 2) == data{uint64_t{1047}});
 }
 
 std::string_view l0_log1 = R"__(ts,addr,port
@@ -197,8 +197,8 @@ TEST(csv reader - schema with container) {
   REQUIRE_EQUAL(slices[0].schema(), l1);
   CHECK(slices[0].at(10, 1) == data{pattern{"gladness"}});
   auto xs = vast::list{};
-  xs.emplace_back(data{count{42}});
-  xs.emplace_back(data{count{1337}});
+  xs.emplace_back(data{uint64_t{42}});
+  xs.emplace_back(data{uint64_t{1337}});
   CHECK(slices[0].at(19, 2, list_type{uint64_type{}}) == make_view(xs));
 }
 
@@ -335,7 +335,7 @@ TEST(csv reader - reordered schema) {
   CHECK((slices[0].at(0, 0)
          == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
                      {data{"bar"}, unbox(to<address>("2001:db8::"))}}}));
-  CHECK(slices[0].at(0, 1) == data{count{424242}});
+  CHECK(slices[0].at(0, 1) == data{uint64_t{424242}});
   CHECK(slices[0].at(0, 2) == data{real{4.2}});
   CHECK(slices[0].at(0, 3) == data{integer{-1337}});
   CHECK(slices[0].at(0, 4) == data{true});

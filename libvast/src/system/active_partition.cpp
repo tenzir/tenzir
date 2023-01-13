@@ -644,7 +644,7 @@ active_partition_actor::behavior_type active_partition(
         size_t memory_usage = 0;
         void deliver(caf::typed_response_promise<record>&& promise,
                      record&& content) {
-          content["memory-usage"] = count{memory_usage};
+          content["memory-usage"] = uint64_t{memory_usage};
           promise.deliver(std::move(content));
         }
       };
@@ -666,7 +666,7 @@ active_partition_actor::behavior_type active_partition(
             ps["type"] = fmt::to_string(field.type());
             auto it = response.find("memory-usage");
             if (it != response.end()) {
-              if (const auto* s = caf::get_if<count>(&it->second))
+              if (const auto* s = caf::get_if<uint64_t>(&it->second))
                 rs->memory_usage += *s;
             }
             if (v >= status_verbosity::debug)

@@ -181,7 +181,8 @@ caf::error convert(const From& src, std::string& dst, const string_type&) {
   // plus correctly.
   if constexpr (std::is_same_v<From, integer>) {
     if (src.value >= 0)
-      return convert(detail::narrow_cast<count>(src.value), dst, string_type{});
+      return convert(detail::narrow_cast<uint64_t>(src.value), dst,
+                     string_type{});
   }
   // In order to get consistent formatting as strings we create a data view
   // here. While not as cheap as printing directly, it's at least a bit cheaper
@@ -219,8 +220,8 @@ caf::error convert(const From& src, To& dst, const double_type&) {
 
 // Overload for counts.
 template <concepts::unsigned_integral To>
-caf::error convert(const count& src, To& dst, const uint64_type&) {
-  if constexpr (sizeof(To) >= sizeof(count)) {
+caf::error convert(const uint64_t& src, To& dst, const uint64_type&) {
+  if constexpr (sizeof(To) >= sizeof(uint64_t)) {
     dst = src;
   } else {
     if (src < std::numeric_limits<To>::min()
@@ -241,7 +242,7 @@ caf::error convert(const integer& src, To& dst, const uint64_type&) {
     return caf::make_error(
       ec::convert_error, fmt::format(": {} can not be negative ({})",
                                      detail::pretty_type_name(dst), src.value));
-  if constexpr (sizeof(To) >= sizeof(count)) {
+  if constexpr (sizeof(To) >= sizeof(uint64_t)) {
     dst = src.value;
   } else {
     if (src.value

@@ -65,7 +65,7 @@ auto test_basic = [](auto v) {
 
 BASIC(bool, true)
 BASIC(integer, 42)
-BASIC(count, 56u)
+BASIC(uint64_t, 56u)
 BASIC(real, 0.42)
 BASIC(duration, std::chrono::minutes{55})
 BASIC(vast::time, unbox(to<vast::time>("2012-08-12+23:55-0130")))
@@ -92,9 +92,9 @@ NARROW(integer, int8_t, 42)
 NARROW(integer, int16_t, 42)
 NARROW(integer, int32_t, 42)
 NARROW(integer, int64_t, 42)
-NARROW(count, uint8_t, 56u)
-NARROW(count, uint16_t, 56u)
-NARROW(count, uint32_t, 56u)
+NARROW(uint64_t, uint8_t, 56u)
+NARROW(uint64_t, uint16_t, 56u)
+NARROW(uint64_t, uint32_t, 56u)
 NARROW(real, float, 0.42)
 #undef NARROW
 
@@ -117,9 +117,9 @@ OUT_OF_BOUNDS(integer, int16_t, 1 << 15)
 OUT_OF_BOUNDS(integer, int16_t, -(1 << 15) - 1)
 OUT_OF_BOUNDS(integer, int32_t, 1ll << 31)
 OUT_OF_BOUNDS(integer, int32_t, -(1ll << 31) - 1)
-OUT_OF_BOUNDS(count, uint8_t, 1u << 8)
-OUT_OF_BOUNDS(count, uint16_t, 1u << 16)
-OUT_OF_BOUNDS(count, uint32_t, 1ull << 32)
+OUT_OF_BOUNDS(uint64_t, uint8_t, 1u << 8)
+OUT_OF_BOUNDS(uint64_t, uint16_t, 1u << 16)
+OUT_OF_BOUNDS(uint64_t, uint32_t, 1ull << 32)
 #undef OUT_OF_BOUNDS
 
 TEST(data overload) {
@@ -138,7 +138,7 @@ TEST(failing) {
   r = record{{"foo", integer{42}}};
   CHECK_EQUAL(convert(r, x), ec::no_error);
   x.value.value = 1337;
-  r = record{{"value", count{666}}};
+  r = record{{"value", uint64_t{666}}};
   CHECK_EQUAL(convert(r, x), ec::convert_error);
   x.value.value = 1337;
   r = record{{"value", caf::none}};
@@ -203,7 +203,7 @@ struct Complex {
   std::string a;
   struct b_t {
     integer c;
-    std::vector<count> d;
+    std::vector<uint64_t> d;
 
     friend auto inspect(auto& f, b_t& x) {
       return vast::detail::apply_all(f, x.c, x.d);
@@ -211,7 +211,7 @@ struct Complex {
   } b;
   struct e_t {
     integer f;
-    std::optional<count> g;
+    std::optional<uint64_t> g;
 
     friend auto inspect(auto& f, e_t& x) {
       return vast::detail::apply_all(f, x.f, x.g);
@@ -249,9 +249,9 @@ TEST(nested struct - single schema) {
   REQUIRE_EQUAL(convert(r, x), ec::no_error);
   CHECK_EQUAL(x.a, "c3po");
   CHECK_EQUAL(x.b.c, integer{23});
-  CHECK_EQUAL(x.b.d[0], count{1u});
-  CHECK_EQUAL(x.b.d[1], count{2u});
-  CHECK_EQUAL(x.b.d[2], count{3u});
+  CHECK_EQUAL(x.b.d[0], uint64_t{1u});
+  CHECK_EQUAL(x.b.d[1], uint64_t{2u});
+  CHECK_EQUAL(x.b.d[2], uint64_t{3u});
 }
 
 struct Enum {
@@ -435,7 +435,7 @@ TEST(list to vector of struct) {
 }
 
 TEST(map to map) {
-  using Map = vast::detail::flat_map<count, std::string>;
+  using Map = vast::detail::flat_map<uint64_t, std::string>;
   auto x = Map{};
   auto schema = map_type{uint64_type{}, string_type{}};
   auto r = map{{1u, "foo"}, {12u, "bar"}, {997u, "baz"}};
@@ -508,7 +508,7 @@ TEST(list of record to map) {
 }
 
 struct iList {
-  std::vector<count> value;
+  std::vector<uint64_t> value;
 
   friend iList mappend(iList lhs, iList rhs) {
     lhs.value.insert(lhs.value.end(),
@@ -543,14 +543,14 @@ TEST(list of record to map monoid) {
       {"outer",
        record{
          {"name", "x"},
-         {"value", list{count{1}, count{3}}},
+         {"value", list{uint64_t{1}, uint64_t{3}}},
        }},
     },
     record{
       {"outer",
        record{
          {"name", "y"},
-         {"value", list{count{82}}},
+         {"value", list{uint64_t{82}}},
        }},
     },
   };
@@ -560,14 +560,14 @@ TEST(list of record to map monoid) {
       {"outer",
        record{
          {"name", "x"},
-         {"value", list{count{42}}},
+         {"value", list{uint64_t{42}}},
        }},
     },
     record{
       {"outer",
        record{
          {"name", "y"},
-         {"value", list{count{121}}},
+         {"value", list{uint64_t{121}}},
        }},
     },
   };

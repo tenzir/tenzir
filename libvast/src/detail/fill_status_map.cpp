@@ -66,8 +66,8 @@ record fill_status_map(caf::stream_manager& mgr) {
   // Downstream status.
   auto& out = mgr.out();
   auto downstream = record{};
-  downstream["buffered"] = count{out.buffered()};
-  downstream["paths"] = count{out.num_paths()};
+  downstream["buffered"] = uint64_t{out.buffered()};
+  downstream["paths"] = uint64_t{out.num_paths()};
   downstream["stalled"] = out.stalled();
   downstream["clean"] = out.clean();
   out.for_each_path([&](auto& opath) {
@@ -101,13 +101,13 @@ record fill_status_map(caf::stream_manager& mgr) {
 }
 
 void fill_status_map(record& xs, caf::scheduled_actor* self) {
-  xs["actor-id"] = count{self->id()};
+  xs["actor-id"] = uint64_t{self->id()};
   xs["thread-id"] = thread_id();
 #if VAST_LINUX
   xs["pthread-id"] = integer{pthread_id()};
 #endif // VAST_LINUX
   xs["name"] = self->name();
-  xs["mailbox-size"] = count{self->mailbox().size()};
+  xs["mailbox-size"] = uint64_t{self->mailbox().size()};
   size_t counter = 0;
   std::string name;
   for (auto& mgr : unique_values(self->stream_managers())) {

@@ -180,7 +180,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   if (has_component("system")) {
     auto system = record{};
     if (v >= status_verbosity::info) {
-      system["in-memory-table-slices"] = count{table_slice::instances()};
+      system["in-memory-table-slices"] = uint64_t{table_slice::instances()};
       system["database-path"] = self->state.dir.string();
       merge(detail::get_status(), system, policy::merge_lists::no);
     }
@@ -202,9 +202,9 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
     }
     if (v >= status_verbosity::debug) {
       auto& sys = self->system();
-      system["running-actors"] = count{sys.registry().running()};
-      system["detached-actors"] = count{sys.detached_actors()};
-      system["worker-threads"] = count{sys.scheduler().num_workers()};
+      system["running-actors"] = uint64_t{sys.registry().running()};
+      system["detached-actors"] = uint64_t{sys.detached_actors()};
+      system["worker-threads"] = uint64_t{sys.scheduler().num_workers()};
     }
     rs->content["system"] = std::move(system);
   }

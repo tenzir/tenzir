@@ -19,19 +19,19 @@ TEST(copying views) {
   CHECK_VARIANT_EQUAL(view<caf::none_t>{caf::none}, caf::none);
   CHECK_VARIANT_EQUAL(view<bool>{true}, true);
   CHECK_VARIANT_EQUAL(view<integer>{42}, integer{42});
-  CHECK_VARIANT_EQUAL(view<count>{42}, 42u);
+  CHECK_VARIANT_EQUAL(view<uint64_t>{42}, 42u);
   CHECK_VARIANT_EQUAL(view<real>{4.2}, 4.2);
   MESSAGE("using make_view");
   CHECK_VARIANT_EQUAL(make_view(caf::none), caf::none);
   CHECK_VARIANT_EQUAL(make_view(true), true);
   CHECK_VARIANT_EQUAL(make_view(integer{42}), integer{42});
-  CHECK_VARIANT_EQUAL(materialize(make_view(42u)), count(42u));
+  CHECK_VARIANT_EQUAL(materialize(make_view(42u)), uint64_t(42u));
   CHECK_VARIANT_EQUAL(make_view(4.2), real(4.2));
   MESSAGE("copying from temporary data");
   CHECK_VARIANT_EQUAL(materialize(make_view(data{caf::none})), caf::none);
   CHECK_VARIANT_EQUAL(materialize(make_view(data{true})), true);
   CHECK_VARIANT_EQUAL(materialize(make_view(data{integer{42}})), integer{42});
-  CHECK_VARIANT_EQUAL(materialize(make_view(data{42u})), count(42u));
+  CHECK_VARIANT_EQUAL(materialize(make_view(data{42u})), uint64_t(42u));
   CHECK_VARIANT_EQUAL(materialize(make_view(data{4.2})), real(4.2));
 }
 

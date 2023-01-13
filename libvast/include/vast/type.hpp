@@ -487,7 +487,7 @@ public:
   friend std::span<const std::byte> as_bytes(const uint64_type&) noexcept;
 
   /// Constructs data from the type.
-  [[nodiscard]] static count construct() noexcept;
+  [[nodiscard]] static uint64_t construct() noexcept;
 
   /// Converts the type into an Arrow DataType.
   [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;

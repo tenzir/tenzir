@@ -70,7 +70,7 @@ struct zeek_parser {
   }
 
   bool operator()(const uint64_type&) const {
-    static auto p = parsers::u64->*[](count x) {
+    static auto p = parsers::u64->*[](uint64_t x) {
       return x;
     };
     return parse(p);
@@ -155,7 +155,7 @@ struct zeek_parser_factory {
   }
 
   result_type operator()(const uint64_type&) const {
-    return parsers::u64->*[](count x) {
+    return parsers::u64->*[](uint64_t x) {
       return x;
     };
   }

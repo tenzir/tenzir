@@ -255,11 +255,8 @@ using duration = caf::timespan;
 /// represent +/- 292 years around the UNIX epoch.
 using time = caf::timestamp;
 
-/// Unsigned integer type.
-using count = uint64_t;
-
 /// Floating point type.
-using real = double;
+using real [[deprecated("use double instead")]] = double;
 
 /// Enumeration type.
 using enumeration = uint8_t;
@@ -445,7 +442,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((std::pair<std::string, vast::data>))
   VAST_ADD_TYPE_ID((std::vector<uint32_t>))
-  VAST_ADD_TYPE_ID((std::vector<vast::count>))
+  VAST_ADD_TYPE_ID((std::vector<uint64_t>))
   VAST_ADD_TYPE_ID((std::vector<std::string>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>))

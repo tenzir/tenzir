@@ -51,7 +51,7 @@ using view = typename view_trait<T>::type;
 
 VAST_VIEW_TRAIT(bool)
 VAST_VIEW_TRAIT(integer)
-VAST_VIEW_TRAIT(count)
+VAST_VIEW_TRAIT(uint64_t)
 VAST_VIEW_TRAIT(real)
 VAST_VIEW_TRAIT(duration)
 VAST_VIEW_TRAIT(time)
@@ -144,7 +144,7 @@ using data_view = caf::variant<
   view<caf::none_t>,
   view<bool>,
   view<integer>,
-  view<count>,
+  view<uint64_t>,
   view<real>,
   view<duration>,
   view<time>,
@@ -423,7 +423,7 @@ private:
 template <class T>
 view<T> make_view(const T& x) {
   constexpr auto directly_constructible
-    = detail::is_any_v<T, caf::none_t, bool, integer, count, real, duration,
+    = detail::is_any_v<T, caf::none_t, bool, integer, uint64_t, real, duration,
                        time, std::string, address, subnet, enumeration>;
   if constexpr (directly_constructible) {
     return x;

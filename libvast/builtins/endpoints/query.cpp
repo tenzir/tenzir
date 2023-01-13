@@ -321,7 +321,7 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         if (!rq.params.contains("n"))
           return rq.response->abort(400, "missing parameter 'n'\n");
         auto id = caf::get<std::string>(rq.params["id"]);
-        auto n = caf::get<count>(rq.params["n"]);
+        auto n = caf::get<uint64_t>(rq.params["n"]);
         auto it = self->state.live_queries_.find(id);
         if (it == self->state.live_queries_.end())
           return rq.response->abort(422, "unknown id\n");

@@ -27,7 +27,7 @@ namespace vast::format::test {
 // A type-erased probability distribution.
 using distribution
   = caf::variant<std::uniform_int_distribution<integer::value_type>,
-                 std::uniform_int_distribution<count>,
+                 std::uniform_int_distribution<uint64_t>,
                  std::uniform_real_distribution<long double>,
                  std::normal_distribution<long double>,
                  detail::pareto_distribution<long double>>;

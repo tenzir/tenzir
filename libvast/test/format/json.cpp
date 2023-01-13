@@ -83,7 +83,7 @@ TEST(json to data) {
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
-  CHECK(slice.at(0, 1) == data{count{424242}});
+  CHECK(slice.at(0, 1) == data{uint64_t{424242}});
   CHECK(slice.at(0, 2).is<real>());
   const auto r = slice.at(0, 2).get_data().get(
     std::integral_constant<
@@ -97,14 +97,14 @@ TEST(json to data) {
   std::array<std::uint8_t, 4> addr2{192, 168, 0, 1};
   CHECK((slice.at(0, 7) == data{subnet{address::v4(std::span{addr2}), 24}}));
   CHECK(slice.at(0, 11) == data{enumeration{2}});
-  const list lc
-    = {data{count{0x3e7}}, data{count{19}}, data{count{5555}}, data{count{0}}};
+  const list lc = {data{uint64_t{0x3e7}}, data{uint64_t{19}},
+                   data{uint64_t{5555}}, data{uint64_t{0}}};
   CHECK(slice.at(0, 12) == data{lc});
-  CHECK(slice.at(0, 14) == data{count{421}});
+  CHECK(slice.at(0, 14) == data{uint64_t{421}});
   CHECK(slice.at(0, 15) == data{std::string{"test"}});
   auto reference = map{};
-  reference[count{1}] = data{"FOO"};
-  reference[count{1024}] = data{"BAR!"};
+  reference[uint64_t{1}] = data{"FOO"};
+  reference[uint64_t{1024}] = data{"BAR!"};
   CHECK_EQUAL(materialize(slice.at(0, 17)), data{reference});
 }
 

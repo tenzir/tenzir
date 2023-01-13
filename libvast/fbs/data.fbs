@@ -8,7 +8,7 @@ struct Integer {
   value: long;
 }
 
-struct Count {
+struct UInt64 {
   value: ulong;
 }
 
@@ -71,7 +71,7 @@ table Record {
 union Data {
   boolean: Boolean,
   integer: Integer,
-  count: Count,
+  uint64: UInt64,
   real: Real,
   duration: Duration,
   time: Time,

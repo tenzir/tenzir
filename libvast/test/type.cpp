@@ -660,7 +660,7 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(caf::none), type{});
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
   CHECK_EQUAL(type::infer(integer{}), int64_type{});
-  CHECK_EQUAL(type::infer(count{}), uint64_type{});
+  CHECK_EQUAL(type::infer(uint64_t{}), uint64_type{});
   CHECK_EQUAL(type::infer(real{}), double_type{});
   CHECK_EQUAL(type::infer(duration{}), duration_type{});
   CHECK_EQUAL(type::infer(time{}), time_type{});
@@ -689,7 +689,7 @@ TEST(type inference) {
     {"b", integer{}},
     {"c",
      record{
-       {"d", count{}},
+       {"d", uint64_t{}},
      }},
   };
   const auto rt = record_type{
@@ -922,10 +922,11 @@ TEST(construct) {
     },
   };
   const auto expected = record::vector_type{
-    {"n", data{list{}}},   {"b", data{bool{}}},     {"i", data{integer{}}},
-    {"c", data{count{}}},  {"r", data{real{}}},     {"s", data{std::string{}}},
-    {"t", data{time{}}},   {"d", data{duration{}}}, {"a", data{address{}}},
-    {"s", data{subnet{}}},
+    {"n", data{list{}}},    {"b", data{bool{}}},
+    {"i", data{integer{}}}, {"c", data{uint64_t{}}},
+    {"r", data{real{}}},    {"s", data{std::string{}}},
+    {"t", data{time{}}},    {"d", data{duration{}}},
+    {"a", data{address{}}}, {"s", data{subnet{}}},
   };
   CHECK_EQUAL(t.construct(), record::make_unsafe(expected));
 }

@@ -64,8 +64,8 @@ auto check_column(const table_slice& slice, int c, const T& t,
     CHECK_EQUAL(materialize(slice.at(r, c, type{t})), ref[r]);
 }
 
-count operator"" _c(unsigned long long int x) {
-  return static_cast<count>(x);
+uint64_t operator"" _c(unsigned long long int x) {
+  return static_cast<uint64_t>(x);
 }
 
 template <concrete_type VastType, class... Ts>
@@ -147,7 +147,7 @@ TEST(batch transform nested column) {
     },
   };
   auto f1s = std::vector<std::string>{"n1", "n2", "n3", "n4"};
-  auto f2s = std::vector<count>{1_c, 2_c, 3_c, 4_c};
+  auto f2s = std::vector<uint64_t>{1_c, 2_c, 3_c, 4_c};
   auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
                                   pattern("p4")};
   auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
@@ -207,7 +207,7 @@ TEST(batch project nested column) {
     },
   };
   auto f1s = std::vector<std::string>{"n1", "n2", "n3", "n4"};
-  auto f2s = std::vector<count>{1_c, 2_c, 3_c, 4_c};
+  auto f2s = std::vector<uint64_t>{1_c, 2_c, 3_c, 4_c};
   auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
                                   pattern("p4")};
   auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};

@@ -334,7 +334,7 @@ TEST(data) {
   CHECK_TO_STRING(r, "12.21");
   data b{true};
   CHECK_TO_STRING(b, "true");
-  data c{count{23}};
+  data c{uint64_t{23}};
   CHECK_TO_STRING(c, "23");
   data i{integer{42}};
   CHECK_TO_STRING(i, "+42");

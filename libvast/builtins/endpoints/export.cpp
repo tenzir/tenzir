@@ -572,8 +572,8 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       if (rq.params.contains("limit")) {
         auto& param = rq.params.at("limit");
         // Should be type-checked by the server.
-        VAST_ASSERT(caf::holds_alternative<count>(param));
-        params.limit = caf::get<count>(param);
+        VAST_ASSERT(caf::holds_alternative<uint64_t>(param));
+        params.limit = caf::get<uint64_t>(param);
       }
       if (rq.params.contains("flatten")) {
         auto& param = rq.params.at("flatten");

@@ -400,7 +400,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
                           detail::narrow_cast<double>(value.value), metadata,
                           {});
     },
-    [self](atom::metrics, const std::string& key, count value,
+    [self](atom::metrics, const std::string& key, uint64_t value,
            metrics_metadata& metadata) {
       VAST_TRACE_SCOPE("{} received {} from {}", *self, key,
                        self->current_sender());

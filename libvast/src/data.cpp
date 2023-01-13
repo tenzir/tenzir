@@ -63,9 +63,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::integer,
                              value_offset.Union());
     },
-    [&](const count& value) -> flatbuffers::Offset<fbs::Data> {
-      const auto value_offset = builder.CreateStruct(fbs::data::Count{value});
-      return fbs::CreateData(builder, fbs::data::Data::count,
+    [&](const uint64_t& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(fbs::data::UInt64{value});
+      return fbs::CreateData(builder, fbs::data::Data::uint64,
                              value_offset.Union());
     },
     [&](const real& value) -> flatbuffers::Offset<fbs::Data> {
@@ -178,8 +178,8 @@ caf::error unpack(const fbs::Data& from, data& to) {
       to = integer{from.data_as_integer()->value()};
       return caf::none;
     }
-    case fbs::data::Data::count: {
-      to = count{from.data_as_count()->value()};
+    case fbs::data::Data::uint64: {
+      to = uint64_t{from.data_as_uint64()->value()};
       return caf::none;
     }
     case fbs::data::Data::real: {
@@ -570,7 +570,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
   auto f = detail::overload{
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
-      if constexpr (detail::is_any_v<value_type, bool, count, real, duration,
+      if constexpr (detail::is_any_v<value_type, bool, uint64_t, real, duration,
                                      std::string>)
         cv = x;
       else if constexpr (std::is_same_v<value_type, integer>)
@@ -703,7 +703,7 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
     case simdjson::dom::element_type::DOUBLE:
       return real{elem.get_double()};
     case simdjson::dom::element_type::UINT64:
-      return count{elem.get_uint64()};
+      return uint64_t{elem.get_uint64()};
     case simdjson::dom::element_type::INT64:
       return integer{elem.get_int64()};
     case simdjson::dom::element_type::BOOL:
@@ -868,7 +868,7 @@ void print(YAML::Emitter& out, const data& x) {
     [&out](integer x) {
       out << x.value;
     },
-    [&out](count x) {
+    [&out](uint64_t x) {
       out << x;
     },
     [&out](real x) {

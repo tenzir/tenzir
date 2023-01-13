@@ -54,7 +54,7 @@ constexpr auto to_data_type() {
     if constexpr (sizeof(T) == 1)
       return enumeration{};
     else
-      return count{};
+      return uint64_t{};
   } else if constexpr (std::is_convertible_v<T, std::string>)
     return std::string{};
   else if constexpr (detail::is_any_v<T, caf::none_t, integer, duration, time,
@@ -91,7 +91,7 @@ public:
     caf::none_t,
     bool,
     integer,
-    count,
+    uint64_t,
     real,
     duration,
     time,

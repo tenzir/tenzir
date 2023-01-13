@@ -843,7 +843,7 @@ namespace {
 template <class T>
 T to_si(std::string_view str) {
   auto parse_si = [&](auto input, auto& x) {
-    if constexpr (std::is_same_v<T, count>)
+    if constexpr (std::is_same_v<T, uint64_t>)
       return parsers::count(input, x);
     else if constexpr (std::is_same_v<T, integer>)
       return parsers::integer(input, x);
@@ -857,7 +857,7 @@ T to_si(std::string_view str) {
 } // namespace
 
 TEST(si count) {
-  auto to_count = to_si<count>;
+  auto to_count = to_si<uint64_t>;
   using namespace si_literals;
   CHECK_EQUAL(to_count("42"), 42u);
   CHECK_EQUAL(to_count("1k"), 1_k);
@@ -896,7 +896,7 @@ TEST(si int) {
 
 TEST(bytesize) {
   const auto parse = [](std::string_view str) {
-    if (auto result = count{}; parsers::bytesize(str, result))
+    if (auto result = uint64_t{}; parsers::bytesize(str, result))
       return result;
     FAIL("failed to parse bytesize: " << str);
   };

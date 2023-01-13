@@ -138,7 +138,7 @@ data extract(int64_t value, const type& type) {
     },
     [&](const uint64_type&) noexcept -> data {
       if (value >= 0)
-        return detail::narrow_cast<count>(value);
+        return detail::narrow_cast<uint64_t>(value);
       return caf::none;
     },
     [&](const double_type&) noexcept -> data {
@@ -298,19 +298,19 @@ data extract(uint64_t value, const type& type) {
       return caf::none;
     },
     [&](const uint64_type&) noexcept -> data {
-      return count{value};
+      return uint64_t{value};
     },
     [&](const double_type&) noexcept -> data {
       return detail::narrow_cast<real>(value);
     },
     [&](const duration_type&) noexcept -> data {
       return std::chrono::duration_cast<duration>(
-        std::chrono::duration<count>{value});
+        std::chrono::duration<uint64_t>{value});
     },
     [&](const time_type&) noexcept -> data {
       return time{}
              + std::chrono::duration_cast<duration>(
-               std::chrono::duration<count>{value});
+               std::chrono::duration<uint64_t>{value});
     },
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
@@ -356,7 +356,7 @@ data extract(double value, const type& type) {
       return integer{detail::narrow_cast<integer::value_type>(value)};
     },
     [&](const uint64_type&) noexcept -> data {
-      return detail::narrow_cast<count>(value);
+      return detail::narrow_cast<uint64_t>(value);
     },
     [&](const double_type&) noexcept -> data {
       return value;
@@ -417,10 +417,10 @@ data extract(std::string_view value, const type& type) {
       return caf::none;
     },
     [&](const uint64_type&) noexcept -> data {
-      if (count result = {}; parsers::json_count(value, result))
+      if (uint64_t result = {}; parsers::json_count(value, result))
         return result;
       if (real result = {}; parsers::json_number(value, result))
-        return detail::narrow_cast<count>(result);
+        return detail::narrow_cast<uint64_t>(result);
       return caf::none;
     },
     [&](const double_type&) noexcept -> data {
@@ -494,7 +494,7 @@ data extract(bool value, const type& type) {
       return value ? integer{1} : integer{0};
     },
     [&](const uint64_type&) noexcept -> data {
-      return value ? count{1} : count{0};
+      return value ? uint64_t{1} : uint64_t{0};
     },
     [&](const double_type&) noexcept -> data {
       return caf::none;
@@ -613,7 +613,8 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
     },
     [&](const uint64_type&) noexcept {
       if (value >= 0) {
-        const auto added = builder.add(detail::narrow_cast<view<count>>(value));
+        const auto added
+          = builder.add(detail::narrow_cast<view<uint64_t>>(value));
         VAST_ASSERT(added);
         return;
       }
@@ -694,7 +695,7 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       VAST_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
-      const auto added = builder.add(view<count>{value});
+      const auto added = builder.add(view<uint64_t>{value});
       VAST_ASSERT(added);
     },
     [&](const double_type&) noexcept {
@@ -703,13 +704,13 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
     },
     [&](const duration_type&) noexcept {
       const auto added = builder.add(std::chrono::duration_cast<duration>(
-        std::chrono::duration<count>{value}));
+        std::chrono::duration<uint64_t>{value}));
       VAST_ASSERT(added);
     },
     [&](const time_type&) noexcept {
       const auto added = builder.add(time{}
                                      + std::chrono::duration_cast<duration>(
-                                       std::chrono::duration<count>{value}));
+                                       std::chrono::duration<uint64_t>{value}));
       VAST_ASSERT(added);
     },
     [&](const string_type&) noexcept {
@@ -765,7 +766,7 @@ void add(double value, const type& type, table_slice_builder& builder) {
       VAST_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
-      const auto added = builder.add(detail::narrow_cast<count>(value));
+      const auto added = builder.add(detail::narrow_cast<uint64_t>(value));
       VAST_ASSERT(added);
     },
     [&](const double_type&) noexcept {
@@ -829,7 +830,7 @@ void add(bool value, const type& type, table_slice_builder& builder) {
       VAST_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
-      const auto added = builder.add(value ? count{1} : count{0});
+      const auto added = builder.add(value ? uint64_t{1} : uint64_t{0});
       VAST_ASSERT(added);
     },
     [&](const double_type&) noexcept {
@@ -907,14 +908,14 @@ void add(std::string_view value, const type& type,
       VAST_ASSERT(added);
     },
     [&](const uint64_type&) noexcept {
-      if (count result = {}; parsers::json_count(value, result)) {
+      if (uint64_t result = {}; parsers::json_count(value, result)) {
         const auto added = builder.add(result);
         VAST_ASSERT(added);
         return;
       }
       if (real result = {}; parsers::json_number(value, result)) {
         const auto added
-          = builder.add(detail::narrow_cast<view<count>>(result));
+          = builder.add(detail::narrow_cast<view<uint64_t>>(result));
         VAST_ASSERT(added);
         return;
       }

@@ -61,8 +61,8 @@ auto compare_table_slices(const table_slice& left, const table_slice& right) {
   }
 }
 
-count operator"" _c(unsigned long long int x) {
-  return static_cast<count>(x);
+uint64_t operator"" _c(unsigned long long int x) {
+  return static_cast<uint64_t>(x);
 }
 
 enumeration operator"" _e(unsigned long long int x) {

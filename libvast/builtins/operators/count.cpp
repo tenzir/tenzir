@@ -42,7 +42,7 @@ private:
     return count_;
   }
 
-  vast::count count_ = {};
+  uint64_t count_ = {};
 };
 
 class plugin : public virtual aggregation_function_plugin {

@@ -138,7 +138,7 @@ TEST(export endpoint) {
     auto request = vast::http_request{
       .params = {
         {"expression", ":addr in 192.168.0.0/16"},
-        {"limit", vast::count{16}},
+        {"limit", uint64_t{16}},
       },
       .response = response,
     };
@@ -165,7 +165,7 @@ TEST(export endpoint) {
         // The expression is syntactically valid but semantically
         // invalid (field_extractor in field_extractor)
         {"expression", "net.src.ip in asdf"},
-        {"limit", vast::count{16}},
+        {"limit", uint64_t{16}},
       },
       .response = response,
     };
@@ -183,7 +183,7 @@ TEST(export endpoint) {
     auto request = vast::http_request{
       .params = {
         {"expression", ":addr in 192.168.0.0/16"},
-        {"limit", vast::count{16}},
+        {"limit", uint64_t{16}},
       },
       .response = response,
     };
@@ -207,7 +207,7 @@ TEST(export endpoint) {
     auto request = vast::http_request{
       .params = {
         {"expression", ":addr in 192.168.0.0/16"},
-        {"limit", vast::count{16}},
+        {"limit", uint64_t{16}},
       },
       .response = response,
     };
@@ -259,7 +259,7 @@ TEST(query endpoint) {
   CHECK(!doc["id"].is_null());
   auto const* id = doc["id"].get<const char*>().value();
   auto response_next = std::make_shared<test_response>();
-  const auto NUM_EVENTS = vast::count{16};
+  const auto NUM_EVENTS = uint64_t{16};
   auto request_next = vast::http_request{
     .params = {
       {"id", std::string{id}},

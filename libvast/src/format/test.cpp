@@ -54,8 +54,8 @@ caf::expected<distribution> make_distribution(const type& t) {
     if (caf::holds_alternative<bool_type>(t)
         || caf::holds_alternative<uint64_type>(t)
         || caf::holds_alternative<string_type>(t))
-      return distribution{std::uniform_int_distribution<count>{
-        static_cast<count>(p0), static_cast<count>(p1)}};
+      return distribution{std::uniform_int_distribution<uint64_t>{
+        static_cast<uint64_t>(p0), static_cast<uint64_t>(p1)}};
     return distribution{std::uniform_real_distribution<long double>{p0, p1}};
   }
   if (name == "normal")
@@ -150,7 +150,7 @@ struct randomizer {
     x.value = static_cast<integer::value_type>(sample());
   }
 
-  void operator()(const uint64_type&, count& x) {
+  void operator()(const uint64_type&, uint64_t& x) {
     x = sample();
   }
 
@@ -168,7 +168,7 @@ struct randomizer {
 
   void operator()(const bool_type&, bool& b) {
     lcg gen{static_cast<lcg::result_type>(sample())};
-    std::uniform_int_distribution<count> unif{0, 1};
+    std::uniform_int_distribution<uint64_t> unif{0, 1};
     b = unif(gen);
   }
 

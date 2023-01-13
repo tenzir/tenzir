@@ -106,7 +106,7 @@ TEST(merge) {
 TEST(strip) {
   auto xs = record{
     {"a", record{}},
-    {"b", count{5u}},
+    {"b", uint64_t{5u}},
     {"c",
      record{
        {"d",
@@ -117,7 +117,7 @@ TEST(strip) {
      }},
     {"g", caf::none},
   };
-  auto expected = record{{"b", count{5u}}};
+  auto expected = record{{"b", uint64_t{5u}}};
   CHECK_EQUAL(strip(xs), expected);
 }
 
@@ -128,7 +128,7 @@ TEST(construction) {
   CHECK(caf::holds_alternative<integer>(data{integer{0}}));
   CHECK(caf::holds_alternative<integer>(data{integer{42}}));
   CHECK(caf::holds_alternative<integer>(data{integer{-42}}));
-  CHECK(caf::holds_alternative<count>(data{42u}));
+  CHECK(caf::holds_alternative<uint64_t>(data{42u}));
   CHECK(caf::holds_alternative<real>(data{4.2}));
   CHECK(caf::holds_alternative<std::string>(data{"foo"}));
   CHECK(caf::holds_alternative<std::string>(data{std::string{"foo"}}));
@@ -180,8 +180,8 @@ TEST(evaluation) {
   CHECK(evaluate(rhs, relational_operator::ni, lhs));
   CHECK(evaluate(rhs, relational_operator::not_in, lhs));
   MESSAGE("equality");
-  lhs = count{42};
-  rhs = count{1337};
+  lhs = uint64_t{42};
+  rhs = uint64_t{1337};
   CHECK(evaluate(lhs, relational_operator::less_equal, rhs));
   CHECK(evaluate(lhs, relational_operator::less, rhs));
   CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
@@ -207,9 +207,9 @@ TEST(evaluation - pattern matching) {
 
 TEST(serialization) {
   list xs;
-  xs.emplace_back(count{80});
-  xs.emplace_back(count{53});
-  xs.emplace_back(count{8});
+  xs.emplace_back(uint64_t{80});
+  xs.emplace_back(uint64_t{53});
+  xs.emplace_back(uint64_t{8});
   auto x0 = data{xs};
   caf::byte_buffer buf;
   CHECK(detail::serialize(buf, x0));
@@ -372,7 +372,7 @@ TEST(pack / unpack) {
     {"none", caf::none},
     {"bool", bool{true}},
     {"integer", integer{2}},
-    {"count", count{3u}},
+    {"count", uint64_t{3u}},
     {"real", real{4.0}},
     {"duration", duration{5}},
     {"time", vast::time{} + duration{6}},
@@ -381,8 +381,8 @@ TEST(pack / unpack) {
     {"address", unbox(to<address>("0.0.0.8"))},
     {"subnet", unbox(to<subnet>("0.0.0.9/24"))},
     {"enumeration", enumeration{10}},
-    {"list", list{count{11}}},
-    {"map", map{{std::string{"key"}, count{12}}}},
+    {"list", list{uint64_t{11}}},
+    {"map", map{{std::string{"key"}, uint64_t{12}}}},
     {"record",
      record{
        {"nested_real", real{13.0}},

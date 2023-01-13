@@ -178,7 +178,7 @@ using accountant_actor = typed_actor_fwd<
   // Record integer metric.
   auto(atom::metrics, std::string, integer, metrics_metadata)->caf::result<void>,
   // Record count metric.
-  auto(atom::metrics, std::string, count, metrics_metadata)->caf::result<void>,
+  auto(atom::metrics, std::string, uint64_t, metrics_metadata)->caf::result<void>,
   // Record real metric.
   auto(atom::metrics, std::string, real, metrics_metadata)->caf::result<void>,
   // Record a metrics report.

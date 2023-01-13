@@ -125,10 +125,10 @@ TEST(status) {
       [&](record& status) {
         auto ops = caf::get<record>(status["operations"]);
         auto checks = caf::get<record>(ops["checks"]);
-        auto failed_checks = caf::get<count>(checks["failed"]);
+        auto failed_checks = caf::get<uint64_t>(checks["failed"]);
         CHECK_EQUAL(failed_checks, 1u);
         auto reads = caf::get<record>(ops["reads"]);
-        auto failed_reads = caf::get<count>(reads["failed"]);
+        auto failed_reads = caf::get<uint64_t>(reads["failed"]);
         CHECK_EQUAL(failed_reads, 0u);
       },
       [&](const caf::error& err) {
