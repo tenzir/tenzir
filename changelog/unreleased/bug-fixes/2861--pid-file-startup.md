@@ -1,1 +1,1 @@
-VAST no longer ignore existing PID lock files on linux.
+VAST no longer ignores existing PID lock files on Linux.
