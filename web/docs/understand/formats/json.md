@@ -234,6 +234,11 @@ like this:
 }
 ```
 
+::tip Shorthand Syntax
+The option `--omit-empty` is short for `--omit-nulls --omit-empty-records
+--omit-empty-lists --omit-empty-maps`.
+:::
+
 ### Render durations as fractional seconds
 
 For use cases that involve arithmetic on time durations after VAST provided the
