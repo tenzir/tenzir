@@ -68,7 +68,8 @@ transformer_stream_stage_ptr attach_pipeline_stage(
       for (auto& t2 : *transformed)
         out.push(std::move(t2));
     },
-    [=](caf::unit_t&, const caf::error&) {
+    [=](caf::unit_t&, const caf::error& e) {
+      VAST_WARN("transformer received err {}", e);
       // nop
     });
 }
@@ -91,6 +92,9 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
     return transformer_actor::behavior_type::make_empty_behavior();
   }
   self->state.stage = attach_pipeline_stage(self);
+  self->attach_functor([id = self->id(), name] {
+    VAST_INFO("transformer {} {} going down", id, name);
+  });
   return {
     [self](const stream_sink_actor<table_slice>& out)
       -> caf::outbound_stream_slot<table_slice> {

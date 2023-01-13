@@ -122,6 +122,7 @@ filesystem_actor::behavior_type posix_filesystem(
     },
     [self](atom::move, const std::filesystem::path& from,
            const std::filesystem::path& to) -> caf::result<atom::done> {
+      VAST_INFO("filesystem moving {} to {}", from, to);
       return self->state.rename_single_file(from, to);
     },
     [self](
@@ -131,6 +132,7 @@ filesystem_actor::behavior_type posix_filesystem(
       std::error_code err;
       for (const auto& [from, to] : files) {
         auto result = self->state.rename_single_file(from, to);
+        VAST_INFO("filesystem loop moving {} to {}", from, to);
         if (!result)
           return result.error();
       }

@@ -53,7 +53,6 @@ public:
 
   void process(caf::downstream<detail::framed<table_slice>>& out,
                std::vector<table_slice>& slices) override {
-    VAST_INFO("process importer driver");
     VAST_TRACE_SCOPE("{}", VAST_ARG(slices));
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
@@ -69,7 +68,6 @@ public:
       slice.import_time(time::clock::now());
       out.push(std::move(slice));
     }
-    VAST_INFO("process importer events: ", events);
     t.stop(events);
   }
 

@@ -439,8 +439,8 @@ active_partition_actor::behavior_type active_partition(
     ->set_notification_slot(slot);
   VAST_DEBUG("{} spawned new active store at slot {}", *self, slot);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
-               msg.reason);
+    VAST_DEBUG("{} received EXIT from {} with reason: {}, part id {}", *self,
+               msg.source, msg.reason, id);
     if (self->state.streaming_initiated
         && self->state.stage->inbound_paths().empty()) {
       detail::shutdown_stream_stage(self->state.stage);
@@ -462,7 +462,8 @@ active_partition_actor::behavior_type active_partition(
       caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
       return;
     }
-    VAST_VERBOSE("{} shuts down after persisting partition state", *self);
+    VAST_VERBOSE("{} shuts down after persisting partition state, id:", *self,
+                 id);
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
     // on 'std::vector<caf::actor>' only. That should probably be generalized
     // in the future.
@@ -472,6 +473,9 @@ active_partition_actor::behavior_type active_partition(
     for ([[maybe_unused]] auto&& [qf, indexer] : std::move(copy))
       indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
     shutdown<policy::parallel>(self, std::move(indexers));
+  });
+  self->attach_functor([=] {
+    VAST_INFO("sztyglic dead partition {}", id);
   });
   return {
     [self](atom::erase) -> caf::result<atom::done> {
