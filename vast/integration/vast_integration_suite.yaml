@@ -237,7 +237,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: flush
       - command: status --detailed
-        transformation: jq '.catalog.schemas | del(."vast.metrics") | del(."zeek.conn"."import-time")'
+        transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
       - command: status --detailed
         transformation: jq -ec 'del(.version) | del(.system."swap-space-usage") | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
       - command: status --detailed index importer
