@@ -32,7 +32,7 @@ namespace vast::detail {
 namespace {
 
 bool pid_belongs_to_vast(pid_t pid) {
-  const auto proc_pid_path = fmt::format("/proc/%d/status", pid);
+  const auto proc_pid_path = fmt::format("/proc/{}/status", pid);
   const auto proc_pid_contents = detail::load_contents(proc_pid_path);
   if (!proc_pid_contents) {
     VAST_DEBUG("failed to read {}: {}", proc_pid_path,
