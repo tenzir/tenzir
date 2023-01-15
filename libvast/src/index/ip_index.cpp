@@ -140,7 +140,7 @@ caf::error ip_index::unpack_impl(const fbs::ValueIndex& from) {
   if (from_ip->byte_indexes()->size() != bytes_.size())
     return caf::make_error(ec::format_error,
                            fmt::format("unexpected number of byte indexes in "
-                                       "ip index: expected {}, got {}",
+                                       "IP index: expected {}, got {}",
                                        bytes_.size(),
                                        from_ip->byte_indexes()->size()));
   for (size_t i = 0; i < bytes_.size(); ++i)
