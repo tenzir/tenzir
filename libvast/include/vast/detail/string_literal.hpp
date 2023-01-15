@@ -14,7 +14,8 @@
 
 namespace vast::detail {
 
-/// String literal wrapper for NTTPs.
+/// A string literal wrapper for NTTPs, making it possible to use string
+/// literals as template arguments, which would not normally be possible.
 template <size_t N>
   requires(N >= 1)
 struct string_literal {
