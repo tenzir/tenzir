@@ -35,11 +35,11 @@ paths:
             default: A query matching every event.
           required: true
           description: The query expression to execute.
-          example: ':addr in 10.42.0.0/16'
+          example: ':ip in 10.42.0.0/16'
         - in: query
           name: limit
           schema:
-            type: integer
+            type: int64
             default: 50
           required: false
           description: Maximum number of returned events.
@@ -88,7 +88,7 @@ paths:
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:
@@ -156,10 +156,10 @@ paths:
                 expression:
                   type: string
                   description: The query expression to execute.
-                  example: ':addr in 10.42.0.0/16'
+                  example: ':ip in 10.42.0.0/16'
                   default: A query matching every event.
                 limit:
-                  type: integer
+                  type: int64
                   default: 50
                   description: Maximum number of returned events
                   example: 3
@@ -197,7 +197,7 @@ paths:
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:
@@ -267,10 +267,10 @@ paths:
                 expression:
                   type: string
                   description: The query expression to execute.
-                  example: ':addr in 10.42.0.0/16'
+                  example: ':ip in 10.42.0.0/16'
                   default: A query matching every event.
                 limit:
-                  type: integer
+                  type: int64
                   default: 50
                   description: Maximum number of returned events
                   example: 3
@@ -310,7 +310,7 @@ paths:
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:
@@ -342,15 +342,15 @@ paths:
                         - name: timestamp
                           type: timestamp
                         - name: pcap_cnt
-                          type: count
+                          type: uint64
                         - name: src_ip
-                          type: addr
+                          type: ip
                         - name: src_port
-                          type: count
+                          type: uint64
                         - name: pkts
-                          type: count
+                          type: uint64
                         - name: bytes
-                          type: count
+                          type: uint64
                         - name: action
                           type: 'enum {allowed: 0, blocked: 1}'
                       data:
@@ -372,7 +372,7 @@ paths:
           name: expression
           schema:
             type: string
-            example: ':addr in 10.42.0.0/16'
+            example: ':ip in 10.42.0.0/16'
           required: true
           description: Query string.
       responses:
@@ -406,7 +406,7 @@ paths:
         - in: query
           name: 'n'
           schema:
-            type: integer
+            type: int64
           required: false
           example: 10
           description: Maximum number of returned events
@@ -419,7 +419,7 @@ paths:
                 type: object
                 properties:
                   position:
-                    type: integer
+                    type: int64
                     description: >-
                       The total number of events that has been returned by
                       previous calls to this endpoint.
