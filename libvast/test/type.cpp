@@ -45,66 +45,66 @@ TEST(bool_type) {
   CHECK_EQUAL(bt.to_definition(), expected_definition);
 }
 
-TEST(integer_type) {
-  static_assert(concrete_type<integer_type>);
-  static_assert(basic_type<integer_type>);
-  static_assert(!complex_type<integer_type>);
+TEST(int64_type) {
+  static_assert(concrete_type<int64_type>);
+  static_assert(basic_type<int64_type>);
+  static_assert(!complex_type<int64_type>);
   const auto t = type{};
-  const auto it = type{integer_type{}};
+  const auto it = type{int64_type{}};
   CHECK(it);
-  CHECK_EQUAL(as_bytes(it), as_bytes(integer_type{}));
+  CHECK_EQUAL(as_bytes(it), as_bytes(int64_type{}));
   CHECK(t != it);
   CHECK(t < it);
   CHECK(t <= it);
-  CHECK_EQUAL(fmt::format("{}", it), "int");
-  CHECK_EQUAL(fmt::format("{}", integer_type{}), "int");
-  CHECK(!caf::holds_alternative<integer_type>(t));
-  CHECK(caf::holds_alternative<integer_type>(it));
+  CHECK_EQUAL(fmt::format("{}", it), "int64");
+  CHECK_EQUAL(fmt::format("{}", int64_type{}), "int64");
+  CHECK(!caf::holds_alternative<int64_type>(t));
+  CHECK(caf::holds_alternative<int64_type>(it));
   const auto lit = type::from_legacy_type(legacy_integer_type{});
-  CHECK(caf::holds_alternative<integer_type>(lit));
-  const auto expected_definition = data{"int"};
+  CHECK(caf::holds_alternative<int64_type>(lit));
+  const auto expected_definition = data{"int64"};
   CHECK_EQUAL(it.to_definition(), expected_definition);
 }
 
-TEST(count_type) {
-  static_assert(concrete_type<count_type>);
-  static_assert(basic_type<count_type>);
-  static_assert(!complex_type<count_type>);
+TEST(uint64_type) {
+  static_assert(concrete_type<uint64_type>);
+  static_assert(basic_type<uint64_type>);
+  static_assert(!complex_type<uint64_type>);
   const auto t = type{};
-  const auto ct = type{count_type{}};
+  const auto ct = type{uint64_type{}};
   CHECK(ct);
-  CHECK_EQUAL(as_bytes(ct), as_bytes(count_type{}));
+  CHECK_EQUAL(as_bytes(ct), as_bytes(uint64_type{}));
   CHECK(t != ct);
   CHECK(t < ct);
   CHECK(t <= ct);
-  CHECK_EQUAL(fmt::format("{}", ct), "count");
-  CHECK_EQUAL(fmt::format("{}", count_type{}), "count");
-  CHECK(!caf::holds_alternative<count_type>(t));
-  CHECK(caf::holds_alternative<count_type>(ct));
+  CHECK_EQUAL(fmt::format("{}", ct), "uint64");
+  CHECK_EQUAL(fmt::format("{}", uint64_type{}), "uint64");
+  CHECK(!caf::holds_alternative<uint64_type>(t));
+  CHECK(caf::holds_alternative<uint64_type>(ct));
   const auto lct = type::from_legacy_type(legacy_count_type{});
-  CHECK(caf::holds_alternative<count_type>(lct));
-  const auto expected_definition = data{"count"};
+  CHECK(caf::holds_alternative<uint64_type>(lct));
+  const auto expected_definition = data{"uint64"};
   CHECK_EQUAL(ct.to_definition(), expected_definition);
 }
 
-TEST(real_type) {
-  static_assert(concrete_type<real_type>);
-  static_assert(basic_type<real_type>);
-  static_assert(!complex_type<real_type>);
+TEST(double_type) {
+  static_assert(concrete_type<double_type>);
+  static_assert(basic_type<double_type>);
+  static_assert(!complex_type<double_type>);
   const auto t = type{};
-  const auto rt = type{real_type{}};
+  const auto rt = type{double_type{}};
   CHECK(rt);
-  CHECK_EQUAL(as_bytes(rt), as_bytes(real_type{}));
+  CHECK_EQUAL(as_bytes(rt), as_bytes(double_type{}));
   CHECK(t != rt);
   CHECK(t < rt);
   CHECK(t <= rt);
-  CHECK_EQUAL(fmt::format("{}", rt), "real");
-  CHECK_EQUAL(fmt::format("{}", real_type{}), "real");
-  CHECK(!caf::holds_alternative<real_type>(t));
-  CHECK(caf::holds_alternative<real_type>(rt));
+  CHECK_EQUAL(fmt::format("{}", rt), "double");
+  CHECK_EQUAL(fmt::format("{}", double_type{}), "double");
+  CHECK(!caf::holds_alternative<double_type>(t));
+  CHECK(caf::holds_alternative<double_type>(rt));
   const auto lrt = type::from_legacy_type(legacy_real_type{});
-  CHECK(caf::holds_alternative<real_type>(lrt));
-  const auto expected_definition = data{"real"};
+  CHECK(caf::holds_alternative<double_type>(lrt));
+  const auto expected_definition = data{"double"};
   CHECK_EQUAL(rt.to_definition(), expected_definition);
 }
 
@@ -192,24 +192,24 @@ TEST(pattern_type) {
   CHECK_EQUAL(pt.to_definition(), expected_definition);
 }
 
-TEST(address_type) {
-  static_assert(concrete_type<address_type>);
-  static_assert(basic_type<address_type>);
-  static_assert(!complex_type<address_type>);
+TEST(ip_type) {
+  static_assert(concrete_type<ip_type>);
+  static_assert(basic_type<ip_type>);
+  static_assert(!complex_type<ip_type>);
   const auto t = type{};
-  const auto at = type{address_type{}};
+  const auto at = type{ip_type{}};
   CHECK(at);
-  CHECK_EQUAL(as_bytes(at), as_bytes(address_type{}));
+  CHECK_EQUAL(as_bytes(at), as_bytes(ip_type{}));
   CHECK(t != at);
   CHECK(t < at);
   CHECK(t <= at);
-  CHECK_EQUAL(fmt::format("{}", at), "addr");
-  CHECK_EQUAL(fmt::format("{}", address_type{}), "addr");
-  CHECK(!caf::holds_alternative<address_type>(t));
-  CHECK(caf::holds_alternative<address_type>(at));
+  CHECK_EQUAL(fmt::format("{}", at), "ip");
+  CHECK_EQUAL(fmt::format("{}", ip_type{}), "ip");
+  CHECK(!caf::holds_alternative<ip_type>(t));
+  CHECK(caf::holds_alternative<ip_type>(at));
   const auto lat = type::from_legacy_type(legacy_address_type{});
-  CHECK(caf::holds_alternative<address_type>(lat));
-  const auto expected_definition = data{"addr"};
+  CHECK(caf::holds_alternative<ip_type>(lat));
+  const auto expected_definition = data{"ip"};
   CHECK_EQUAL(at.to_definition(), expected_definition);
 }
 
@@ -272,23 +272,23 @@ TEST(list_type) {
   static_assert(!basic_type<list_type>);
   static_assert(complex_type<list_type>);
   const auto t = type{};
-  const auto tlit = type{list_type{integer_type{}}};
-  const auto lit = list_type{integer_type{}};
+  const auto tlit = type{list_type{int64_type{}}};
+  const auto lit = list_type{int64_type{}};
   CHECK(tlit);
   CHECK_EQUAL(as_bytes(tlit), as_bytes(lit));
   CHECK(t != tlit);
   CHECK(t < tlit);
   CHECK(t <= tlit);
-  CHECK_EQUAL(fmt::format("{}", tlit), "list<int>");
+  CHECK_EQUAL(fmt::format("{}", tlit), "list<int64>");
   CHECK_EQUAL(fmt::format("{}", list_type{{}}), "list<none>");
   CHECK(!caf::holds_alternative<list_type>(t));
   CHECK(caf::holds_alternative<list_type>(tlit));
-  CHECK_EQUAL(caf::get<list_type>(tlit).value_type(), type{integer_type{}});
+  CHECK_EQUAL(caf::get<list_type>(tlit).value_type(), type{int64_type{}});
   const auto llbt
     = type::from_legacy_type(legacy_list_type{legacy_bool_type{}});
   CHECK(caf::holds_alternative<list_type>(llbt));
   CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
-  const auto expected_definition = data{record{{"list", "int"}}};
+  const auto expected_definition = data{record{{"list", "int64"}}};
   CHECK_EQUAL(tlit.to_definition(), expected_definition);
 }
 
@@ -297,26 +297,26 @@ TEST(map_type) {
   static_assert(!basic_type<map_type>);
   static_assert(complex_type<map_type>);
   const auto t = type{};
-  const auto tmsit = type{map_type{string_type{}, integer_type{}}};
-  const auto msit = map_type{string_type{}, integer_type{}};
+  const auto tmsit = type{map_type{string_type{}, int64_type{}}};
+  const auto msit = map_type{string_type{}, int64_type{}};
   CHECK(tmsit);
   CHECK_EQUAL(as_bytes(tmsit), as_bytes(msit));
   CHECK(t != tmsit);
   CHECK(t < tmsit);
   CHECK(t <= tmsit);
-  CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int>");
+  CHECK_EQUAL(fmt::format("{}", tmsit), "map<string, int64>");
   CHECK_EQUAL(fmt::format("{}", map_type{{}, {}}), "map<none, none>");
   CHECK(!caf::holds_alternative<map_type>(t));
   CHECK(caf::holds_alternative<map_type>(tmsit));
   CHECK_EQUAL(caf::get<map_type>(tmsit).key_type(), type{string_type{}});
-  CHECK_EQUAL(caf::get<map_type>(tmsit).value_type(), type{integer_type{}});
+  CHECK_EQUAL(caf::get<map_type>(tmsit).value_type(), type{int64_type{}});
   const auto lmabt = type::from_legacy_type(
     legacy_map_type{legacy_address_type{}, legacy_bool_type{}});
   CHECK(caf::holds_alternative<map_type>(lmabt));
-  CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{address_type{}});
+  CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{ip_type{}});
   CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
   const auto expected_definition
-    = data{record{{"map", record{{"key", "string"}, {"value", "int"}}}}};
+    = data{record{{"map", record{{"key", "string"}, {"value", "int64"}}}}};
   CHECK_EQUAL(tmsit.to_definition(), expected_definition);
 }
 
@@ -326,11 +326,11 @@ TEST(record_type) {
   static_assert(complex_type<record_type>);
   const auto t = type{};
   const auto rt = type{record_type{
-    {"i", integer_type{}},
+    {"i", int64_type{}},
     {"r1",
      record_type{
-       {"p", type{"port", integer_type{}}},
-       {"a", address_type{}},
+       {"p", type{"port", int64_type{}}},
+       {"a", ip_type{}},
      }},
     {"b", bool_type{}},
     {"r2",
@@ -338,18 +338,18 @@ TEST(record_type) {
        {"s", subnet_type{}},
      }},
   }};
-  CHECK_EQUAL(fmt::format("{}", rt), "record {i: int, r1: record {p: port, "
-                                     "a: addr}, b: bool, r2: record {s: "
+  CHECK_EQUAL(fmt::format("{}", rt), "record {i: int64, r1: record {p: port, "
+                                     "a: ip}, b: bool, r2: record {s: "
                                      "subnet}}");
   const auto& r = caf::get<record_type>(rt);
   CHECK_EQUAL(r.field(2).type, bool_type{});
-  CHECK_EQUAL(r.field({1, 1}).type, address_type{});
+  CHECK_EQUAL(r.field({1, 1}).type, ip_type{});
   CHECK_EQUAL(r.field({3, 0}).name, "s");
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
   const auto expected_definition = data{record{
     {"record",
      list{
-       record{{"i", "int"}},
+       record{{"i", "int64"}},
        record{
          {"r1",
           record{
@@ -359,10 +359,10 @@ TEST(record_type) {
                 record{
                   {"p",
                    record{
-                     {"port", "int"},
+                     {"port", "int64"},
                    }},
                 },
-                record{{"a", "addr"}},
+                record{{"a", "ip"}},
               },
             },
           }},
@@ -384,12 +384,12 @@ TEST(record_type) {
 
 TEST(record_type name resolving) {
   const auto rt = record_type{
-    {"i", integer_type{}},
+    {"i", int64_type{}},
     {"r",
      record_type{
-       {"p", type{"port", integer_type{}}},
-       {"a", address_type{}},
-       {"not_i", integer_type{}},
+       {"p", type{"port", int64_type{}}},
+       {"a", ip_type{}},
+       {"not_i", int64_type{}},
      }},
     {"b", type{bool_type{}, {{"key"}}}},
     {"r2",
@@ -397,7 +397,7 @@ TEST(record_type name resolving) {
        {"s", type{subnet_type{}, {{"key", "value"}}}},
        {"r",
         record_type{
-          {"a", address_type{}},
+          {"a", ip_type{}},
         }},
      }},
   };
@@ -439,10 +439,10 @@ TEST(record_type name resolving) {
         "id",
         type{"zeek.conn_id",
              record_type{
-               {"orig_h", address_type{}},
-               {"orig_p", type{"port", count_type{}}},
-               {"resp_h", address_type{}},
-               {"resp_p", type{"port", count_type{}}},
+               {"orig_h", ip_type{}},
+               {"orig_p", type{"port", uint64_type{}}},
+               {"resp_h", ip_type{}},
+               {"resp_p", type{"port", uint64_type{}}},
              }},
       },
       {"proto", string_type{}},
@@ -470,16 +470,16 @@ TEST(record_type flat index computation) {
      record_type{
        {"y",
         record_type{
-          {"z", integer_type{}},
+          {"z", int64_type{}},
           {"k", bool_type{}},
         }},
        {"m",
         record_type{
           {"y",
            record_type{
-             {"a", address_type{}},
+             {"a", ip_type{}},
            }},
-          {"f", real_type{}},
+          {"f", double_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -508,16 +508,16 @@ TEST(record type transformation) {
      record_type{
        {"y",
         record_type{
-          {"z", integer_type{}},
+          {"z", int64_type{}},
           {"k", bool_type{}},
         }},
        {"m",
         record_type{
           {"y",
            record_type{
-             {"a", address_type{}},
+             {"a", ip_type{}},
            }},
-          {"f", real_type{}},
+          {"f", double_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -531,14 +531,14 @@ TEST(record type transformation) {
      record_type{
        {"y",
         record_type{
-          {"z", integer_type{}},
+          {"z", int64_type{}},
           {"t", type{}},
-          {"u", address_type{}},
+          {"u", ip_type{}},
           {"k", bool_type{}},
         }},
        {"m",
         record_type{
-          {"f", real_type{}},
+          {"f", double_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -548,8 +548,7 @@ TEST(record type transformation) {
      }},
   };
   const auto result = old.transform({
-    {{0, 0, 1},
-     record_type::insert_before({{"t", type{}}, {"u", address_type{}}})},
+    {{0, 0, 1}, record_type::insert_before({{"t", type{}}, {"u", ip_type{}}})},
     {{0, 1, 0, 0}, record_type::drop()},
     {{1, 0}, record_type::assign({{"b2", bool_type{}}})},
   });
@@ -561,7 +560,7 @@ TEST(record type transformation) {
     record_type{{
       "y",
       record_type{
-        {"z", integer_type{}},
+        {"z", int64_type{}},
       },
     }},
   }};
@@ -576,7 +575,7 @@ TEST(record_type merging) {
      record_type{
        {"u",
         record_type{
-          {"a", integer_type{}},
+          {"a", int64_type{}},
           {"b", bool_type{}},
         }},
      }},
@@ -590,9 +589,9 @@ TEST(record_type merging) {
      record_type{
        {"y",
         record_type{
-          {"a", count_type{}},
-          {"b", real_type{}},
-          {"c", integer_type{}},
+          {"a", uint64_type{}},
+          {"b", double_type{}},
+          {"c", int64_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -603,14 +602,14 @@ TEST(record_type merging) {
      record_type{
        {"u",
         record_type{
-          {"a", integer_type{}},
+          {"a", int64_type{}},
           {"b", bool_type{}},
         }},
        {"y",
         record_type{
-          {"a", count_type{}},
-          {"b", real_type{}},
-          {"c", integer_type{}},
+          {"a", uint64_type{}},
+          {"b", double_type{}},
+          {"c", int64_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -624,14 +623,14 @@ TEST(record_type merging) {
      record_type{
        {"u",
         record_type{
-          {"a", integer_type{}},
+          {"a", int64_type{}},
           {"b", bool_type{}},
         }},
        {"y",
         record_type{
-          {"a", count_type{}},
-          {"b", real_type{}},
-          {"c", integer_type{}},
+          {"a", uint64_type{}},
+          {"b", double_type{}},
+          {"c", int64_type{}},
         }},
        {"b", bool_type{}},
      }},
@@ -660,14 +659,14 @@ TEST(record_type merging) {
 TEST(type inference) {
   CHECK_EQUAL(type::infer(caf::none), type{});
   CHECK_EQUAL(type::infer(bool{}), bool_type{});
-  CHECK_EQUAL(type::infer(integer{}), integer_type{});
-  CHECK_EQUAL(type::infer(count{}), count_type{});
-  CHECK_EQUAL(type::infer(real{}), real_type{});
+  CHECK_EQUAL(type::infer(int64_t{}), int64_type{});
+  CHECK_EQUAL(type::infer(uint64_t{}), uint64_type{});
+  CHECK_EQUAL(type::infer(double{}), double_type{});
   CHECK_EQUAL(type::infer(duration{}), duration_type{});
   CHECK_EQUAL(type::infer(time{}), time_type{});
   CHECK_EQUAL(type::infer(std::string{}), string_type{});
   CHECK_EQUAL(type::infer(pattern{}), pattern_type{});
-  CHECK_EQUAL(type::infer(address{}), address_type{});
+  CHECK_EQUAL(type::infer(ip{}), ip_type{});
   CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
   // Enumeration types cannot be inferred.
   CHECK_EQUAL(type::infer(enumeration{0}), type{});
@@ -679,26 +678,26 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(map{}), (map_type{type{}, type{}}));
   CHECK_EQUAL(type::infer(map{{caf::none, caf::none}}),
               (map_type{type{}, type{}}));
-  CHECK_EQUAL(type::infer(map{{caf::none, integer{}}}),
-              (map_type{type{}, integer_type{}}));
+  CHECK_EQUAL(type::infer(map{{caf::none, int64_t{}}}),
+              (map_type{type{}, int64_type{}}));
   CHECK_EQUAL(type::infer(map{{bool{}, caf::none}}),
               (map_type{bool_type{}, type{}}));
-  CHECK_EQUAL(type::infer(map{{bool{}, integer{}}}),
-              (map_type{bool_type{}, integer_type{}}));
+  CHECK_EQUAL(type::infer(map{{bool{}, int64_t{}}}),
+              (map_type{bool_type{}, int64_type{}}));
   const auto r = record{
     {"a", bool{}},
-    {"b", integer{}},
+    {"b", int64_t{}},
     {"c",
      record{
-       {"d", count{}},
+       {"d", uint64_t{}},
      }},
   };
   const auto rt = record_type{
     {"a", bool_type{}},
-    {"b", integer_type{}},
+    {"b", int64_type{}},
     {"c",
      record_type{
-       {"d", count_type{}},
+       {"d", uint64_type{}},
      }},
   };
   CHECK_EQUAL(type::infer(r), rt);
@@ -706,11 +705,11 @@ TEST(type inference) {
 
 TEST(legacy_type conversion) {
   const auto rt = type{record_type{
-    {"i", integer_type{}},
+    {"i", int64_type{}},
     {"r1",
      record_type{
-       {"p", type{"port", integer_type{}}},
-       {"a", address_type{}},
+       {"p", type{"port", int64_type{}}},
+       {"a", ip_type{}},
      }},
     {"b", type{bool_type{}, {{"key"}}}},
     {"r2",
@@ -887,14 +886,15 @@ TEST(sorting) {
   auto ts = std::vector<type>{
     type{},
     type{bool_type{}},
-    type{integer_type{}},
+    type{int64_type{}},
     type{"custom_none", type{}},
     type{"custom_bool", bool_type{}},
-    type{"custom_integer", integer_type{}},
+    type{"custom_integer", int64_type{}},
   };
   std::shuffle(ts.begin(), ts.end(), std::random_device());
   std::sort(ts.begin(), ts.end());
-  const char* expected = "none bool int custom_bool custom_none custom_integer";
+  const char* expected
+    = "none bool int64 custom_bool custom_none custom_integer";
   CHECK_EQUAL(fmt::format("{}", fmt::join(ts, " ")), expected);
 }
 
@@ -910,23 +910,24 @@ TEST(construct) {
   const auto t = type{
     "test.full",
     record_type{
-      {"n", list_type{integer_type{}}},
+      {"n", list_type{int64_type{}}},
       {"b", type{bool_type{}, {{"default", "uniform(0,1)"}}}},
-      {"i", type{integer_type{}, {{"default", "uniform(-42000,1337)"}}}},
-      {"c", type{count_type{}, {{"default", "pareto(0,1)"}}}},
-      {"r", type{real_type{}, {{"default", "normal(0,1)"}}}},
+      {"i", type{int64_type{}, {{"default", "uniform(-42000,1337)"}}}},
+      {"c", type{uint64_type{}, {{"default", "pareto(0,1)"}}}},
+      {"r", type{double_type{}, {{"default", "normal(0,1)"}}}},
       {"s", type{string_type{}, {{"default", "uniform(0,100)"}}}},
       {"t", type{time_type{}, {{"default", "uniform(0,10)"}}}},
       {"d", type{duration_type{}, {{"default", "uniform(100,200)"}}}},
-      {"a", type{address_type{}, {{"default", "uniform(0,2000000)"}}}},
+      {"a", type{ip_type{}, {{"default", "uniform(0,2000000)"}}}},
       {"s", type{subnet_type{}, {{"default", "uniform(1000,2000)"}}}},
     },
   };
   const auto expected = record::vector_type{
-    {"n", data{list{}}},   {"b", data{bool{}}},     {"i", data{integer{}}},
-    {"c", data{count{}}},  {"r", data{real{}}},     {"s", data{std::string{}}},
-    {"t", data{time{}}},   {"d", data{duration{}}}, {"a", data{address{}}},
-    {"s", data{subnet{}}},
+    {"n", data{list{}}},    {"b", data{bool{}}},
+    {"i", data{int64_t{}}}, {"c", data{uint64_t{}}},
+    {"r", data{double{}}},  {"s", data{std::string{}}},
+    {"t", data{time{}}},    {"d", data{duration{}}},
+    {"a", data{ip{}}},      {"s", data{subnet{}}},
   };
   CHECK_EQUAL(t.construct(), record::make_unsafe(expected));
 }
@@ -939,10 +940,10 @@ TEST(sum type) {
       return (std::is_same_v<T, U> && ...);
     };
   };
-  CHECK(caf::visit(is_type(address_type{}), type{address_type{}}));
+  CHECK(caf::visit(is_type(ip_type{}), type{ip_type{}}));
   CHECK(caf::visit(is_type(bool_type{}), type{bool_type{}}));
-  CHECK(caf::visit(is_type(bool_type{}, integer_type{}), type{bool_type{}},
-                   type{integer_type{}}));
+  CHECK(caf::visit(is_type(bool_type{}, int64_type{}), type{bool_type{}},
+                   type{int64_type{}}));
 }
 
 TEST(hashes) {
@@ -955,12 +956,12 @@ TEST(hashes) {
   CHECK_EQUAL(fmt::format("0x{:X}", hash(type{})), "0xB51ACBDD64EF56FF");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(bool_type{})), "0x295A1E349D71CC2"
                                                         "3");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(integer_type{})), "0x5B0D4F0B0B16740"
-                                                           "4");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(count_type{})), "0x529C2667783DB09"
-                                                         "D");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(real_type{})), "0x41615FDB30A38AA"
-                                                        "F");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(int64_type{})), "0x5B0D4F0B0B16740"
+                                                         "4");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(uint64_type{})), "0x529C2667783DB09"
+                                                          "D");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(double_type{})), "0x41615FDB30A38AA"
+                                                          "F");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(duration_type{})), "0x6C3BE97C5D5B269"
                                                             "A");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(time_type{})), "0xAD8E364A7A3BFE7"
@@ -969,30 +970,30 @@ TEST(hashes) {
                                                           "5");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(pattern_type{})), "0xE5A24AB16469BBD"
                                                            "B");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(address_type{})), "0xD1678F8D9318E8B"
-                                                           "2");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(ip_type{})), "0xD1678F8D9318E8B"
+                                                      "2");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(subnet_type{})), "0xA927755C100351"
                                                           "93");
   CHECK_EQUAL(fmt::format("0x{:X}",
                           hash(enumeration_type{{"a"}, {"b"}, {"c"}})),
               "0xFFF139D14A6FFAA4");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(list_type{integer_type{}})),
-              "0x2F697BD2223CA310");
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(list_type{int64_type{}})), "0x2F697BD2"
+                                                                    "223CA310");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(map_type{time_type{}, string_type{}})),
               "0x355D5293D16CC7CD");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(record_type{{"a", address_type{}},
+  CHECK_EQUAL(fmt::format("0x{:X}", hash(record_type{{"a", ip_type{}},
                                                      {"b", bool_type{}}})),
               "0xC262CE1B00968C16");
 }
 
 TEST(congruence) {
-  auto i = type{integer_type{}};
-  auto j = type{integer_type{}};
+  auto i = type{int64_type{}};
+  auto j = type{int64_type{}};
   CHECK(i == j);
   i = type{"i", i};
   j = type{"j", j};
   CHECK(i != j);
-  auto c = type{"c", count_type{}};
+  auto c = type{"c", uint64_type{}};
   CHECK(congruent(i, i));
   CHECK(congruent(i, j));
   CHECK(!congruent(i, c));
@@ -1004,14 +1005,14 @@ TEST(congruence) {
   CHECK(congruent(l0, l1));
   CHECK(!congruent(l1, l2));
   auto r0 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"b", bool_type{}},
-    {"c", count_type{}},
+    {"c", uint64_type{}},
   }};
   auto r1 = type{record_type{
-    {"x", address_type{}},
+    {"x", ip_type{}},
     {"y", bool_type{}},
-    {"z", count_type{}},
+    {"z", uint64_type{}},
   }};
   CHECK(r0 != r1);
   CHECK(congruent(r0, r1));
@@ -1024,53 +1025,53 @@ TEST(congruence) {
 }
 
 TEST(compatibility) {
-  CHECK(compatible(type{address_type{}}, relational_operator::in,
-                   type{subnet_type{}}));
-  CHECK(compatible(type{address_type{}}, relational_operator::in, subnet{}));
+  CHECK(
+    compatible(type{ip_type{}}, relational_operator::in, type{subnet_type{}}));
+  CHECK(compatible(type{ip_type{}}, relational_operator::in, subnet{}));
   CHECK(compatible(type{subnet_type{}}, relational_operator::in,
                    type{subnet_type{}}));
   CHECK(compatible(type{subnet_type{}}, relational_operator::in, subnet{}));
 }
 
 TEST(subset) {
-  auto i = type{integer_type{}};
-  auto j = type{integer_type{}};
+  auto i = type{int64_type{}};
+  auto j = type{int64_type{}};
   CHECK(is_subset(i, j));
   i = type{"i", i};
   j = type{"j", j};
   CHECK(is_subset(i, j));
-  auto c = type{"c", count_type{}};
+  auto c = type{"c", uint64_type{}};
   CHECK(is_subset(i, i));
   CHECK(is_subset(i, j));
   CHECK(!is_subset(i, c));
   auto r0 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"b", bool_type{}},
-    {"c", count_type{}},
+    {"c", uint64_type{}},
   }};
   // Rename a field.
   auto r1 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"b", bool_type{}},
-    {"d", count_type{}},
+    {"d", uint64_type{}},
   }};
   // Add a field.
   auto r2 = type{record_type{
-    {"a", address_type{}},
+    {"a", ip_type{}},
     {"b", bool_type{}},
-    {"c", count_type{}},
-    {"d", count_type{}},
+    {"c", uint64_type{}},
+    {"d", uint64_type{}},
   }};
   // Remove a field.
   auto r3 = type{record_type{
-    {"a", address_type{}},
-    {"c", count_type{}},
+    {"a", ip_type{}},
+    {"c", uint64_type{}},
   }};
   // Change a field's type.
   auto r4 = type{record_type{
     {"a", pattern_type{}},
     {"b", bool_type{}},
-    {"c", count_type{}},
+    {"c", uint64_type{}},
   }};
   CHECK(is_subset(r0, r0));
   CHECK(!is_subset(r0, r1));
@@ -1094,24 +1095,24 @@ FIXTURE_SCOPE(type_fixture, fixture)
 TEST(serialization) {
   CHECK_ROUNDTRIP(type{});
   CHECK_ROUNDTRIP(type{bool_type{}});
-  CHECK_ROUNDTRIP(type{integer_type{}});
-  CHECK_ROUNDTRIP(type{count_type{}});
-  CHECK_ROUNDTRIP(type{real_type{}});
+  CHECK_ROUNDTRIP(type{int64_type{}});
+  CHECK_ROUNDTRIP(type{uint64_type{}});
+  CHECK_ROUNDTRIP(type{double_type{}});
   CHECK_ROUNDTRIP(type{duration_type{}});
   CHECK_ROUNDTRIP(type{time_type{}});
   CHECK_ROUNDTRIP(type{string_type{}});
   CHECK_ROUNDTRIP(type{pattern_type{}});
-  CHECK_ROUNDTRIP(type{address_type{}});
+  CHECK_ROUNDTRIP(type{ip_type{}});
   CHECK_ROUNDTRIP(type{subnet_type{}});
   CHECK_ROUNDTRIP(type{enumeration_type{{"a"}, {"b"}, {"c"}}});
-  CHECK_ROUNDTRIP(type{list_type{integer_type{}}});
-  CHECK_ROUNDTRIP(type{map_type{address_type{}, subnet_type{}}});
+  CHECK_ROUNDTRIP(type{list_type{int64_type{}}});
+  CHECK_ROUNDTRIP(type{map_type{ip_type{}, subnet_type{}}});
   const auto rt = type{record_type{
-    {"i", integer_type{}},
+    {"i", int64_type{}},
     {"r1",
      record_type{
-       {"p", type{"port", integer_type{}}},
-       {"a", address_type{}},
+       {"p", type{"port", int64_type{}}},
+       {"a", ip_type{}},
      }},
     {"b", bool_type{}},
     {"r2",

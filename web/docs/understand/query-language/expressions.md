@@ -23,10 +23,10 @@ The following diagram shows an example expression in tree form:
 When written out, it looks like this:
 
 ```c
-(dport <= 1024 || :addr in 10.0.0.0/8) && ! (#type == /zeek.*/)
+(dport <= 1024 || :ip in 10.0.0.0/8) && ! (#type == /zeek.*/)
 ```
 
-In this example, the predicate operands `dport`, `:addr`, and `#type` represent
+In this example, the predicate operands `dport`, `:ip`, and `#type` represent
 [extractors](#extractors) that resolve to a set of matching fields at runtime.
 
 Let's take a look at the expression components in more depth.
@@ -71,17 +71,17 @@ available types. Each letter in a cell denotes a set of operators:
 - **R**: range operators `<`, `<=`, `>=`, `>`
 - **M**: membership operators `in`, `!in`, `ni`, `!ni`
 
-| | **Bool** | **Integer** | **Count** | **Real** | **Duration** | **Time** | **String** | **Pattern** | **Address** | **Subnet** | **Enum** | **List** | **Map**
+| | **Bool** | **Int64** | **UInt64** | **Double** | **Duration** | **Time** | **String** | **Pattern** | **IP** | **Subnet** | **Enum** | **List** | **Map**
 ---|---|---|---|---|---|---|---|---|---|---|---|---|---
  **Bool** | E |  |  |  |  |  |  |  |  |  |  | M | M
- **Integer** |  | ER |  |  |  |  |  |  |  |  |  | M | M
- **Count** |  |  | ER |  |  |  |  |  |  |  |  | M | M
+ **Int64** |  | ER |  |  |  |  |  |  |  |  |  | M | M
+ **UInt64** |  |  | ER |  |  |  |  |  |  |  |  | M | M
  **Real** |  |  |  | ER |  |  |  |  |  |  |  | M | M
  **Duration** |  |  |  |  | ER |  |  |  |  |  |  | M | M
  **Time** |  |  |  |  |  | ER |  |  |  |  |  | M | M
  **String** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
  **Pattern** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
- **Address** |  |  |  |  |  |  |  |  | E | EM |  | M | M
+ **IP** |  |  |  |  |  |  |  |  | E | EM |  | M | M
  **Subnet** |  |  |  |  |  |  |  |  | EM | EM |  | M | M
  **Enum** |  |  |  |  |  |  |  |  |  |  | E | M | M
  **List** | M | M | M | M | M | M | M | M | M | M | M | EM | M
@@ -137,15 +137,15 @@ extractors work for all [basic
 types](/docs/understand/data-model/type-system) and user-defined aliases.
 
 A search for type `:T` includes all aliased types. For example, given the alias
-`port` that maps to `count`, then the `:count` type extractor will also consider
-instances of type `port`. However, a `:port` query does not include `:count`
+`port` that maps to `count`, then the `:uint64` type extractor will also consider
+instances of type `port`. However, a `:port` query does not include `:uint64`
 types because an alias is a strict refinement of an existing type.
 
 ##### Examples
 
 - `:timestamp > 1 hour ago`: events with a `timestamp` alias in the last hour
-- `:addr == 6.6.6.6`: events with any field of type `addr` equal to 6.6.6.6
-- `:count > 42M`: events where `count` values is greater than 42M
+- `:ip == 6.6.6.6`: events with any field of type `addr` equal to 6.6.6.6
+- `:uint64 > 42M`: events where `count` values is greater than 42M
 - `"evil" in :string`: events where any `string` field contains the substring
   `evil`
 
@@ -171,7 +171,7 @@ as **value predicates**. That is, if a predicate has the form `:T == X` where
 `X` is a value and `T` the type of `X`, it suffices to write `X`.
 The predicate parser deduces the type of `X` automatically in this case.
 
-For example, `6.6.6.6` is a valid predicate and expands to `:addr == 6.6.6.6`.
+For example, `6.6.6.6` is a valid predicate and expands to `:ip == 6.6.6.6`.
 This allows for quick type-based point queries, such as
 `(6.6.6.6 || 10.0.0.0/8) && "evil"`.
 
@@ -180,7 +180,7 @@ Value predicates of type `subnet` expand more broadly. Given a subnet
 `10.0.0.0/8`, the parser expands this to:
 
 ```c
-:subnet == 10.0.0.0/8 || :addr in 10.0.0.0/8
+:subnet == 10.0.0.0/8 || :ip in 10.0.0.0/8
 ```
 
 This makes it easier to search for IP addresses belonging to a specific subnet.
@@ -197,14 +197,14 @@ Here is an over view of basic types:
 | ---------- | --------------------------------------- | -------------
 | `none`     | Denotes an absent or invalid value      | `nil`
 | `bool`     | A boolean value                         | `true`, `false`
-| `int`      | A 64-bit signed integer                 | `-42`, `+3`
-| `count`    | A 64-bit unsigned integer               | `0`, `42`
-| `real`     | A 64-bit double (IEEE 754)              | `-0.7`, `1.337`
+| `int64`    | A 64-bit signed integer                 | `-42`, `+3`
+| `uint64`   | A 64-bit unsigned integer               | `0`, `42`
+| `double`   | A 64-bit double (IEEE 754)              | `-0.7`, `1.337`
 | `duration` | A time span (nanosecond granularity)    | `-3us`, `24h`
 | `time`     | A time point (nanosecond granularity)   | `now`, `1h ago`, `2020-01-01+10:42:00`
 | `string`   | A sequence of characters                | `"foo"`
 | `pattern`  | A regular expression                    | `/fo*.bar$/`
-| `addr`     | An IPv4 or IPv6 address                 | `::1`, `10.0.0.1`, `2001:db8::`
+| `ip`       | An IPv4 or IPv6 address                 | `::1`, `10.0.0.1`, `2001:db8::`
 | `subnet`   | An IPv4 or IPv6 subnet                  | `::1/128`, `10.0.0.0/8`, `2001:db8::/32`
 
 Complex types:

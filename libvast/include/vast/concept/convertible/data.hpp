@@ -179,9 +179,9 @@ caf::error convert(const From& src, std::string& dst, const string_type&) {
   // integers if possible to avoid the unary plus prefix from being printed, as
   // downstream parsers of the resulting string often cannot handle the unary
   // plus correctly.
-  if constexpr (std::is_same_v<From, integer>) {
-    if (src.value >= 0)
-      return convert(detail::narrow_cast<count>(src.value), dst, string_type{});
+  if constexpr (std::is_same_v<From, int64_t>) {
+    if (src >= 0)
+      return convert(detail::narrow_cast<uint64_t>(src), dst, string_type{});
   }
   // In order to get consistent formatting as strings we create a data view
   // here. While not as cheap as printing directly, it's at least a bit cheaper
@@ -203,8 +203,8 @@ caf::error convert(const From& src, To& dst, const Type&) {
 
 // Overload for reals.
 template <concepts::floating_point To>
-caf::error convert(const integer& src, To& dst, const real_type&) {
-  dst = src.value;
+caf::error convert(const int64_t& src, To& dst, const double_type&) {
+  dst = src;
   return caf::none;
 }
 
@@ -212,15 +212,15 @@ caf::error convert(const integer& src, To& dst, const real_type&) {
 //  We need to exclude `From == To` to disambiguate overloads.
 template <concepts::arithmetic From, concepts::floating_point To>
   requires(!std::same_as<From, To>)
-caf::error convert(const From& src, To& dst, const real_type&) {
+caf::error convert(const From& src, To& dst, const double_type&) {
   dst = src;
   return caf::none;
 }
 
 // Overload for counts.
 template <concepts::unsigned_integral To>
-caf::error convert(const count& src, To& dst, const count_type&) {
-  if constexpr (sizeof(To) >= sizeof(count)) {
+caf::error convert(const uint64_t& src, To& dst, const uint64_type&) {
+  if constexpr (sizeof(To) >= sizeof(uint64_t)) {
     dst = src;
   } else {
     if (src < std::numeric_limits<To>::min()
@@ -236,40 +236,39 @@ caf::error convert(const count& src, To& dst, const count_type&) {
 }
 
 template <concepts::unsigned_integral To>
-caf::error convert(const integer& src, To& dst, const count_type&) {
-  if (src.value < 0)
-    return caf::make_error(
-      ec::convert_error, fmt::format(": {} can not be negative ({})",
-                                     detail::pretty_type_name(dst), src.value));
-  if constexpr (sizeof(To) >= sizeof(count)) {
-    dst = src.value;
+caf::error convert(const int64_t& src, To& dst, const uint64_type&) {
+  if (src < 0)
+    return caf::make_error(ec::convert_error,
+                           fmt::format(": {} can not be negative ({})",
+                                       detail::pretty_type_name(dst), src));
+  if constexpr (sizeof(To) >= sizeof(uint64_t)) {
+    dst = src;
   } else {
-    if (src.value
-        > static_cast<integer::value_type>(std::numeric_limits<To>::max()))
+    if (src > static_cast<int64_t>(std::numeric_limits<To>::max()))
       return caf::make_error(ec::convert_error,
                              fmt::format(": {} can not be represented by the "
                                          "target variable [{}, {}]",
                                          src, std::numeric_limits<To>::min(),
                                          std::numeric_limits<To>::max()));
-    dst = detail::narrow_cast<To>(src.value);
+    dst = detail::narrow_cast<To>(src);
   }
   return caf::none;
 }
 
 // Overload for integers.
 template <concepts::signed_integral To>
-caf::error convert(const integer& src, To& dst, const integer_type&) {
-  if constexpr (sizeof(To) >= sizeof(integer::value)) {
-    dst = src.value;
+caf::error convert(const int64_t& src, To& dst, const int64_type&) {
+  if constexpr (sizeof(To) >= sizeof(int64_t)) {
+    dst = src;
   } else {
-    if (src.value < std::numeric_limits<To>::min()
-        || src.value > std::numeric_limits<To>::max())
+    if (src < std::numeric_limits<To>::min()
+        || src > std::numeric_limits<To>::max())
       return caf::make_error(ec::convert_error,
                              fmt::format(": {} can not be represented by the "
                                          "target variable [{}, {}]",
                                          src, std::numeric_limits<To>::min(),
                                          std::numeric_limits<To>::max()));
-    dst = detail::narrow_cast<To>(src.value);
+    dst = detail::narrow_cast<To>(src);
   }
   return caf::none;
 }

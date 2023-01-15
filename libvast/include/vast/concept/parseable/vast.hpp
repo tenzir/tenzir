@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/base.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/http.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"

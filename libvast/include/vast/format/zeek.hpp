@@ -13,7 +13,7 @@
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/any.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
@@ -62,22 +62,22 @@ struct zeek_parser {
     return parse(parsers::tf);
   }
 
-  bool operator()(const integer_type&) const {
-    static auto p = parsers::i64->*[](integer::value_type x) { //
-      return integer{x};
+  bool operator()(const int64_type&) const {
+    static auto p = parsers::i64->*[](int64_t x) { //
+      return int64_t{x};
     };
     return parse(p);
   }
 
-  bool operator()(const count_type&) const {
-    static auto p = parsers::u64->*[](count x) {
+  bool operator()(const uint64_type&) const {
+    static auto p = parsers::u64->*[](uint64_t x) {
       return x;
     };
     return parse(p);
   }
 
   bool operator()(const time_type&) const {
-    static auto p = parsers::real->*[](real x) {
+    static auto p = parsers::real->*[](double x) {
       auto i = std::chrono::duration_cast<duration>(double_seconds(x));
       return time{i};
     };
@@ -85,7 +85,7 @@ struct zeek_parser {
   }
 
   bool operator()(const duration_type&) const {
-    static auto p = parsers::real->*[](real x) {
+    static auto p = parsers::real->*[](double x) {
       return std::chrono::duration_cast<duration>(double_seconds(x));
     };
     return parse(p);
@@ -105,8 +105,8 @@ struct zeek_parser {
     return parse(p);
   }
 
-  bool operator()(const address_type&) const {
-    static auto p = parsers::addr->*[](address x) {
+  bool operator()(const ip_type&) const {
+    static auto p = parsers::ip->*[](ip x) {
       return x;
     };
     return parse(p);
@@ -142,33 +142,33 @@ struct zeek_parser_factory {
     return parsers::tf;
   }
 
-  result_type operator()(const real_type&) const {
-    return parsers::real->*[](real x) {
+  result_type operator()(const double_type&) const {
+    return parsers::real->*[](double x) {
       return x;
     };
   }
 
-  result_type operator()(const integer_type&) const {
-    return parsers::i64->*[](integer::value_type x) {
-      return integer{x};
+  result_type operator()(const int64_type&) const {
+    return parsers::i64->*[](int64_t x) {
+      return int64_t{x};
     };
   }
 
-  result_type operator()(const count_type&) const {
-    return parsers::u64->*[](count x) {
+  result_type operator()(const uint64_type&) const {
+    return parsers::u64->*[](uint64_t x) {
       return x;
     };
   }
 
   result_type operator()(const time_type&) const {
-    return parsers::real->*[](real x) {
+    return parsers::real->*[](double x) {
       auto i = std::chrono::duration_cast<duration>(double_seconds(x));
       return time{i};
     };
   }
 
   result_type operator()(const duration_type&) const {
-    return parsers::real->*[](real x) {
+    return parsers::real->*[](double x) {
       return std::chrono::duration_cast<duration>(double_seconds(x));
     };
   }
@@ -195,8 +195,8 @@ struct zeek_parser_factory {
       };
   }
 
-  result_type operator()(const address_type&) const {
-    return parsers::addr->*[](address x) {
+  result_type operator()(const ip_type&) const {
+    return parsers::ip->*[](ip x) {
       return x;
     };
   }

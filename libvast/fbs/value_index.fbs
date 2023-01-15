@@ -74,7 +74,7 @@ table HashIndex {
   seeds: [detail.HashIndexSeed] (required);
 }
 
-table AddressIndex {
+table IPIndex {
   base: detail.ValueIndexBase (required);
   byte_indexes: [BitmapIndex] (required);
   v4_index: BitmapIndex (required);
@@ -82,7 +82,7 @@ table AddressIndex {
 
 table SubnetIndex {
   base: detail.ValueIndexBase (required);
-  address_index: vast.fbs.ValueIndex (required);
+  ip_index: vast.fbs.ValueIndex (required);
   prefix_index: BitmapIndex (required);
 }
 
@@ -93,7 +93,7 @@ table EnumerationIndex {
 
 union ValueIndex {
   arithmetic: ArithmeticIndex,
-  address: AddressIndex,
+  ip: IPIndex,
   enumeration: EnumerationIndex,
   hash: HashIndex,
   list: ListIndex,

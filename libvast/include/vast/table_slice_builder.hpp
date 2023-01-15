@@ -132,17 +132,18 @@ append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,
                const view<type_to_data_t<bool_type>>& view) noexcept;
 
 arrow::Status
-append_builder(const integer_type&,
-               type_to_arrow_builder_t<integer_type>& builder,
-               const view<type_to_data_t<integer_type>>& view) noexcept;
+append_builder(const int64_type&, type_to_arrow_builder_t<int64_type>& builder,
+               const view<type_to_data_t<int64_type>>& view) noexcept;
 
 arrow::Status
-append_builder(const count_type&, type_to_arrow_builder_t<count_type>& builder,
-               const view<type_to_data_t<count_type>>& view) noexcept;
+append_builder(const uint64_type&,
+               type_to_arrow_builder_t<uint64_type>& builder,
+               const view<type_to_data_t<uint64_type>>& view) noexcept;
 
 arrow::Status
-append_builder(const real_type&, type_to_arrow_builder_t<real_type>& builder,
-               const view<type_to_data_t<real_type>>& view) noexcept;
+append_builder(const double_type&,
+               type_to_arrow_builder_t<double_type>& builder,
+               const view<type_to_data_t<double_type>>& view) noexcept;
 
 arrow::Status
 append_builder(const duration_type&,
@@ -164,9 +165,8 @@ append_builder(const pattern_type&,
                const view<type_to_data_t<pattern_type>>& view) noexcept;
 
 arrow::Status
-append_builder(const address_type&,
-               type_to_arrow_builder_t<address_type>& builder,
-               const view<type_to_data_t<address_type>>& view) noexcept;
+append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
+               const view<type_to_data_t<ip_type>>& view) noexcept;
 
 arrow::Status
 append_builder(const subnet_type&,

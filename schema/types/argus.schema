@@ -16,94 +16,94 @@ type argus.record = record{
   Dir: string #index=hash,        // dir
   DstAddr: string,                // daddr (MAC or IP)
   Dport: port,                    // dport
-  TotPkts: count,                 // pkts
-  TotBytes: count,                // bytes
+  TotPkts: uint64,                 // pkts
+  TotBytes: uint64,                // bytes
   State: string #index=hash,      // state
   // Optional fields that are present when invoking ra(1) with -s +F where F is
   // the field name from the man page of ra(1).
   SrcId: string #index=hash,      // srcid
-  Rank: count,                    // rank
+  Rank: uint64,                    // rank
   LastTime: time,                 // ltime
-  Trans: count,                   // trans
-  Seq: count,                     // seq
+  Trans: uint64,                   // trans
+  Seq: uint64,                     // seq
   Dur: duration #unit=s,          // dur
   RunTime: duration #unit=s,      // runtime
   IdleTime: duration #unit=s,     // idle
-  Mean: real,                     // mean
-  StdDev: real,                   // stddev
-  Sum: real,                      // sum
-  Min: real,                      // min
-  Max: real,                      // max
+  Mean: double,                     // mean
+  StdDev: double,                   // stddev
+  Sum: double,                      // sum
+  Min: double,                      // min
+  Max: double,                      // max
   SrcMac: string,                 // smac
   DstMac: string,                 // dmac
   SrcOui: string,                 // soui
   DstOui: string,                 // doui
-  sTos: count,                    // stos
-  dTos: count,                    // dtos
+  sTos: uint64,                    // stos
+  dTos: uint64,                    // dtos
   sDSb: string,                   // sdsb
   dDSb: string,                   // ddsb
   sCo: string #index=hash,        // sco
   dCo: string #index=hash,        // dco
-  sTtl: count #max=255,           // sttl
-  dTtl: count #max=255,           // dttl
-  sHops: count,                   // shops
-  dHops: count,                   // dhops
+  sTtl: uint64 #max=255,           // sttl
+  dTtl: uint64 #max=255,           // dttl
+  sHops: uint64,                   // shops
+  dHops: uint64,                   // dhops
   sIpId: string #index=hash #hex, // sipid
   dIpId: string #index=hash #hex, // dipid
   sMpls: string #index=hash,      // smpls
   dMpls: string #index=hash,      // dmpls
   AutoId: string #index=hash,     // autoid
-  sAS: count,                     // sas
-  dAS: count,                     // das
-  iAS: count,                     // ias
+  sAS: uint64,                     // sas
+  dAS: uint64,                     // das
+  iAS: uint64,                     // ias
   Cause: argus.cause,             // cause
-  NStrok: count,                  // nstroke
-  sNStrok: count,                 // snstroke
-  dNStrok: count,                 // dnstroke
-  SrcPkts: count,                 // spkts
-  DstPkts: count,                 // dpkts
-  SrcBytes: count,                // sbytes
-  DstBytes: count,                // dbytes
-  TotAppByte: count,              // appbytes
-  SAppBytes: count,               // sappbytes
-  DAppBytes: count,               // dappbytes
-  PCRatio: real,                  // pcr
-  Load: real,                     // load
-  SrcLoad: real,                  // sload
-  DstLoad: real,                  // dload
-  Loss: count,                    // loss
-  SrcLoss: count,                 // sloss
-  DstLoss: count,                 // dloss
-  pLoss: real,                    // ploss
-  pSrcLoss: real,                 // sploss (psloss in man page)
-  pDstLoss: real,                 // dploss (pdloss in man page)
-  Retrans: count,                 // retrans
-  SrcRetra: count,                // sretrans
-  DstRetra: count,                // dretrans
-  pRetran: real,                  // pretrans
-  pSrcRetr: real,                 // spretrans (psretrans in man page)
-  pDstRetr: real,                 // dpretrans (pdretrans in man page)
-  SrcGap: count,                  // sgap
-  DstGap: count,                  // dgap
-  Rate: real,                     // rate
-  SrcRate: real,                  // srate
-  DstRate: real,                  // drate
+  NStrok: uint64,                  // nstroke
+  sNStrok: uint64,                 // snstroke
+  dNStrok: uint64,                 // dnstroke
+  SrcPkts: uint64,                 // spkts
+  DstPkts: uint64,                 // dpkts
+  SrcBytes: uint64,                // sbytes
+  DstBytes: uint64,                // dbytes
+  TotAppByte: uint64,              // appbytes
+  SAppBytes: uint64,               // sappbytes
+  DAppBytes: uint64,               // dappbytes
+  PCRatio: double,                  // pcr
+  Load: double,                     // load
+  SrcLoad: double,                  // sload
+  DstLoad: double,                  // dload
+  Loss: uint64,                    // loss
+  SrcLoss: uint64,                 // sloss
+  DstLoss: uint64,                 // dloss
+  pLoss: double,                    // ploss
+  pSrcLoss: double,                 // sploss (psloss in man page)
+  pDstLoss: double,                 // dploss (pdloss in man page)
+  Retrans: uint64,                 // retrans
+  SrcRetra: uint64,                // sretrans
+  DstRetra: uint64,                // dretrans
+  pRetran: double,                  // pretrans
+  pSrcRetr: double,                 // spretrans (psretrans in man page)
+  pDstRetr: double,                 // dpretrans (pdretrans in man page)
+  SrcGap: uint64,                  // sgap
+  DstGap: uint64,                  // dgap
+  Rate: double,                     // rate
+  SrcRate: double,                  // srate
+  DstRate: double,                  // drate
   SIntPkt: duration #unit=ms,     // sintpkt
   SIntDist: string,               // sintdist
   SIntPktAct: duration #unit=ms,  // sintpktact
   SIntActDist: string,            // sintdistact (sintackdist in man page)
   SIntPktIdl: duration #unit=ms,  // sintpktidl
   SIntIdlDist: string,            // sintdistidl
-  SIntPktMax: count,              // not present in man page
-  SIntPktMin: count,              // not present in man page
+  SIntPktMax: uint64,              // not present in man page
+  SIntPktMin: uint64,              // not present in man page
   DIntPkt: duration #unit=ms,     // dintpkt
   DIntDist: string,               // dintdist
   DIntPktAct: duration #unit=ms,  // dintpktact
   DIntActDist: string,            // dintdistact (sintackdist in man page)
   DIntPktIdl: duration #unit=ms,  // dintpktidl
   DIntIdlDist: string,            // dintdistidl
-  DIntPktMax: count,              // not present in man page
-  DIntPktMin: count,              // not present in man page
+  DIntPktMax: uint64,              // not present in man page
+  DIntPktMin: uint64,              // not present in man page
   SrcJitter: duration #unit=ms,   // sjit
   SrcJitAct: duration #unit=ms,   // sjitact
   SrcJitIdl: duration #unit=ms,   // sjitidl (sitidle in man page)
@@ -113,8 +113,8 @@ type argus.record = record{
   Label: string,                  // label
   srcUdata: string,               // suser
   dstUdata: string,               // duser
-  SrcWin: count,                  // swin
-  DstWin: count,                  // dwin
+  SrcWin: uint64,                  // swin
+  DstWin: uint64,                  // dwin
   sVlan: string #index=hash,      // svlan
   dVlan: string #index=hash,      // dvlan
   sVid: string #index=hash,       // svid
@@ -123,33 +123,33 @@ type argus.record = record{
   dVpri: string #index=hash,      // dvpri
   SRange: time,                   // srng
   ERange: time,                   // srng
-  SrcTCPBase: count,              // stcpb
-  DstTCPBase: count,              // dtcpb
+  SrcTCPBase: uint64,              // stcpb
+  DstTCPBase: uint64,              // dtcpb
   TcpRtt: duration #unit=s,       // tcprtt
   SynAck: duration #unit=s,       // synack
   AckDat: duration #unit=s,       // ackdat
   TcpOpt: string,                 // tcpopt
   Inode: string,                  // inode
-  Offset: count,                  // offset
-  sMeanPktSz: real,               // smeansz
-  dMeanPktSz: real,               // dmeansz
-  sPktSz: real,                   // spktsz
-  sMaxPktSz: real,                // smaxsz
-  dPktSz: real,                   // dpktsz
-  dMaxPktSz: real,                // dmaxsz
-  sminPktSz: real,                // sminsz
-  dminPktSz: real,                // dminsz
+  Offset: uint64,                  // offset
+  sMeanPktSz: double,               // smeansz
+  dMeanPktSz: double,               // dmeansz
+  sPktSz: double,                   // spktsz
+  sMaxPktSz: double,                // smaxsz
+  dPktSz: double,                   // dpktsz
+  dMaxPktSz: double,                // dmaxsz
+  sminPktSz: double,                // sminsz
+  dminPktSz: double,                // dminsz
   // Fields that do not exist in the ra(1) man page under -s. These have been
   // inferred by looking a the source code.
-  STcpMax: real,                  // stcpmax
-  DTcpMax: real,                  // dtcpmax
+  STcpMax: double,                  // stcpmax
+  DTcpMax: double,                  // dtcpmax
   dlDur: duration #unit=s,        // dldur
   dlsTime: time,                  // dlstime
   dllTime: time,                  // dlltime
-  dsPkts: count,                  // dspkts
-  ddPkts: count,                  // ddpkts
-  dsBytes: count,                 // dsbytes
-  ddBytes: count,                 // ddbytes
+  dsPkts: uint64,                  // dspkts
+  ddPkts: uint64,                  // ddpkts
+  dsBytes: uint64,                 // dsbytes
+  ddBytes: uint64,                 // ddbytes
   JDelay: duration #unit=s,       // jdelay
   LDelay: duration #unit=s,       // ldelay
   sEnc: string,                   // senc

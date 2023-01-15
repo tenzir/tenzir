@@ -8,18 +8,17 @@
 
 #define SUITE parseable
 
-#include "vast/address.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/stream.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/integer.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/ip.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/test/test.hpp"
 
@@ -122,14 +121,13 @@ TEST(container attribute folding) {
 }
 
 TEST(action) {
-  using namespace parsers;
   auto make_v4 = [](uint32_t a) {
-    return address::v4(a);
+    return ip::v4(a);
   };
-  auto ipv4_addr = b32be->*make_v4;
-  address x;
+  auto ipv4_addr = parsers::b32be->*make_v4;
+  ip x;
   CHECK(ipv4_addr("\x0A\x00\x00\x01", x));
-  CHECK_EQUAL(x, unbox(to<address>("10.0.0.1")));
+  CHECK_EQUAL(x, unbox(to<ip>("10.0.0.1")));
 }
 
 TEST(end of input) {
@@ -599,11 +597,11 @@ TEST(real) {
 }
 
 TEST(real - scientific) {
-  auto p = make_parser<real>{};
+  auto p = make_parser<double>{};
   {
     MESSAGE("null exponent");
     auto str = ".456789e0"s;
-    real d = 0;
+    double d = 0;
     auto f = str.begin();
     auto l = str.end();
     CHECK(p(f, l, d));
@@ -613,7 +611,7 @@ TEST(real - scientific) {
   {
     MESSAGE("positive exponent");
     auto str = ".456789e43"s;
-    real d = 0;
+    double d = 0;
     auto f = str.begin();
     auto l = str.end();
     CHECK(p(f, l, d));
@@ -623,7 +621,7 @@ TEST(real - scientific) {
   {
     MESSAGE("explicit positive exponent");
     auto str = ".456789e+43"s;
-    real d = 0;
+    double d = 0;
     auto f = str.begin();
     auto l = str.end();
     CHECK(p(f, l, d));
@@ -633,7 +631,7 @@ TEST(real - scientific) {
   {
     MESSAGE("negative exponent");
     auto str = ".456789e-322"s;
-    real d = 0;
+    double d = 0;
     auto f = str.begin();
     auto l = str.end();
     CHECK(p(f, l, d));
@@ -843,9 +841,9 @@ namespace {
 template <class T>
 T to_si(std::string_view str) {
   auto parse_si = [&](auto input, auto& x) {
-    if constexpr (std::is_same_v<T, count>)
+    if constexpr (std::is_same_v<T, uint64_t>)
       return parsers::count(input, x);
-    else if constexpr (std::is_same_v<T, integer>)
+    else if constexpr (std::is_same_v<T, int64_t>)
       return parsers::integer(input, x);
   };
   T x;
@@ -857,7 +855,7 @@ T to_si(std::string_view str) {
 } // namespace
 
 TEST(si count) {
-  auto to_count = to_si<count>;
+  auto to_count = to_si<uint64_t>;
   using namespace si_literals;
   CHECK_EQUAL(to_count("42"), 42u);
   CHECK_EQUAL(to_count("1k"), 1_k);
@@ -876,9 +874,9 @@ TEST(si count) {
 }
 
 TEST(si int) {
-  auto to_int = to_si<integer>;
+  auto to_int = to_si<int64_t>;
   auto as_int = [](auto x) {
-    return integer{detail::narrow_cast<integer::value_type>(x)};
+    return int64_t{detail::narrow_cast<int64_t>(x)};
   };
   using namespace si_literals;
   CHECK_EQUAL(to_int("-42"), -as_int(42));
@@ -896,7 +894,7 @@ TEST(si int) {
 
 TEST(bytesize) {
   const auto parse = [](std::string_view str) {
-    if (auto result = count{}; parsers::bytesize(str, result))
+    if (auto result = uint64_t{}; parsers::bytesize(str, result))
       return result;
     FAIL("failed to parse bytesize: " << str);
   };

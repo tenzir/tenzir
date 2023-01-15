@@ -36,7 +36,7 @@ TEST(custom index_config) {
         .fp_rate = 0.001,
       },
       {
-        .targets = {":addr"s},
+        .targets = {":ip"s},
         .fp_rate = 0.05,
       },
     },
@@ -65,10 +65,9 @@ TEST(custom index_config) {
   CHECK_EQUAL(url_parameters->p, 0.001);
   // Verify type synopses.
   auto& string_synopsis = ps.type_synopses_.at(vast::type{vast::string_type{}});
-  auto& address_synopsis
-    = ps.type_synopses_.at(vast::type{vast::address_type{}});
+  auto& ip_synopsis = ps.type_synopses_.at(vast::type{vast::ip_type{}});
   auto string_parameters = vast::parse_parameters(string_synopsis->type());
-  auto address_parameters = vast::parse_parameters(address_synopsis->type());
+  auto address_parameters = vast::parse_parameters(ip_synopsis->type());
   REQUIRE(string_parameters);
   REQUIRE(url_parameters);
   CHECK_EQUAL(string_parameters->p, vast::defaults::system::fp_rate);

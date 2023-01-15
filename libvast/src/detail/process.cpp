@@ -57,7 +57,7 @@ static record get_status_proc() {
   auto kvp = [&](const char* k, const std::string_view human_friendly) {
     // The output says "kB", but the unit is actually "kiB".
     return (k >> ws >> parsers::u64 >> ws >> "kB")->*[=, &result](uint64_t x) {
-      result[human_friendly] = count{x * 1024};
+      result[human_friendly] = uint64_t{x * 1024};
     };
   };
   auto rss = kvp("VmRSS:", "current-memory-usage");
@@ -92,7 +92,7 @@ static record get_settings_mach() {
   task_info(task, TASK_BASIC_INFO, (task_info_t)&t_info, &t_info_count);
   // http://web.mit.edu/darwin/src/modules/xnu/osfmk/man/task_basic_info.html
   // says the resident set size is counted in pages, so we multiply accordingly.
-  result["current-memory-usage"] = count{t_info.resident_size * PAGE_SIZE};
+  result["current-memory-usage"] = uint64_t{t_info.resident_size * PAGE_SIZE};
   return result;
 }
 
@@ -110,7 +110,7 @@ static record get_status_rusage() {
     VAST_WARN("{} failed to obtain rusage: {}", __func__, std::strerror(errno));
     return result;
   }
-  result["peak-memory-usage"] = count{ru.ru_maxrss * 1024ull};
+  result["peak-memory-usage"] = uint64_t{ru.ru_maxrss * 1024ull};
   return result;
 }
 

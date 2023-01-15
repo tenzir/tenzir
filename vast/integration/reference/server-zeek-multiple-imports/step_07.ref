@@ -6,26 +6,26 @@
           type: string
           attributes:
             index: hash
-      - id.orig_h: addr
+      - id.orig_h: ip
       - id.orig_p:
-          port: count
-      - id.resp_h: addr
+          port: uint64
+      - id.resp_h: ip
       - id.resp_p:
-          port: count
+          port: uint64
       - proto: string
-      - trans_id: count
+      - trans_id: uint64
       - query: string
-      - qclass: count
+      - qclass: uint64
       - qclass_name: string
-      - qtype: count
+      - qtype: uint64
       - qtype_name: string
-      - rcode: count
+      - rcode: uint64
       - rcode_name: string
       - AA: bool
       - TC: bool
       - RD: bool
       - RA: bool
-      - Z: count
+      - Z: uint64
       - answers:
           list: string
       - TTLs:
@@ -39,24 +39,24 @@
           type: string
           attributes:
             index: hash
-      - id.orig_h: addr
+      - id.orig_h: ip
       - id.orig_p:
-          port: count
-      - id.resp_h: addr
+          port: uint64
+      - id.resp_h: ip
       - id.resp_p:
-          port: count
+          port: uint64
       - proto: string
       - service: string
       - duration: duration
-      - orig_bytes: count
-      - resp_bytes: count
+      - orig_bytes: uint64
+      - resp_bytes: uint64
       - conn_state: string
       - local_orig: bool
-      - missed_bytes: count
+      - missed_bytes: uint64
       - history: string
-      - orig_pkts: count
-      - orig_ip_bytes: count
-      - resp_pkts: count
-      - resp_ip_bytes: count
+      - orig_pkts: uint64
+      - orig_ip_bytes: uint64
+      - resp_pkts: uint64
+      - resp_ip_bytes: uint64
       - tunnel_parents:
           list: string

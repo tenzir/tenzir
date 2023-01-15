@@ -99,7 +99,7 @@ vast:
           - suricata.http.http.url
         fp-rate: 0.005
       - targets:
-          - :addr
+          - :ip
         fp-rate: 0.1
 ```
 

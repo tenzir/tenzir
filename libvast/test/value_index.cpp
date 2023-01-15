@@ -11,8 +11,8 @@
 #include "vast/value_index.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -89,27 +89,27 @@ TEST(bool) {
 TEST(integer) {
   caf::settings opts;
   opts["base"] = "uniform(10, 20)";
-  auto idx = factory<value_index>::make(type{integer_type{}}, std::move(opts));
+  auto idx = factory<value_index>::make(type{int64_type{}}, std::move(opts));
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
-  REQUIRE(idx->append(make_data_view(integer{-7})));
-  REQUIRE(idx->append(make_data_view(integer{42})));
-  REQUIRE(idx->append(make_data_view(integer{10000})));
-  REQUIRE(idx->append(make_data_view(integer{4711})));
-  REQUIRE(idx->append(make_data_view(integer{31337})));
-  REQUIRE(idx->append(make_data_view(integer{42})));
-  REQUIRE(idx->append(make_data_view(integer{42})));
+  REQUIRE(idx->append(make_data_view(int64_t{-7})));
+  REQUIRE(idx->append(make_data_view(int64_t{42})));
+  REQUIRE(idx->append(make_data_view(int64_t{10000})));
+  REQUIRE(idx->append(make_data_view(int64_t{4711})));
+  REQUIRE(idx->append(make_data_view(int64_t{31337})));
+  REQUIRE(idx->append(make_data_view(int64_t{42})));
+  REQUIRE(idx->append(make_data_view(int64_t{42})));
   MESSAGE("lookup");
   auto leet
-    = idx->lookup(relational_operator::equal, make_data_view(integer{31337}));
+    = idx->lookup(relational_operator::equal, make_data_view(int64_t{31337}));
   CHECK(to_string(unbox(leet)) == "0000100");
   auto less_than_leet
-    = idx->lookup(relational_operator::less, make_data_view(integer{31337}));
+    = idx->lookup(relational_operator::less, make_data_view(int64_t{31337}));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
   auto greater_zero
-    = idx->lookup(relational_operator::greater, make_data_view(integer{0}));
+    = idx->lookup(relational_operator::greater, make_data_view(int64_t{0}));
   CHECK(to_string(unbox(greater_zero)) == "0111111");
-  auto xs = list{integer{42}, integer{10}, integer{4711}};
+  auto xs = list{int64_t{42}, int64_t{10}, int64_t{4711}};
   auto multi = unbox(idx->lookup(relational_operator::in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "0101011");
   MESSAGE("serialization");
@@ -118,7 +118,7 @@ TEST(integer) {
   value_index_ptr idx2;
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   less_than_leet
-    = idx2->lookup(relational_operator::less, make_data_view(integer{31337}));
+    = idx2->lookup(relational_operator::less, make_data_view(int64_t{31337}));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
   auto builder = flatbuffers::FlatBufferBuilder{};
   const auto idx_offset = pack(builder, idx);
@@ -132,7 +132,7 @@ TEST(integer) {
   CHECK_EQUAL(idx->type(), idx3->type());
   CHECK_EQUAL(idx->options(), idx3->options());
   less_than_leet
-    = idx3->lookup(relational_operator::less, make_data_view(integer{31337}));
+    = idx3->lookup(relational_operator::less, make_data_view(int64_t{31337}));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
 }
 

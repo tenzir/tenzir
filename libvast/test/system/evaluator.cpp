@@ -24,10 +24,10 @@ using namespace vast;
 
 namespace {
 
-using counts = std::vector<vast::count>;
+using counts = std::vector<uint64_t>;
 
 template <class F>
-ids select(const counts& xs, vast::count y, F pred) {
+ids select(const counts& xs, uint64_t y, F pred) {
   ids result;
   for (auto x : xs)
     result.append_bit(pred(x, y));
@@ -35,9 +35,9 @@ ids select(const counts& xs, vast::count y, F pred) {
 }
 
 ids select(const counts& xs, curried_predicate pred) {
-  if (!caf::holds_alternative<vast::count>(pred.rhs))
+  if (!caf::holds_alternative<uint64_t>(pred.rhs))
     FAIL("RHS is not a count");
-  auto y = caf::get<vast::count>(pred.rhs);
+  auto y = caf::get<uint64_t>(pred.rhs);
   switch (pred.op) {
     default:
       FAIL("unsupported relational operator");
@@ -91,8 +91,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   type schema = type{
     "test",
     record_type{
-      {"x", count_type{}},
-      {"y", count_type{}},
+      {"x", uint64_type{}},
+      {"y", uint64_type{}},
     },
   };
 

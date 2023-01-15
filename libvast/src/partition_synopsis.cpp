@@ -81,7 +81,7 @@ double get_type_fprate(const index_config& config, const type& type) {
     for (const auto& name : targets) {
       if (name == ":string" && type == string_type{})
         return fprate;
-      else if (name == ":addr" && type == address_type{})
+      else if (name == ":ip" && type == ip_type{})
         return fprate;
     }
   }
@@ -104,14 +104,14 @@ void partition_synopsis::add(const table_slice& slice,
   auto each = caf::get<record_type>(schema).leaves();
   auto leaf_it = each.begin();
   caf::settings synopsis_opts;
-  // These options must be kept in sync with vast/address_synopsis.hpp and
+  // These options must be kept in sync with vast/ip_synopsis.hpp and
   // vast/string_synopsis.hpp respectively.
   synopsis_opts["buffer-input-data"] = true;
   synopsis_opts["max-partition-size"] = partition_capacity;
   synopsis_opts["string-synopsis-fp-rate"]
     = get_type_fprate(fp_rates, vast::type{string_type{}});
   synopsis_opts["address-synopsis-fp-rate"]
-    = get_type_fprate(fp_rates, vast::type{address_type{}});
+    = get_type_fprate(fp_rates, vast::type{ip_type{}});
   for (size_t col = 0; col < slice.columns(); ++col, ++leaf_it) {
     auto&& leaf = *leaf_it;
     auto add_column = [&](const synopsis_ptr& syn) {

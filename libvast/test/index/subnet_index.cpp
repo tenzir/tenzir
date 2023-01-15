@@ -11,7 +11,7 @@
 #include "vast/index/subnet_index.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -37,20 +37,20 @@ TEST(subnet) {
   REQUIRE(idx.append(make_data_view(s2)));
   REQUIRE(idx.append(make_data_view(s2)));
   MESSAGE("address lookup (ni)");
-  auto a = unbox(to<address>("192.168.0.0")); // network address
+  auto a = unbox(to<ip>("192.168.0.0")); // network address
   auto bm = idx.lookup(relational_operator::ni, make_data_view(a));
   CHECK_EQUAL(to_string(unbox(bm)), "101100");
-  a = unbox(to<address>("192.168.0.1"));
+  a = unbox(to<ip>("192.168.0.1"));
   bm = idx.lookup(relational_operator::ni, make_data_view(a));
   CHECK_EQUAL(to_string(unbox(bm)), "101100");
-  a = unbox(to<address>("192.168.1.42"));
+  a = unbox(to<ip>("192.168.1.42"));
   bm = idx.lookup(relational_operator::ni, make_data_view(a));
   CHECK_EQUAL(to_string(unbox(bm)), "010000");
   // IPv6
-  a = unbox(to<address>("feff::")); // too far out
+  a = unbox(to<ip>("feff::")); // too far out
   bm = idx.lookup(relational_operator::ni, make_data_view(a));
   CHECK_EQUAL(to_string(unbox(bm)), "000000");
-  a = unbox(to<address>("fe80::aaaa"));
+  a = unbox(to<ip>("fe80::aaaa"));
   bm = idx.lookup(relational_operator::ni, make_data_view(a));
   CHECK_EQUAL(to_string(unbox(bm)), "000011");
   MESSAGE("equality lookup");

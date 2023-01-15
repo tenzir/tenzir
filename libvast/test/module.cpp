@@ -251,11 +251,11 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
     if (known_type_name == "bool")
       return type{name, bool_type{}};
     if (known_type_name == "integer")
-      return type{name, integer_type{}};
+      return type{name, int64_type{}};
     if (known_type_name == "count")
-      return type{name, count_type{}};
+      return type{name, uint64_type{}};
     if (known_type_name == "real")
-      return type{name, real_type{}};
+      return type{name, double_type{}};
     if (known_type_name == "duration")
       return type{name, duration_type{}};
     if (known_type_name == "time")
@@ -265,7 +265,7 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
     if (known_type_name == "pattern")
       return type{name, pattern_type{}};
     if (known_type_name == "address")
-      return type{name, address_type{}};
+      return type{name, ip_type{}};
     if (known_type_name == "subnet")
       return type{name, subnet_type{}};
     // Check type aliases aka. known types
@@ -418,34 +418,34 @@ TEST(YAML Type - parsing bool type) {
 
 TEST(YAML Type - Parsing integer type) {
   std::vector<type> known_types;
-  auto integer_type_wo_attrs = record::value_type{
+  auto int64_type_wo_attrs = record::value_type{
     "int_field",
     record{{"type", "integer"}},
   };
-  auto result = unbox(to_type(known_types, integer_type_wo_attrs));
-  auto expected_type = type{"int_field", integer_type{}};
+  auto result = unbox(to_type(known_types, int64_type_wo_attrs));
+  auto expected_type = type{"int_field", int64_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(YAML Type - Parsing count_type) {
+TEST(YAML Type - Parsing uint64_type) {
   std::vector<type> known_types;
-  auto count_type_wo_attrs = record::value_type{
+  auto uint64_type_wo_attrs = record::value_type{
     "count_field",
     record{{"type", "count"}},
   };
-  auto result = unbox(to_type(known_types, count_type_wo_attrs));
-  auto expected_type = type{"count_field", count_type{}};
+  auto result = unbox(to_type(known_types, uint64_type_wo_attrs));
+  auto expected_type = type{"count_field", uint64_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(YAML Type - Parsing real_type) {
+TEST(YAML Type - Parsing double_type) {
   std::vector<type> known_types;
-  auto real_type_wo_attrs = record::value_type{
+  auto double_type_wo_attrs = record::value_type{
     "real_field",
     record{{"type", "real"}},
   };
-  auto result = unbox(to_type(known_types, real_type_wo_attrs));
-  auto expected_type = type{"real_field", real_type{}};
+  auto result = unbox(to_type(known_types, double_type_wo_attrs));
+  auto expected_type = type{"real_field", double_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -493,14 +493,14 @@ TEST(YAML Type - Parsing pattern_type) {
   CHECK_EQUAL(result, expected_type);
 }
 
-TEST(YAML Type - Parsing address_type) {
+TEST(YAML Type - Parsing ip_type) {
   std::vector<type> known_types;
-  auto address_type_wo_attrs = record::value_type{
+  auto ip_type_wo_attrs = record::value_type{
     "address_field",
     record{{"type", "address"}},
   };
-  auto result = unbox(to_type(known_types, address_type_wo_attrs));
-  auto expected_type = type{"address_field", address_type{}};
+  auto result = unbox(to_type(known_types, ip_type_wo_attrs));
+  auto expected_type = type{"address_field", ip_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -534,7 +534,7 @@ TEST(YAML Type - Parsing list_type) {
     record{{"list", "count"}},
   };
   auto result = unbox(to_type(known_types, list_type_wo_attrs));
-  auto expected_type = type{"list_field", list_type{count_type{}}};
+  auto expected_type = type{"list_field", list_type{uint64_type{}}};
   CHECK_EQUAL(result, expected_type);
 }
 
@@ -549,7 +549,7 @@ TEST(YAML Type - Parsing map_type) {
   auto result = unbox(to_type(known_types, map_type_wo_attrs));
   auto expected_type = type{
     "map_field",
-    map_type{count_type{}, string_type{}},
+    map_type{uint64_type{}, string_type{}},
   };
   CHECK_EQUAL(result, expected_type);
 }

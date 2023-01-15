@@ -49,10 +49,10 @@ protected:
 
 /// The list of concrete types.
 using concrete_types
-  = caf::detail::type_list<bool_type, integer_type, count_type, real_type,
+  = caf::detail::type_list<bool_type, int64_type, uint64_type, double_type,
                            duration_type, time_type, string_type, pattern_type,
-                           address_type, subnet_type, enumeration_type,
-                           list_type, map_type, record_type>;
+                           ip_type, subnet_type, enumeration_type, list_type,
+                           map_type, record_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -444,11 +444,11 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
-// -- integer_type ------------------------------------------------------------
+// -- int64_type ------------------------------------------------------------
 
 /// A signed integer.
 /// @relates type
-class integer_type final {
+class int64_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 2;
@@ -457,10 +457,10 @@ public:
   using arrow_type = arrow::Int64Type;
 
   /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const integer_type&) noexcept;
+  friend std::span<const std::byte> as_bytes(const int64_type&) noexcept;
 
   /// Constructs data from the type.
-  [[nodiscard]] static integer construct() noexcept;
+  [[nodiscard]] static int64_t construct() noexcept;
 
   /// Converts the type into an Arrow DataType.
   [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
@@ -471,11 +471,11 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
-// -- count_type --------------------------------------------------------------
+// -- uint64_type --------------------------------------------------------------
 
 /// An unsigned integer.
 /// @relates type
-class count_type final {
+class uint64_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 3;
@@ -484,10 +484,10 @@ public:
   using arrow_type = arrow::UInt64Type;
 
   /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const count_type&) noexcept;
+  friend std::span<const std::byte> as_bytes(const uint64_type&) noexcept;
 
   /// Constructs data from the type.
-  [[nodiscard]] static count construct() noexcept;
+  [[nodiscard]] static uint64_t construct() noexcept;
 
   /// Converts the type into an Arrow DataType.
   [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
@@ -498,11 +498,11 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
 };
 
-// -- real_type ---------------------------------------------------------------
+// -- double_type ---------------------------------------------------------------
 
 /// A floating-point value.
 /// @relates type
-class real_type final {
+class double_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 4;
@@ -511,10 +511,10 @@ public:
   using arrow_type = arrow::DoubleType;
 
   /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const real_type&) noexcept;
+  friend std::span<const std::byte> as_bytes(const double_type&) noexcept;
 
   /// Constructs data from the type.
-  [[nodiscard]] static real construct() noexcept;
+  [[nodiscard]] static double construct() noexcept;
 
   /// Converts the type into an Arrow DataType.
   [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
@@ -692,11 +692,11 @@ struct pattern_type::arrow_type final : arrow::ExtensionType {
   std::string Serialize() const override;
 };
 
-// -- address_type ------------------------------------------------------------
+// -- ip_type ------------------------------------------------------------
 
 /// An IP address (v4 or v6).
 /// @relates type
-class address_type final {
+class ip_type final {
 public:
   /// Returns the type index.
   static constexpr uint8_t type_index = 9;
@@ -735,10 +735,10 @@ public:
   };
 
   /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const address_type&) noexcept;
+  friend std::span<const std::byte> as_bytes(const ip_type&) noexcept;
 
   /// Constructs data from the type.
-  [[nodiscard]] static address construct() noexcept;
+  [[nodiscard]] static ip construct() noexcept;
 
   /// Converts the type into an Arrow DataType.
   [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
@@ -749,7 +749,7 @@ public:
 };
 
 /// An extension type for Arrow representing corresponding to the address type.
-struct address_type::arrow_type final : arrow::ExtensionType {
+struct ip_type::arrow_type final : arrow::ExtensionType {
   /// A unique identifier for this extension type.
   static constexpr auto name = "vast.address";
 
@@ -819,7 +819,7 @@ public:
     explicit builder_type(arrow::MemoryPool* pool
                           = arrow::default_memory_pool());
     [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
-    [[nodiscard]] address_type::builder_type& address_builder() noexcept;
+    [[nodiscard]] ip_type::builder_type& ip_builder() noexcept;
     [[nodiscard]] arrow::UInt8Builder& length_builder() noexcept;
 
   private:
@@ -1413,15 +1413,15 @@ public:
 };
 
 template <>
-class TypeTraits<typename vast::address_type::arrow_type>
+class TypeTraits<typename vast::ip_type::arrow_type>
   : TypeTraits<FixedSizeBinaryType> {
 public:
-  using ArrayType = vast::address_type::array_type;
-  using ScalarType = vast::address_type::scalar_type;
-  using BuilderType = vast::address_type::builder_type;
+  using ArrayType = vast::ip_type::array_type;
+  using ScalarType = vast::ip_type::scalar_type;
+  using BuilderType = vast::ip_type::builder_type;
   constexpr static bool is_parameter_free = true;
   static inline std::shared_ptr<DataType> type_singleton() {
-    return vast::address_type::to_arrow_type();
+    return vast::ip_type::to_arrow_type();
   }
 };
 
@@ -2085,22 +2085,21 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const vast::integer_type&, FormatContext& ctx) const
+  auto format(const vast::int64_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    // TODO: Rename to "integer" when switching to YAML schemas.
-    return format_to(ctx.out(), "int");
+    return format_to(ctx.out(), "int64");
   }
 
   template <class FormatContext>
-  auto format(const vast::count_type&, FormatContext& ctx) const
+  auto format(const vast::uint64_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "count");
+    return format_to(ctx.out(), "uint64");
   }
 
   template <class FormatContext>
-  auto format(const vast::real_type&, FormatContext& ctx) const
+  auto format(const vast::double_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "real");
+    return format_to(ctx.out(), "double");
   }
 
   template <class FormatContext>
@@ -2128,10 +2127,9 @@ struct formatter<T> {
   }
 
   template <class FormatContext>
-  auto format(const vast::address_type&, FormatContext& ctx) const
+  auto format(const vast::ip_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
-    // TODO: Rename to "address" when switching to YAML schemas.
-    return format_to(ctx.out(), "addr");
+    return format_to(ctx.out(), "ip");
   }
 
   template <class FormatContext>

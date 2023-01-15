@@ -68,24 +68,23 @@ TEST(parseable / printable - predicate) {
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: type
-  MESSAGE("10.0.0.0/8 ni :addr");
-  str = "10.0.0.0/8 ni :addr";
+  MESSAGE("10.0.0.0/8 ni :ip");
+  str = "10.0.0.0/8 ni :ip";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<type_extractor>(pred.rhs));
   CHECK(caf::get<data>(pred.lhs) == data{*to<subnet>("10.0.0.0/8")});
   CHECK(pred.op == relational_operator::ni);
-  CHECK(caf::get<type_extractor>(pred.rhs)
-        == type_extractor{type{address_type{}}});
+  CHECK(caf::get<type_extractor>(pred.rhs) == type_extractor{type{ip_type{}}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
-  MESSAGE(":real >= -4.8");
-  str = ":real >= -4.8";
+  MESSAGE(":double >= -4.8");
+  str = ":double >= -4.8";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<type_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<type_extractor>(pred.lhs)
-        == type_extractor{type{real_type{}}});
+        == type_extractor{type{double_type{}}});
   CHECK(pred.op == relational_operator::greater_equal);
   CHECK(caf::get<data>(pred.rhs) == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
@@ -116,16 +115,16 @@ TEST(parseable / printable - predicate) {
 TEST(parseable - expression) {
   expression expr;
   predicate p1{field_extractor{"x"}, relational_operator::equal, data{42u}};
-  predicate p2{type_extractor{type{real_type{}}}, relational_operator::equal,
-               data{real{5.3}}};
+  predicate p2{type_extractor{type{double_type{}}}, relational_operator::equal,
+               data{double{5.3}}};
   predicate p3{field_extractor{"a"}, relational_operator::greater,
                field_extractor{"b"}};
   MESSAGE("conjunction");
-  CHECK(parsers::expr("x == 42 && :real == 5.3"s, expr));
+  CHECK(parsers::expr("x == 42 && :double == 5.3"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2}));
-  CHECK(parsers::expr("x == 42 && :real == 5.3 && x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 && :double == 5.3 && x == 42"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2, p1}));
-  CHECK(parsers::expr("x == 42 && ! :real == 5.3 && x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 && ! :double == 5.3 && x == 42"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y"s, expr));
   CHECK(parsers::expr(
@@ -139,13 +138,13 @@ TEST(parseable - expression) {
   CHECK(caf::holds_alternative<type_extractor>(x0->lhs));
   CHECK(caf::holds_alternative<type_extractor>(x1->lhs));
   MESSAGE("disjunction");
-  CHECK(parsers::expr("x == 42 || :real == 5.3 || x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 || :double == 5.3 || x == 42"s, expr));
   CHECK_EQUAL(expr, expression(disjunction{p1, p2, p1}));
   CHECK(parsers::expr("a==b || b==c || c==d"s, expr));
   MESSAGE("negation");
   CHECK(parsers::expr("! x == 42"s, expr));
   CHECK_EQUAL(expr, expression(negation{p1}));
-  CHECK(parsers::expr("!(x == 42 || :real == 5.3)"s, expr));
+  CHECK(parsers::expr("!(x == 42 || :double == 5.3)"s, expr));
   CHECK_EQUAL(expr, expression(negation{disjunction{p1, p2}}));
   MESSAGE("parentheses");
   CHECK(parsers::expr("(x == 42)"s, expr));
@@ -171,7 +170,7 @@ TEST(parseable - value predicate) {
   REQUIRE(pred != nullptr);
   auto extractor = caf::get_if<type_extractor>(&pred->lhs);
   REQUIRE(extractor != nullptr);
-  CHECK(caf::holds_alternative<count_type>(extractor->type));
+  CHECK(caf::holds_alternative<uint64_type>(extractor->type));
   CHECK(caf::holds_alternative<data>(pred->rhs));
   CHECK_EQUAL(pred->op, relational_operator::equal);
   CHECK(caf::get<data>(pred->rhs) == data{42u});

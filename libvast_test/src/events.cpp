@@ -42,18 +42,18 @@ struct alternating {};
 
 template <class Policy>
 std::vector<table_slice> make_integers(size_t count) {
-  auto schema = type{"test.int", record_type{{"value", integer_type{}}}};
+  auto schema = type{"test.int", record_type{{"value", int64_type{}}}};
   auto builder = std::make_shared<table_slice_builder>(schema);
   VAST_ASSERT(builder != nullptr);
   std::vector<table_slice> result;
   result.reserve(count);
   auto i = size_t{0};
   while (i < count) {
-    integer x;
+    int64_t x;
     if constexpr (std::is_same_v<Policy, ascending>)
-      x.value = i;
+      x = i;
     else if constexpr (std::is_same_v<Policy, alternating>)
-      x.value = i % 2;
+      x = i % 2;
     else
       static_assert(detail::always_false_v<Policy>, "invalid policy");
     if (!builder->add(make_view(x)))

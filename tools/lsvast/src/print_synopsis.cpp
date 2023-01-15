@@ -82,13 +82,13 @@ void print_synopsis(const vast::fbs::synopsis::LegacySynopsis* synopsis,
       // Try the two options that are currently being produced by VAST.
       using string_synopsis
         = vast::bloom_filter_synopsis<std::string, vast::legacy_hash>;
-      using address_synopsis
-        = vast::bloom_filter_synopsis<vast::address, vast::legacy_hash>;
+      using ip_synopsis
+        = vast::bloom_filter_synopsis<vast::ip, vast::legacy_hash>;
       if (auto const* bloom_synopsis
           = dynamic_cast<string_synopsis*>(ptr.get())) {
         print_raw_bloom_filter(bloom_synopsis, indent);
       } else if (auto const* bloom_synopsis
-                 = dynamic_cast<address_synopsis*>(ptr.get())) {
+                 = dynamic_cast<ip_synopsis*>(ptr.get())) {
         print_raw_bloom_filter(bloom_synopsis, indent);
       } else {
         fmt::print("(unknown bloom filter type)\n");

@@ -27,12 +27,12 @@
 namespace vast {
 
 /// An index for IP addresses.
-class address_index : public value_index {
+class ip_index : public value_index {
 public:
   using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   using type_index = bitmap_index<bool, singleton_coder<ewah_bitmap>>;
 
-  explicit address_index(vast::type t, caf::settings opts = {});
+  explicit ip_index(vast::type t, caf::settings opts = {});
 
   bool inspect_impl(supported_inspectors& inspector) override;
 

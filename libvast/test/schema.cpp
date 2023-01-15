@@ -32,10 +32,10 @@ using namespace std::string_literals;
 TEST(offset finding) {
   std::string str = R"__(
     type a = int
-    type inner = record{ x: int, y: real }
-    type middle = record{ a: int, b: inner }
-    type outer = record{ a: middle, b: record { y: string }, c: int }
-    type foo = record{ a: int, b: real, c: outer, d: middle }
+    type inner = record{ x: int64, y: double }
+    type middle = record{ a: int64, b: inner }
+    type outer = record{ a: middle, b: record { y: string }, c: int64 }
+    type foo = record{ a: int64, b: double, c: outer, d: middle }
   )__";
   auto mod = unbox(to<module>(str));
   auto* foo_type = mod.find("foo");
@@ -43,20 +43,20 @@ TEST(offset finding) {
   REQUIRE(holds_alternative<record_type>(*foo_type));
   const auto& foo_record = get<record_type>(*foo_type);
   CHECK_EQUAL(foo_record.num_fields(), 4u);
-  CHECK_EQUAL(foo_record.field(offset{0}).type, integer_type{});
-  CHECK_EQUAL(foo_record.field(offset{1}).type, real_type{});
+  CHECK_EQUAL(foo_record.field(offset{0}).type, int64_type{});
+  CHECK_EQUAL(foo_record.field(offset{1}).type, double_type{});
   CHECK_EQUAL(foo_record.field(offset{2}).name, "c");
   CHECK(caf::holds_alternative<record_type>(foo_record.field(offset{2}).type));
   CHECK_EQUAL(
     caf::get<record_type>(foo_record.field(offset{2}).type).num_fields(), 3u);
   CHECK_EQUAL(foo_record.field(offset{2, 0}).name, "a");
   CHECK_EQUAL(foo_record.field(offset{2, 1, 0}).type, string_type{});
-  CHECK_EQUAL(foo_record.field(offset{2, 2}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{2, 2}).type, int64_type{});
   CHECK_EQUAL(foo_record.field(offset{3}).name, "d");
-  CHECK_EQUAL(foo_record.field(offset{3, 0}).type, integer_type{});
+  CHECK_EQUAL(foo_record.field(offset{3, 0}).type, int64_type{});
   CHECK_EQUAL(foo_record.field(offset{3, 1}).name, "b");
-  CHECK_EQUAL(foo_record.field(offset{3, 1, 0}).type, integer_type{});
-  CHECK_EQUAL(foo_record.field(offset{3, 1, 1}).type, real_type{});
+  CHECK_EQUAL(foo_record.field(offset{3, 1, 0}).type, int64_type{});
+  CHECK_EQUAL(foo_record.field(offset{3, 1, 1}).type, double_type{});
 }
 
 TEST(combining) {
@@ -71,18 +71,17 @@ TEST(combining) {
   )__"));
   auto z = module::combine(x, y);
   CHECK_EQUAL(unbox(z.find("a")),
-              (type{"a", type{"int_custom", integer_type{}}}));
-  CHECK_EQUAL(unbox(z.find("b")), (type{"b", real_type{}}));
-  CHECK_EQUAL(unbox(z.find("c")), (type{"c", address_type{}}));
+              (type{"a", type{"int_custom", int64_type{}}}));
+  CHECK_EQUAL(unbox(z.find("b")), (type{"b", double_type{}}));
+  CHECK_EQUAL(unbox(z.find("c")), (type{"c", ip_type{}}));
   CHECK_EQUAL(unbox(z.find("d")), (type{"d", pattern_type{}}));
-  CHECK_EQUAL(unbox(z.find("int_custom")),
-              (type{"int_custom", integer_type{}}));
+  CHECK_EQUAL(unbox(z.find("int_custom")), (type{"int_custom", int64_type{}}));
 }
 
 TEST(merging) {
   std::string str = R"__(
     type a = int
-    type inner = record{ x: int, y: real }
+    type inner = record{ x: int64, y: double }
   )__";
   auto s1 = to<module>(str);
   REQUIRE(s1);
@@ -103,11 +102,11 @@ TEST(serialization) {
     "foo",
     record_type{
       {"s1", string_type{}},
-      {"d1", real_type{}},
-      {"c", type{count_type{}, {{"skip"}}}},
-      {"i", integer_type{}},
+      {"d1", double_type{}},
+      {"c", type{uint64_type{}, {{"skip"}}}},
+      {"i", int64_type{}},
       {"s2", string_type{}},
-      {"d2", real_type{}},
+      {"d2", double_type{}},
     },
   };
   mod.add(t);
@@ -162,7 +161,7 @@ TEST(module : zeek - style) {
     type zeek.ssl = record{
       ts: time,
       uid: string,
-      id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
+      id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
       version: string,
       cipher: string,
       server_name: string,
@@ -198,7 +197,7 @@ TEST(schema : aliases) {
   CHECK(parsers::module(std::string{str}, mod));
   auto foo = mod.find("foo");
   REQUIRE(foo);
-  CHECK(holds_alternative<address_type>(*foo));
+  CHECK(holds_alternative<ip_type>(*foo));
   CHECK(mod.find("bar"));
   CHECK(mod.find("baz"));
   CHECK(mod.find("x"));
@@ -246,14 +245,14 @@ TEST(parseable - basic types local) {
   auto str = R"__(
     type foo = record{
       a1: bool,
-      a2: int,
-      a3: count,
-      a4: real,
+      a2: int64,
+      a3: uint64,
+      a4: double,
       a5: duration,
       a6: time,
       a7: string,
       a8: pattern,
-      a9: addr,
+      a9: ip,
       a10: subnet,
     }
   )__";
@@ -271,7 +270,7 @@ TEST(parseable - basic types local) {
 TEST(parseable - complex types global) {
   auto str = R"__(
     type enum_t = enum{x, y, z}
-    type list_t = list<addr>
+    type list_t = list<ip>
     type map_t = map<count, addr>
     type foo = record{
       e: enum_t,
@@ -312,7 +311,7 @@ TEST(parseable - out of order definitions) {
       type{
         "bar",
         record_type{
-          {"x", type{"foo", integer_type{}}},
+          {"x", type{"foo", int64_type{}}},
         },
       },
     },
@@ -349,7 +348,7 @@ TEST(parseable - with context) {
       record_type{
         {"x",
          record_type{
-           {"y", type{"foo", count_type{}}},
+           {"y", type{"foo", uint64_type{}}},
          }},
       },
     };
@@ -374,7 +373,7 @@ TEST(parseable - with context) {
       record_type{
         {"x",
          record_type{
-           {"y", type{"foo", integer_type{}}},
+           {"y", type{"foo", int64_type{}}},
          }},
       },
     };
@@ -399,7 +398,7 @@ TEST(parseable - with context) {
       record_type{
         {"x",
          record_type{
-           {"y", type{"foo", integer_type{}}},
+           {"y", type{"foo", int64_type{}}},
          }},
       },
     };
@@ -431,14 +430,14 @@ TEST(parseable - with context) {
     MESSAGE("Arithmetic - basic addition");
     auto str = R"__(
       type foo = record{
-        x: int
+        x: int64
       }
       type bar = record{
-        y: int
+        y: int64
       }
       type gob = foo + bar + tar
       type tar = record{
-        z: int
+        z: int64
       }
     )__"sv;
     auto sm = unbox(to<symbol_map>(str));
@@ -448,9 +447,9 @@ TEST(parseable - with context) {
     auto expected = type{
       "gob",
       record_type{
-        {"x", integer_type{}},
-        {"y", integer_type{}},
-        {"z", integer_type{}},
+        {"x", int64_type{}},
+        {"y", int64_type{}},
+        {"z", int64_type{}},
       },
     };
     CHECK_EQUAL(gob, expected);
@@ -459,12 +458,12 @@ TEST(parseable - with context) {
     MESSAGE("Arithmetic - field clash");
     auto str = R"__(
       type foo = record{
-        a: int,
-        b: int
+        a: int64,
+        b: int64
       }
       type bar = record{
-        a: real,
-        c: real
+        a: double,
+        c: double
       }
       type lplus = foo + bar
     )__"sv;
@@ -476,12 +475,12 @@ TEST(parseable - with context) {
     MESSAGE("Arithmetic - priorities");
     auto str = R"__(
       type foo = record{
-        a: int,
-        b: int
+        a: int64,
+        b: int64
       } #attr_one #attr_two=val
       type bar = record{
-        a: real,
-        c: real
+        a: double,
+        c: double
       } #attr_one=val #attr_two
       type lplus = foo <+ bar
       type rplus = foo +> bar
@@ -492,9 +491,9 @@ TEST(parseable - with context) {
     auto expected_lplus = type{
       "lplus",
       record_type{
-        {"a", integer_type{}},
-        {"b", integer_type{}},
-        {"c", real_type{}},
+        {"a", int64_type{}},
+        {"b", int64_type{}},
+        {"c", double_type{}},
       },
       {
         {"attr_one"},
@@ -504,9 +503,9 @@ TEST(parseable - with context) {
     auto expected_rplus = type{
       "rplus",
       record_type{
-        {"a", real_type{}},
-        {"b", integer_type{}},
-        {"c", real_type{}},
+        {"a", double_type{}},
+        {"b", int64_type{}},
+        {"c", double_type{}},
       },
       {
         {"attr_one", "val"},
@@ -523,17 +522,17 @@ TEST(parseable - with context) {
     auto str = R"__(
       type foo = record{
         a: record{
-          x: count,
+          x: uint64,
           y: record {
             z: list<string>
           }
         },
         "b.c": record {
-          d: count,
-          e: count
+          d: uint64,
+          e: uint64
         },
         f: record {
-          g: count
+          g: uint64
         }
       }
       type bar = foo - a.y - "b.c".d - f.g
@@ -547,11 +546,11 @@ TEST(parseable - with context) {
       record_type{
         {"a",
          record_type{
-           {"x", count_type{}},
+           {"x", uint64_type{}},
          }},
         {"b.c",
          record_type{
-           {"e", count_type{}},
+           {"e", uint64_type{}},
          }},
       },
     };
@@ -562,24 +561,24 @@ TEST(parseable - with context) {
     auto str = R"__(
       type base = record{
         a: record{
-             x: count,
+             x: uint64,
              y: string
            },
-        b: int,
-        c: int,
+        b: int64,
+        c: int64,
       }
       type derived1 = base - c +> record{
         a: record {
-             y: addr
+             y: ip
            },
-        b: real,
+        b: double,
         d: time,
       }
       type derived2 = base +> record{
         a: record {
-             y: addr
+             y: ip
            },
-        b: real,
+        b: double,
         d: time,
       } - c
     )__"sv;
@@ -593,10 +592,10 @@ TEST(parseable - with context) {
       record_type{
         {"a",
          record_type{
-           {"x", count_type{}},
-           {"y", address_type{}},
+           {"x", uint64_type{}},
+           {"y", ip_type{}},
          }},
-        {"b", real_type{}},
+        {"b", double_type{}},
         {"d", time_type{}},
       },
     };
@@ -614,7 +613,7 @@ TEST(parseable - overwriting with self reference) {
   {
     auto local = symbol_map{};
     auto p = symbol_map_parser{};
-    CHECK(p("type foo = record{\"x\": count}", local));
+    CHECK(p("type foo = record{\"x\": uint64}", local));
     global = std::move(local);
   }
   {
@@ -631,7 +630,7 @@ TEST(parseable - overwriting with self reference) {
     auto expected = type{
       "foo",
       record_type{
-        {"x", count_type{}},
+        {"x", uint64_type{}},
         {"y", string_type{}},
       },
     };

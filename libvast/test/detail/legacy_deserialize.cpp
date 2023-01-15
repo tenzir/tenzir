@@ -12,7 +12,7 @@
 
 #include "vast/as_bytes.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/detail/serialize.hpp"
 #include "vast/factory.hpp"
 #include "vast/ids.hpp"
@@ -231,16 +231,16 @@ TEST(record_type) {
       record_type{
         {"y",
          record_type{
-           {"z", integer_type{}},
+           {"z", int64_type{}},
            {"k", bool_type{}},
          }},
         {"m",
          record_type{
            {"y",
             record_type{
-              {"a", address_type{}},
+              {"a", ip_type{}},
             }},
-           {"f", real_type{}},
+           {"f", double_type{}},
          }},
         {"b", bool_type{}},
       },
@@ -264,7 +264,7 @@ TEST(qualified_record_field) {
   const auto field = qualified_record_field{
     "zeek.conn",
     "conn.id",
-    type{address_type{}},
+    type{ip_type{}},
   };
 
   caf::byte_buffer buf;
@@ -288,8 +288,8 @@ TEST(ids) {
 
 namespace {
 
-auto to_addr_view(std::string_view str) {
-  return make_data_view(unbox(to<address>(str)));
+auto to_ip_view(std::string_view str) {
+  return make_data_view(unbox(to<ip>(str)));
 }
 
 } // namespace
@@ -320,12 +320,12 @@ TEST(bool_synopsis) {
   CHECK_EQUAL(*bs, *bs2);
 }
 
-TEST(address_synopsis) {
+TEST(ip_synopsis) {
   factory<synopsis>::initialize();
-  auto lat = type{address_type{}, {{"synopsis", "bloomfilter(1,0.1)"}}};
+  auto lat = type{ip_type{}, {{"synopsis", "bloomfilter(1,0.1)"}}};
   auto as = factory<synopsis>::make(lat, caf::settings{});
   REQUIRE_NOT_EQUAL(as, nullptr);
-  as->add(to_addr_view("192.168.0.1"));
+  as->add(to_ip_view("192.168.0.1"));
   caf::byte_buffer buf;
   CHECK(detail::serialize(buf, as));
   auto as2 = factory<synopsis>::make(lat, caf::settings{});

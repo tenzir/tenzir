@@ -11,8 +11,8 @@
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/fbs/value_index.hpp"
-#include "vast/index/address_index.hpp"
 #include "vast/index/container_lookup.hpp"
+#include "vast/index/ip_index.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -28,18 +28,17 @@ namespace {
 
 bool serialize(auto& serializer, value_index& network,
                subnet_index::prefix_index& length) {
-  auto* network_as_address = dynamic_cast<address_index*>(&network);
-  VAST_ASSERT(network_as_address);
-  return serializer.apply(*network_as_address) && serializer.apply(length);
+  auto* network_as_ip = dynamic_cast<ip_index*>(&network);
+  VAST_ASSERT(network_as_ip);
+  return serializer.apply(*network_as_ip) && serializer.apply(length);
 }
 
 bool deserialize(auto& deserializer, value_index_ptr& network,
                  subnet_index::prefix_index& length) {
-  network
-    = factory<value_index>::make(vast::type{address_type{}}, caf::settings{});
-  auto* network_as_address = dynamic_cast<address_index*>(network.get());
-  VAST_ASSERT(network_as_address);
-  return deserializer.apply(*network_as_address) && deserializer.apply(length);
+  network = factory<value_index>::make(vast::type{ip_type{}}, caf::settings{});
+  auto* network_as_ip = dynamic_cast<ip_index*>(network.get());
+  VAST_ASSERT(network_as_ip);
+  return deserializer.apply(*network_as_ip) && deserializer.apply(length);
 }
 
 } // namespace
@@ -47,7 +46,7 @@ bool deserialize(auto& deserializer, value_index_ptr& network,
 subnet_index::subnet_index(vast::type x, caf::settings opts)
   : value_index{std::move(x), std::move(opts)},
     network_{
-      factory<value_index>::make(vast::type{address_type{}}, caf::settings{})},
+      factory<value_index>::make(vast::type{ip_type{}}, caf::settings{})},
     length_{128 + 1} {
   // nop
 }
@@ -81,7 +80,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
       [&](auto x) -> caf::expected<ids> {
         return caf::make_error(ec::type_clash, materialize(x));
       },
-      [&](view<address> x) -> caf::expected<ids> {
+      [&](view<ip> x) -> caf::expected<ids> {
         if (!(op == relational_operator::ni
               || op == relational_operator::not_ni))
           return caf::make_error(ec::unsupported_operator, op);
@@ -165,10 +164,10 @@ size_t subnet_index::memusage_impl() const {
 flatbuffers::Offset<fbs::ValueIndex> subnet_index::pack_impl(
   flatbuffers::FlatBufferBuilder& builder,
   flatbuffers::Offset<fbs::value_index::detail::ValueIndexBase> base_offset) {
-  const auto address_index_offset = pack(builder, network_);
+  const auto ip_index_offset = pack(builder, network_);
   const auto prefix_index_offset = pack(builder, length_);
   const auto subnet_index_offset = fbs::value_index::CreateSubnetIndex(
-    builder, base_offset, address_index_offset, prefix_index_offset);
+    builder, base_offset, ip_index_offset, prefix_index_offset);
   return fbs::CreateValueIndex(builder, fbs::value_index::ValueIndex::subnet,
                                subnet_index_offset.Union());
 }
@@ -176,7 +175,7 @@ flatbuffers::Offset<fbs::ValueIndex> subnet_index::pack_impl(
 caf::error subnet_index::unpack_impl(const fbs::ValueIndex& from) {
   const auto* from_subnet = from.value_index_as_subnet();
   VAST_ASSERT(from_subnet);
-  if (auto err = unpack(*from_subnet->address_index(), network_))
+  if (auto err = unpack(*from_subnet->ip_index(), network_))
     return err;
   return unpack(*from_subnet->prefix_index(), length_);
 }

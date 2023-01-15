@@ -35,7 +35,7 @@ using fixture_base = fixtures::deterministic_actor_system_and_events;
 struct fixture : fixture_base {
   fixture() : fixture_base(VAST_PP_STRINGIFY(SUITE)) {
     expr = unbox(to<expression>("service == \"dns\" "
-                                "&& :addr == 192.168.1.1"));
+                                "&& :ip == 192.168.1.1"));
   }
 
   ~fixture() override {

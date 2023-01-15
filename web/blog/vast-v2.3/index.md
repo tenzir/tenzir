@@ -96,7 +96,7 @@ vast:
         partition-index: false
         # Don't create partition indexes for fields of type addr.
       - targets:
-          - :addr
+          - :ip
         partition-index: false
 ```
 

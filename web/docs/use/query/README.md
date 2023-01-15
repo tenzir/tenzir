@@ -32,19 +32,19 @@ may print:
       - timestamp:
           timestamp: time
       - flow_id:
-          type: count
+          type: uint64
           attributes:
             index: hash
-      - pcap_cnt: count
+      - pcap_cnt: uint64
       - vlan:
-          list: count
+          list: uint64
       - in_iface: string
-      - src_ip: addr
+      - src_ip: ip
       - src_port:
-          port: count
-      - dest_ip: addr
+          port: uint64
+      - dest_ip: ip
       - dest_port:
-          port: count
+          port: uint64
       - proto: string
       - event_type: string
       - community_id:
@@ -54,13 +54,13 @@ may print:
       - flow:
           suricata.component.flow:
             record:
-              - pkts_toserver: count
-              - pkts_toclient: count
-              - bytes_toserver: count
-              - bytes_toclient: count
+              - pkts_toserver: uint64
+              - pkts_toclient: uint64
+              - bytes_toserver: uint64
+              - bytes_toclient: uint64
               - start: time
               - end: time
-              - age: count
+              - age: uint64
               - state: string
               - reason: string
               - alerted: bool
@@ -70,19 +70,19 @@ may print:
       - timestamp:
           timestamp: time
       - flow_id:
-          type: count
+          type: uint64
           attributes:
             index: hash
-      - pcap_cnt: count
+      - pcap_cnt: uint64
       - vlan:
-          list: count
+          list: uint64
       - in_iface: string
-      - src_ip: addr
+      - src_ip: ip
       - src_port:
-          port: count
-      - dest_ip: addr
+          port: uint64
+      - dest_ip: ip
       - dest_port:
-          port: count
+          port: uint64
       - proto: string
       - event_type: string
       - community_id:
@@ -94,17 +94,17 @@ may print:
             - hostname: string
             - url: string
             - http_port:
-                port: count
+                port: uint64
             - http_user_agent: string
             - http_content_type: string
             - http_method: string
             - http_refer: string
             - protocol: string
-            - status: count
+            - status: uint64
             - redirect: string
-            - length: count
+            - length: uint64
       - tx_id:
-          type: count
+          type: uint64
           attributes:
             index: hash
 ```
@@ -161,7 +161,7 @@ looking for, we still want that you can write queries effectively. Taking the
 above query as an example, you can also write:
 
 ```c
-:string == "evil.com" || :addr in 10.0.0.0/8
+:string == "evil.com" || :ip in 10.0.0.0/8
 ```
 
 In fact, both predicates in this expression are what we call [value

@@ -9,11 +9,11 @@
 #pragma once
 
 #include "vast/access.hpp"
-#include "vast/address.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/ip.hpp"
 
 #include <arpa/inet.h>  // inet_pton
 #include <sys/socket.h> // AF_INET*
@@ -45,7 +45,7 @@ namespace vast {
 ///                    / "2" %x30-34 DIGIT     ; 200-249
 ///                    / "25" %x30-35          ; 250-255
 struct ip_address_parser : vast::parser_base<ip_address_parser> {
-  using attribute = address;
+  using attribute = ip;
 
   static auto make_v4() {
     using namespace parsers;
@@ -105,8 +105,8 @@ struct ip_address_parser : vast::parser_base<ip_address_parser> {
   }
 };
 
-struct address_parser : vast::parser_base<address_parser> {
-  using attribute = address;
+struct ip_parser : vast::parser_base<ip_parser> {
+  using attribute = ip;
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
@@ -115,13 +115,13 @@ struct address_parser : vast::parser_base<address_parser> {
   }
 
   template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, address& a) const {
+  bool parse(Iterator& f, const Iterator& l, ip& a) const {
     static auto const v4 = ip_address_parser::make_v4();
     static auto const v6 = ip_address_parser::make_v6();
     std::array<uint8_t, 16> bytes;
     auto begin = f;
     if (v4(f, l, bytes[12], bytes[13], bytes[14], bytes[15])) {
-      a = address::v4(std::span<const uint8_t, 4>{bytes.data() + 12, 4});
+      a = ip::v4(std::span<const uint8_t, 4>{bytes.data() + 12, 4});
       return true;
     }
     if (v6(f, l, unused)) {
@@ -136,7 +136,7 @@ struct address_parser : vast::parser_base<address_parser> {
       std::copy(begin, f, buf);
       auto okay = ::inet_pton(AF_INET6, buf, bytes.data()) == 1;
       if (okay)
-        a = address{bytes};
+        a = ip{bytes};
       return okay;
     }
     return false;
@@ -144,13 +144,13 @@ struct address_parser : vast::parser_base<address_parser> {
 };
 
 template <>
-struct parser_registry<address> {
-  using type = address_parser;
+struct parser_registry<ip> {
+  using type = ip_parser;
 };
 
 namespace parsers {
 
-static auto const addr = make_parser<vast::address>();
+static auto const ip = make_parser<vast::ip>();
 
 } // namespace parsers
 

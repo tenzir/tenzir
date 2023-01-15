@@ -26,11 +26,11 @@ schema:
 
 ```go title=test.schema
 type test = record{
-  ip: addr,
+  ip: ip,
   sn: subnet,
   str: string,
   rec: record{
-    a: real,
+    a: double,
     b: pattern
   }
 }

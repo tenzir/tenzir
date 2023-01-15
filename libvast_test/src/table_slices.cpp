@@ -258,14 +258,14 @@ void table_slices::test_smart_pointer_serialization() {
 
 void table_slices::test_append_column_to_index() {
   MESSAGE(">> test append_column_to_index");
-  auto idx = factory<value_index>::make(type{integer_type{}}, caf::settings{});
+  auto idx = factory<value_index>::make(type{int64_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   auto slice = make_slice();
   slice.offset(0);
   slice.append_column_to_index(1, *idx);
   CHECK_EQUAL(idx->offset(), 2u);
   constexpr auto less = relational_operator::less;
-  CHECK_EQUAL(unbox(idx->lookup(less, make_view(integer{3}))), make_ids({1}));
+  CHECK_EQUAL(unbox(idx->lookup(less, make_view(int64_t{3}))), make_ids({1}));
 }
 
 } // namespace fixtures

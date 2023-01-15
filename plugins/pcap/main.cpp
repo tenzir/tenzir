@@ -78,20 +78,20 @@ type make_packet_type() {
   // port alias type here. Until then, we create the alias manually.
   // See also:
   // - src/format/zeek.cpp
-  const auto port_type = type{"port", count_type{}};
+  const auto port_type = type{"port", uint64_type{}};
   const auto timestamp_type = type{"timestamp", time_type{}};
   return type{
     "pcap.packet",
     record_type{
       {"time", timestamp_type},
-      {"src", address_type{}},
-      {"dst", address_type{}},
+      {"src", ip_type{}},
+      {"dst", ip_type{}},
       {"sport", port_type},
       {"dport", port_type},
       {"vlan",
        record_type{
-         {"outer", count_type{}},
-         {"inner", count_type{}},
+         {"outer", uint64_type{}},
+         {"inner", uint64_type{}},
        }},
       {"community_id", type{string_type{}, {{"index", "hash"}}}},
       {"payload", type{string_type{}, {{"skip"}}}},
@@ -204,8 +204,8 @@ struct packet {
         size_t header_length = (std::to_integer<uint8_t>(bytes[0]) & 0x0f) * 4;
         if (bytes.size() < header_length)
           return std::nullopt;
-        result.src = address::v4(bytes.subspan<12, 4>());
-        result.dst = address::v4(bytes.subspan<16, 4>());
+        result.src = ip::v4(bytes.subspan<12, 4>());
+        result.dst = ip::v4(bytes.subspan<16, 4>());
         result.type = std::to_integer<uint8_t>(bytes[9]);
         result.payload = bytes.subspan(header_length);
         return result;
@@ -214,8 +214,8 @@ struct packet {
         constexpr size_t ipv6_header_size = 40;
         if (bytes.size() < ipv6_header_size)
           return std::nullopt;
-        result.src = address::v6(bytes.subspan<8, 16>());
-        result.dst = address::v6(bytes.subspan<24, 16>());
+        result.src = ip::v6(bytes.subspan<8, 16>());
+        result.dst = ip::v6(bytes.subspan<24, 16>());
         result.type = std::to_integer<uint8_t>(bytes[6]);
         result.payload = bytes.subspan(40);
         return result;
@@ -224,8 +224,8 @@ struct packet {
     return std::nullopt;
   }
 
-  address src;
-  address dst;
+  ip src;
+  ip dst;
   uint8_t type;
   std::span<const std::byte> payload;
 };
@@ -525,9 +525,9 @@ protected:
             && builder_->add(conn.dst_addr)
             && builder_->add(conn.src_port.number())
             && builder_->add(conn.dst_port.number())
-            && (frame->outer_vid ? builder_->add(count{*frame->outer_vid})
+            && (frame->outer_vid ? builder_->add(uint64_t{*frame->outer_vid})
                                  : builder_->add(caf::none))
-            && (frame->outer_vid ? builder_->add(count{*frame->inner_vid})
+            && (frame->outer_vid ? builder_->add(uint64_t{*frame->inner_vid})
                                  : builder_->add(caf::none))
             && (community_id_ ? builder_->add(std::string_view{cid})
                               : builder_->add(caf::none))

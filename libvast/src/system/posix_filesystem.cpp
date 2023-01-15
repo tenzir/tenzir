@@ -190,9 +190,9 @@ filesystem_actor::behavior_type posix_filesystem(
         auto ops = record{};
         auto add_stats = [&](auto& name, auto& stats) {
           auto dict = record{};
-          dict["successful"] = count{stats.successful};
-          dict["failed"] = count{stats.failed};
-          dict["bytes"] = count{stats.bytes};
+          dict["successful"] = uint64_t{stats.successful};
+          dict["failed"] = uint64_t{stats.failed};
+          dict["bytes"] = uint64_t{stats.bytes};
           ops[name] = std::move(dict);
         };
         add_stats("checks", self->state.stats.checks);

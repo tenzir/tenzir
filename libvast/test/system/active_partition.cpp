@@ -96,7 +96,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   vast::type schema_{
     "y",
     vast::record_type{
-      {"x", vast::count_type{}},
+      {"x", vast::uint64_type{}},
     },
   };
 
@@ -166,7 +166,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(passive_state.id, partition_id);
   REQUIRE(passive_state.combined_schema_);
   CHECK_EQUAL(*passive_state.combined_schema_,
-              (vast::record_type{{"y.x", vast::count_type{}}}));
+              (vast::record_type{{"y.x", vast::uint64_type{}}}));
   vast::ids expected_ids;
   expected_ids.append_bit(true);
   CHECK_EQUAL(passive_state.type_ids_.at(std::string{schema_.name()}),

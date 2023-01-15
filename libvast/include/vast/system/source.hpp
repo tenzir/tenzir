@@ -87,7 +87,7 @@ struct source_state {
   measurement metrics = {};
 
   /// Per-event counters for the accountant.
-  std::unordered_map<std::string, vast::count> event_counters = {};
+  std::unordered_map<std::string, uint64_t> event_counters = {};
 
   /// The amount of time to wait until the next wakeup.
   std::chrono::milliseconds wakeup_delay = std::chrono::milliseconds::zero();

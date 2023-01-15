@@ -9,7 +9,7 @@
 #define SUITE pcap
 
 #include <vast/concept/parseable/to.hpp>
-#include <vast/concept/parseable/vast/address.hpp>
+#include <vast/concept/parseable/vast/ip.hpp>
 #include <vast/config.hpp>
 #include <vast/defaults.hpp>
 #include <vast/error.hpp>
@@ -92,9 +92,9 @@ TEST(PCAP read 1) {
   REQUIRE_EQUAL(events_produced, 44u);
   auto&& schema = slice.schema();
   CHECK_EQUAL(schema.name(), "pcap.packet");
-  auto src = slice.at(43, 1, address_type{});
+  auto src = slice.at(43, 1, ip_type{});
   REQUIRE(src);
-  CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
+  CHECK_EQUAL(src, unbox(to<ip>("192.168.1.1")));
   auto idx = caf::get<record_type>(schema).resolve_key("community_id");
   REQUIRE(idx);
   auto community_id_column

@@ -10,7 +10,7 @@
 
 #include "vast/command.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -78,17 +78,17 @@ type deduce(simdjson::dom::element e) {
       return type{record_type{fields}};
     }
     case ::simdjson::dom::element_type::INT64:
-      return type{integer_type{}};
+      return type{int64_type{}};
     case ::simdjson::dom::element_type::UINT64:
-      return type{count_type{}};
+      return type{uint64_type{}};
     case ::simdjson::dom::element_type::DOUBLE:
-      return type{real_type{}};
+      return type{double_type{}};
     case ::simdjson::dom::element_type::STRING: {
       const std::string x{e.get_string().value()};
       if (parsers::net(x))
         return type{subnet_type{}};
-      if (parsers::addr(x))
-        return type{address_type{}};
+      if (parsers::ip(x))
+        return type{ip_type{}};
       if (parsers::ymdhms(x))
         return type{time_type{}};
       if (parsers::duration(x))

@@ -13,10 +13,10 @@
 #include "vast/concept/parseable/vast/base.hpp"
 #include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/index/address_index.hpp"
 #include "vast/index/arithmetic_index.hpp"
 #include "vast/index/enumeration_index.hpp"
 #include "vast/index/hash_index.hpp"
+#include "vast/index/ip_index.hpp"
 #include "vast/index/list_index.hpp"
 #include "vast/index/string_index.hpp"
 #include "vast/index/subnet_index.hpp"
@@ -124,26 +124,22 @@ auto add_value_index_factory(T&& x = {}) {
 
 template <class T>
 auto add_arithmetic_index_factory() {
-  static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
-                                 real_type, duration_type, time_type>);
+  static_assert(detail::is_any_v<T, int64_type, uint64_type, enumeration_type,
+                                 double_type, duration_type, time_type>);
   using concrete_data = type_to_data_t<T>;
-  if constexpr (detail::is_any_v<concrete_data, integer>)
-    return add_value_index_factory<
-      T, arithmetic_index<typename concrete_data::value_type>>();
-  else
-    return add_value_index_factory<T, arithmetic_index<concrete_data>>();
+  return add_value_index_factory<T, arithmetic_index<concrete_data>>();
 }
 
 } // namespace
 
 void factory_traits<value_index>::initialize() {
   add_value_index_factory<bool_type, arithmetic_index<bool>>();
-  add_arithmetic_index_factory<integer_type>();
-  add_arithmetic_index_factory<count_type>();
-  add_arithmetic_index_factory<real_type>();
+  add_arithmetic_index_factory<int64_type>();
+  add_arithmetic_index_factory<uint64_type>();
+  add_arithmetic_index_factory<double_type>();
   add_arithmetic_index_factory<duration_type>();
   add_arithmetic_index_factory<time_type>();
-  add_value_index_factory<address_type, address_index>();
+  add_value_index_factory<ip_type, ip_index>();
   add_value_index_factory<subnet_type, subnet_index>();
   add_value_index_factory<string_type, string_index>();
   // List and enumeration types are not default-constructible, but their
