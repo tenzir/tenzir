@@ -235,25 +235,16 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         current_token = {str_l_it, str_r_it};
         result.aggregator_groups.emplace_back(current_token);
         current_mode = parsing_mode::AGGREGATOR_TIME_RESOLUTION;
-      } else if (current_mode == parsing_mode::SHORT_OPTION_KEY
-                 || current_mode == parsing_mode::LONG_OPTION_KEY) {
+      } else if (current_mode == parsing_mode::LONG_OPTION_KEY) {
         maybe_last_extractor = true;
         ++str_l_it;
         current_assignment_key = {str_l_it, str_r_it};
-        if (current_mode == parsing_mode::SHORT_OPTION_KEY) {
-          result.short_form_options[current_assignment_key] = {};
-          current_mode = parsing_mode::SHORT_OPTION_ASSIGNMENT;
-        } else {
           result.long_form_options[current_assignment_key] = {};
           current_mode = parsing_mode::LONG_OPTION_ASSIGNMENT;
-        }
-      } else if (current_mode == parsing_mode::SHORT_OPTION_VALUE
-                 || current_mode == parsing_mode::LONG_OPTION_VALUE
+      } else if (current_mode == parsing_mode::LONG_OPTION_VALUE
                  || current_mode == parsing_mode::EXTRACTOR_VALUE) {
         current_token = {str_l_it, str_r_it};
-        if (current_mode == parsing_mode::SHORT_OPTION_VALUE) {
-          result.short_form_options[current_assignment_key] = current_token;
-        } else if (current_mode == parsing_mode::LONG_OPTION_VALUE) {
+        if (current_mode == parsing_mode::LONG_OPTION_VALUE) {
           result.long_form_options[current_assignment_key] = current_token;
         } else {
           result.assignments.emplace_back(
@@ -283,7 +274,8 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       if (current_mode == parsing_mode::EXTRACTOR
           || current_mode == parsing_mode::EXTRACTOR_VALUE
           || current_mode == parsing_mode::AGGREGATOR_GROUP) {
-        if (current_mode != parsing_mode::AGGREGATOR_GROUP) {
+        if (current_mode != parsing_mode::AGGREGATOR_GROUP
+            && current_mode != parsing_mode::EXTRACTOR) {
           current_mode = parsing_mode::NONE;
         }
         if (maybe_last_extractor) {
@@ -296,15 +288,14 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         } else if (current_mode == parsing_mode::EXTRACTOR_VALUE) {
           result.assignments.emplace_back(
             vast::list{current_assignment_key, current_token});
-        } else {
+        } else if (current_mode == parsing_mode::AGGREGATOR_GROUP) {
           result.aggregator_groups.emplace_back(current_token);
           current_mode = parsing_mode::AGGREGATOR_GROUP_LIST;
         }
         str_l_it = str_r_it;
       } else if (current_mode == parsing_mode::AGGREGATOR_LIST_END) {
         current_mode = parsing_mode::AGGREGATOR_LIST;
-      } else if (current_mode == parsing_mode::SHORT_OPTION_ASSIGNMENT
-                 || current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT
+      } else if (current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT
                  || current_mode == parsing_mode::EXTRACTOR_ASSIGNMENT) {
         result.parse_error
           = caf::make_error(ec::parse_error, "option assignment disrupted by "
@@ -315,23 +306,47 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         ++str_r_it;
       }
     } else if (*str_r_it == '-') {
-      if (current_mode == parsing_mode::NONE) {
-        current_mode = parsing_mode::SHORT_OPTION_KEY;
-        str_l_it = str_r_it;
-      } else if (current_mode == parsing_mode::SHORT_OPTION_KEY) {
-        current_mode = parsing_mode::LONG_OPTION_KEY;
-        str_l_it = str_r_it;
-      } else if (current_mode == parsing_mode::SHORT_OPTION_ASSIGNMENT
-                 || current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT) {
+      str_l_it = str_r_it;
+      ++str_r_it;
+      if (str_r_it == str.end() || std::isspace(*str_r_it)) {
         result.parse_error
-          = caf::make_error(ec::parse_error, "option definition in place of "
-                                             "option value assignment");
+          = caf::make_error(ec::parse_error, "invalid option prefix");
         break;
       }
-      ++str_r_it;
+      if (current_mode == parsing_mode::NONE) {
+        if (*str_r_it != '-') {
+          current_mode = parsing_mode::SHORT_OPTION;
+          current_assignment_key = *str_r_it;
+          ++str_r_it;
+          if (str_r_it == str.end() || !std::isspace(*str_r_it)) {
+            result.parse_error
+              = caf::make_error(ec::parse_error, "invalid short-form option prefix");
+            break;
+          }
+          while (str_r_it != str.end() && std::isspace(*str_r_it)) {
+            ++str_r_it;
+          }
+          if (str_r_it == str.end() || *str_r_it == '-') {
+            result.parse_error
+              = caf::make_error(ec::parse_error, "missing value for short-form option");
+            break;
+          }
+          str_l_it = str_r_it;
+          while (str_r_it != str.end() && !std::isspace(*str_r_it)) {
+            ++str_r_it;
+          }
+          current_token = {str_l_it, str_r_it};
+          result.short_form_options[current_assignment_key] = current_token;
+          current_mode = parsing_mode::NONE;
+        } else {
+          current_mode = parsing_mode::LONG_OPTION_KEY;
+        }
+      }
+      if (str_r_it != str.end()) {
+        ++str_r_it;
+      }
     } else if (*str_r_it == '=') {
       if (current_mode != parsing_mode::LONG_OPTION_KEY
-          && current_mode != parsing_mode::SHORT_OPTION_KEY
           && current_mode != parsing_mode::EXTRACTOR) {
         result.parse_error
           = caf::make_error(ec::parse_error, "assignment is missing key");
@@ -344,9 +359,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         current_assignment_key = {str_l_it, str_r_it};
         result.long_form_options[current_assignment_key] = {};
         current_mode = parsing_mode::LONG_OPTION_ASSIGNMENT;
-      } else if (current_mode == parsing_mode::SHORT_OPTION_VALUE
-                 || current_mode == parsing_mode::LONG_OPTION_VALUE
-                 || current_mode == parsing_mode::SHORT_OPTION_ASSIGNMENT
+      } else if (current_mode == parsing_mode::LONG_OPTION_VALUE
                  || current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT) {
         result.parse_error
           = caf::make_error(ec::parse_error, "duplicate assignment");
@@ -463,9 +476,6 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       } else if (current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT) {
         str_l_it = str_r_it;
         current_mode = parsing_mode::LONG_OPTION_VALUE;
-      } else if (current_mode == parsing_mode::SHORT_OPTION_ASSIGNMENT) {
-        str_l_it = str_r_it;
-        current_mode = parsing_mode::SHORT_OPTION_VALUE;
       } else if (current_mode == parsing_mode::EXTRACTOR_ASSIGNMENT) {
         str_l_it = str_r_it;
         current_mode = parsing_mode::EXTRACTOR_VALUE;
