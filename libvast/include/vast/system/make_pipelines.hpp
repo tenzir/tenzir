@@ -53,22 +53,6 @@ caf::error parse_pipeline_operators(pipeline& pipeline,
 caf::expected<std::vector<std::unique_ptr<pipeline_operator>>>
 make_pipeline(std::string_view pipeline_string);
 
-enum class parsing_mode {
-  NONE,
-  EXTRACTOR,
-  AGGREGATOR,
-  AGGREGATOR_EXTRACTOR,
-  AGGREGATOR_LIST,
-  AGGREGATOR_LIST_END,
-  AGGREGATOR_GROUP_LIST,
-  AGGREGATOR_GROUP,
-  AGGREGATOR_TIME_RESOLUTION,
-  SHORT_OPTION,
-  LONG_OPTION,
-  EXTRACTOR_ASSIGNMENT,
-  EXTRACTOR_VALUE,
-};
-
 struct pipeline_parsing_result {
   vast::list extractors;
   vast::list assignments;

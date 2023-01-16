@@ -9,7 +9,9 @@
 #define SUITE pipeline_parsing
 
 #include "vast/system/make_pipelines.hpp"
-#include "vast/test/test.hpp"
+#include <vast/pipeline_operator.hpp>
+#include <vast/plugin.hpp>
+#include <vast/test/test.hpp>
 
 TEST(pipeline string parsing - extractor - space after comma) {
   std::string pipeline_str = " field1, field2, field3";
@@ -74,64 +76,55 @@ TEST(pipeline string parsing - aggregators - single group
      - no time resolution) {
   std::string pipeline_str
     = " min(net.src.ip), max(net.dest.port) by timestamp";
+  auto* summarize_plugin = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
-  REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregators.size(), 2);
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregators,
-                (vast::list{vast::list{"min", "net.src.ip"},
-                            vast::list{"max", "net.dest.port"}}));
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregator_groups.size(), 1);
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregator_groups, vast::list{"timestam"
-                                                                    "p"});
-  REQUIRE(parsed_pipeline_input.long_form_options.empty());
+  auto [parsed_iterator, plugin] = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(plugin);
+  REQUIRE_EQUAL(parsed_iterator, pipeline_str_view.end());
 }
+
+TEST(pipeline string parsing - aggregators - single group
+     - spaces in aggregator) {
+  std::string pipeline_str
+    = " min( net.src.ip ), max( net.dest.port ) by timestamp";
+  auto* summarize_plugin = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
+  std::string_view pipeline_str_view = pipeline_str;
+  auto [parsed_iterator, plugin] = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(plugin);
+  REQUIRE_EQUAL(parsed_iterator, pipeline_str_view.end());
+}
+
 
 TEST(pipeline string parsing - aggregators - single group - time resolution) {
   std::string pipeline_str
     = " min(net.src.ip), max(net.dest.port) by timestamp resolution 1h";
+  auto* summarize_plugin = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
-  REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregators.size(), 3);
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregators,
-                (vast::list{"field1", "field2", "field3"}));
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregator_groups.size(), 1);
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregator_groups, vast::list{"timestam"
-                                                                    "p"});
-  REQUIRE_EQUAL(parsed_pipeline_input.long_form_options.size(), 1);
+  auto [parsed_iterator, plugin] = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(plugin);
+  REQUIRE_EQUAL(parsed_iterator, pipeline_str_view.end());
 }
 
 TEST(pipeline string parsing - aggregators - multiple groups
      - no time resolution) {
   std::string pipeline_str
     = " min(net.src.ip), max(net.dest.port) by timestamp, proto, event_type";
+  auto* summarize_plugin = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
-  REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregators.size(), 2);
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregators,
-                (vast::list{"field1", "field2", "field3"}));
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregator_groups.size(), 3);
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregator_groups,
-                (vast::list{"timestamp", "proto", "event_type"}));
-  REQUIRE(parsed_pipeline_input.long_form_options.empty());
+  auto [parsed_iterator, plugin] = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(plugin);
+  REQUIRE_EQUAL(parsed_iterator, pipeline_str_view.end());
 }
 
 TEST(pipeline string parsing - aggregators - multiple groups
      - time resolution) {
   std::string pipeline_str
     = " min(net.src.ip), max(net.dest.port) by timestamp resolution 5h";
+  auto* summarize_plugin = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
   std::string_view pipeline_str_view = pipeline_str;
-  auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
-  REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregators.size(), 2);
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregators,
-                (vast::list{"field1", "field2", "field3"}));
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregator_groups.size(), 1);
-  REQUIRE_EQUAL(parsed_pipeline_input.aggregator_groups, vast::list{"timestam"
-                                                                    "p"});
-  REQUIRE_EQUAL(parsed_pipeline_input.long_form_options.size(), 1);
+  auto [parsed_iterator, plugin] = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(plugin);
+  REQUIRE_EQUAL(parsed_iterator, pipeline_str_view.end());
 }
 
 TEST(pipeline string parsing - aggregators - multiple groups - missing 'by') {
@@ -139,7 +132,6 @@ TEST(pipeline string parsing - aggregators - multiple groups - missing 'by') {
     = " min(net.src.ip), max(net.dest.port) timestamp resolution 5h";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
-
   REQUIRE_NOT_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
   REQUIRE(parsed_pipeline_input.parse_error);
 }
