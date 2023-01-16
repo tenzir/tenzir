@@ -18,7 +18,6 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
-#include <vast/detail/exception_ptr.hpp>
 #include <vast/format/json.hpp>
 #include <vast/logger.hpp>
 #include <vast/plugin.hpp>
