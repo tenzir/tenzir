@@ -72,8 +72,6 @@ enum class parsing_mode {
 struct pipeline_parsing_result {
   vast::list extractors;
   vast::list assignments;
-  vast::list aggregators;
-  vast::list aggregator_groups;
   record long_form_options;
   record short_form_options;
   std::string_view::iterator new_str_it;
