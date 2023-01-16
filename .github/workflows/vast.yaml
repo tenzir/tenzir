@@ -56,6 +56,7 @@ jobs:
     name: Configure
     runs-on: ubuntu-20.04
     outputs:
+      version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
       build-version-short: ${{ steps.configure.outputs.build-version-short }}
       before-sha: ${{ steps.configure.outputs.before-sha }}
@@ -96,6 +97,13 @@ jobs:
       - name: Configure
         id: configure
         run: |
+          # Create a matrix with VAST versions greater than limit_version.
+          limit_version=v2.2.0
+          dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
+          dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
+          filtered_versions=$(printf "$dated_versions" | awk -F# '{if($0>="'$dated_limit_version'")print$2}')
+          version_matrix="$(printf "$filtered_versions" | jq -R | jq -sc 'map({version: .})')"
+          echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
           build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
@@ -391,6 +399,37 @@ jobs:
               done
             done
           done
+
+  regression-tests:
+    needs:
+      - docker-vast
+      - configure
+    strategy:
+      fail-fast: false
+      matrix:
+        regression-tests: ${{ fromJson(needs.configure.outputs.version-matrix) }}
+    name: Regression Tests (${{ matrix.regression-tests.version }})
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Regression Tests
+        run: |
+          scripts/regression-tests.sh ${{ matrix.regression-tests.version }} ${{ needs.configure.outputs.vast-container-ref }}
+
 
   docker-compose:
     needs:
@@ -1141,11 +1180,13 @@ jobs:
       # We currently have a transient error on TheHive init script (sc-39576)
       # - docker-compose
       - example-notebooks
-      - vast-nix
-      - vast
-      - vast-plugins
       - python
       - python-package
+      - regression-tests
+      - vast
+      - vast-io
+      - vast-nix
+      - vast-plugins
     if: always()
     runs-on: ubuntu-latest
     name: Pass Branch Protections
