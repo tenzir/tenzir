@@ -219,6 +219,14 @@ TEST(pipeline string parsing - options - long form options with comma at end) {
                 (vast::record{{"method", "cryptopan,"}, {"seed", "deadbeef"}}));
 }
 
+TEST(pipeline string parsing - options - long form option with no key or value) {
+  std::string pipeline_str = " --";
+  std::string_view pipeline_str_view = pipeline_str;
+  auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
+  REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
+  REQUIRE(parsed_pipeline_input.parse_error);
+}
+
 TEST(pipeline string parsing - options - short form options) {
   std::string pipeline_str = " -m cryptopan -s deadbeef";
   std::string_view pipeline_str_view = pipeline_str;
