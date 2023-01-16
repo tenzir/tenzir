@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <vast/concept/printable/vast/integer.hpp>
 #include <vast/data.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/error.hpp>
@@ -75,9 +74,9 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
       VAST_TRACE_SCOPE("{} sets configuration {}", *self, config);
       for (auto& [key, value] : config) {
         if (key == "max-events") {
-          if (auto max_events = caf::get_if<integer>(&value)) {
+          if (auto max_events = caf::get_if<uint64_t>(&value)) {
             VAST_VERBOSE("{} sets max-events to {}", *self, *max_events);
-            self->state.max_events = max_events->value;
+            self->state.max_events = *max_events;
           }
         }
       }
@@ -120,7 +119,7 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
     [](atom::status, system::status_verbosity) -> record {
       // Return an arbitrary record here for use in the status command.
       auto result = record{};
-      result["answer"] = integer{42};
+      result["answer"] = uint64_t{42};
       return result;
     },
   };

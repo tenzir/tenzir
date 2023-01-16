@@ -120,21 +120,21 @@ class stringification_inspector;
 namespace vast {
 
 class active_store;
-class address;
-class address_type;
+class ip;
+class ip_type;
 class aggregation_function;
 class bitmap;
 class bool_type;
 class chunk;
 class command;
-class count_type;
+class uint64_type;
 class data;
 class duration_type;
 class enumeration_type;
 class expression;
 class ewah_bitmap;
 class http_request;
-class integer_type;
+class int64_type;
 class legacy_abstract_type;
 class legacy_type;
 class list_type;
@@ -147,7 +147,7 @@ class pattern_type;
 class plugin;
 class plugin_ptr;
 class port;
-class real_type;
+class double_type;
 class record_type;
 class segment;
 class string_type;
@@ -183,7 +183,6 @@ struct legacy_duration_type;
 struct legacy_enumeration_type;
 struct field_extractor;
 struct flow;
-struct integer;
 struct legacy_integer_type;
 struct invocation;
 struct legacy_list_type;
@@ -255,12 +254,6 @@ using duration = caf::timespan;
 /// represent +/- 292 years around the UNIX epoch.
 using time = caf::timestamp;
 
-/// Unsigned integer type.
-using count = uint64_t;
-
-/// Floating point type.
-using real = double;
-
 /// Enumeration type.
 using enumeration = uint8_t;
 
@@ -299,10 +292,10 @@ struct v2;
 
 namespace value_index {
 
-struct AddressIndex;
 struct ArithmeticIndex;
 struct EnumerationIndex;
 struct HashIndex;
+struct IPIndex;
 struct ListIndex;
 struct StringIndex;
 struct SubnetIndex;
@@ -382,7 +375,7 @@ constexpr inline caf::type_id_t first_vast_type_id = 800;
 
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
-  VAST_ADD_TYPE_ID((vast::address))
+  VAST_ADD_TYPE_ID((vast::ip))
   VAST_ADD_TYPE_ID((vast::rest_endpoint))
   VAST_ADD_TYPE_ID((vast::meta_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
@@ -398,7 +391,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
   VAST_ADD_TYPE_ID((vast::http_request))
-  VAST_ADD_TYPE_ID((vast::integer))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::partition_info))
@@ -445,7 +437,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
 
   VAST_ADD_TYPE_ID((std::pair<std::string, vast::data>))
   VAST_ADD_TYPE_ID((std::vector<uint32_t>))
-  VAST_ADD_TYPE_ID((std::vector<vast::count>))
+  VAST_ADD_TYPE_ID((std::vector<uint64_t>))
   VAST_ADD_TYPE_ID((std::vector<std::string>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>))
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>))

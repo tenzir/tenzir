@@ -56,12 +56,12 @@ struct json_printer
       return printers::str.print(out_, "null");
     }
 
-    bool operator()(const integer& x) {
-      return printers::str.print(out_, std::to_string(x.value));
+    bool operator()(const int64_t& x) {
+      return printers::str.print(out_, std::to_string(x));
     }
 
-    bool operator()(const address& x) {
-      static auto p = '"' << make_printer<address>{} << '"';
+    bool operator()(const ip& x) {
+      static auto p = '"' << make_printer<ip>{} << '"';
       return p.print(out_, x);
     }
 
@@ -87,7 +87,7 @@ struct json_printer
         auto str = std::to_string(x);
         if constexpr (std::is_floating_point_v<T>) {
           // Avoid trailing zeros.
-          if (real i; std::modf(x, &i) == 0.0)
+          if (double i; std::modf(x, &i) == 0.0)
             str.erase(str.find('.') + 2, std::string::npos);
           else
             str.erase(str.find_last_not_of('0') + 1, std::string::npos);

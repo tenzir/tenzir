@@ -6,12 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 
-#include "vast/address.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/address.hpp"
+#include "vast/concept/printable/vast/ip.hpp"
+#include "vast/ip.hpp"
 
 #define SUITE address
 #include "vast/test/test.hpp"
@@ -23,27 +23,26 @@ using namespace std::string_literals;
 
 namespace {
 
-std::array<vast::address::byte_type, 32> seed_1
+std::array<vast::ip::byte_type, 32> seed_1
   = {21,  34,  23,  141, 51,  164, 207, 128, 19, 10, 91, 22, 73, 144, 125, 16,
      216, 152, 143, 131, 121, 121, 101, 39,  98, 87, 76, 45, 42, 132, 34,  2};
 
-std::array<vast::address::byte_type, 32> seed_2
+std::array<vast::ip::byte_type, 32> seed_2
   = {0x80, 0x09, 0xAB, 0x3A, 0x60, 0x54, 0x35, 0xBE, 0xA0, 0xC3, 0x85,
      0xBE, 0xA1, 0x84, 0x85, 0xD8, 0xB0, 0xA1, 0x10, 0x3D, 0x65, 0x90,
      0xBD, 0xF4, 0x8C, 0x96, 0x8B, 0xE5, 0xDE, 0x53, 0x83, 0x6E};
 
-std::array<vast::address::byte_type, 32> seed_3
+std::array<vast::ip::byte_type, 32> seed_3
   = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
      16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 
 void check_address_pseudonymization(
   const std::unordered_map<std::string, std::string>& addresses,
-  const std::array<vast::address::byte_type, 32>& seed) {
+  const std::array<vast::ip::byte_type, 32>& seed) {
   for (const auto& [original, pseudonymized] : addresses) {
-    auto original_address = *to<address>(original);
-    auto pseudonymized_address_expectation = *to<address>(pseudonymized);
-    auto pseudonymized_adress_actual
-      = address::pseudonymize(original_address, seed);
+    auto original_address = *to<ip>(original);
+    auto pseudonymized_address_expectation = *to<ip>(pseudonymized);
+    auto pseudonymized_adress_actual = ip::pseudonymize(original_address, seed);
     REQUIRE_EQUAL(pseudonymized_adress_actual,
                   pseudonymized_address_expectation);
   }
@@ -52,13 +51,13 @@ void check_address_pseudonymization(
 } // namespace
 
 TEST(IPv4) {
-  address x;
-  address y;
+  ip x;
+  ip y;
   CHECK(x == y);
   CHECK(!x.is_v4());
   CHECK(x.is_v6());
 
-  auto a = *to<address>("172.16.7.1");
+  auto a = *to<ip>("172.16.7.1");
   CHECK(to_string(a) == "172.16.7.1");
   CHECK(a.is_v4());
   CHECK(!a.is_v6());
@@ -66,7 +65,7 @@ TEST(IPv4) {
   CHECK(!a.is_multicast());
   CHECK(!a.is_broadcast());
 
-  auto localhost = *to<address>("127.0.0.1");
+  auto localhost = *to<ip>("127.0.0.1");
   CHECK(to_string(localhost) == "127.0.0.1");
   CHECK(localhost.is_v4());
   CHECK(localhost.is_loopback());
@@ -77,80 +76,80 @@ TEST(IPv4) {
   CHECK(localhost < a);
 
   // Bitwise operations
-  address anded = a & localhost;
-  address ored = a | localhost;
-  address xored = a ^ localhost;
-  CHECK(anded == *to<address>("44.0.0.1"));
-  CHECK(ored == *to<address>("255.16.7.1"));
-  CHECK(xored == *to<address>("211.16.7.0"));
+  ip anded = a & localhost;
+  ip ored = a | localhost;
+  ip xored = a ^ localhost;
+  CHECK(anded == *to<ip>("44.0.0.1"));
+  CHECK(ored == *to<ip>("255.16.7.1"));
+  CHECK(xored == *to<ip>("211.16.7.0"));
   CHECK(anded.is_v4());
   CHECK(ored.is_v4());
   CHECK(xored.is_v4());
 
-  auto broadcast = *to<address>("255.255.255.255");
+  auto broadcast = *to<ip>("255.255.255.255");
   CHECK(broadcast.is_broadcast());
 
   uint32_t n = 3232235691;
-  auto b = address::v4(n);
+  auto b = ip::v4(n);
   CHECK(to_string(b) == "192.168.0.171");
 
   auto n8n = std::array<uint8_t, 4>{{0xC0, 0xA8, 0x00, 0xAB}};
-  auto b8n = address::v4(std::span{n8n});
+  auto b8n = ip::v4(std::span{n8n});
   CHECK(to_string(b8n) == "192.168.0.171");
 }
 
 TEST(IPv6) {
-  CHECK(address() == *to<address>("::"));
+  CHECK(ip() == *to<ip>("::"));
 
-  auto a = *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
-  auto b = *to<address>("2001:db8:0:0:202:b3ff:fe1e:8329");
-  auto c = *to<address>("2001:db8::202:b3ff:fe1e:8329");
+  auto a = *to<ip>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
+  auto b = *to<ip>("2001:db8:0:0:202:b3ff:fe1e:8329");
+  auto c = *to<ip>("2001:db8::202:b3ff:fe1e:8329");
   CHECK(a.is_v6() && b.is_v6() && c.is_v6());
   CHECK(!(a.is_v4() || b.is_v4() || c.is_v4()));
   CHECK(a == b && b == c);
 
-  auto d = *to<address>("ff01::1");
+  auto d = *to<ip>("ff01::1");
   CHECK(d.is_multicast());
 
-  CHECK((a ^ b) == *to<address>("::"));
+  CHECK((a ^ b) == *to<ip>("::"));
   CHECK((a & b) == a);
   CHECK((a | b) == a);
-  CHECK((a & d) == *to<address>("2001::1"));
-  CHECK((a | d) == *to<address>("ff01:db8::202:b3ff:fe1e:8329"));
-  CHECK((a ^ d) == *to<address>("df00:db8::202:b3ff:fe1e:8328"));
+  CHECK((a & d) == *to<ip>("2001::1"));
+  CHECK((a | d) == *to<ip>("ff01:db8::202:b3ff:fe1e:8329"));
+  CHECK((a ^ d) == *to<ip>("df00:db8::202:b3ff:fe1e:8328"));
 
   uint8_t raw8[16] = {0xdf, 0x00, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
                       0x02, 0x02, 0xb3, 0xff, 0xfe, 0x1e, 0x83, 0x28};
-  auto e = address::v6(std::span{raw8});
+  auto e = ip::v6(std::span{raw8});
   CHECK(e == (a ^ d));
 
   uint32_t raw32[4] = {0xdf000db8, 0x00000000, 0x0202b3ff, 0xfe1e8328};
-  auto f = address::v6(std::span{raw32});
+  auto f = ip::v6(std::span{raw32});
   CHECK(f == (a ^ d));
   CHECK(f == e);
 
   CHECK(!a.mask(129));
   CHECK(a.mask(128)); // No modification
-  CHECK(a == *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329"));
+  CHECK(a == *to<ip>("2001:db8:0000:0000:0202:b3ff:fe1e:8329"));
   CHECK(a.mask(112));
-  CHECK(a == *to<address>("2001:db8::202:b3ff:fe1e:0"));
+  CHECK(a == *to<ip>("2001:db8::202:b3ff:fe1e:0"));
   CHECK(a.mask(100));
-  CHECK(a == *to<address>("2001:db8::202:b3ff:f000:0"));
+  CHECK(a == *to<ip>("2001:db8::202:b3ff:f000:0"));
   CHECK(a.mask(64));
-  CHECK(a == *to<address>("2001:db8::"));
+  CHECK(a == *to<ip>("2001:db8::"));
   CHECK(a.mask(3));
-  CHECK(a == *to<address>("2000::"));
+  CHECK(a == *to<ip>("2000::"));
   CHECK(a.mask(0));
-  CHECK(a == *to<address>("::"));
+  CHECK(a == *to<ip>("::"));
 }
 
 TEST(parseable) {
-  auto p = make_parser<address>{};
+  auto p = make_parser<ip>{};
   MESSAGE("IPv4");
   auto str = "192.168.0.1"s;
   auto f = str.begin();
   auto l = str.end();
-  address a;
+  ip a;
   CHECK(p(f, l, a));
   CHECK(f == l);
   CHECK(a.is_v4());

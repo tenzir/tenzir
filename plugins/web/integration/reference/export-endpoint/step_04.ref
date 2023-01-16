@@ -12,7 +12,7 @@
       },
       {
         "name": "id.orig_h",
-        "type": "addr"
+        "type": "ip"
       },
       {
         "name": "id.orig_p",
@@ -20,7 +20,7 @@
       },
       {
         "name": "id.resp_h",
-        "type": "addr"
+        "type": "ip"
       },
       {
         "name": "id.resp_p",
@@ -40,11 +40,11 @@
       },
       {
         "name": "orig_bytes",
-        "type": "count"
+        "type": "uint64"
       },
       {
         "name": "resp_bytes",
-        "type": "count"
+        "type": "uint64"
       },
       {
         "name": "conn_state",
@@ -56,7 +56,7 @@
       },
       {
         "name": "missed_bytes",
-        "type": "count"
+        "type": "uint64"
       },
       {
         "name": "history",
@@ -64,19 +64,19 @@
       },
       {
         "name": "orig_pkts",
-        "type": "count"
+        "type": "uint64"
       },
       {
         "name": "orig_ip_bytes",
-        "type": "count"
+        "type": "uint64"
       },
       {
         "name": "resp_pkts",
-        "type": "count"
+        "type": "uint64"
       },
       {
         "name": "resp_ip_bytes",
-        "type": "count"
+        "type": "uint64"
       },
       {
         "name": "tunnel_parents",

@@ -19,9 +19,9 @@ cases:
 The analyzer can issue queries for observables with the following types:
 
 - **ip**: match all events that have a corresponding value in any field with the
-  `:addr` type.
+  `:ip` type.
 
-- **subnet**: match all events that have a value in any field with the `:addr` type
+- **subnet**: match all events that have a value in any field with the `:ip` type
   that belongs to that subnet.
 
 - **hash/domain**: match all events that contain the associated strings.

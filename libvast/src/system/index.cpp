@@ -1029,7 +1029,7 @@ index_state::status(status_verbosity v) const {
     size_t memory_usage = 0;
     void
     deliver(caf::typed_response_promise<record>&& promise, record&& content) {
-      content["memory-usage"] = count{memory_usage};
+      content["memory-usage"] = uint64_t{memory_usage};
       promise.deliver(std::move(content));
     }
   };
@@ -1056,9 +1056,9 @@ index_state::status(status_verbosity v) const {
       pending_status.emplace_back(std::move(q));
     }
     rs->content["pending"] = std::move(pending_status);
-    rs->content["num-active-partitions"] = count{active_partitions.size()};
-    rs->content["num-cached-partitions"] = count{inmem_partitions.size()};
-    rs->content["num-unpersisted-partitions"] = count{unpersisted.size()};
+    rs->content["num-active-partitions"] = uint64_t{active_partitions.size()};
+    rs->content["num-cached-partitions"] = uint64_t{inmem_partitions.size()};
+    rs->content["num-unpersisted-partitions"] = uint64_t{unpersisted.size()};
     const auto timeout = defaults::system::status_request_timeout / 5 * 4;
     auto partitions = record{};
     auto partition_status
@@ -1070,7 +1070,7 @@ index_state::status(status_verbosity v) const {
               ps["id"] = to_string(id);
               auto it = part_status.find("memory-usage");
               if (it != part_status.end()) {
-                if (const auto* s = caf::get_if<count>(&it->second))
+                if (const auto* s = caf::get_if<uint64_t>(&it->second))
                   rs->memory_usage += *s;
               }
               if (v >= status_verbosity::debug)

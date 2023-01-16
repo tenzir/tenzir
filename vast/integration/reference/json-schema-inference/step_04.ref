@@ -1,1 +1,1 @@
-type json = record {a: record {b: record {c: int}, d: bool, e: bool}, f: record {g: string}}
+type json = record {a: record {b: record {c: int64}, d: bool, e: bool}, f: record {g: string}}

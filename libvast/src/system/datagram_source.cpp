@@ -180,7 +180,7 @@ caf::behavior datagram_source(
         record src;
         if (self->state.reader)
           src["format"] = self->state.reader->name();
-        src["produced"] = count{self->state.count};
+        src["produced"] = uint64_t{self->state.count};
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);

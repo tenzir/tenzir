@@ -169,7 +169,7 @@ TEST(one - shot integer query result) {
   auto src = detail::spawn_container_source(sys, slices, index);
   run();
   MESSAGE("query half of the values");
-  auto [query_id, hits, scheduled] = query(":int == +1");
+  auto [query_id, hits, scheduled] = query(":int64 == +1");
   CHECK_EQUAL(hits, taste_count);
   CHECK_EQUAL(scheduled, taste_count);
   size_t expected_result = rows(slices) / 2;
@@ -184,7 +184,7 @@ TEST(iterable integer query result) {
   auto src = detail::spawn_container_source(sys, slices, index);
   run();
   MESSAGE("query half of the values");
-  auto [query_id, hits, scheduled] = query(":int == +1");
+  auto [query_id, hits, scheduled] = query(":int64 == +1");
   CHECK_NOT_EQUAL(query_id, uuid::nil());
   CHECK_EQUAL(hits, partitions);
   CHECK_EQUAL(scheduled, taste_count);
@@ -201,7 +201,7 @@ TEST(iterable zeek conn log query result) {
   MESSAGE("issue field type query");
   {
     auto expected_result = 4u;
-    auto [query_id, hits, scheduled] = query(":addr == 192.168.1.104");
+    auto [query_id, hits, scheduled] = query(":ip == 192.168.1.104");
     auto result = receive_result(query_id, hits, scheduled);
     CHECK_EQUAL(result, expected_result);
   }
@@ -221,7 +221,7 @@ TEST(iterable zeek conn log query result) {
   {
     auto expected_result = 2u;
     auto [query_id, hits, scheduled] = query("service == \"dns\" "
-                                             "&& :addr == 192.168.1.103");
+                                             "&& :ip == 192.168.1.103");
     auto result = receive_result(query_id, hits, scheduled);
     CHECK_EQUAL(result, expected_result);
   }

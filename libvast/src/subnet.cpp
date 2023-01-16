@@ -19,15 +19,15 @@ namespace vast {
 subnet::subnet() : length_{0u} {
 }
 
-subnet::subnet(address addr, uint8_t length)
+subnet::subnet(ip addr, uint8_t length)
   : network_{std::move(addr)}, length_{length} {
   if (!initialize()) {
-    network_ = address{};
+    network_ = ip{};
     length_ = 0;
   }
 }
 
-bool subnet::contains(const address& addr) const {
+bool subnet::contains(const ip& addr) const {
   return addr.compare(network_, length_);
 }
 
@@ -35,7 +35,7 @@ bool subnet::contains(const subnet& other) const {
   return length_ <= other.length_ && contains(other.network_);
 }
 
-const address& subnet::network() const {
+const ip& subnet::network() const {
   return network_;
 }
 

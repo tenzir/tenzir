@@ -144,10 +144,10 @@ view<type_to_data_t<Type>>
 value_at([[maybe_unused]] const Type& type,
          const type_to_arrow_array_storage_t<Type>& arr, int64_t row) noexcept {
   VAST_ASSERT(!arr.IsNull(row));
-  if constexpr (detail::is_any_v<Type, bool_type, count_type, real_type>) {
+  if constexpr (detail::is_any_v<Type, bool_type, uint64_type, double_type>) {
     return arr.GetView(row);
-  } else if constexpr (std::is_same_v<Type, integer_type>) {
-    return integer{arr.GetView(row)};
+  } else if constexpr (std::is_same_v<Type, int64_type>) {
+    return int64_t{arr.GetView(row)};
   } else if constexpr (std::is_same_v<Type, duration_type>) {
     VAST_ASSERT(
       caf::get<type_to_arrow_type_t<duration_type>>(*arr.type()).unit()
@@ -163,17 +163,16 @@ value_at([[maybe_unused]] const Type& type,
   } else if constexpr (std::is_same_v<Type, pattern_type>) {
     return view<type_to_data_t<pattern_type>>{
       value_at(string_type{}, arr, row)};
-  } else if constexpr (std::is_same_v<Type, address_type>) {
+  } else if constexpr (std::is_same_v<Type, ip_type>) {
     VAST_ASSERT(arr.byte_width() == 16);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     const auto* bytes = arr.raw_values() + (row * 16);
-    return address::v6(std::span<const uint8_t, 16>{bytes, 16});
+    return ip::v6(std::span<const uint8_t, 16>{bytes, 16});
   } else if constexpr (std::is_same_v<Type, subnet_type>) {
     VAST_ASSERT(arr.num_fields() == 2);
     auto network = value_at(
-      address_type{},
-      *caf::get<type_to_arrow_array_t<address_type>>(*arr.field(0)).storage(),
-      row);
+      ip_type{},
+      *caf::get<type_to_arrow_array_t<ip_type>>(*arr.field(0)).storage(), row);
     auto length
       = static_cast<const arrow::UInt8Array&>(*arr.field(1)).GetView(row);
     return {network, length};

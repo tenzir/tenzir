@@ -176,11 +176,11 @@ using accountant_actor = typed_actor_fwd<
   // Record time metric.
   auto(atom::metrics, std::string, time, metrics_metadata)->caf::result<void>,
   // Record integer metric.
-  auto(atom::metrics, std::string, integer, metrics_metadata)->caf::result<void>,
+  auto(atom::metrics, std::string, int64_t, metrics_metadata)->caf::result<void>,
   // Record count metric.
-  auto(atom::metrics, std::string, count, metrics_metadata)->caf::result<void>,
+  auto(atom::metrics, std::string, uint64_t, metrics_metadata)->caf::result<void>,
   // Record real metric.
-  auto(atom::metrics, std::string, real, metrics_metadata)->caf::result<void>,
+  auto(atom::metrics, std::string, double, metrics_metadata)->caf::result<void>,
   // Record a metrics report.
   auto(atom::metrics, report)->caf::result<void>,
   // Record a performance report.

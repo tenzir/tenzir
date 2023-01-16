@@ -57,7 +57,7 @@ TEST(evaluation - meta extractor - #type) {
 
 TEST(evaluation - type extractor - count) {
   // head -n 108 conn.log | grep '\t350\t' | wc -l
-  auto expr = make_conn_expr(":count == 350");
+  auto expr = make_conn_expr(":uint64 == 350");
   auto ids = evaluate(expr, zeek_conn_log_slice, {});
   CHECK_EQUAL(rank(ids), 18u);
 }

@@ -11,7 +11,7 @@
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/string/char.hpp"
-#include "vast/concept/printable/vast/address.hpp"
+#include "vast/concept/printable/vast/ip.hpp"
 #include "vast/subnet.hpp"
 
 namespace vast {
@@ -21,8 +21,8 @@ struct subnet_printer : printer_base<subnet_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const subnet& sn) const {
-    using namespace printers;
-    return (addr << chr<'/'> << u8)(out, sn.network(), sn.length());
+    using printers::ip, printers::chr, printers::u8;
+    return (ip << chr<'/'> << u8)(out, sn.network(), sn.length());
   }
 };
 

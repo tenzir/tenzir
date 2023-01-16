@@ -12,7 +12,7 @@
 
 #include "vast/arrow_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"

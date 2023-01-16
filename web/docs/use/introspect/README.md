@@ -127,19 +127,19 @@ vast show schemas --yaml
       - timestamp:
           timestamp: time
       - flow_id:
-          type: count
+          type: uint64
           attributes:
             index: hash
-      - pcap_cnt: count
+      - pcap_cnt: uint64
       - vlan:
-          list: count
+          list: uint64
       - in_iface: string
-      - src_ip: addr
+      - src_ip: ip
       - src_port:
-          port: count
-      - dest_ip: addr
+          port: uint64
+      - dest_ip: ip
       - dest_port:
-          port: count
+          port: uint64
       - proto: string
       - event_type: string
       - community_id:
@@ -149,13 +149,13 @@ vast show schemas --yaml
       - flow:
           suricata.component.flow:
             record:
-              - pkts_toserver: count
-              - pkts_toclient: count
-              - bytes_toserver: count
-              - bytes_toclient: count
+              - pkts_toserver: uint64
+              - pkts_toclient: uint64
+              - bytes_toserver: uint64
+              - bytes_toclient: uint64
               - start: time
               - end: time
-              - age: count
+              - age: uint64
               - state: string
               - reason: string
               - alerted: bool

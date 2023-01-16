@@ -19,7 +19,7 @@ namespace vast::plugins::web {
 struct configuration {
   static const record_type& schema() noexcept {
     static auto result = vast::record_type{
-      {"bind", vast::string_type{}},    {"port", vast::integer_type{}},
+      {"bind", vast::string_type{}},    {"port", vast::int64_type{}},
       {"mode", vast::string_type{}},    {"certfile", vast::string_type{}},
       {"keyfile", vast::string_type{}}, {"web-root", vast::string_type{}},
     };

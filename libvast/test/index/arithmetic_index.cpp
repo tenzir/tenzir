@@ -11,8 +11,8 @@
 #include "vast/index/arithmetic_index.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -41,10 +41,10 @@ struct fixture {
 FIXTURE_SCOPE(value_index_tests, fixture)
 
 TEST(real with custom binner) {
-  using index_type = arithmetic_index<real, precision_binner<6, 2>>;
+  using index_type = arithmetic_index<double, precision_binner<6, 2>>;
   caf::settings opts;
   opts["base"] = "uniform64(10)";
-  auto idx = index_type{type{real_type{}}, opts};
+  auto idx = index_type{type{double_type{}}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(-7.8)));
   REQUIRE(idx.append(make_data_view(42.123)));
@@ -65,7 +65,7 @@ TEST(real with custom binner) {
   MESSAGE("serialization");
   caf::byte_buffer buf;
   CHECK(detail::serialize(buf, idx));
-  auto idx2 = index_type{type{real_type{}}, opts};
+  auto idx2 = index_type{type{double_type{}}, opts};
   REQUIRE_EQUAL(detail::legacy_deserialize(buf, idx2), true);
   result = idx2.lookup(relational_operator::not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
@@ -142,16 +142,16 @@ TEST(time) {
 }
 
 TEST(none values - arithmetic) {
-  auto idx = factory<value_index>::make(type{count_type{}}, caf::settings{});
+  auto idx = factory<value_index>::make(type{uint64_type{}}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
-  REQUIRE(idx->append(make_data_view(integer{42})));
-  REQUIRE(idx->append(make_data_view(integer{43})));
+  REQUIRE(idx->append(make_data_view(int64_t{42})));
+  REQUIRE(idx->append(make_data_view(int64_t{43})));
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(caf::none)));
-  auto bm = idx->lookup(relational_operator::less, make_data_view(integer{50}));
+  auto bm = idx->lookup(relational_operator::less, make_data_view(int64_t{50}));
   CHECK_EQUAL(to_string(unbox(bm)), "01100");
-  bm = idx->lookup(relational_operator::greater, make_data_view(integer{42}));
+  bm = idx->lookup(relational_operator::greater, make_data_view(int64_t{42}));
   CHECK_EQUAL(to_string(unbox(bm)), "00100");
 }
 

@@ -16,19 +16,19 @@
           }
         },
         {
-          "id.orig_h": "addr"
+          "id.orig_h": "ip"
         },
         {
           "id.orig_p": {
-            "port": "count"
+            "port": "uint64"
           }
         },
         {
-          "id.resp_h": "addr"
+          "id.resp_h": "ip"
         },
         {
           "id.resp_p": {
-            "port": "count"
+            "port": "uint64"
           }
         },
         {
@@ -41,10 +41,10 @@
           "duration": "duration"
         },
         {
-          "orig_bytes": "count"
+          "orig_bytes": "uint64"
         },
         {
-          "resp_bytes": "count"
+          "resp_bytes": "uint64"
         },
         {
           "conn_state": "string"
@@ -53,22 +53,22 @@
           "local_orig": "bool"
         },
         {
-          "missed_bytes": "count"
+          "missed_bytes": "uint64"
         },
         {
           "history": "string"
         },
         {
-          "orig_pkts": "count"
+          "orig_pkts": "uint64"
         },
         {
-          "orig_ip_bytes": "count"
+          "orig_ip_bytes": "uint64"
         },
         {
-          "resp_pkts": "count"
+          "resp_pkts": "uint64"
         },
         {
-          "resp_ip_bytes": "count"
+          "resp_ip_bytes": "uint64"
         },
         {
           "tunnel_parents": {

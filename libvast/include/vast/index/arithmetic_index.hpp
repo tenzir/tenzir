@@ -47,7 +47,7 @@ public:
       detail::is_any_v<T, time, duration>,
       duration::rep,
       std::conditional_t<
-        detail::is_any_v<T, bool, integer::value_type, count, real>,
+        detail::is_any_v<T, bool, int64_t, uint64_t, double>,
         T,
         std::false_type
       >
@@ -82,7 +82,7 @@ public:
         detail::is_any_v<T, time, duration>,
         decimal_binner<9>, // nanoseconds -> seconds
         std::conditional_t<
-          std::is_same_v<T, real>,
+          std::is_same_v<T, double>,
           precision_binner<10>, // no fractional part
           identity_binner
         >
@@ -136,13 +136,13 @@ private:
       [&](view<bool> x) {
         return append(x);
       },
-      [&](view<integer> x) {
-        return append(x.value);
-      },
-      [&](view<count> x) {
+      [&](view<int64_t> x) {
         return append(x);
       },
-      [&](view<real> x) {
+      [&](view<uint64_t> x) {
+        return append(x);
+      },
+      [&](view<double> x) {
         return append(x);
       },
       [&](view<duration> x) {
@@ -164,13 +164,13 @@ private:
       [&](view<bool> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x);
       },
-      [&](view<integer> x) -> caf::expected<ids> {
-        return bmi_.lookup(op, x.value);
-      },
-      [&](view<count> x) -> caf::expected<ids> {
+      [&](view<int64_t> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x);
       },
-      [&](view<real> x) -> caf::expected<ids> {
+      [&](view<uint64_t> x) -> caf::expected<ids> {
+        return bmi_.lookup(op, x);
+      },
+      [&](view<double> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x);
       },
       [&](view<duration> x) -> caf::expected<ids> {

@@ -28,8 +28,8 @@ struct fixture : fixtures::deterministic_actor_system {
     "l0",
     record_type{
       {"ts", time_type{}},
-      {"addr", address_type{}},
-      {"port", count_type{}},
+      {"addr", ip_type{}},
+      {"port", uint64_type{}},
     },
   };
 
@@ -38,7 +38,7 @@ struct fixture : fixtures::deterministic_actor_system {
     record_type{
       {"s", string_type{}},
       {"ptn", pattern_type{}},
-      {"lis", list_type{count_type{}}},
+      {"lis", list_type{uint64_type{}}},
     },
   };
 
@@ -46,21 +46,21 @@ struct fixture : fixtures::deterministic_actor_system {
     "l2",
     record_type{
       {"b", bool_type{}},
-      {"c", count_type{}},
-      {"r", real_type{}},
-      {"i", integer_type{}},
+      {"c", uint64_type{}},
+      {"r", double_type{}},
+      {"i", int64_type{}},
       {"s", string_type{}},
-      {"a", address_type{}},
+      {"a", ip_type{}},
       {"sn", subnet_type{}},
       {"t", time_type{}},
       {"d", duration_type{}},
       {"d2", duration_type{}},
       {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},
-      {"lc", list_type{count_type{}}},
+      {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
-      {"r2", real_type{}},
-      {"msa", map_type{string_type{}, address_type{}}},
-      {"mcs", map_type{count_type{}, string_type{}}},
+      {"r2", double_type{}},
+      {"msa", map_type{string_type{}, ip_type{}}},
+      {"mcs", map_type{uint64_type{}, string_type{}}},
     },
   };
 
@@ -120,7 +120,7 @@ TEST(csv reader - simple) {
   REQUIRE_EQUAL(slices[0].schema(), l0);
   CHECK(slices[1].at(0, 0)
         == data{unbox(to<vast::time>("2011-08-12T14:59:11.994970Z"))});
-  CHECK(slices[1].at(1, 2) == data{count{1047}});
+  CHECK(slices[1].at(1, 2) == data{uint64_t{1047}});
 }
 
 std::string_view l0_log1 = R"__(ts,addr,port
@@ -136,9 +136,8 @@ std::string_view l0_log1 = R"__(ts,addr,port
 TEST(csv reader - empty fields) {
   auto slices = run(l0_log1, 8, 5);
   REQUIRE_EQUAL(slices[0].schema(), l0);
-  CHECK(slices[1].at(0, 1, address_type{})
-        == data{unbox(to<address>("147.32.84.165"))});
-  CHECK(slices[1].at(1, 2, count_type{}) == std::nullopt);
+  CHECK(slices[1].at(0, 1, ip_type{}) == data{unbox(to<ip>("147.32.84.165"))});
+  CHECK(slices[1].at(1, 2, uint64_type{}) == std::nullopt);
 }
 
 std::string_view l1_log_string = R"__(s
@@ -197,9 +196,9 @@ TEST(csv reader - schema with container) {
   REQUIRE_EQUAL(slices[0].schema(), l1);
   CHECK(slices[0].at(10, 1) == data{pattern{"gladness"}});
   auto xs = vast::list{};
-  xs.emplace_back(data{count{42}});
-  xs.emplace_back(data{count{1337}});
-  CHECK(slices[0].at(19, 2, list_type{count_type{}}) == make_view(xs));
+  xs.emplace_back(data{uint64_t{42}});
+  xs.emplace_back(data{uint64_t{1337}});
+  CHECK(slices[0].at(19, 2, list_type{uint64_type{}}) == make_view(xs));
 }
 
 std::string_view l1_log1 = R"__(s,ptn
@@ -249,12 +248,12 @@ std::string_view l2_log_msa = R"__(msa
 
 TEST(csv reader - map string->address) {
   auto slices = run(l2_log_msa, 1, 1);
-  auto t = map_type{string_type{}, address_type{}};
+  auto t = map_type{string_type{}, ip_type{}};
   auto l2_msa = type{"l2", record_type{{"msa", t}}};
   REQUIRE_EQUAL(slices[0].schema(), l2_msa);
   auto m = vast::map{};
-  m.emplace(data{"foo"}, unbox(to<address>("1.2.3.4")));
-  m.emplace(data{"bar"}, unbox(to<address>("2001:db8::")));
+  m.emplace(data{"foo"}, unbox(to<ip>("1.2.3.4")));
+  m.emplace(data{"bar"}, unbox(to<ip>("2001:db8::")));
   CHECK_EQUAL(materialize(slices[0].at(0, 0)), data{m});
 }
 
@@ -264,7 +263,7 @@ std::string_view l2_log_vp = R"__(lc
 
 TEST(csv reader - list of count) {
   auto slices = run(l2_log_vp, 2, 100);
-  auto t = type{list_type{count_type{}}};
+  auto t = type{list_type{uint64_type{}}};
   auto l2_vp = type{"l2", record_type{{"lc", t}}};
   REQUIRE_EQUAL(slices[0].schema(), l2_vp);
   CHECK((slices[0].at(0, 0, t) == data{list{1u, 2u, 3u, 4u, 5u}}));
@@ -314,32 +313,32 @@ TEST(csv reader - reordered schema) {
   auto l2_sub = type{
     "l2",
     record_type{
-      {"msa", map_type{string_type{}, address_type{}}},
-      {"c", count_type{}},
-      {"r", real_type{}},
-      {"i", integer_type{}},
+      {"msa", map_type{string_type{}, ip_type{}}},
+      {"c", uint64_type{}},
+      {"r", double_type{}},
+      {"i", int64_type{}},
       {"b", bool_type{}},
-      {"a", address_type{}},
+      {"a", ip_type{}},
       {"sn", subnet_type{}},
       {"d", duration_type{}},
       {"e", enumeration_type{{{"FOO"}, {"BAR"}, {"BAZ"}}}},
       {"t", time_type{}},
-      {"lc", list_type{count_type{}}},
+      {"lc", list_type{uint64_type{}}},
       {"lt", list_type{time_type{}}},
-      {"r2", real_type{}},
+      {"r2", double_type{}},
       // FIXME: Parsing maps in csv is broken, see ch12358.
-      // {"mcs", map_type{count_type{}, string_type{}}}
+      // {"mcs", map_type{uint64_type{}, string_type{}}}
     },
   };
   REQUIRE_EQUAL(slices[0].schema(), l2_sub);
   CHECK((slices[0].at(0, 0)
-         == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
-                     {data{"bar"}, unbox(to<address>("2001:db8::"))}}}));
-  CHECK(slices[0].at(0, 1) == data{count{424242}});
-  CHECK(slices[0].at(0, 2) == data{real{4.2}});
-  CHECK(slices[0].at(0, 3) == data{integer{-1337}});
+         == data{map{{data{"foo"}, unbox(to<ip>("1.2.3.4"))},
+                     {data{"bar"}, unbox(to<ip>("2001:db8::"))}}}));
+  CHECK(slices[0].at(0, 1) == data{uint64_t{424242}});
+  CHECK(slices[0].at(0, 2) == data{double{4.2}});
+  CHECK(slices[0].at(0, 3) == data{int64_t{-1337}});
   CHECK(slices[0].at(0, 4) == data{true});
-  CHECK(slices[0].at(0, 5) == data{unbox(to<address>("147.32.84.165"))});
+  CHECK(slices[0].at(0, 5) == data{unbox(to<ip>("147.32.84.165"))});
   CHECK(slices[0].at(0, 6) == data{unbox(to<subnet>("192.168.0.1/24"))});
   CHECK(slices[0].at(0, 7) == data{unbox(to<duration>("42s"))});
   CHECK(slices[0].at(0, 8) == data{enumeration{2}});
@@ -348,7 +347,7 @@ TEST(csv reader - reordered schema) {
   CHECK((slices[0].at(0, 10) == data{list{5555u, 0u}}));
   CHECK(slices[0].at(0, 11)
         == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
-  CHECK(slices[0].at(0, 12) == data{real{3.}});
+  CHECK(slices[0].at(0, 12) == data{double{3.}});
   // FIXME: Parsing maps in csv is broken, see ch12358.
   // auto m = map{};
   // m[1u] = data{"FOO"};

@@ -10,9 +10,9 @@
 
 #include "vast/pipeline.hpp"
 
-#include "vast/address.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
+#include "vast/ip.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/test/test.hpp"
@@ -34,7 +34,7 @@ const auto testdata_schema = vast::type{
   vast::record_type{
     {"uid", vast::string_type{}},
     {"desc", vast::string_type{}},
-    {"index", vast::integer_type{}},
+    {"index", vast::int64_type{}},
   },
 };
 
@@ -43,7 +43,7 @@ const auto testdata_schema2 = vast::type{
   vast::record_type{
     {"uid", vast::string_type{}},
     {"desc", vast::string_type{}},
-    {"index", vast::integer_type{}},
+    {"index", vast::int64_type{}},
     {"note", vast::string_type{}},
   },
 };
@@ -52,17 +52,17 @@ const auto testresult_schema2 = vast::type{
   "testdata",
   vast::record_type{
     {"uid", vast::string_type{}},
-    {"index", vast::integer_type{}},
+    {"index", vast::int64_type{}},
   },
 };
 
 const auto testdata_schema3 = vast::type{
   "testdata",
   vast::record_type{
-    {"orig_addr", vast::address_type{}},
-    {"orig_port", vast::integer_type{}},
-    {"dest_addr", vast::address_type{}},
-    {"non_anon_addr", vast::address_type{}},
+    {"orig_addr", vast::ip_type{}},
+    {"orig_port", vast::int64_type{}},
+    {"dest_addr", vast::ip_type{}},
+    {"non_anon_addr", vast::ip_type{}},
   },
 };
 
@@ -77,7 +77,7 @@ struct pipelines_fixture {
     for (int i = 0; i < 10; ++i) {
       auto uuid = vast::uuid::random();
       auto str = fmt::format("{}", uuid);
-      REQUIRE(builder->add(str, "test-datum", vast::integer{i}));
+      REQUIRE(builder->add(str, "test-datum", int64_t{i}));
     }
     vast::table_slice slice = builder->finish();
     return slice;
@@ -98,8 +98,8 @@ struct pipelines_fixture {
       auto str = fmt::format("{}", uuid);
       auto str2 = fmt::format("test-datum {}", i);
       auto str3 = fmt::format("note {}", i);
-      REQUIRE(builder->add(str, str2, vast::integer{i}, str3));
-      REQUIRE(builder2->add(str, vast::integer{i}));
+      REQUIRE(builder->add(str, str2, int64_t{i}, str3));
+      REQUIRE(builder2->add(str, int64_t{i}));
     }
     return {builder->finish(), builder2->finish()};
   }
@@ -120,12 +120,12 @@ struct pipelines_fixture {
       auto uuid = vast::uuid::random();
       auto str = fmt::format("{}", uuid);
       auto str2 = fmt::format("test-datum {}", i);
-      REQUIRE(builder->add(str, str2, vast::integer{i}));
+      REQUIRE(builder->add(str, str2, int64_t{i}));
       if (i == 2) {
-        REQUIRE(builder2->add(str, str2, vast::integer{i}));
+        REQUIRE(builder2->add(str, str2, int64_t{i}));
       }
       if (i > 5) {
-        REQUIRE(builder3->add(str, str2, vast::integer{i}));
+        REQUIRE(builder3->add(str, str2, int64_t{i}));
       }
     }
     return {builder->finish(), builder2->finish(), builder3->finish()};
@@ -139,10 +139,9 @@ struct pipelines_fixture {
     auto builder
       = std::make_shared<vast::table_slice_builder>(testdata_schema3);
     REQUIRE(builder);
-    REQUIRE(builder->add(*vast::to<vast::address>(orig_ip),
-                         vast::integer{40002},
-                         *vast::to<vast::address>(dest_ip),
-                         *vast::to<vast::address>(non_anon_ip)));
+    REQUIRE(builder->add(*vast::to<vast::ip>(orig_ip), int64_t{40002},
+                         *vast::to<vast::ip>(dest_ip),
+                         *vast::to<vast::ip>(non_anon_ip)));
     return builder->finish();
   }
 
@@ -232,7 +231,7 @@ TEST(replace operator) {
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(materialize(table_slice.at(0, 0)), "xxx");
   CHECK_EQUAL(materialize(table_slice.at(0, 1)),
-              unbox(vast::to<vast::address>("1.2.3.4")));
+              unbox(vast::to<vast::ip>("1.2.3.4")));
 }
 
 TEST(extend operator) {
@@ -257,7 +256,7 @@ TEST(extend operator) {
   const auto table_slice = as_table_slice(replaced);
   CHECK_EQUAL(materialize(table_slice.at(0, 3)), "xxx");
   CHECK_EQUAL(materialize(table_slice.at(0, 4)),
-              unbox(vast::to<vast::address>("1.2.3.4")));
+              unbox(vast::to<vast::ip>("1.2.3.4")));
 }
 
 TEST(where operator) {
@@ -374,12 +373,12 @@ TEST(pseudonymize - seed input too short and odd amount of chars) {
     = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *vast::to<vast::address>("20.251.116.68"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+                *vast::to<vast::ip>("20.251.116.68"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *vast::to<vast::address>("72.57.233.231"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *vast::to<vast::address>("0.0.0.0"));
+                *vast::to<vast::ip>("72.57.233.231"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *vast::to<vast::ip>("0.0.0."
+                                                                       "0"));
 }
 
 TEST(pseudonymize - seed input too long) {
@@ -400,12 +399,12 @@ TEST(pseudonymize - seed input too long) {
     = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *vast::to<vast::address>("117.8.135.123"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+                *vast::to<vast::ip>("117.8.135.123"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *vast::to<vast::address>("55.21.62.136"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *vast::to<vast::address>("0.0.0.0"));
+                *vast::to<vast::ip>("55.21.62.136"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *vast::to<vast::ip>("0.0.0."
+                                                                       "0"));
 }
 
 TEST(pseudonymize - IPv4 address batch pseudonymizing) {
@@ -425,12 +424,12 @@ TEST(pseudonymize - IPv4 address batch pseudonymizing) {
     = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *vast::to<vast::address>("117.8.135.123"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+                *vast::to<vast::ip>("117.8.135.123"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *vast::to<vast::address>("55.21.62.136"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *vast::to<vast::address>("0.0.0.0"));
+                *vast::to<vast::ip>("55.21.62.136"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 3)), *vast::to<vast::ip>("0.0.0."
+                                                                       "0"));
 }
 
 TEST(pseudonymize - IPv6 address batch pseudonymizing) {
@@ -451,17 +450,17 @@ TEST(pseudonymize - IPv6 address batch pseudonymizing) {
     = caf::get<vast::record_type>(schema(pseudonymized));
   const auto table_slice = as_table_slice(pseudonymized);
   REQUIRE_EQUAL(materialize(table_slice.at(0, 0)),
-                *vast::to<vast::address>("1482:f447:75b3:f1f9:"
-                                         "fbdf:622e:34f:"
-                                         "ff7b"));
-  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), vast::integer(40002));
+                *vast::to<vast::ip>("1482:f447:75b3:f1f9:"
+                                    "fbdf:622e:34f:"
+                                    "ff7b"));
+  REQUIRE_EQUAL(materialize(table_slice.at(0, 1)), int64_t(40002));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 2)),
-                *vast::to<vast::address>("f33c:8ca3:ef0f:e019:"
-                                         "e7ff:f1e3:f91f:"
-                                         "f800"));
+                *vast::to<vast::ip>("f33c:8ca3:ef0f:e019:"
+                                    "e7ff:f1e3:f91f:"
+                                    "f800"));
   REQUIRE_EQUAL(materialize(table_slice.at(0, 3)),
-                *vast::to<vast::address>("2a02:db8:85a3::8a2e:"
-                                         "370:7344"));
+                *vast::to<vast::ip>("2a02:db8:85a3::8a2e:"
+                                    "370:7344"));
 }
 
 TEST(pipeline with multiple steps) {
@@ -485,7 +484,7 @@ TEST(pipeline with multiple steps) {
   auto wrong_schema = vast::type{"stub", testdata_schema};
   wrong_schema.assign_metadata(vast::type{"foo", vast::type{}});
   auto builder = std::make_shared<vast::table_slice_builder>(wrong_schema);
-  REQUIRE(builder->add("asdf", "jklo", vast::integer{23}));
+  REQUIRE(builder->add("asdf", "jklo", int64_t{23}));
   auto wrong_slice = builder->finish();
   auto add2_failed = pipeline.add(std::move(wrong_slice));
   REQUIRE(!add2_failed);
@@ -506,7 +505,7 @@ TEST(pipeline with multiple steps) {
     "index");
   CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 0)), "asdf");
   CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 1)), "jklo");
-  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), vast::integer{23});
+  CHECK_EQUAL(materialize((*not_transformed)[0].at(0, 2)), int64_t{23});
 }
 
 TEST(pipeline rename schema) {

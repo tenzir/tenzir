@@ -88,7 +88,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
     },
     [self](atom::status, status_verbosity v) {
       record result;
-      result["memory-usage"] = count{self->state.idx->memusage()};
+      result["memory-usage"] = uint64_t{self->state.idx->memusage()};
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       return result;

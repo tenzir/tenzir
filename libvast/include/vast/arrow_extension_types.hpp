@@ -69,14 +69,19 @@ private:
 
 /// Address representation as an Arrow extension type.
 /// Internal (physical) representation is a 16-byte fixed binary.
-class address_extension_type : public arrow::ExtensionType {
+class ip_extension_type : public arrow::ExtensionType {
 public:
+  // NOTE: The identifier for the extension type of VAST's ip type has not
+  // changed when the type was renamed from address to ip because that would be
+  // a breaking change. This is fixable by registering two separate extension
+  // types with the same functionality but different ids, but that's a lot of
+  // effort for something users don't usually see.
   static constexpr auto vast_id = "vast.address";
 
   static const std::shared_ptr<arrow::DataType> arrow_type;
 
   // Create an arrow type representation of a VAST address type.
-  explicit address_extension_type();
+  explicit ip_extension_type();
 
   /// Unique name to identify the extension type, `vast.address`.
   std::string extension_name() const override;
@@ -90,7 +95,7 @@ public:
   std::shared_ptr<arrow::Array>
   MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
 
-  /// Create an instance of address_extension_type given the actual storage type
+  /// Create an instance of ip_extension_type given the actual storage type
   /// and the serialized representation.
   /// @param storage_type the physical storage type of the extension
   /// @param serialized the serialized form of the extension.
@@ -106,7 +111,7 @@ public:
 /// Subnet representation as an Arrow extension type.
 /// Internal (physical) representation is a struct containing
 /// a `uint8`, the length of the network prefix, and the address,
-/// represented as `address_extension_type`.
+/// represented as `ip_extension_type`.
 class subnet_extension_type : public arrow::ExtensionType {
 public:
   static constexpr auto vast_id = "vast.subnet";
@@ -180,8 +185,8 @@ struct enum_array : arrow::ExtensionArray {
   using arrow::ExtensionArray::ExtensionArray;
 };
 
-struct address_array : arrow::ExtensionArray {
-  using TypeClass = address_extension_type;
+struct ip_array : arrow::ExtensionArray {
+  using TypeClass = ip_extension_type;
   using arrow::ExtensionArray::ExtensionArray;
 };
 
@@ -198,7 +203,7 @@ struct pattern_array : arrow::ExtensionArray {
 /// Register all VAST-defined Arrow extension types in the global registry.
 void register_extension_types();
 
-/// Creates an `address_extension_type` for VAST `address_type.
+/// Creates an `ip_extension_type` for VAST `ip_type.
 /// @returns An arrow extension type for address.
 std::shared_ptr<arrow::ExtensionType> make_arrow_address();
 
@@ -247,8 +252,8 @@ struct sum_type_access<arrow::Array> final {
     arrow::BooleanArray, arrow::Int64Array, arrow::UInt64Array,
     arrow::DoubleArray, arrow::DurationArray, arrow::StringArray,
     arrow::TimestampArray, arrow::MapArray, arrow::ListArray,
-    arrow::StructArray, vast::address_array, vast::pattern_array,
-    vast::enum_array, vast::subnet_array, arrow::FixedSizeBinaryArray>;
+    arrow::StructArray, vast::ip_array, vast::pattern_array, vast::enum_array,
+    vast::subnet_array, arrow::FixedSizeBinaryArray>;
   using data_types = typename tl_map_array_to_type<types>::type;
   using extension_types
     = detail::tl_filter_t<data_types, arrow::is_extension_type>;

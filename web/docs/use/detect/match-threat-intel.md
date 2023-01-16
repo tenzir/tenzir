@@ -475,7 +475,7 @@ types:
   feodo.blocklist:
     record:
       - first_seen_utc: time
-      - dst_ip: addr
+      - dst_ip: ip
       - dst_port: port
       - c2_status:
           enum:

@@ -27,6 +27,12 @@ namespace vast {
 
 namespace {
 
+template <class LhsView, class RhsView>
+inline constexpr auto requires_stdcmp
+  = std::is_integral_v<LhsView> && std::is_integral_v<RhsView>
+    && !std::is_same_v<LhsView, RhsView>
+    && !detail::is_any_v<bool, LhsView, RhsView>;
+
 template <relational_operator Op>
 struct cell_evaluator;
 
@@ -41,7 +47,10 @@ struct cell_evaluator<relational_operator::equal> {
                { lhs == rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs == rhs;
+    if constexpr (requires_stdcmp<LhsView, RhsView>)
+      return std::cmp_equal(lhs, rhs);
+    else
+      return lhs == rhs;
   }
 
   static bool evaluate(std::string_view lhs, view<pattern> rhs) noexcept {
@@ -71,7 +80,10 @@ struct cell_evaluator<relational_operator::less> {
                { lhs < rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs < rhs;
+    if constexpr (requires_stdcmp<LhsView, RhsView>)
+      return std::cmp_less(lhs, rhs);
+    else
+      return lhs < rhs;
   }
 };
 
@@ -86,7 +98,10 @@ struct cell_evaluator<relational_operator::less_equal> {
                { lhs <= rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs <= rhs;
+    if constexpr (requires_stdcmp<LhsView, RhsView>)
+      return std::cmp_less_equal(lhs, rhs);
+    else
+      return lhs <= rhs;
   }
 };
 
@@ -101,7 +116,10 @@ struct cell_evaluator<relational_operator::greater> {
                { lhs > rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs > rhs;
+    if constexpr (requires_stdcmp<LhsView, RhsView>)
+      return std::cmp_greater(lhs, rhs);
+    else
+      return lhs > rhs;
   }
 };
 
@@ -116,7 +134,10 @@ struct cell_evaluator<relational_operator::greater_equal> {
                { lhs >= rhs } -> std::same_as<bool>;
              }
   static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    return lhs >= rhs;
+    if constexpr (requires_stdcmp<LhsView, RhsView>)
+      return std::cmp_greater_equal(lhs, rhs);
+    else
+      return lhs >= rhs;
   }
 };
 
@@ -134,7 +155,7 @@ struct cell_evaluator<relational_operator::in> {
     return rhs.search(lhs);
   }
 
-  static bool evaluate(view<address> lhs, view<subnet> rhs) noexcept {
+  static bool evaluate(view<ip> lhs, view<subnet> rhs) noexcept {
     return rhs.contains(lhs);
   }
 

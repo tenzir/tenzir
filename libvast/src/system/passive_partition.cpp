@@ -22,6 +22,7 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/hash/xxhash.hpp"
 #include "vast/ids.hpp"
+#include "vast/ip_synopsis.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/system/indexer.hpp"

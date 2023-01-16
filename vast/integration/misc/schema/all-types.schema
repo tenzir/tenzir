@@ -7,13 +7,13 @@ type multi_attr_rec = record {
 
 type all_types_i = record {
   b: bool #description=unnamed_extended_bool,
-  i: int,
-  c: count,
-  r: real,
+  i: int64,
+  c: uint64,
+  r: double,
   d: duration,
   t: time,
   s: string,
-  a: addr,
+  a: ip,
   n: subnet,
   e: enum { A, B, C },
   l: list<multi_attr_rec>,
@@ -21,7 +21,7 @@ type all_types_i = record {
     x: baz,
     y: string,
     z: time,
-    lrc: list<record { x1: int, x2: count }>,
+    lrc: list<record { x1: int64, x2: uint64 }>,
   },
   // active indexer instantiated (and failing) despite #skip
   p: pattern #skip,

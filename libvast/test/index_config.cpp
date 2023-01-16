@@ -25,7 +25,7 @@ auto example_index_config = R"__(
 rules:
   - targets:
       - suricata.dns.dns.rrname
-      - :address
+      - :addr
     fp-rate: 0.005
   - targets:
       - zeek.conn.id.orig_h
@@ -35,8 +35,8 @@ rules:
 const vast::type schema{
   "y",
   vast::record_type{
-    {"x", vast::count_type{}},
-    {"y", vast::type{"foo", vast::count_type{}}},
+    {"x", vast::uint64_type{}},
+    {"y", vast::type{"foo", vast::uint64_type{}}},
   },
 };
 
@@ -87,7 +87,7 @@ TEST(should_create_partition_index will will use create_partition_index from
   qualified_record_field in_x{schema, {0u}};
   qualified_record_field in_y{schema, {1u}};
   auto rules_x = std::vector{
-    index_config::rule{.targets = {":count"}, .create_partition_index = false},
+    index_config::rule{.targets = {":uint64"}, .create_partition_index = false},
   };
   auto rules_y = std::vector{
     index_config::rule{.targets = {":foo"}, .create_partition_index = false},

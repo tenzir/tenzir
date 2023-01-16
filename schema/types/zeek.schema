@@ -1,7 +1,7 @@
 type zeek.conn_id = record{
-  orig_h: addr,
+  orig_h: ip,
   orig_p: port,
-  resp_h: addr,
+  resp_h: ip,
   resp_p: port
 }
 
@@ -11,9 +11,9 @@ type zeek.capture_loss = record{
   ts: timestamp,
   ts_delta: duration,
   peer: string,
-  gaps: count,
-  acks: count,
-  percent_lost: real
+  gaps: uint64,
+  acks: uint64,
+  percent_lost: double
 }
 
 type zeek.conn = record{
@@ -25,17 +25,17 @@ type zeek.conn = record{
   proto: string,
   service: string,
   duration: duration,
-  orig_bytes: count,
-  resp_bytes: count,
+  orig_bytes: uint64,
+  resp_bytes: uint64,
   conn_state: string,
   local_orig: bool,
   local_resp: bool,
-  missed_bytes: count,
+  missed_bytes: uint64,
   history: string,
-  orig_pkts: count,
-  orig_ip_bytes: count,
-  resp_pkts: count,
-  resp_ip_bytes: count,
+  orig_pkts: uint64,
+  orig_ip_bytes: uint64,
+  resp_pkts: uint64,
+  resp_ip_bytes: uint64,
   tunnel_parents: list<string>,
   community_id: string
 }
@@ -57,20 +57,20 @@ type zeek.dhcp = record{
   _write_ts: time,
   ts: timestamp,
   uids: list<string>,
-  client_addr: addr,
-  server_addr: addr,
+  client_addr: ip,
+  server_addr: ip,
   mac: string,
   host_name: string,
   client_fqdn: string,
   domain: string,
-  requested_addr: addr,
-  assigned_addr: addr,
+  requested_addr: ip,
+  assigned_addr: ip,
   lease_time: duration,
   client_message: string,
   server_message: string,
   msg_types: list<string>,
   duration: duration,
-  trans_id: count
+  trans_id: uint64
 }
 
 type zeek.dnp3 = record{
@@ -80,7 +80,7 @@ type zeek.dnp3 = record{
   uid: string #index=hash,
   id: zeek.conn_id,
   fc_reply: string,
-  iin: count
+  iin: uint64
 }
 
 type zeek.dns = record{
@@ -90,20 +90,20 @@ type zeek.dns = record{
   uid: string #index=hash,
   id: zeek.conn_id,
   proto: string,
-  trans_id: count,
+  trans_id: uint64,
   rtt: duration,
   query: string,
-  qclass: count,
+  qclass: uint64,
   qclass_name: string,
-  qtype: count,
+  qtype: uint64,
   qtype_name: string,
-  rcode: count,
+  rcode: uint64,
   rcode_name: string,
   AA: bool,
   TC: bool,
   RD: bool,
   RA: bool,
-  Z: count,
+  Z: uint64,
   answers: list<string>,
   TTLs: list<duration>,
   rejected: bool
@@ -125,21 +125,21 @@ type zeek.files = record{
   _write_ts: time,
   ts: timestamp,
   fuid: string,
-  tx_hosts: list<addr>,
-  rx_hosts: list<addr>,
+  tx_hosts: list<ip>,
+  rx_hosts: list<ip>,
   conn_uids: list<string>,
   source: string,
-  depth: count,
+  depth: uint64,
   analyzers: list<string>,
   mime_type: string,
   filename: string,
   duration: duration,
   local_orig: bool,
   is_orig: bool,
-  seen_bytes: count,
-  total_bytes: count,
-  missing_bytes: count,
-  overflow_bytes: count,
+  seen_bytes: uint64,
+  total_bytes: uint64,
+  missing_bytes: uint64,
+  overflow_bytes: uint64,
   timedout: bool,
   parent_fuid: string,
   md5: string,
@@ -147,7 +147,7 @@ type zeek.files = record{
   sha256: string,
   extracted: string,
   extracted_cutoff: bool,
-  extracted_size: count
+  extracted_size: uint64
 }
 
 type zeek.ftp = record{
@@ -161,13 +161,13 @@ type zeek.ftp = record{
   command: string,
   arg: string,
   mime_type: string,
-  file_size: count,
-  reply_code: count,
+  file_size: uint64,
+  reply_code: uint64,
   reply_msg: string,
   data_channel: record{
     passive: bool,
-    orig_h: addr,
-    resp_h: addr,
+    orig_h: ip,
+    resp_h: ip,
     resp_p: port
   },
   fuid: string
@@ -179,18 +179,18 @@ type zeek.http = record{
   ts: timestamp,
   uid: string #index=hash,
   id: zeek.conn_id,
-  trans_depth: count,
+  trans_depth: uint64,
   method: string,
   host: string,
   uri: string,
   referrer: string,
   version: string,
   user_agent: string,
-  request_body_len: count,
-  response_body_len: count,
-  status_code: count,
+  request_body_len: uint64,
+  response_body_len: uint64,
+  status_code: uint64,
   status_msg: string,
-  info_code: count,
+  info_code: uint64,
   info_msg: string,
   tags: list<string>,
   username: string,
@@ -231,7 +231,7 @@ type zeek.irc = record{
   value: string,
   addl: string,
   dcc_file_name: string,
-  dcc_file_size: count,
+  dcc_file_size: uint64,
   dcc_mime_type: string,
   fuid: string
 }
@@ -255,10 +255,10 @@ type zeek.notice = record{
   note: string,
   msg: string,
   sub: string,
-  src: addr,
-  dst: addr,
+  src: ip,
+  dst: ip,
   p: port,
-  n: count,
+  n: uint64,
   peer_descr: string,
   actions: list<string>,
   suppress_for: duration,
@@ -267,8 +267,8 @@ type zeek.notice = record{
     country_code: string,
     region: string,
     city: string,
-    latitude: real,
-    longitude: real
+    latitude: double,
+    longitude: double
   }
 }
 
@@ -343,11 +343,11 @@ type zeek.rdp = record{
   client_build: string,
   client_name: string,
   client_dig_product_id: string,
-  desktop_width: count,
-  desktop_height: count,
+  desktop_width: uint64,
+  desktop_height: uint64,
   requested_color_depth: string,
   cert_type: string,
-  cert_count: count,
+  cert_count: uint64,
   cert_permanent: bool,
   encryption_level: string,
   encryption_method: string
@@ -368,7 +368,7 @@ type zeek.sip = record{
   ts: timestamp,
   uid: string #index=hash,
   id: zeek.conn_id,
-  trans_depth: count,
+  trans_depth: uint64,
   method: string,
   uri: string,
   date: string,
@@ -383,11 +383,11 @@ type zeek.sip = record{
   request_path: list<string>,
   response_path: list<string>,
   user_agent: string,
-  status_code: count,
+  status_code: uint64,
   status_msg: string,
   warning: string,
-  request_body_len: count,
-  response_body_len: count,
+  request_body_len: uint64,
+  response_body_len: uint64,
   content_type: string
 }
 
@@ -399,7 +399,7 @@ type zeek.smb = record{
   id: zeek.conn_id,
   action: string,
   name: string,
-  size: real,
+  size: double,
   path: string,
   service: string,
   share_type: string
@@ -411,7 +411,7 @@ type zeek.smtp = record{
   ts: timestamp,
   uid: string #index=hash,
   id: zeek.conn_id,
-  trans_depth: count,
+  trans_depth: uint64,
   helo: string,
   mailfrom: string,
   rcptto: list<string>,
@@ -423,11 +423,11 @@ type zeek.smtp = record{
   msg_id: string,
   in_reply_to: string,
   subject: string,
-  x_originating_ip: addr,
+  x_originating_ip: ip,
   first_received: string,
   second_received: string,
   last_reply: string,
-  path: list<addr>,
+  path: list<ip>,
   user_agent: string,
   tls: bool,
   fuids: list<string>,
@@ -443,10 +443,10 @@ type zeek.snmp = record{
   duration: duration,
   version: string,
   community: string,
-  get_requests: count,
-  get_bulk_requests: count,
-  get_responses: count,
-  set_requests: count,
+  get_requests: uint64,
+  get_bulk_requests: uint64,
+  get_responses: uint64,
+  set_requests: uint64,
   display_string: string,
   up_since: time
 }
@@ -455,12 +455,12 @@ type zeek.software = record{
   _path: string,
   _write_ts: time,
   ts: time,
-  host: addr,
+  host: ip,
   software_type: string,
   name: string,
   version: record{
-    major: count,
-    minor: real
+    major: uint64,
+    minor: double
   },
   unparsed_version: string
 }
@@ -471,9 +471,9 @@ type zeek.ssh = record{
   ts: timestamp,
   uid: string #index=hash,
   id: zeek.conn_id,
-  version: count,
+  version: uint64,
   auth_success: bool,
-  auth_attempts: count,
+  auth_attempts: uint64,
   direction: string,
   client: string,
   server: string,
@@ -514,30 +514,30 @@ type zeek.stats = record{
   _write_ts: time,
   ts: timestamp,
   peer: string,
-  mem: count,
-  pkts_proc: count,
-  bytes_recv: count,
-  pkts_dropped: count,
-  pkts_link: count,
+  mem: uint64,
+  pkts_proc: uint64,
+  bytes_recv: uint64,
+  pkts_dropped: uint64,
+  pkts_link: uint64,
   pkt_lag: duration,
-  events_proc: count,
-  events_queued: count,
-  active_tcp_conns: count,
-  active_udp_conns: count,
-  active_icmp_conns: count,
-  tcp_conns: count,
-  udp_conns: count,
-  icmp_conns: count,
-  timers: count,
-  active_timers: count,
-  files: count,
-  active_files: count,
-  dns_requests: count,
-  active_dns_requests: count,
-  reassem_tcp_size: count,
-  reassem_file_size: count,
-  reassem_frag_size: count,
-  reassem_unknown_size: count
+  events_proc: uint64,
+  events_queued: uint64,
+  active_tcp_conns: uint64,
+  active_udp_conns: uint64,
+  active_icmp_conns: uint64,
+  tcp_conns: uint64,
+  udp_conns: uint64,
+  icmp_conns: uint64,
+  timers: uint64,
+  active_timers: uint64,
+  files: uint64,
+  active_files: uint64,
+  dns_requests: uint64,
+  active_dns_requests: uint64,
+  reassem_tcp_size: uint64,
+  reassem_file_size: uint64,
+  reassem_frag_size: uint64,
+  reassem_unknown_size: uint64
 }
 
 type zeek.tunnel = record{
@@ -568,7 +568,7 @@ type zeek.x509 = record{
   ts: timestamp,
   id: string,
   certificate: record{
-    version: count,
+    version: uint64,
     serial: string,
     subject: string,
     issuer: string,
@@ -577,7 +577,7 @@ type zeek.x509 = record{
     key_alg: string,
     sig_alg: string,
     key_type: string,
-    key_length: count,
+    key_length: uint64,
     exponent: string,
     curve: string
   },
@@ -585,10 +585,10 @@ type zeek.x509 = record{
     dns: list<string>,
     uri: list<string>,
     email: list<string>,
-    ip: list<addr>
+    ip: list<ip>
   },
   basic_constraints: record{
     ca: bool,
-    path_len: count
+    path_len: uint64
   }
 }

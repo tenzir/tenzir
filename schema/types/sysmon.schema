@@ -11,7 +11,7 @@ type sysmon.ProcessCreation = record {
     // Process Guid of the process that got spawned/created (child)
     ProcessGuid: string,
     // Process ID used by the os to identify the created process (child)
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process being spawned/created. Considered also the child or source process
     Image: string,
     // Version of the image associated with the main process (child)
@@ -33,9 +33,9 @@ type sysmon.ProcessCreation = record {
     // Logon GUID of the user who created the new process. Value that can help you correlate this event with others that contain the same Logon GUID (Sysmon Events)
     LogonGuid: string,
     // Login ID of the user who created the new process. Value that can help you correlate this event with others that contain the same Logon ID
-    LogonId: count,
+    LogonId: uint64,
     // ID of the session the user belongs to
-    TerminalSessionId: count,
+    TerminalSessionId: uint64,
     // Integrity label assigned to a process
     IntegrityLevel: string,
     // Hashes captured by sysmon driver
@@ -43,7 +43,7 @@ type sysmon.ProcessCreation = record {
     // ProcessGUID of the process that spawned/created the main process (child)
     ParentProcessGuid: string,
     // Process ID of the process that spawned/created the main process (child)
-    ParentProcessId: count,
+    ParentProcessId: uint64,
     // File path that spawned/created the main process
     ParentImage: string,
     // Arguments which were passed to the executable associated with the parent process
@@ -67,15 +67,15 @@ type sysmon.ProcessAccess = record {
     // Process Guid of the source process that opened another process. It is derived from a truncated part of the machine GUID, the process start-time and the process token ID.
     SourceProcessGuid: string,
     // Process ID used by the os to identify the source process that opened another process. Derived partially from the EPROCESS kernel structure
-    SourceProcessId: count,
+    SourceProcessId: uint64,
     // ID of the specific thread inside of the source process that opened another process
-    SourceThreadId: count,
+    SourceThreadId: uint64,
     // File path of the source process that created a thread in another process
     SourceImage: string,
     // Process Guid of the target process
     TargetProcessGuid: string,
     // Process ID used by the os to identify the target process
-    TargetProcessId: count,
+    TargetProcessId: uint64,
     // File path of the target process
     TargetImage: string,
     // The access flags (bitmask) associated with the process rights requested for the target process
@@ -96,7 +96,7 @@ type sysmon.FileCreate = record {
     // Process Guid of the process that created the file
     ProcessGuid: string,
     // Process ID used by the os to identify the process that created the file (child)
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that created the file
     Image: string,
     // Name of the file
@@ -118,7 +118,7 @@ type sysmon.RegistryEventObjectCreateAndDelete = record {
     // Process Guid of the process that created or deleted a registry key
     ProcessGuid: string,
     // Process ID used by the os to identify the process that created or deleted a registry key
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that created or deleted a registry key
     Image: string,
     // complete path of the registry key
@@ -137,7 +137,7 @@ type sysmon.RegistryEventValueSet = record {
     // Process Guid of the process that modified a registry value
     ProcessGuid: string,
     // Process ID used by the os to identify the process that that modified a registry value
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that that modified a registry value
     Image: string,
     // complete path of the registry key
@@ -158,7 +158,7 @@ type sysmon.RegistryEventKeyAndValueRename = record {
     // Process Guid of the process that renamed a registry value and key
     ProcessGuid: string,
     // Process ID used by the os to identify the process that renamed a registry value and key
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that renamed a registry value and key
     Image: string,
     // complete path of the registry key
@@ -181,7 +181,7 @@ type sysmon.FileCreateStreamHash = record {
     // Process Guid of the process that created the named file stream
     ProcessGuid: string,
     // Process ID used by the os to identify the process that created the named file stream
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that created the named file stream
     Image: string,
     // Name of the file
@@ -214,7 +214,7 @@ type sysmon.PipeCreated = record {
     // Process Guid of the process that created the pipe
     ProcessGuid: string,
     // Process ID used by the os to identify the process that created the pipe
-    ProcessId: count,
+    ProcessId: uint64,
     // Name of the pipe created
     PipeName: string,
     // File path of the process that created the pipe
@@ -233,7 +233,7 @@ type sysmon.PipeConnected = record {
     // Process Guid of the process that connected the pipe
     ProcessGuid: string,
     // Process ID used by the os to identify the process that connected the pipe
-    ProcessId: count,
+    ProcessId: uint64,
     // Name of the pipe connecged
     PipeName: string,
     // File path of the process that connected the pipe
@@ -276,7 +276,7 @@ type sysmon.ProcessChangedFileCreationTime = record {
     // Process Guid of the process that changed the file creation time
     ProcessGuid: string,
     // Process ID used by the os to identify the process changing the file creation time
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that changed the file creation time
     Image: string,
     // full path name of the file
@@ -337,7 +337,7 @@ type sysmon.DNSQuery = record {
     // Process Guid of the process that executed the DNS query
     ProcessGuid: string,
     // Process id of the process that executed the DNS query
-    ProcessId: count,
+    ProcessId: uint64,
     // DNS query name
     QueryName: string,
     // DNS query status
@@ -357,7 +357,7 @@ type sysmon.FileDelete = record {
     // Process Guid of the process that deleted the file
     ProcessGuid: string,
     // Process ID used by the os to identify the process that deleted the file
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that deleted the file
     Image: string,
     // Name of the account who deleted the file.
@@ -384,7 +384,7 @@ type sysmon.NetworkConnection = record {
     // Process Guid of the process that made the network connection
     ProcessGuid: string,
     // Process ID used by the os to identify the process that made the network connection
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that made the network connection
     Image: string,
     // Name of the account who made the network connection. It usually containes domain name and user name
@@ -396,7 +396,7 @@ type sysmon.NetworkConnection = record {
     // is the source ip an Ipv6
     SourceIsIpv6: bool,
     // source ip address that made the network connection
-    SourceIp: addr,
+    SourceIp: ip,
     // name of the host that made the network connection
     SourceHostname: string,
     // source port number
@@ -406,7 +406,7 @@ type sysmon.NetworkConnection = record {
     // is the destination ip an Ipv6
     DestinationIsIpv6: bool,
     // ip address destination
-    DestinationIp: addr,
+    DestinationIp: ip,
     // name of the host that received the network connection
     DestinationHostname: string,
     // destination port number
@@ -438,7 +438,7 @@ type sysmon.ProcessTerminated = record {
     // Process Guid of the process that terminated
     ProcessGuid: string,
     // Process ID used by the os to identify the process that terminated
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that terminated
     Image: string,
 }
@@ -479,7 +479,7 @@ type sysmon.ImageLoaded = record {
     // Process Guid of the process that loaded the image
     ProcessGuid: string,
     // Process ID used by the os to identify the process that loaded the image
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that loaded the image
     Image: string,
     // full path of the image loaded
@@ -519,17 +519,17 @@ type sysmon.CreateRemoteThread = record {
     // Process Guid of the source process that created a thread in another process
     SourceProcessGuid: string,
     // Process ID used by the os to identify the source process that created a thread in another process
-    SourceProcessId: count,
+    SourceProcessId: uint64,
     // File path of the source process that created a thread in another process
     SourceImage: string,
     // Process Guid of the target process
     TargetProcessGuid: string,
     // Process ID used by the os to identify the target process
-    TargetProcessId: count,
+    TargetProcessId: uint64,
     // File path of the target process
     TargetImage: string,
     // Id of the new thread created in the target process
-    NewThreadId: count,
+    NewThreadId: uint64,
     // New thread start address
     StartAddress: string,
     // Start module determined from thread start address mapping to PEB loaded module list
@@ -551,7 +551,7 @@ type sysmon.RawAccessRead = record {
     // Process Guid of the process that conducted reading operations from the drive
     ProcessGuid: string,
     // Process ID used by the os to identify the process that conducted reading operations from the drive
-    ProcessId: count,
+    ProcessId: uint64,
     // File path of the process that conducted reading operations from the drive
     Image: string,
     // Target device
@@ -592,14 +592,14 @@ type sysmon.RawAccessRead = record {
 type winlogbeat.meta_data = record {
   instance_id: string #index=hash,
   hostname: string,
-  event_id: count,
+  event_id: uint64,
 }
 
 type winlogbeat.network_meta_data = record {
   instance_id: string #index=hash,
   hostname: string,
   community_id: string #index=hash,
-  event_id: count,
+  event_id: uint64,
 }
 
 type winlogbeat.ProcessCreation = record {

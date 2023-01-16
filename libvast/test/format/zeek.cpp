@@ -249,10 +249,10 @@ TEST(zeek data parsing) {
   data d;
   CHECK(zeek_parse(type{bool_type{}}, "T", d));
   CHECK(d == true);
-  CHECK(zeek_parse(type{integer_type{}}, "-49329", d));
-  CHECK(d == integer{-49329});
-  CHECK(zeek_parse(type{count_type{}}, "49329"s, d));
-  CHECK(d == count{49329});
+  CHECK(zeek_parse(type{int64_type{}}, "-49329", d));
+  CHECK(d == int64_t{-49329});
+  CHECK(zeek_parse(type{uint64_type{}}, "49329"s, d));
+  CHECK(d == uint64_t{49329});
   CHECK(zeek_parse(type{time_type{}}, "1258594163.566694", d));
   auto ts = duration_cast<vast::duration>(double_seconds{1258594163.566694});
   CHECK(d == vast::time{ts});
@@ -260,12 +260,12 @@ TEST(zeek data parsing) {
   CHECK(d == ts);
   CHECK(zeek_parse(type{string_type{}}, "\\x2afoo*"s, d));
   CHECK(d == "*foo*");
-  CHECK(zeek_parse(type{address_type{}}, "192.168.1.103", d));
-  CHECK(d == *to<address>("192.168.1.103"));
+  CHECK(zeek_parse(type{ip_type{}}, "192.168.1.103", d));
+  CHECK(d == *to<ip>("192.168.1.103"));
   CHECK(zeek_parse(type{subnet_type{}}, "10.0.0.0/24", d));
   CHECK(d == *to<subnet>("10.0.0.0/24"));
-  CHECK(zeek_parse(type{list_type{integer_type{}}}, "49329", d));
-  CHECK(d == list{integer{49329}});
+  CHECK(zeek_parse(type{list_type{int64_type{}}}, "49329", d));
+  CHECK(d == list{int64_t{49329}});
   CHECK(zeek_parse(type{list_type{string_type{}}}, "49329,42", d));
   CHECK((d == list{"49329", "42"}));
 }
@@ -304,9 +304,9 @@ TEST(zeek reader - custom module) {
     type zeek.conn = record{
       ts: timestamp #test,
       uid: string #index=string, // clashing user attribute
-      id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
+      id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
       proto: string #foo=bar, // user attribute
-      service: count, // type mismatch
+      service: uint64, // type mismatch
       community_id: string // not present in the data
     }
   )__";
@@ -327,21 +327,21 @@ TEST(zeek reader - custom module) {
     type zeek.conn = record{
       ts: timestamp #test,
       uid: string #index=string,
-      id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
+      id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
       proto: string #foo=bar,
       service: string,
       duration: duration,
-      orig_bytes: count,
-      resp_bytes: count,
+      orig_bytes: uint64,
+      resp_bytes: uint64,
       conn_state: string,
       local_orig: bool,
       //local_resp: bool,
-      missed_bytes: count,
+      missed_bytes: uint64,
       history: string,
-      orig_pkts: count,
-      orig_ip_bytes: count,
-      resp_pkts: count,
-      resp_ip_bytes: count,
+      orig_pkts: uint64,
+      orig_ip_bytes: uint64,
+      resp_pkts: uint64,
+      resp_ip_bytes: uint64,
       tunnel_parents: list<string>,
     })__";
   auto expected = unbox(to<module>(ref_module));

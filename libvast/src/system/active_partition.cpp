@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/address_synopsis.hpp"
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -31,6 +30,7 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/hash/xxhash.hpp"
 #include "vast/ids.hpp"
+#include "vast/ip_synopsis.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -641,8 +641,8 @@ active_partition_actor::behavior_type active_partition(
       struct extra_state {
         size_t memory_usage = 0;
         void deliver(caf::typed_response_promise<record>&& promise,
-                     record&& content) const {
-          content["memory-usage"] = count{memory_usage};
+                     record&& content) {
+          content["memory-usage"] = uint64_t{memory_usage};
           promise.deliver(std::move(content));
         }
       };
@@ -664,7 +664,7 @@ active_partition_actor::behavior_type active_partition(
             ps["type"] = fmt::to_string(field.type());
             auto it = response.find("memory-usage");
             if (it != response.end()) {
-              if (const auto* s = caf::get_if<count>(&it->second))
+              if (const auto* s = caf::get_if<uint64_t>(&it->second))
                 rs->memory_usage += *s;
             }
             if (v >= status_verbosity::debug)

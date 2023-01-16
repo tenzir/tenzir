@@ -110,8 +110,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   vast::type schema_{
     "y",
     vast::record_type{
-      {"x", vast::count_type{}},
-      {"z", vast::real_type{}},
+      {"x", vast::uint64_type{}},
+      {"x", vast::double_type{}},
     },
   };
 
@@ -184,8 +184,8 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(passive_state.id, partition_id);
   REQUIRE(passive_state.combined_schema_);
   CHECK_EQUAL(*passive_state.combined_schema_,
-              (vast::record_type{{"y.x", vast::count_type{}},
-                                 {"y.z", vast::real_type{}}}));
+              (vast::record_type{{"y.x", vast::uint64_type{}},
+                                 {"y.z", vast::double_type{}}}));
   vast::ids expected_ids;
   expected_ids.append_bit(true);
   CHECK_EQUAL(passive_state.type_ids_.at(std::string{schema_.name()}),
@@ -201,7 +201,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   auto col2_idx
     = vast::system::unpack_value_index(*indexes->Get(1)->index(), container);
   REQUIRE(col2_idx);
-  CHECK_EQUAL(vast::real_type{}, col2_idx->type());
+  CHECK_EQUAL(vast::double_type{}, col2_idx->type());
   auto result = col2_idx->lookup(vast::relational_operator::less,
                                  vast::make_data_view(1.0));
   CHECK_EQUAL(unbox(result), make_ids({0, 0}));

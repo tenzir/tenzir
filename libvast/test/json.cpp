@@ -28,8 +28,8 @@ TEST(from_json - basic) {
   auto json = unbox(from_json(
     R"_({"a": 4.2, "b": -2, "c": 3, "d": null, "e": true, "f": "foo"})_"));
   CHECK_EQUAL(json, (record{{{"a", 4.2},
-                             {"b", integer{-2}},
-                             {"c", integer{3}},
+                             {"b", int64_t{-2}},
+                             {"c", int64_t{3}},
                              {"d", data{}},
                              {"e", data{true}},
                              {"f", data{"foo"}}}}));

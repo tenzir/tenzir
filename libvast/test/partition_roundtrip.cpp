@@ -134,7 +134,7 @@ TEST(empty partition roundtrip) {
   auto schema = vast::type{
     "y",
     vast::record_type{
-      {"x", vast::count_type{}},
+      {"x", vast::uint64_type{}},
     },
   };
   auto qf = vast::qualified_record_field{schema, vast::offset{0}};
@@ -236,7 +236,7 @@ TEST(full partition roundtrip) {
   auto schema = vast::type{
     "y",
     vast::record_type{
-      {"x", vast::count_type{}},
+      {"x", vast::uint64_type{}},
     },
   };
   auto builder = std::make_shared<vast::table_slice_builder>(schema);

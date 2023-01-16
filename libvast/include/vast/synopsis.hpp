@@ -74,7 +74,7 @@ public:
 
   /// Returns a new synopsis with the same data but consuming less memory,
   /// or `nullptr` if that is not possible.
-  /// This currently only makes sense for the `buffered_address_synopsis`.
+  /// This currently only makes sense for the `buffered_ip_synopsis`.
   [[nodiscard]] virtual synopsis_ptr shrink() const;
 
   /// Tests whether two objects are equal.

@@ -34,7 +34,7 @@ caf::error add(const message_view& msg, table_slice_builder& builder) {
   };
   // Append first 7 fields.
   if (auto err
-      = caf::error::eval(f(count{msg.cef_version}), f(msg.device_vendor),
+      = caf::error::eval(f(uint64_t{msg.cef_version}), f(msg.device_vendor),
                          f(msg.device_product), f(msg.device_version),
                          f(msg.signature_id), f(msg.name), f(msg.severity)))
     return err;
