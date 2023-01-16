@@ -38,9 +38,12 @@
   },
   "type": "module",
   "dependencies": {
+    "@auth/core": "^0.2.5",
+    "@auth/sveltekit": "^0.1.12",
     "@bytemd/plugin-gfm": "^1.17.4",
     "@bytemd/plugin-highlight": "^1.17.4",
     "@bytemd/plugin-mermaid": "^1.17.4",
+    "@sveltejs/adapter-node": "^1.1.0",
     "@sveltestack/svelte-query": "^1.6.0",
     "@types/file-saver": "^2.0.5",
     "bytemd": "^1.17.4",
