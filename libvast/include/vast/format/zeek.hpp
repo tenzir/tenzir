@@ -98,13 +98,6 @@ struct zeek_parser {
     return parse(p);
   }
 
-  bool operator()(const pattern_type&) const {
-    static auto p = +parsers::any->*[](std::string x) {
-      return detail::byte_unescape(x);
-    };
-    return parse(p);
-  }
-
   bool operator()(const ip_type&) const {
     static auto p = parsers::ip->*[](ip x) {
       return x;
@@ -174,17 +167,6 @@ struct zeek_parser_factory {
   }
 
   result_type operator()(const string_type&) const {
-    if (set_separator_.empty())
-      return +parsers::any->*[](std::string x) {
-        return detail::byte_unescape(x);
-      };
-    else
-      return +(parsers::any - set_separator_)->*[](std::string x) {
-        return detail::byte_unescape(x);
-      };
-  }
-
-  result_type operator()(const pattern_type&) const {
     if (set_separator_.empty())
       return +parsers::any->*[](std::string x) {
         return detail::byte_unescape(x);

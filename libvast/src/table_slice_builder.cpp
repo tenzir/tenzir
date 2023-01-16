@@ -341,14 +341,6 @@ append_builder(const string_type&,
 }
 
 arrow::Status
-append_builder(const pattern_type&,
-               type_to_arrow_builder_t<pattern_type>& builder,
-               const view<type_to_data_t<pattern_type>>& view) noexcept {
-  const auto str = view.string();
-  return builder.Append(arrow_compat::string_view{str.data(), str.size()});
-}
-
-arrow::Status
 append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
                const view<type_to_data_t<ip_type>>& view) noexcept {
   const auto bytes = as_bytes(view);

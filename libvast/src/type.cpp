@@ -62,6 +62,8 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
   VAST_ASSERT(root);
   while (transparent == type::transparent::yes) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -70,7 +72,6 @@ resolve_transparent(const fbs::Type* root, enum type::transparent transparent
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -96,6 +97,8 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
   auto result = as_bytes(t);
   while (true) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -104,7 +107,6 @@ std::span<const std::byte> as_bytes_complex(const T& ct) {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -290,6 +292,8 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
   const auto* root = &type.table(type::transparent::no);
   for (auto nesting_depth = 0; root != nullptr; ++nesting_depth) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -298,7 +302,6 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -375,6 +378,8 @@ type::type(std::string_view name, const type& nested,
     for (const auto* root = fbs::GetType(nested_bytes.data());
          root != nullptr;) {
       switch (root->type_type()) {
+        case fbs::type::Type::pattern_type:
+          __builtin_unreachable();
         case fbs::type::Type::NONE:
         case fbs::type::Type::bool_type:
         case fbs::type::Type::int64_type:
@@ -383,7 +388,6 @@ type::type(std::string_view name, const type& nested,
         case fbs::type::Type::duration_type:
         case fbs::type::Type::time_type:
         case fbs::type::Type::string_type:
-        case fbs::type::Type::pattern_type:
         case fbs::type::Type::ip_type:
         case fbs::type::Type::subnet_type:
         case fbs::type::Type::enumeration_type:
@@ -517,7 +521,7 @@ type type::infer(const data& value) noexcept {
       return type{string_type{}};
     },
     [](const pattern&) noexcept -> type {
-      return type{pattern_type{}};
+      return type{string_type{}};
     },
     [](const ip&) noexcept -> type {
       return type{ip_type{}};
@@ -613,8 +617,8 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
     [&](const legacy_string_type&) noexcept {
       return type{other.name(), string_type{}, std::move(attributes)};
     },
-    [&](const legacy_pattern_type&) noexcept {
-      return type{other.name(), pattern_type{}, std::move(attributes)};
+    [&](const legacy_pattern_type&) noexcept -> type {
+      die("unreachable");
     },
     [&](const legacy_address_type&) noexcept {
       return type{other.name(), ip_type{}, std::move(attributes)};
@@ -677,9 +681,6 @@ legacy_type type::to_legacy_type() const noexcept {
     },
     [&](const string_type&) noexcept -> legacy_type {
       return legacy_string_type{};
-    },
-    [&](const pattern_type&) noexcept -> legacy_type {
-      return legacy_pattern_type{};
     },
     [&](const ip_type&) noexcept -> legacy_type {
       return legacy_address_type{};
@@ -1014,6 +1015,8 @@ std::string_view type::name() const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -1022,7 +1025,6 @@ std::string_view type::name() const& noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1047,6 +1049,8 @@ detail::generator<std::string_view> type::names() const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -1055,7 +1059,6 @@ detail::generator<std::string_view> type::names() const& noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1081,6 +1084,8 @@ type::attribute(const char* key) const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -1089,7 +1094,6 @@ type::attribute(const char* key) const& noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1119,6 +1123,8 @@ bool type::has_attributes() const noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -1127,7 +1133,6 @@ bool type::has_attributes() const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1155,6 +1160,8 @@ type::attributes(type::recurse recurse) const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -1163,7 +1170,6 @@ type::attributes(type::recurse recurse) const& noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1198,6 +1204,8 @@ detail::generator<type> type::aliases() const noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -1206,7 +1214,6 @@ detail::generator<type> type::aliases() const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -1230,6 +1237,8 @@ detail::generator<type> type::aliases() const noexcept {
 bool is_container(const type& type) noexcept {
   const auto& root = type.table(type::transparent::yes);
   switch (root.type_type()) {
+    case fbs::type::Type::pattern_type:
+      __builtin_unreachable();
     case fbs::type::Type::NONE:
     case fbs::type::Type::bool_type:
     case fbs::type::Type::int64_type:
@@ -1238,7 +1247,6 @@ bool is_container(const type& type) noexcept {
     case fbs::type::Type::duration_type:
     case fbs::type::Type::time_type:
     case fbs::type::Type::string_type:
-    case fbs::type::Type::pattern_type:
     case fbs::type::Type::ip_type:
     case fbs::type::Type::subnet_type:
     case fbs::type::Type::enumeration_type:
@@ -1326,7 +1334,7 @@ bool congruent(const type& x, const data& y) noexcept {
     [](const string_type&, const std::string&) noexcept {
       return true;
     },
-    [](const pattern_type&, const pattern&) noexcept {
+    [](const string_type&, const pattern&) noexcept {
       return true;
     },
     [](const ip_type&, const ip&) noexcept {
@@ -1381,10 +1389,8 @@ bool compatible(const type& lhs, relational_operator op,
 bool compatible(const type& lhs, relational_operator op,
                 const data& rhs) noexcept {
   auto string_and_pattern = [](auto& x, auto& y) {
-    return (caf::holds_alternative<string_type>(x)
-            && caf::holds_alternative<pattern>(y))
-           || (caf::holds_alternative<pattern_type>(x)
-               && caf::holds_alternative<std::string>(y));
+    return caf::holds_alternative<string_type>(x)
+           && caf::holds_alternative<pattern>(y);
   };
   switch (op) {
     case relational_operator::equal:
@@ -1778,91 +1784,6 @@ std::shared_ptr<typename arrow::TypeTraits<string_type::arrow_type>::BuilderType
 string_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
   return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
     to_arrow_type(), pool);
-}
-
-// -- pattern_type ------------------------------------------------------------
-
-static_assert(pattern_type::type_index
-              == static_cast<uint8_t>(fbs::type::Type::pattern_type));
-
-std::span<const std::byte> as_bytes(const pattern_type&) noexcept {
-  static const auto buffer = []() noexcept {
-    constexpr auto reserved_size = 32;
-    auto builder = flatbuffers::FlatBufferBuilder{reserved_size};
-    const auto pattern_type = fbs::type::CreatePatternType(builder);
-    const auto type = fbs::CreateType(builder, fbs::type::Type::pattern_type,
-                                      pattern_type.Union());
-    builder.Finish(type);
-    auto result = builder.Release();
-
-    VAST_ASSERT(result.size() == reserved_size);
-    return result;
-  }();
-  return as_bytes(buffer);
-}
-
-pattern pattern_type::construct() noexcept {
-  return {};
-}
-
-std::shared_ptr<pattern_type::arrow_type>
-pattern_type::to_arrow_type() noexcept {
-  return std::make_shared<arrow_type>();
-}
-
-void pattern_type::arrow_type::register_extension() noexcept {
-  if (arrow::GetExtensionType(name))
-    return;
-  auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
-  VAST_ASSERT(status.ok());
-}
-
-std::shared_ptr<arrow::DataType> pattern_type::builder_type::type() const {
-  return pattern_type::to_arrow_type();
-}
-
-pattern_type::arrow_type::arrow_type() noexcept
-  : arrow::ExtensionType(string_type::to_arrow_type()) {
-  // nop
-}
-
-std::shared_ptr<pattern_type::builder_type>
-pattern_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
-  return std::make_shared<builder_type>(to_arrow_type()->storage_type(), pool);
-}
-
-std::string pattern_type::arrow_type::extension_name() const {
-  return name;
-}
-
-bool pattern_type::arrow_type::ExtensionEquals(
-  const arrow::ExtensionType& other) const {
-  return other.extension_name() == name;
-}
-
-std::shared_ptr<arrow::Array> pattern_type::arrow_type::MakeArray(
-  std::shared_ptr<arrow::ArrayData> data) const {
-  return std::make_shared<array_type>(std::move(data));
-}
-
-arrow::Result<std::shared_ptr<arrow::DataType>>
-pattern_type::arrow_type::Deserialize(
-  std::shared_ptr<arrow::DataType> storage_type,
-  const std::string& serialized) const {
-  if (serialized != name)
-    return arrow::Status::Invalid("type identifier does not match");
-  if (!storage_type->Equals(storage_type_))
-    return arrow::Status::Invalid("storage type does not match");
-  return std::make_shared<arrow_type>();
-}
-
-std::string pattern_type::arrow_type::Serialize() const {
-  return name;
-}
-
-std::shared_ptr<arrow::StringArray> pattern_type::array_type::storage() const {
-  return std::static_pointer_cast<arrow::StringArray>(
-    arrow::ExtensionArray::storage());
 }
 
 // -- ip_type ------------------------------------------------------------
@@ -2566,6 +2487,8 @@ detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
     const auto* field_type = resolve_transparent(field->type_nested_root());
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -2574,7 +2497,6 @@ detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2634,6 +2556,8 @@ size_t record_type::num_leaves() const noexcept {
     const auto* field_type = resolve_transparent(field->type_nested_root());
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -2642,7 +2566,6 @@ size_t record_type::num_leaves() const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2689,6 +2612,8 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
     const auto* field_type = resolve_transparent(field->type_nested_root());
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -2697,7 +2622,6 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2750,6 +2674,8 @@ record_type::resolve_key(std::string_view key) const noexcept {
     const auto* field_type = resolve_transparent(field->type_nested_root());
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -2758,7 +2684,6 @@ record_type::resolve_key(std::string_view key) const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2842,6 +2767,8 @@ record_type::resolve_key_suffix(std::string_view key,
     const auto* field_type = resolve_transparent(field->type_nested_root());
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -2850,7 +2777,6 @@ record_type::resolve_key_suffix(std::string_view key,
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:
@@ -2991,6 +2917,8 @@ size_t record_type::flat_index(const offset& index) const noexcept {
     const auto* field_type = resolve_transparent(field->type_nested_root());
     VAST_ASSERT(field_type);
     switch (field_type->type_type()) {
+      case fbs::type::Type::pattern_type:
+        __builtin_unreachable();
       case fbs::type::Type::NONE:
       case fbs::type::Type::bool_type:
       case fbs::type::Type::int64_type:
@@ -2999,7 +2927,6 @@ size_t record_type::flat_index(const offset& index) const noexcept {
       case fbs::type::Type::duration_type:
       case fbs::type::Type::time_type:
       case fbs::type::Type::string_type:
-      case fbs::type::Type::pattern_type:
       case fbs::type::Type::ip_type:
       case fbs::type::Type::subnet_type:
       case fbs::type::Type::enumeration_type:

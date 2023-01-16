@@ -173,7 +173,7 @@ struct table_slice_fixture {
   enumeration_type et = enumeration_type{{"foo"}, {"bar"}, {"bank"}};
   map_type mt_et_count = map_type{et, uint64_type{}};
   map_type mt_addr_et = map_type{ip_type{}, et};
-  map_type mt_pattern_subnet = map_type{pattern_type{}, subnet_type{}};
+  map_type mt_string_subnet = map_type{string_type{}, subnet_type{}};
   list_type lt = list_type{subnet_type{}};
   list_type elt = list_type{et};
   record_type rt = record_type{
@@ -190,14 +190,14 @@ struct table_slice_fixture {
     {"f11_2",
      record_type{
        {"f11_2_1", ip_type{}},
-       {"f11_2_2", pattern_type{}},
+       {"f11_2_2", string_type{}},
      }},
   };
   list_type lrt = list_type{rt};
   record_type t = record_type{
     {"f1", type{string_type{}, {{"key", "value"}}}},
     {"f2", uint64_type{}},
-    {"f3", pattern_type{}},
+    {"f3", string_type{}},
     {"f4", ip_type{}},
     {"f5", subnet_type{}},
     {"f6", et},
@@ -205,13 +205,13 @@ struct table_slice_fixture {
     {"f8", mt_et_count},
     {"f9", elt},
     {"f10", mt_addr_et},
-    {"f11", mt_pattern_subnet},
+    {"f11", mt_string_subnet},
     {"f12", rrt},
     {"f13", duration_type{}},
   };
   list f1_string = list{"n1", "n2", {}, "n4"};
   list f2_count = list{1_c, {}, 3_c, 4_c};
-  list f3_pattern = list{pattern("p1"), {}, pattern("p3"), {}};
+  list f3_string = list{"p1", {}, "p3", {}};
   list f4_address = list{
     unbox(to<ip>("172.16.7.29")),
     {},
@@ -251,27 +251,27 @@ struct table_slice_fixture {
     map{{unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")), 1_e},
         {unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")), caf::none}},
   };
-  list f11_map_pattern_subnet = list{
-    map{{pattern("l8"), unbox(to<subnet>("172.16.7.0/8"))},
-        {pattern("l16"), unbox(to<subnet>("172.16.0.0/16"))},
-        {pattern("l24"), unbox(to<subnet>("172.0.0.0/24"))}},
-    map{{pattern("l64"), unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/64"))},
-        {pattern("l96"), unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/96"))},
-        {pattern("l128"), unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/"
-                                           "128"))}},
+  list f11_map_string_subnet = list{
+    map{{"l8", unbox(to<subnet>("172.16.7.0/8"))},
+        {"l16", unbox(to<subnet>("172.16.0.0/16"))},
+        {"l24", unbox(to<subnet>("172.0.0.0/24"))}},
+    map{{"l64", unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/64"))},
+        {"l96", unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/96"))},
+        {"l128", unbox(to<subnet>("ff01:db8::202:b3ff:fe1e:8329/"
+                                  "128"))}},
     map{},
     caf::none,
   };
   list f12_duration
     = list{duration{13323100000}, caf::none, caf::none, caf::none};
   table_slice slice = make_slice(
-    t, f1_string, f2_count, f3_pattern, f4_address, f5_subnet, f6_enum,
+    t, f1_string, f2_count, f3_string, f4_address, f5_subnet, f6_enum,
     f7_list_subnet, f8_map_enum_count, f9_enum_list, f10_map_addr_enum,
-    f11_map_pattern_subnet,
+    f11_map_string_subnet,
     f6_enum,    // f12_1_1 re-using existing data arrays for convenience
     f5_subnet,  // f12_1_2
     f4_address, // f12_2_1
-    f3_pattern, // f12_2_2
+    f3_string,  // f12_2_2
     f12_duration);
 };
 

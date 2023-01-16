@@ -23,17 +23,13 @@
   -- field metadata --
   -- field metadata --
   -- field metadata --
-  -- field metadata --
   ARROW:extension:metadata: 'vast.address'
-  ARROW:extension:metadata: 'vast.pattern'
   ARROW:extension:metadata: 'vast.subnet'
   ARROW:extension:metadata: '{ "A": 0, "B": 1, "C": 2 }'
   ARROW:extension:name: 'vast.address'
   ARROW:extension:name: 'vast.enumeration'
-  ARROW:extension:name: 'vast.pattern'
   ARROW:extension:name: 'vast.subnet'
   VAST:attributes:0: '{ "description": "unnamed_extended_bool" }'
-  VAST:attributes:0: '{ "skip": "" }'
   VAST:attributes:0: '{ "skip": "" }'
   VAST:attributes:0: '{ "skip": "" }'
   child 0, address: fixed_size_binary[16]
@@ -62,7 +58,6 @@ m: map<int64, double>
 n: struct<address: fixed_size_binary[16], length: uint8>
 open next reader
 open next reader
-p: string
 r: double
 s: string
 t: timestamp[ns]

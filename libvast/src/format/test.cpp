@@ -179,12 +179,6 @@ struct randomizer {
       c = static_cast<char>(unif_char(gen));
   }
 
-  void operator()(const pattern_type&, pattern& p) {
-    auto intermediate = std::string{};
-    (*this)(string_type{}, intermediate);
-    p = pattern{std::move(intermediate)};
-  }
-
   void operator()(const ip_type&, ip& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.

@@ -64,7 +64,8 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     | "duration"_p  ->* type_factory<legacy_duration_type>
     | "time"_p      ->* type_factory<legacy_time_type>
     | "string"_p    ->* type_factory<legacy_string_type>
-    | "pattern"_p   ->* type_factory<legacy_pattern_type>
+    // We removed support for pattern types with VAST v3.0.
+    // | "pattern"_p   ->* type_factory<legacy_pattern_type>
     | "ip"_p        ->* type_factory<legacy_address_type>
     | "addr"_p      ->* type_factory<legacy_address_type,
         "the type token 'addr' is deprecated; use 'ip' instead">

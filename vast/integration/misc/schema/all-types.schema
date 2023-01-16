@@ -24,8 +24,6 @@ type all_types_i = record {
     lrc: list<record { x1: int64, x2: uint64 }>,
   },
   // active indexer instantiated (and failing) despite #skip
-  p: pattern #skip,
-  // active indexer instantiated (and failing) despite #skip
   m: map<int, real> #skip, 
 } #top_level_key=v
 

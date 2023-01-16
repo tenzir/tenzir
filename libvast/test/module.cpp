@@ -73,9 +73,9 @@ type get_known_type(const std::vector<type>& known_types,
 }
 
 constexpr auto reserved_names
-  = std::array{"bool", "integer", "count",   "real",    "duration",
-               "time", "string",  "pattern", "address", "subnet",
-               "enum", "list",    "map",     "record"};
+  = std::array{"bool", "integer", "count",   "real",   "duration",
+               "time", "string",  "address", "subnet", "enum",
+               "list", "map",     "record"};
 
 caf::expected<type> to_enum(std::string_view name, const data& enumeration,
                             std::vector<type::attribute_view>&& attributes) {
@@ -262,8 +262,6 @@ caf::expected<type> to_type(const std::vector<type>& known_types,
       return type{name, time_type{}};
     if (known_type_name == "string")
       return type{name, string_type{}};
-    if (known_type_name == "pattern")
-      return type{name, pattern_type{}};
     if (known_type_name == "address")
       return type{name, ip_type{}};
     if (known_type_name == "subnet")
@@ -479,17 +477,6 @@ TEST(YAML Type - Parsing string_type without attributes) {
   };
   auto result = unbox(to_type(known_types, string_type_wo_attrs));
   auto expected_type = type{"string_field", string_type{}};
-  CHECK_EQUAL(result, expected_type);
-}
-
-TEST(YAML Type - Parsing pattern_type) {
-  std::vector<type> known_types;
-  auto pattern_type_wo_attrs = record::value_type{
-    "pattern_field",
-    record{{"type", "pattern"}},
-  };
-  auto result = unbox(to_type(known_types, pattern_type_wo_attrs));
-  auto expected_type = type{"pattern_field", pattern_type{}};
   CHECK_EQUAL(result, expected_type);
 }
 

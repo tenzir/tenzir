@@ -171,27 +171,6 @@ TEST(string_type) {
   CHECK_EQUAL(st.to_definition(), expected_definition);
 }
 
-TEST(pattern_type) {
-  static_assert(concrete_type<pattern_type>);
-  static_assert(basic_type<pattern_type>);
-  static_assert(!complex_type<pattern_type>);
-  const auto t = type{};
-  const auto pt = type{pattern_type{}};
-  CHECK(pt);
-  CHECK_EQUAL(as_bytes(pt), as_bytes(pattern_type{}));
-  CHECK(t != pt);
-  CHECK(t < pt);
-  CHECK(t <= pt);
-  CHECK_EQUAL(fmt::format("{}", pt), "pattern");
-  CHECK_EQUAL(fmt::format("{}", pattern_type{}), "pattern");
-  CHECK(!caf::holds_alternative<pattern_type>(t));
-  CHECK(caf::holds_alternative<pattern_type>(pt));
-  const auto lpt = type::from_legacy_type(legacy_pattern_type{});
-  CHECK(caf::holds_alternative<pattern_type>(lpt));
-  const auto expected_definition = data{"pattern"};
-  CHECK_EQUAL(pt.to_definition(), expected_definition);
-}
-
 TEST(ip_type) {
   static_assert(concrete_type<ip_type>);
   static_assert(basic_type<ip_type>);
@@ -665,7 +644,7 @@ TEST(type inference) {
   CHECK_EQUAL(type::infer(duration{}), duration_type{});
   CHECK_EQUAL(type::infer(time{}), time_type{});
   CHECK_EQUAL(type::infer(std::string{}), string_type{});
-  CHECK_EQUAL(type::infer(pattern{}), pattern_type{});
+  CHECK_EQUAL(type::infer(pattern{}), string_type{});
   CHECK_EQUAL(type::infer(ip{}), ip_type{});
   CHECK_EQUAL(type::infer(subnet{}), subnet_type{});
   // Enumeration types cannot be inferred.
@@ -968,8 +947,6 @@ TEST(hashes) {
                                                         "9");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(string_type{})), "0x2476398993549B"
                                                           "5");
-  CHECK_EQUAL(fmt::format("0x{:X}", hash(pattern_type{})), "0xE5A24AB16469BBD"
-                                                           "B");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(ip_type{})), "0xD1678F8D9318E8B"
                                                       "2");
   CHECK_EQUAL(fmt::format("0x{:X}", hash(subnet_type{})), "0xA927755C100351"
@@ -1069,7 +1046,7 @@ TEST(subset) {
   }};
   // Change a field's type.
   auto r4 = type{record_type{
-    {"a", pattern_type{}},
+    {"a", string_type{}},
     {"b", bool_type{}},
     {"c", uint64_type{}},
   }};
@@ -1101,7 +1078,6 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{duration_type{}});
   CHECK_ROUNDTRIP(type{time_type{}});
   CHECK_ROUNDTRIP(type{string_type{}});
-  CHECK_ROUNDTRIP(type{pattern_type{}});
   CHECK_ROUNDTRIP(type{ip_type{}});
   CHECK_ROUNDTRIP(type{subnet_type{}});
   CHECK_ROUNDTRIP(type{enumeration_type{{"a"}, {"b"}, {"c"}}});

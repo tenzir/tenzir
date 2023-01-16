@@ -5,17 +5,6 @@ import pyarrow as pa
 import vast.utils.arrow as vua
 
 
-def test_pattern_extension_type():
-    ty = vua.PatternType()
-    str_patterns = ["/foo*bar/", "/ba.qux/", None]
-    arr = vua.extension_array(str_patterns, ty)
-    arr.validate()
-    assert arr.type is ty
-    assert arr[0].as_py() == "/foo*bar/"
-    assert arr[1].as_py() == "/ba.qux/"
-    assert arr[2].as_py() == None
-
-
 def test_ip_ip_extension_type():
     ty = vua.IPType()
     arr = vua.extension_array(["10.1.21.165", None], ty)
@@ -100,10 +89,6 @@ def ipc_read_batch(buf):
 
 
 def test_ipc():
-    # Create sample patterns.
-    patterns = ["/foo/", "/bar/"]
-    pattern_type = vua.PatternType()
-    pattern_array = vua.extension_array(patterns, pattern_type)
     # Create sample IP addresses.
     addresses = [
         ipaddress.IPv4Address("10.1.21.165"),
@@ -127,24 +112,14 @@ def test_ipc():
     enum_type = vua.EnumType(fields)
     enum_array = vua.extension_array(enums, enum_type)
     # Assemble a record batch.
-    schema = pa.schema(
-        [("p", pattern_type), ("a", ip_type), ("s", subnet_type), ("e", enum_type)]
-    )
-    batch = pa.record_batch(
-        [pattern_array, ip_array, subnet_array, enum_array], schema=schema
-    )
+    schema = pa.schema([("a", ip_type), ("s", subnet_type), ("e", enum_type)])
+    batch = pa.record_batch([ip_array, subnet_array, enum_array], schema=schema)
 
     # Perform a roundtrip (logic lifted from Arrow's test_extension_type.py.
     buf = ipc_write_batch(batch)
     del batch
     batch = ipc_read_batch(buf)
 
-    # Validate patterns.
-    p = batch.column("p")
-    assert isinstance(p, pa.ExtensionArray)
-    assert p.type == pattern_type
-    assert p.storage.to_pylist() == patterns
-    assert p.to_pylist() == patterns
     # Validate addresses.
     a = batch.column("a")
     assert isinstance(a, pa.ExtensionArray)

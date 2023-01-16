@@ -113,7 +113,7 @@ table_slices::table_slices(std::string_view suite)
     + ", [1337ms]"s // ve
     + ", [2018-12-24]"s // vf
     + ", [\"foo\"]"s // vg
-    + ", [/foo.*bar/]"s // vh
+    /* + ", [/foo.*bar/]"s // vh */
     + ", [127.0.0.1]"s // vi
     + ", [10.0.0.0/8]"s // vj
     // + ", [[1, 2, 3]]"s // vl
@@ -127,7 +127,7 @@ table_slices::table_slices(std::string_view suite)
     + ", {1337ms -> true}"s // mea
     + ", {2018-12-24 -> true}"s // mfa
     + ", {\"foo\" -> true}"s // mga
-    + ", {/foo.*bar/ -> true}"s // mha
+    /* + ", {/foo.*bar/ -> true}"s // mha */
     + ", {127.0.0.1 -> true}"s // mia
     + ", {10.0.0.0/8 -> true}"s // mja
     // + ", {[1, 2, 3] -> true}"s // mla
@@ -141,7 +141,7 @@ table_slices::table_slices(std::string_view suite)
     + ", {true -> 1337ms}"s // mae
     + ", {true -> 2018-12-24}"s // maf
     + ", {true -> \"foo\"}"s // mag
-    + ", {true -> /foo.*bar/}"s // mah
+    /* + ", {true -> /foo.*bar/}"s // mah */
     + ", {true -> 127.0.0.1}"s // mai
     + ", {true -> 10.0.0.0/8}"s // maj
     // + ", {true -> [1, 2, 3]}"s // mal
@@ -155,10 +155,10 @@ table_slices::table_slices(std::string_view suite)
   // clang-format on
   // Initialize test data.
   auto rows = std::vector<std::string>{
-    "[true, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
+    "[true, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", 127.0.0.1,"
     " 10.0.0.0/8, [1, 2, 3], {1 -> true, 2 -> false, 3 -> true}"
       + test_collections + ", \"aas\"]",
-    "[false, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, "
+    "[false, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", ::1, "
     "64:ff9b::/96,"
     " [], {}"
       + test_collections + ", \"aas\"]",

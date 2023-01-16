@@ -37,7 +37,7 @@ struct fixture : fixtures::deterministic_actor_system {
     "l1",
     record_type{
       {"s", string_type{}},
-      {"ptn", pattern_type{}},
+      {"ptn", string_type{}},
       {"lis", list_type{uint64_type{}}},
     },
   };
@@ -151,17 +151,6 @@ TEST(csv reader - string) {
   CHECK(slices[0].at(0, 0) == data{"hello"});
 }
 
-std::string_view l1_log_pattern = R"__(ptn
-hello
-)__";
-
-TEST(csv reader - pattern) {
-  auto slices = run(l1_log_pattern, 1, 1);
-  auto l1_pattern = type{"l1", record_type{{"ptn", pattern_type{}}}};
-  REQUIRE_EQUAL(slices[0].schema(), l1_pattern);
-  CHECK(slices[0].at(0, 0) == data{pattern{"hello"}});
-}
-
 std::string_view l1_log0 = R"__(s,ptn,lis
 hello,world,[1,2]
 Tom,appeared,[42,1337]
@@ -194,7 +183,7 @@ burden,Sighing,[42,1337]
 TEST(csv reader - schema with container) {
   auto slices = run(l1_log0, 20, 20);
   REQUIRE_EQUAL(slices[0].schema(), l1);
-  CHECK(slices[0].at(10, 1) == data{pattern{"gladness"}});
+  CHECK(slices[0].at(10, 1) == data{"gladness"});
   auto xs = vast::list{};
   xs.emplace_back(data{uint64_t{42}});
   xs.emplace_back(data{uint64_t{1337}});
@@ -235,12 +224,12 @@ TEST(csv reader - subschema construction) {
     "l1",
     record_type{
       {"s", string_type{}},
-      {"ptn", pattern_type{}},
+      {"ptn", string_type{}},
     },
   };
   auto slices = run(l1_log1, 20, 20);
   REQUIRE_EQUAL(slices[0].schema(), l1_sub);
-  CHECK(slices[0].at(10, 1) == data{pattern{"gladness"}});
+  CHECK(slices[0].at(10, 1) == data{"gladness"});
 }
 
 std::string_view l2_log_msa = R"__(msa
