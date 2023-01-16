@@ -8,9 +8,8 @@
 
 #define SUITE fanout_counter
 
-#include "vast/detail/fanout_counter.hpp"
-
 #include <vast/atoms.hpp>
+#include <vast/detail/fanout_counter.hpp>
 #include <vast/error.hpp>
 #include <vast/test/fixtures/actor_system.hpp>
 #include <vast/test/test.hpp>
@@ -21,8 +20,8 @@ namespace {
 
 struct fixture : public fixtures::deterministic_actor_system {
   using actor_type = caf::actor;
-  using response_type
-    = caf::response_handle<caf::blocking_actor, caf::message, true>;
+  using response_type = decltype(std::declval<caf::blocking_actor>().request(
+    std::declval<actor_type>(), caf::infinite, vast::atom::status_v));
 
   fixture() : fixtures::deterministic_actor_system(VAST_PP_STRINGIFY(SUITE)) {
   }
