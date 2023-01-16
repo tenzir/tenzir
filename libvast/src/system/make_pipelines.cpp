@@ -235,14 +235,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         current_token = {str_l_it, str_r_it};
         result.aggregator_groups.emplace_back(current_token);
         current_mode = parsing_mode::AGGREGATOR_TIME_RESOLUTION;
-      } else if (current_mode == parsing_mode::LONG_OPTION_KEY) {
-        maybe_last_extractor = true;
-        ++str_l_it;
-        current_assignment_key = {str_l_it, str_r_it};
-          result.long_form_options[current_assignment_key] = {};
-          current_mode = parsing_mode::LONG_OPTION_ASSIGNMENT;
-      } else if (current_mode == parsing_mode::LONG_OPTION_VALUE
-                 || current_mode == parsing_mode::EXTRACTOR_VALUE) {
+      } else if (current_mode == parsing_mode::EXTRACTOR_VALUE) {
         current_token = {str_l_it, str_r_it};
         if (current_mode == parsing_mode::LONG_OPTION_VALUE) {
           result.long_form_options[current_assignment_key] = current_token;
@@ -339,32 +332,35 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
           result.short_form_options[current_assignment_key] = current_token;
           current_mode = parsing_mode::NONE;
         } else {
-          current_mode = parsing_mode::LONG_OPTION_KEY;
+          current_mode = parsing_mode::LONG_OPTION;
+          ++str_r_it;
+          str_l_it = str_r_it;
+          while (str_r_it != str.end() && *str_r_it != '=' && !std::isspace(*str_r_it)) {
+            ++str_r_it;
+          }
+          if (str_r_it == str.end() || std::isspace(*str_r_it)) {
+            result.parse_error
+              = caf::make_error(ec::parse_error, "missing long-form option assignment");
+            break;
+          }
+          current_assignment_key = {str_l_it, str_r_it};
+          ++str_r_it;
+          str_l_it = str_r_it;
+          while (str_r_it != str.end() && !std::isspace(*str_r_it)) {
+            ++str_r_it;
+          }
+          current_token = {str_l_it, str_r_it};
+          result.long_form_options[current_assignment_key] = current_token;
+          current_mode = parsing_mode::NONE;
         }
       }
       if (str_r_it != str.end()) {
         ++str_r_it;
       }
     } else if (*str_r_it == '=') {
-      if (current_mode != parsing_mode::LONG_OPTION_KEY
-          && current_mode != parsing_mode::EXTRACTOR) {
-        result.parse_error
-          = caf::make_error(ec::parse_error, "assignment is missing key");
-        break;
-      } else if (current_mode == parsing_mode::EXTRACTOR) {
+      if (current_mode == parsing_mode::EXTRACTOR) {
         current_assignment_key = {str_l_it, str_r_it};
         current_mode = parsing_mode::EXTRACTOR_ASSIGNMENT;
-      } else if (current_mode == parsing_mode::LONG_OPTION_KEY) {
-        ++str_l_it;
-        current_assignment_key = {str_l_it, str_r_it};
-        result.long_form_options[current_assignment_key] = {};
-        current_mode = parsing_mode::LONG_OPTION_ASSIGNMENT;
-      } else if (current_mode == parsing_mode::LONG_OPTION_VALUE
-                 || current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT) {
-        result.parse_error
-          = caf::make_error(ec::parse_error, "duplicate assignment");
-        break;
-      }
       ++str_r_it;
     } else {
       if (current_mode == parsing_mode::EXTRACTOR) {
@@ -473,9 +469,6 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       } else if (current_mode == parsing_mode::AGGREGATOR_GROUP_LIST) {
         str_l_it = str_r_it;
         current_mode = parsing_mode::AGGREGATOR_GROUP;
-      } else if (current_mode == parsing_mode::LONG_OPTION_ASSIGNMENT) {
-        str_l_it = str_r_it;
-        current_mode = parsing_mode::LONG_OPTION_VALUE;
       } else if (current_mode == parsing_mode::EXTRACTOR_ASSIGNMENT) {
         str_l_it = str_r_it;
         current_mode = parsing_mode::EXTRACTOR_VALUE;
