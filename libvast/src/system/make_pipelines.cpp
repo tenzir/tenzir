@@ -222,12 +222,16 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
   pipeline_parsing_result result;
   std::string current_token;
   std::string current_assignment_key;
+  auto it_at_operator_end = [str](const auto& it) {
+    return (it == str.end() || *it == '|');
+  };
   result.new_str_it = str.begin();
   for (auto str_l_it = result.new_str_it;
-       result.new_str_it != str.end() && *result.new_str_it != '|';) {
+       !it_at_operator_end(result.new_str_it);) {
     if (*result.new_str_it == '-') {
       ++result.new_str_it;
-      if (result.new_str_it == str.end() || std::isspace(*result.new_str_it)) {
+      if (it_at_operator_end(result.new_str_it)
+          || std::isspace(*result.new_str_it)) {
         result.parse_error
           = caf::make_error(ec::parse_error, "invalid option prefix");
         return result;
@@ -235,25 +239,26 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       if (*result.new_str_it != '-') {
         current_assignment_key = *result.new_str_it;
         ++result.new_str_it;
-        if (result.new_str_it == str.end()
+        if (it_at_operator_end(result.new_str_it)
             || !std::isspace(*result.new_str_it)) {
           result.parse_error
             = caf::make_error(ec::parse_error, "invalid short-form option "
                                                "prefix");
           return result;
         }
-        while (result.new_str_it != str.end()
+        while (!it_at_operator_end(result.new_str_it)
                && std::isspace(*result.new_str_it)) {
           ++result.new_str_it;
         }
-        if (result.new_str_it == str.end() || *result.new_str_it == '-') {
+        if (it_at_operator_end(result.new_str_it)
+            || *result.new_str_it == '-') {
           result.parse_error
             = caf::make_error(ec::parse_error, "missing value for short-form "
                                                "option");
           return result;
         }
         str_l_it = result.new_str_it;
-        while (result.new_str_it != str.end()
+        while (!it_at_operator_end(result.new_str_it)
                && !std::isspace(*result.new_str_it)) {
           ++result.new_str_it;
         }
@@ -262,11 +267,12 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       } else {
         ++result.new_str_it;
         str_l_it = result.new_str_it;
-        while (result.new_str_it != str.end() && *result.new_str_it != '='
+        while (!it_at_operator_end(result.new_str_it)
+               && *result.new_str_it != '='
                && !std::isspace(*result.new_str_it)) {
           ++result.new_str_it;
         }
-        if (result.new_str_it == str.end()
+        if (it_at_operator_end(result.new_str_it)
             || std::isspace(*result.new_str_it)) {
           result.parse_error
             = caf::make_error(ec::parse_error, "missing long-form option "
@@ -276,7 +282,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         current_assignment_key = {str_l_it, result.new_str_it};
         ++result.new_str_it;
         str_l_it = result.new_str_it;
-        while (result.new_str_it != str.end()
+        while (!it_at_operator_end(result.new_str_it)
                && !std::isspace(*result.new_str_it)) {
           ++result.new_str_it;
         }
@@ -285,9 +291,10 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       }
     } else if (!std::isspace(*result.new_str_it)) {
       auto complex_value_lvl = 0;
-      while (result.new_str_it != str.end()) {
+      while (!it_at_operator_end(result.new_str_it)) {
         str_l_it = result.new_str_it;
-        while (result.new_str_it != str.end() && *result.new_str_it != '=' && *result.new_str_it != ','
+        while (!it_at_operator_end(result.new_str_it)
+               && *result.new_str_it != '=' && *result.new_str_it != ','
                && !std::isspace(*result.new_str_it)) {
           ++result.new_str_it;
         }
@@ -295,28 +302,30 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         while (std::isspace(*result.new_str_it)) {
           ++result.new_str_it;
         }
-        if (result.new_str_it == str.end()) {
+        if (it_at_operator_end(result.new_str_it)) {
           result.extractors.emplace_back(current_assignment_key);
         } else if (*result.new_str_it == ',') {
           result.extractors.emplace_back(current_assignment_key);
           ++result.new_str_it;
-          while (result.new_str_it != str.end()
+          while (!it_at_operator_end(result.new_str_it)
                  && std::isspace(*result.new_str_it)) {
             ++result.new_str_it;
           }
-          if (result.new_str_it == str.end()) {
+          if (it_at_operator_end(result.new_str_it)) {
             result.parse_error
               = caf::make_error(ec::parse_error, "missing extractor after "
                                                  "comma");
             return result;
           }
-          while (result.new_str_it != str.end()) {
-            while (result.new_str_it != str.end()
+          while (!it_at_operator_end(result.new_str_it)) {
+            while (!it_at_operator_end(result.new_str_it)
                    && std::isspace(*result.new_str_it)) {
               ++result.new_str_it;
             }
             str_l_it = result.new_str_it;
-            while (result.new_str_it != str.end() && !std::isspace(*result.new_str_it) && *result.new_str_it != ',') {
+            while (!it_at_operator_end(result.new_str_it)
+                   && !std::isspace(*result.new_str_it)
+                   && *result.new_str_it != ',') {
               ++result.new_str_it;
             }
             current_assignment_key = {str_l_it, result.new_str_it};
@@ -325,34 +334,37 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
                 = caf::make_error(ec::parse_error, "missing extractor");
               return result;
             }
-            while (result.new_str_it != str.end() && std::isspace(*result.new_str_it)) {
+            while (!it_at_operator_end(result.new_str_it)
+                   && std::isspace(*result.new_str_it)) {
               ++result.new_str_it;
             }
-            if (result.new_str_it != str.end() && *result.new_str_it != ',') {
+            if (!it_at_operator_end(result.new_str_it)
+                && *result.new_str_it != ',') {
               result.parse_error
                 = caf::make_error(ec::parse_error, "missing comma after "
                                                    "extractor");
               return result;
             }
             result.extractors.emplace_back(current_assignment_key);
-            if (result.new_str_it != str.end()) {
+            if (!it_at_operator_end(result.new_str_it)) {
               ++result.new_str_it;
             }
           }
         } else if (*result.new_str_it == '=') {
           ++result.new_str_it;
-          while (result.new_str_it != str.end()
+          while (!it_at_operator_end(result.new_str_it)
                  && std::isspace(*result.new_str_it)) {
             ++result.new_str_it;
           }
-          if (result.new_str_it == str.end() || *result.new_str_it == ',') {
+          if (it_at_operator_end(result.new_str_it)
+              || *result.new_str_it == ',') {
             result.parse_error
               = caf::make_error(ec::parse_error, "missing value for "
                                                  "assignment");
             return result;
           }
           str_l_it = result.new_str_it;
-          while (result.new_str_it != str.end()) {
+          while (!it_at_operator_end(result.new_str_it)) {
             if (*result.new_str_it == '[' || *result.new_str_it == '{'
                 || *result.new_str_it == '<') {
               ++complex_value_lvl;
@@ -388,7 +400,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
           while (std::isspace(*result.new_str_it)) {
             ++result.new_str_it;
           }
-          if (result.new_str_it != str.end()) {
+          if (!it_at_operator_end(result.new_str_it)) {
             if (*result.new_str_it != ',') {
               result.parse_error
                 = caf::make_error(ec::parse_error, "missing comma for "
@@ -396,11 +408,11 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
               return result;
             } else {
               ++result.new_str_it;
-              while (result.new_str_it != str.end()
+              while (!it_at_operator_end(result.new_str_it)
                      && std::isspace(*result.new_str_it)) {
                 ++result.new_str_it;
               }
-              if (result.new_str_it == str.end()) {
+              if (it_at_operator_end(result.new_str_it)) {
                 result.parse_error
                   = caf::make_error(ec::parse_error, "missing assignment after "
                                                      "comma");
@@ -416,7 +428,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         }
       }
     }
-    if (result.new_str_it != str.end()) {
+    if (!it_at_operator_end(result.new_str_it)) {
       ++result.new_str_it;
     }
   }
