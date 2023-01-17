@@ -192,7 +192,7 @@ For example, consider this JSON object:
   ],
   "baz": {
     "qux": {},
-    "quux": null,
+    "quux": null
   }
 }
 ```
@@ -206,7 +206,7 @@ With `--omit-empty-records`, this same record will display like this:
     null
   ],
   "baz": {
-    "quux": null,
+    "quux": null
   }
 }
 ```
@@ -220,7 +220,7 @@ With `--omit-empty-lists`, this same record will display like this:
   ],
   "baz": {
     "qux": {},
-    "quux": null,
+    "quux": null
   }
 }
 ```
@@ -230,7 +230,7 @@ like this:
 
 ```json
 {
-  "bar": [],
+  "bar": []
 }
 ```
 
