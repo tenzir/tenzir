@@ -28,7 +28,7 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <arrow/table.h>
+#include <arrow/record_batch.h>
 #include <caf/detail/pretty_type_name.hpp>
 #include <caf/expected.hpp>
 #include <caf/none.hpp>
