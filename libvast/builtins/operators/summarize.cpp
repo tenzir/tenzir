@@ -12,7 +12,10 @@
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/to.hpp>
+#include <vast/concept/parseable/vast/time.hpp>
 #include <vast/error.hpp>
+#include <vast/fwd.hpp>
 #include <vast/hash/hash_append.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
@@ -822,29 +825,137 @@ public:
   virtual std::pair<std::string_view::iterator,
                     caf::expected<std::unique_ptr<pipeline_operator>>>
   parse_pipeline_string(std::string_view str) const override {
-    auto parse_result = system::parse_pipeline(str);
-    if (parse_result.parse_error) {
-      return {parse_result.new_str_it, parse_result.parse_error};
+    record aggregations;
+    vast::list aggregator_groups;
+    std::string aggregator;
+    std::string aggregator_extractor;
+    caf::expected<duration> time_resolution{caf::none};
+    auto it_at_operator_end = [str](const auto& it) {
+      return (it == str.end() || *it == '|');
+    };
+    auto str_r_it = str.begin();
+    auto str_l_it = str_r_it;
+    while (std::isspace(*str_r_it)) {
+      ++str_r_it;
+    }
+    if (it_at_operator_end(str_r_it) || *str_r_it == ',') {
+      return {str_r_it, caf::make_error(ec::parse_error, "missing "
+                                                         "arguments")};
+    }
+    do {
+      while (*str_r_it == ',' || std::isspace(*str_r_it)) {
+        ++str_r_it;
+      }
+      str_l_it = str_r_it;
+      while (!it_at_operator_end(str_r_it) && !std::isspace(*str_r_it) && *str_r_it != '(') {
+        if (*str_r_it == ')') {
+          return {str_r_it, caf::make_error(ec::parse_error, "missing opening "
+                                                             "bracket for "
+                                                             "aggregator")};
+        }
+        ++str_r_it;
+      }
+      if (it_at_operator_end(str_r_it) || std::isspace(*str_r_it)) {
+        return {str_r_it, caf::make_error(ec::parse_error, "missing aggregator "
+                                                           "grouping "
+                                                           "parentheses")};
+      }
+      aggregator = {str_l_it, str_r_it};
+      ++str_r_it;
+      while (std::isspace(*str_r_it)) {
+        ++str_r_it;
+      }
+      str_l_it = str_r_it;
+      while (!it_at_operator_end(str_r_it) && !std::isspace(*str_r_it)
+             && *str_r_it != ')') {
+        if (*str_l_it == '(') {
+          return {str_r_it, caf::make_error(ec::parse_error, "duplicate "
+                                                             "opening "
+                                                             "bracket "
+                                                             "for aggregator")};
+        }
+        ++str_r_it;
+      }
+      if (it_at_operator_end(str_r_it)) {
+        return {str_r_it, caf::make_error(ec::parse_error, "missing closing "
+                                                           "bracket for "
+                                                           "aggregator")};
+      }
+      aggregator_extractor = {str_l_it, str_r_it};
+      aggregations[aggregator_extractor] = aggregator;
+      while (std::isspace(*str_r_it)) {
+        ++str_r_it;
+      }
+      ++str_r_it;
+    } while (!it_at_operator_end(str_r_it) && *str_r_it == ',');
+    while (!it_at_operator_end(str_r_it) && std::isspace(*str_r_it)) {
+      ++str_r_it;
+    }
+    if (it_at_operator_end(str_r_it) || std::string(str_r_it, str_r_it + 3) != "by ") {
+      return {str_r_it, caf::make_error(ec::parse_error, "missing 'by' keyword for extractor group")};
+    }
+    str_r_it += 3;
+    while (!it_at_operator_end(str_r_it) && std::isspace(*str_r_it)) {
+      ++str_r_it;
+    }
+    if (*str_r_it == ',') {
+      return {str_r_it, caf::make_error(ec::parse_error, "missing extractor in grouping")};
+    }
+    do {
+      while (!it_at_operator_end(str_r_it) && (std::isspace(*str_r_it) || *str_r_it == ',')) {
+        ++str_r_it;
+      }
+      str_l_it = str_r_it;
+      while (!it_at_operator_end(str_r_it) && !std::isspace(*str_r_it) && *str_r_it != ',') {
+        ++str_r_it;
+      }
+      aggregator_groups.emplace_back(std::string{str_l_it, str_r_it});
+      while (!it_at_operator_end(str_r_it) && std::isspace(*str_r_it)) {
+        ++str_r_it;
+      }
+    } while (!it_at_operator_end(str_r_it) && *str_r_it == ',');
+    while (!it_at_operator_end(str_r_it) && std::isspace(*str_r_it)) {
+      ++str_r_it;
+    }
+    if (!it_at_operator_end(str_r_it)) {
+      if (std::string_view{str_r_it, str_r_it + 11} != "resolution ")
+        return {str_r_it,
+                caf::make_error(ec::parse_error, "missing 'resolution' keyword "
+                                                 "for time resolution")};
+      str_r_it += 11;
+      while (!it_at_operator_end(str_r_it) && std::isspace(*str_r_it)) {
+        ++str_r_it;
+      }
+      if (it_at_operator_end(str_r_it)) {
+        return {str_r_it, caf::make_error(ec::parse_error, "missing duration "
+                                                           "value for time "
+                                                           "resolution")};
+      }
+      str_l_it = str_r_it;
+      while (!it_at_operator_end(str_r_it) && !std::isspace(*str_r_it)) {
+        ++str_r_it;
+      }
+      auto time_resolution_str = std::string_view{str_l_it, str_r_it};
+      time_resolution = to<duration>(time_resolution_str);
+      if (!time_resolution) {
+        return {str_r_it, caf::make_error(ec::parse_error,
+                                          "invalid time resolution value")};
+      }
+      while (!it_at_operator_end(str_r_it) && std::isspace(*str_r_it)) {
+        ++str_r_it;
+      }
+      if (!it_at_operator_end(str_r_it)) {
+        return {str_r_it, caf::make_error(ec::parse_error,
+                                          "multiple time resolution values are not allowed")};
+      }
     }
     record options;
-    record aggregations;
-    for (const auto& aggregation : parse_result.aggregators) {
-      const auto* aggregation_pair = caf::get_if<list>(&aggregation);
-      const auto* extractor
-        = caf::get_if<std::string>(&aggregation_pair->front());
-      const auto* aggregator
-        = caf::get_if<std::string>(&aggregation_pair->back());
-      aggregations[*extractor] = *aggregator;
-    }
     options["aggregate"] = aggregations;
-    if (!parse_result.aggregator_groups.empty()) {
-      options["group-by"] = parse_result.aggregator_groups;
+    options["group-by"] = aggregator_groups;
+    if (time_resolution) {
+      options["time-resolution"] = *time_resolution;
     }
-    if (parse_result.long_form_options.contains("time-resolution")) {
-      options["time-resolution"]
-        = parse_result.long_form_options["time-resolution"];
-    }
-    return {parse_result.new_str_it, make_pipeline_operator(options)};
+    return {str_r_it, make_pipeline_operator(options)};
   }
 };
 
