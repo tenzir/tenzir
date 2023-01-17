@@ -186,6 +186,7 @@ vast:
     # As an example, to configure an auto-starting PCAP source that listens
     # on the interface 'en0' and lives inside the VAST node, add `spawn
     # source pcap -i en0`.
+    # Note that commands are not executed sequentially but in parallel.
     commands: []
 
     # Triggers removal of old data when the disk budget is exceeded.

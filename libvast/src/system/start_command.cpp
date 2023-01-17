@@ -28,10 +28,35 @@
 #include <caf/openssl/all.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <csignal>
 
 namespace vast::system {
+
+namespace {
+
+/// Actor to run one of the additional commands given as
+/// parameters to the VAST node.
+using command_runner_actor = system::typed_actor_fwd<
+  // Handle a request.
+  auto(atom::run, invocation)->caf::result<void>>::unwrap;
+
+command_runner_actor::behavior_type
+command_runner(command_runner_actor::pointer self) {
+  return {
+    [self](atom::run, vast::invocation& invocation) -> caf::result<void> {
+      auto [root, root_factory] = make_application("vast");
+      auto result = run(invocation, self->home_system(), root_factory);
+      if (!result)
+        VAST_ERROR("failed to run start command {}: {}", invocation,
+                   result.error());
+      return {};
+    },
+  };
+}
+
+} // namespace
 
 using namespace std::chrono_literals;
 
@@ -62,11 +87,11 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   auto node_opt = spawn_node(self, content(sys.config()));
   if (!node_opt)
     return caf::make_message(std::move(node_opt.error()));
-  auto& node = node_opt->get();
+  auto const& node = node_opt->get();
   // Publish our node.
-  auto host = node_endpoint.host.empty()
-                ? defaults::system::endpoint_host.data()
-                : node_endpoint.host.c_str();
+  auto const* host = node_endpoint.host.empty()
+                       ? defaults::system::endpoint_host.data()
+                       : node_endpoint.host.c_str();
   auto publish = [&]() -> caf::expected<uint16_t> {
     const auto reuse_address = true;
     if (sys.has_openssl_manager()) {
@@ -94,16 +119,17 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   auto commands = caf::get_or(inv.options, "vast.start.commands",
                               std::vector<std::string>{});
   if (commands.empty()) {
-    if (auto command = caf::get_if<std::string>( //
-          &inv.options, "vast.start.commands"))
-      commands.push_back(std::move(*command));
+    if (auto const* command
+        = caf::get_if<std::string>(&inv.options, "vast.start.commands"))
+      commands.push_back(*command);
   }
+  std::vector<command_runner_actor> command_runners;
   if (!commands.empty()) {
     auto [root, root_factory] = make_application("vast");
     // We're already in the start command, so we can safely assert that
     // make_application works as expected.
     VAST_ASSERT(root);
-    for (const auto& command : commands) {
+    for (auto const& command : commands) {
       // We use std::quoted for correct tokenization of quoted strings. The
       // invocation parser expects a vector of strings that are correctly
       // tokenized already.
@@ -118,9 +144,9 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         return caf::make_message(hook_invocation.error());
       detail::merge_settings(inv.options, hook_invocation->options,
                              policy::merge_lists::yes);
-      auto result = run(*hook_invocation, sys, root_factory);
-      if (!result)
-        return caf::make_message(result.error());
+      auto runner = self->spawn<caf::detached>(command_runner);
+      command_runners.push_back(runner);
+      self->send(runner, atom::run_v, *hook_invocation);
     }
   }
   self
