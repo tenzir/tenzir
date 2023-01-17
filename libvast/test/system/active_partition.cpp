@@ -111,7 +111,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     "y",
     vast::record_type{
       {"x", vast::uint64_type{}},
-      {"x", vast::double_type{}},
+      {"z", vast::double_type{}},
     },
   };
 
