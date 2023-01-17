@@ -191,22 +191,42 @@ make_pipeline(const std::string& name,
 }
 
 caf::expected<std::vector<std::unique_ptr<pipeline_operator>>>
-make_pipeline(std::string_view pipeline_string) {
+make_pipeline(std::string_view pipeline_str) {
   std::vector<std::unique_ptr<pipeline_operator>> pipeline;
-  for (auto pl_str_it = pipeline_string.begin();
-       pl_str_it != pipeline_string.end();) {
+  std::string_view pl_op_str;
+  for (auto pl_str_it = pipeline_str.begin();;) {
+    if (*pl_str_it == '|' || pl_str_it == pipeline_str.end()) {
+      if (pl_op_str.empty()) {
+        return caf::make_error(
+          ec::parse_error,
+          fmt::format("empty pipeline operator at char {}",
+                      std::distance(pipeline_str.begin(), pl_str_it)));
+      }
+      if (pl_str_it == pipeline_str.end()) {
+        break;
+      }
+      pl_op_str = {};
+    }
     if (std::isspace(*pl_str_it) || *pl_str_it == '|') {
       ++pl_str_it;
       continue;
     }
-    auto pl_str_to_parse = std::string_view{pl_str_it, pipeline_string.end()};
+    auto pl_str_to_parse = std::string_view{pl_str_it, pipeline_str.end()};
     auto pl_op_str_it = pl_str_it;
-    while (std::isalnum(*pl_op_str_it)
-           && pl_op_str_it != pipeline_string.end()) {
+    while (!std::isspace(*pl_op_str_it) && *pl_op_str_it != '|'
+           && pl_op_str_it != pipeline_str.end()) {
+      if (!std::isalnum(*pl_op_str_it)) {
+        return caf::make_error(
+          ec::parse_error,
+          fmt::format("invalid pipeline operator "
+                      "character {} at char {}",
+                      *pl_op_str_it,
+                      std::distance(pipeline_str.begin(), pl_op_str_it)));
+      }
       ++pl_op_str_it;
     };
-    auto pl_op_str = std::string_view{pl_str_it, pl_op_str_it};
-    pl_str_to_parse = std::string_view{pl_op_str_it, pipeline_string.end()};
+    pl_op_str = {pl_str_it, pl_op_str_it};
+    pl_str_to_parse = std::string_view{pl_op_str_it, pipeline_str.end()};
     auto [new_str_it_pos, pipeline_op]
       = parse_pipeline_operator(pl_op_str, pl_str_to_parse);
     if (!pipeline_op) {

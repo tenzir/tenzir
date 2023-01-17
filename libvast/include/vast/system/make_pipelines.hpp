@@ -51,7 +51,7 @@ make_pipeline(const std::string& name,
 caf::error parse_pipeline_operators(pipeline& pipeline,
                                     const caf::config_value::list& operators);
 caf::expected<std::vector<std::unique_ptr<pipeline_operator>>>
-make_pipeline(std::string_view pipeline_string);
+make_pipeline(std::string_view pipeline_str);
 
 struct pipeline_parsing_result {
   vast::list extractors;
