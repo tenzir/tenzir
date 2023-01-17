@@ -152,6 +152,20 @@ TEST(pipeline string parsing - aggregators - multiple groups
   REQUIRE_EQUAL(parsed_iterator, pipeline_str_view.end());
 }
 
+
+TEST(pipeline string parsing - aggregators - multiple groups
+     - groups start with comma) {
+  std::string pipeline_str
+    = " min(net.src.ip), max(net.dest.port) by , timestamp, proto, event_type";
+  auto* summarize_plugin
+    = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
+  std::string_view pipeline_str_view = pipeline_str;
+  auto [parsed_iterator, plugin]
+    = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(!plugin);
+  REQUIRE_NOT_EQUAL(parsed_iterator, pipeline_str_view.end());
+}
+
 TEST(pipeline string parsing - aggregators - multiple groups
      - time resolution) {
   std::string pipeline_str
@@ -173,8 +187,8 @@ TEST(pipeline string parsing - aggregators - multiple groups - missing 'by') {
   std::string_view pipeline_str_view = pipeline_str;
   auto [parsed_iterator, plugin]
     = summarize_plugin->parse_pipeline_string(pipeline_str_view);
-  REQUIRE(plugin);
-  REQUIRE_EQUAL(parsed_iterator, pipeline_str_view.end());
+  REQUIRE(!plugin);
+  REQUIRE_NOT_EQUAL(parsed_iterator, pipeline_str_view.end());
 }
 
 TEST(pipeline string parsing - aggregators - multiple groups
@@ -227,6 +241,30 @@ TEST(pipeline string parsing - aggregators - missing closing bracket) {
   REQUIRE_NOT_EQUAL(parsed_iterator, pipeline_str_view.end());
 }
 
+TEST(pipeline string parsing - aggregators - missing aggregator) {
+  std::string pipeline_str
+    = "  by timestamp resolution 5h";
+  auto* summarize_plugin
+    = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
+  std::string_view pipeline_str_view = pipeline_str;
+  auto [parsed_iterator, plugin]
+    = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(!plugin);
+  REQUIRE_NOT_EQUAL(parsed_iterator, pipeline_str_view.end());
+}
+
+TEST(pipeline string parsing - aggregators - starting with comma) {
+  std::string pipeline_str
+    = "  , distinct() by timestamp resolution 5h";
+  auto* summarize_plugin
+    = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
+  std::string_view pipeline_str_view = pipeline_str;
+  auto [parsed_iterator, plugin]
+    = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(!plugin);
+  REQUIRE_NOT_EQUAL(parsed_iterator, pipeline_str_view.end());
+}
+
 TEST(pipeline string parsing - aggregators - no grouping extractor) {
   std::string pipeline_str = "distinct() by timestamp resolution 5h";
   auto* summarize_plugin
@@ -241,6 +279,17 @@ TEST(pipeline string parsing - aggregators - no grouping extractor) {
 TEST(pipeline string parsing - aggregators
      - missing grouping extractor brackets) {
   std::string pipeline_str = "distinct by timestamp resolution 5h";
+  auto* summarize_plugin
+    = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
+  std::string_view pipeline_str_view = pipeline_str;
+  auto [parsed_iterator, plugin]
+    = summarize_plugin->parse_pipeline_string(pipeline_str_view);
+  REQUIRE(!plugin);
+  REQUIRE_NOT_EQUAL(parsed_iterator, pipeline_str_view.end());
+}
+
+TEST(pipeline string parsing - aggregators - multiple time resolution values) {
+  std::string pipeline_str = "distinct() by timestamp resolution 5h 10s";
   auto* summarize_plugin
     = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
   std::string_view pipeline_str_view = pipeline_str;
