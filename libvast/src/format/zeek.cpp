@@ -42,7 +42,8 @@ constexpr std::string_view type_name_prefix = "zeek.";
 // Creates a VAST type from an ASCII Zeek type in a log header.
 caf::expected<type> parse_type(std::string_view zeek_type) {
   type t;
-  if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file")
+  if (zeek_type == "enum" || zeek_type == "string" || zeek_type == "file"
+      || zeek_type == "pattern")
     t = type{string_type{}};
   else if (zeek_type == "bool")
     t = type{bool_type{}};
@@ -56,8 +57,6 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     t = type{time_type{}};
   else if (zeek_type == "interval")
     t = type{duration_type{}};
-  else if (zeek_type == "pattern")
-    t = type{pattern_type{}};
   else if (zeek_type == "addr")
     t = type{ip_type{}};
   else if (zeek_type == "subnet")
@@ -114,9 +113,6 @@ std::string to_zeek_string(const type& t) {
     },
     [](const string_type&) -> std::string {
       return "string";
-    },
-    [](const pattern_type&) -> std::string {
-      return "pattern";
     },
     [](const ip_type&) -> std::string {
       return "addr";

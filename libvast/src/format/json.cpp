@@ -97,9 +97,6 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
     [&](const string_type&) noexcept -> data {
       return ::simdjson::to_string(values);
     },
-    [&](const pattern_type&) noexcept -> data {
-      return caf::none;
-    },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
@@ -155,9 +152,6 @@ data extract(int64_t value, const type& type) {
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
     },
-    [&](const pattern_type&) noexcept -> data {
-      return caf::none;
-    },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
@@ -209,9 +203,6 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
     },
     [&](const string_type&) noexcept -> data {
       return ::simdjson::to_string(value);
-    },
-    [&](const pattern_type&) noexcept -> data {
-      return caf::none;
     },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
@@ -314,9 +305,6 @@ data extract(uint64_t value, const type& type) {
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
     },
-    [&](const pattern_type&) noexcept -> data {
-      return caf::none;
-    },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
@@ -371,9 +359,6 @@ data extract(double value, const type& type) {
     },
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
-    },
-    [&](const pattern_type&) noexcept -> data {
-      return caf::none;
     },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
@@ -447,11 +432,6 @@ data extract(std::string_view value, const type& type) {
     [&](const string_type&) noexcept -> data {
       return std::string{value};
     },
-    [&](const pattern_type&) noexcept -> data {
-      if (auto result = to<pattern>(value))
-        return *result;
-      return caf::none;
-    },
     [&](const ip_type&) noexcept -> data {
       if (auto result = to<ip>(value))
         return *result;
@@ -506,9 +486,6 @@ data extract(bool value, const type& type) {
     },
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
-    },
-    [&](const pattern_type&) noexcept -> data {
-      return caf::none;
     },
     [&](const ip_type&) noexcept -> data {
       return caf::none;
@@ -639,10 +616,6 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(fmt::to_string(value));
       VAST_ASSERT(added);
     },
-    [&](const pattern_type&) noexcept {
-      const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
-    },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
@@ -715,10 +688,6 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(fmt::to_string(value));
       VAST_ASSERT(added);
     },
-    [&](const pattern_type&) noexcept {
-      const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
-    },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
@@ -786,10 +755,6 @@ void add(double value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(fmt::to_string(value));
       VAST_ASSERT(added);
     },
-    [&](const pattern_type&) noexcept {
-      const auto added = builder.add(caf::none);
-      VAST_ASSERT(added);
-    },
     [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
@@ -845,10 +810,6 @@ void add(bool value, const type& type, table_slice_builder& builder) {
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(fmt::to_string(value));
-      VAST_ASSERT(added);
-    },
-    [&](const pattern_type&) noexcept {
-      const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
     [&](const ip_type&) noexcept {
@@ -963,10 +924,6 @@ void add(std::string_view value, const type& type,
     },
     [&](const string_type&) noexcept {
       const auto added = builder.add(value);
-      VAST_ASSERT(added);
-    },
-    [&](const pattern_type&) noexcept {
-      const auto added = builder.add(view<pattern>{value});
       VAST_ASSERT(added);
     },
     [&](const ip_type&) noexcept {

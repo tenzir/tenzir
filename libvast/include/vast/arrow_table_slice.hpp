@@ -160,9 +160,6 @@ value_at([[maybe_unused]] const Type& type,
   } else if constexpr (std::is_same_v<Type, string_type>) {
     const auto str = arr.GetView(row);
     return {str.data(), str.size()};
-  } else if constexpr (std::is_same_v<Type, pattern_type>) {
-    return view<type_to_data_t<pattern_type>>{
-      value_at(string_type{}, arr, row)};
   } else if constexpr (std::is_same_v<Type, ip_type>) {
     VAST_ASSERT(arr.byte_width() == 16);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)

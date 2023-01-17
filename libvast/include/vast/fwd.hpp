@@ -143,7 +143,6 @@ class module;
 class null_bitmap;
 class passive_store;
 class pattern;
-class pattern_type;
 class plugin;
 class plugin_ptr;
 class port;

@@ -67,14 +67,14 @@ TEST(combining) {
   )__"));
   auto y = unbox(to<module>(R"__(
     type c = addr
-    type d = pattern
+    type d = string
   )__"));
   auto z = module::combine(x, y);
   CHECK_EQUAL(unbox(z.find("a")),
               (type{"a", type{"int_custom", int64_type{}}}));
   CHECK_EQUAL(unbox(z.find("b")), (type{"b", double_type{}}));
   CHECK_EQUAL(unbox(z.find("c")), (type{"c", ip_type{}}));
-  CHECK_EQUAL(unbox(z.find("d")), (type{"d", pattern_type{}}));
+  CHECK_EQUAL(unbox(z.find("d")), (type{"d", string_type{}}));
   CHECK_EQUAL(unbox(z.find("int_custom")), (type{"int_custom", int64_type{}}));
 }
 
@@ -212,7 +212,7 @@ TEST(parseable - basic types global) {
     type t5 = duration
     type t6 = time
     type t7 = string
-    type t8 = pattern
+    type t8 = string
     type t9 = addr
     type t10 = subnet
     type foo = record{
@@ -238,7 +238,7 @@ TEST(parseable - basic types global) {
   REQUIRE(r);
   auto t8 = r->resolve_key("a8");
   REQUIRE(t8);
-  CHECK(holds_alternative<pattern_type>(r->field(*t8).type));
+  CHECK(holds_alternative<string_type>(r->field(*t8).type));
 }
 
 TEST(parseable - basic types local) {
@@ -251,7 +251,7 @@ TEST(parseable - basic types local) {
       a5: duration,
       a6: time,
       a7: string,
-      a8: pattern,
+      a8: string,
       a9: ip,
       a10: subnet,
     }

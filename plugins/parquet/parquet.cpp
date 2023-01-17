@@ -115,12 +115,6 @@ align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
     [&](const enumeration_type& et) -> std::shared_ptr<arrow::Array> {
       return fix_enum_array(et, array);
     },
-    [&](const pattern_type&) -> std::shared_ptr<arrow::Array> {
-      if (pattern_type::to_arrow_type()->Equals(array->type()))
-        return {};
-      return std::make_shared<pattern_type::array_type>(
-        pattern_type::to_arrow_type(), array);
-    },
     [&](const ip_type&) -> std::shared_ptr<arrow::Array> {
       if (ip_type::to_arrow_type()->Equals(array->type()))
         return {}; // address is not always wrong, only when inside maps

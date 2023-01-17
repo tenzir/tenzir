@@ -89,17 +89,10 @@ TEST(subnet type serde roundtrip) {
   serde_roundtrip(subnet_type{});
 }
 
-TEST(pattern type serde roundtrip) {
-  serde_roundtrip(pattern_type{});
-}
-
 TEST(arrow::DataType sum type) {
   CHECK(caf::visit(is_type<arrow::Int64Type>(), *arrow::int64()));
   CHECK(caf::visit(is_type<ip_type::arrow_type>(),
                    static_cast<const arrow::DataType&>(ip_type::arrow_type())));
-  CHECK(caf::visit(
-    is_type<pattern_type::arrow_type>(),
-    static_cast<const arrow::DataType&>(pattern_type::arrow_type())));
   CHECK(caf::visit(is_type<arrow::Int64Type, arrow::UInt64Type>(),
                    *arrow::int64(), *arrow::uint64()));
   CHECK_EQUAL(caf::get_if<arrow::StringType>(arrow::utf8().get()),
@@ -107,12 +100,8 @@ TEST(arrow::DataType sum type) {
   auto et = static_pointer_cast<arrow::DataType>(
     std::make_shared<enumeration_type::arrow_type>(
       enumeration_type{{"A"}, {"B"}, {"C"}}));
-  auto pt = static_pointer_cast<arrow::DataType>(
-    std::make_shared<pattern_type::arrow_type>());
   CHECK(caf::get_if<enumeration_type::arrow_type>(et.get()));
-  CHECK(!caf::get_if<enumeration_type::arrow_type>(pt.get()));
-  CHECK(!caf::get_if<pattern_type::arrow_type>(et.get()));
-  CHECK(caf::get_if<pattern_type::arrow_type>(pt.get()));
+  CHECK(!caf::get_if<subnet_type::arrow_type>(et.get()));
 }
 
 TEST(arrow::Array sum type) {
@@ -121,28 +110,16 @@ TEST(arrow::Array sum type) {
   auto uint_arr = make_arrow_array<arrow::UInt64Builder>({7, 8});
   auto int_arr = make_arrow_array<arrow::Int64Builder>({3, 2, 1});
   auto addr_arr = make_ip_array();
-  const auto& pattern_arr = std::static_pointer_cast<arrow::Array>(
-    std::make_shared<pattern_type::array_type>(
-      std::make_shared<pattern_type::arrow_type>(), str_arr));
   CHECK(caf::get_if<arrow::StringArray>(&*str_arr));
   CHECK(!caf::get_if<arrow::UInt64Array>(&*str_arr));
   CHECK(!caf::get_if<arrow::StringArray>(&*uint_arr));
   CHECK(caf::get_if<arrow::UInt64Array>(&*uint_arr));
   CHECK(!caf::get_if<ip_type::array_type>(&*uint_arr));
-  CHECK(!caf::get_if<pattern_type::array_type>(&*addr_arr));
   CHECK(caf::get_if<ip_type::array_type>(&*addr_arr));
-  CHECK(!caf::get_if<ip_type::array_type>(&*pattern_arr));
-  CHECK(caf::get_if<pattern_type::array_type>(&*pattern_arr));
-  CHECK(caf::get_if<pattern_type::array_type>(&*pattern_arr));
   caf::visit(is_type<arrow::StringArray>(), *str_arr);
-  caf::visit(is_type<pattern_type::array_type>(), *pattern_arr);
-  caf::visit(is_type<pattern_type::array_type>(), *str_arr);
   auto f = detail::overload{
     [](const ip_type::array_type&) {
       return 99;
-    },
-    [](const pattern_type::array_type&) {
-      return 100;
     },
     [](const arrow::StringArray&) {
       return 101;
@@ -152,7 +129,6 @@ TEST(arrow::Array sum type) {
     },
   };
   CHECK_EQUAL(caf::visit(f, *str_arr), 101);
-  CHECK_EQUAL(caf::visit(f, *pattern_arr), 100);
   CHECK_EQUAL(caf::visit(f, *addr_arr), 99);
   CHECK_EQUAL(caf::visit(f, *int_arr), -1);
 }

@@ -58,13 +58,6 @@ class plugin : public virtual aggregation_function_plugin {
         const Type&) -> caf::expected<std::unique_ptr<aggregation_function>> {
         return std::make_unique<min_function<Type>>(input_type);
       },
-      [](const pattern_type& type)
-        -> caf::expected<std::unique_ptr<aggregation_function>> {
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("min aggregation function does not "
-                                           "support type {}",
-                                           type));
-      },
       []<complex_type Type>(const Type& type)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
         return caf::make_error(ec::invalid_configuration,

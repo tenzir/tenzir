@@ -5,36 +5,6 @@ from typing import Iterable, Optional, Sequence, SupportsBytes, SupportsIndex
 import pyarrow as pa
 
 
-class PatternScalar(pa.ExtensionScalar):
-    def as_py(self) -> str | None:
-        return None if self.value is None else self.value.as_py()
-
-
-class PatternType(pa.ExtensionType):
-    ext_name = "vast.pattern"
-    ext_type = pa.string()
-
-    def __init__(self):
-        pa.ExtensionType.__init__(self, self.ext_type, self.ext_name)
-
-    def __arrow_ext_serialize__(self) -> bytes:
-        return self.ext_name.encode()
-
-    @classmethod
-    def __arrow_ext_deserialize__(self, storage_type, serialized: bytes):
-        if serialized.decode() != self.ext_name:
-            raise TypeError("type identifier does not match")
-        if storage_type != self.ext_type:
-            raise TypeError("storage type does not match")
-        return PatternType()
-
-    def __reduce__(self):
-        return PatternScalar, ()
-
-    def __arrow_ext_scalar_class__(self):
-        return PatternScalar
-
-
 class IPScalar(pa.ExtensionScalar):
     def as_py(self) -> ip.IPv4Address | ip.IPv6Address | None:
         return None if self.value is None else unpack_ip(self.value.as_py())
@@ -197,7 +167,7 @@ def pack_subnet(
             return (subnet.network_address.packed, subnet.prefixlen)
 
 
-VastExtensionType = PatternType | IPType | EnumType | SubnetType
+VastExtensionType = IPType | EnumType | SubnetType
 
 
 def py_dict_to_arrow_dict(dict: dict[str, int]) -> pa.StringArray:
@@ -233,9 +203,6 @@ def extension_array(obj: Sequence, type: pa.DataType) -> pa.Array:
                 names=["address", "length"],
             )
             return pa.ExtensionArray.from_storage(type, storage)
-        case PatternType():
-            storage = pa.array(obj, pa.string())
-            return pa.ExtensionArray.from_storage(type, storage)
         case EnumType(fields=fields):
             # use the mappings in the `fields` metadata as indices for building
             # the dictionary
@@ -249,7 +216,6 @@ def extension_array(obj: Sequence, type: pa.DataType) -> pa.Array:
 
 
 # Modules are intialized exactly once, so we can perform the registration here.
-pa.register_extension_type(PatternType())
 pa.register_extension_type(IPType())
 pa.register_extension_type(SubnetType())
 pa.register_extension_type(EnumType({"stub": 0}))

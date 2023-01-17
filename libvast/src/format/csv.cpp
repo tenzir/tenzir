@@ -299,10 +299,6 @@ struct container_parser_builder {
       return +(parsers::any - opt_.separator - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
         return data{std::move(x)};
       };
-    } else if constexpr (std::is_same_v<T, pattern_type>) {
-      return +(parsers::any - opt_.separator - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
-        return data{pattern{std::move(x)}};
-      };
       // clang-format on
     } else if constexpr (std::is_same_v<T, enumeration_type>) {
       auto to_enumeration = [t](std::string s) -> caf::optional<Attribute> {
@@ -409,9 +405,6 @@ struct csv_parser_factory {
           .with(add_t<duration>{bptr_});
       } else if constexpr (std::is_same_v<U, string_type>) {
         return (-field).with(add_t<std::string>{bptr_});
-      } else if constexpr (std::is_same_v<U, pattern_type>) {
-        return (-as<pattern>(as<std::string>(field)))
-          .with(add_t<pattern>{bptr_});
       } else if constexpr (std::is_same_v<U, enumeration_type>) {
         auto to_enumeration = [u](std::string s) -> caf::optional<enumeration> {
           for (const auto& [canonical, internal] : u.fields())

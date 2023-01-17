@@ -145,41 +145,6 @@ public:
   std::string Serialize() const override;
 };
 
-/// pattern representation as an Arrow extension type.
-/// Internal (physical) representation is `arrow::StringType`.
-class pattern_extension_type : public arrow::ExtensionType {
-public:
-  static constexpr auto vast_id = "vast.pattern";
-  static const std::shared_ptr<arrow::DataType> arrow_type;
-
-  // Create an arrow type representation of a VAST pattern type.
-  pattern_extension_type();
-
-  /// Unique name to identify the extension type, `vast.pattern`.
-  std::string extension_name() const override;
-
-  /// Compare two extension types for equality, based on the extension name.
-  /// @param other An extension type to test for equality.
-  bool ExtensionEquals(const ExtensionType& other) const override;
-
-  /// Wrap built-in Array type in an ExtensionArray instance
-  /// @param data the physical storage for the extension type
-  std::shared_ptr<arrow::Array>
-  MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
-
-  /// Create an instance of pattern given the actual storage type
-  /// and the serialized representation.
-  /// @param storage_type the physical storage type of the extension
-  /// @param serialized the serialized form of the extension.
-  arrow::Result<std::shared_ptr<DataType>>
-  Deserialize(std::shared_ptr<DataType> storage_type,
-              const std::string& serialized) const override;
-
-  /// Create serialized representation of pattern, based on extension name.
-  /// @return the serialized representation, `vast.pattern`.
-  std::string Serialize() const override;
-};
-
 struct enum_array : arrow::ExtensionArray {
   using TypeClass = enum_extension_type;
   using arrow::ExtensionArray::ExtensionArray;
@@ -195,11 +160,6 @@ struct subnet_array : arrow::ExtensionArray {
   using arrow::ExtensionArray::ExtensionArray;
 };
 
-struct pattern_array : arrow::ExtensionArray {
-  using TypeClass = pattern_extension_type;
-  using arrow::ExtensionArray::ExtensionArray;
-};
-
 /// Register all VAST-defined Arrow extension types in the global registry.
 void register_extension_types();
 
@@ -210,10 +170,6 @@ std::shared_ptr<arrow::ExtensionType> make_arrow_address();
 /// Creates an `subnet_extension_type` for VAST `subnet_type.
 /// @returns An arrow extension type for subnet.
 std::shared_ptr<arrow::ExtensionType> make_arrow_subnet();
-
-/// Creates an `pattern_extension_type` for VAST `pattern_type.
-/// @returns An arrow extension type for pattern.
-std::shared_ptr<arrow::ExtensionType> make_arrow_pattern();
 
 /// Creates a `enum_extension_type` extension for `enumeration_type`.
 /// @param t The enumeration type to represent.

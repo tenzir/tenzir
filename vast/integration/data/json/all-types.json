@@ -1,4 +1,4 @@
-{ "b": true,  "p": ".*", "e": "A"  }
-{ "b": false, "p": ".*", "e": "B"  }
-{ "b": false, "p": ".*", "e": "C" }
-{ "b": false, "p": ".*", "e": "D" }
+{ "b": true,  "e": "A"  }
+{ "b": false, "e": "B"  }
+{ "b": false, "e": "C" }
+{ "b": false, "e": "D" }

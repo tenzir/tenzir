@@ -50,9 +50,9 @@ protected:
 /// The list of concrete types.
 using concrete_types
   = caf::detail::type_list<bool_type, int64_type, uint64_type, double_type,
-                           duration_type, time_type, string_type, pattern_type,
-                           ip_type, subnet_type, enumeration_type, list_type,
-                           map_type, record_type>;
+                           duration_type, time_type, string_type, ip_type,
+                           subnet_type, enumeration_type, list_type, map_type,
+                           record_type>;
 
 /// A concept that models any concrete type.
 template <class T>
@@ -604,92 +604,6 @@ public:
   [[nodiscard]] static std::shared_ptr<
     typename arrow::TypeTraits<arrow_type>::BuilderType>
   make_arrow_builder(arrow::MemoryPool* pool) noexcept;
-};
-
-// -- pattern_type ------------------------------------------------------------
-
-/// A regular expression.
-/// @relates type
-class pattern_type final {
-public:
-  /// Returns the type index.
-  static constexpr uint8_t type_index = 8;
-
-  /// The corresponding Arrow DataType.
-  struct arrow_type;
-
-  /// The corresponding Arrow Array.
-  struct array_type final : arrow::ExtensionArray {
-    using TypeClass = arrow_type;
-    using arrow::ExtensionArray::ExtensionArray;
-
-    [[nodiscard]] std::shared_ptr<arrow::StringArray> storage() const;
-
-  private:
-    using arrow::ExtensionArray::storage;
-  };
-
-  /// The corresponding Arrow Scalar.
-  struct scalar_type final : arrow::ExtensionScalar {
-    using TypeClass = arrow_type;
-    using arrow::ExtensionScalar::ExtensionScalar;
-  };
-
-  /// The corresponding Arrow ArrayBuilder.
-  struct builder_type final : arrow::StringBuilder {
-    using TypeClass = arrow_type;
-    using arrow::StringBuilder::StringBuilder;
-    [[nodiscard]] std::shared_ptr<arrow::DataType> type() const override;
-  };
-
-  /// Returns a view of the underlying binary representation.
-  friend std::span<const std::byte> as_bytes(const pattern_type&) noexcept;
-
-  /// Constructs data from the type.
-  [[nodiscard]] static pattern construct() noexcept;
-
-  /// Converts the type into an Arrow DataType.
-  [[nodiscard]] static std::shared_ptr<arrow_type> to_arrow_type() noexcept;
-
-  /// Creates an Arrow ArrayBuilder from the type.
-  [[nodiscard]] static std::shared_ptr<builder_type>
-  make_arrow_builder(arrow::MemoryPool* pool) noexcept;
-};
-
-/// An extension type for Arrow representing corresponding to the pattern type.
-struct pattern_type::arrow_type final : arrow::ExtensionType {
-  /// A unique identifier for this extension type.
-  static constexpr auto name = "vast.pattern";
-
-  /// Register this extension type.
-  static void register_extension() noexcept;
-
-  /// Create an arrow type representation of a VAST pattern type.
-  arrow_type() noexcept;
-
-  /// Unique name to identify the extension type.
-  std::string extension_name() const override;
-
-  /// Compare two extension types for equality, based on the extension name.
-  /// @param other An extension type to test for equality.
-  bool ExtensionEquals(const arrow::ExtensionType& other) const override;
-
-  /// Wrap built-in Array type in an ExtensionArray instance.
-  /// @param data the physical storage for the extension type.
-  std::shared_ptr<arrow::Array>
-  MakeArray(std::shared_ptr<arrow::ArrayData> data) const override;
-
-  /// Create an instance of pattern given the actual storage type
-  /// and the serialized representation.
-  /// @param storage_type the physical storage type of the extension.
-  /// @param serialized the serialized form of the extension.
-  arrow::Result<std::shared_ptr<arrow::DataType>>
-  Deserialize(std::shared_ptr<arrow::DataType> storage_type,
-              const std::string& serialized) const override;
-
-  /// Create serialized representation of pattern.
-  /// @return the serialized representation.
-  std::string Serialize() const override;
 };
 
 // -- ip_type ------------------------------------------------------------
@@ -1401,18 +1315,6 @@ auto serialize_bytes(flatbuffers::FlatBufferBuilder&, const Type&) = delete;
 namespace arrow {
 
 template <>
-class TypeTraits<typename vast::pattern_type::arrow_type>
-  : TypeTraits<StringType> {
-public:
-  using ArrayType = vast::pattern_type::array_type;
-  using ScalarType = vast::pattern_type::scalar_type;
-  using BuilderType = vast::pattern_type::builder_type;
-  static inline std::shared_ptr<DataType> type_singleton() {
-    return vast::pattern_type::to_arrow_type();
-  }
-};
-
-template <>
 class TypeTraits<typename vast::ip_type::arrow_type>
   : TypeTraits<FixedSizeBinaryType> {
 public:
@@ -2118,12 +2020,6 @@ struct formatter<T> {
   auto format(const vast::string_type&, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return format_to(ctx.out(), "string");
-  }
-
-  template <class FormatContext>
-  auto format(const vast::pattern_type&, FormatContext& ctx) const
-    -> decltype(ctx.out()) {
-    return format_to(ctx.out(), "pattern");
   }
 
   template <class FormatContext>
