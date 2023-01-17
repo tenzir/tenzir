@@ -10,7 +10,11 @@ vast:
 
   # The timeout for connecting to a VAST server. Set to 0 seconds to wait
   # indefinitely.
-  connection-timeout: 10s
+  connection-timeout: 5m
+
+  # The delay between two connection attempts. Set to 0s to try connecting
+  # without retries.
+  connection-retry-delay: 3s
 
   # The file system path used for persistent state.
   db-directory: "vast.db"
