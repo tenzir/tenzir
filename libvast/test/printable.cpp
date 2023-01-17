@@ -397,10 +397,10 @@ TEST(JSON - omit nulls) {
     .omit_nulls = true,
   }};
   check_to_json(p, vast::record{{"a", 42u}, {"b", caf::none}, {"c", caf::none}},
-                "{\"a\": 42}");
+                R"__({"a": 42})__");
   check_to_json(
     p, vast::record{{"a", vast::record{{"b", caf::none}}}, {"c", caf::none}},
-    "{\"a\": {}}");
+    R"__({"a": {}})__");
   check_to_json(p,
                 vast::record{
                   {"a", 42u},
@@ -417,7 +417,7 @@ TEST(JSON - omit empty records) {
     .omit_empty_records = true,
   }};
   check_to_json(p, vast::record{{"a", 42u}, {"b", caf::none}, {"c", caf::none}},
-                "{\"a\": 42}");
+                R"__({"a": 42})__");
   check_to_json(
     p, vast::record{{"a", vast::record{{"b", caf::none}}}, {"c", caf::none}},
     "{}");
@@ -440,7 +440,7 @@ TEST(JSON - omit empty lists) {
     check_to_json(
       p,
       vast::record{{"a", vast::list{}}, {"b", vast::list{}}, {"c", caf::none}},
-      "{\"c\": null}");
+      R"__({"c": null})__");
     check_to_json(p,
                   vast::list{vast::record{{"a", vast::record{{"b", caf::none}}},
                                           {"c", caf::none}},
