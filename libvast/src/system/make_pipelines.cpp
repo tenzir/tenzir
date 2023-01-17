@@ -222,74 +222,155 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
   pipeline_parsing_result result;
   std::string current_token;
   std::string current_assignment_key;
-  auto str_r_it = str.begin();
-  for (auto str_l_it = str_r_it; str_l_it != str.end() && *str_l_it != '|';) {
-    if (std::isspace(*str_r_it)) {
-      ++str_r_it;
-    } else if (*str_r_it == ','
-               || (str_r_it == str.end() || *str_r_it == '|')) {
-      str_l_it = str_r_it;
-    } else if (*str_r_it == '-') {
-      str_l_it = str_r_it;
-      ++str_r_it;
-      if (str_r_it == str.end() || std::isspace(*str_r_it)) {
+  result.new_str_it = str.begin();
+  for (auto str_l_it = result.new_str_it;
+       result.new_str_it != str.end() && *result.new_str_it != '|';) {
+    if (*result.new_str_it == '-') {
+      ++result.new_str_it;
+      if (result.new_str_it == str.end() || std::isspace(*result.new_str_it)) {
         result.parse_error
           = caf::make_error(ec::parse_error, "invalid option prefix");
-        break;
+        return result;
       }
-      if (*str_r_it != '-') {
-        current_assignment_key = *str_r_it;
-        ++str_r_it;
-        if (str_r_it == str.end() || !std::isspace(*str_r_it)) {
+      if (*result.new_str_it != '-') {
+        current_assignment_key = *result.new_str_it;
+        ++result.new_str_it;
+        if (result.new_str_it == str.end()
+            || !std::isspace(*result.new_str_it)) {
           result.parse_error
             = caf::make_error(ec::parse_error, "invalid short-form option "
                                                "prefix");
-          break;
+          return result;
         }
-        while (str_r_it != str.end() && std::isspace(*str_r_it)) {
-          ++str_r_it;
+        while (result.new_str_it != str.end()
+               && std::isspace(*result.new_str_it)) {
+          ++result.new_str_it;
         }
-        if (str_r_it == str.end() || *str_r_it == '-') {
+        if (result.new_str_it == str.end() || *result.new_str_it == '-') {
           result.parse_error
             = caf::make_error(ec::parse_error, "missing value for short-form "
                                                "option");
-          break;
+          return result;
         }
-        str_l_it = str_r_it;
-        while (str_r_it != str.end() && !std::isspace(*str_r_it)) {
-          ++str_r_it;
+        str_l_it = result.new_str_it;
+        while (result.new_str_it != str.end()
+               && !std::isspace(*result.new_str_it)) {
+          ++result.new_str_it;
         }
-        current_token = {str_l_it, str_r_it};
+        current_token = {str_l_it, result.new_str_it};
         result.short_form_options[current_assignment_key] = current_token;
       } else {
-        ++str_r_it;
-        str_l_it = str_r_it;
-        while (str_r_it != str.end() && *str_r_it != '='
-               && !std::isspace(*str_r_it)) {
-          ++str_r_it;
+        ++result.new_str_it;
+        str_l_it = result.new_str_it;
+        while (result.new_str_it != str.end() && *result.new_str_it != '='
+               && !std::isspace(*result.new_str_it)) {
+          ++result.new_str_it;
         }
-        if (str_r_it == str.end() || std::isspace(*str_r_it)) {
+        if (result.new_str_it == str.end()
+            || std::isspace(*result.new_str_it)) {
           result.parse_error
             = caf::make_error(ec::parse_error, "missing long-form option "
                                                "assignment");
-          break;
+          return result;
         }
-        current_assignment_key = {str_l_it, str_r_it};
-        ++str_r_it;
-        str_l_it = str_r_it;
-        while (str_r_it != str.end() && !std::isspace(*str_r_it)) {
-          ++str_r_it;
+        current_assignment_key = {str_l_it, result.new_str_it};
+        ++result.new_str_it;
+        str_l_it = result.new_str_it;
+        while (result.new_str_it != str.end()
+               && !std::isspace(*result.new_str_it)) {
+          ++result.new_str_it;
         }
-        current_token = {str_l_it, str_r_it};
+        current_token = {str_l_it, result.new_str_it};
         result.long_form_options[current_assignment_key] = current_token;
       }
-    } else {
+    } else if (!std::isspace(*result.new_str_it)) {
+      auto complex_value_lvl = 0;
+      while (result.new_str_it != str.end()) {
+        str_l_it = result.new_str_it;
+        while (result.new_str_it != str.end() && *result.new_str_it != '='
+               && !std::isspace(*result.new_str_it)) {
+          ++result.new_str_it;
+        }
+        current_assignment_key = {str_l_it, result.new_str_it};
+        while (std::isspace(*result.new_str_it)) {
+          ++result.new_str_it;
+        }
+        if (*result.new_str_it == '=') {
+          ++result.new_str_it;
+          while (result.new_str_it != str.end()
+                 && std::isspace(*result.new_str_it)) {
+            ++result.new_str_it;
+          }
+          if (result.new_str_it == str.end() || *result.new_str_it == ',') {
+            result.parse_error
+              = caf::make_error(ec::parse_error, "missing value for "
+                                                 "assignment");
+            return result;
+          }
+          str_l_it = result.new_str_it;
+          while (result.new_str_it != str.end()) {
+            if (*result.new_str_it == '[' || *result.new_str_it == '{'
+                || *result.new_str_it == '<') {
+              ++complex_value_lvl;
+            } else if (*result.new_str_it == ']' || *result.new_str_it == '}'
+                       || *result.new_str_it == '>') {
+              if (complex_value_lvl == 0) {
+                result.parse_error
+                  = caf::make_error(ec::parse_error, "missing opening bracket "
+                                                     "for complex value");
+                return result;
+              }
+              --complex_value_lvl;
+            } else if (*result.new_str_it == '=') {
+              result.parse_error
+                = caf::make_error(ec::parse_error, "duplicate assignment");
+              return result;
+            } else if ((*result.new_str_it == ','
+                        || std::isspace(*result.new_str_it))
+                       && complex_value_lvl == 0) {
+              break;
+            }
+            ++result.new_str_it;
+          }
+          if (complex_value_lvl != 0) {
+            result.parse_error
+              = caf::make_error(ec::parse_error, "missing closing bracket "
+                                                 "for complex value");
+            return result;
+          }
+          current_token = {str_l_it, result.new_str_it};
+          result.assignments.emplace_back(
+            vast::list{current_assignment_key, current_token});
+          while (std::isspace(*result.new_str_it)) {
+            ++result.new_str_it;
+          }
+          if (result.new_str_it != str.end()) {
+            if (*result.new_str_it != ',') {
+              result.parse_error
+                = caf::make_error(ec::parse_error, "missing comma for "
+                                                   "assignments");
+              return result;
+            } else {
+              ++result.new_str_it;
+              while (result.new_str_it != str.end()
+                     && std::isspace(*result.new_str_it)) {
+                ++result.new_str_it;
+              }
+              if (result.new_str_it == str.end()) {
+                result.parse_error
+                  = caf::make_error(ec::parse_error, "missing assignment after "
+                                                     "comma");
+                return result;
+              }
+            }
+          }
+        }
+      }
     }
-    if (str_r_it != str.end()) {
-      ++str_r_it;
+    if (result.new_str_it != str.end()) {
+      ++result.new_str_it;
     }
   }
-  result.new_str_it = str_r_it;
   return result;
 }
 
