@@ -45,11 +45,12 @@ using command_runner_actor = system::typed_actor_fwd<
 command_runner_actor::behavior_type
 command_runner(command_runner_actor::pointer self) {
   return {
-    [self](atom::run, vast::invocation& hook_invocation) -> caf::result<void> {
+    [self](atom::run, vast::invocation& invocation) -> caf::result<void> {
       auto [root, root_factory] = make_application("vast");
-      auto result = run(hook_invocation, self->home_system(), root_factory);
+      auto result = run(invocation, self->home_system(), root_factory);
       if (!result)
-        return result.error();
+        VAST_ERROR("failed to run start command {}: {}", invocation,
+                   result.error());
       return {};
     },
   };
@@ -143,7 +144,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         return caf::make_message(hook_invocation.error());
       detail::merge_settings(inv.options, hook_invocation->options,
                              policy::merge_lists::yes);
-      auto runner = self->spawn(command_runner);
+      auto runner = self->spawn<caf::detached>(command_runner);
       command_runners.push_back(runner);
       self->send(runner, atom::run_v, *hook_invocation);
     }
