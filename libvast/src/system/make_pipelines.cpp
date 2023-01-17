@@ -287,7 +287,7 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
       auto complex_value_lvl = 0;
       while (result.new_str_it != str.end()) {
         str_l_it = result.new_str_it;
-        while (result.new_str_it != str.end() && *result.new_str_it != '='
+        while (result.new_str_it != str.end() && *result.new_str_it != '=' && *result.new_str_it != ','
                && !std::isspace(*result.new_str_it)) {
           ++result.new_str_it;
         }
@@ -295,7 +295,51 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
         while (std::isspace(*result.new_str_it)) {
           ++result.new_str_it;
         }
-        if (*result.new_str_it == '=') {
+        if (result.new_str_it == str.end()) {
+          result.extractors.emplace_back(current_assignment_key);
+        } else if (*result.new_str_it == ',') {
+          result.extractors.emplace_back(current_assignment_key);
+          ++result.new_str_it;
+          while (result.new_str_it != str.end()
+                 && std::isspace(*result.new_str_it)) {
+            ++result.new_str_it;
+          }
+          if (result.new_str_it == str.end()) {
+            result.parse_error
+              = caf::make_error(ec::parse_error, "missing extractor after "
+                                                 "comma");
+            return result;
+          }
+          while (result.new_str_it != str.end()) {
+            while (result.new_str_it != str.end()
+                   && std::isspace(*result.new_str_it)) {
+              ++result.new_str_it;
+            }
+            str_l_it = result.new_str_it;
+            while (result.new_str_it != str.end() && !std::isspace(*result.new_str_it) && *result.new_str_it != ',') {
+              ++result.new_str_it;
+            }
+            current_assignment_key = {str_l_it, result.new_str_it};
+            if (current_assignment_key.empty()) {
+              result.parse_error
+                = caf::make_error(ec::parse_error, "missing extractor");
+              return result;
+            }
+            while (result.new_str_it != str.end() && std::isspace(*result.new_str_it)) {
+              ++result.new_str_it;
+            }
+            if (result.new_str_it != str.end() && *result.new_str_it != ',') {
+              result.parse_error
+                = caf::make_error(ec::parse_error, "missing comma after "
+                                                   "extractor");
+              return result;
+            }
+            result.extractors.emplace_back(current_assignment_key);
+            if (result.new_str_it != str.end()) {
+              ++result.new_str_it;
+            }
+          }
+        } else if (*result.new_str_it == '=') {
           ++result.new_str_it;
           while (result.new_str_it != str.end()
                  && std::isspace(*result.new_str_it)) {
@@ -364,6 +408,11 @@ pipeline_parsing_result parse_pipeline(std::string_view str) {
               }
             }
           }
+        } else {
+          result.parse_error
+            = caf::make_error(ec::parse_error, "missing comma after "
+                                               "extractor");
+          return result;
         }
       }
     }
