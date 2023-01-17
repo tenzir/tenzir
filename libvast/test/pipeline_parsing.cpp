@@ -304,7 +304,7 @@ TEST(pipeline string parsing - options - short form options) {
   REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
   REQUIRE_EQUAL(parsed_pipeline_input.short_form_options.size(), 2);
   REQUIRE_EQUAL(parsed_pipeline_input.short_form_options,
-                (vast::record{{"m", "cryptopan,"}, {"s", "deadbeef"}}));
+                (vast::record{{"m", "cryptopan"}, {"s", "deadbeef"}}));
 }
 
 TEST(pipeline string parsing - options - short form option - wrong space) {
@@ -320,7 +320,7 @@ TEST(pipeline string parsing - options - short form option
   std::string pipeline_str = " -m";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
-  REQUIRE_NOT_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
+  REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
   REQUIRE(parsed_pipeline_input.parse_error);
 }
 
