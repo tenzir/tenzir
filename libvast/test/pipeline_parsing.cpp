@@ -15,7 +15,7 @@
 #include <vast/test/test.hpp>
 
 TEST(pipeline string parsing - extractor - space after comma) {
-   std::string pipeline_str = " field1, field2, field3";
+  std::string pipeline_str = " field1, field2, field3";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
   REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
@@ -78,8 +78,7 @@ TEST(pipeline string parsing - extractor - single field) {
   auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
   REQUIRE_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
   REQUIRE_EQUAL(parsed_pipeline_input.extractors.size(), 1);
-  REQUIRE_EQUAL(parsed_pipeline_input.extractors,
-                (vast::list{"field3"}));
+  REQUIRE_EQUAL(parsed_pipeline_input.extractors, (vast::list{"field3"}));
   REQUIRE(!parsed_pipeline_input.parse_error);
 }
 
@@ -96,8 +95,7 @@ TEST(pipeline string parsing - extractor - pipeline delimiter) {
   auto parsed_pipeline_input = vast::system::parse_pipeline(pipeline_str_view);
   REQUIRE_NOT_EQUAL(parsed_pipeline_input.new_str_it, pipeline_str_view.end());
   REQUIRE_EQUAL(parsed_pipeline_input.extractors.size(), 1);
-  REQUIRE_EQUAL(parsed_pipeline_input.extractors,
-                (vast::list{"field3"}));
+  REQUIRE_EQUAL(parsed_pipeline_input.extractors, (vast::list{"field3"}));
   REQUIRE(!parsed_pipeline_input.parse_error);
 }
 
@@ -151,7 +149,6 @@ TEST(pipeline string parsing - aggregators - multiple groups
   REQUIRE(plugin);
   REQUIRE_EQUAL(parsed_iterator, pipeline_str_view.end());
 }
-
 
 TEST(pipeline string parsing - aggregators - multiple groups
      - groups start with comma) {
@@ -242,8 +239,7 @@ TEST(pipeline string parsing - aggregators - missing closing bracket) {
 }
 
 TEST(pipeline string parsing - aggregators - missing aggregator) {
-  std::string pipeline_str
-    = "  by timestamp resolution 5h";
+  std::string pipeline_str = "  by timestamp resolution 5h";
   auto* summarize_plugin
     = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
   std::string_view pipeline_str_view = pipeline_str;
@@ -254,8 +250,7 @@ TEST(pipeline string parsing - aggregators - missing aggregator) {
 }
 
 TEST(pipeline string parsing - aggregators - starting with comma) {
-  std::string pipeline_str
-    = "  , distinct() by timestamp resolution 5h";
+  std::string pipeline_str = "  , distinct() by timestamp resolution 5h";
   auto* summarize_plugin
     = vast::plugins::find<vast::pipeline_operator_plugin>("summarize");
   std::string_view pipeline_str_view = pipeline_str;
@@ -515,7 +510,22 @@ TEST(pipeline string parsing - pipeline - string with superfluous delimiter) {
   std::string pipeline_str = "identity | ";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::system::make_pipeline(pipeline_str_view);
+  REQUIRE(!parsed_pipeline);
+}
 
+TEST(pipeline string parsing - pipeline
+     - string with two superfluous delimiters) {
+  std::string pipeline_str = "identity | ";
+  std::string_view pipeline_str_view = pipeline_str;
+  auto parsed_pipeline = vast::system::make_pipeline(pipeline_str_view);
+  REQUIRE(!parsed_pipeline);
+}
+
+TEST(pipeline string parsing - pipeline
+     - invalid operator syntax) {
+  std::string pipeline_str = "iden,tity";
+  std::string_view pipeline_str_view = pipeline_str;
+  auto parsed_pipeline = vast::system::make_pipeline(pipeline_str_view);
   REQUIRE(!parsed_pipeline);
 }
 
