@@ -372,12 +372,8 @@ filter(const table_slice& slice, const expression& expr);
 [[nodiscard]] std::optional<table_slice>
 filter(const table_slice& slice, const ids& hints);
 
-/// Resolves all enumeration columns in a table slice.
-/// @note Technically speaking this function only exists to solve a gap in our
-/// data model: While enumeration should exist as a type, it should not be a
-/// member of the data or view variants, such that resolving happens lazily on
-/// access. That is, however, a bigger undertaking to change, so for now this
-/// function serves as a stop gap.
+/// Resolves all enumeration columns in a table slice to string columns. Note
+/// that this does not go into records inside lists or maps.
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);
 
 } // namespace vast
