@@ -8,9 +8,8 @@
 
 #include "vast/hash/uniquely_represented.hpp"
 
-#include "vast/address.hpp"
-#include "vast/data/integer.hpp"
 #include "vast/flow.hpp"
+#include "vast/ip.hpp"
 #include "vast/port.hpp"
 #include "vast/uuid.hpp"
 
@@ -23,8 +22,9 @@
 
 using namespace vast;
 
-static_assert(uniquely_represented<address>);
+static_assert(uniquely_represented<ip>);
 static_assert(uniquely_represented<flow>);
-static_assert(uniquely_represented<integer>);
+static_assert(uniquely_represented<uint64_t>);
+static_assert(uniquely_represented<int64_t>);
 static_assert(uniquely_represented<port>);
 static_assert(uniquely_represented<uuid>);

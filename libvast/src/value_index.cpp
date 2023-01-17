@@ -152,8 +152,8 @@ caf::error unpack(const fbs::ValueIndex& from, value_index_ptr& to) {
       return caf::make_error(ec::format_error, "invalid value index type");
     case fbs::value_index::ValueIndex::arithmetic:
       return do_unpack(*from.value_index_as_arithmetic()->base());
-    case fbs::value_index::ValueIndex::address:
-      return do_unpack(*from.value_index_as_address()->base());
+    case fbs::value_index::ValueIndex::ip:
+      return do_unpack(*from.value_index_as_ip()->base());
     case fbs::value_index::ValueIndex::enumeration:
       return do_unpack(*from.value_index_as_enumeration()->base());
     case fbs::value_index::ValueIndex::hash:

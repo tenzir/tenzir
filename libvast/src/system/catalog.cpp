@@ -583,8 +583,8 @@ type_set catalog_state::types() const {
 void catalog_state::emit_metrics() const {
   VAST_ASSERT(accountant);
   auto num_partitions_and_events_per_schema_and_version
-    = detail::stable_map<std::pair<std::string_view, count>,
-                         std::pair<count, count>>{};
+    = detail::stable_map<std::pair<std::string_view, uint64_t>,
+                         std::pair<uint64_t, uint64_t>>{};
   for (const auto& [type, id_synopsis_map] : synopses_per_type) {
     for (const auto& [id, synopsis] : id_synopsis_map) {
       VAST_ASSERT(synopsis);
@@ -595,8 +595,8 @@ void catalog_state::emit_metrics() const {
       num_events += synopsis->events;
     }
   }
-  auto total_num_partitions = count{0};
-  auto total_num_events = count{0};
+  auto total_num_partitions = uint64_t{0};
+  auto total_num_events = uint64_t{0};
   auto r = report{};
   r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
   for (const auto& [schema_and_version, num_partitions_and_events] :
@@ -794,12 +794,12 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     },
     [self](atom::status, status_verbosity v) {
       record result;
-      result["memory-usage"] = count{self->state.memusage()};
-      auto num_events = count{};
-      auto num_partitions = count{};
+      result["memory-usage"] = uint64_t{self->state.memusage()};
+      auto num_events = uint64_t{};
+      auto num_partitions = uint64_t{};
       struct schema_stats_entry {
-        count num_events = {};
-        count num_partitions = {};
+        uint64_t num_events = {};
+        uint64_t num_partitions = {};
         time min_import_time = time::max();
         time max_import_time = time::min();
       };

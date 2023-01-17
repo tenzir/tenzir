@@ -29,18 +29,18 @@ const auto agg_test_schema = vast::type{
   vast::record_type{
     // FIXME: Do we want to test for other types? integer type?
     {"time", vast::time_type{}},
-    {"ip", vast::address_type{}},
-    {"port", vast::count_type{}},
-    {"sum", vast::real_type{}},
-    {"sum_null", vast::real_type{}},
-    {"min", vast::integer_type{}},
-    {"max", vast::integer_type{}},
+    {"ip", vast::ip_type{}},
+    {"port", vast::uint64_type{}},
+    {"sum", vast::double_type{}},
+    {"sum_null", vast::double_type{}},
+    {"min", vast::int64_type{}},
+    {"max", vast::int64_type{}},
     {"any_true", vast::bool_type{}},
     {"all_true", vast::bool_type{}},
     {"any_false", vast::bool_type{}},
     {"all_false", vast::bool_type{}},
-    {"alternating_number", vast::count_type{}},
-    {"alternating_number_list", vast::list_type{vast::count_type{}}},
+    {"alternating_number", vast::uint64_type{}},
+    {"alternating_number_list", vast::list_type{vast::uint64_type{}}},
   },
 };
 
@@ -51,22 +51,22 @@ table_slice make_testdata() {
   for (int i = 0; i < 10; ++i) {
     // 2009-11-16 12 AM
     auto time = vast::time{std::chrono::seconds(1258329600 + i)};
-    auto ip = address::v4(0xC0A80101); // 192, 168, 1, 1
-    auto port = count{443};
+    auto ip = ip::v4(0xC0A80101); // 192, 168, 1, 1
+    auto port = uint64_t{443};
     // We inject a gap here at index 1 to make sure that we test both the slow-
     // and fast-paths for aggregation_function::add(...).
-    auto sum = i == 2 ? data{caf::none} : data{real{1. * i}};
+    auto sum = i == 2 ? data{caf::none} : data{double{1. * i}};
     auto sum_null = caf::none;
-    auto min = integer{i};
-    auto max = integer{i};
+    auto min = int64_t{i};
+    auto max = int64_t{i};
     auto any_true = i == 0;
     auto all_true = true;
     auto any_false = false;
     auto all_false = i != 0;
-    auto alternating_number = detail::narrow_cast<count>(i % 3);
+    auto alternating_number = detail::narrow_cast<uint64_t>(i % 3);
     auto alternating_number_list = list{
-      detail::narrow_cast<count>(i % 3),
-      detail::narrow_cast<count>(i % 5),
+      detail::narrow_cast<uint64_t>(i % 3),
+      detail::narrow_cast<uint64_t>(i % 5),
     };
     if (i == 8)
       alternating_number_list.emplace_back();
@@ -186,12 +186,12 @@ TEST(summarize test) {
   const auto summarized_slice = table_slice{result[0].batch};
   CHECK_EQUAL(materialize(summarized_slice.at(0, 0)),
               data{vast::time{std::chrono::seconds(1258329600)}});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), address::v4(0xC0A80101));
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), count{443});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), real{43.});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), ip::v4(0xC0A80101));
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), uint64_t{443});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), double{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), integer{0});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), integer{9});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), int64_t{0});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), int64_t{9});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 7)), true);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 8)), false);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 9)), true);
@@ -200,18 +200,19 @@ TEST(summarize test) {
               vast::time{std::chrono::seconds(1258329600)});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 12)),
               vast::time{std::chrono::seconds(1258329609)});
-  const auto expected_ports = list{count{443}};
+  const auto expected_ports = list{uint64_t{443}};
   CHECK_EQUAL(materialize(summarized_slice.at(0, 13)), expected_ports);
-  const auto expected_alternating_numbers = list{count{0}, count{1}, count{2}};
+  const auto expected_alternating_numbers
+    = list{uint64_t{0}, uint64_t{1}, uint64_t{2}};
   const auto expected_alternating_numbers_list
-    = list{count{0}, count{1}, count{2}, count{3}, count{4}};
+    = list{uint64_t{0}, uint64_t{1}, uint64_t{2}, uint64_t{3}, uint64_t{4}};
   CHECK_EQUAL(materialize(summarized_slice.at(0, 14)),
               expected_alternating_numbers);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 15)),
               expected_alternating_numbers_list);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 16)),
               vast::time{std::chrono::seconds(1258329600)});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 17)), count{9});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 17)), uint64_t{9});
 }
 
 TEST(summarize test fully qualified field names) {
@@ -245,12 +246,12 @@ TEST(summarize test fully qualified field names) {
   REQUIRE_EQUAL(summarized_slice.columns(), 11u);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 0)),
               vast::time{std::chrono::seconds(1258329600)});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), address::v4(0xC0A80101));
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), count{443});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), real{43.});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), ip::v4(0xC0A80101));
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 2)), uint64_t{443});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 3)), double{43.});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 4)), caf::none);
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), integer{0});
-  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), integer{9});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 5)), int64_t{0});
+  CHECK_EQUAL(materialize(summarized_slice.at(0, 6)), int64_t{9});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 7)), true);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 8)), false);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 9)), true);

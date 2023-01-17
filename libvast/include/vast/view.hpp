@@ -50,13 +50,13 @@ using view = typename view_trait<T>::type;
   }
 
 VAST_VIEW_TRAIT(bool)
-VAST_VIEW_TRAIT(integer)
-VAST_VIEW_TRAIT(count)
-VAST_VIEW_TRAIT(real)
+VAST_VIEW_TRAIT(int64_t)
+VAST_VIEW_TRAIT(uint64_t)
+VAST_VIEW_TRAIT(double)
 VAST_VIEW_TRAIT(duration)
 VAST_VIEW_TRAIT(time)
 VAST_VIEW_TRAIT(enumeration)
-VAST_VIEW_TRAIT(address)
+VAST_VIEW_TRAIT(ip)
 VAST_VIEW_TRAIT(subnet)
 
 #undef VAST_VIEW_TRAIT
@@ -143,14 +143,14 @@ struct view_trait<record> {
 using data_view = caf::variant<
   view<caf::none_t>,
   view<bool>,
-  view<integer>,
-  view<count>,
-  view<real>,
+  view<int64_t>,
+  view<uint64_t>,
+  view<double>,
   view<duration>,
   view<time>,
   view<std::string>,
   view<pattern>,
-  view<address>,
+  view<ip>,
   view<subnet>,
   view<enumeration>,
   view<list>,
@@ -423,8 +423,8 @@ private:
 template <class T>
 view<T> make_view(const T& x) {
   constexpr auto directly_constructible
-    = detail::is_any_v<T, caf::none_t, bool, integer, count, real, duration,
-                       time, std::string, address, subnet, enumeration>;
+    = detail::is_any_v<T, caf::none_t, bool, int64_t, uint64_t, double,
+                       duration, time, std::string, ip, subnet, enumeration>;
   if constexpr (directly_constructible) {
     return x;
   } else if constexpr (std::is_same_v<T, pattern>) {

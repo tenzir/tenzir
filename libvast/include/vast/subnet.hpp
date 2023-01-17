@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "vast/address.hpp"
 #include "vast/detail/inspection_common.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/ip.hpp"
 
 namespace vast {
 
@@ -25,12 +25,12 @@ public:
   /// Constructs a prefix from an address.
   /// @param addr The address.
   /// @param length The prefix length.
-  subnet(address addr, uint8_t length);
+  subnet(ip addr, uint8_t length);
 
   /// Checks whether this subnet includes a given address.
   /// @param addr The address to test for containment.
   /// @returns `true` if *addr* is an element of this subnet.
-  [[nodiscard]] bool contains(const address& addr) const;
+  [[nodiscard]] bool contains(const ip& addr) const;
 
   /// Checks whether this subnet includes another subnet.
   /// For two subnets *A* and *B*, the subset relationship *A ⊆ B* holds true
@@ -44,7 +44,7 @@ public:
 
   /// Retrieves the network address of the prefix.
   /// @returns The prefix address.
-  [[nodiscard]] const address& network() const;
+  [[nodiscard]] const ip& network() const;
 
   /// Retrieves the prefix length.
   /// @returns The prefix length.
@@ -63,7 +63,7 @@ public:
 private:
   bool initialize();
 
-  address network_;
+  ip network_;
   uint8_t length_;
 };
 

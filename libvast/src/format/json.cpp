@@ -10,8 +10,7 @@
 
 #include "vast/arrow_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/integer.hpp"
+#include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
@@ -81,13 +80,13 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const count_type&) noexcept -> data {
+    [&](const uint64_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return caf::none;
     },
     [&](const duration_type&) noexcept -> data {
@@ -102,7 +101,7 @@ data extract(const ::simdjson::dom::array& values, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -134,25 +133,25 @@ data extract(int64_t value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return value != 0;
     },
-    [&](const integer_type&) noexcept -> data {
-      return integer{value};
+    [&](const int64_type&) noexcept -> data {
+      return int64_t{value};
     },
-    [&](const count_type&) noexcept -> data {
+    [&](const uint64_type&) noexcept -> data {
       if (value >= 0)
-        return detail::narrow_cast<count>(value);
+        return detail::narrow_cast<uint64_t>(value);
       return caf::none;
     },
-    [&](const real_type&) noexcept -> data {
-      return detail::narrow_cast<real>(value);
+    [&](const double_type&) noexcept -> data {
+      return detail::narrow_cast<double>(value);
     },
     [&](const duration_type&) noexcept -> data {
       return std::chrono::duration_cast<duration>(
-        std::chrono::duration<integer::value_type>{value});
+        std::chrono::duration<int64_t>{value});
     },
     [&](const time_type&) noexcept -> data {
       return time{}
              + std::chrono::duration_cast<duration>(
-               std::chrono::duration<integer::value_type>{value});
+               std::chrono::duration<int64_t>{value});
     },
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
@@ -160,7 +159,7 @@ data extract(int64_t value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -194,13 +193,13 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const integer_type&) noexcept -> data {
+    [&](const int64_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const count_type&) noexcept -> data {
+    [&](const uint64_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return caf::none;
     },
     [&](const duration_type&) noexcept -> data {
@@ -215,7 +214,7 @@ data extract(const ::simdjson::dom::object& value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -293,25 +292,25 @@ data extract(uint64_t value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return value != 0;
     },
-    [&](const integer_type&) noexcept -> data {
-      if (value <= std::numeric_limits<integer::value_type>::max())
-        return integer{detail::narrow_cast<integer::value_type>(value)};
+    [&](const int64_type&) noexcept -> data {
+      if (value <= std::numeric_limits<int64_t>::max())
+        return int64_t{detail::narrow_cast<int64_t>(value)};
       return caf::none;
     },
-    [&](const count_type&) noexcept -> data {
-      return count{value};
+    [&](const uint64_type&) noexcept -> data {
+      return uint64_t{value};
     },
-    [&](const real_type&) noexcept -> data {
-      return detail::narrow_cast<real>(value);
+    [&](const double_type&) noexcept -> data {
+      return detail::narrow_cast<double>(value);
     },
     [&](const duration_type&) noexcept -> data {
       return std::chrono::duration_cast<duration>(
-        std::chrono::duration<count>{value});
+        std::chrono::duration<uint64_t>{value});
     },
     [&](const time_type&) noexcept -> data {
       return time{}
              + std::chrono::duration_cast<duration>(
-               std::chrono::duration<count>{value});
+               std::chrono::duration<uint64_t>{value});
     },
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
@@ -319,7 +318,7 @@ data extract(uint64_t value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -353,23 +352,23 @@ data extract(double value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return value != 0.0;
     },
-    [&](const integer_type&) noexcept -> data {
-      return integer{detail::narrow_cast<integer::value_type>(value)};
+    [&](const int64_type&) noexcept -> data {
+      return int64_t{detail::narrow_cast<int64_t>(value)};
     },
-    [&](const count_type&) noexcept -> data {
-      return detail::narrow_cast<count>(value);
+    [&](const uint64_type&) noexcept -> data {
+      return detail::narrow_cast<uint64_t>(value);
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return value;
     },
     [&](const duration_type&) noexcept -> data {
       return std::chrono::duration_cast<duration>(
-        std::chrono::duration<real>{value});
+        std::chrono::duration<double>{value});
     },
     [&](const time_type&) noexcept -> data {
       return time{}
              + std::chrono::duration_cast<duration>(
-               std::chrono::duration<real>{value});
+               std::chrono::duration<double>{value});
     },
     [&](const string_type&) noexcept -> data {
       return fmt::to_string(value);
@@ -377,7 +376,7 @@ data extract(double value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -410,40 +409,40 @@ data extract(std::string_view value, const type& type) {
         return result;
       return caf::none;
     },
-    [&](const integer_type&) noexcept -> data {
-      if (integer::value_type result = {}; parsers::json_int(value, result))
-        return integer{result};
-      if (real result = {}; parsers::json_number(value, result))
-        return integer{detail::narrow_cast<integer::value_type>(result)};
+    [&](const int64_type&) noexcept -> data {
+      if (int64_t result = {}; parsers::json_int(value, result))
+        return int64_t{result};
+      if (double result = {}; parsers::json_number(value, result))
+        return int64_t{detail::narrow_cast<int64_t>(result)};
       return caf::none;
     },
-    [&](const count_type&) noexcept -> data {
-      if (count result = {}; parsers::json_count(value, result))
+    [&](const uint64_type&) noexcept -> data {
+      if (uint64_t result = {}; parsers::json_count(value, result))
         return result;
-      if (real result = {}; parsers::json_number(value, result))
-        return detail::narrow_cast<count>(result);
+      if (double result = {}; parsers::json_number(value, result))
+        return detail::narrow_cast<uint64_t>(result);
       return caf::none;
     },
-    [&](const real_type&) noexcept -> data {
-      if (real result = {}; parsers::json_number(value, result))
+    [&](const double_type&) noexcept -> data {
+      if (double result = {}; parsers::json_number(value, result))
         return result;
       return caf::none;
     },
     [&](const duration_type&) noexcept -> data {
       if (auto result = to<duration>(value))
         return *result;
-      if (real result = {}; parsers::json_number(value, result))
+      if (double result = {}; parsers::json_number(value, result))
         return std::chrono::duration_cast<duration>(
-          std::chrono::duration<real>{result});
+          std::chrono::duration<double>{result});
       return caf::none;
     },
     [&](const time_type&) noexcept -> data {
       if (auto result = to<time>(value))
         return *result;
-      if (real result = {}; parsers::json_number(value, result))
+      if (double result = {}; parsers::json_number(value, result))
         return time{}
                + std::chrono::duration_cast<duration>(
-                 std::chrono::duration<real>{result});
+                 std::chrono::duration<double>{result});
       return caf::none;
     },
     [&](const string_type&) noexcept -> data {
@@ -454,8 +453,8 @@ data extract(std::string_view value, const type& type) {
         return *result;
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
-      if (auto result = to<address>(value))
+    [&](const ip_type&) noexcept -> data {
+      if (auto result = to<ip>(value))
         return *result;
       return caf::none;
     },
@@ -491,13 +490,13 @@ data extract(bool value, const type& type) {
     [&](const bool_type&) noexcept -> data {
       return value;
     },
-    [&](const integer_type&) noexcept -> data {
-      return value ? integer{1} : integer{0};
+    [&](const int64_type&) noexcept -> data {
+      return value ? int64_t{1} : int64_t{0};
     },
-    [&](const count_type&) noexcept -> data {
-      return value ? count{1} : count{0};
+    [&](const uint64_type&) noexcept -> data {
+      return value ? uint64_t{1} : uint64_t{0};
     },
-    [&](const real_type&) noexcept -> data {
+    [&](const double_type&) noexcept -> data {
       return caf::none;
     },
     [&](const duration_type&) noexcept -> data {
@@ -512,7 +511,7 @@ data extract(bool value, const type& type) {
     [&](const pattern_type&) noexcept -> data {
       return caf::none;
     },
-    [&](const address_type&) noexcept -> data {
+    [&](const ip_type&) noexcept -> data {
       return caf::none;
     },
     [&](const subnet_type&) noexcept -> data {
@@ -608,33 +607,33 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value != 0);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
-      const auto added = builder.add(view<integer>{value});
+    [&](const int64_type&) noexcept {
+      const auto added = builder.add(view<int64_t>{value});
       VAST_ASSERT(added);
     },
-    [&](const count_type&) noexcept {
+    [&](const uint64_type&) noexcept {
       if (value >= 0) {
-        const auto added = builder.add(detail::narrow_cast<view<count>>(value));
+        const auto added
+          = builder.add(detail::narrow_cast<view<uint64_t>>(value));
         VAST_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
-      const auto added = builder.add(detail::narrow_cast<view<real>>(value));
+    [&](const double_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<view<double>>(value));
       VAST_ASSERT(added);
     },
     [&](const duration_type&) noexcept {
       const auto added = builder.add(std::chrono::duration_cast<duration>(
-        std::chrono::duration<integer::value_type>{value}));
+        std::chrono::duration<int64_t>{value}));
       VAST_ASSERT(added);
     },
     [&](const time_type&) noexcept {
-      const auto added
-        = builder.add(time{}
-                      + std::chrono::duration_cast<duration>(
-                        std::chrono::duration<integer::value_type>{value}));
+      const auto added = builder.add(time{}
+                                     + std::chrono::duration_cast<duration>(
+                                       std::chrono::duration<int64_t>{value}));
       VAST_ASSERT(added);
     },
     [&](const string_type&) noexcept {
@@ -645,7 +644,7 @@ void add(int64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -684,33 +683,33 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value != 0);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
+    [&](const int64_type&) noexcept {
       if (value <= std::numeric_limits<int64_t>::max()) {
-        const auto added = builder.add(
-          view<integer>{detail::narrow_cast<integer::value_type>(value)});
+        const auto added
+          = builder.add(view<int64_t>{detail::narrow_cast<int64_t>(value)});
         VAST_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const count_type&) noexcept {
-      const auto added = builder.add(view<count>{value});
+    [&](const uint64_type&) noexcept {
+      const auto added = builder.add(view<uint64_t>{value});
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
-      const auto added = builder.add(detail::narrow_cast<view<real>>(value));
+    [&](const double_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<view<double>>(value));
       VAST_ASSERT(added);
     },
     [&](const duration_type&) noexcept {
       const auto added = builder.add(std::chrono::duration_cast<duration>(
-        std::chrono::duration<count>{value}));
+        std::chrono::duration<uint64_t>{value}));
       VAST_ASSERT(added);
     },
     [&](const time_type&) noexcept {
       const auto added = builder.add(time{}
                                      + std::chrono::duration_cast<duration>(
-                                       std::chrono::duration<count>{value}));
+                                       std::chrono::duration<uint64_t>{value}));
       VAST_ASSERT(added);
     },
     [&](const string_type&) noexcept {
@@ -721,7 +720,7 @@ void add(uint64_t value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -760,28 +759,28 @@ void add(double value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value != 0);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
-      const auto added = builder.add(
-        view<integer>{detail::narrow_cast<integer::value_type>(value)});
+    [&](const int64_type&) noexcept {
+      const auto added
+        = builder.add(view<int64_t>{detail::narrow_cast<int64_t>(value)});
       VAST_ASSERT(added);
     },
-    [&](const count_type&) noexcept {
-      const auto added = builder.add(detail::narrow_cast<count>(value));
+    [&](const uint64_type&) noexcept {
+      const auto added = builder.add(detail::narrow_cast<uint64_t>(value));
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
+    [&](const double_type&) noexcept {
       const auto added = builder.add(value);
       VAST_ASSERT(added);
     },
     [&](const duration_type&) noexcept {
       const auto added = builder.add(std::chrono::duration_cast<duration>(
-        std::chrono::duration<real>{value}));
+        std::chrono::duration<double>{value}));
       VAST_ASSERT(added);
     },
     [&](const time_type&) noexcept {
       const auto added = builder.add(time{}
                                      + std::chrono::duration_cast<duration>(
-                                       std::chrono::duration<real>{value}));
+                                       std::chrono::duration<double>{value}));
       VAST_ASSERT(added);
     },
     [&](const string_type&) noexcept {
@@ -792,7 +791,7 @@ void add(double value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -825,15 +824,15 @@ void add(bool value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(value);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
-      const auto added = builder.add(value ? integer{1} : integer{0});
+    [&](const int64_type&) noexcept {
+      const auto added = builder.add(value ? int64_t{1} : int64_t{0});
       VAST_ASSERT(added);
     },
-    [&](const count_type&) noexcept {
-      const auto added = builder.add(value ? count{1} : count{0});
+    [&](const uint64_type&) noexcept {
+      const auto added = builder.add(value ? uint64_t{1} : uint64_t{0});
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
+    [&](const double_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -853,7 +852,7 @@ void add(bool value, const type& type, table_slice_builder& builder) {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
+    [&](const ip_type&) noexcept {
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
@@ -892,38 +891,38 @@ void add(std::string_view value, const type& type,
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const integer_type&) noexcept {
-      if (integer::value_type result = {}; parsers::json_int(value, result)) {
-        const auto added = builder.add(view<integer>{result});
+    [&](const int64_type&) noexcept {
+      if (int64_t result = {}; parsers::json_int(value, result)) {
+        const auto added = builder.add(view<int64_t>{result});
         VAST_ASSERT(added);
         return;
       }
-      if (real result = {}; parsers::json_number(value, result)) {
-        const auto added = builder.add(
-          view<integer>{detail::narrow_cast<integer::value_type>(result)});
+      if (double result = {}; parsers::json_number(value, result)) {
+        const auto added
+          = builder.add(view<int64_t>{detail::narrow_cast<int64_t>(result)});
         VAST_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const count_type&) noexcept {
-      if (count result = {}; parsers::json_count(value, result)) {
+    [&](const uint64_type&) noexcept {
+      if (uint64_t result = {}; parsers::json_count(value, result)) {
         const auto added = builder.add(result);
         VAST_ASSERT(added);
         return;
       }
-      if (real result = {}; parsers::json_number(value, result)) {
+      if (double result = {}; parsers::json_number(value, result)) {
         const auto added
-          = builder.add(detail::narrow_cast<view<count>>(result));
+          = builder.add(detail::narrow_cast<view<uint64_t>>(result));
         VAST_ASSERT(added);
         return;
       }
       const auto added = builder.add(caf::none);
       VAST_ASSERT(added);
     },
-    [&](const real_type&) noexcept {
-      if (real result = {}; parsers::json_number(value, result)) {
+    [&](const double_type&) noexcept {
+      if (double result = {}; parsers::json_number(value, result)) {
         const auto added = builder.add(result);
         VAST_ASSERT(added);
         return;
@@ -937,9 +936,9 @@ void add(std::string_view value, const type& type,
         VAST_ASSERT(added);
         return;
       }
-      if (real result = {}; parsers::json_number(value, result)) {
+      if (double result = {}; parsers::json_number(value, result)) {
         const auto added = builder.add(std::chrono::duration_cast<duration>(
-          std::chrono::duration<real>(result)));
+          std::chrono::duration<double>(result)));
         VAST_ASSERT(added);
         return;
       }
@@ -952,10 +951,11 @@ void add(std::string_view value, const type& type,
         VAST_ASSERT(added);
         return;
       }
-      if (real result = {}; parsers::json_number(value, result)) {
-        const auto added = builder.add(time{}
-                                       + std::chrono::duration_cast<duration>(
-                                         std::chrono::duration<real>(result)));
+      if (double result = {}; parsers::json_number(value, result)) {
+        const auto added
+          = builder.add(time{}
+                        + std::chrono::duration_cast<duration>(
+                          std::chrono::duration<double>(result)));
         VAST_ASSERT(added);
         return;
       }
@@ -970,8 +970,8 @@ void add(std::string_view value, const type& type,
       const auto added = builder.add(view<pattern>{value});
       VAST_ASSERT(added);
     },
-    [&](const address_type&) noexcept {
-      if (auto result = to<address>(value)) {
+    [&](const ip_type&) noexcept {
+      if (auto result = to<ip>(value)) {
         const auto added = builder.add(*result);
         VAST_ASSERT(added);
         return;

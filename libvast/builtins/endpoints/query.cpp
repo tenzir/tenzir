@@ -18,6 +18,7 @@
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
+#include <vast/system/spawn_arguments.hpp>
 #include <vast/table_slice.hpp>
 
 #include <caf/stateful_actor.hpp>
@@ -35,7 +36,7 @@ static auto const* SPEC_V0 = R"_(
         name: expression
         schema:
           type: string
-          example: ":addr in 10.42.0.0/16"
+          example: ":ip in 10.42.0.0/16"
         required: true
         description: Query string.
     responses:
@@ -70,7 +71,7 @@ static auto const* SPEC_V0 = R"_(
       - in: query
         name: n
         schema:
-          type: integer
+          type: int64
         required: false
         example: 10
         description: Maximum number of returned events
@@ -83,7 +84,7 @@ static auto const* SPEC_V0 = R"_(
               type: object
               properties:
                 position:
-                  type: integer
+                  type: int64
                   description: The total number of events that has been returned by previous calls to this endpoint.
                 events:
                   type: array
@@ -286,12 +287,17 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         } else {
           return rq.response->abort(422, "missing parameter 'expression'\n");
         }
-        auto expr = to<vast::expression>(*query_string);
+        auto expr = system::parse_expression(*query_string);
         if (!expr)
-          return rq.response->abort(400, "couldn't parse expression\n");
+          return rq.response->abort(400, fmt::format("unparseable query: {}\n",
+                                                     expr.error()));
+        auto normalized_expr = normalize_and_validate(*expr);
+        if (!normalized_expr)
+          return rq.response->abort(400, fmt::format("invalid query: {}\n",
+                                                     normalized_expr.error()));
         auto handler = self->spawn(query_manager, self->state.index_);
-        auto query = vast::query_context::make_extract("http-request", handler,
-                                                       std::move(*expr));
+        auto query = vast::query_context::make_extract(
+          "http-request", handler, std::move(*normalized_expr));
         query.taste = 0;
         self
           ->request(self->state.index_, caf::infinite, atom::evaluate_v, query)
@@ -315,7 +321,7 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         if (!rq.params.contains("n"))
           return rq.response->abort(400, "missing parameter 'n'\n");
         auto id = caf::get<std::string>(rq.params["id"]);
-        auto n = caf::get<count>(rq.params["n"]);
+        auto n = caf::get<uint64_t>(rq.params["n"]);
         auto it = self->state.live_queries_.find(id);
         if (it == self->state.live_queries_.end())
           return rq.response->abort(422, "unknown id\n");
@@ -372,7 +378,7 @@ class plugin final : public virtual rest_endpoint_plugin {
         .path = "/query/:id/next",
         .params = vast::record_type{
           {"id", vast::string_type{}},
-          {"n", vast::count_type{}},
+          {"n", vast::uint64_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,

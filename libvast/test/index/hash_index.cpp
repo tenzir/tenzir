@@ -86,18 +86,18 @@ TEST(factory construction and parameterization) {
 
 TEST(hash index for integer) {
   factory<value_index>::initialize();
-  auto t = type{integer_type{}, {{"index", "hash"}}};
+  auto t = type{int64_type{}, {{"index", "hash"}}};
   caf::settings opts;
   opts["cardinality"] = 1_Ki;
   auto idx = factory<value_index>::make(t, opts);
   REQUIRE(idx != nullptr);
   auto ptr = dynamic_cast<hash_index<3>*>(idx.get());
   REQUIRE(ptr != nullptr);
-  CHECK(idx->append(make_data_view(integer{42})));
-  CHECK(idx->append(make_data_view(integer{43})));
-  CHECK(idx->append(make_data_view(integer{44})));
+  CHECK(idx->append(make_data_view(int64_t{42})));
+  CHECK(idx->append(make_data_view(int64_t{43})));
+  CHECK(idx->append(make_data_view(int64_t{44})));
   auto result
-    = idx->lookup(relational_operator::not_equal, make_data_view(integer{42}));
+    = idx->lookup(relational_operator::not_equal, make_data_view(int64_t{42}));
   CHECK_EQUAL(to_string(unbox(result)), "011");
   auto builder = flatbuffers::FlatBufferBuilder{};
   const auto idx_offset = pack(builder, idx);
@@ -111,24 +111,24 @@ TEST(hash index for integer) {
   CHECK_EQUAL(idx->type(), idx2->type());
   CHECK_EQUAL(idx->options(), idx2->options());
   result
-    = idx2->lookup(relational_operator::not_equal, make_data_view(integer{42}));
+    = idx2->lookup(relational_operator::not_equal, make_data_view(int64_t{42}));
   CHECK_EQUAL(to_string(unbox(result)), "011");
 }
 
 TEST(hash index for list) {
   factory<value_index>::initialize();
-  auto t = type{list_type{address_type{}}, {{"index", "hash"}}};
+  auto t = type{list_type{ip_type{}}, {{"index", "hash"}}};
   auto idx = factory<value_index>::make(t, caf::settings{});
   REQUIRE(idx != nullptr);
-  auto xs = list{integer{1}, integer{2}, integer{3}};
-  auto ys = list{integer{7}, integer{5}, integer{4}};
-  auto zs = list{integer{0}, integer{0}, integer{0}};
+  auto xs = list{int64_t{1}, int64_t{2}, int64_t{3}};
+  auto ys = list{int64_t{7}, int64_t{5}, int64_t{4}};
+  auto zs = list{int64_t{0}, int64_t{0}, int64_t{0}};
   CHECK(idx->append(make_data_view(xs)));
   CHECK(idx->append(make_data_view(xs)));
   CHECK(idx->append(make_data_view(zs)));
   auto result = idx->lookup(relational_operator::equal, make_data_view(zs));
   CHECK_EQUAL(to_string(unbox(result)), "001");
-  result = idx->lookup(relational_operator::ni, make_data_view(integer{1}));
+  result = idx->lookup(relational_operator::ni, make_data_view(int64_t{1}));
   REQUIRE(!result);
   CHECK(result.error() == ec::unsupported_operator);
   auto builder = flatbuffers::FlatBufferBuilder{};
@@ -144,7 +144,7 @@ TEST(hash index for list) {
   CHECK_EQUAL(idx->options(), idx2->options());
   result = idx2->lookup(relational_operator::equal, make_data_view(zs));
   CHECK_EQUAL(to_string(unbox(result)), "001");
-  result = idx2->lookup(relational_operator::ni, make_data_view(integer{1}));
+  result = idx2->lookup(relational_operator::ni, make_data_view(int64_t{1}));
   REQUIRE(!result);
   CHECK(result.error() == ec::unsupported_operator);
 }

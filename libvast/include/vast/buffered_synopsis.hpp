@@ -60,7 +60,7 @@ public:
     params.n = next_power_of_two;
     VAST_DEBUG("shrinks buffered synopsis to {} elements", params.n);
     auto type = annotate_parameters(this->type(), params);
-    // TODO: If we can get rid completely of the `address_synopsis` and
+    // TODO: If we can get rid completely of the `ip_synopsis` and
     // `string_synopsis` types, we could also call the correct constructor here.
     auto shrunk_synopsis
       = buffered_synopsis_traits<T>::template make<HashFunction>(

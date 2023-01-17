@@ -46,16 +46,14 @@ caf::expected<distribution> make_distribution(const type& t) {
                                             "specification");
   VAST_DEBUG("generating distribution {} in [{}, {})", name, p0, p1);
   if (name == "uniform") {
-    if (caf::holds_alternative<integer_type>(t))
-      return distribution{
-        std::uniform_int_distribution<vast::integer::value_type>{
-          static_cast<vast::integer::value_type>(p0),
-          static_cast<vast::integer::value_type>(p1)}};
+    if (caf::holds_alternative<int64_type>(t))
+      return distribution{std::uniform_int_distribution<int64_t>{
+        static_cast<int64_t>(p0), static_cast<int64_t>(p1)}};
     if (caf::holds_alternative<bool_type>(t)
-        || caf::holds_alternative<count_type>(t)
+        || caf::holds_alternative<uint64_type>(t)
         || caf::holds_alternative<string_type>(t))
-      return distribution{std::uniform_int_distribution<count>{
-        static_cast<count>(p0), static_cast<count>(p1)}};
+      return distribution{std::uniform_int_distribution<uint64_t>{
+        static_cast<uint64_t>(p0), static_cast<uint64_t>(p1)}};
     return distribution{std::uniform_real_distribution<long double>{p0, p1}};
   }
   if (name == "normal")
@@ -146,15 +144,15 @@ struct randomizer {
     // Do nothing.
   }
 
-  void operator()(const integer_type&, integer& x) {
-    x.value = static_cast<integer::value_type>(sample());
-  }
-
-  void operator()(const count_type&, count& x) {
+  void operator()(const int64_type&, int64_t& x) {
     x = sample();
   }
 
-  void operator()(const real_type&, real& x) {
+  void operator()(const uint64_type&, uint64_t& x) {
+    x = sample();
+  }
+
+  void operator()(const double_type&, double& x) {
     x = sample();
   }
 
@@ -168,7 +166,7 @@ struct randomizer {
 
   void operator()(const bool_type&, bool& b) {
     lcg gen{static_cast<lcg::result_type>(sample())};
-    std::uniform_int_distribution<count> unif{0, 1};
+    std::uniform_int_distribution<uint64_t> unif{0, 1};
     b = unif(gen);
   }
 
@@ -187,7 +185,7 @@ struct randomizer {
     p = pattern{std::move(intermediate)};
   }
 
-  void operator()(const address_type&, address& addr) {
+  void operator()(const ip_type&, ip& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.
     lcg gen{static_cast<lcg::result_type>(sample())};
@@ -197,12 +195,12 @@ struct randomizer {
       byte = unif0(gen);
     auto ptr = reinterpret_cast<const uint8_t*>(bytes);
     auto span = std::span<const uint8_t, 16>{ptr, 16};
-    addr = address{span};
+    addr = ip{span};
   }
 
   void operator()(const subnet_type&, subnet& sn) {
-    address addr;
-    (*this)(address_type{}, addr);
+    ip addr;
+    (*this)(ip_type{}, addr);
     std::uniform_int_distribution<uint8_t> unif{0, 128};
     sn = {addr, unif(gen_)};
   }
@@ -231,13 +229,13 @@ std::string_view builtin_module = R"__(
   type test.full = record{
     n: list<int>,
     b: bool #default="uniform(0,1)",
-    i: int #default="uniform(-42000,1337)",
-    c: count #default="pareto(0,1)",
-    r: real #default="normal(0,1)",
+    i: int64 #default="uniform(-42000,1337)",
+    c: uint64 #default="pareto(0,1)",
+    r: double #default="normal(0,1)",
     s: string #default="uniform(0,100)",
     t: time #default="uniform(0,10)",
     d: duration #default="uniform(100,200)",
-    a: addr #default="uniform(0,2000000)",
+    a: ip #default="uniform(0,2000000)",
     u: subnet #default="uniform(1000,2000)",
   }
 )__";

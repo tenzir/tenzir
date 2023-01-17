@@ -134,7 +134,7 @@ type infer(const message_view& msg) {
   static constexpr auto name = "cef.event";
   // These fields are always present.
   auto fields = std::vector<struct record_type::field>{
-    {"cef_version", count_type{}},     {"device_vendor", string_type{}},
+    {"cef_version", uint64_type{}},    {"device_vendor", string_type{}},
     {"device_product", string_type{}}, {"device_version", string_type{}},
     {"signature_id", string_type{}},   {"name", string_type{}},
     {"severity", string_type{}},

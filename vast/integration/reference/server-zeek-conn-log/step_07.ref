@@ -1,6 +1,3 @@
 {
-  "zeek.conn": {
-    "num-events": 34090,
-    "num-partitions": 5
-  }
+  "zeek.conn": 34090
 }

@@ -73,7 +73,7 @@ jq -c < data.json | head -1 | vast infer
 This prints:
 
 ```
-type json = record {timestamp: time, src_ip: addr, src_port: int, dest_ip: addr, dest_port: int, proto: string}
+type json = record {timestamp: time, src_ip: ip, src_port: int64, dest_ip: ip, dest_port: int, proto: string}
 ```
 
 :::caution YAML Modules coming soon
@@ -124,7 +124,7 @@ The corresponding schema type looks like this:
 message:
   record:
     - date: time
-    - target: addr
+    - target: ip
     - message: msg
 ```
 
@@ -136,7 +136,7 @@ types:
   message:
     record:
       - date: time
-      - target: addr
+      - target: ip
       - message: msg
 ```
 

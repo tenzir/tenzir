@@ -99,11 +99,10 @@ TEST(count IP point query with partition - local stores) {
                            3, 1, indexdir, vast::index_config{});
   // Fill the INDEX with 400 rows from the Zeek conn log.
   detail::spawn_container_source(sys, take(zeek_conn_log_full, 4), index);
-  MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
-  auto counter
-    = sys.spawn(system::counter,
-                unbox(to<expression>(":addr == 192.168.1.104")), index,
-                /*skip_candidate_check = */ false);
+  MESSAGE("spawn the COUNTER for query ':ip == 192.168.1.104'");
+  auto counter = sys.spawn(system::counter,
+                           unbox(to<expression>(":ip == 192.168.1.104")), index,
+                           /*skip_candidate_check = */ false);
   run();
   anon_send(counter, atom::run_v, client);
   sched.run_once();

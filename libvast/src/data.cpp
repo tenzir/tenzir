@@ -57,20 +57,19 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::boolean,
                              value_offset.Union());
     },
-    [&](const integer& value) -> flatbuffers::Offset<fbs::Data> {
-      const auto value_offset
-        = builder.CreateStruct(fbs::data::Integer{value.value});
-      return fbs::CreateData(builder, fbs::data::Data::integer,
+    [&](const int64_t& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(fbs::data::Int64{value});
+      return fbs::CreateData(builder, fbs::data::Data::int64,
                              value_offset.Union());
     },
-    [&](const count& value) -> flatbuffers::Offset<fbs::Data> {
-      const auto value_offset = builder.CreateStruct(fbs::data::Count{value});
-      return fbs::CreateData(builder, fbs::data::Data::count,
+    [&](const uint64_t& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(fbs::data::UInt64{value});
+      return fbs::CreateData(builder, fbs::data::Data::uint64,
                              value_offset.Union());
     },
-    [&](const real& value) -> flatbuffers::Offset<fbs::Data> {
-      const auto value_offset = builder.CreateStruct(fbs::data::Real{value});
-      return fbs::CreateData(builder, fbs::data::Data::real,
+    [&](const double& value) -> flatbuffers::Offset<fbs::Data> {
+      const auto value_offset = builder.CreateStruct(fbs::data::Double{value});
+      return fbs::CreateData(builder, fbs::data::Data::double_,
                              value_offset.Union());
     },
     [&](const duration& value) -> flatbuffers::Offset<fbs::Data> {
@@ -97,18 +96,17 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
       return fbs::CreateData(builder, fbs::data::Data::pattern,
                              value_offset.Union());
     },
-    [&](const address& value) -> flatbuffers::Offset<fbs::Data> {
-      auto address_buffer = fbs::data::Address{};
-      std::memcpy(address_buffer.mutable_bytes()->data(),
-                  as_bytes(value).data(), 16);
-      const auto value_offset = builder.CreateStruct(address_buffer);
-      return fbs::CreateData(builder, fbs::data::Data::address,
+    [&](const ip& value) -> flatbuffers::Offset<fbs::Data> {
+      auto ip_buffer = fbs::data::IP{};
+      std::memcpy(ip_buffer.mutable_bytes()->data(), as_bytes(value).data(),
+                  16);
+      const auto value_offset = builder.CreateStruct(ip_buffer);
+      return fbs::CreateData(builder, fbs::data::Data::ip,
                              value_offset.Union());
     },
     [&](const subnet& value) -> flatbuffers::Offset<fbs::Data> {
-      auto subnet_buffer
-        = fbs::data::Subnet{fbs::data::Address{}, value.length()};
-      std::memcpy(subnet_buffer.mutable_address().mutable_bytes()->data(),
+      auto subnet_buffer = fbs::data::Subnet{fbs::data::IP{}, value.length()};
+      std::memcpy(subnet_buffer.mutable_ip().mutable_bytes()->data(),
                   as_bytes(value.network()).data(), 16);
       const auto value_offset = builder.CreateStruct(subnet_buffer);
       return fbs::CreateData(builder, fbs::data::Data::subnet,
@@ -174,16 +172,16 @@ caf::error unpack(const fbs::Data& from, data& to) {
       to = bool{from.data_as_boolean()->value()};
       return caf::none;
     }
-    case fbs::data::Data::integer: {
-      to = integer{from.data_as_integer()->value()};
+    case fbs::data::Data::int64: {
+      to = int64_t{from.data_as_int64()->value()};
       return caf::none;
     }
-    case fbs::data::Data::count: {
-      to = count{from.data_as_count()->value()};
+    case fbs::data::Data::uint64: {
+      to = uint64_t{from.data_as_uint64()->value()};
       return caf::none;
     }
-    case fbs::data::Data::real: {
-      to = real{from.data_as_real()->value()};
+    case fbs::data::Data::double_: {
+      to = double{from.data_as_double_()->value()};
       return caf::none;
     }
     case fbs::data::Data::duration: {
@@ -202,22 +200,18 @@ caf::error unpack(const fbs::Data& from, data& to) {
       to = pattern{from.data_as_pattern()->value()->str()};
       return caf::none;
     }
-    case fbs::data::Data::address: {
-      auto address_buffer = address{};
-      static_assert(sizeof(address)
-                    == sizeof(*from.data_as_address()->bytes()));
-      std::memcpy(&address_buffer, from.data_as_address()->bytes()->data(),
-                  sizeof(address));
-      to = address_buffer;
+    case fbs::data::Data::ip: {
+      auto ip_buffer = ip{};
+      static_assert(sizeof(ip) == sizeof(*from.data_as_ip()->bytes()));
+      std::memcpy(&ip_buffer, from.data_as_ip()->bytes()->data(), sizeof(ip));
+      to = ip_buffer;
       return caf::none;
     }
     case fbs::data::Data::subnet: {
-      auto address_buffer = address{};
-      static_assert(sizeof(address)
-                    == sizeof(*from.data_as_subnet()->address().bytes()));
-      std::memcpy(&address_buffer,
-                  from.data_as_subnet()->address().bytes()->data(),
-                  sizeof(address));
+      auto address_buffer = ip{};
+      static_assert(sizeof(ip) == sizeof(*from.data_as_subnet()->ip().bytes()));
+      std::memcpy(&address_buffer, from.data_as_subnet()->ip().bytes()->data(),
+                  sizeof(ip));
       to = subnet{address_buffer, from.data_as_subnet()->length()};
       return caf::none;
     }
@@ -300,7 +294,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
                         [](const std::string& lhs, const pattern& rhs) {
                           return rhs.search(lhs);
                         },
-                        [](const address& lhs, const subnet& rhs) {
+                        [](const ip& lhs, const subnet& rhs) {
                           return rhs.contains(lhs);
                         },
                         [](const subnet& lhs, const subnet& rhs) {
@@ -570,11 +564,9 @@ caf::error convert(const data& d, caf::config_value& cv) {
   auto f = detail::overload{
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
-      if constexpr (detail::is_any_v<value_type, bool, count, real, duration,
-                                     std::string>)
+      if constexpr (detail::is_any_v<value_type, bool, uint64_t, double,
+                                     duration, std::string, int64_t>)
         cv = x;
-      else if constexpr (std::is_same_v<value_type, integer>)
-        cv = x.value;
       else
         cv = to_string(x);
       return caf::none;
@@ -645,7 +637,7 @@ bool convert(const caf::config_value& x, data& y) {
       return true;
     },
     [&](const caf::config_value::integer& value) -> bool {
-      y = integer{value};
+      y = int64_t{value};
       return true;
     },
     [&](const caf::uri& value) -> bool {
@@ -701,11 +693,11 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
     case simdjson::dom::element_type::NULL_VALUE:
       return data{};
     case simdjson::dom::element_type::DOUBLE:
-      return real{elem.get_double()};
+      return double{elem.get_double()};
     case simdjson::dom::element_type::UINT64:
-      return count{elem.get_uint64()};
+      return uint64_t{elem.get_uint64()};
     case simdjson::dom::element_type::INT64:
-      return integer{elem.get_int64()};
+      return int64_t{elem.get_int64()};
     case simdjson::dom::element_type::BOOL:
       return bool{elem.get_bool()};
     case simdjson::dom::element_type::STRING: {
@@ -864,13 +856,13 @@ void print(YAML::Emitter& out, const data& x) {
     [&out](bool x) {
       out << (x ? "true" : "false");
     },
-    [&out](integer x) {
-      out << x.value;
-    },
-    [&out](count x) {
+    [&out](int64_t x) {
       out << x;
     },
-    [&out](real x) {
+    [&out](uint64_t x) {
+      out << x;
+    },
+    [&out](double x) {
       out << to_string(x);
     },
     [&out](duration x) {
@@ -885,7 +877,7 @@ void print(YAML::Emitter& out, const data& x) {
     [&out](const pattern& x) {
       out << to_string(x);
     },
-    [&out](const address& x) {
+    [&out](const ip& x) {
       out << to_string(x);
     },
     [&out](const subnet& x) {

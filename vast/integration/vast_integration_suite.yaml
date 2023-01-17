@@ -68,7 +68,7 @@ fixtures:
                     ['-e', f'127.0.0.1:{VAST_PORT}',
                      '-i', 'node',
                      '--aging-frequency=2000min',
-                     '--aging-query=:addr == 192.168.1.104',
+                     '--aging-query=:ip == 192.168.1.104',
                      '--active-partition-timeout=5s',
                      'start'],
                     work_dir, name='node', port=VAST_PORT,
@@ -114,8 +114,8 @@ tests:
     steps:
       - command: -N --max-partition-size=64 import zeek
         input: data/zeek/conn.log.gz
-      - command: -N count ":addr == 192.168.1.104"
-      - command: -N count -e ":addr == 192.168.1.104"
+      - command: -N count ":ip == 192.168.1.104"
+      - command: -N count -e ":ip == 192.168.1.104"
       - command: -N count "resp_p == 80"
       - command: -N count "resp_p != 80"
       - command: -N count 861237
@@ -126,7 +126,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: -N export ascii 'resp_h == 192.168.1.104'
       - command: -N export ascii 'orig_bytes > 1k && orig_bytes < 1Ki'
-      - command: -N export ascii ':string == "OrfTtuI5G4e" || :port == 67 || :count == 67'
+      - command: -N export ascii ':string == "OrfTtuI5G4e" || :port == 67 || :uint64 == 67'
       - command: -N export ascii '#type == "zeek.conn" && resp_h == 192.168.1.104'
       - command: '-N export ascii "#type != \"zeek.conn\" && #type != \"vast.metrics\""'
       - command: -N export ascii '#type != "foobar" && resp_h == 192.168.1.104'
@@ -150,7 +150,7 @@ tests:
       - command: -N export zeek 'resp_h == 192.168.1.104'
         transformation: awk '!/^#(open|close)/'
       - command: -N count ':port == 53'
-      - command: '-N count ":count == 53 && #type == \"zeek.dns\""'
+      - command: '-N count ":uint64 == 53 && #type == \"zeek.dns\""'
   Node Zeek http log:
     tags: [node, import-export, zeek]
     steps:
@@ -237,7 +237,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: flush
       - command: status --detailed
-        transformation: jq '.catalog.schemas | del(."vast.metrics") | del(."zeek.conn"."import-time")'
+        transformation: jq '.catalog.schemas | with_entries(.value = .value."num-events")'
       - command: status --detailed
         transformation: jq -ec 'del(.version) | del(.system."swap-space-usage") | paths(scalars) as $p | {path:$p, type:(getpath($p) | type)}'
       - command: status --detailed index importer
@@ -423,14 +423,16 @@ tests:
   Arrow Import:
     condition: version | jq -e '."Apache Arrow"'
     tags: [import, arrow]
+    fixture: ServerTester
     steps:
-      - command: -N import --batch-encoding=arrow arrow
+      - command: import --batch-encoding=arrow arrow
         # the input corresponds to conn.log.gz + eve.json (see above)
         input: data/suricata/arrow_ipc.bin
-      - command: -N export -n 10 arrow '#type == "zeek.conn"'
+      - command: export -n 10 arrow '#type == "zeek.conn"'
         transformation: python @./misc/scripts/print-arrow.py
-      - command: -N export arrow '#type == "suricata.http"'
+      - command: export arrow '#type == "suricata.http"'
         transformation: python @./misc/scripts/print-arrow.py
+      - command: count
   Import syslog:
     tags: [syslog, import]
     steps:
@@ -516,7 +518,7 @@ tests:
     tags: [import, json]
     steps:
       - guard: version | jq -e '."Apache Arrow"'
-      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: count, }>, d: count, }" --type=custom --batch-encoding=arrow json'
+      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: uint64, }>, d: uint64, }" --type=custom --batch-encoding=arrow json'
         input: data/json/record-in-list.json
       - command: -N export ascii '#type == "custom"'
 

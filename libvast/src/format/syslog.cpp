@@ -26,9 +26,9 @@ type make_rfc5424_type() {
   return type{
     "syslog.rfc5424",
     record_type{{
-      {"facility", count_type{}},
-      {"severity", count_type{}},
-      {"version", count_type{}},
+      {"facility", uint64_type{}},
+      {"severity", uint64_type{}},
+      {"version", uint64_type{}},
       {"ts", type{"timestamp", time_type{}}},
       {"hostname", string_type{}},
       {"app_name", string_type{}},

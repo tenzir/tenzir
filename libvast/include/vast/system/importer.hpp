@@ -80,7 +80,7 @@ struct importer_state {
 
   measurement measurement_ = {};
   stopwatch::time_point last_report = {};
-  detail::heterogeneous_string_hashmap<count> schema_counters = {};
+  detail::heterogeneous_string_hashmap<uint64_t> schema_counters = {};
 
   /// The index actor.
   index_actor index;

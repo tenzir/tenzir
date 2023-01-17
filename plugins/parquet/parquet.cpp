@@ -40,8 +40,8 @@ struct configuration {
 
   static const record_type& schema() noexcept {
     static auto result = record_type{
-      {"row-group-size", count_type{}},
-      {"zstd-compression-level", integer_type{}},
+      {"row-group-size", uint64_type{}},
+      {"zstd-compression-level", int64_type{}},
     };
     return result;
   }
@@ -121,21 +121,21 @@ align_array_to_type(const vast::type& t, std::shared_ptr<arrow::Array> array) {
       return std::make_shared<pattern_type::array_type>(
         pattern_type::to_arrow_type(), array);
     },
-    [&](const address_type&) -> std::shared_ptr<arrow::Array> {
-      if (address_type::to_arrow_type()->Equals(array->type()))
+    [&](const ip_type&) -> std::shared_ptr<arrow::Array> {
+      if (ip_type::to_arrow_type()->Equals(array->type()))
         return {}; // address is not always wrong, only when inside maps
-      return std::make_shared<address_type::array_type>(
-        address_type::to_arrow_type(), array);
+      return std::make_shared<ip_type::array_type>(ip_type::to_arrow_type(),
+                                                   array);
     },
     [&](const subnet_type&) -> std::shared_ptr<arrow::Array> {
       if (subnet_type::to_arrow_type()->Equals(array->type()))
         return {};
       auto sa = std::static_pointer_cast<arrow::StructArray>(array);
-      auto address_array = std::make_shared<address_type::array_type>(
-        address_type::to_arrow_type(), sa->field(0));
+      auto ip_array = std::make_shared<ip_type::array_type>(
+        ip_type::to_arrow_type(), sa->field(0));
       auto inner_type = subnet_type::to_arrow_type()->storage_type();
       auto children = std::vector<std::shared_ptr<arrow::Array>>{
-        address_array,
+        ip_array,
         sa->field(1),
       };
       auto struct_array

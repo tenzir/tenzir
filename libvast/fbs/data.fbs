@@ -4,15 +4,15 @@ struct Boolean {
   value: bool;
 }
 
-struct Integer {
+struct Int64 {
   value: long;
 }
 
-struct Count {
+struct UInt64 {
   value: ulong;
 }
 
-struct Real {
+struct Double {
   value: double;
 }
 
@@ -32,12 +32,12 @@ table Pattern {
   value: string;
 }
 
-struct Address {
+struct IP {
   bytes: [ubyte:16];
 }
 
 struct Subnet {
-  address: Address;
+  ip: IP;
   length: ubyte;
 }
 
@@ -70,14 +70,14 @@ table Record {
 /// The sum data of all possible types.
 union Data {
   boolean: Boolean,
-  integer: Integer,
-  count: Count,
-  real: Real,
+  int64: Int64,
+  uint64: UInt64,
+  double_: Double,
   duration: Duration,
   time: Time,
   string: String,
   pattern: Pattern,
-  address: Address,
+  ip: IP,
   subnet: Subnet,
   enumeration: Enumeration,
   list: List,

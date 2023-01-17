@@ -31,19 +31,14 @@
 
 namespace vast::system {
 
-caf::expected<expression>
-parse_expression(std::vector<std::string>::const_iterator begin,
-                 std::vector<std::string>::const_iterator end) {
-  if (begin == end)
-    return caf::make_error(ec::syntax_error, "no query expression given");
-  auto query = detail::join(begin, end, " ");
+caf::expected<expression> parse_expression(const std::string& query) {
   // Get all query languages, but make sure that VAST is at the front.
   // TODO: let the user choose exactly one language instead.
   auto query_languages = collect(plugins::get<query_language_plugin>());
   if (const auto* vastql = plugins::find<query_language_plugin>("VASTQL")) {
     const auto it
       = std::find(query_languages.begin(), query_languages.end(), vastql);
-    VAST_ASSERT(it != query_languages.end());
+    VAST_ASSERT_CHEAP(it != query_languages.end());
     std::rotate(query_languages.begin(), it, it + 1);
   }
   for (const auto& query_language : query_languages) {
@@ -55,6 +50,15 @@ parse_expression(std::vector<std::string>::const_iterator begin,
   }
   return caf::make_error(ec::syntax_error,
                          fmt::format("invalid query: {}", query));
+}
+
+caf::expected<expression>
+parse_expression(std::vector<std::string>::const_iterator begin,
+                 std::vector<std::string>::const_iterator end) {
+  if (begin == end)
+    return caf::make_error(ec::syntax_error, "no query expression given");
+  auto query = detail::join(begin, end, " ");
+  return parse_expression(query);
 }
 
 caf::expected<expression>

@@ -64,8 +64,8 @@ auto check_column(const table_slice& slice, int c, const T& t,
     CHECK_EQUAL(materialize(slice.at(r, c, type{t})), ref[r]);
 }
 
-count operator"" _c(unsigned long long int x) {
-  return static_cast<count>(x);
+uint64_t operator"" _c(unsigned long long int x) {
+  return static_cast<uint64_t>(x);
 }
 
 template <concrete_type VastType, class... Ts>
@@ -92,8 +92,8 @@ enumeration operator"" _e(unsigned long long int x) {
   return static_cast<enumeration>(x);
 }
 
-integer operator"" _i(unsigned long long int x) {
-  return integer{detail::narrow<integer::value_type>(x)};
+int64_t operator"" _i(unsigned long long int x) {
+  return int64_t{detail::narrow<int64_t>(x)};
 }
 
 #define CHECK_OK(expression)                                                   \
@@ -105,14 +105,14 @@ integer operator"" _i(unsigned long long int x) {
 TEST(nested multi - column roundtrip) {
   auto t = record_type{
     {"f1", type{string_type{}, {{"key", "value"}}}},
-    {"f2", type{"alt_name", count_type{}}},
+    {"f2", type{"alt_name", uint64_type{}}},
     {
       "f3_rec",
       type{
         "nested",
         record_type{
           {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
-          {"f3.2", integer_type{}},
+          {"f3.2", int64_type{}},
         },
         {{"attr"}, {"other_attr", "val"}},
       },
@@ -124,33 +124,33 @@ TEST(nested multi - column roundtrip) {
   auto f4s = list{8_i, 7_i, 6_i, 5_i};
   auto slice = make_slice(t, f1s, f2s, f3s, f4s);
   check_column(slice, 0, string_type{}, f1s);
-  check_column(slice, 1, count_type{}, f2s);
+  check_column(slice, 1, uint64_type{}, f2s);
   check_column(slice, 2, pattern_type{}, f3s);
-  check_column(slice, 3, integer_type{}, f4s);
+  check_column(slice, 3, int64_type{}, f4s);
   record_batch_roundtrip(slice);
 }
 
 TEST(batch transform nested column) {
   auto t = record_type{
     {"f1", type{string_type{}, {{"key", "value"}}}},
-    {"f2", type{"alt_name", count_type{}}},
+    {"f2", type{"alt_name", uint64_type{}}},
     {
       "f3_rec",
       type{
         "nested",
         record_type{
           {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
-          {"f3.2", integer_type{}},
+          {"f3.2", int64_type{}},
         },
         {{"attr"}, {"other_attr", "val"}},
       },
     },
   };
   auto f1s = std::vector<std::string>{"n1", "n2", "n3", "n4"};
-  auto f2s = std::vector<count>{1_c, 2_c, 3_c, 4_c};
+  auto f2s = std::vector<uint64_t>{1_c, 2_c, 3_c, 4_c};
   auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
                                   pattern("p4")};
-  auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
+  auto f4s = std::vector<int64_t>{8_i, 7_i, 6_i, 5_i};
   auto slice = make_slice(t, f1s, f2s, f3s, f4s);
   auto transform_fn =
     [](struct record_type::field field, std::shared_ptr<arrow::Array>) noexcept
@@ -172,7 +172,7 @@ TEST(batch transform nested column) {
   REQUIRE(caf::holds_alternative<record_type>(schema));
   const auto expected_t = record_type{
     {"f3.1", string_type{}},
-    {"f3.2", integer_type{}},
+    {"f3.2", int64_type{}},
   };
   CHECK_EQUAL(caf::get<record_type>(schema).field(2).name, "f3_rec");
   CHECK_EQUAL(
@@ -193,24 +193,24 @@ TEST(batch transform nested column) {
 TEST(batch project nested column) {
   auto t = record_type{
     {"f1", type{string_type{}, {{"key", "value"}}}},
-    {"f2", type{"alt_name", count_type{}}},
+    {"f2", type{"alt_name", uint64_type{}}},
     {
       "f3_rec",
       type{
         "nested",
         record_type{
           {"f3.1", type{"rgx", pattern_type{}, {{"index", "none"}}}},
-          {"f3.2", integer_type{}},
+          {"f3.2", int64_type{}},
         },
         {{"attr"}, {"other_attr", "val"}},
       },
     },
   };
   auto f1s = std::vector<std::string>{"n1", "n2", "n3", "n4"};
-  auto f2s = std::vector<count>{1_c, 2_c, 3_c, 4_c};
+  auto f2s = std::vector<uint64_t>{1_c, 2_c, 3_c, 4_c};
   auto f3s = std::vector<pattern>{pattern("p1"), pattern("p2"), pattern("p3"),
                                   pattern("p4")};
-  auto f4s = std::vector<integer>{8_i, 7_i, 6_i, 5_i};
+  auto f4s = std::vector<int64_t>{8_i, 7_i, 6_i, 5_i};
   auto slice = make_slice(t, f1s, f2s, f3s, f4s);
   auto [schema, batch]
     = select_columns(slice.schema(), to_record_batch(slice), {{0}, {2, 1}});
@@ -222,7 +222,7 @@ TEST(batch project nested column) {
       type{
         "nested",
         record_type{
-          {"f3.2", integer_type{}},
+          {"f3.2", int64_type{}},
         },
         {{"attr"}, {"other_attr", "val"}},
       },
@@ -241,7 +241,7 @@ TEST(batch project nested column) {
 }
 
 TEST(single column - equality) {
-  auto t = count_type{};
+  auto t = uint64_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, caf::none, 3_c);
   auto slice2 = make_single_column_slice(t, 0_c, 1_c, caf::none, 3_c);
   CHECK_VARIANT_EQUAL(slice1.at(0, 0, t), slice2.at(0, 0, t));
@@ -255,7 +255,7 @@ TEST(single column - equality) {
 }
 
 TEST(single column - count) {
-  auto t = count_type{};
+  auto t = uint64_type{};
   auto slice = make_single_column_slice(t, 0_c, 1_c, caf::none, 3_c);
   REQUIRE_EQUAL(slice.rows(), 4u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 0_c);
@@ -291,7 +291,7 @@ TEST(single column - enum2) {
 }
 
 TEST(single column - integer) {
-  auto t = integer_type{};
+  auto t = int64_type{};
   auto slice = make_single_column_slice(t, caf::none, 1_i, 2_i);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), std::nullopt);
@@ -313,7 +313,7 @@ TEST(single column - boolean) {
 }
 
 TEST(single column - real) {
-  auto t = real_type{};
+  auto t = double_type{};
   auto slice = make_single_column_slice(t, 1.23, 3.21, caf::none);
   REQUIRE_EQUAL(slice.rows(), 3u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), 1.23);
@@ -376,12 +376,12 @@ TEST(single column - duration) {
 }
 
 TEST(single column - address) {
-  using vast::address;
+  using vast::ip;
   using vast::to;
-  auto t = address_type{};
-  auto a1 = unbox(to<address>("172.16.7.1"));
-  auto a2 = unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329"));
-  auto a3 = unbox(to<address>("2001:db8::"));
+  auto t = ip_type{};
+  auto a1 = unbox(to<ip>("172.16.7.1"));
+  auto a2 = unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329"));
+  auto a3 = unbox(to<ip>("2001:db8::"));
   auto slice = make_single_column_slice(t, caf::none, a1, a2, a3);
   REQUIRE_EQUAL(slice.rows(), 4u);
   CHECK_VARIANT_EQUAL(slice.at(0, 0, t), std::nullopt);
@@ -410,7 +410,7 @@ TEST(single column - subnet) {
 }
 
 TEST(single column - list of integers) {
-  auto t = list_type{integer_type{}};
+  auto t = list_type{int64_type{}};
   record_type schema{{"values", t}};
   list list1{1_i, 2_i, 3_i};
   list list2{10_i, 20_i};
@@ -434,8 +434,8 @@ TEST(list of structs) {
       "foo",
       list_type{
         record_type{
-          {"bar", count_type{}},
-          {"baz", count_type{}},
+          {"bar", uint64_type{}},
+          {"baz", uint64_type{}},
         },
       },
     },
@@ -567,7 +567,7 @@ TEST(single column - list of strings) {
 }
 
 TEST(single column - list of list of integers) {
-  auto t = list_type{integer_type{}};
+  auto t = list_type{int64_type{}};
   // Note: we call the copy ctor if we don't wrap legacy_list_type into a type.
   auto llt = list_type{type{t}};
   record_type schema{{"values", llt}};
@@ -587,7 +587,7 @@ TEST(single column - list of list of integers) {
 }
 
 TEST(single column - map) {
-  auto t = map_type{string_type{}, count_type{}};
+  auto t = map_type{string_type{}, uint64_type{}};
   record_type schema{{"values", t}};
   map map1{{"foo"s, 42_c}, {"bar"s, 23_c}};
   map map2{{"a"s, 0_c}, {"b"s, {}}, {"c", 2_c}};
@@ -601,7 +601,7 @@ TEST(single column - map) {
 }
 
 TEST(single column - serialization) {
-  auto t = count_type{};
+  auto t = uint64_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
   decltype(slice1) slice2 = {};
   {
@@ -618,7 +618,7 @@ TEST(single column - serialization) {
 }
 
 TEST(record batch roundtrip) {
-  auto t = count_type{};
+  auto t = uint64_type{};
   auto slice1 = make_single_column_slice(t, 0_c, 1_c, 2_c, 3_c);
   auto batch = to_record_batch(slice1);
   auto slice2 = table_slice{batch};
@@ -630,7 +630,7 @@ TEST(record batch roundtrip) {
 }
 
 TEST(record batch roundtrip - adding column) {
-  auto slice1 = make_single_column_slice(count_type{}, 0_c, 1_c, 2_c, 3_c);
+  auto slice1 = make_single_column_slice(uint64_type{}, 0_c, 1_c, 2_c, 3_c);
   auto batch = to_record_batch(slice1);
   auto cb = string_type::make_arrow_builder(arrow::default_memory_pool());
   REQUIRE(cb);
@@ -643,10 +643,10 @@ TEST(record batch roundtrip - adding column) {
   auto new_batch = batch->AddColumn(1, "new", column.MoveValueUnsafe());
   REQUIRE(new_batch.ok());
   auto slice2 = table_slice_builder::create(new_batch.ValueUnsafe());
-  CHECK_VARIANT_EQUAL(slice2.at(0, 0, count_type{}), 0_c);
-  CHECK_VARIANT_EQUAL(slice2.at(1, 0, count_type{}), 1_c);
-  CHECK_VARIANT_EQUAL(slice2.at(2, 0, count_type{}), 2_c);
-  CHECK_VARIANT_EQUAL(slice2.at(3, 0, count_type{}), 3_c);
+  CHECK_VARIANT_EQUAL(slice2.at(0, 0, uint64_type{}), 0_c);
+  CHECK_VARIANT_EQUAL(slice2.at(1, 0, uint64_type{}), 1_c);
+  CHECK_VARIANT_EQUAL(slice2.at(2, 0, uint64_type{}), 2_c);
+  CHECK_VARIANT_EQUAL(slice2.at(3, 0, uint64_type{}), 3_c);
   CHECK_VARIANT_EQUAL(slice2.at(0, 1, string_type{}), "0"sv);
   CHECK_VARIANT_EQUAL(slice2.at(1, 1, string_type{}), "1"sv);
   CHECK_VARIANT_EQUAL(slice2.at(2, 1, string_type{}), "2"sv);
@@ -661,25 +661,24 @@ auto field_roundtrip(const type& t) {
 
 TEST(arrow primitive type to field roundtrip) {
   field_roundtrip(type{bool_type{}});
-  field_roundtrip(type{integer_type{}});
-  field_roundtrip(type{count_type{}});
-  field_roundtrip(type{real_type{}});
+  field_roundtrip(type{int64_type{}});
+  field_roundtrip(type{uint64_type{}});
+  field_roundtrip(type{double_type{}});
   field_roundtrip(type{duration_type{}});
   field_roundtrip(type{time_type{}});
   field_roundtrip(type{string_type{}});
   field_roundtrip(type{pattern_type{}});
-  field_roundtrip(type{address_type{}});
+  field_roundtrip(type{ip_type{}});
   field_roundtrip(type{subnet_type{}});
   field_roundtrip(type{enumeration_type{{"first"}, {"third", 2}, {"fourth"}}});
-  field_roundtrip(type{list_type{integer_type{}}});
-  field_roundtrip(type{map_type{integer_type{}, address_type{}}});
+  field_roundtrip(type{list_type{int64_type{}}});
+  field_roundtrip(type{map_type{int64_type{}, ip_type{}}});
   field_roundtrip(
-    type{record_type{{"key", integer_type{}}, {"value", address_type{}}}});
-  field_roundtrip(
-    type{record_type{{"a", string_type{}}, {"b", address_type{}}}});
+    type{record_type{{"key", int64_type{}}, {"value", ip_type{}}}});
+  field_roundtrip(type{record_type{{"a", string_type{}}, {"b", ip_type{}}}});
   field_roundtrip(type{record_type{
     {"a", string_type{}},
-    {"b", record_type{{"hits", count_type{}}, {"net", subnet_type{}}}}}});
+    {"b", record_type{{"hits", uint64_type{}}, {"net", subnet_type{}}}}}});
 }
 
 TEST(arrow names and attrs roundtrip) {
@@ -714,21 +713,21 @@ auto schema_roundtrip(const type& t) {
 }
 
 TEST(arrow record type to schema roundtrip tp) {
-  schema_roundtrip(type{"somename", record_type{{"a", integer_type{}}}});
+  schema_roundtrip(type{"somename", record_type{{"a", int64_type{}}}});
   schema_roundtrip(type{
     "alias",
     record_type{
-      {"a", integer_type{}},
+      {"a", int64_type{}},
       {"b", bool_type{}},
-      {"c", integer_type{}},
-      {"d", count_type{}},
-      {"e", real_type{}},
+      {"c", int64_type{}},
+      {"d", uint64_type{}},
+      {"e", double_type{}},
       {"f", duration_type{}},
       {"g", time_type{}},
       {"h", string_type{}},
-      {"i", address_type{}},
+      {"i", ip_type{}},
       {"j", subnet_type{}},
-      {"k", list_type{integer_type{}}},
+      {"k", list_type{int64_type{}}},
     },
     {{"top_level_key", "top_level_value"}},
   });
@@ -747,7 +746,7 @@ TEST(arrow record type to schema roundtrip tp) {
   auto inner = type{
     "inner_rec",
     record_type{
-      {"a", integer_type{}},
+      {"a", int64_type{}},
       {"b", string_type{}},
     },
     {{"key0", "value0"}, {"key1"}},
@@ -755,7 +754,7 @@ TEST(arrow record type to schema roundtrip tp) {
   auto outer = type{
     "outer_rec",
     record_type{
-      {"x", count_type{}},
+      {"x", uint64_type{}},
       {"y", string_type{}},
       {"z_nested", inner},
     },
@@ -776,7 +775,7 @@ TEST(arrow record type to schema roundtrip tp) {
 
 TEST(full_table_slice) {
   auto et = enumeration_type{{"foo"}, {"bar"}, {"baz"}};
-  auto mt = map_type{et, count_type{}};
+  auto mt = map_type{et, uint64_type{}};
   auto lt = list_type{subnet_type{}};
   auto rt = record_type{
     {"f9_1", et},
@@ -787,20 +786,20 @@ TEST(full_table_slice) {
     {"f11_1",
      record_type{
        {"f11_1_1", et},
-       {"f11_1_2", count_type{}},
+       {"f11_1_2", uint64_type{}},
      }},
     {"f11_2",
      record_type{
-       {"f11_2_1", address_type{}},
+       {"f11_2_1", ip_type{}},
        {"f11_2_2", pattern_type{}},
      }},
   };
   auto lrt = list_type{rt};
   auto t = record_type{
     {"f1", type{string_type{}, {{"key", "value"}}}},
-    {"f2", count_type{}},
+    {"f2", uint64_type{}},
     {"f3", pattern_type{}},
-    {"f4", address_type{}},
+    {"f4", ip_type{}},
     {"f5", subnet_type{}},
     {"f6", et},
     {"f7", lt},
@@ -813,10 +812,10 @@ TEST(full_table_slice) {
   auto f2_count = list{1_c, {}, 3_c, 4_c};
   auto f3_pattern = list{pattern("p1"), {}, pattern("p3"), {}};
   auto f4_address = list{
-    unbox(to<address>("172.16.7.29")),
+    unbox(to<ip>("172.16.7.29")),
     {},
-    unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329")),
-    unbox(to<address>("2001:db8::")),
+    unbox(to<ip>("ff01:db8::202:b3ff:fe1e:8329")),
+    unbox(to<ip>("2001:db8::")),
   };
   auto f5_subnet = list{
     unbox(to<subnet>("172.16.7.0/8")),
@@ -855,9 +854,9 @@ TEST(full_table_slice) {
     f3_pattern  // f11_2_2
   );
   check_column(slice, 0, string_type{}, f1_string);
-  check_column(slice, 1, count_type{}, f2_count);
+  check_column(slice, 1, uint64_type{}, f2_count);
   check_column(slice, 2, pattern_type{}, f3_pattern);
-  check_column(slice, 3, address_type{}, f4_address);
+  check_column(slice, 3, ip_type{}, f4_address);
   check_column(slice, 4, subnet_type{}, f5_subnet);
   check_column(slice, 5, et, f6_enum);
   check_column(slice, 6, lt, f7_list_subnet);
@@ -866,8 +865,8 @@ TEST(full_table_slice) {
   check_column(slice, 9, string_type{}, f9_2_string);
   check_column(slice, 10, lrt, f10_list_record);
   check_column(slice, 11, et, f6_enum);                // f11_1_1
-  check_column(slice, 12, count_type{}, f2_count);     // f11_1_2
-  check_column(slice, 13, address_type{}, f4_address); // f11_2_1
+  check_column(slice, 12, uint64_type{}, f2_count);    // f11_1_2
+  check_column(slice, 13, ip_type{}, f4_address);      // f11_2_1
   check_column(slice, 14, pattern_type{}, f3_pattern); // f11_2_2
   MESSAGE("test is_serilaized");
   CHECK(slice.is_serialized());

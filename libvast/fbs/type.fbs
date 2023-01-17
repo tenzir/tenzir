@@ -31,13 +31,13 @@ namespace vast.fbs.type;
 table BoolType {}
 
 /// A signed integer.
-table IntegerType {}
+table Int64Type {}
 
 /// An unsigned integer.
-table CountType {}
+table UInt64Type {}
 
 /// A floating-point value.
-table RealType {}
+table DoubleType {}
 
 /// A time interval.
 table DurationType {}
@@ -52,7 +52,7 @@ table StringType {}
 table PatternType {}
 
 /// An IP address (v4 or v6).
-table AddressType {}
+table IPType {}
 
 /// A CIDR subnet.
 table SubnetType {}
@@ -83,14 +83,14 @@ namespace vast.fbs.type;
 /// The sum type of all possible types.
 union Type {
   bool_type: BoolType,
-  integer_type: IntegerType,
-  count_type: CountType,
-  real_type: RealType,
+  int64_type: Int64Type,
+  uint64_type: UInt64Type,
+  double_type: DoubleType,
   duration_type: DurationType,
   time_type: TimeType,
   string_type: StringType,
   pattern_type: PatternType,
-  address_type: AddressType,
+  ip_type: IPType,
   subnet_type: SubnetType,
   enumeration_type: EnumerationType,
   list_type: ListType,

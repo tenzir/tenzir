@@ -135,7 +135,7 @@ TEST(parseable) {
     (t
      == legacy_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}}));
   MESSAGE("record");
-  auto str = R"__(record{"a b": addr, b: bool})__"sv;
+  auto str = R"__(record{"a b": ip, b: bool})__"sv;
   CHECK(parsers::legacy_type(str, t));
   // clang-format off
   auto r = legacy_record_type{
@@ -145,7 +145,7 @@ TEST(parseable) {
   // clang-format on
   CHECK_EQUAL(t, r);
   MESSAGE("recursive");
-  str = "record{r: record{a: addr, i: record{b: bool}}}"sv;
+  str = "record{r: record{a: ip, i: record{b: bool}}}"sv;
   CHECK(parsers::legacy_type(str, t));
   // clang-format off
   r = legacy_record_type{
@@ -169,7 +169,7 @@ TEST(parseable) {
     = record_field{"-", legacy_record_type{{"bar", legacy_bool_type{}}}};
   CHECK_EQUAL(unbox(to<legacy_type>("foo-bar")), r);
   CHECK_EQUAL(unbox(to<legacy_type>("foo - bar")), r);
-  str = "record{a: real} + bar"sv;
+  str = "record{a: double} + bar"sv;
   // clang-format off
   r = legacy_record_type{
     {"", legacy_record_type{{"a", legacy_real_type{}}}},

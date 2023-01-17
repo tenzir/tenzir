@@ -17,6 +17,7 @@
 #include "vast/type.hpp"
 
 #include <arrow/io/api.h>
+#include <arrow/ipc/reader.h>
 #include <arrow/ipc/writer.h>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
@@ -35,12 +36,14 @@ public:
 
   writer();
   writer(writer&&) = default;
+  writer(const writer&) = delete;
   writer& operator=(writer&&) = default;
+  writer& operator=(const writer&) = delete;
   ~writer() override = default;
 
   explicit writer(const caf::settings& options);
 
-  caf::error write(const table_slice& x) override;
+  caf::error write(const table_slice& slice) override;
 
   [[nodiscard]] const char* name() const override;
 
@@ -53,7 +56,6 @@ public:
 private:
   output_stream_ptr out_;
   type current_schema_;
-  std::unique_ptr<table_slice_builder> current_builder_;
   batch_writer_ptr current_batch_writer_;
 };
 
@@ -104,6 +106,7 @@ private:
 
   vast::module module_;
   std::unique_ptr<arrow_istream_wrapper> input_;
+  std::shared_ptr<::arrow::ipc::RecordBatchReader> reader_;
 };
 
 } // namespace vast::format::arrow

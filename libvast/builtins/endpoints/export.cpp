@@ -19,6 +19,7 @@
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
 #include <vast/system/query_cursor.hpp>
+#include <vast/system/spawn_arguments.hpp>
 #include <vast/table_slice.hpp>
 
 #include <caf/stateful_actor.hpp>
@@ -39,11 +40,11 @@ static auto const* SPEC_V0 = R"_(
           default: A query matching every event.
         required: true
         description: The query expression to execute.
-        example: ":addr in 10.42.0.0/16"
+        example: ":ip in 10.42.0.0/16"
       - in: query
         name: limit
         schema:
-          type: integer
+          type: int64
           default: 50
         required: false
         description: Maximum number of returned events.
@@ -92,7 +93,7 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:
@@ -126,10 +127,10 @@ static auto const* SPEC_V0 = R"_(
               expression:
                 type: string
                 description: The query expression to execute.
-                example: ":addr in 10.42.0.0/16"
+                example: ":ip in 10.42.0.0/16"
                 default: A query matching every event.
               limit:
-                type: integer
+                type: int64
                 default: 50
                 description: Maximum number of returned events
                 example: 3
@@ -165,7 +166,7 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:
@@ -203,10 +204,10 @@ static auto const* SPEC_V0 = R"_(
               expression:
                 type: string
                 description: The query expression to execute.
-                example: ":addr in 10.42.0.0/16"
+                example: ":ip in 10.42.0.0/16"
                 default: A query matching every event.
               limit:
-                type: integer
+                type: int64
                 default: 50
                 description: Maximum number of returned events
                 example: 3
@@ -243,7 +244,7 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num_events:
-                    type: integer
+                    type: int64
                   version:
                     type: string
                   events:
@@ -555,21 +556,24 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       } else {
         query_string = "#type != \"this_expression_matches_everything\"";
       }
-      auto expr = to<vast::expression>(*query_string);
-      if (!expr) {
-        rq.response->abort(400, "couldn't parse expression\n");
-        return;
-      }
+      auto expr = system::parse_expression(*query_string);
+      if (!expr)
+        return rq.response->abort(400, fmt::format("unparseable query: {}\n",
+                                                   expr.error()));
+      auto normalized_expr = normalize_and_validate(*expr);
+      if (!normalized_expr)
+        return rq.response->abort(400, fmt::format("invalid query: {}\n",
+                                                   normalized_expr.error()));
       auto params = export_parameters{
-        .expr = std::move(*expr),
+        .expr = std::move(*normalized_expr),
       };
       if (endpoint_id == ENDPOINT_EXPORT_TYPED)
         params.format_opts.typed_results = true;
       if (rq.params.contains("limit")) {
         auto& param = rq.params.at("limit");
         // Should be type-checked by the server.
-        VAST_ASSERT(caf::holds_alternative<count>(param));
-        params.limit = caf::get<count>(param);
+        VAST_ASSERT(caf::holds_alternative<uint64_t>(param));
+        params.limit = caf::get<uint64_t>(param);
       }
       if (rq.params.contains("flatten")) {
         auto& param = rq.params.at("flatten");
@@ -653,7 +657,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   rest_endpoints() const override {
     static auto common_parameters = vast::record_type{
       {"expression", vast::string_type{}},
-      {"limit", vast::count_type{}},
+      {"limit", vast::uint64_type{}},
       {"pipeline", vast::string_type{}},
       {"flatten", vast::bool_type{}},
       {"omit-nulls", vast::bool_type{}},

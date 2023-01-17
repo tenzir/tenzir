@@ -67,8 +67,8 @@ caf::error render(output_iterator& out, const T& x) {
   return caf::none;
 }
 
-caf::error render(output_iterator& out, const view<real>& x) {
-  real_printer<real, 6>{}.print(out, x);
+caf::error render(output_iterator& out, const view<double>& x) {
+  real_printer<double, 6>{}.print(out, x);
   return caf::none;
 }
 
@@ -331,11 +331,11 @@ struct container_parser_builder {
       auto kvp =
         caf::visit(*this, t.key_type()) >> ws >> opt_.kvp_separator >> ws >> caf::visit(*this, t.value_type());
       return (ws >> '{' >> ws >> (kvp % (ws >> opt_.set_separator >> ws)) >> ws >> '}' >> ws) ->* map_insert;
-    } else if constexpr (std::is_same_v<T, real_type>) {
+    } else if constexpr (std::is_same_v<T, double_type>) {
       // The default parser for real's requires the dot, so we special-case the
       // real parser here.
       auto ws = ignore(*parsers::space - opt_.separator);
-      return (ws >> parsers::real >> ws) ->* [](real x) {
+      return (ws >> parsers::real >> ws) ->* [](double x) {
         return x;
       };
     } else if constexpr (registered_parser_type<type_to_data_t<T>>) {
@@ -425,11 +425,11 @@ struct csv_parser_factory {
       } else if constexpr (detail::is_any_v<U, list_type, map_type>) {
         auto pb = container_parser_builder<Iterator, data>{opt_};
         return (-caf::visit(pb, t)).with(add_t<data>{bptr_});
-      } else if constexpr (std::is_same_v<U, real_type>) {
+      } else if constexpr (std::is_same_v<U, double_type>) {
         // The default parser for real's requires the dot, so we special-case
         // the real parser here.
         const auto& p = parsers::real;
-        return (-(quoted_parser{p} | p)).with(add_t<real>{bptr_});
+        return (-(quoted_parser{p} | p)).with(add_t<double>{bptr_});
       } else if constexpr (registered_parser_type<type_to_data_t<U>>) {
         using value_type = type_to_data_t<U>;
         auto p = make_parser<value_type>{};

@@ -52,8 +52,8 @@ TEST(merge) {
   const auto xs = record{
     {"a", "foo"},
     {"b", record{
-      {"c", integer{-42}},
-      {"d", list{integer{1}, integer{2}, integer{3}}}
+      {"c", int64_t{-42}},
+      {"d", list{int64_t{1}, int64_t{2}, int64_t{3}}}
     }},
     {"c", record{
       {"a", "bar"}
@@ -62,8 +62,8 @@ TEST(merge) {
   const auto ys = record{
     {"a", "bar"},
     {"b", record{
-      {"a", integer{42}},
-      {"d", list{integer{4}, integer{5}, integer{6}}}
+      {"a", int64_t{42}},
+      {"d", list{int64_t{4}, int64_t{5}, int64_t{6}}}
     }},
     {"c", "not a record yet"}
   };
@@ -71,9 +71,9 @@ TEST(merge) {
     auto expected = record{
       {"a", "foo"},
       {"b", record{
-        {"a", integer{42}},
-        {"d", list{integer{1}, integer{2}, integer{3}}},
-        {"c", integer{-42}}
+        {"a", int64_t{42}},
+        {"d", list{int64_t{1}, int64_t{2}, int64_t{3}}},
+        {"c", int64_t{-42}}
       }},
       {"c", record{
         {"a", "bar"}
@@ -87,10 +87,10 @@ TEST(merge) {
     auto expected = record{
       {"a", "foo"},
       {"b", record{
-        {"a", integer{42}},
-        {"d", list{integer{4}, integer{5}, integer{6},
-                   integer{1}, integer{2}, integer{3}}},
-        {"c", integer{-42}}
+        {"a", int64_t{42}},
+        {"d", list{int64_t{4}, int64_t{5}, int64_t{6},
+                   int64_t{1}, int64_t{2}, int64_t{3}}},
+        {"c", int64_t{-42}}
       }},
       {"c", record{
         {"a", "bar"}
@@ -106,7 +106,7 @@ TEST(merge) {
 TEST(strip) {
   auto xs = record{
     {"a", record{}},
-    {"b", count{5u}},
+    {"b", uint64_t{5u}},
     {"c",
      record{
        {"d",
@@ -117,7 +117,7 @@ TEST(strip) {
      }},
     {"g", caf::none},
   };
-  auto expected = record{{"b", count{5u}}};
+  auto expected = record{{"b", uint64_t{5u}}};
   CHECK_EQUAL(strip(xs), expected);
 }
 
@@ -125,15 +125,15 @@ TEST(construction) {
   CHECK(caf::holds_alternative<caf::none_t>(data{}));
   CHECK(caf::holds_alternative<bool>(data{true}));
   CHECK(caf::holds_alternative<bool>(data{false}));
-  CHECK(caf::holds_alternative<integer>(data{integer{0}}));
-  CHECK(caf::holds_alternative<integer>(data{integer{42}}));
-  CHECK(caf::holds_alternative<integer>(data{integer{-42}}));
-  CHECK(caf::holds_alternative<count>(data{42u}));
-  CHECK(caf::holds_alternative<real>(data{4.2}));
+  CHECK(caf::holds_alternative<int64_t>(data{int64_t{0}}));
+  CHECK(caf::holds_alternative<int64_t>(data{int64_t{42}}));
+  CHECK(caf::holds_alternative<int64_t>(data{int64_t{-42}}));
+  CHECK(caf::holds_alternative<uint64_t>(data{42u}));
+  CHECK(caf::holds_alternative<double>(data{4.2}));
   CHECK(caf::holds_alternative<std::string>(data{"foo"}));
   CHECK(caf::holds_alternative<std::string>(data{std::string{"foo"}}));
   CHECK(caf::holds_alternative<pattern>(data{pattern{"foo"}}));
-  CHECK(caf::holds_alternative<address>(data{address{}}));
+  CHECK(caf::holds_alternative<ip>(data{ip{}}));
   CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
   CHECK(caf::holds_alternative<list>(data{list{}}));
   CHECK(caf::holds_alternative<map>(data{map{}}));
@@ -148,14 +148,14 @@ TEST(relational_operators) {
   CHECK(d1 >= d2);
   CHECK(!(d1 > d2));
 
-  d2 = integer{42};
+  d2 = int64_t{42};
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
   CHECK(!(d1 >= d2));
   CHECK(!(d1 > d2));
 
-  d1 = integer{42};
+  d1 = int64_t{42};
   d2 = caf::none;
   CHECK(d1 != d2);
   CHECK(!(d1 < d2));
@@ -163,7 +163,7 @@ TEST(relational_operators) {
   CHECK(d1 >= d2);
   CHECK(d1 > d2);
 
-  d2 = integer{1377};
+  d2 = int64_t{1377};
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
@@ -180,14 +180,14 @@ TEST(evaluation) {
   CHECK(evaluate(rhs, relational_operator::ni, lhs));
   CHECK(evaluate(rhs, relational_operator::not_in, lhs));
   MESSAGE("equality");
-  lhs = count{42};
-  rhs = count{1337};
+  lhs = uint64_t{42};
+  rhs = uint64_t{1337};
   CHECK(evaluate(lhs, relational_operator::less_equal, rhs));
   CHECK(evaluate(lhs, relational_operator::less, rhs));
   CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
   CHECK(!evaluate(lhs, relational_operator::equal, rhs));
   MESSAGE("network types");
-  lhs = *to<address>("10.0.0.1");
+  lhs = *to<ip>("10.0.0.1");
   rhs = *to<subnet>("10.0.0.0/8");
   CHECK(evaluate(lhs, relational_operator::in, rhs));
   lhs = *to<subnet>("10.0.42.0/16");
@@ -195,7 +195,7 @@ TEST(evaluation) {
   rhs = *to<subnet>("10.0.42.0/17");
   CHECK(!evaluate(lhs, relational_operator::in, rhs));
   MESSAGE("mixed types");
-  rhs = real{4.2};
+  rhs = double{4.2};
   CHECK(!evaluate(lhs, relational_operator::equal, rhs));
   CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
 }
@@ -207,9 +207,9 @@ TEST(evaluation - pattern matching) {
 
 TEST(serialization) {
   list xs;
-  xs.emplace_back(count{80});
-  xs.emplace_back(count{53});
-  xs.emplace_back(count{8});
+  xs.emplace_back(uint64_t{80});
+  xs.emplace_back(uint64_t{53});
+  xs.emplace_back(uint64_t{8});
   auto x0 = data{xs};
   caf::byte_buffer buf;
   CHECK(detail::serialize(buf, x0));
@@ -242,7 +242,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK_EQUAL(f, l);
-  CHECK_EQUAL(d, integer{1001});
+  CHECK_EQUAL(d, int64_t{1001});
   str = "1001"s;
   f = str.begin();
   l = str.end();
@@ -275,7 +275,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == *to<address>("10.0.0.1"));
+  CHECK(d == *to<ip>("10.0.0.1"));
   MESSAGE("list");
   str = "[42,4.2,nil]"s;
   f = str.begin();
@@ -297,7 +297,7 @@ TEST(convert - caf::config_value) {
   auto x = record{
     {"x", "foo"},
     {"r", record{
-      {"i", integer{-42}},
+      {"i", int64_t{-42}},
       {"u", 42u},
       {"r", record{
         {"u", 3.14}
@@ -305,8 +305,8 @@ TEST(convert - caf::config_value) {
     }},
     {"delta", 12ms},
     {"uri", "https://tenzir.com/"},
-    {"xs", list{integer{1}, integer{2}, integer{3}}},
-    {"ys", list{integer{1}, "foo", 3.14}},
+    {"xs", list{int64_t{1}, int64_t{2}, int64_t{3}}},
+    {"ys", list{int64_t{1}, "foo", 3.14}},
     {"zs", list{record{{"z", true}}, map{{42u, 4.2}}}}
   };
   // clang-format on
@@ -356,12 +356,12 @@ TEST(convert - caf::config_value - null) {
 // instead we test here that the fields that are nested deeper than
 // `max_recursion_depth` are cut off during `flatten()`.
 TEST(nesting depth) {
-  auto x = record{{"leaf", integer{1}}};
+  auto x = record{{"leaf", int64_t{1}}};
   for (size_t i = 0; i < defaults::max_recursion; ++i) {
     auto tmp = record{{"nested", std::exchange(x, {})}};
     x = tmp;
   }
-  auto final = record{{"branch1", x}, {"branch2", integer{4}}};
+  auto final = record{{"branch1", x}, {"branch2", int64_t{4}}};
   CHECK_EQUAL(depth(final), defaults::max_recursion + 2);
   auto flattened = flatten(final);
   CHECK_EQUAL(depth(flattened), 1ull);
@@ -371,21 +371,21 @@ TEST(pack / unpack) {
   auto x = data{record{
     {"none", caf::none},
     {"bool", bool{true}},
-    {"integer", integer{2}},
-    {"count", count{3u}},
-    {"real", real{4.0}},
+    {"integer", int64_t{2}},
+    {"count", uint64_t{3u}},
+    {"real", double{4.0}},
     {"duration", duration{5}},
     {"time", vast::time{} + duration{6}},
     {"string", std::string{"7"}},
     {"pattern", pattern{"7"}},
-    {"address", unbox(to<address>("0.0.0.8"))},
+    {"address", unbox(to<ip>("0.0.0.8"))},
     {"subnet", unbox(to<subnet>("0.0.0.9/24"))},
     {"enumeration", enumeration{10}},
-    {"list", list{count{11}}},
-    {"map", map{{std::string{"key"}, count{12}}}},
+    {"list", list{uint64_t{11}}},
+    {"map", map{{std::string{"key"}, uint64_t{12}}}},
     {"record",
      record{
-       {"nested_real", real{13.0}},
+       {"nested_real", double{13.0}},
        {"nested_record", record{}},
      }},
   }};

@@ -301,21 +301,22 @@ append_builder(const bool_type&, type_to_arrow_builder_t<bool_type>& builder,
 }
 
 arrow::Status
-append_builder(const integer_type&,
-               type_to_arrow_builder_t<integer_type>& builder,
-               const view<type_to_data_t<integer_type>>& view) noexcept {
-  return builder.Append(view.value);
-}
-
-arrow::Status
-append_builder(const count_type&, type_to_arrow_builder_t<count_type>& builder,
-               const view<type_to_data_t<count_type>>& view) noexcept {
+append_builder(const int64_type&, type_to_arrow_builder_t<int64_type>& builder,
+               const view<type_to_data_t<int64_type>>& view) noexcept {
   return builder.Append(view);
 }
 
 arrow::Status
-append_builder(const real_type&, type_to_arrow_builder_t<real_type>& builder,
-               const view<type_to_data_t<real_type>>& view) noexcept {
+append_builder(const uint64_type&,
+               type_to_arrow_builder_t<uint64_type>& builder,
+               const view<type_to_data_t<uint64_type>>& view) noexcept {
+  return builder.Append(view);
+}
+
+arrow::Status
+append_builder(const double_type&,
+               type_to_arrow_builder_t<double_type>& builder,
+               const view<type_to_data_t<double_type>>& view) noexcept {
   return builder.Append(view);
 }
 
@@ -348,9 +349,8 @@ append_builder(const pattern_type&,
 }
 
 arrow::Status
-append_builder(const address_type&,
-               type_to_arrow_builder_t<address_type>& builder,
-               const view<type_to_data_t<address_type>>& view) noexcept {
+append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
+               const view<type_to_data_t<ip_type>>& view) noexcept {
   const auto bytes = as_bytes(view);
   VAST_ASSERT(bytes.size() == 16);
   return builder.Append(arrow_compat::string_view{
@@ -363,8 +363,8 @@ append_builder(const subnet_type&,
                const view<type_to_data_t<subnet_type>>& view) noexcept {
   if (auto status = builder.Append(); !status.ok())
     return status;
-  if (auto status = append_builder(address_type{}, builder.address_builder(),
-                                   view.network());
+  if (auto status
+      = append_builder(ip_type{}, builder.ip_builder(), view.network());
       !status.ok())
     return status;
   return builder.length_builder().Append(view.length());

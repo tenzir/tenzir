@@ -69,18 +69,18 @@ struct json_printer : printer_base<json_printer> {
       return true;
     }
 
-    bool operator()(view<integer> x) noexcept {
-      out_ = fmt::format_to(out_, "{}", x.value);
-      return true;
-    }
-
-    bool operator()(view<count> x) noexcept {
+    bool operator()(view<int64_t> x) noexcept {
       out_ = fmt::format_to(out_, "{}", x);
       return true;
     }
 
-    bool operator()(view<real> x) noexcept {
-      if (real i; std::modf(x, &i) == 0.0) // NOLINT
+    bool operator()(view<uint64_t> x) noexcept {
+      out_ = fmt::format_to(out_, "{}", x);
+      return true;
+    }
+
+    bool operator()(view<double> x) noexcept {
+      if (double i; std::modf(x, &i) == 0.0) // NOLINT
         out_ = fmt::format_to(out_, "{}.0", i);
       else
         out_ = fmt::format_to(out_, "{}", x);
@@ -90,7 +90,7 @@ struct json_printer : printer_base<json_printer> {
     bool operator()(view<duration> x) noexcept {
       if (options_.numeric_durations) {
         const auto seconds
-          = std::chrono::duration_cast<std::chrono::duration<real>>(x).count();
+          = std::chrono::duration_cast<std::chrono::duration<double>>(x).count();
         return (*this)(seconds);
       }
       static auto p = '"' << make_printer<duration>{} << '"';
@@ -111,8 +111,8 @@ struct json_printer : printer_base<json_printer> {
       return (*this)(x.string());
     }
 
-    bool operator()(view<address> x) noexcept {
-      static auto p = '"' << make_printer<address>{} << '"';
+    bool operator()(view<ip> x) noexcept {
+      static auto p = '"' << make_printer<ip>{} << '"';
       return p.print(out_, x);
     }
 

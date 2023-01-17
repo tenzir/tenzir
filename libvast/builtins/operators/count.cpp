@@ -25,7 +25,7 @@ public:
 
 private:
   [[nodiscard]] type output_type() const override {
-    return type{count_type{}};
+    return type{uint64_type{}};
   }
 
   void add(const data_view& view) override {
@@ -42,7 +42,7 @@ private:
     return count_;
   }
 
-  vast::count count_ = {};
+  uint64_t count_ = {};
 };
 
 class plugin : public virtual aggregation_function_plugin {

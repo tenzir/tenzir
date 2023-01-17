@@ -31,7 +31,7 @@ static auto const json_count
   | parsers::u64;
 static auto const json_number
   = (parsers::hex_prefix >> parsers::hex64 ->* [](uint64_t x) {
-        return detail::narrow_cast<vast::real>(x); })
+        return detail::narrow_cast<double>(x); })
   | parsers::real;
 // clang-format on
 

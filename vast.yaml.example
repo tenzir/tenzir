@@ -170,7 +170,7 @@ vast:
     #             targets
     #
     #   partition-index - VAST will not create dense index when set to false
-    #   - targets: [:string, :address]
+    #   - targets: [:string, :ip]
     #     fp-rate: 0.01
     #     partition-index: false
 

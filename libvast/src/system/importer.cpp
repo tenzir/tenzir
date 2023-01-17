@@ -156,7 +156,7 @@ void importer_state::send_report() {
   samples.reserve(num_schemas_seen);
   samples.push_back(performance_sample{"importer"s, measurement_});
   samples.push_back(performance_sample{"node_throughput"s, node_throughput});
-  auto total_count = count{0};
+  auto total_count = uint64_t{0};
   for (const auto& [name, count] : schema_counters) {
     total_count += count;
     samples.push_back(performance_sample{
