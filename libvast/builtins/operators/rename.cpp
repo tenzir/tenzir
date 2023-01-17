@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/system/make_pipelines.hpp"
+
 #include <vast/arrow_table_slice.hpp>
 #include <vast/arrow_table_slice_builder.hpp>
 #include <vast/concept/convertible/data.hpp>
@@ -182,8 +183,10 @@ public:
     record options;
     for (const auto& assignment : parse_result.assignments) {
       const auto* assignment_pair = caf::get_if<list>(&assignment);
-      auto* new_extractor = caf::get_if<std::string>(&assignment_pair->front());
-      auto* old_extractor = caf::get_if<std::string>(&assignment_pair->back());
+      const auto* new_extractor
+        = caf::get_if<std::string>(&assignment_pair->front());
+      const auto* old_extractor
+        = caf::get_if<std::string>(&assignment_pair->back());
       auto rename_entry = vast::record{};
       rename_entry["from"] = *old_extractor;
       rename_entry["to"] = *new_extractor;
