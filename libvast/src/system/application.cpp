@@ -104,7 +104,12 @@ auto make_export_command() {
       .add<bool>("numeric-durations", "render durations as numbers as opposed "
                                       "to human-readable strings with up to "
                                       "two decimal places")
-      .add<bool>("omit-nulls", "omit null fields in JSON objects"));
+      .add<bool>("omit-nulls", "omit null fields in JSON objects")
+      .add<bool>("omit-empty-records", "omit empty records in JSON objects")
+      .add<bool>("omit-empty-lists", "omit empty lists in JSON objects")
+      .add<bool>("omit-empty-maps", "omit empty maps in JSON objects")
+      .add<bool>("omit-empty", "omit all empty values and nulls in JSON "
+                               "objects"));
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
                           opts("?vast.export.null"));

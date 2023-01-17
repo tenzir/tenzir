@@ -11,267 +11,320 @@
 #include "vast/concept/printable/core/operators.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/core/sequence.hpp"
-#include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
-#include "vast/concept/printable/string.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/escapers.hpp"
-#include "vast/policy/omit_nulls.hpp"
-#include "vast/time.hpp"
 #include "vast/view.hpp"
 
 #include <fmt/format.h>
 
 namespace vast {
 
-namespace policy {
+struct json_printer : printer_base<json_printer> {
+  struct options {
+    /// The number of spaces used for indentation.
+    uint8_t indentation = 2;
 
-// Tree policies.
-struct tree {};
-struct oneline {};
+    /// Print NDJSON rather than JSON.
+    bool oneline = false;
 
-// Duration policies.
-struct numeric_durations {};
-struct human_readable_durations {};
+    /// Print nested objects as flattened.
+    bool flattened = false;
 
-} // namespace policy
+    /// Print numeric rather than human-readable durations.
+    bool numeric_durations = false;
 
-template <class TreePolicy, class DurationPolicy, class NullPolicy,
-          int Indent = 2, int Padding = 0>
-struct json_printer
-  : printer_base<
-      json_printer<TreePolicy, DurationPolicy, NullPolicy, Indent, Padding>> {
-  inline static constexpr bool tree = std::is_same_v<TreePolicy, policy::tree>;
-  inline static constexpr bool human_readable_durations
-    = std::is_same_v<DurationPolicy, policy::human_readable_durations>;
+    /// Omit null values when printing.
+    bool omit_nulls = false;
 
-  static_assert(Padding >= 0, "padding must not be negative");
+    /// Omit empty records when printing.
+    bool omit_empty_records = false;
+
+    /// Omit empty lists when printing.
+    bool omit_empty_lists = false;
+
+    /// Omit empty maps when printing.
+    bool omit_empty_maps = false;
+  };
+
+  explicit json_printer(struct options options) noexcept
+    : printer_base(), options_{options} {
+    // nop
+  }
 
   template <class Iterator>
   struct print_visitor {
-    explicit print_visitor(Iterator& out) : out_{out} {
+    print_visitor(Iterator& out, const options& options) noexcept
+      : out_{out}, options_{options} {
+      // nop
     }
 
-    bool operator()(const caf::none_t&) {
-      return printers::str.print(out_, "null");
+    bool operator()(caf::none_t) noexcept {
+      out_ = fmt::format_to(out_, "null");
+      return true;
     }
 
-    bool operator()(const int64_t& x) {
-      return printers::str.print(out_, std::to_string(x));
+    bool operator()(view<bool> x) noexcept {
+      out_ = x ? fmt::format_to(out_, "true") : fmt::format_to(out_, "false");
+      return true;
     }
 
-    bool operator()(const ip& x) {
-      static auto p = '"' << make_printer<ip>{} << '"';
+    bool operator()(view<int64_t> x) noexcept {
+      out_ = fmt::format_to(out_, "{}", x);
+      return true;
+    }
+
+    bool operator()(view<uint64_t> x) noexcept {
+      out_ = fmt::format_to(out_, "{}", x);
+      return true;
+    }
+
+    bool operator()(view<double> x) noexcept {
+      if (double i; std::modf(x, &i) == 0.0) // NOLINT
+        out_ = fmt::format_to(out_, "{}.0", i);
+      else
+        out_ = fmt::format_to(out_, "{}", x);
+      return true;
+    }
+
+    bool operator()(view<duration> x) noexcept {
+      if (options_.numeric_durations) {
+        const auto seconds
+          = std::chrono::duration_cast<std::chrono::duration<double>>(x).count();
+        return (*this)(seconds);
+      }
+      static auto p = '"' << make_printer<duration>{} << '"';
       return p.print(out_, x);
     }
 
-    bool operator()(const data& x) {
-      return caf::visit(*this, x);
-    }
-
-    bool operator()(const view<data>& x) {
-      return caf::visit(*this, x);
-    }
-
-    template <class T>
-    bool operator()(const T& x) {
-      if constexpr (human_readable_durations
-                    && std::is_same_v<T, view<duration>>) {
-        static auto p = '"' << make_printer<duration>{} << '"';
-        return p.print(out_, x);
-      }
-      if constexpr (std::is_arithmetic_v<T>) {
-        // Print non-finite numbers as `null`.
-        if (!std::isfinite(x))
-          return printers::str.print(out_, "null");
-        auto str = std::to_string(x);
-        if constexpr (std::is_floating_point_v<T>) {
-          // Avoid trailing zeros.
-          if (double i; std::modf(x, &i) == 0.0)
-            str.erase(str.find('.') + 2, std::string::npos);
-          else
-            str.erase(str.find_last_not_of('0') + 1, std::string::npos);
-        }
-        return printers::str.print(out_, str);
-      } else {
-        data y;
-        return convert(x, y) && caf::visit(*this, y);
-      }
-    }
-
-    bool operator()(const bool& b) {
-      return printers::str.print(out_, b ? "true" : "false");
-    }
-
-    bool operator()(const std::string_view& str) {
-      static auto p = '"' << printers::escape(detail::json_escaper) << '"';
-      return p.print(out_, str);
-    }
-
-    bool operator()(const std::string& str) {
-      return (*this)(std::string_view{str});
-    }
-
-    bool operator()(const view<pattern>& x) {
-      return (*this)(x.string());
-    }
-
-    bool operator()(const view<time>& x) {
+    bool operator()(view<time> x) noexcept {
       static auto p = '"' << make_printer<time>{} << '"';
       return p.print(out_, x);
     }
 
-    bool operator()(const std::pair<std::string_view, view<data>>& kvp) {
-      using namespace printers;
-      if (!(*this)(kvp.first))
-        return false;
-      if (!str.print(out_, ": "))
-        return false;
-      return caf::visit(*this, kvp.second);
+    bool operator()(view<std::string> x) noexcept {
+      static auto p = '"' << printers::escape(detail::json_escaper) << '"';
+      return p.print(out_, x);
     }
 
-    template <class ForwardIterator>
-    bool print_array(ForwardIterator begin, ForwardIterator end) {
-      using namespace printers;
-      if (depth_ == 0 && !pad())
-        return false;
-      if (begin == end)
-        return str.print(out_, "[]");
-      if (!printers::any.print(out_, '['))
-        return false;
-      if constexpr (tree) {
-        ++depth_;
-        printers::any.print(out_, '\n');
-      }
-      while (begin != end) {
-        if (!indent())
-          return false;
-        if (!caf::visit(*this, *begin))
-          return false;
-        ++begin;
-        if (begin != end)
-          if (!str.print(out_, tree ? ",\n" : ", "))
-            return false;
-      }
-      if constexpr (tree) {
-        --depth_;
-        if (!printers::any.print(out_, '\n') || !indent())
-          return false;
-      }
-      return printers::any.print(out_, ']');
+    bool operator()(view<pattern> x) noexcept {
+      return (*this)(x.string());
     }
 
-    bool operator()(const list& xs) {
-      return print_array(xs.begin(), xs.end());
+    bool operator()(view<ip> x) noexcept {
+      static auto p = '"' << make_printer<ip>{} << '"';
+      return p.print(out_, x);
     }
 
-    bool operator()(const view<list>& xs) {
-      return print_array(xs.begin(), xs.end());
+    bool operator()(view<subnet> x) noexcept {
+      static auto p = '"' << make_printer<subnet>{} << '"';
+      return p.print(out_, x);
     }
 
-    template <class ForwardIterator>
-    bool print_object(ForwardIterator begin, ForwardIterator end) {
-      using namespace printers;
-      if (depth_ == 0 && !pad())
-        return false;
-      if (begin == end)
-        return str.print(out_, "{}");
-      if (!printers::any.print(out_, '{'))
-        return false;
-      if constexpr (tree) {
-        ++depth_;
-        if (!printers::any.print(out_, '\n'))
-          return false;
-      }
-      bool print_comma = false;
-      for (; begin != end; ++begin) {
-        if (caf::holds_alternative<caf::none_t>(begin->second)
-            && std::is_same_v<NullPolicy, policy::omit_nulls>)
+    bool operator()(view<enumeration> x) noexcept {
+      // We shouldn't ever arrive here as users should transform the enumeration
+      // to its textual representation first, but you never really know, so
+      // let's just print the number.
+      out_ = fmt::format_to(out_, "{}", x);
+      return true;
+    }
+
+    bool operator()(const view<list>& x) noexcept {
+      bool printed_once = false;
+      out_ = fmt::format_to(out_, "[");
+      for (const auto& element : x) {
+        if (should_skip(element))
           continue;
-        if (print_comma)
-          if (!str.print(out_, tree ? ",\n" : ", "))
-            return false;
-        if (!indent())
-          return false;
-        if (!(*this)(begin->first))
-          return false;
-        if (!str.print(out_, ": "))
-          return false;
-        if (!caf::visit(*this, begin->second))
-          return false;
-        print_comma = true;
-      }
-      if constexpr (tree) {
-        --depth_;
-        if (!printers::any.print(out_, '\n'))
-          return false;
-        if (!indent())
+        if (!printed_once) {
+          indent();
+          newline();
+          printed_once = true;
+        } else {
+          separator();
+          newline();
+        }
+        if (!caf::visit(*this, element))
           return false;
       }
-      return printers::any.print(out_, '}');
-    }
-
-    bool operator()(const record& xs) {
-      return print_object(xs.begin(), xs.end());
-    }
-
-    bool operator()(const view<record>& xs) {
-      return print_object(xs.begin(), xs.end());
-    }
-
-    bool operator()(const map& xs) {
-      // FIXME: maps are currently treated the same as records. This feels
-      // wrong. We should reconsider rendering of VAST maps, e.g., as list of
-      // key-value pairs: [[a, b], [c, d]].
-      return print_object(xs.begin(), xs.end());
-    }
-
-    bool operator()(const view<map>& xs) {
-      // FIXME: maps are currently treated the same as records. This feels
-      // wrong. We should reconsider rendering of VAST maps, e.g., as list of
-      // key-value pairs: [[a, b], [c, d]].
-      return print_object(xs.begin(), xs.end());
-    }
-
-    bool pad() {
-      if constexpr (Padding > 0)
-        for (auto i = 0; i < Padding; ++i)
-          if (!printers::any.print(out_, ' '))
-            return false;
+      if (printed_once) {
+        dedent();
+        newline();
+      }
+      out_ = fmt::format_to(out_, "]");
       return true;
     }
 
-    bool indent() {
-      if (!pad())
-        return false;
-      if constexpr (!tree)
+    bool operator()(const view<map>& x) noexcept {
+      bool printed_once = false;
+      out_ = fmt::format_to(out_, "[");
+      for (const auto& element : x) {
+        if (should_skip(element.second))
+          continue;
+        if (!printed_once) {
+          indent();
+          newline();
+          printed_once = true;
+        } else {
+          separator();
+          newline();
+        }
+        out_ = fmt::format_to(out_, "{{");
+        indent();
+        newline();
+        out_ = fmt::format_to(out_, "\"key\": ");
+        if (!caf::visit(*this, element.first))
+          return false;
+        separator();
+        newline();
+        out_ = fmt::format_to(out_, "\"value\": ");
+        if (!caf::visit(*this, element.second))
+          return false;
+        dedent();
+        newline();
+        out_ = fmt::format_to(out_, "}}");
+      }
+      if (printed_once) {
+        dedent();
+        newline();
+      }
+      out_ = fmt::format_to(out_, "]");
+      return true;
+    }
+
+    bool
+    operator()(const view<record>& x, std::string_view prefix = {}) noexcept {
+      bool printed_once = false;
+      if (!options_.flattened || prefix.empty())
+        out_ = fmt::format_to(out_, "{{");
+      for (const auto& element : x) {
+        if (should_skip(element.second))
+          continue;
+        if (!printed_once) {
+          if (!options_.flattened) {
+            indent();
+            newline();
+          }
+          printed_once = true;
+        } else {
+          separator();
+          newline();
+        }
+        if (options_.flattened) {
+          const auto name = prefix.empty()
+                              ? std::string{element.first}
+                              : fmt::format("{}.{}", prefix, element.first);
+          if (const auto* r = caf::get_if<view<record>>(&element.second)) {
+            if (!(*this)(*r, name))
+              return false;
+          } else {
+            if (!(*this)(name))
+              return false;
+            out_ = fmt::format_to(out_, ": ");
+            if (!caf::visit(*this, element.second)) {
+              return false;
+            }
+          }
+        } else {
+          if (!(*this)(element.first))
+            return false;
+          out_ = fmt::format_to(out_, ": ");
+          if (!caf::visit(*this, element.second))
+            return false;
+        }
+      }
+      if (printed_once && !options_.flattened) {
+        dedent();
+        newline();
+      }
+      if (!options_.flattened || prefix.empty())
+        out_ = fmt::format_to(out_, "}}");
+      return true;
+    }
+
+  private:
+    bool should_skip(view<data> x) noexcept {
+      if (options_.omit_nulls && caf::holds_alternative<caf::none_t>(x)) {
         return true;
-      for (auto i = 0; i < depth_ * Indent; ++i)
-        if (!printers::any.print(out_, ' '))
-          return false;
-      return true;
+      }
+      if (options_.omit_empty_lists && caf::holds_alternative<view<list>>(x)) {
+        const auto& ys = caf::get<view<list>>(x);
+        return std::all_of(ys.begin(), ys.end(),
+                           [this](const view<data>& y) noexcept {
+                             return should_skip(y);
+                           });
+      }
+      if (options_.omit_empty_maps && caf::holds_alternative<view<map>>(x)) {
+        const auto& ys = caf::get<view<map>>(x);
+        return std::all_of(
+          ys.begin(), ys.end(),
+          [this](const view<map>::view_type::value_type& y) noexcept {
+            return should_skip(y.second);
+          });
+      }
+      if (options_.omit_empty_records
+          && caf::holds_alternative<view<record>>(x)) {
+        const auto& ys = caf::get<view<record>>(x);
+        return std::all_of(
+          ys.begin(), ys.end(),
+          [this](const view<record>::view_type::value_type& y) noexcept {
+            return should_skip(y.second);
+          });
+      }
+      return false;
+    }
+
+    void indent() noexcept {
+      indentation_ += options_.indentation;
+    }
+
+    void dedent() noexcept {
+      VAST_ASSERT_EXPENSIVE(indentation_ >= options_.indentation,
+                            "imbalanced calls between indent() and dedent()");
+      indentation_ -= options_.indentation;
+    }
+
+    void separator() noexcept {
+      if (options_.oneline)
+        out_ = fmt::format_to(out_, ", ");
+      else
+        out_ = fmt::format_to(out_, ",");
+    }
+
+    void newline() noexcept {
+      if (!options_.oneline)
+        out_ = fmt::format_to(out_, "\n{: >{}}", "", indentation_);
     }
 
     Iterator& out_;
-    int depth_ = 0;
+    const options& options_;
+    uint32_t indentation_ = 0;
   };
 
-  // Overload for concrete JSON types.
+  template <class Iterator>
+  bool print(Iterator& out, const view<data>& d) const noexcept {
+    return caf::visit(print_visitor{out, options_}, d);
+  }
+
   template <class Iterator, class T>
-  bool print(Iterator& out, const T& x) const {
-    return print_visitor<Iterator>{out}(x);
+    requires caf::detail::tl_contains<view<data>::types, T>::value bool
+  print(Iterator& out, const T& d) const noexcept {
+    return print_visitor{out, options_}(d);
   }
 
   template <class Iterator>
-  bool print(Iterator& out, const data& d) const {
-    return caf::visit(print_visitor<Iterator>{out}, d);
+  bool print(Iterator& out, const data& d) const noexcept {
+    return print(out, make_view(d));
   }
+
+  template <class Iterator, class T>
+    requires(!caf::detail::tl_contains<view<data>::types, T>::value
+             && caf::detail::tl_contains<data::types, T>::value) bool
+  print(Iterator& out, const T& d) const noexcept {
+    return print(out, make_view(d));
+  }
+
+private:
+  options options_ = {};
 };
 
-namespace printers {
-
-template <class TreePolicy, class DurationPolicy, class NullPolicy>
-auto json = json_printer<TreePolicy, DurationPolicy, NullPolicy>{};
-
-} // namespace printers
 } // namespace vast

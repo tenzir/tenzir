@@ -351,19 +351,12 @@ uint64_t rows(const std::vector<table_slice>& slices);
 ids evaluate(const expression& expr, const table_slice& slice,
              const ids& hints);
 
-// Attribute-specifier-seqs are not allowed in friend function declarations, so
-// we re-declare the filter functions with nodiscard here.
-[[nodiscard]] std::optional<table_slice>
-filter(const table_slice& slice, expression expr, const ids& hints);
-
 /// Produces a new table slice consisting only of events that match the given
 /// expression. Does not preserve ids, use `select`instead if the id mapping
 /// must be maintained.
 /// @param slice The input table slice.
 /// @param expr The expression to evaluate.
 /// @returns a new table slice consisting only of events matching the given
-///          expression.
-/// @pre `slice.encoding() != table_slice_encoding::none`
 [[nodiscard]] std::optional<table_slice>
 filter(const table_slice& slice, const expression& expr);
 
@@ -379,10 +372,9 @@ filter(const table_slice& slice, const expression& expr);
 [[nodiscard]] std::optional<table_slice>
 filter(const table_slice& slice, const ids& hints);
 
-// Attribute-specifier-seqs are not allowed in friend function declarations, so
-// we re-declare the count_matching function with nodiscard here.
-[[nodiscard]] uint64_t count_matching(const table_slice& slice,
-                                      const expression& expr, const ids& hints);
+/// Resolves all enumeration columns in a table slice to string columns. Note
+/// that this does not go into records inside lists or maps.
+[[nodiscard]] table_slice resolve_enumerations(table_slice slice);
 
 } // namespace vast
 

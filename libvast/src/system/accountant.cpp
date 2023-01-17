@@ -155,48 +155,28 @@ struct accountant_state_impl {
                double x, const metrics_metadata& meta1,
                const metrics_metadata& meta2) {
     using namespace std::string_view_literals;
-    json_printer<policy::oneline, policy::human_readable_durations,
-                 policy::include_nulls>
-      printer;
-    std::vector<char> buf;
+    auto printer = json_printer{json_printer::options{
+      .oneline = true,
+      .omit_empty_records = true,
+    }};
+    auto metadata = vast::record{};
+    metadata.reserve(meta1.size() + meta2.size());
+    for (const auto& [key, value] : meta1)
+      metadata.emplace(key, value);
+    for (const auto& [key, value] : meta2)
+      metadata.emplace(key, value);
+    const auto entry = vast::record{
+      {"ts", ts},
+      {"version", version::version},
+      {"actor", actor_map[actor_id]},
+      {"key", key},
+      {"value", x},
+      {"metadata", metadata},
+    };
+    auto buf = std::vector<char>{};
     auto iter = std::back_inserter(buf);
-    *iter++ = '{';
-    printer.print(iter, std::pair{"ts"sv, make_data_view(ts)});
-    *iter++ = ',';
-    printer.print(iter, std::pair{"version"sv, make_data_view(std::string_view{
-                                                 version::version})});
-    *iter++ = ',';
-    printer.print(iter,
-                  std::pair{"actor"sv, make_data_view(actor_map[actor_id])});
-    *iter++ = ',';
-    printer.print(iter, std::pair{"key"sv, make_data_view(key)});
-    *iter++ = ',';
-    printer.print(iter, std::pair{"value"sv, make_data_view(x)});
-    if (!(meta1.empty() && meta2.empty())) {
-      *iter++ = ',';
-      printer.print(iter, "metadata"sv);
-      *iter++ = ':';
-      *iter++ = ' ';
-      *iter++ = '{';
-      auto print_separator = false;
-      auto insert_meta = [&](const metrics_metadata& m) {
-        for (const auto& [meta_key, meta_value] : m) {
-          if (print_separator) {
-            *iter++ = ',';
-          } else {
-            print_separator = true;
-          }
-          printer.print(iter, meta_key);
-          *iter++ = ':';
-          *iter++ = ' ';
-          printer.print(iter, meta_value);
-        }
-      };
-      insert_meta(meta1);
-      insert_meta(meta2);
-      *iter++ = '}';
-    }
-    *iter++ = '}';
+    const auto ok = printer.print(iter, entry);
+    VAST_ASSERT_CHEAP(ok);
     *iter++ = '\n';
     return buf;
   }

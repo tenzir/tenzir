@@ -176,6 +176,69 @@ vast export json --omit-null '#type == /.*flow/' | jq
 Note that `pcap_cnt`, `vlan`, and other fields do not appear in the output,
 although have existed in the query result above.
 
+### Omitting empty fields
+
+The options `--omit-empty-records`, `--omit-empty-lists`, and
+`--omit-empty-maps` cause empty records, lists, and maps to be hidden from the
+output respectively.
+
+For example, consider this JSON object:
+
+```json
+{
+  "foo": [],
+  "bar": [
+    null
+  ],
+  "baz": {
+    "qux": {},
+    "quux": null
+  }
+}
+```
+
+With `--omit-empty-records`, this same record will display like this:
+
+```json
+{
+  "foo": [],
+  "bar": [
+    null
+  ],
+  "baz": {
+    "quux": null
+  }
+}
+```
+
+With `--omit-empty-lists`, this same record will display like this:
+
+```json
+{
+  "bar": [
+    null
+  ],
+  "baz": {
+    "qux": {},
+    "quux": null
+  }
+}
+```
+
+With `--omit-empty-records` and `--omit-nulls`, this same record will display
+like this:
+
+```json
+{
+  "bar": []
+}
+```
+
+::tip Shorthand Syntax
+The option `--omit-empty` is short for `--omit-nulls --omit-empty-records
+--omit-empty-lists --omit-empty-maps`.
+:::
+
 ### Render durations as fractional seconds
 
 For use cases that involve arithmetic on time durations after VAST provided the

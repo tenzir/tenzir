@@ -735,11 +735,10 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
 } // end namespace
 
 caf::expected<std::string> to_json(const data& x) {
+  static const auto p = json_printer{json_printer::options{}};
   std::string str;
   auto out = std::back_inserter(str);
-  if (json_printer<policy::tree, policy::human_readable_durations,
-                   policy::include_nulls, 2>{}
-        .print(out, x))
+  if (p.print(out, x))
     return str;
   return caf::make_error(ec::parse_error, "cannot convert to json");
 }

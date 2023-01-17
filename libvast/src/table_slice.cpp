@@ -648,4 +648,52 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   return rank(evaluate(expr, slice, hints));
 }
 
+table_slice resolve_enumerations(table_slice slice) {
+  auto type = caf::get<record_type>(slice.schema());
+  // Resolve enumeration types, if there are any.
+  auto transformations = std::vector<indexed_transformation>{};
+  for (const auto& [field, index] : type.leaves()) {
+    if (!caf::holds_alternative<enumeration_type>(field.type))
+      continue;
+    static auto transformation =
+      [](struct record_type::field field,
+         std::shared_ptr<arrow::Array> array) noexcept
+      -> std::vector<
+        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+      const auto& et = caf::get<enumeration_type>(field.type);
+      auto new_type = vast::type{string_type{}};
+      new_type.assign_metadata(field.type);
+      auto builder
+        = string_type::make_arrow_builder(arrow::default_memory_pool());
+      for (const auto& value : values(
+             et, caf::get<type_to_arrow_array_t<enumeration_type>>(*array))) {
+        if (!value) {
+          const auto append_result = builder->AppendNull();
+          VAST_ASSERT_EXPENSIVE(append_result.ok(),
+                                append_result.ToString().c_str());
+          continue;
+        }
+        const auto append_result
+          = append_builder(string_type{}, *builder, et.field(*value));
+        VAST_ASSERT_EXPENSIVE(append_result.ok(),
+                              append_result.ToString().c_str());
+      }
+      return {{
+        {field.name, new_type},
+        builder->Finish().ValueOrDie(),
+      }};
+    };
+    transformations.push_back({index, transformation});
+  }
+  if (transformations.empty())
+    return slice;
+  auto transform_result = transform_columns(
+    slice.schema(), to_record_batch(slice), transformations);
+  return table_slice{
+    std::move(transform_result).second,
+    std::move(transform_result).first,
+    table_slice::serialize::no,
+  };
+}
+
 } // namespace vast
