@@ -35,19 +35,29 @@ namespace {
 
 caf::expected<std::pair<expression, std::optional<pipeline>>>
 parse_arguments(const std::vector<std::string>& args) {
-  // TODO support returning match everything ?
-  if (args.empty())
-    return caf::make_error(ec::invalid_argument, "no query provided");
+  static const auto match_everything = expression{predicate{
+    meta_extractor{meta_extractor::kind::type},
+    relational_operator::not_equal,
+    data{"this expression matches everything"},
+  }};
+  if (args.empty()) {
+    return std::pair{
+      match_everything,
+      std::optional<pipeline>{},
+    };
+  }
   const auto repr = detail::join(args.begin(), args.end(), " ");
   using parsers::space, parsers::expr, parsers::eoi;
   auto f = repr.begin();
   const auto l = repr.end();
   auto parsed_expr = expression{};
   const auto optional_ws = ignore(*space);
-  if (!expr(f, l, parsed_expr))
-    return caf::make_error(
-      ec::syntax_error,
-      fmt::format("failed to parse expression in query '{}'", repr));
+  bool has_expr = true;
+  if (!expr(f, l, parsed_expr)) {
+    VAST_WARN("failed to parse expr from '{}'", repr);
+    parsed_expr = match_everything;
+    has_expr = false;
+  }
   VAST_WARN("parsed expr = {}", parsed_expr);
   // <expr> | <pipeline>
   //       ^ we start here
@@ -58,12 +68,14 @@ parse_arguments(const std::vector<std::string>& args) {
       std::optional<pipeline>{},
     };
   }
-  const auto has_pipeline_parser = optional_ws >> '|';
-  if (!has_pipeline_parser(f, l, unused)) {
-    return caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                         "pipeline in query "
-                                                         "'{}': missing pipe",
-                                                         repr));
+  if (has_expr) {
+    const auto has_pipeline_parser = optional_ws >> '|';
+    if (!has_pipeline_parser(f, l, unused)) {
+      return caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                           "pipeline in query "
+                                                           "'{}': missing pipe",
+                                                           repr));
+    }
   }
   const auto pipeline_repr = std::string_view{f, l};
   auto parsed_pipeline = pipeline::parse("export", pipeline_repr);
