@@ -9,6 +9,8 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/core.hpp>
+#include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
@@ -127,6 +129,46 @@ public:
     if (!config)
       return config.error();
     return std::make_unique<drop_operator>(std::move(*config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    // '... | drop extractor, ... '
+    //            ^ we start here
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    using parsers::space, parsers::eoi, parsers::alnum, parsers::chr;
+    using namespace parser_literals;
+    const auto required_ws = ignore(+space);
+    const auto optional_ws = ignore(*space);
+    auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
+    // A field cannot start with:
+    //  - '-' to leave room for potential arithmetic expressions in operands
+    //  - ':' so it won't be interpreted as a type extractor
+    auto extractor = (!('-'_p) >> (+extractor_char % '.'));
+    // .then([](const std::vector<char>& in)
+    // {
+    //   return std::string{in.begin(), in.end()};
+    // });
+    const auto p = required_ws >> (extractor % (',' >> optional_ws))
+                   >> optional_ws >> ('|' | eoi);
+    auto config = configuration{};
+    auto parse_result = std::string{};
+
+    if (!extractor(f, l, parse_result)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse drop "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+
+    return {
+      std::string_view{f, l},
+      std::make_unique<drop_operator>(std::move(config)),
+    };
   }
 };
 
