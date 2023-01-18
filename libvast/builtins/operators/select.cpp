@@ -9,6 +9,8 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/core.hpp>
+#include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
@@ -107,6 +109,40 @@ public:
     if (!config)
       return config.error();
     return std::make_unique<select_operator>(std::move(*config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    using parsers::space, parsers::eoi, parsers::alnum, parsers::chr;
+    using namespace parser_literals;
+    const auto required_ws = ignore(+space);
+    const auto optional_ws = ignore(*space);
+    auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
+    // An extractor cannot start with:
+    //  - '-' to leave room for potential arithmetic expressions in operands
+    auto extractor
+      = (!('-'_p) >> (+extractor_char % '.'))
+          .then([](std::vector<std::string> in) {
+            return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
+          });
+    const auto p = required_ws >> (extractor % (',' >> optional_ws))
+                   >> optional_ws >> ('|' | eoi);
+    auto config = configuration{};
+    if (!p(f, l, config.fields)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse select "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<select_operator>(std::move(config)),
+    };
   }
 };
 

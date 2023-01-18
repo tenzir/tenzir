@@ -19,6 +19,7 @@
 #include <vast/type.hpp>
 
 #include <arrow/type.h>
+#include <fmt/format.h>
 
 namespace vast::plugins::drop {
 
@@ -143,20 +144,17 @@ public:
     const auto required_ws = ignore(+space);
     const auto optional_ws = ignore(*space);
     auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
-    // A field cannot start with:
+    // An extractor cannot start with:
     //  - '-' to leave room for potential arithmetic expressions in operands
-    //  - ':' so it won't be interpreted as a type extractor
-    auto extractor = (!('-'_p) >> (+extractor_char % '.'));
-    // .then([](const std::vector<char>& in)
-    // {
-    //   return std::string{in.begin(), in.end()};
-    // });
+    auto extractor
+      = (!('-'_p) >> (+extractor_char % '.'))
+          .then([](std::vector<std::string> in) {
+            return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
+          });
     const auto p = required_ws >> (extractor % (',' >> optional_ws))
                    >> optional_ws >> ('|' | eoi);
     auto config = configuration{};
-    auto parse_result = std::string{};
-
-    if (!extractor(f, l, parse_result)) {
+    if (!p(f, l, config.fields)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse drop "
@@ -164,7 +162,6 @@ public:
                                                       pipeline)),
       };
     }
-
     return {
       std::string_view{f, l},
       std::make_unique<drop_operator>(std::move(config)),
