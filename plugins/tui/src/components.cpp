@@ -141,7 +141,7 @@ Component Cell(view<data> x) {
   return Cell(to_string(x), colorize(x));
 }
 
-Component VerticalDataView(table_slice slice) {
+Component VerticalDataView(table_slice slice, size_t max_rows) {
   auto table = Container::Horizontal({});
   for (size_t i = 0; i < slice.columns(); ++i) {
     auto column = Container::Vertical({});
@@ -149,21 +149,24 @@ Component VerticalDataView(table_slice slice) {
     const auto& schema = caf::get<record_type>(slice.layout());
     auto name = schema.key(schema.resolve_flat_index(i));
     column->Add(Cell(std::move(name)));
+    // Separate column header from data.
     column->Add(Renderer([=] {
-      return separatorLight() | color(default_theme.color.frame);
+      return separator() | color(default_theme.color.frame);
     }));
-    // Add column data.
+    // Assemble a column.
     auto col = table_slice_column(slice, i);
-    for (size_t j = 0; j < col.size(); ++j)
+    for (size_t j = 0; j < std::min(col.size(), max_rows); ++j)
       column->Add(Cell(col[j]));
+    // Append column to table.
     table->Add(column);
+    // Separate inner columns.
     if (i != slice.columns() - 1)
       table->Add(Renderer([=] {
-        return separatorLight() | color(default_theme.color.frame);
+        return separator() | color(default_theme.color.frame);
       }));
   }
   return Renderer(table, [=] {
-    return table->Render() | border | vscroll_indicator | frame;
+    return table->Render() | vscroll_indicator | frame;
   });
 }
 

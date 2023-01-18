@@ -97,6 +97,7 @@ ftxui::Component Hover(ftxui::Element element);
 /// A button-based dropdown that toggles a component right beneath it.
 /// @param title The title of the button.
 /// @param component The component to toggle on button click.
+/// @param theme The theme to use.
 /// @returns The dropdown component.
 ftxui::Component DropdownButton(std::string title, ftxui::Component component,
                                 const struct theme& theme = default_theme);
@@ -121,7 +122,8 @@ ftxui::Component Cell(view<data> x);
 
 /// A component that renders data as scrollable table.
 /// @param slice The data to render.
+/// @param max_rows The maximum number of rows to render.
 /// @returns An interactive component that displays the table.
-ftxui::Component VerticalDataView(table_slice slice);
+ftxui::Component VerticalDataView(table_slice slice, size_t max_rows = 100);
 
 } // namespace vast::plugins::tui

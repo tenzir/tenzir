@@ -72,10 +72,13 @@ struct ui_state {
 
   /// State per pipeline.
   struct pipeline_state {
+    /// A flag that indicates that the corresponding exporter is still running.
+    bool running = true;
+
     /// The pipeline expression.
     expression expr;
 
-    /// The buffered data for this pipeline.
+    /// The buffered results for this pipeline.
     std::vector<table_slice> data;
   };
 
@@ -365,7 +368,106 @@ Component FleetPage(ui_state* state) {
   return Make<Impl>(state);
 };
 
-Component HuntPage(ui_state* state) {
+Component PipelineExplorer(ui_state* state, uuid pipeline_id) {
+  class Impl : public ComponentBase {
+  public:
+    Impl(ui_state* state, uuid pipeline_id)
+      : state_{state}, pipeline_id_{pipeline_id} {
+      // Create the navigation.
+      auto menu_style = state_->theme.navigation(MenuOption::Direction::Down);
+      auto nav = Menu(&schemas_, &index_, menu_style);
+      // Build the containers that the menu references.
+      auto loading = Renderer([] {
+        return text("loading...") | center | flex; // fancy spinner instead?
+      });
+      data_views_ = Container::Tab({loading}, &index_);
+      nav = Renderer(nav, [=] {
+        return vbox({
+          nav->Render(),
+          filler(),
+        });
+      });
+      auto split = ResizableSplitLeft(nav, data_views_, &nav_width_);
+      Add(split);
+    }
+
+    Element Render() override {
+      // We only check for updates when we can expect more data to come.
+      if (complete_)
+        return ComponentBase::Render();
+      auto& pipeline = state_->pipelines[pipeline_id_];
+      auto num_slices = pipeline.data.size();
+      if (num_slices > num_slices_) {
+        VAST_DEBUG("got new table slices: {} -> {}", num_slices_, num_slices);
+        num_slices_ = num_slices;
+        // TODO: make rebuilding of components incremental, i.e, the amount of
+        // work should be proportional to the new batches that arrive. Right
+        // now, we're starting from scratch for every batch, which is quadratic
+        // work.
+        index_ = 0;
+        schemas_.clear();
+        data_views_->DetachAllChildren();
+        // Left-fold all slices with the same schema name into a dataset.
+        std::map<std::string, std::vector<table_slice>> dataset;
+        for (const auto& slice : pipeline.data)
+          dataset[std::string{slice.layout().name()}].push_back(slice);
+        // Display the dataset by schema name & count.
+        for (const auto& [schema, slices] : dataset) {
+          size_t num_records = 0;
+          for (const auto& slice : slices)
+            num_records += slice.rows();
+          // FIXME: Do not show the first few events. We currently do that
+          // because it would overwhelm the DOM rendering otherwise.
+          const auto& first = slices[0];
+          VAST_DEBUG("rendering 1st slice of {} with {} records", schema,
+                     first.rows());
+          auto n = fmt::format(std::locale("en_US.UTF-8"), "{:L}", num_records);
+          schemas_.push_back(fmt::format("{} ({})", schema, n));
+          data_views_->Add(VerticalDataView(first, 100));
+        }
+        VAST_ASSERT(data_views_->ChildCount() == schemas_.size());
+      }
+      if (!pipeline.running) {
+        complete_ = true;
+        if (schemas_.empty()) {
+          auto nothing = Renderer([] {
+            return text("no results") | center | flex; // fancify?
+          });
+          data_views_->DetachAllChildren();
+          data_views_->Add(nothing);
+        }
+      }
+      return ComponentBase::Render();
+    }
+
+  private:
+    ui_state* state_;
+
+    /// The width of the navigation split.
+    int nav_width_ = 25;
+
+    /// The ID of this pipeline.
+    uuid pipeline_id_;
+
+    /// Flag to indicate whether we are done updating.
+    bool complete_ = false;
+
+    /// A state flag that tells us when to rebuild the data view.
+    size_t num_slices_ = 0;
+
+    /// The currently selected schema.
+    int index_ = 0;
+
+    /// The menu items for the navigator.
+    std::vector<std::string> schemas_;
+
+    /// The main tab.
+    Component data_views_;
+  };
+  return Make<Impl>(state, pipeline_id);
+}
+
+Component ExplorerPage(ui_state* state) {
   class Impl : public ComponentBase {
   public:
     Impl(ui_state* state) : state_{state} {
@@ -390,29 +492,32 @@ Component HuntPage(ui_state* state) {
       selector |= Maybe([=] {
         return !state_->nodes.empty();
       });
-      // Put controls together in one row.
+      // Put input controls together at the top.
       auto top = Container::Horizontal({
         input,
         submit,
         selector,
       });
       top = Renderer(top, [=] {
-        return hbox({
-                 window(text("Pipeline"), input->Render()) //
-                   | xflex                                 //
-                   | color(state->theme.color.primary),
-                 submit->Render() | size(WIDTH, EQUAL, 9),
-                 selector->Render(),
-               })
-               | size(HEIGHT, GREATER_THAN, 5);
+        return vbox({
+          hbox({
+            window(text("Pipeline"), input->Render()) //
+              | xflex                                 //
+              | color(state->theme.color.primary),
+            submit->Render() | size(WIDTH, EQUAL, 9),
+            selector->Render(),
+          }) | size(HEIGHT, GREATER_THAN, 5),
+          separator() | color(default_theme.color.frame),
+        });
       });
-      data_view_ = Container::Vertical({});
-      data_view_->Add(Renderer([] {
+      // Put data controls together at the top; a dummy initially.
+      bottom_ = Container::Vertical({});
+      bottom_->Add(Renderer([] {
         return Vee() | center | flex;
       }));
       auto container = Container::Vertical({
         top,
-        data_view_ | flex,
+        bottom_,
       });
       Add(container);
     }
@@ -428,18 +533,14 @@ Component HuntPage(ui_state* state) {
         for (size_t i = 0; i < num_nodes; ++i)
           selector_->Add(Checkbox(nodes[i].first, &checkboxes_[i]));
       }
-      // Update data views when new query results arrive.
-      auto& pipeline = state_->pipelines[pipeline_id_];
-      auto num_slices = pipeline.data.size();
-      if (num_slices > num_slices_) {
-        VAST_DEBUG("detected new slices: {} -> {}", num_slices_, num_slices);
-        // Remove placeholder for the first result.
-        if (num_slices_ == 0)
-          data_view_->DetachAllChildren();
-        // Render new table slices.
-        for (size_t i = num_slices_; i < num_slices; ++i)
-          data_view_->Add(VerticalDataView(pipeline.data[i]));
-        num_slices_ = num_slices;
+      // Re-render pipeline once submitted. We're using the pipeline ID as a
+      // toggle: it's non-nil only to submit a pipeline instance. Thereafter we
+      // forget about it.
+      if (pipeline_id_ != uuid::nil()) {
+        VAST_DEBUG("creating explorer for pipeline {}", pipeline_id_);
+        bottom_->DetachAllChildren();
+        bottom_->Add(PipelineExplorer(state_, pipeline_id_));
+        pipeline_id_ = uuid::nil();
       }
       return ComponentBase::Render();
     }
@@ -478,14 +579,11 @@ Component HuntPage(ui_state* state) {
     /// The node selector with checkboxes.
     Component selector_;
 
+    /// The data explorer.
+    Component bottom_;
+
     /// A state flag that tells us when to rebuild the node selector.
     size_t num_nodes_ = 0;
-
-    /// The bottom part of the scren showing the data.
-    Component data_view_;
-
-    /// A state flag that tells us when to rebuild the data view.
-    size_t num_slices_ = 0;
 
     /// The boolean flags for the node selector. We're using a deque<bool>
     /// because vector<bool> doesn't provide bool lvalues, which the checkbox
@@ -493,7 +591,7 @@ Component HuntPage(ui_state* state) {
     std::deque<bool> checkboxes_;
 
     /// The (for now just one and only) UUID for the pipeline state.
-    uuid pipeline_id_;
+    uuid pipeline_id_ = uuid::nil();
   };
   return Make<Impl>(state);
 }
@@ -523,6 +621,7 @@ Component LogPane(ui_state* state) {
       if (saved_size_ != size) {
         saved_size_ = size;
         index_ = size - 1;
+        TakeFocus();
       }
       return ComponentBase::Render() | vscroll_indicator | yframe;
     }
@@ -545,7 +644,7 @@ Component MainWindow(ui_state* state) {
         pages.push_back(std::move(page));
       };
       add_page("Fleet", FleetPage(state_));
-      add_page("Hunt", HuntPage(state));
+      add_page("Explorer", ExplorerPage(state));
       add_page("About", AboutPage());
       // Create the navigation.
       auto page_menu
@@ -660,9 +759,14 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
           node.actor = system::node_actor{};
       // And exporters.
       if (auto exporter = caf::actor_cast<system::exporter_actor>(remote)) {
-        VAST_VERBOSE("removing exporter {}", exporter->address());
+        VAST_VERBOSE("got DOWN from exporter {}", exporter->address());
         auto i = state->exporters.find(exporter);
         VAST_ASSERT(i != state->exporters.end()); // we registered everyone
+        const auto& pipeline_id = i->second;
+        VAST_VERBOSE("marking pipeline as complete: {}", pipeline_id);
+        VAST_ASSERT_CHEAP(state->pipelines.contains(pipeline_id));
+        // FIXME: table slice can still arrive afterwards!
+        state->pipelines[pipeline_id].running = false;
         state->exporters.erase(i);
       }
     };
@@ -687,8 +791,9 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
         VAST_ASSERT_CHEAP(state->exporters.contains(exporter));
         auto pipeline_id = state->exporters[exporter];
         auto& pipeline = state->pipelines[pipeline_id];
-        VAST_DEBUG("adding table slice with {} events to pipeline {} from {}",
-                   slice.rows(), pipeline_id, remote->address());
+        VAST_DEBUG(
+          "adding table slice '{}' with {} events to pipeline {} from {}",
+          slice.layout().name(), slice.rows(), pipeline_id, remote->address());
         pipeline.data.push_back(slice);
       };
       self->state.mutate(f);
@@ -714,7 +819,7 @@ ui_actor::behavior_type ui(ui_actor::stateful_pointer<ui_actor_state> self) {
               [=](caf::actor& actor) {
                 auto exporter
                   = caf::actor_cast<system::exporter_actor>(std::move(actor));
-                VAST_DEBUG("got new EXPORTER for node '{}'", node_id);
+                VAST_DEBUG("got new EXPORTER {}", exporter->address());
                 self->monitor(exporter);
                 self->send(exporter, atom::sink_v,
                            caf::actor_cast<caf::actor>(self));
