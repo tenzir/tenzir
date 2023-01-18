@@ -217,6 +217,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     = has_low_priority_option(self->state.options)
         ? query_context::priority::low
         : query_context::priority::normal;
+  VAST_WARN("spawned exporter with {} pipelines", pipelines.size());
   self->state.pipeline = pipeline_executor{std::move(pipelines)};
   if (auto err = self->state.pipeline.validate(
         pipeline_executor::allow_aggregate_pipelines::no)) {

@@ -8,7 +8,9 @@
 
 #include "vast/pipeline.hpp"
 
+#include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_encoding.hpp"
 
@@ -20,6 +22,50 @@
 #include <algorithm>
 
 namespace vast {
+
+caf::expected<pipeline>
+pipeline::parse(std::string name, std::string_view repr) {
+  auto result = pipeline{std::move(name), {}};
+  // plugin name parser
+  using parsers::alnum, parsers::chr, parsers::space;
+  // '... | where <expr> | ...'
+  // '... | where <expr>'
+  //       ^ we start here
+  const auto optional_ws = ignore(*space);
+  const auto plugin_name_char_parser = alnum | chr{'-'};
+  const auto plugin_name_parser = optional_ws >> +plugin_name_char_parser;
+  while (repr.empty()) {
+    // TODO: What characters are valid in plugin names? Should we restrict that?
+    // 1. parse a single word as operator plugin name
+    const auto* f = repr.begin();
+    const auto* const l = repr.end();
+    auto plugin_name = std::string{};
+    if (!plugin_name_parser(f, l, plugin_name)) {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("failed to parse pipeline '{}': "
+                                         "operator name is invalid",
+                                         repr));
+    }
+    // 2. find plugin using operator name
+    const auto* plugin = plugins::find<pipeline_operator_plugin>(plugin_name);
+    if (!plugin) {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("failed to parse pipeline '{}': "
+                                         "operator '{}' does not exist",
+                                         repr, plugin_name));
+    }
+    // 3. ask the plugin to parse itself from the remainder
+    auto [remaining_repr, op]
+      = plugin->make_pipeline_operator(std::string_view{f, l});
+    if (!op)
+      return caf::make_error(ec::unspecified, fmt::format("failed to parse "
+                                                          "pipeline '{}': {}",
+                                                          repr, op.error()));
+    result.add_operator(std::move(*op));
+    repr = remaining_repr;
+  }
+  return result;
+}
 
 pipeline::pipeline(std::string name, std::vector<std::string>&& schema_names)
   : name_(std::move(name)), schema_names_(std::move(schema_names)) {

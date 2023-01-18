@@ -8,6 +8,7 @@
 
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/error.hpp>
@@ -126,6 +127,44 @@ public:
                     *expr, normalized_and_validated_expr.error()));
     return std::make_unique<where_operator>(
       std::move(*normalized_and_validated_expr));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    // '... | where <expr> | ...'
+    // '... | where <expr>'
+    //             ^ we start here
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    using parsers::space, parsers::eoi, parsers::expr;
+    const auto required_ws = ignore(+space);
+    const auto optional_ws = ignore(*space);
+    const auto p = required_ws >> expr >> optional_ws >> ('|' | eoi);
+    auto parse_result = expression{};
+    if (!p(f, l, parse_result)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse where "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto normalized_and_validated_expr = normalize_and_validate(parse_result);
+    if (!normalized_and_validated_expr) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(
+          ec::invalid_configuration,
+          fmt::format("failed to normalized and validate expression '{}': {}",
+                      parse_result, normalized_and_validated_expr.error())),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<where_operator>(
+        std::move(*normalized_and_validated_expr)),
+    };
   }
 };
 

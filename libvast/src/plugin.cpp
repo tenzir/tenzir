@@ -20,6 +20,7 @@
 #include "vast/error.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline_operator.hpp"
 #include "vast/plugin.hpp"
 #include "vast/query_context.hpp"
 #include "vast/store.hpp"
@@ -378,6 +379,18 @@ store_plugin::make_store(system::accountant_actor accountant,
                                                  std::move(*store), fs,
                                                  std::move(accountant),
                                                  std::move(path), name());
+}
+
+// -- pipeline_operator_plugin -------------------------------------------------
+
+std::pair<std::string_view, caf::expected<std::unique_ptr<pipeline_operator>>>
+pipeline_operator_plugin::make_pipeline_operator(
+  std::string_view pipeline) const {
+  // FIXME: Remove default impl.
+  return {
+    pipeline,
+    caf::make_error(ec::unimplemented),
+  };
 }
 
 // -- plugin_ptr ---------------------------------------------------------------
