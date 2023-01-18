@@ -35,6 +35,7 @@ namespace {
 
 caf::expected<std::pair<expression, std::optional<pipeline>>>
 parse_arguments(const std::vector<std::string>& args) {
+  // TODO support returning match everything ?
   if (args.empty())
     return caf::make_error(ec::invalid_argument, "no query provided");
   const auto repr = detail::join(args.begin(), args.end(), " ");
