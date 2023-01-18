@@ -426,7 +426,10 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("store-backend", "store plugin to use for imported "
                                            "data")
         .add<std::string>("connection-timeout", "the timeout for connecting to "
-                                                "a VAST server (default: 10s)");
+                                                "a VAST server (default: 5m)")
+        .add<std::string>("connection-retry-delay",
+                          "the delay between vast node connection attempts"
+                          "a VAST server (default: 3s)");
   ob = add_index_opts(std::move(ob));
   auto root = std::make_unique<command>(path, "", std::move(ob));
   root->add_subcommand(make_count_command());
