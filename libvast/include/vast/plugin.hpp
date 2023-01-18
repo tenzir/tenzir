@@ -125,6 +125,12 @@ public:
 /// @relates plugin
 class component_plugin : public virtual plugin {
 public:
+  /// The name for this component in the registry.
+  /// Defaults to the plugin name.
+  virtual std::string component_name() const {
+    return this->name();
+  }
+
   /// Creates an actor as a component in the NODE.
   /// @param node A stateful pointer to the NODE actor.
   /// @returns The actor handle to the NODE component.
