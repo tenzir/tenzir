@@ -25,7 +25,7 @@ namespace {
 
 /// The parsed configuration.
 struct configuration {
-  static caf::expected<configuration> make(const record& config) {
+  static caf::expected<configuration> make(const record& config, bool reparse_values = true) {
     if (config.size() != 1 || !config.contains("fields"))
       return caf::make_error(ec::invalid_configuration, "extend configuration "
                                                         "must contain only the "
@@ -39,7 +39,7 @@ struct configuration {
     result.fields.reserve(fields->size());
     for (const auto& [key, _] : *fields)
       result.fields.emplace_back(key);
-    result.transformation = [fields = *fields](
+    result.transformation = [fields = *fields, reparse_values](
                               struct record_type::field field,
                               std::shared_ptr<arrow::Array> array) noexcept {
       const auto length = array->length();
@@ -53,7 +53,10 @@ struct configuration {
         // The config parsing never produces all possible alternatives of the
         // data variant, e.g., addresses will be represented as strings. Because
         // of that we need to re-parse the data if it's a string.
-        auto reparsed_value = [](auto value) {
+        auto reparsed_value = [reparse_values](auto value) {
+          if (!reparse_values) {
+            return value;
+          }
           const auto* str = caf::get_if<std::string>(&value);
           if (!str)
             return value;
@@ -151,6 +154,59 @@ public:
     if (!parsed_config)
       return parsed_config.error();
     return std::make_unique<extend_operator>(std::move(*parsed_config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    using parsers::space, parsers::eoi, parsers::alnum, parsers::chr, parsers::data;
+    using namespace parser_literals;
+    const auto required_ws = ignore(+space);
+    const auto optional_ws = ignore(*space);
+    auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
+    // An extractor cannot start with:
+    //  - '-' to leave room for potential arithmetic expressions in operands
+    auto extractor
+      = (!('-'_p) >> (+extractor_char % '.'))
+          .then([](std::vector<std::string> in) {
+            return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
+          });
+    const auto p = required_ws
+                   >> ((extractor >> optional_ws >> '=' >> optional_ws
+                       >> data) % (',' >> optional_ws))
+                   >> optional_ws >> ('|' | eoi);
+    std::vector<std::tuple<std::string, vast::data>> parsed_assignments;
+    if (!p(f, l, parsed_assignments)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    record config_record;
+    record fields_record;
+    for (const auto& [key, data] : parsed_assignments) {
+      fields_record[key] = data;
+    }
+    config_record["fields"] = fields_record;
+    auto config = configuration::make(config_record, false);
+    if (!config) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to generate "
+                                                      "configuration for "
+                                                      "extend "
+                                                      "operator: '{}'",
+                                                      config.error())),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<extend_operator>(std::move(*config)),
+    };
   }
 };
 
