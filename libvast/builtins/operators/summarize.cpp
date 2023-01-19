@@ -839,7 +839,7 @@ public:
             return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
           });
 
-    auto extractor_list = (extractor % (',' >> optional_ws));
+    auto extractor_list = (extractor % (optional_ws >> ',' >> optional_ws));
     auto aggregation_function
       = -(extractor >> optional_ws >> '=' >> optional_ws)
         >> (+aggregation_func_char) >> optional_ws >> '(' >> optional_ws

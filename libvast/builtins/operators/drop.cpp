@@ -151,7 +151,7 @@ public:
           .then([](std::vector<std::string> in) {
             return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
           });
-    const auto p = required_ws >> (extractor % (',' >> optional_ws))
+    const auto p = required_ws >> (extractor % (optional_ws >> ',' >> optional_ws))
                    >> optional_ws >> ('|' | eoi);
     auto config = configuration{};
     if (!p(f, l, config.fields)) {
