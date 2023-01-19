@@ -927,6 +927,129 @@ TEST(bytesize) {
   CHECK_EQUAL(parse("1  MiB"), 1_Mi);
 }
 
+// -- option set --------------------------------------------------------------
+
+TEST(option set - no options defined) {
+  const auto options = option_set_parser{{}};
+  auto pipeline_options = R"(--option="o" --invalid="i" field1)";
+  auto pipeline_options_view = std::string_view{pipeline_options};
+  const auto* f = pipeline_options_view.begin();
+  const auto* const l = pipeline_options_view.end();
+  auto parsed_options = std::unordered_map<std::string, data>{};
+  auto success = options(f, l, parsed_options);
+  REQUIRE(success);
+  REQUIRE(parsed_options.empty());
+  REQUIRE_EQUAL(f, pipeline_options_view.begin());
+}
+
+TEST(option set - long form options) {
+  const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
+  auto pipeline_options = R"(--option = "value" --valid=12345 field1)";
+  auto pipeline_options_view = std::string_view{pipeline_options};
+  const auto* f = pipeline_options_view.begin();
+  const auto* const l = pipeline_options_view.end();
+  auto parsed_options = std::unordered_map<std::string, data>{};
+  auto success = options(f, l, parsed_options);
+  REQUIRE(success);
+  REQUIRE_EQUAL(parsed_options.size(), size_t{2});
+  REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
+  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
+                "value");
+  REQUIRE_EQUAL((*caf::get_if<unsigned long>(&parsed_options.at("valid"))),
+                12345ul);
+}
+
+TEST(option set - short form options) {
+  const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
+  auto pipeline_options = R"(-o "value" -v 12345 field1)";
+  auto pipeline_options_view = std::string_view{pipeline_options};
+  const auto* f = pipeline_options_view.begin();
+  const auto* const l = pipeline_options_view.end();
+  auto parsed_options = std::unordered_map<std::string, data>{};
+  auto success = options(f, l, parsed_options);
+  REQUIRE(success);
+  REQUIRE_EQUAL(parsed_options.size(), size_t{2});
+  REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
+  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
+                "value");
+  REQUIRE_EQUAL((*caf::get_if<unsigned long>(&parsed_options.at("valid"))),
+                12345ul);
+}
+
+TEST(option set - long form options mixed with short form options) {
+  const auto options
+    = option_set_parser{{{"option", 'o'}, {"valid", 'v'}, {"short", 's'}}};
+  auto pipeline_options = R"(-o "value" --valid=12345 -s 2 field1)";
+  auto pipeline_options_view = std::string_view{pipeline_options};
+  const auto* f = pipeline_options_view.begin();
+  const auto* const l = pipeline_options_view.end();
+  auto parsed_options = std::unordered_map<std::string, data>{};
+  auto success = options(f, l, parsed_options);
+  REQUIRE(success);
+  REQUIRE_EQUAL(parsed_options.size(), size_t{3});
+  REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
+  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
+                "value");
+  REQUIRE_EQUAL((*caf::get_if<unsigned long>(&parsed_options.at("valid"))),
+                12345ul);
+  REQUIRE_EQUAL((*caf::get_if<unsigned long>(&parsed_options.at("short"))),
+                2ul);
+}
+
+TEST(option set - invalid long form option syntax) {
+  const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
+  auto pipeline_options = R"(--option "value" --valid=12345 field1)";
+  auto pipeline_options_view = std::string_view{pipeline_options};
+  const auto* f = pipeline_options_view.begin();
+  const auto* const l = pipeline_options_view.end();
+  auto parsed_options = std::unordered_map<std::string, data>{};
+  auto success = options(f, l, parsed_options);
+  REQUIRE(!success);
+  REQUIRE(parsed_options.empty());
+  REQUIRE_EQUAL(f, pipeline_options_view.begin());
+}
+
+TEST(option set - invalid short form option syntax) {
+  const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
+  auto pipeline_options = R"(-o="value" -v 12345 field1)";
+  auto pipeline_options_view = std::string_view{pipeline_options};
+  const auto* f = pipeline_options_view.begin();
+  const auto* const l = pipeline_options_view.end();
+  auto parsed_options = std::unordered_map<std::string, data>{};
+  auto success = options(f, l, parsed_options);
+  REQUIRE(!success);
+  REQUIRE(parsed_options.empty());
+  REQUIRE_EQUAL(f, pipeline_options_view.begin());
+}
+
+TEST(option set - option value defined twice gets overwritten) {
+  const auto options = option_set_parser{{{"option", 'o'}, {"valid", 'v'}}};
+  auto pipeline_options = R"(--option = "value" -o "value2" field1)";
+  auto pipeline_options_view = std::string_view{pipeline_options};
+  const auto* f = pipeline_options_view.begin();
+  const auto* const l = pipeline_options_view.end();
+  auto parsed_options = std::unordered_map<std::string, data>{};
+  auto success = options(f, l, parsed_options);
+  REQUIRE(success);
+  REQUIRE_EQUAL(parsed_options.size(), size_t{1});
+  REQUIRE_NOT_EQUAL(f, pipeline_options_view.begin());
+  REQUIRE_EQUAL((*caf::get_if<std::string>(&parsed_options.at("option"))),
+                "value2");
+}
+
+TEST(option set - missing option value) {
+  const auto options = option_set_parser{{{"option", 'o'}}};
+  auto pipeline_options = R"(--option =)";
+  auto pipeline_options_view = std::string_view{pipeline_options};
+  const auto* f = pipeline_options_view.begin();
+  const auto* const l = pipeline_options_view.end();
+  auto parsed_options = std::unordered_map<std::string, data>{};
+  auto success = options(f, l, parsed_options);
+  REQUIRE(!success);
+  REQUIRE(parsed_options.empty());
+  REQUIRE_EQUAL(f, pipeline_options_view.begin());
+}
+
 // -- API ---------------------------------------------------------------------
 
 TEST(stream) {
