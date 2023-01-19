@@ -175,7 +175,7 @@ public:
           });
     const auto p = required_ws
                    >> ((extractor >> optional_ws >> '=' >> optional_ws
-                       >> data) % (',' >> optional_ws))
+                       >> data) % (optional_ws >> ',' >> optional_ws))
                    >> optional_ws >> ('|' | eoi);
     std::vector<std::tuple<std::string, vast::data>> parsed_assignments;
     if (!p(f, l, parsed_assignments)) {
