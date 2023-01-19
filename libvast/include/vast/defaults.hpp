@@ -265,7 +265,7 @@ inline constexpr std::chrono::milliseconds status_request_timeout
 
 /// Timeout for initial connections to the node.
 inline constexpr std::chrono::milliseconds node_connection_timeout
-  = std::chrono::seconds{10};
+  = std::chrono::minutes{5};
 
 /// Timeout for the scheduler to give up on a partition.
 inline constexpr std::chrono::milliseconds scheduler_timeout
