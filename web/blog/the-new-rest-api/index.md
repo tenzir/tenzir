@@ -212,7 +212,7 @@ services:
   web:
     image: tenzir/vast
     environment:
-      - "VAST_START__COMMANDS=['web server --mode=dev']"
+      - "VAST_START__COMMANDS=web server --mode=dev"
     ports:
       - "42001:42001"
     healthcheck:
