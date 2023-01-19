@@ -201,7 +201,7 @@ public:
           });
     auto short_form_option_key = (alpha);
     auto long_form_option_key = ('-'_p) >> (+alpha);
-    auto option_value = (+extractor_char);
+    auto option_value = ((!'-'_p) >> (+extractor_char));
     auto short_form_option
       = (short_form_option_key >> (+space) >> option_value)
           .then([&short_form_options](std::string in) {
