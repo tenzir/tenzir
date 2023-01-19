@@ -195,6 +195,12 @@ curl "https://vast.example.org:42001/api/v0/status?verbosity=detailed" \
 }
 ```
 
+:::caution Status changes in v3.0
+In the upcoming v3.0 release, the statistics under the key `.index.statistics`
+will move to `.catalog`. This change is already merged into the master branch.
+Consult the [status key reference](/docs/setup/monitor#reference) for details.
+:::
+
 ### Perform a HTTP health check
 
 The `/status` endpoint can also be used as a HTTP health check in
