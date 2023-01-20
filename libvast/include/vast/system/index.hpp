@@ -89,17 +89,6 @@ struct active_partition_info {
   /// The slot ID that identifies the partition in the stream.
   caf::stream_slot stream_slot = {};
 
-  /// The store actor that holds the segments for this partition.
-  // NOTE: Logically this should belong inside the active partition, but the way
-  // the CAF streaming api works makes it really annoying to have the partition
-  // stream both whole table_slices to the store and table_slice_columns to
-  // the indexers. So barring a major refactoring, we just have the partition
-  // do the streaming.
-  store_builder_actor store = {};
-
-  // The slot ID that identifies the store in the stream.
-  caf::stream_slot store_slot = {};
-
   /// The remaining free capacity of the partition.
   size_t capacity = {};
 

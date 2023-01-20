@@ -13,15 +13,10 @@
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/expression.hpp"
-#include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/partition_common.hpp"
-#include "vast/detail/settings.hpp"
 #include "vast/detail/tracepoint.hpp"
-#include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
@@ -30,16 +25,11 @@
 #include "vast/ip_synopsis.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
-#include "vast/qualified_record_field.hpp"
-#include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/status.hpp"
 #include "vast/system/terminate.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_column.hpp"
-#include "vast/time.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
@@ -99,6 +89,8 @@ unpack_schema(const fbs::partition::LegacyPartition& partition) {
                                            "partition flatbuffer");
 }
 
+} // namespace
+
 value_index_ptr
 unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
                    const fbs::flatbuffer_container& container) {
@@ -113,7 +105,7 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     VAST_ASSERT(uncompressed_data);
     return uncompressed_data;
   };
-  if (auto* data = index_fbs.caf_0_18_data()) {
+  if (const auto* data = index_fbs.caf_0_18_data()) {
     auto uncompressed_data = uncompress(*data);
     auto bytes = as_bytes(*uncompressed_data);
     caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
@@ -124,7 +116,7 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     }
     return state_ptr;
   }
-  if (auto* data = index_fbs.caf_0_17_data()) {
+  if (const auto* data = index_fbs.caf_0_17_data()) {
     auto uncompressed_data = uncompress(*data);
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
@@ -159,8 +151,6 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
   }
   return {};
 }
-
-} // namespace
 
 /// Gets the INDEXER at a certain position.
 indexer_actor passive_partition_state::indexer_at(size_t position) const {

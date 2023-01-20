@@ -10,19 +10,13 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/aliases.hpp"
 #include "vast/fbs/flatbuffer_container.hpp"
 #include "vast/fbs/partition.hpp"
-#include "vast/fbs/segmented_file.hpp"
 #include "vast/ids.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/query_context.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/evaluator.hpp"
-#include "vast/system/indexer.hpp"
-#include "vast/system/instrumentation.hpp"
-#include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
@@ -123,6 +117,10 @@ struct passive_partition_state {
 };
 
 // -- flatbuffers --------------------------------------------------------------
+
+[[nodiscard]] value_index_ptr
+unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
+                   const fbs::flatbuffer_container& container);
 
 [[nodiscard]] caf::error
 unpack(const fbs::partition::LegacyPartition&, passive_partition_state&);

@@ -222,16 +222,13 @@ TEST(full partition roundtrip) {
   auto fs = self->spawn(vast::system::posix_filesystem, directory,
                         vast::system::accountant_actor{});
   auto partition_uuid = vast::uuid::random();
-  auto store_id = std::string{vast::defaults::system::store_backend};
-  const auto* store_plugin
-    = vast::plugins::find<vast::store_actor_plugin>(store_id);
+  const auto* store_plugin = vast::plugins::find<vast::store_actor_plugin>(
+    vast::defaults::system::store_backend);
   REQUIRE(store_plugin);
-  auto [store_builder, store_header] = unbox(store_plugin->make_store_builder(
-    vast::system::accountant_actor{}, fs, partition_uuid));
   auto partition
     = sys.spawn(vast::system::active_partition, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
-                vast::index_config{}, store_builder, store_id, store_header,
+                vast::index_config{}, store_plugin,
                 std::make_shared<vast::taxonomies>());
   run();
   REQUIRE(partition);

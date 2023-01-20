@@ -18,16 +18,21 @@
 namespace vast::detail {
 
 template <class State>
-void notify_listeners_if_clean(State& st, const caf::stream_manager& mgr) {
+void notify_listeners_if_clean(State& st, const caf::stream_manager& mgr,
+                               caf::stream_slot slot
+                               = caf::invalid_stream_slot) {
+  if (st.flush_listeners.empty())
+    return;
   // We intentionally don't check the inbound path state here because it will
   // only be marked as idle after an ack was sent for the last batch that was
   // received. However, acks are only sent once for each credit round, which
   // means that sometimes we wouldn't notify even though all batches are done.
   // In that case the listener would never get the notification and hang.
-  if (!st.flush_listeners.empty() // && mgr.inbound_paths_idle()
-      && mgr.out().clean()) {
+  if (slot != caf::invalid_stream_slot) {
+    if (mgr.out().clean(slot))
+      st.notify_flush_listeners();
+  } else if (mgr.out().clean())
     st.notify_flush_listeners();
-  }
 }
 
 // A custom stream manager that is able to notify when all data has been
@@ -53,7 +58,9 @@ public:
   void handle(caf::stream_slots slots,
               caf::upstream_msg::ack_batch& x) override {
     super::handle(slots, x);
-    notify_listeners_if_clean(state(), *this);
+    auto slot = slots.receiver == notification_slot ? notification_slot
+                                                    : caf::invalid_stream_slot;
+    notify_listeners_if_clean(state(), *this, slot);
   }
 
   void input_closed(caf::error reason) override {
@@ -70,8 +77,14 @@ public:
       state().notify_flush_listeners();
   }
 
+  void set_notification_slot(caf::stream_slot slot) {
+    notification_slot = slot;
+  }
+
 private:
   Self* self_;
+
+  caf::stream_slot notification_slot = caf::invalid_stream_slot;
 
   auto self() {
     return self_;
@@ -89,8 +102,7 @@ private:
 template <class Self, class Init, class Fun, class Finalize = caf::unit_t,
           class DownstreamManager = caf::default_downstream_manager_t<Fun>,
           class Trait = caf::stream_stage_trait_t<Fun>>
-caf::stream_stage_ptr<typename Trait::input, DownstreamManager>
-attach_notifying_stream_stage(
+auto attach_notifying_stream_stage(
   Self* self, bool continuous, Init init, Fun fun, Finalize fin = {},
   [[maybe_unused]] caf::policy::arg<DownstreamManager> token = {}) {
   using input_type = typename Trait::input;

@@ -15,13 +15,13 @@
 #include "vast/ids.hpp"
 #include "vast/index_config.hpp"
 #include "vast/partition_synopsis.hpp"
+#include "vast/plugin.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/query_context.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
@@ -43,13 +43,6 @@ bool should_skip_index_creation(const type& type,
                                 const qualified_record_field& qf,
                                 const std::vector<index_config::rule>& rules);
 
-/// Helper class used to route table slice columns to the correct indexer
-/// in the CAF stream stage.
-struct partition_selector {
-  bool operator()(const qualified_record_field& filter,
-                  const table_slice_column& column) const;
-};
-
 /// The state of the ACTIVE PARTITION actor.
 struct active_partition_state {
   // -- constructor ------------------------------------------------------------
@@ -58,10 +51,9 @@ struct active_partition_state {
 
   // -- member types -----------------------------------------------------------
 
-  using partition_stream_stage_ptr = caf::stream_stage_ptr<
-    table_slice,
-    caf::broadcast_downstream_manager<
-      table_slice_column, vast::qualified_record_field, partition_selector>>;
+  using partition_stream_stage_ptr
+    = caf::stream_stage_ptr<table_slice,
+                            caf::broadcast_downstream_manager<table_slice>>;
 
   /// Contains all the data necessary to create a partition flatbuffer.
   struct serialization_data {
@@ -150,8 +142,11 @@ struct active_partition_state {
   /// with a serialized chunk.
   size_t persisted_indexers = {};
 
-  /// The store to retrieve the data from.
-  store_actor store = {};
+  /// The store backend.
+  const store_actor_plugin* store_plugin = {};
+
+  /// The store builder.
+  store_builder_actor store_builder = {};
 
   /// Temporary storage for the serialized indexers of this partition, before
   /// they get written into the flatbuffer.
@@ -183,12 +178,8 @@ pack_full(const active_partition_state::serialization_data& x,
 /// @param accountant The actor handle of the accountant.
 /// @param filesystem The actor handle of the filesystem.
 /// @param index_opts Settings that are forwarded when creating indexers.
-/// @param store The store to retrieve the events from.
-/// @param store_id The name of the store backend that should be stored
-///                      on disk.
-/// @param store_header A binary blob that allows reconstructing the store
-///                     plugin when reading this partition from disk.
 /// @param index_config The meta-index configuration of the false-positives
+/// @param store A pointer to the store impplementation.
 /// @param taxonomies The taxonomies for resolving expressions during a query.
 /// rates for the types and fields.
 // TODO: Bundle store, store_id and store_header in a single struct
@@ -196,7 +187,7 @@ active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, accountant_actor accountant, filesystem_actor filesystem,
   caf::settings index_opts, const index_config& synopsis_opts,
-  store_actor store, std::string store_id, chunk_ptr store_header,
+  const store_actor_plugin* store_plugin,
   std::shared_ptr<vast::taxonomies> taxonomies);
 
 } // namespace vast::system
