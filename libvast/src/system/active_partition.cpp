@@ -384,7 +384,7 @@ active_partition_actor::behavior_type active_partition(
              caf::get<record_type>(schema).leaves()) {
           column_idx++;
           // TODO: The qualified record field is a leftover from heterogeneous
-          // partitions, the indexers can be indexed by the column instead.
+          // partitions, the indexers can be indexed by the offset instead.
           const auto qf = qualified_record_field{schema, offset};
           auto& idx = self->state.indexers[qf];
           if (idx)

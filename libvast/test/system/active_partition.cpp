@@ -126,7 +126,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
     last_written_chunks;
   auto filesystem = sys.spawn(dummy_filesystem, std::ref(last_written_chunks));
   const auto partition_id = vast::uuid::random();
-  // FIXME: We should implement a mock store and use that for this test.
+  // TODO: We should implement a mock store and use that for this test.
   const auto* store_plugin = vast::plugins::find<vast::store_actor_plugin>(
     vast::defaults::system::store_backend);
   REQUIRE(store_plugin);
