@@ -1,7 +1,8 @@
 ---
+draft: true
 title: The New REST API
 authors: [lava, mavam]
-date: 2023-01-19
+date: 2023-01-24
 image: /img/rest-api-deployment-single.light.png
 tags: [frontend, rest, api, architecture]
 ---
