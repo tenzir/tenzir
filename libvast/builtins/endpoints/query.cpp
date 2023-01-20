@@ -191,6 +191,7 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     if (self->state.promise.pending())
       self->state.promise.deliver(msg.reason);
+    self->quit();
   });
   return {[self](atom::provision, system::query_cursor cursor) {
             self->state.cursor = cursor;
