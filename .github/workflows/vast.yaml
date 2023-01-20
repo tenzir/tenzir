@@ -280,7 +280,6 @@ jobs:
       - configure
       - changelog
       - docker-vast
-      - python
     if: ${{ needs.configure.outputs.run-vast-io == 'true' }}
     name: vast.io
     runs-on: ubuntu-20.04
@@ -329,7 +328,6 @@ jobs:
   docker-vast:
     needs:
       - configure
-      - python
     if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
     name: Docker (tenzir/vast)
     runs-on: ubuntu-20.04
@@ -442,7 +440,6 @@ jobs:
     needs:
       - docker-vast
       - configure
-      - python
     if: ${{ needs.configure.outputs.run-docker-compose == 'true' }}
     name: Docker Compose
     runs-on: ubuntu-20.04

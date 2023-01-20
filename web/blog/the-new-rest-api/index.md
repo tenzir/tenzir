@@ -1,12 +1,13 @@
 ---
+draft: true
 title: The New REST API
 authors: [lava, mavam]
-date: 2023-01-19
+date: 2023-01-24
 image: /img/rest-api-deployment-single.light.png
 tags: [frontend, rest, api, architecture]
 ---
 
-As of [v2.4](vast-v2.4) VAST ships with a new `web` [plugin][plugins] that
+As of [v2.4](/blog/vast-v2.4) VAST ships with a new `web` [plugin][plugins] that
 provides a [REST API][rest-api]. The [API documentation](/api) describes the
 available endpoints also provides an
 [OpenAPI](https://spec.openapis.org/oas/latest.html) spec for download. This
