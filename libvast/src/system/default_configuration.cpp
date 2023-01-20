@@ -50,6 +50,9 @@ default_configuration::default_configuration() {
   // We do a combination of (1) and (2).
   set("caf.stream.max-batch-delay", caf::timespan{15ms});
   set("caf.scheduler.max-throughput", 500);
+  set("caf.stream.credit-policy", "token-based");
+  set("caf.stream.token-based-policy.batch-size", 1);
+  set("caf.stream.token-based-policy.buffer-size", 64);
 }
 
 } // namespace vast::system
