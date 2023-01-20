@@ -217,14 +217,12 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     = has_low_priority_option(self->state.options)
         ? query_context::priority::low
         : query_context::priority::normal;
-  VAST_WARN("spawned exporter with {} pipelines", pipelines.size());
+  VAST_DEBUG("spawned exporter with {} pipelines", pipelines.size());
   self->state.pipeline = pipeline_executor{std::move(pipelines)};
   if (auto err = self->state.pipeline.validate(
-        pipeline_executor::allow_aggregate_pipelines::yes)) {
-    VAST_ERROR("transformer is not allowed to use aggregate transform {}", err);
-    self->quit();
-    return exporter_actor::behavior_type::make_empty_behavior();
-    // TODO: print warning here when VAST node sends aggregation function (also -n)
+        pipeline_executor::allow_aggregate_pipelines::no)) {
+    VAST_WARN("exporter received aggregation pipelines - this may currently "
+              "cause unstable behavior but pipelines will be applied");
   }
   if (has_continuous_option(options))
     VAST_DEBUG("{} has continuous query option", *self);
