@@ -51,17 +51,13 @@ PNG or SVG images.
 This means the editing workflow looks as follows:
 
 1. Open <https://excalidraw.com> and click *Upload* in the top left
-2. Select the PNG or SVG you would like to edit
+2. Select the SVG you would like to edit
 3. Make your edits in Excalidraw
-4. Re-export the drawing in size **2x** and **check the box "Embed scene"**
+4. Uncheck the box "Background" to ensure a transparent background.
+5. Re-export the drawing in size **2x** and **check the box "Embed scene"**
 
 The last part is crucial: If you don't check "Embed scene" it will no longer be
 able to recover the original diagram source.
-
-:::tip Transparent Background
-If possible, *uncheck* the box "Background" to generate a transparent
-background, as it makes images fit in more seamlessly.
-:::
 
 ## Cater to dark mode
 
@@ -74,6 +70,21 @@ Here's an example to include one image that exists in two variants:
 ```markdown
 ![Image Description](/path/to/dark.png#gh-dark-mode-only)
 ![Image Description](/path/to/light.png#gh-light-mode-only)
+```
+
+SVGs do not need this double-inclusion. We automatically perform the following
+Excalidraw-style CSS filter for all inlined SVGs:
+
+```css
+[data-theme='dark'] .markdown-inline-svg {
+  filter: invert(100%) hue-rotate(180deg);
+}
+```
+
+This means that it suffices to include SVGs as follows:
+
+```markdown
+![Image Description](/path/to/light-version.svg)
 ```
 
 ## Scale images
