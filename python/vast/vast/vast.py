@@ -2,7 +2,7 @@ import asyncio
 import time
 from abc import ABC
 from enum import Enum, auto
-from typing import AsyncIterable, Optional
+from typing import AsyncIterable, Optional, AsyncGenerator
 
 import pyarrow as pa
 import vast.utils.arrow

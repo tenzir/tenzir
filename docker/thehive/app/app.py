@@ -4,13 +4,14 @@ import hashlib
 import json
 import os
 import time
-from typing import Dict, Optional
+from typing import Optional
 
 import aiohttp
 import vast.utils.logging as logging
 from dateutil.parser import isoparse
+from pandas import Timestamp
 
-from vast import VAST, ExportMode
+from vast import VAST, ExportMode, to_rows
 
 logger = logging.get("vast.thehive.app")
 
@@ -27,7 +28,7 @@ SENT_ALERT_REFS = set()
 
 async def call_thehive(
     path: str,
-    payload: Optional[Dict] = None,
+    payload: Optional[dict] = None,
 ) -> str:
     """Call a TheHive endpoint with basic auth"""
     path = f"{THEHIVE_URL}{path}"
@@ -48,7 +49,7 @@ async def call_thehive(
 async def wait_for_thehive(
     path: str,
     timeout: int,
-    payload: Optional[Dict] = None,
+    payload: Optional[dict] = None,
 ) -> str:
     """Call thehive repeatedly until timeout"""
     start = time.time()
@@ -62,13 +63,13 @@ async def wait_for_thehive(
             await asyncio.sleep(1)
 
 
-def suricata2thehive(event: Dict) -> Dict:
+def suricata2thehive(event: dict) -> dict:
     """Convert a Suricata alert event into a TheHive alert"""
     # convert iso into epoch
-    sighted_time_iso = event.get("timestamp", datetime.datetime.now().isoformat())
-    sighted_time_ms = int(isoparse(sighted_time_iso).timestamp() * 1000)
-    start_time_iso = event.get("flow", {}).get("timestamp", sighted_time_iso)
-    start_time_ms = int(isoparse(start_time_iso).timestamp() * 1000)
+    sighted_time_pandas = event.get("timestamp", Timestamp.utcnow())
+    sighted_time_ms = int(sighted_time_pandas.timestamp() * 1000)
+    start_time_pandas = event.get("flow", {}).get("timestamp", sighted_time_pandas)
+    start_time_ms = int(start_time_pandas.timestamp() * 1000)
     alert = event.get("alert", {})
     # Severity is defined differently:
     # - in Suricata: 1-255 (usually 1-4), 1 being the highest
@@ -78,7 +79,7 @@ def suricata2thehive(event: Dict) -> Dict:
     desc = f'{alert.get("signature_id", "No signature ID")}: {alert.get("signature", "No signature")}'
     # A unique identifier of this alert, hashing together the start time and flow id
     src_ref = hashlib.md5(
-        f'{start_time_iso}{event.get("flow_id", "")}'.encode()
+        f'{start_time_pandas}{event.get("flow_id", "")}'.encode()
     ).hexdigest()
 
     return {
@@ -117,7 +118,7 @@ def suricata2thehive(event: Dict) -> Dict:
     }
 
 
-async def on_suricata_alert(alert: Dict):
+async def on_suricata_alert(alert: dict):
     global SENT_ALERT_REFS
     logger.debug(f"Received Suricata alert: {alert}")
     thehive_alert = suricata2thehive(alert)
@@ -144,13 +145,13 @@ async def run_async():
     expr = '#type == "suricata.alert"'
     # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
-    hist_iter = VAST.export_rows(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)
-    async for alert in hist_iter:
-        await on_suricata_alert(alert)
+    hist_iter = VAST.export(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)
+    async for row in to_rows(hist_iter):
+        await on_suricata_alert(row.data)
     logger.info("Starting live forwarding...")
-    cont_iter = VAST.export_rows(expr, ExportMode.CONTINUOUS)
-    async for alert in cont_iter:
-        await on_suricata_alert(alert)
+    cont_iter = VAST.export(expr, ExportMode.CONTINUOUS)
+    async for row in to_rows(cont_iter):
+        await on_suricata_alert(row.data)
 
 
 def run():

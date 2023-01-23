@@ -1,4 +1,6 @@
-from vast import VAST, ExportMode, collect_pyarrow, to_rows
+from vast import VAST, ExportMode, collect_pyarrow, to_rows, VastRow
+import asyncio
+import ipaddress
 import os
 import pytest
 import subprocess
@@ -73,16 +75,36 @@ async def test_export_collect_pyarrow():
 
 
 @pytest.mark.asyncio
-async def test_export_to_rows():
+async def test_export_historical_row():
     vast_import(["suricata"], integration_data("suricata/eve.json"))
     result = VAST.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
-    rows = []
+    rows: list[VastRow] = []
     async for row in to_rows(result):
         rows.append(row)
     assert len(rows) == 1
+    assert rows[0].name == "suricata.alert"
+    # only assert extension types here
+    alert = rows[0].data
+    assert alert["src_ip"] == ipaddress.IPv4Address("147.32.84.165")
+    assert alert["dest_ip"] == ipaddress.IPv4Address("78.40.125.4")
 
-    result = VAST.export("", ExportMode.HISTORICAL)
-    rows = []
-    async for row in to_rows(result):
-        rows.append(row)
-    assert len(rows) == 7
+
+@pytest.mark.asyncio
+async def test_export_continuous_rows():
+    async def run_export():
+        result = VAST.export('#type == "suricata.alert"', ExportMode.CONTINUOUS)
+        return await anext(result)
+
+    task = asyncio.create_task(run_export())
+    await asyncio.sleep(3)
+    await asyncio.get_event_loop().run_in_executor(
+        None, lambda: vast_import(["suricata"], integration_data("suricata/eve.json"))
+    )
+    print("await anext", flush=True)
+    row = await task
+    print("alert received", flush=True)
+    assert row.name == "suricata.alert"
+    # only assert extension types here
+    alert = row.data
+    assert alert["src_ip"] == ipaddress.IPv4Address("147.32.84.165")
+    assert alert["dest_ip"] == ipaddress.IPv4Address("78.40.125.4")
