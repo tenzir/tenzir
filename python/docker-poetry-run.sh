@@ -14,7 +14,6 @@ set -eux -o pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
 DOCKER_BUILDKIT=1 docker build \
-    --target vast-python-script \
     --build-arg VAST_VERSION=${VAST_CONTAINER_REF:-latest} \
     --build-arg VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io} \
     --file ../docker/dev/Dockerfile \
