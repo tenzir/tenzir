@@ -1,7 +1,11 @@
+import base64
 from collections import defaultdict
-from typing import Any, AsyncIterable
 from dataclasses import dataclass
+import datetime
+from decimal import Decimal
+from typing import Any, AsyncIterable
 
+import numpy as np
 import pyarrow as pa
 import vast.utils.arrow
 import vast.utils.logging
@@ -9,6 +13,10 @@ import vast.utils.logging
 from .vast import TableSlice
 
 logger = vast.utils.logging.get("vast.vast")
+
+_JSON_COMPATIBILITY_DOCSTRING_ = """JSON types are numbers, booleans, strings, arrays and objects
+- dates and times are formated with ISO 8601
+- raw bytes are Base64 encoded"""
 
 
 def to_pyarrow(batch: TableSlice) -> pa.RecordBatch:
@@ -48,18 +56,51 @@ async def collect_pyarrow(
 
 @dataclass
 class VastRow:
-    """A row wise representation of the data and metadata"""
+    """A row wise representation of the data and metadata
+
+    - name: the VAST type for the row
+    - data: the event data contained in the row"""
 
     name: str
     data: dict[str, Any]
 
 
-async def to_rows(
+def arrow_dict_to_json_dict(dictionary):
+    f"""Convert a result item of PyArrow to_pylist into a dictionary with
+    JSON compatible value types
+
+    {_JSON_COMPATIBILITY_DOCSTRING_}"""
+    for key, value in dictionary.items():
+        if isinstance(value, dict):
+            arrow_dict_to_json_dict(value)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, (dict, list)):
+                    arrow_dict_to_json_dict(item)
+                elif not isinstance(item, (int, float, bool)):
+                    item = str(item)
+        elif isinstance(value, (np.floating, Decimal)):
+            dictionary[key] = float(value)
+        elif isinstance(value, bytes):
+            dictionary[key] = base64.b64encode(value).decode()
+        elif isinstance(value, (datetime.time, datetime.datetime, datetime.date)):
+            dictionary[key] = value.isoformat()
+        elif value is None or isinstance(value, (int, float, bool)):
+            dictionary[key] = value
+        elif not isinstance(value, (int, float, bool)):
+            dictionary[key] = str(value)
+    return dictionary
+
+
+async def to_json_rows(
     stream: AsyncIterable[TableSlice],
 ) -> AsyncIterable[VastRow]:
-    """Convert the table slice iterator to a row by row iterator"""
+    f"""Convert the TableSlice iterator to a row by row iterator with value types
+    dumbed down to JSON compatible types
+
+    {_JSON_COMPATIBILITY_DOCSTRING_}"""
     async for slice in stream:
         batch = to_pyarrow(slice)
         name = vast.utils.arrow.name(batch.schema)
         for row in batch.to_pylist():
-            yield VastRow(name, row)
+            yield VastRow(name, arrow_dict_to_json_dict(row))

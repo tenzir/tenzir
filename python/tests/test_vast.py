@@ -1,9 +1,8 @@
-from vast import VAST, ExportMode, collect_pyarrow, to_rows, VastRow
+from vast import VAST, ExportMode, collect_pyarrow, to_json_rows, VastRow
 import vast.utils.logging
 import vast.utils.asyncio
 import asyncio
 from asyncio.subprocess import PIPE
-import ipaddress
 import os
 import pytest
 import shutil
@@ -51,7 +50,7 @@ async def vast_import(expression: list[str]):
 
 def integration_data(path):
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    return f"{dir_path}/../../vast/integration/data/{path}"
+    return os.path.normpath(f"{dir_path}/../../vast/integration/data/{path}")
 
 
 @pytest.mark.asyncio
@@ -92,21 +91,21 @@ async def test_export_historical_rows():
     await vast_import(["-r", integration_data("suricata/eve.json"), "suricata"])
     result = VAST.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
     rows: list[VastRow] = []
-    async for row in to_rows(result):
+    async for row in to_json_rows(result):
         rows.append(row)
     assert len(rows) == 1
     assert rows[0].name == "suricata.alert"
     # only assert extension types here
     alert = rows[0].data
-    assert alert["src_ip"] == ipaddress.IPv4Address("147.32.84.165")
-    assert alert["dest_ip"] == ipaddress.IPv4Address("78.40.125.4")
+    assert alert["src_ip"] == "147.32.84.165"
+    assert alert["dest_ip"] == "78.40.125.4"
 
 
 @pytest.mark.asyncio
 async def test_export_continuous_rows():
     async def run_export():
         result = VAST.export('#type == "suricata.alert"', ExportMode.CONTINUOUS)
-        return await anext(to_rows(result))
+        return await anext(to_json_rows(result))
 
     task = asyncio.create_task(run_export())
     await asyncio.sleep(3)
@@ -118,5 +117,5 @@ async def test_export_continuous_rows():
     assert row.name == "suricata.alert"
     # only assert extension types here
     alert = row.data
-    assert alert["src_ip"] == ipaddress.IPv4Address("147.32.84.165")
-    assert alert["dest_ip"] == ipaddress.IPv4Address("78.40.125.4")
+    assert alert["src_ip"] == "147.32.84.165"
+    assert alert["dest_ip"] == "78.40.125.4"
