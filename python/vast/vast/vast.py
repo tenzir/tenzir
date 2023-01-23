@@ -2,7 +2,8 @@ import asyncio
 import time
 from abc import ABC
 from enum import Enum, auto
-from typing import AsyncIterable, Optional, AsyncGenerator
+from typing import AsyncIterable
+import secrets
 
 import pyarrow as pa
 import vast.utils.arrow
@@ -31,22 +32,42 @@ class PyArrowTableSlice(TableSlice):
         self._batch = batch
 
 
-class AsyncRecordBatchStreamReader:
-    def __init__(self, source):
-        self.reader = pa.RecordBatchStreamReader(source)
-        self.loop = asyncio.get_event_loop()
+class _LazyReader:
+    """Helper class that instantiates the PyArrow RecordBatchStreamReader in a
+    dedicated thread to avoid blocking"""
 
-    def _next_batch(self) -> Optional[TableSlice]:
-        try:
-            return PyArrowTableSlice(self.reader.read_next_batch())
-        except StopIteration:
-            return None
+    def __init__(self, source):
+        self.source = source
+        self._reader = None
+
+    async def get(self):
+        if self._reader is None:
+            self._reader = await asyncio.to_thread(
+                pa.RecordBatchStreamReader, self.source
+            )
+        return self._reader
+
+
+class AsyncRecordBatchStreamReader:
+    """A thread based wrapper that makes PyArrow RecordBatchStreamReader
+    async"""
+
+    def __init__(self, source):
+        self.reader: _LazyReader = _LazyReader(source)
 
     def __aiter__(self):
         return self
 
     async def __anext__(self) -> TableSlice:
-        value = await self.loop.run_in_executor(None, self._next_batch)
+        reader = await self.reader.get()
+
+        def _next_batch():
+            try:
+                return PyArrowTableSlice(reader.read_next_batch())
+            except StopIteration:
+                return None
+
+        value = await asyncio.to_thread(_next_batch)
         if value is None:
             raise StopAsyncIteration
         return value
@@ -94,10 +115,23 @@ class VAST:
         else:
             cmd = cmd.arrow(expression)
         proc = cmd.sync_exec()
+
+        def log():
+            id = secrets.token_hex(6)
+            logger.debug(
+                f"Logging stderr for export({expression}, {mode}, {limit}) with id {id}"
+            )
+            for line in iter(proc.stderr.readline(), b""):
+                logger.debug(f"{id}: {line.decode().strip()}")
+
+        # TODO: don't use default thread pool here as it won't scale
+        t = asyncio.create_task(asyncio.to_thread(log))
+
         try:
             # VAST concatenates IPC streams for different types so we need to
             # spawn multiple stream readers
             while True:
+                logger.debug("starting new record batch stream")
                 async for batch in AsyncRecordBatchStreamReader(proc.stdout):
                     yield batch
         except Exception as e:
@@ -107,7 +141,8 @@ class VAST:
             if isinstance(e, pa.ArrowInvalid) and proc.wait(0.1) == 0:
                 logger.debug("completed processing stream of record batches")
             else:
-                logger.error(proc.stderr)
+                proc.kill()
+                await asyncio.wait_for(t, 3)
                 raise e
 
     @staticmethod
