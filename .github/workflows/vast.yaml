@@ -1103,6 +1103,7 @@ jobs:
   python:
     needs:
       - configure
+      - docker-vast
     if: ${{ needs.configure.outputs.run-python == 'true' }}
     name: Python
     runs-on: ${{ matrix.os }}
@@ -1130,6 +1131,12 @@ jobs:
         working-directory: python
         run: |
           poetry run pytest
+      - name: Run tests in Docker
+        working-directory: python
+        run: |
+          export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
+          export VAST_CONTAINER_REGISTRY=ghcr.io
+          ./docker-poetry-run.sh pytest
       - name: Build package
         working-directory: python
         run: |
