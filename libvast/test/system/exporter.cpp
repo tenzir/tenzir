@@ -23,6 +23,8 @@
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
+#include <caf/attach_stream_sink.hpp>
+
 using namespace vast;
 
 using std::string;
@@ -32,6 +34,23 @@ namespace {
 
 using fixture_base = fixtures::deterministic_actor_system_and_events;
 
+caf::behavior
+dummy_sink(caf::event_based_actor* self, std::vector<table_slice>* result) {
+  return {
+    [=](caf::stream<table_slice> in) {
+      caf::attach_stream_sink(
+        self, in,
+        [](caf::unit_t&) {
+          // nop
+        },
+        [result](caf::unit_t&, table_slice&& x) {
+          result->push_back(x);
+        })
+        .inbound_slot();
+    },
+  };
+}
+
 struct fixture : fixture_base {
   fixture() : fixture_base(VAST_PP_STRINGIFY(SUITE)) {
     expr = unbox(to<expression>("service == \"dns\" "
@@ -39,6 +58,7 @@ struct fixture : fixture_base {
   }
 
   ~fixture() override {
+    self->send_exit(sink, caf::exit_reason::user_shutdown);
     self->send_exit(importer, caf::exit_reason::user_shutdown);
     self->send_exit(exporter, caf::exit_reason::user_shutdown);
     self->send_exit(index, caf::exit_reason::user_shutdown);
@@ -69,7 +89,11 @@ struct fixture : fixture_base {
   void spawn_exporter(query_options opts) {
     exporter
       = self->spawn(system::exporter, expr, opts, defaults::export_::max_events,
-                    std::vector<vast::pipeline>{});
+                    std::vector<vast::pipeline>{}, index);
+  }
+
+  void spawn_sink() {
+    sink = self->spawn(dummy_sink, std::addressof(sink_received_slices));
   }
 
   void importer_setup() {
@@ -83,10 +107,9 @@ struct fixture : fixture_base {
 
   void exporter_setup(query_options opts) {
     spawn_exporter(opts);
-    send(exporter, atom::set_v, index);
-    send(exporter, atom::sink_v, self);
+    spawn_sink();
+    send(exporter, atom::sink_v, sink);
     send(exporter, atom::run_v);
-    send(exporter, atom::extract_v);
     run();
   }
 
@@ -114,7 +137,7 @@ struct fixture : fixture_base {
         });
 
     MESSAGE("got " << total_events << " events in total");
-    return result;
+    return sink_received_slices;
   }
 
   void verify(const std::vector<table_slice>& results) {
@@ -129,7 +152,9 @@ struct fixture : fixture_base {
   system::index_actor index;
   system::importer_actor importer;
   system::exporter_actor exporter;
+  caf::actor sink;
   expression expr;
+  std::vector<table_slice> sink_received_slices;
 };
 
 } // namespace
@@ -165,9 +190,12 @@ TEST(historical query with importer) {
 
 TEST(continuous query with exporter only) {
   MESSAGE("prepare exporter for continuous query");
+  spawn_catalog();
+  spawn_index();
+  run();
   spawn_exporter(continuous);
-  send(exporter, atom::sink_v, self);
-  send(exporter, atom::extract_v);
+  spawn_sink();
+  send(exporter, atom::sink_v, sink);
   run();
   MESSAGE("send conn.log directly to exporter");
   vast::detail::spawn_container_source(sys, zeek_conn_log, exporter);

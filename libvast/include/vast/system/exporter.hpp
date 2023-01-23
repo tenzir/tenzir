@@ -21,8 +21,11 @@
 #include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/scheduled_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
+
+#include <queue>
 
 namespace vast::system {
 
@@ -60,7 +63,7 @@ struct exporter_state {
   std::unordered_map<type, expression> checkers = {};
 
   /// Caches results for the SINK.
-  std::vector<table_slice> results = {};
+  std::queue<table_slice> results = {};
 
   /// Stores the time point for when this actor got started via 'run'.
   std::chrono::system_clock::time_point start = {};
@@ -74,6 +77,10 @@ struct exporter_state {
 
   /// Stores the query ID we receive from the INDEX.
   uuid id = {};
+
+  /// Used to send table slices to the sink in a streaming manner.
+  caf::stream_source_ptr<caf::broadcast_downstream_manager<table_slice>> source
+    = {};
 };
 
 /// The EXPORTER gradually requests more results from the index until no more
@@ -83,9 +90,10 @@ struct exporter_state {
 /// @param expr The AST of the query.
 /// @param options The query options.
 /// @param pipelines The applied pipelines.
+/// @param index The index actor.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options, unsigned long export_max_events,
-         std::vector<pipeline>&& pipelines);
+         std::vector<pipeline>&& pipelines, index_actor index);
 
 } // namespace vast::system
