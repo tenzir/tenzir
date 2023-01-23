@@ -1133,6 +1133,7 @@ jobs:
           poetry run pytest
       - name: Run tests in Docker
         working-directory: python
+        if: matrix.os == 'ubuntu-latest'
         run: |
           export VAST_CONTAINER_REF="${{ needs.configure.outputs.vast-container-ref }}"
           export VAST_CONTAINER_REGISTRY=ghcr.io
