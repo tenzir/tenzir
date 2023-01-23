@@ -22,7 +22,7 @@ DOCKER_BUILDKIT=1 docker build \
     $SCRIPT_DIR/..
 
 docker run \
-    --env VAST_CONSOLE_VERBOSITY=info \
+    --env VAST_CONSOLE_VERBOSITY=debug \
     --env VAST_PYTHON_INTEGRATION=1 \
     tenzir/vast-python-script \
     $@
