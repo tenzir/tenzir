@@ -17,7 +17,7 @@ WORKDIR /vast/python/
 # Layer the Poetry install to optimize the dev experience.
 COPY --chown=vast:vast \ 
     ./vast/integration/data/ \
-    /vast/integration/data/
+    /vast/vast/integration/data/
 COPY --chown=vast:vast \
     ./python/pyproject.toml \
     ./python/poetry.lock \
