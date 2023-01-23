@@ -265,7 +265,7 @@ inline constexpr std::chrono::milliseconds status_request_timeout
 
 /// Timeout for initial connections to the node.
 inline constexpr std::chrono::milliseconds node_connection_timeout
-  = std::chrono::seconds{10};
+  = std::chrono::minutes{5};
 
 /// Timeout for the scheduler to give up on a partition.
 inline constexpr std::chrono::milliseconds scheduler_timeout
@@ -290,6 +290,10 @@ inline constexpr bool create_partition_index = true;
 
 /// Whether to spawn central components in separate threads.
 inline constexpr bool detach_components = true;
+
+/// Time to wait before trying to make another connection attempt to a remote
+/// VAST node.
+inline constexpr auto node_connection_retry_delay = std::chrono::seconds{3u};
 
 } // namespace system
 
