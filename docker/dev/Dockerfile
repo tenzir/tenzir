@@ -29,7 +29,6 @@ COPY --chown=vast:vast \
     ./python/ \
     ./
 RUN poetry install
-ENV VAST_PYTHON_INTEGRATION=1
 ENTRYPOINT [ "poetry", "run" ]
 
 
