@@ -27,8 +27,8 @@ async def vast_server():
     )
     await asyncio.sleep(3)
     yield
-    proc.kill()
-    await asyncio.sleep(1)
+    proc.terminate()
+    await asyncio.wait_for(proc.wait(), 5)
     await asyncio.to_thread(shutil.rmtree, TEST_DB_DIR)
 
 
@@ -59,7 +59,7 @@ async def test_count():
     assert result == 0
     await vast_import(["-r", integration_data("suricata/eve.json"), "suricata"])
     result = await VAST.count()
-    assert result == 7
+    assert result == 8
 
 
 @pytest.mark.asyncio
@@ -82,6 +82,7 @@ async def test_export_collect_pyarrow():
         "suricata.fileinfo",
         "suricata.http",
         "suricata.stats",
+        "suricata.quic",
     }
 
 
@@ -101,7 +102,6 @@ async def test_export_historical_rows():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="Continuous export not flushing stdout properly")
 async def test_export_continuous_rows():
     async def run_export():
         result = VAST.export('#type == "suricata.alert"', ExportMode.CONTINUOUS)
