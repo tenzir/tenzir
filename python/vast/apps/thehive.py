@@ -1,5 +1,5 @@
 import asyncio
-import datetime
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -8,10 +8,8 @@ from typing import Optional
 
 import aiohttp
 import vast.utils.logging as logging
-from dateutil.parser import isoparse
-from pandas import Timestamp
 
-from vast import VAST, ExportMode, to_rows
+from vast import VAST, ExportMode, to_json_rows
 
 logger = logging.get("vast.thehive.app")
 
@@ -60,11 +58,8 @@ async def wait_for_thehive(
 
 def suricata2thehive(event: dict) -> dict:
     """Convert a Suricata alert event into a TheHive alert"""
-    # convert iso into epoch
-    sighted_time_pandas = event.get("timestamp", Timestamp.utcnow())
-    sighted_time_ms = int(sighted_time_pandas.timestamp() * 1000)
-    start_time_pandas = event.get("flow", {}).get("timestamp", sighted_time_pandas)
-    start_time_ms = int(start_time_pandas.timestamp() * 1000)
+    sighted_time_iso = event.get("timestamp", datetime.now().isoformat())
+    start_time_iso = event.get("flow", {}).get("timestamp", sighted_time_iso)
     alert = event.get("alert", {})
     # Severity is defined differently:
     # - in Suricata: 1-255 (usually 1-4), 1 being the highest
@@ -74,7 +69,7 @@ def suricata2thehive(event: dict) -> dict:
     desc = f'{alert.get("signature_id", "No signature ID")}: {alert.get("signature", "No signature")}'
     # A unique identifier of this alert, hashing together the start time and flow id
     src_ref = hashlib.md5(
-        f'{start_time_pandas}{event.get("flow_id", "")}'.encode()
+        f'{start_time_iso}{event.get("flow_id", "")}'.encode()
     ).hexdigest()
 
     return {
@@ -84,29 +79,29 @@ def suricata2thehive(event: dict) -> dict:
         "title": "Suricata Alert",
         "description": desc,
         "severity": severity,
-        "date": sighted_time_ms,
+        "date": sighted_time_iso,
         "tags": [],
         "observables": [
             {
                 "dataType": "ip",
                 "data": event["src_ip"],
                 "message": "Source IP",
-                "startDate": start_time_ms,
+                "startDate": start_time_iso,
                 "tags": [],
                 "ioc": False,
                 "sighted": True,
-                "sightedAt": sighted_time_ms,
+                "sightedAt": sighted_time_iso,
                 "ignoreSimilarity": False,
             },
             {
                 "dataType": "ip",
                 "data": event["dest_ip"],
                 "message": "Destination IP",
-                "startDate": start_time_ms,
+                "startDate": start_time_iso,
                 "tags": [],
                 "ioc": False,
                 "sighted": True,
-                "sightedAt": sighted_time_ms,
+                "sightedAt": sighted_time_iso,
                 "ignoreSimilarity": False,
             },
         ],
@@ -137,11 +132,11 @@ async def run_async():
     # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
     hist_iter = VAST.export(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)
-    async for row in to_rows(hist_iter):
+    async for row in to_json_rows(hist_iter):
         await on_suricata_alert(row.data)
     logger.info("Starting live forwarding...")
     cont_iter = VAST.export(expr, ExportMode.CONTINUOUS)
-    async for row in to_rows(cont_iter):
+    async for row in to_json_rows(cont_iter):
         await on_suricata_alert(row.data)
 
 
