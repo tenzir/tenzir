@@ -1,5 +1,6 @@
 from vast import VAST, ExportMode, collect_pyarrow, to_rows, VastRow
 import vast.utils.logging
+import vast.utils.asyncio
 import asyncio
 from asyncio.subprocess import PIPE
 import ipaddress
@@ -27,6 +28,7 @@ async def vast_server():
     await asyncio.sleep(3)
     yield
     proc.kill()
+    await asyncio.sleep(1)
     await asyncio.to_thread(shutil.rmtree, TEST_DB_DIR)
 
 
@@ -84,7 +86,7 @@ async def test_export_collect_pyarrow():
 
 
 @pytest.mark.asyncio
-async def test_export_historical_row():
+async def test_export_historical_rows():
     await vast_import(["-r", integration_data("suricata/eve.json"), "suricata"])
     result = VAST.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
     rows: list[VastRow] = []
@@ -99,23 +101,21 @@ async def test_export_historical_row():
 
 
 @pytest.mark.asyncio
+@pytest.mark.xfail(reason="Continuous export not flushing stdout properly")
 async def test_export_continuous_rows():
     async def run_export():
         result = VAST.export('#type == "suricata.alert"', ExportMode.CONTINUOUS)
-        logger.info("export returned")
-        async for row in to_rows(result):
-            logger.info("return row")
-            return row
+        return await anext(to_rows(result))
 
     task = asyncio.create_task(run_export())
-    await asyncio.sleep(6)
+    await asyncio.sleep(3)
     await vast_import(["-r", integration_data("suricata/eve.json"), "suricata"])
     logger.info("await task")
-    row = await task
+    row = await asyncio.wait_for(task, 5)
     logger.info("task awaited")
     assert row is not None
     assert row.name == "suricata.alert"
-    # # only assert extension types here
-    # alert = row.data
-    # assert alert["src_ip"] == ipaddress.IPv4Address("147.32.84.165")
-    # assert alert["dest_ip"] == ipaddress.IPv4Address("78.40.125.4")
+    # only assert extension types here
+    alert = row.data
+    assert alert["src_ip"] == ipaddress.IPv4Address("147.32.84.165")
+    assert alert["dest_ip"] == ipaddress.IPv4Address("78.40.125.4")

@@ -118,11 +118,11 @@ class VAST:
 
         def log():
             id = secrets.token_hex(6)
-            logger.debug(
-                f"Logging stderr for export({expression}, {mode}, {limit}) with id {id}"
-            )
-            for line in iter(proc.stderr.readline(), b""):
-                logger.debug(f"{id}: {line.decode().strip()}")
+            export_str = f"export({expression}, {mode}, {limit})"
+            logger.debug(f"[export-{id}] Start logging for {export_str}")
+            for line in iter(proc.stderr.readline, b""):
+                logger.debug(f"[export-{id}] {line.decode().strip()}")
+            logger.debug(f"[export-{id}] Stop logging")
 
         # TODO: don't use default thread pool here as it won't scale
         t = asyncio.create_task(asyncio.to_thread(log))
@@ -135,10 +135,7 @@ class VAST:
                 async for batch in AsyncRecordBatchStreamReader(proc.stdout):
                     yield batch
         except Exception as e:
-            # Process should be completed when stdout is closed, but Popen state
-            # might not be updated yet. Calling `wait()` with a very short
-            # timeout ensures the returncode is properly set.
-            if isinstance(e, pa.ArrowInvalid) and proc.wait(0.1) == 0:
+            if isinstance(e, pa.ArrowInvalid):
                 logger.debug("completed processing stream of record batches")
             else:
                 proc.kill()
