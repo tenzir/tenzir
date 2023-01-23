@@ -31,7 +31,7 @@ COMPOSE_FILE="$COMPOSE_FILE:compose/thehive.app.yaml"
 docker compose up --build --no-recreate -d thehive-app
 
 # check that the historical import took place
-docker compose run --no-deps thehive-app count-alerts 2>&1 | \
+docker compose run --no-deps thehive-app app-thehive-count-alerts 2>&1 | \
     tee /dev/stderr | \
     grep -q "alert_count=1"
 
@@ -43,6 +43,6 @@ cat ../vast/integration/data/suricata/eve.json | \
     docker compose run --no-TTY vast import --blocking suricata
 
 # check that the continuous import took place, but not for the duplicate
-docker compose run --no-deps thehive-app count-alerts 2>&1 | \
+docker compose run --no-deps thehive-app app-thehive-count-alerts 2>&1 | \
     tee /dev/stderr | \
     grep -q "alert_count=2"

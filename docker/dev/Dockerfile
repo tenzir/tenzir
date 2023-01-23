@@ -1,7 +1,7 @@
 ARG VAST_VERSION
 ARG VAST_CONTAINER_REGISTRY
 
-FROM $VAST_CONTAINER_REGISTRY/tenzir/vast:$VAST_VERSION as poetry-base
+FROM $VAST_CONTAINER_REGISTRY/tenzir/vast:$VAST_VERSION
 USER root
 RUN apt-get update && \
     apt install -y \
@@ -13,8 +13,6 @@ USER vast:vast
 ENV POETRY_HOME=$PREFIX
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
-
-FROM poetry-base as vast-python-script
 WORKDIR /vast/python/
 # Layer the Poetry install to optimize the dev experience.
 COPY --chown=vast:vast \ 
@@ -24,27 +22,9 @@ COPY --chown=vast:vast \
     ./python/pyproject.toml \
     ./python/poetry.lock \
     ./
-RUN poetry install --no-root
+RUN poetry install --no-root --all-extras
 COPY --chown=vast:vast \
     ./python/ \
     ./
-RUN poetry install
-ENTRYPOINT [ "poetry", "run" ]
-
-
-FROM poetry-base as vast-python-app
-ARG RELATIVE_APP_DIR
-ENV CONTAINER_APP_DIR=/vast/$RELATIVE_APP_DIR
-COPY --chown=vast:vast ./python /vast/python
-# Layer the Poetry install to optimize the dev experience.
-WORKDIR $CONTAINER_APP_DIR
-COPY --chown=vast:vast \
-    $RELATIVE_APP_DIR/pyproject.toml \
-    $RELATIVE_APP_DIR/poetry.lock \
-    $CONTAINER_APP_DIR
-RUN poetry install --no-root
-COPY --chown=vast:vast \
-    $RELATIVE_APP_DIR/ \
-    $CONTAINER_APP_DIR
-RUN poetry install
+RUN poetry install --all-extras
 ENTRYPOINT [ "poetry", "run" ]
