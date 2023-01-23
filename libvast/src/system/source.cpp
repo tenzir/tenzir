@@ -145,8 +145,8 @@ void source_state::filter_and_push(
                  reader->name(), unfiltered_rows, slice.schema());
     }
   } else {
-    VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
-               unfiltered_rows, slice.schema());
+    // VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
+    //            unfiltered_rows, slice.schema());
     push_to_out(std::move(slice));
   }
 }
@@ -222,13 +222,13 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                   *self, num);
         return;
       }
-      VAST_DEBUG("{} schedules generation of {} messages", *self, num);
+      // VAST_DEBUG("{} schedules generation of {} messages", *self, num);
       self
         ->request(caf::actor_cast<source_actor>(self), caf::infinite,
                   atom::internal_v, atom::run_v, static_cast<uint64_t>(num))
         .then(
           [=]() {
-            VAST_DEBUG("{} finished generation of {} messages", *self, num);
+            // VAST_DEBUG("{} finished generation of {} messages", *self, num);
           },
           [=](const caf::error& err) {
             VAST_WARN("{} failed generation of {} messages: {}", *self, num,

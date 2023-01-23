@@ -185,7 +185,7 @@ load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
   vast::module types;
   symbol_map global_symbols;
   for (const auto& dir : module_dirs) {
-    VAST_VERBOSE("loading schemas from {}", dir);
+    // VAST_VERBOSE("loading schemas from {}", dir);
     std::error_code err{};
     if (!std::filesystem::exists(dir, err)) {
       VAST_DEBUG("{} skips non-existing directory: {}", __func__, dir);
@@ -203,7 +203,7 @@ load_module(const detail::stable_set<std::filesystem::path>& module_dirs,
                                          dir, module_files.error()));
     symbol_map local_symbols;
     for (const auto& f : *module_files) {
-      VAST_DEBUG("loading schema {}", f);
+      // VAST_DEBUG("loading schema {}", f);
       if (auto err = load_symbols(f, local_symbols))
         return err;
     }

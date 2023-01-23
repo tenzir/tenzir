@@ -94,7 +94,7 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
   if (!pipelines_list) {
     // TODO: Distinguish between the case where no pipelines were specified
     // (= return) and where there is something other than a list (= error).
-    VAST_DEBUG("unable to find transformations for key {}", key);
+    // VAST_DEBUG("unable to find transformations for key {}", key);
     return result;
   }
   // (name, [event_type]), ...
