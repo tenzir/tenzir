@@ -1,9 +1,8 @@
 import asyncio
-import json
 import time
 from abc import ABC
 from enum import Enum, auto
-from typing import Any, AsyncIterable, Dict, Optional
+from typing import AsyncIterable, Optional
 
 import pyarrow as pa
 import vast.utils.arrow

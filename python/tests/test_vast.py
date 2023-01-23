@@ -4,7 +4,6 @@ import pytest
 import subprocess
 import time
 import shutil
-from typing import List
 
 if "VAST_PYTHON_INTEGRATION" not in os.environ:
     # Tests in this module require access to integration test files and the VAST binary
@@ -25,7 +24,7 @@ def vast_server():
     shutil.rmtree(TEST_DB_DIR)
 
 
-def vast_import(expression: List[str], file: str):
+def vast_import(expression: list[str], file: str):
     proc = subprocess.Popen(
         ["vast", "import", "--blocking", *expression], stdin=subprocess.PIPE
     )

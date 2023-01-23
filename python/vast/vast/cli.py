@@ -1,6 +1,5 @@
 import asyncio
 import subprocess
-from typing import List
 
 import vast.utils.logging
 
@@ -11,7 +10,7 @@ class CLI:
     """A command-line wrapper for the VAST executable."""
 
     @staticmethod
-    def arguments(**kwargs) -> List[str]:
+    def arguments(**kwargs) -> list[str]:
         result = []
         for k, v in kwargs.items():
             if v is True:

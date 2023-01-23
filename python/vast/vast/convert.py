@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Any, AsyncIterable, Dict, List, Tuple
+from typing import Any, AsyncIterable
 
 import pyarrow as pa
 import vast.utils.arrow
@@ -21,7 +21,7 @@ def to_pyarrow(batch: TableSlice) -> pa.RecordBatch:
 
 async def collect_pyarrow(
     stream: AsyncIterable[TableSlice],
-) -> Dict[str, List[pa.Table]]:
+) -> dict[str, list[pa.Table]]:
     """Iterate through the TableSlice stream and sort the record batches by
     schema as lists of PyArrow Tables with identical schemas"""
     num_batches = 0
@@ -47,7 +47,7 @@ async def collect_pyarrow(
 
 async def to_rows(
     stream: AsyncIterable[TableSlice],
-) -> AsyncIterable[Tuple[pa.Schema, Dict[str, Any]]]:
+) -> AsyncIterable[tuple[pa.Schema, dict[str, Any]]]:
     async for slice in stream:
         batch = to_pyarrow(slice)
         for row in batch.to_pylist():
