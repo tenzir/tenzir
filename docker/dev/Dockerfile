@@ -14,7 +14,7 @@ ENV POETRY_HOME=$PREFIX
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
 
-FROM poetry-base as bindings-tests
+FROM poetry-base as vast-python-script
 WORKDIR /vast/python/
 # Layer the Poetry install to optimize the dev experience.
 COPY --chown=vast:vast \ 
@@ -30,10 +30,10 @@ COPY --chown=vast:vast \
     ./
 RUN poetry install
 ENV VAST_PYTHON_INTEGRATION=1
-ENTRYPOINT [ "poetry", "run", "pytest", "tests/test_vast.py", "-vv" ]
+ENTRYPOINT [ "poetry", "run" ]
 
 
-FROM poetry-base
+FROM poetry-base as vast-python-app
 ARG RELATIVE_APP_DIR
 ENV CONTAINER_APP_DIR=/vast/$RELATIVE_APP_DIR
 COPY --chown=vast:vast ./python /vast/python

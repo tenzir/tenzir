@@ -36,7 +36,7 @@ poetry run pytest
 Run the integrations tests via Docker Compose and pytest:
 
 ```bash
-docker compose -f "../docker/compose/vast.tests.yaml" up --build
+./docker-poetry-run.sh pytest -v
 ```
 
 ## Packaging

@@ -3,7 +3,8 @@ services:
   thehive-app:
     build:
       context: ../..
-      dockerfile: docker/dev/app.Dockerfile
+      dockerfile: docker/dev/Dockerfile
+      target: vast-python-app
       args:
         - VAST_VERSION=${VAST_CONTAINER_REF:-latest}
         - VAST_CONTAINER_REGISTRY=${VAST_CONTAINER_REGISTRY:-docker.io}
