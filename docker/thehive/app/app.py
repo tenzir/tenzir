@@ -20,11 +20,6 @@ THEHIVE_ORGADMIN_PWD = os.environ["DEFAULT_ORGADMIN_PWD"]
 THEHIVE_URL = os.environ["THEHIVE_URL"]
 BACKFILL_LIMIT = int(os.environ["BACKFILL_LIMIT"])
 
-# An in memory cache of the event refs that where already sent to TheHive This
-# helps limiting the amount of unnecessary calls to the API when dealing with
-# duplicates
-SENT_ALERT_REFS = set()
-
 
 async def call_thehive(
     path: str,
@@ -125,9 +120,6 @@ async def on_suricata_alert(alert: dict):
     logger.debug(f"Resulting TheHive alert: {thehive_alert}")
 
     ref = thehive_alert["sourceRef"]
-    if ref in SENT_ALERT_REFS:
-        logger.debug(f"Alert with hash {ref} skipped")
-        return
     try:
         await call_thehive("/api/v1/alert", thehive_alert)
         logger.debug(f"Alert with hash {ref} ingested")
@@ -136,7 +128,6 @@ async def on_suricata_alert(alert: dict):
             logger.debug(f"Alert with hash {ref} not ingested (error 400)")
         else:
             raise e
-    SENT_ALERT_REFS.add(ref)
 
 
 async def run_async():
