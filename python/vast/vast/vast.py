@@ -124,7 +124,9 @@ class VAST:
                 logger.debug(f"[export-{id}] {line.decode().strip()}")
             logger.debug(f"[export-{id}] Stop logging")
 
-        # TODO: don't use default thread pool here as it won't scale
+        # TODO: don't use default thread pool here as this method
+        # will block one thread per running export, risking exhaustion of
+        # the pool if we run many in parallel.
         t = asyncio.create_task(asyncio.to_thread(log))
 
         try:
@@ -138,7 +140,13 @@ class VAST:
             if isinstance(e, pa.ArrowInvalid):
                 logger.debug("completed processing stream of record batches")
             else:
+                # Use SIGKILL as we are already in an unexpected error state, so
+                # there is no point in trying a graceful exit.
                 proc.kill()
+                # We set a timeout to make sure that we don't hang while tearing
+                # down the logging task. The duration of 3s is arbitrary and is
+                # expected to be more than enough for the logger task to
+                # complete.
                 await asyncio.wait_for(t, 3)
                 raise e
 

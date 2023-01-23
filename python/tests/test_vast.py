@@ -50,7 +50,8 @@ async def vast_import(expression: list[str]):
 
 
 def integration_data(path):
-    return f"../../vast/integration/data/{path}"
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    return f"{dir_path}/../../vast/integration/data/{path}"
 
 
 @pytest.mark.asyncio
