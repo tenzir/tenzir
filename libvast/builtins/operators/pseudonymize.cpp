@@ -201,8 +201,8 @@ public:
                                                       pipeline)),
       };
     }
-    const auto extractor_parser = extractor_list >> optional_ws
-                                  >> end_of_pipeline_operator;
+    const auto extractor_parser
+      = extractor_list >> optional_ws >> end_of_pipeline_operator;
     auto parsed_extractors = std::vector<std::string>{};
     if (!extractor_parser(f, l, parsed_extractors)) {
       return {

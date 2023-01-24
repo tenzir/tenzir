@@ -28,14 +28,10 @@ pipeline::parse(std::string name, std::string_view repr) {
   auto result = pipeline{std::move(name), {}};
   // plugin name parser
   using parsers::alnum, parsers::chr, parsers::space;
-  // '... | where <expr> | ...'
-  // '... | where <expr>'
-  //       ^ we start here
   const auto optional_ws = ignore(*space);
   const auto plugin_name_char_parser = alnum | chr{'-'};
   const auto plugin_name_parser = optional_ws >> +plugin_name_char_parser;
   while (!repr.empty()) {
-    // TODO: What characters are valid in plugin names? Should we restrict that?
     // 1. parse a single word as operator plugin name
     const auto* f = repr.begin();
     const auto* const l = repr.end();

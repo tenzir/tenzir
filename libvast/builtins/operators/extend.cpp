@@ -26,7 +26,8 @@ namespace {
 
 /// The parsed configuration.
 struct configuration {
-  static caf::expected<configuration> make(const record& config, bool reparse_values = true) {
+  static caf::expected<configuration>
+  make(const record& config, bool reparse_values = true) {
     if (config.size() != 1 || !config.contains("fields"))
       return caf::make_error(ec::invalid_configuration, "extend configuration "
                                                         "must contain only the "
