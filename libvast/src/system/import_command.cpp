@@ -84,8 +84,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
       // C++20: remove explicit 'importer' parameter passing.
       [&, importer = importer](const caf::down_msg& msg) {
         if (msg.source == importer) {
-          VAST_DEBUG("{} received DOWN from node importer",
-                     __PRETTY_FUNCTION__);
+          VAST_DEBUG("{} received DOWN from node importer {} {}",
+                     __PRETTY_FUNCTION__, msg.reason, msg.source);
           self->send_exit(src, caf::exit_reason::user_shutdown);
           err = ec::remote_node_down;
           stop = true;
