@@ -182,8 +182,8 @@ public:
     for (const auto& [key, data] : parsed_assignments) {
       fields_record[key] = data;
     }
-    config_record["fields"] = fields_record;
-    auto config = configuration::make(config_record, false);
+    config_record["fields"] = std::move(fields_record);
+    auto config = configuration::make(std::move(config_record), false);
     if (!config) {
       return {
         std::string_view{f, l},

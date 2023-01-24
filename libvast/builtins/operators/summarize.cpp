@@ -863,10 +863,10 @@ public:
         = (output)
             ? *output
             : fmt::format("{}({})", function_name, fmt::join(arguments, ","));
-      config.aggregations.push_back(new_aggregation);
+      config.aggregations.push_back(std::move(new_aggregation));
     }
-    config.group_by_extractors = std::get<1>(parsed_aggregations);
-    config.time_resolution = std::get<2>(parsed_aggregations);
+    config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
+    config.time_resolution = std::move(std::get<2>(parsed_aggregations));
 
     return {
       std::string_view{f, l},

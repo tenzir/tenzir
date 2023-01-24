@@ -215,7 +215,7 @@ public:
       };
     }
     auto config = configuration{};
-    config.fields = parsed_extractors;
+    config.fields = std::move(parsed_extractors);
     for (const auto& [key, value] : parsed_options) {
       auto value_str = caf::get_if<std::string>(&value);
       if (!value_str) {
