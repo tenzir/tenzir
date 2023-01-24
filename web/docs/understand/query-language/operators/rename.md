@@ -22,3 +22,14 @@ rename:
     - from: src_ip
       to: source_address
 ```
+
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+rename NEW=EXTRACTOR[, …]
+```
+### Example
+```
+rename my.connection=:suricata.flow, source_port=src_port, source_address=src_ip
+```

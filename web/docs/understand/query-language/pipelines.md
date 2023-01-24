@@ -54,3 +54,20 @@ that execute in sequential order.
 Please consult the [section on data transformation](/docs/use/transform) on
 where you can deploy pipelines today. Have a look at [all available
 operators](operators) to better understand what you can do with the data.
+
+## Launch pipelines dynamically (experimental)
+
+As an alternative to configuration file-based pipelines, the `export` command
+supports launching a dynamically defined pipeline. The command will
+provide the beginning dataset in this case.
+
+This dynamic pipeline is an optional string parameter, with operators chained
+by the `|` delimiter, for example:
+
+```
+export json 'select timestamp, flow_id, src_ip, dest_ip, src_port | drop timestamp'
+```
+
+Have a look at [all available operators](operators) for more details about the
+respective pipeline operator string syntax. Please note that this feature is
+experimental and the syntax may be subject to change.

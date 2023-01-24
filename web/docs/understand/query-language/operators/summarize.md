@@ -101,3 +101,13 @@ summarize:
         - src_ip
         - dest_ip
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+summarize AGGREGATION()[, …] by FIELD[, …] [resolution DURATION]
+```
+### Example
+```
+summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute
+```

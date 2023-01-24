@@ -18,3 +18,13 @@ select:
     - ip
     - timestamp
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+select FIELD[, …]
+```
+### Example
+```
+select ip, timestamp
+```

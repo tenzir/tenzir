@@ -16,3 +16,13 @@ hash:
   out: pseudonym
   salt: "B3IwnumKPEJDAA4u"
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+hash --salt=[STRING] FIELD
+```
+### Example
+```
+hash --salt="B3IwnumKPEJDAA4u" username
+```

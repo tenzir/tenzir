@@ -24,3 +24,13 @@ pseudonymize:
     - ip_origin
     - ip_dest
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+pseudonymize [-m|--method=STRING] -s|--seed=STRING FIELD[, …]
+```
+### Example
+```
+pseudonymize --method="crypto-pan" --seed="deadbeef" ip_origin, ip_dest
+```
