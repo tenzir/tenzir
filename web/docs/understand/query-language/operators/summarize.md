@@ -105,9 +105,28 @@ summarize:
 ## Pipeline Operator String Syntax (Experimental)
 
 ```
-summarize AGGREGATION()[, …] by FIELD[, …] [resolution DURATION]
+summarize [STRING = ]AGGREGATION(EXTRACTOR[, …])[, …] by EXTRACTOR[, …] [resolution DURATION]
 ```
+
 ### Example
+
+Show all distinct `id.origin_port` values grouped by `id.origin_ip` values.
+
+```
+summarize distinct(id.origin_port) by id.origin_ip'
+```
+
+Show all distinct `id.origin_port` values grouped by `id.origin_ip` values in
+a field with the custom name `total_ports`.
+
+```
+summarize total_ports=distinct(id.origin_port) by id.origin_ip'
+```
+
+Show the result of `any(Initiated)` grouped by the `SourceIp, SourcePort,
+DestinationPoint` and `UtcTime` values, with an optional time resolution of one
+minute.
+
 ```
 summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute
 ```

@@ -62,11 +62,11 @@ supports launching a dynamically defined pipeline. The command will
 provide the beginning dataset in this case.
 
 This dynamic pipeline is an optional string parameter, with operators chained
-by the `|` delimiter, for example:
+by the `|` delimiter. This pipeline can be put after an expression so it will
+only be applied to the resulting dataset of that expression. For example:
 
-```
-export json 'select timestamp, flow_id, src_ip, dest_ip, src_port | drop timestamp'
-```
+`export json 'src_ip == 192.168.1.104 | select timestamp, flow_id, src_ip,
+dest_ip, src_port | drop timestamp'`
 
 Have a look at [all available operators](operators) for more details about the
 respective pipeline operator string syntax. Please note that this feature is

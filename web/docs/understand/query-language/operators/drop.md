@@ -27,9 +27,13 @@ drop:
 ## Pipeline Operator String Syntax (Experimental)
 
 ```
-drop FIELD/SCHEMA[, …]
+drop EXTRACTOR[, …]
 ```
+
 ### Example
+
+Drop the fields `source_ip` and `dest_ip`, and all schemas of type `suricata.dns`:
+
 ```
-drop source_ip, dest_ip, suricata.dns
+drop source_ip, dest_ip, :suricata.dns
 ```

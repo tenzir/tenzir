@@ -19,7 +19,11 @@ where:
 ```
 where EXPRESSION
 ```
+
 ### Example
+
+Evaluate the expression `dest_port == 53`.
+
 ```
 where dest_port == 53
 ```

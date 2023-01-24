@@ -22,9 +22,13 @@ select:
 ## Pipeline Operator String Syntax (Experimental)
 
 ```
-select FIELD[, …]
+select EXTRACTOR[, …]
 ```
+
 ### Example
+
+Keep the `ip` and `timestamp` fields.
+
 ```
 select ip, timestamp
 ```

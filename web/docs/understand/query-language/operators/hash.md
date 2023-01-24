@@ -20,9 +20,14 @@ hash:
 ## Pipeline Operator String Syntax (Experimental)
 
 ```
-hash --salt=[STRING] FIELD
+hash (-s|--salt=STRING) FIELD
 ```
+
 ### Example
+
+Hash all values of the field `username` using the salt value `"xxx"` and store
+the digest in a new field `username_hashed`:
+
 ```
 hash --salt="B3IwnumKPEJDAA4u" username
 ```
