@@ -14,7 +14,6 @@ where:
   expression: "dest_port == 53"
 ```
 
-
 ## Pipeline Operator String Syntax (Experimental)
 
 ```

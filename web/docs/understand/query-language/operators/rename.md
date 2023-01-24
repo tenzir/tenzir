@@ -23,7 +23,6 @@ rename:
       to: source_address
 ```
 
-
 ## Pipeline Operator String Syntax (Experimental)
 
 ```
