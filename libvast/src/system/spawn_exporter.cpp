@@ -54,11 +54,11 @@ parse_arguments(const std::vector<std::string>& args) {
   const auto optional_ws = ignore(*space);
   bool has_expr = true;
   if (!expr(f, l, parsed_expr)) {
-    VAST_WARN("failed to parse expr from '{}'", repr);
+    VAST_DEBUG("failed to parse expr from '{}'", repr);
     parsed_expr = match_everything;
     has_expr = false;
   }
-  VAST_WARN("parsed expr = {}", parsed_expr);
+  VAST_DEBUG("parsed expr = {}", parsed_expr);
   // <expr> | <pipeline>
   //       ^ we start here
   const auto has_no_pipeline_parser = optional_ws >> eoi;
@@ -85,7 +85,7 @@ parse_arguments(const std::vector<std::string>& args) {
                                        "'{}': {}",
                                        repr, parsed_pipeline.error()));
   }
-  VAST_WARN("parsed pipeline = {}", pipeline_repr);
+  VAST_DEBUG("parsed pipeline = {}", pipeline_repr);
   return std::pair{
     std::move(parsed_expr),
     std::move(*parsed_pipeline),
