@@ -381,18 +381,6 @@ store_plugin::make_store(system::accountant_actor accountant,
                                                  std::move(path), name());
 }
 
-// -- pipeline_operator_plugin -------------------------------------------------
-
-std::pair<std::string_view, caf::expected<std::unique_ptr<pipeline_operator>>>
-pipeline_operator_plugin::make_pipeline_operator(
-  std::string_view pipeline) const {
-  // FIXME: Remove default impl.
-  return {
-    pipeline,
-    caf::make_error(ec::unimplemented),
-  };
-}
-
 // -- plugin_ptr ---------------------------------------------------------------
 
 caf::expected<plugin_ptr>

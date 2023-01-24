@@ -261,7 +261,7 @@ public:
   /// @returns the remaining pipeline, and the parsed operator (or an error).
   [[nodiscard]] virtual std::pair<
     std::string_view, caf::expected<std::unique_ptr<pipeline_operator>>>
-  make_pipeline_operator(std::string_view pipeline) const;
+  make_pipeline_operator(std::string_view pipeline) const = 0;
 };
 
 // -- aggregation function plugin ---------------------------------------------
