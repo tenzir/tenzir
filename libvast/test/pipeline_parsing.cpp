@@ -225,7 +225,7 @@ TEST(pipeline string parsing - aggregators - multiple time resolution values) {
 
 TEST(pipeline string parsing - options - long form options) {
   std::string pipeline_str
-    = "pseudonymize --method=cryptopan --seed=deadbeef field";
+    = R"(pseudonymize --method = "cryptopan" --seed="deadbeef" field)";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline
     = vast::pipeline::parse("pseudonymize", pipeline_str_view);
@@ -234,7 +234,7 @@ TEST(pipeline string parsing - options - long form options) {
 
 TEST(pipeline string parsing - options - long form option - wrong space) {
   std::string pipeline_str
-    = "pseudonymize - -method=cryptopan --seed=deadbeef field";
+    = R"(pseudonymize - -method="cryptopan" --seed="deadbeef" field)";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline
     = vast::pipeline::parse("pseudonymize", pipeline_str_view);
@@ -244,7 +244,7 @@ TEST(pipeline string parsing - options - long form option - wrong space) {
 TEST(pipeline string parsing - options
      - long form options with comma in middle) {
   std::string pipeline_str
-    = "pseudonymize --method=crypto, pan --seed=deadbeef field";
+    = R"(pseudonymize --method="crypto", "pan" --seed="deadbeef" field)";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline
     = vast::pipeline::parse("pseudonymize", pipeline_str_view);
@@ -253,7 +253,7 @@ TEST(pipeline string parsing - options
 
 TEST(pipeline string parsing - options - long form options with comma at end) {
   std::string pipeline_str
-    = "pseudonymize --method=cryptopan --seed=deadbeef, field";
+    = R"(pseudonymize --method="cryptopan" --seed="deadbeef", field)";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline
     = vast::pipeline::parse("pseudonymize", pipeline_str_view);
@@ -270,7 +270,8 @@ TEST(pipeline string parsing - options - long form option with no key
 }
 
 TEST(pipeline string parsing - options - short form options) {
-  std::string pipeline_str = "pseudonymize -m cryptopan -s deadbeef field";
+  std::string pipeline_str
+    = R"(pseudonymize -m "cryptopan" -s "deadbeef" field)";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline
     = vast::pipeline::parse("pseudonymize", pipeline_str_view);
@@ -278,7 +279,7 @@ TEST(pipeline string parsing - options - short form options) {
 }
 
 TEST(pipeline string parsing - options - short form option - wrong space) {
-  std::string pipeline_str = "pseudonymize - m cryptopan field";
+  std::string pipeline_str = R"(pseudonymize - m "cryptopan" field)";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline
     = vast::pipeline::parse("pseudonymize", pipeline_str_view);
@@ -315,7 +316,7 @@ TEST(pipeline string parsing - options - short form option
 TEST(pipeline string parsing - options
      - short form options with long form options) {
   std::string pipeline_str
-    = "pseudonymize -D 10s  --method=cryptopan -s deadbeef field";
+    = R"(pseudonymize --method="cryptopan" -s "deadbeef" field)";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline
     = vast::pipeline::parse("pseudonymize", pipeline_str_view);
@@ -340,8 +341,7 @@ TEST(pipeline string parsing - options - operator with wrong long form option) {
 }
 
 TEST(pipeline string parsing - value assignment - simple renaming) {
-  std::string pipeline_str
-    = R"(rename secret=xxx)";
+  std::string pipeline_str = R"(rename secret=xxx)";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("rename", pipeline_str_view);
   REQUIRE(parsed_pipeline);
@@ -372,7 +372,7 @@ TEST(pipeline string parsing - value assignment - no comma) {
 
 TEST(pipeline string parsing - value assignment - comma at end) {
   std::string pipeline_str
-    = R"(rename secret="xxx", my.connection =:suricata.flow, int= 2, strs = ["a", "b", "c"], )";
+    = R"(rename secret="xxx", my.connection =suricata.flow, int= 2, strs = ["a", "b", "c"], )";
   std::string_view pipeline_str_view = pipeline_str;
   auto parsed_pipeline = vast::pipeline::parse("rename", pipeline_str_view);
   REQUIRE(!parsed_pipeline);

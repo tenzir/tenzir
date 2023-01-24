@@ -10,7 +10,8 @@
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/core.hpp>
-#include <vast/concept/parseable/string/char_class.hpp>
+#include <vast/concept/parseable/vast/option_set.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
@@ -158,45 +159,14 @@ public:
   [[nodiscard]] std::pair<std::string_view,
                           caf::expected<std::unique_ptr<pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
-    auto short_form_options = std::map<std::string, std::string>{};
-    auto long_form_options = std::map<std::string, std::string>{};
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    using parsers::space, parsers::eoi, parsers::alnum, parsers::alpha,
-      parsers::chr;
-    using namespace parser_literals;
-    const auto required_ws = ignore(+space);
-    const auto optional_ws = ignore(*space);
-
-    auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
-    auto extractor
-      = (!('-'_p) >> (+extractor_char % '.'))
-          .then([](std::vector<std::string> in) {
-            return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
-          });
-    auto short_form_option_key = (alpha);
-    auto long_form_option_key = ('-'_p) >> (+alpha);
-    auto option_value = ((!'-'_p) >> (+extractor_char));
-    auto short_form_option
-      = (short_form_option_key >> (+space) >> option_value)
-          .then([&short_form_options](std::string in) {
-            auto split_options = detail::split(in, " ");
-            short_form_options[std::string{split_options.front()}]
-              = split_options.back();
-            return in;
-          });
-    auto long_form_option
-      = (long_form_option_key >> optional_ws >> chr{'='} >> optional_ws
-         >> option_value)
-          .then([&long_form_options](std::string in) {
-            auto split_options = detail::split(in, "=");
-            long_form_options[std::string{split_options.front()}]
-              = split_options.back();
-            return in;
-          });
-    auto option = ('-') >> (short_form_option | long_form_option);
-    const auto option_parser = (required_ws >> (option % (required_ws)));
-    if (!option_parser(f, l, unused)) {
+    const auto options = option_set_parser{{{"salt", 's'}}};
+    const auto option_parser = (required_ws >> options);
+    auto parsed_options = std::unordered_map<std::string, data>{};
+    if (!option_parser(f, l, parsed_options)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse hash "
@@ -204,9 +174,8 @@ public:
                                                       pipeline)),
       };
     }
-    const auto extractor_parser = optional_ws
-                                  >> (extractor % (',' >> optional_ws))
-                                  >> optional_ws >> ('|' | eoi);
+    const auto extractor_parser = optional_ws >> extractor_list >> optional_ws
+                                  >> end_of_pipeline_operator;
     auto parsed_extractors = std::vector<std::string>{};
     if (!extractor_parser(f, l, parsed_extractors)) {
       return {
@@ -220,10 +189,22 @@ public:
     auto config = configuration{};
     config.field = parsed_extractors.front();
     config.out = parsed_extractors.front() + "_hashed";
-    if (!short_form_options["s"].empty()) {
-      config.salt = short_form_options["s"];
-    } else if (!long_form_options["salt"].empty()) {
-      config.salt = long_form_options["salt"];
+    for (const auto& [key, value] : parsed_options) {
+      auto value_str = caf::get_if<std::string>(&value);
+      if (!value_str) {
+        return {
+          std::string_view{f, l},
+          caf::make_error(ec::syntax_error, fmt::format("invalid option value "
+                                                        "string for "
+                                                        "pseudonymize "
+                                                        "operator: "
+                                                        "'{}'",
+                                                        value)),
+        };
+      }
+      if (key == "s" || key == "salt") {
+        config.salt = *value_str;
+      }
     }
     return {
       std::string_view{f, l},

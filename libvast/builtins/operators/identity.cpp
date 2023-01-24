@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/concept/parseable/string/char_class.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/logger.hpp>
 #include <vast/pipeline.hpp>
@@ -60,14 +61,10 @@ public:
   [[nodiscard]] std::pair<std::string_view,
                           caf::expected<std::unique_ptr<pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
-    // '... | identity | ...'
-    // '... | identity'
-    //                ^ we start here
+    using parsers::optional_ws, parsers::end_of_pipeline_operator;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    using parsers::space, parsers::eoi;
-    const auto optional_ws = ignore(*space);
-    const auto p = optional_ws >> ('|' | eoi);
+    const auto p = optional_ws >> end_of_pipeline_operator;
     if (!p(f, l, unused)) {
       return {
         std::string_view{f, l},

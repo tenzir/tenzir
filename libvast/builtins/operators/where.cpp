@@ -11,6 +11,7 @@
 #include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/expression.hpp>
 #include <vast/logger.hpp>
@@ -132,15 +133,12 @@ public:
   [[nodiscard]] std::pair<std::string_view,
                           caf::expected<std::unique_ptr<pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
-    // '... | where <expr> | ...'
-    // '... | where <expr>'
-    //             ^ we start here
+    using parsers::optional_ws, parsers::required_ws,
+      parsers::end_of_pipeline_operator, parsers::expr;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    using parsers::space, parsers::eoi, parsers::expr;
-    const auto required_ws = ignore(+space);
-    const auto optional_ws = ignore(*space);
-    const auto p = required_ws >> expr >> optional_ws >> ('|' | eoi);
+    const auto p
+      = required_ws >> expr >> optional_ws >> end_of_pipeline_operator;
     auto parse_result = expression{};
     if (!p(f, l, parse_result)) {
       return {

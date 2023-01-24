@@ -13,6 +13,7 @@
 #include "vast/concept/parseable/core/plus.hpp"
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 
 #include <fmt/format.h>
 
@@ -33,7 +34,11 @@ const inline auto extractor_list
 const inline auto extractor_assignment
   = (extractor >> optional_ws >> '=' >> optional_ws >> extractor);
 const inline auto extractor_assignment_list
-  = (extractor_assignment % (',' >> optional_ws));
+  = (extractor_assignment % (optional_ws >> ',' >> optional_ws));
+const inline auto extractor_value_assignment
+  = (extractor >> optional_ws >> '=' >> optional_ws >> data);
+const inline auto extractor_value_assignment_list
+  = (extractor_value_assignment % (optional_ws >> ',' >> optional_ws));
 constexpr inline auto aggregation_func_char = alnum | chr{'-'};
 const inline auto aggregation_function
   = -(extractor >> optional_ws >> '=' >> optional_ws)

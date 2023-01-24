@@ -12,7 +12,7 @@
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/core.hpp>
-#include <vast/concept/parseable/string/char_class.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
 #include <vast/pipeline.hpp>
@@ -823,35 +823,17 @@ public:
   [[nodiscard]] std::pair<std::string_view,
                           caf::expected<std::unique_ptr<pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::duration, parsers::extractor_list,
+      parsers::aggregation_function_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    using parsers::space, parsers::eoi, parsers::alnum, parsers::chr, parsers::duration;
-    using namespace parser_literals;
-    const auto required_ws = ignore(+space);
-    const auto optional_ws = ignore(*space);
-    auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
-    auto aggregation_func_char = alnum | chr{'-'};
-    // An extractor cannot start with:
-    //  - '-' to leave room for potential arithmetic expressions in operands
-    auto extractor
-      = (!('-'_p) >> (+extractor_char % '.'))
-          .then([](std::vector<std::string> in) {
-            return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
-          });
-
-    auto extractor_list = (extractor % (optional_ws >> ',' >> optional_ws));
-    auto aggregation_function
-      = -(extractor >> optional_ws >> '=' >> optional_ws)
-        >> (+aggregation_func_char) >> optional_ws >> '(' >> optional_ws
-        >> extractor_list >> optional_ws >> ')';
-    auto aggregation_function_list
-      = (aggregation_function % (',' >> optional_ws));
-
     const auto p = required_ws >> aggregation_function_list >> required_ws
                    >> ("by") >> required_ws >> extractor_list
                    >> -(required_ws >> "resolution" >> required_ws >> duration)
-                   >> optional_ws >> ('|' | eoi);
-    std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string, std::vector<std::string>>>,
+                   >> optional_ws >> end_of_pipeline_operator;
+    std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
+                                      std::vector<std::string>>>,
                std::vector<std::string>, std::optional<vast::duration>>
       parsed_aggregations{};
     if (!p(f, l, parsed_aggregations)) {
@@ -863,7 +845,8 @@ public:
       };
     }
     auto config = configuration{};
-    for (const auto& [output, function_name, arguments] : std::get<0>(parsed_aggregations)) {
+    for (const auto& [output, function_name, arguments] :
+         std::get<0>(parsed_aggregations)) {
       configuration::aggregation new_aggregation{};
       if (!plugins::find<aggregation_function_plugin>(function_name)) {
         return {
@@ -885,9 +868,9 @@ public:
     config.time_resolution = std::get<2>(parsed_aggregations);
 
     return {
-            std::string_view{f, l},
-            std::make_unique<summarize_operator>(std::move(config)),
-            };
+      std::string_view{f, l},
+      std::make_unique<summarize_operator>(std::move(config)),
+    };
   }
 };
 

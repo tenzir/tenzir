@@ -9,6 +9,7 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
@@ -159,24 +160,13 @@ public:
   [[nodiscard]] std::pair<std::string_view,
                           caf::expected<std::unique_ptr<pipeline_operator>>>
   make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::optional_ws, parsers::required_ws, parsers::data,
+      parsers::end_of_pipeline_operator,
+      parsers::extractor_value_assignment_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    using parsers::space, parsers::eoi, parsers::alnum, parsers::chr, parsers::data;
-    using namespace parser_literals;
-    const auto required_ws = ignore(+space);
-    const auto optional_ws = ignore(*space);
-    auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
-    // An extractor cannot start with:
-    //  - '-' to leave room for potential arithmetic expressions in operands
-    auto extractor
-      = (!('-'_p) >> (+extractor_char % '.'))
-          .then([](std::vector<std::string> in) {
-            return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
-          });
-    const auto p = required_ws
-                   >> ((extractor >> optional_ws >> '=' >> optional_ws
-                       >> data) % (optional_ws >> ',' >> optional_ws))
-                   >> optional_ws >> ('|' | eoi);
+    const auto p = required_ws >> extractor_value_assignment_list >> optional_ws
+                   >> end_of_pipeline_operator;
     std::vector<std::tuple<std::string, vast::data>> parsed_assignments;
     if (!p(f, l, parsed_assignments)) {
       return {
