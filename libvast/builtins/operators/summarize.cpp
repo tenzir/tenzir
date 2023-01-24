@@ -839,7 +839,7 @@ public:
     if (!p(f, l, parsed_aggregations)) {
       return {
         std::string_view{f, l},
-        caf::make_error(ec::syntax_error, fmt::format("failed to parse select "
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse summarize "
                                                       "operator: '{}'",
                                                       pipeline)),
       };
