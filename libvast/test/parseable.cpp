@@ -15,6 +15,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/ip.hpp"
 #include "vast/concept/parseable/vast/offset.hpp"
+#include "vast/concept/parseable/vast/option_set.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/detail/narrow.hpp"
