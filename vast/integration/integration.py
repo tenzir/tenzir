@@ -364,16 +364,19 @@ class Server:
         LOGGER.debug(f"stopping server fixture: {command}")
         stop_out = open(self.cwd / "stop.out", "w")
         stop_err = open(self.cwd / "stop.err", "w")
-        stop = 0
         try:
             stop = spawn(
                 command,
                 cwd=self.cwd,
                 stdout=stop_out,
                 stderr=stop_err,
-            ).wait(STEP_TIMEOUT)
+            )
+            stop.wait(STEP_TIMEOUT)
         except:
-            stop.kill()
+            pass
+        else:
+            if isinstance(stop, subprocess.Popen):
+                stop.kill()
         try:
             self.process.wait(STEP_TIMEOUT)
         except:
