@@ -18,7 +18,7 @@
 #include <fmt/format.h>
 
 namespace vast::parsers {
-using namespace parser_literals;
+
 constexpr inline auto required_ws = ignore(+space);
 constexpr inline auto optional_ws = ignore(*space);
 constexpr inline auto end_of_pipeline_operator = ('|' | eoi);
@@ -26,9 +26,10 @@ constexpr inline auto extractor_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
 // An extractor cannot start with:
 //  - '-' to leave room for potential arithmetic expressions in operands
 const inline auto extractor
-  = (!('-'_p) >> (+extractor_char % '.')).then([](std::vector<std::string> in) {
-      return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
-    });
+  = (!(chr{'-'}) >> (+extractor_char % '.'))
+      .then([](std::vector<std::string> in) {
+        return fmt::to_string(fmt::join(in.begin(), in.end(), "."));
+      });
 const inline auto extractor_list
   = (extractor % (optional_ws >> ',' >> optional_ws));
 const inline auto extractor_assignment
@@ -46,4 +47,5 @@ const inline auto aggregation_function
     >> extractor_list >> optional_ws >> ')';
 const inline auto aggregation_function_list
   = (aggregation_function % (',' >> optional_ws));
+
 } // namespace vast::parsers

@@ -17,7 +17,6 @@
 #include <algorithm>
 
 namespace vast {
-using namespace parser_literals;
 
 struct option_set_parser : parser_base<option_set_parser> {
   using attribute = std::unordered_map<std::string, data>;
