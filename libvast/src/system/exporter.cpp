@@ -220,9 +220,10 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   VAST_DEBUG("spawned exporter with {} pipelines", pipelines.size());
   self->state.pipeline = pipeline_executor{std::move(pipelines)};
   if (auto err = self->state.pipeline.validate(
-        pipeline_executor::allow_aggregate_pipelines::no)) {
-    VAST_WARN("exporter received aggregation pipelines - this may currently "
-              "cause unstable behavior but pipelines will be applied");
+        pipeline_executor::allow_aggregate_pipelines::yes)) {
+    VAST_ERROR("Received invalid pipeline: {}", err);
+    self->quit();
+    return exporter_actor::behavior_type::make_empty_behavior();
   }
   if (has_continuous_option(options))
     VAST_DEBUG("{} has continuous query option", *self);
