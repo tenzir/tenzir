@@ -38,13 +38,13 @@ struct option_set_parser : parser_base<option_set_parser> {
 
 private:
   static bool consume_space(auto& f, const auto& l) {
-    constexpr auto space_consumer = ignore(+parsers::space);
+    constexpr auto space_consumer = ignore(+whitespace);
     return space_consumer(f, l, unused);
   }
   template <class Attribute>
   bool parse_short_form(auto& f, const auto& l, Attribute& x) const {
     static constexpr auto short_form_parser
-      = '-' >> (parsers::alpha) >> ignore(+parsers::space) >> parsers::data;
+      = '-' >> (parsers::alpha) >> ignore(+whitespace) >> parsers::data;
     auto short_form_opt = std::tuple<char, vast::data>{};
     auto f_previous = f;
     if (short_form_parser(f_previous, l, short_form_opt)) {
@@ -66,8 +66,8 @@ private:
   template <class Attribute>
   bool parse_long_form(auto& f, const auto& l, Attribute& x) const {
     static const auto parser = "--" >> +(parsers::alpha)
-                               >> ignore(*parsers::space) >> '='
-                               >> ignore(*parsers::space) >> parsers::data;
+                               >> ignore(*whitespace) >> '='
+                               >> ignore(*whitespace) >> parsers::data;
     auto long_form_opt = std::tuple<std::string, vast::data>{};
     auto f_copy = f;
     if (parser(f_copy, l, long_form_opt)) {
@@ -88,6 +88,7 @@ private:
   }
 
 private:
+  static constexpr auto whitespace = parsers::blank;
   std::vector<std::pair<std::string, char>> defined_options_;
 };
 
