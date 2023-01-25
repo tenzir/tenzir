@@ -46,7 +46,7 @@ private:
   template <class Attribute>
   bool parse_short_form(auto& f, const auto& l, Attribute& x) const {
     static constexpr auto short_form_key_parser = '-' >> (parsers::alpha);
-    char short_form_opt;
+    auto short_form_opt = char{};
     auto f_previous = f;
     if (short_form_key_parser(f_previous, l, short_form_opt)) {
       vast::data data_out;
