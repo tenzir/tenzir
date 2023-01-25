@@ -122,7 +122,9 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   // Mark the query as low priority if explicitly requested.
   if (get_or(args.inv.options, "vast.export.low-priority", false))
     query_opts = query_opts + low_priority;
-  auto handle = self->spawn(exporter, expr, query_opts, std::move(*pipelines));
+  auto max_events = get_or(args.inv.options, "vast.export.max-events",
+                           defaults::export_::max_events);
+  auto handle = self->spawn(exporter, expr, query_opts, max_events, std::move(*pipelines));
   VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
   // Wire the exporter to all components.
   auto [accountant, importer, index]
@@ -146,8 +148,6 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     self->send(handle, atom::set_v, index);
   }
   // Setting max-events to 0 means infinite.
-  auto max_events = get_or(args.inv.options, "vast.export.max-events",
-                           defaults::export_::max_events);
   if (max_events > 0)
     self->send(handle, atom::extract_v, static_cast<uint64_t>(max_events));
   else

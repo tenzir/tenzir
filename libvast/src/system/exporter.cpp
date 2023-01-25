@@ -200,7 +200,16 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<pipeline>&& pipelines) {
+         query_options options, unsigned long export_max_events,
+         std::vector<pipeline>&& pipelines) {
+  if (!pipelines.empty() && export_max_events > 0) {
+    VAST_ERROR("Using pipelines is currently incompatible with "
+               "vast.export.max-events "
+               "option value {}",
+               export_max_events);
+    self->quit();
+    return exporter_actor::behavior_type::make_empty_behavior();
+  }
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,

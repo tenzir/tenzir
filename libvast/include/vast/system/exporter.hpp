@@ -85,6 +85,7 @@ struct exporter_state {
 /// @param pipelines The applied pipelines.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<pipeline>&& pipelines);
+         query_options options, unsigned long export_max_events,
+         std::vector<pipeline>&& pipelines);
 
 } // namespace vast::system
