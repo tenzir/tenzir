@@ -293,6 +293,7 @@ target_compile_options(
             -Wextra
             -pedantic
             -Werror=switch
+            -Werror=odr
             -Wundef
             $<$<CONFIG:CI>:-Werror
             # Never treat deprecation warnings as errors.

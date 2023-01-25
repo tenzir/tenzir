@@ -9,15 +9,11 @@
 #include "vast/arrow_table_slice.hpp"
 
 #include "vast/config.hpp"
-#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/detail/passthrough.hpp"
-#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/value_index.hpp"
@@ -32,26 +28,6 @@
 #include <utility>
 
 namespace vast {
-
-auto values(const type& type,
-            const std::same_as<arrow::Array> auto& array) noexcept
-  -> detail::generator<data_view> {
-  const auto f = []<concrete_type Type>(
-                   const Type& type,
-                   const arrow::Array& array) -> detail::generator<data_view> {
-    for (auto&& result :
-         values(type, caf::get<type_to_arrow_array_t<Type>>(array))) {
-      if (!result)
-        co_yield {};
-      else
-        co_yield std::move(*result);
-    }
-  };
-  return caf::visit(f, type, detail::passthrough(array));
-}
-
-template auto values(const type& type, const arrow::Array& array) noexcept
-  -> detail::generator<data_view>;
 
 // -- utility for converting Buffer to RecordBatch -----------------------------
 
