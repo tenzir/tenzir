@@ -610,7 +610,7 @@ def run(args, test_dec):
                 test_result = Result.FAILURE
                 for i in range(0, args.repetitions):
                     test_result = tester.run(name, definition)
-                    if test_result is Result.TIMEOUT:
+                    if test_result is not Result.SUCCESS:
                         if i < args.repetitions - 1:
                             # Try again.
                             LOGGER.warning(
@@ -680,8 +680,8 @@ def main():
         "-r",
         "--repetitions",
         type=int,
-        default=3,
-        help="Repeat count for tests that timed out",
+        default=10,
+        help="Number of repetitions for failed tests",
     )
     parser.add_argument(
         "-l",
