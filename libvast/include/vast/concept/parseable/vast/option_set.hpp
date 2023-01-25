@@ -24,8 +24,11 @@ struct option_set_parser : parser_base<option_set_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     while (!parsers::eoi(f, l, unused)) {
-      auto success = parse_short_form(f, l, x) || parse_long_form(f, l, x);
-      if (!success || !consume_space(f, l)) {
+      auto success = parse_short_form(f, l, x) && parse_long_form(f, l, x);
+      if (!success) {
+        return false;
+      }
+      if (!consume_space(f, l)) {
         break;
       }
     }
@@ -43,51 +46,57 @@ private:
   }
   template <class Attribute>
   bool parse_short_form(auto& f, const auto& l, Attribute& x) const {
-    static constexpr auto short_form_parser
-      = '-' >> (parsers::alpha) >> ignore(+whitespace) >> parsers::data;
-    auto short_form_opt = std::tuple<char, vast::data>{};
+    static constexpr auto short_form_key_parser = '-' >> (parsers::alpha);
+    char short_form_opt;
     auto f_previous = f;
-    if (short_form_parser(f_previous, l, short_form_opt)) {
+    if (short_form_key_parser(f_previous, l, short_form_opt)) {
+      vast::data data_out;
+      auto short_form_data_parser = ignore(+whitespace) >> parsers::data;
+      if (!short_form_data_parser(f_previous, l, data_out)) {
+        return false;
+      }
       auto found
         = std::find_if(defined_options_.begin(), defined_options_.end(),
                        [&short_form_opt](const auto& pair) {
-                         return std::get<0>(short_form_opt) == pair.second;
+                         return short_form_opt == pair.second;
                        });
       if (found != defined_options_.end()) {
         if constexpr (!std::is_same_v<Attribute, unused_type>) {
-          x[std::move(found->first)] = std::move(std::get<1>(short_form_opt));
+          x[std::move(found->first)] = std::move(data_out);
         }
         f = f_previous;
         return true;
       }
     }
-    return false;
+    return true;
   }
   template <class Attribute>
   bool parse_long_form(auto& f, const auto& l, Attribute& x) const {
-    static const auto parser = "--" >> +(parsers::alpha)
-                               >> ignore(*whitespace) >> '='
-                               >> ignore(*whitespace) >> parsers::data;
-    auto long_form_opt = std::tuple<std::string, vast::data>{};
-    auto f_copy = f;
-    if (parser(f_copy, l, long_form_opt)) {
+    static const auto long_form_key_parser = "--" >> +(parsers::alpha);
+    auto long_form_opt_key = std::string{};
+    auto f_previous = f;
+    if (long_form_key_parser(f_previous, l, long_form_opt_key)) {
+      vast::data data_out;
+      auto long_form_data_parser
+        = ignore(*whitespace) >> '=' >> ignore(*whitespace) >> parsers::data;
+      if (!long_form_data_parser(f_previous, l, data_out)) {
+        return false;
+      }
       auto found
         = std::find_if(defined_options_.begin(), defined_options_.end(),
-                       [&long_form_opt](const auto& pair) {
-                         return std::get<0>(long_form_opt) == pair.first;
+                       [&long_form_opt_key](const auto& pair) {
+                         return long_form_opt_key == pair.first;
                        });
       if (found != defined_options_.end()) {
         if constexpr (!std::is_same_v<Attribute, unused_type>) {
-          x[std::move(found->first)] = std::move(std::get<1>(long_form_opt));
+          x[std::move(found->first)] = std::move(data_out);
         }
-        f = f_copy;
+        f = f_previous;
         return true;
       }
     }
-    return false;
+    return true;
   }
-
-private:
   static constexpr auto whitespace = parsers::blank;
   std::vector<std::pair<std::string, char>> defined_options_;
 };
