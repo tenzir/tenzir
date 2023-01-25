@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/passthrough.hpp"
 #include "vast/table_slice.hpp"
 
 #include <arrow/array.h>
@@ -320,6 +321,23 @@ auto values(const Type& type, const type_to_arrow_array_t<Type>& arr) noexcept
   } else {
     return impl(type, arr);
   }
+}
+
+auto values(const type& type,
+            const std::same_as<arrow::Array> auto& array) noexcept
+  -> detail::generator<data_view> {
+  const auto f = []<concrete_type Type>(
+                   const Type& type,
+                   const arrow::Array& array) -> detail::generator<data_view> {
+    for (auto&& result :
+         values(type, caf::get<type_to_arrow_array_t<Type>>(array))) {
+      if (!result)
+        co_yield {};
+      else
+        co_yield std::move(*result);
+    }
+  };
+  return caf::visit(f, type, detail::passthrough(array));
 }
 
 struct indexed_transformation {
