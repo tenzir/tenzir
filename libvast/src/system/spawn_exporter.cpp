@@ -124,7 +124,8 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     query_opts = query_opts + low_priority;
   auto max_events = get_or(args.inv.options, "vast.export.max-events",
                            defaults::export_::max_events);
-  auto handle = self->spawn(exporter, expr, query_opts, max_events, std::move(*pipelines));
+  auto handle = self->spawn(exporter, expr, query_opts, max_events,
+                            std::move(*pipelines));
   VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
   // Wire the exporter to all components.
   auto [accountant, importer, index]
