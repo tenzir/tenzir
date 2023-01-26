@@ -88,7 +88,7 @@ vast web generate-token
 
 For local testing and development, generating suitable certificates and tokens
 can be a hassle. For this scenario, you can start the server in [developer
-mode](#developer-mode) where it accepts plain HTTP connections are does not
+mode](#developer-mode) where it accepts plain HTTP connections and does not
 perform token authentication.
 
 ## TLS Modes
