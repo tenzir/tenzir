@@ -45,12 +45,10 @@
 #include "vast/system/spawn_counter.hpp"
 #include "vast/system/spawn_disk_monitor.hpp"
 #include "vast/system/spawn_eraser.hpp"
-#include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_exporter.hpp"
 #include "vast/system/spawn_importer.hpp"
 #include "vast/system/spawn_index.hpp"
 #include "vast/system/spawn_node.hpp"
-#include "vast/system/spawn_pivoter.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
 #include "vast/system/status.hpp"
@@ -382,11 +380,9 @@ auto make_component_factory() {
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
     {"spawn eraser", lift_component_factory<spawn_eraser>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
-    {"spawn explorer", lift_component_factory<spawn_explorer>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
     {"spawn index", lift_component_factory<spawn_index>()},
-    {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
     {"spawn source", lift_component_factory<spawn_source>()},
     {"spawn source arrow", lift_component_factory<spawn_source>()},
     {"spawn source csv", lift_component_factory<spawn_source>()},
