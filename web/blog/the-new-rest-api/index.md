@@ -1,15 +1,14 @@
 ---
-draft: true
 title: The New REST API
 authors: [lava, mavam]
-date: 2022-12-15
+date: 2023-01-26
 image: /img/rest-api-deployment-single.light.png
 tags: [frontend, rest, api, architecture]
 ---
 
-As of [v2.4](vast-v2.4), VAST comes officially with a new `web`
-[plugin][plugins] that provides a [REST API][rest-api]. The [API
-documentation](/api) describes the available endpoints also provides an
+As of [v2.4](/blog/vast-v2.4) VAST ships with a new `web` [plugin][plugins] that
+provides a [REST API][rest-api]. The [API documentation](/api) describes the
+available endpoints also provides an
 [OpenAPI](https://spec.openapis.org/oas/latest.html) spec for download. This
 blog post shows how we built the API and what you can do with it.
 
@@ -19,10 +18,20 @@ blog post shows how we built the API and what you can do with it.
 
 <!--truncate-->
 
-Two architectural features of VAST made it really easy to design the REST API:
+Why does VAST need a REST API? Two reasons:
 
-1. [Plugins][plugins]
-2. [Actors][actors]
+1. **Make it easy to integrate with VAST**. To date, the only interface to VAST
+   is the command line. This is great for testing and ad-hoc use cases, but to
+   make it easy for other tools to integrate with VAST, a REST API is the common
+   expectation.
+
+2. **Develop our own web frontend**. We are in the middle of building a
+   [Svelte](https://svelte.dev/) frontend that delivers a web-based experience
+   of interacting with VAST through the browser. This frontend interacts with
+   VAST through the REST API.
+
+Two architectural features of VAST made it really smooth to design the REST API:
+[Plugins][plugins] and [Actors][actors].
 
 First, VAST's plugin system offers a flexible extension mechanism to add
 additional functionality without bloating the core. Specifically, we chose
@@ -161,20 +170,18 @@ vast web server --mode=mtls
 ## Usage Examples
 
 Now that you know how we put the REST API together, let's look at some
-end-to-end examples. We built the REST API for two reasons::
+end-to-end examples.
 
-1. Enable third parties to integrate with VAST
-2. Develop our own web frontend
+### See what's inside VAST
 
-We'll conclude this blog post with few examples that show how you can use the
-REST API.
+One straightforward example is checking the number of records in VAST:
 
-One straightforward example is checking the number of events inside the database:
-```(bash)
-$ curl "https://vast.example.org:42001/api/v0/status?verbosity=detailed" \
-    | jq .index.statistics
+```bash
+curl "https://vast.example.org:42001/api/v0/status?verbosity=detailed" \
+  | jq .index.statistics
 ```
-```(json)
+
+```json
 {
   "events": {
     "total": 8462
@@ -186,17 +193,26 @@ $ curl "https://vast.example.org:42001/api/v0/status?verbosity=detailed" \
     }
   }
 }
-
 ```
 
-The `/status` endpoint can also be used as a http health check in `docker-compose`:
-```
+:::caution Status changes in v3.0
+In the upcoming v3.0 release, the statistics under the key `.index.statistics`
+will move to `.catalog`. This change is already merged into the master branch.
+Consult the [status key reference](/docs/setup/monitor#reference) for details.
+:::
+
+### Perform a HTTP health check
+
+The `/status` endpoint can also be used as a HTTP health check in
+`docker-compose`:
+
+```yaml
 version: '3.4'
 services:
   web:
-    image: tenzir/vast:
+    image: tenzir/vast
     environment:
-      - "VAST_START__COMMANDS=['web server --mode=dev']"
+      - "VAST_START__COMMANDS=web server --mode=dev"
     ports:
       - "42001:42001"
     healthcheck:
@@ -207,13 +223,17 @@ services:
       timeout: 10s
 ```
 
+### Run a query
+
 The other initial endpoints can be used to get data out of VAST. For example, to
 get up to two `zeek.conn` events which connect to the subnet `192.168.0.0/16`, using
 the VAST query expression `net.src.ip in 192.168.0.0/16`:
+
+```bash
+curl "http://127.0.0.1:42001/api/v0/export?limit=2&expression=net.src.ip%20in%20192.168.0.0%2f16"
 ```
-$ curl "http://127.0.0.1:42001/api/v0/export?limit=2&expression=net.src.ip%20in%20192.168.0.0%2f16"
-```
-```(json)
+
+```json
 {
   "version": "v2.4.0-457-gb35c25d88a",
   "num_events": 2,
@@ -266,32 +286,82 @@ $ curl "http://127.0.0.1:42001/api/v0/export?limit=2&expression=net.src.ip%20in%
 }
 ```
 
-Note that when using curl, all request parameters need to be properly urlencoded. This can be cumbersome
-for the `expression` and `pipeline` parameters, so we also provide an `/export` POST endpoint that accepts
-parameters in a JSON body. The next example shows how to use POST requests from curl.
+Note that when using `curl`, all request parameters need to be properly
+urlencoded. This can be cumbersome for the `expression` and `pipeline`
+parameters, so we also provide an `/export` POST endpoint that accepts
+parameters in the JSON body. The next example shows how to use POST requests
+from curl. It also uses the `/query` endpoint instead of `/export` to get
+results iteratively instead of a one-shot result. The cost for this is having to
+make two API calls instead of one:
 
-It also uses the `/query` endpoint instead of `/export` to get results iteratively
-instead of a one-shot result. The cost for this is having to make two API calls instead
-of one:
-
-```(bash)
-$ curl -XPOST -H"Content-Type: application/json" -d'{"expression": "udp"}' http://127.0.0.1:42001/api/v0/query/new
+```bash
+curl -XPOST -H"Content-Type: application/json" -d'{"expression": "udp"}' http://127.0.0.1:42001/api/v0/query/new
 ```
-```(json)
+
+```json
 {"id": "31cd0f6c-915f-448e-b64a-b5ab7aae2474"}
 ```
-```(bash)
-$ curl http://127.0.0.1:42001/api/v0/query/31cd0f6c-915f-448e-b64a-b5ab7aae2474/next?n=2
-```
-```(json)
-{"position": 0, "events": [
-{"ts": "2009-11-18T08:00:21.486539", "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": "163.82ms", "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []},
-{"ts": "2009-11-18T08:08:00.237253", "uid": "nkCxlvNN8pi", "id.orig_h": "192.168.1.103", "id.orig_p": 137, "id.resp_h": "192.168.1.255", "id.resp_p": 137, "proto": "udp", "service": "dns", "duration": "3.78s", "orig_bytes": 350, "resp_bytes": 0, "conn_state": "S0", "local_orig": null, "missed_bytes": 0, "history": "D", "orig_pkts": 7, "orig_ip_bytes": 546, "resp_pkts": 0, "resp_ip_bytes": 0, "tunnel_parents": []}]}
+
+```bash
+curl http://127.0.0.1:42001/api/v0/query/31cd0f6c-915f-448e-b64a-b5ab7aae2474/next?n=2 | jq
 ```
 
+```json
+{
+  "position": 0,
+  "events": [
+    {
+      "ts": "2009-11-18T08:00:21.486539",
+      "uid": "Pii6cUUq1v4",
+      "id.orig_h": "192.168.1.102",
+      "id.orig_p": 68,
+      "id.resp_h": "192.168.1.1",
+      "id.resp_p": 67,
+      "proto": "udp",
+      "service": null,
+      "duration": "163.82ms",
+      "orig_bytes": 301,
+      "resp_bytes": 300,
+      "conn_state": "SF",
+      "local_orig": null,
+      "missed_bytes": 0,
+      "history": "Dd",
+      "orig_pkts": 1,
+      "orig_ip_bytes": 329,
+      "resp_pkts": 1,
+      "resp_ip_bytes": 328,
+      "tunnel_parents": []
+    },
+    {
+      "ts": "2009-11-18T08:08:00.237253",
+      "uid": "nkCxlvNN8pi",
+      "id.orig_h": "192.168.1.103",
+      "id.orig_p": 137,
+      "id.resp_h": "192.168.1.255",
+      "id.resp_p": 137,
+      "proto": "udp",
+      "service": "dns",
+      "duration": "3.78s",
+      "orig_bytes": 350,
+      "resp_bytes": 0,
+      "conn_state": "S0",
+      "local_orig": null,
+      "missed_bytes": 0,
+      "history": "D",
+      "orig_pkts": 7,
+      "orig_ip_bytes": 546,
+      "resp_pkts": 0,
+      "resp_ip_bytes": 0,
+      "tunnel_parents": []
+    }
+  ]
+}
+```
 
-Please note that the `v0` API version is still considered experimental, and we make no
+:::note Still Experimental
+Please note that we consider the API version `v0` experimental, and we make no
 stability guarantees at the moment.
+:::
 
 As always, if you have any question on usage, swing by our [community
 Slack](http://slack.tenzir.com). Missing routes? Let us know so that we know
