@@ -8,6 +8,7 @@
 
 #include "vast/format/single_schema_reader.hpp"
 
+#include "vast/cast.hpp"
 #include "vast/error.hpp"
 #include "vast/factory.hpp"
 #include "vast/logger.hpp"
@@ -27,7 +28,8 @@ single_schema_reader::~single_schema_reader() {
   // nop
 }
 
-caf::error single_schema_reader::finish(consumer& f, caf::error result) {
+caf::error single_schema_reader::finish(consumer& f, caf::error result,
+                                        type cast_to_schema) {
   last_batch_sent_ = reader_clock::now();
   batch_events_ = 0;
   if (builder_ != nullptr && builder_->rows() > 0) {
@@ -35,6 +37,8 @@ caf::error single_schema_reader::finish(consumer& f, caf::error result) {
     // Override error in case we encounter an error in the builder.
     if (slice.encoding() == table_slice_encoding::none)
       return caf::make_error(ec::parse_error, "unable to finish current slice");
+    if (cast_to_schema)
+      slice = cast(std::move(slice), cast_to_schema);
     f(std::move(slice));
   }
   return result;

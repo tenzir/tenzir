@@ -28,8 +28,13 @@ protected:
   /// @param f Consumer for the finished slice.
   /// @param result Current status of the parent context, usually returned
   ///               unmodified.
+  /// @param cast_to_schema An optional schema to cast the resulting batches to.
   /// @returns `result`, unless any `finish()` call fails.
-  caf::error finish(consumer& f, caf::error result = caf::none);
+  /// @note The integration of casting into the finish function is far from a
+  /// clean abstraction; when converting reading events into a pipeline-based
+  /// operation, we should instead insert a "cast" operator into the pipeline.
+  caf::error
+  finish(consumer& f, caf::error result = caf::none, type cast_to_schema = {});
 
   /// Tries to create a new table slice builder from given schema.
   bool reset_builder(type schema);

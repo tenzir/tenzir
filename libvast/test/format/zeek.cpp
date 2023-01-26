@@ -294,11 +294,11 @@ TEST(zeek reader - schema enrichment) {
     })__";
   auto expected = unbox(to<module>(ref_module));
   auto zeek_conn = unbox(expected.find("zeek.custom"));
-  CHECK_EQUAL(slices[0].schema(), flatten(zeek_conn));
+  CHECK_EQUAL(slices[0].schema(), zeek_conn);
 }
 
-TEST(zeek reader - custom module) {
-  std::string custom_module = R"__(
+TEST(zeek reader - custom schema) {
+  std::string custom_schema = R"__(
     type port = count
     type timestamp = time
     type zeek.conn = record{
@@ -306,11 +306,10 @@ TEST(zeek reader - custom module) {
       uid: string #index=string, // clashing user attribute
       id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
       proto: string #foo=bar, // user attribute
-      service: uint64, // type mismatch
       community_id: string // not present in the data
     }
   )__";
-  auto mod = unbox(to<module>(custom_module));
+  auto mod = unbox(to<module>(custom_schema));
   using reader_type = format::zeek::reader;
   reader_type reader{caf::settings{}, std::make_unique<std::istringstream>(
                                         std::string{conn_log_100_events})};
@@ -321,32 +320,8 @@ TEST(zeek reader - custom module) {
   auto [err, num] = reader.read(20, 20, add_slice);
   CHECK_EQUAL(slices.size(), 1u);
   CHECK_EQUAL(slices[0].rows(), 20u);
-  std::string ref_module = R"__(
-    type port = count
-    type timestamp = time
-    type zeek.conn = record{
-      ts: timestamp #test,
-      uid: string #index=string,
-      id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
-      proto: string #foo=bar,
-      service: string,
-      duration: duration,
-      orig_bytes: uint64,
-      resp_bytes: uint64,
-      conn_state: string,
-      local_orig: bool,
-      //local_resp: bool,
-      missed_bytes: uint64,
-      history: string,
-      orig_pkts: uint64,
-      orig_ip_bytes: uint64,
-      resp_pkts: uint64,
-      resp_ip_bytes: uint64,
-      tunnel_parents: list<string>,
-    })__";
-  auto expected = unbox(to<module>(ref_module));
-  auto zeek_conn = unbox(expected.find("zeek.conn"));
-  CHECK_EQUAL(slices[0].schema(), flatten(zeek_conn));
+  auto zeek_conn = unbox(mod.find("zeek.conn"));
+  CHECK_EQUAL(slices[0].schema(), zeek_conn);
 }
 
 TEST(zeek reader - continous stream with partial slice) {

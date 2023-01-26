@@ -3,6 +3,12 @@
     "zeek.conn": {
       "record": [
         {
+          "_path": "string"
+        },
+        {
+          "_write_ts": "time"
+        },
+        {
           "ts": {
             "timestamp": "time"
           }
@@ -16,19 +22,27 @@
           }
         },
         {
-          "id.orig_h": "ip"
-        },
-        {
-          "id.orig_p": {
-            "port": "uint64"
-          }
-        },
-        {
-          "id.resp_h": "ip"
-        },
-        {
-          "id.resp_p": {
-            "port": "uint64"
+          "id": {
+            "zeek.conn_id": {
+              "record": [
+                {
+                  "orig_h": "ip"
+                },
+                {
+                  "orig_p": {
+                    "port": "uint64"
+                  }
+                },
+                {
+                  "resp_h": "ip"
+                },
+                {
+                  "resp_p": {
+                    "port": "uint64"
+                  }
+                }
+              ]
+            }
           }
         },
         {
@@ -53,6 +67,9 @@
           "local_orig": "bool"
         },
         {
+          "local_resp": "bool"
+        },
+        {
           "missed_bytes": "uint64"
         },
         {
@@ -74,6 +91,9 @@
           "tunnel_parents": {
             "list": "string"
           }
+        },
+        {
+          "community_id": "string"
         }
       ]
     }

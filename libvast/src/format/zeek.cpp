@@ -8,6 +8,7 @@
 
 #include "vast/format/zeek.hpp"
 
+#include "vast/cast.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -245,11 +246,12 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   // Loop until reaching EOF, a timeout, or the configured limit of records.
   while (produced < max_events) {
     if (lines_->done())
-      return finish(f, caf::make_error(ec::end_of_input, "input exhausted"));
+      return finish(f, caf::make_error(ec::end_of_input, "input exhausted"),
+                    output_schema_);
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
-      return finish(f, ec::timeout);
+      return finish(f, ec::timeout, output_schema_);
     }
     auto timed_out = next_line();
     if (timed_out)
@@ -263,7 +265,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       continue;
     } else if (line.starts_with("#separator")) {
       // We encountered a new log file.
-      if (auto err = finish(f))
+      if (auto err = finish(f, caf::none, output_schema_))
         return err;
       VAST_DEBUG("{} restarts with new log", detail::pretty_type_name(this));
       separator_.clear();
@@ -302,24 +304,28 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
         else if (is_empty(i))
           xs[i] = caf::get<record_type>(schema_).field(i).type.construct();
         else if (!parsers_[i](fields[i], xs[i]))
-          return finish(f, caf::make_error(ec::parse_error, "field", i, "line",
-                                           lines_->line_number(),
-                                           std::string{fields[i]}));
+          return finish(f,
+                        caf::make_error(ec::parse_error, "field", i, "line",
+                                        lines_->line_number(),
+                                        std::string{fields[i]}),
+                        output_schema_);
       }
       for (size_t i = 0; i < fields.size(); ++i) {
         if (!builder_->add(make_data_view(xs[i])))
-          return finish(f, caf::make_error(ec::type_clash, "field", i, "line",
-                                           lines_->line_number(),
-                                           std::string{fields[i]}));
+          return finish(f,
+                        caf::make_error(ec::type_clash, "field", i, "line",
+                                        lines_->line_number(),
+                                        std::string{fields[i]}),
+                        output_schema_);
       }
       if (builder_->rows() == max_slice_size)
-        if (auto err = finish(f))
+        if (auto err = finish(f, {}, output_schema_))
           return err;
       ++produced;
       ++batch_events_;
     }
   }
-  return finish(f);
+  return finish(f, {}, output_schema_);
 }
 
 // Parses a single header line a Zeek log. (Since parsing headers is not on the
@@ -416,35 +422,16 @@ caf::error reader::parse_header() {
   auto name = std::string{type_name_prefix} + path;
   // If a congruent type exists in the module, we give the type in the module
   // precedence.
+  output_schema_ = {};
   if (auto* t = module_.find(name)) {
-    const auto* r = caf::get_if<record_type>(t);
-    if (!r)
-      return caf::make_error(ec::format_error,
-                             "the zeek reader expects records for "
-                             "the top level types in the schema");
-    auto transformations = std::vector<record_type::transformation>{};
-    for (const auto& [schema_field, schema_index] : schema.leaves()) {
-      const auto key = schema.key(schema_index);
-      if (auto module_index = r->resolve_key(key)) {
-        const auto module_field = r->field(*module_index);
-        if (!congruent(module_field.type, schema_field.type))
-          VAST_WARN("{} encountered a type mismatch between the schema "
-                    "definition ({}) and the input data ({}",
-                    detail::pretty_type_name(this), module_field, schema_field);
-        else {
-          transformations.push_back({
-            schema_index,
-            record_type::assign({
-              {std::string{schema_field.name}, module_field.type},
-            }),
-          });
-        }
-      }
+    auto is_castable = can_cast(schema, *t);
+    if (!is_castable) {
+      VAST_WARN("zeek-reader ignores incompatible schema '{}' from schema "
+                "files: {}",
+                *t, is_castable.error());
+    } else {
+      output_schema_ = *t;
     }
-    auto transformed_schema = schema.transform(std::move(transformations));
-    // Cannot fail; we're not deleting any fields.
-    VAST_ASSERT(transformed_schema);
-    schema = std::move(*transformed_schema);
   }
   for (auto i = 0u; i < schema.num_fields(); ++i)
     VAST_DEBUG("{}       {}) {} : {}", detail::pretty_type_name(this), i,
