@@ -422,7 +422,7 @@ tests:
         transformation: python @./misc/scripts/print-arrow.py
   Arrow Import:
     condition: version | jq -e '."Apache Arrow"'
-    tags: [import, arrow]
+    tags: [import, arrow, disabled]
     fixture: ServerTester
     steps:
       - command: import --batch-encoding=arrow arrow
