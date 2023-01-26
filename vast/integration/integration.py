@@ -340,7 +340,14 @@ class Server:
         LOGGER.debug(f"starting server fixture: {command}")
         LOGGER.debug(f"waiting for port {self.port} to be available")
         if not wait.tcp.closed(self.port, timeout=5):
-            raise RuntimeError("Port is blocked by another process.\nAborting tests...")
+            LOGGER.warning(
+                f"Couldn't aquire port, attempting to kill lingering subprocesses"
+            )
+            signal_subprocs(signal.SIGKILL)
+            if not wait.tcp.closed(self.port, timeout=5):
+                raise RuntimeError(
+                    "Port is blocked by another process.\nAborting tests..."
+                )
         self.cwd.mkdir(parents=True)
         out = open(self.cwd / "out", "w")
         err = open(self.cwd / "err", "w")
@@ -364,16 +371,19 @@ class Server:
         LOGGER.debug(f"stopping server fixture: {command}")
         stop_out = open(self.cwd / "stop.out", "w")
         stop_err = open(self.cwd / "stop.err", "w")
-        stop = 0
         try:
             stop = spawn(
                 command,
                 cwd=self.cwd,
                 stdout=stop_out,
                 stderr=stop_err,
-            ).wait(STEP_TIMEOUT)
+            )
+            stop.wait(STEP_TIMEOUT)
         except:
-            stop.kill()
+            pass
+        else:
+            if isinstance(stop, subprocess.Popen):
+                stop.kill()
         try:
             self.process.wait(STEP_TIMEOUT)
         except:
@@ -610,7 +620,7 @@ def run(args, test_dec):
                 test_result = Result.FAILURE
                 for i in range(0, args.repetitions):
                     test_result = tester.run(name, definition)
-                    if test_result is Result.TIMEOUT:
+                    if test_result is not Result.SUCCESS:
                         if i < args.repetitions - 1:
                             # Try again.
                             LOGGER.warning(
@@ -680,8 +690,8 @@ def main():
         "-r",
         "--repetitions",
         type=int,
-        default=3,
-        help="Repeat count for tests that timed out",
+        default=10,
+        help="Number of repetitions for failed tests",
     )
     parser.add_argument(
         "-l",
