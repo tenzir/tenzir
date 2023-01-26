@@ -199,7 +199,7 @@ def empty(iterable):
 
 def is_non_deterministic(command):
     positionals = list(filter(lambda x: x[0] != "-", command))
-    return positionals[0] in {"export", "explore", "get", "pivot"}
+    return positionals[0] in {"export"}
 
 
 def run_step(
