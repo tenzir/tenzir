@@ -1,16 +1,15 @@
 import asyncio
-import datetime
+from datetime import datetime
 import hashlib
 import json
 import os
 import time
-from typing import Dict, Optional
+from typing import Optional
 
 import aiohttp
 import vast.utils.logging as logging
-from dateutil.parser import isoparse
 
-from vast import VAST, ExportMode
+from vast import VAST, ExportMode, to_json_rows
 
 logger = logging.get("vast.thehive.app")
 
@@ -19,15 +18,10 @@ THEHIVE_ORGADMIN_PWD = os.environ["DEFAULT_ORGADMIN_PWD"]
 THEHIVE_URL = os.environ["THEHIVE_URL"]
 BACKFILL_LIMIT = int(os.environ["BACKFILL_LIMIT"])
 
-# An in memory cache of the event refs that where already sent to TheHive This
-# helps limiting the amount of unnecessary calls to the API when dealing with
-# duplicates
-SENT_ALERT_REFS = set()
-
 
 async def call_thehive(
     path: str,
-    payload: Optional[Dict] = None,
+    payload: Optional[dict] = None,
 ) -> str:
     """Call a TheHive endpoint with basic auth"""
     path = f"{THEHIVE_URL}{path}"
@@ -48,7 +42,7 @@ async def call_thehive(
 async def wait_for_thehive(
     path: str,
     timeout: int,
-    payload: Optional[Dict] = None,
+    payload: Optional[dict] = None,
 ) -> str:
     """Call thehive repeatedly until timeout"""
     start = time.time()
@@ -62,13 +56,10 @@ async def wait_for_thehive(
             await asyncio.sleep(1)
 
 
-def suricata2thehive(event: Dict) -> Dict:
+def suricata2thehive(event: dict) -> dict:
     """Convert a Suricata alert event into a TheHive alert"""
-    # convert iso into epoch
-    sighted_time_iso = event.get("timestamp", datetime.datetime.now().isoformat())
-    sighted_time_ms = int(isoparse(sighted_time_iso).timestamp() * 1000)
+    sighted_time_iso = event.get("timestamp", datetime.now().isoformat())
     start_time_iso = event.get("flow", {}).get("timestamp", sighted_time_iso)
-    start_time_ms = int(isoparse(start_time_iso).timestamp() * 1000)
     alert = event.get("alert", {})
     # Severity is defined differently:
     # - in Suricata: 1-255 (usually 1-4), 1 being the highest
@@ -88,45 +79,42 @@ def suricata2thehive(event: Dict) -> Dict:
         "title": "Suricata Alert",
         "description": desc,
         "severity": severity,
-        "date": sighted_time_ms,
+        "date": sighted_time_iso,
         "tags": [],
         "observables": [
             {
                 "dataType": "ip",
                 "data": event["src_ip"],
                 "message": "Source IP",
-                "startDate": start_time_ms,
+                "startDate": start_time_iso,
                 "tags": [],
                 "ioc": False,
                 "sighted": True,
-                "sightedAt": sighted_time_ms,
+                "sightedAt": sighted_time_iso,
                 "ignoreSimilarity": False,
             },
             {
                 "dataType": "ip",
                 "data": event["dest_ip"],
                 "message": "Destination IP",
-                "startDate": start_time_ms,
+                "startDate": start_time_iso,
                 "tags": [],
                 "ioc": False,
                 "sighted": True,
-                "sightedAt": sighted_time_ms,
+                "sightedAt": sighted_time_iso,
                 "ignoreSimilarity": False,
             },
         ],
     }
 
 
-async def on_suricata_alert(alert: Dict):
+async def on_suricata_alert(alert: dict):
     global SENT_ALERT_REFS
     logger.debug(f"Received Suricata alert: {alert}")
     thehive_alert = suricata2thehive(alert)
     logger.debug(f"Resulting TheHive alert: {thehive_alert}")
 
     ref = thehive_alert["sourceRef"]
-    if ref in SENT_ALERT_REFS:
-        logger.debug(f"Alert with hash {ref} skipped")
-        return
     try:
         await call_thehive("/api/v1/alert", thehive_alert)
         logger.debug(f"Alert with hash {ref} ingested")
@@ -135,7 +123,6 @@ async def on_suricata_alert(alert: Dict):
             logger.debug(f"Alert with hash {ref} not ingested (error 400)")
         else:
             raise e
-    SENT_ALERT_REFS.add(ref)
 
 
 async def run_async():
@@ -144,13 +131,13 @@ async def run_async():
     expr = '#type == "suricata.alert"'
     # We don't use "UNIFIED" to specify a limit on the HISTORICAL backfill
     logger.info("Starting retro filling...")
-    hist_iter = VAST.export_rows(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)
-    async for alert in hist_iter:
-        await on_suricata_alert(alert)
+    hist_iter = VAST.export(expr, ExportMode.HISTORICAL, limit=BACKFILL_LIMIT)
+    async for row in to_json_rows(hist_iter):
+        await on_suricata_alert(row.data)
     logger.info("Starting live forwarding...")
-    cont_iter = VAST.export_rows(expr, ExportMode.CONTINUOUS)
-    async for alert in cont_iter:
-        await on_suricata_alert(alert)
+    cont_iter = VAST.export(expr, ExportMode.CONTINUOUS)
+    async for row in to_json_rows(cont_iter):
+        await on_suricata_alert(row.data)
 
 
 def run():

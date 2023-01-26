@@ -1,5 +1,5 @@
 import asyncio
-from typing import List
+import subprocess
 
 import vast.utils.logging
 
@@ -10,7 +10,7 @@ class CLI:
     """A command-line wrapper for the VAST executable."""
 
     @staticmethod
-    def arguments(**kwargs) -> List[str]:
+    def arguments(**kwargs) -> list[str]:
         result = []
         for k, v in kwargs.items():
             if v is True:
@@ -32,7 +32,7 @@ class CLI:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-        logger.debug(f"> vast {' '.join(self.args)}")
+        logger.debug(f"> {['vast', *self.args]}")
         if not stdin:
             return await run(*self.args, stdin=False)
         proc = await run(*self.args, stdin=True)
@@ -40,6 +40,26 @@ class CLI:
         # have to switch to a streaming approach.
         proc.stdin.write(str(stdin).encode())
         await proc.stdin.drain()
+        proc.stdin.close()
+        return proc
+
+    def sync_exec(self, stdin=False) -> subprocess.Popen:
+        def run(*args, stdin) -> subprocess.Popen:
+            return subprocess.Popen(
+                ["vast", *args],
+                stdin=subprocess.PIPE if stdin else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+        logger.debug(f"> {['vast', *self.args]}")
+        if not stdin:
+            return run(*self.args, stdin=False)
+        proc = run(*self.args, stdin=True)
+        # TODO: for large inputs, the buffering may be excessive here. We may
+        # have to switch to a streaming approach.
+        proc.stdin.write(str(stdin).encode())
+        proc.stdin.flush()
         proc.stdin.close()
         return proc
 

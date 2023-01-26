@@ -24,14 +24,26 @@ repository = "https://github.com/tenzir/vast"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-dynaconf = "^3.1"
+aiohttp = "^3.8"
 coloredlogs = "^15.0"
+dynaconf = "^3.1"
+numpy = "^1.21"
 pandas = "^1.5"
 pyarrow = "^10.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.2"
 pytest-asyncio = "^0.20.3"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto" # required for async fixtures
+
+[tool.poetry.extras]
+thehive = ["aiohttp"]
+
+[tool.poetry.scripts]
+app-thehive-run = { callable = "vast.apps.thehive:run", extras = ["thehive"] }
+app-thehive-count-alerts = { callable = "vast.apps.thehive:count_alerts", extras = ["thehive"] }
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

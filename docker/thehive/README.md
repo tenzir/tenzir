@@ -131,7 +131,6 @@ wget -O - -o /dev/null https://storage.googleapis.com/tenzir-public-data/malware
 
 > **Note** To avoid forwarding the same alert multiple times, we use the hash of
 > the connection timestamp and the flow id as `sourceRef` of the TheHive alert.
-> This fields is guarantied to be unique by TheHive. The app also maintains a
-> local cache of all the `sourceRef` values that it already tried to import.
+> This field is guarantied to be unique by TheHive.
 
 [cortex-analyzers-docs]: https://docs.thehive-project.org/cortex/
