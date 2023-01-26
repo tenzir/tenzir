@@ -72,15 +72,7 @@ struct Offset;
 
 // -- caf ----------------------------------------------------------------------
 
-// These are missing from <caf/fwd.hpp>.
-
 namespace caf {
-
-template <class>
-class inbound_stream_slot;
-
-template <class, class...>
-class outbound_stream_slot;
 
 // TODO CAF 0.19. Check if this already implemented by CAF itself.
 template <class Slot>
@@ -346,6 +338,7 @@ struct component_map;
 struct component_map_entry;
 struct component_state;
 struct component_state_map;
+struct connect_request;
 struct data_point;
 struct index_state;
 struct measurement;
@@ -423,6 +416,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::detail::stable_map<std::string, vast::data>))
   VAST_ADD_TYPE_ID((vast::detail::stable_map<vast::data, vast::data>))
 
+  VAST_ADD_TYPE_ID((vast::system::connect_request))
   VAST_ADD_TYPE_ID((vast::system::metrics_metadata))
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_cursor))

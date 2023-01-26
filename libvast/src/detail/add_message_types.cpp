@@ -33,6 +33,7 @@
 #include "vast/system/actors.hpp"
 #include "vast/system/catalog.hpp"
 #include "vast/system/component_registry.hpp"
+#include "vast/system/connect_request.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/query_cursor.hpp"
 #include "vast/system/query_status.hpp"
