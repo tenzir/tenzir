@@ -340,7 +340,14 @@ class Server:
         LOGGER.debug(f"starting server fixture: {command}")
         LOGGER.debug(f"waiting for port {self.port} to be available")
         if not wait.tcp.closed(self.port, timeout=5):
-            raise RuntimeError("Port is blocked by another process.\nAborting tests...")
+            LOGGER.warning(
+                f"Couldn't aquire port, attempting to kill lingering subprocesses"
+            )
+            signal_subprocs(signal.SIGKILL)
+            if not wait.tcp.closed(self.port, timeout=5):
+                raise RuntimeError(
+                    "Port is blocked by another process.\nAborting tests..."
+                )
         self.cwd.mkdir(parents=True)
         out = open(self.cwd / "out", "w")
         err = open(self.cwd / "err", "w")
