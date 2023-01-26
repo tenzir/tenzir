@@ -203,11 +203,11 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options, unsigned long export_max_events,
          std::vector<pipeline>&& pipelines) {
   if (!pipelines.empty() && export_max_events > 0) {
-    VAST_ERROR("Using pipelines is currently incompatible with "
-               "vast.export.max-events "
-               "option value {}",
-               export_max_events);
-    self->quit();
+    self->quit(caf::make_error(
+      ec::invalid_argument, fmt::format("{} is unable to use pipelines when "
+                                        "limiting events using "
+                                        "'vast.export.max-events' (set to {})",
+                                        *self, export_max_events)));
     return exporter_actor::behavior_type::make_empty_behavior();
   }
   auto normalized_expr = normalize_and_validate(std::move(expr));
@@ -230,8 +230,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   self->state.pipeline = pipeline_executor{std::move(pipelines)};
   if (auto err = self->state.pipeline.validate(
         pipeline_executor::allow_aggregate_pipelines::yes)) {
-    VAST_ERROR("Received invalid pipeline: {}", err);
-    self->quit();
+    self->quit(caf::make_error(
+      ec::invalid_argument,
+      fmt::format("{} received an invalid pipeline: {}", *self, err)));
     return exporter_actor::behavior_type::make_empty_behavior();
   }
   if (has_continuous_option(options))
