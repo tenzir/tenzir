@@ -38,9 +38,9 @@ spawn_counter(node_actor::stateful_pointer<node_state> self,
     return query_result.error();
   if (query_result->second) {
     return caf::make_error(ec::invalid_configuration,
-                           fmt::format("{} parsed a pipeline string which "
-                                       "should "
-                                       "be impossible",
+                           fmt::format("{} failed to spawn counter: the "
+                                       "provided query must not contain a "
+                                       "pipeline",
                                        *self));
   }
   auto expr = query_result->first;

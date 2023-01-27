@@ -37,9 +37,9 @@ spawn_pivoter(node_actor::stateful_pointer<node_state> self,
     return query_result_.error();
   if (query_result_->second) {
     return caf::make_error(ec::invalid_configuration,
-                           fmt::format("{} parsed a pipeline string which "
-                                       "should "
-                                       "be impossible",
+                           fmt::format("{} failed to spawn pivoter: the "
+                                       "provided query must not contain a "
+                                       "pipeline",
                                        *self));
   }
   expr = query_result_->first;

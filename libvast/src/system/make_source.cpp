@@ -148,9 +148,9 @@ make_source(caf::actor_system& sys, const std::string& format,
       return query_result.error();
     if (query_result->second) {
       return caf::make_error(ec::invalid_configuration,
-                             fmt::format("{} parsed a pipeline string which "
-                                         "should "
-                                         "be impossible",
+                             fmt::format("{} failed to make source: the "
+                                         "provided query must not contain a "
+                                         "pipeline",
                                          inv.full_name));
     }
     auto expr = query_result->first;
