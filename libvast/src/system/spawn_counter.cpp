@@ -17,7 +17,7 @@
 #include "vast/system/counter.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/node_control.hpp"
-#include "vast/system/spawn_arguments.hpp"
+#include "vast/system/parse_query.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>

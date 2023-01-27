@@ -18,8 +18,8 @@
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
+#include <vast/system/parse_query.hpp>
 #include <vast/system/query_cursor.hpp>
-#include <vast/system/spawn_arguments.hpp>
 #include <vast/table_slice.hpp>
 
 #include <caf/stateful_actor.hpp>

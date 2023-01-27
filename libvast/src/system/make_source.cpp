@@ -26,8 +26,8 @@
 #include "vast/module.hpp"
 #include "vast/optional.hpp"
 #include "vast/system/datagram_source.hpp"
+#include "vast/system/parse_query.hpp"
 #include "vast/system/source.hpp"
-#include "vast/system/spawn_arguments.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/io/middleman.hpp>

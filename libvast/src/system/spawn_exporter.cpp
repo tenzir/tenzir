@@ -19,6 +19,7 @@
 #include "vast/system/exporter.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/parse_query.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/transformer.hpp"
 
