@@ -137,6 +137,38 @@ struct cast_helper<Type, Type> {
 };
 
 template <>
+struct cast_helper<list_type, list_type> {
+  static auto
+  can_cast(const list_type& from_type, const list_type& to_type) noexcept
+    -> caf::expected<void> {
+    auto can_cast_value_types = cast_helper<type, type>::can_cast(
+      from_type.value_type(), to_type.value_type());
+    if (!can_cast_value_types)
+      return caf::make_error(ec::convert_error,
+                             fmt::format("cannot cast from '{}' to '{}': {}",
+                                         from_type, to_type,
+                                         can_cast_value_types.error()));
+    return {};
+  }
+
+  static auto cast(const list_type& from_type,
+                   std::shared_ptr<type_to_arrow_array_t<list_type>> from_array,
+                   const list_type& to_type) noexcept
+    -> std::shared_ptr<type_to_arrow_array_t<list_type>> {
+    VAST_ASSERT(can_cast(from_type, to_type));
+    if (from_type == to_type)
+      return from_array;
+    const auto offsets = from_array->offsets();
+    const auto cast_values = cast_helper<type, type>::cast(
+      from_type.value_type(), from_array->values(), to_type.value_type());
+    return type_to_arrow_array_t<list_type>::FromArrays(
+             *offsets, *cast_values, arrow::default_memory_pool(),
+             from_array->null_bitmap(), from_array->null_count())
+      .ValueOrDie();
+  }
+};
+
+template <>
 struct cast_helper<record_type, record_type> {
   static auto
   can_cast(const record_type& from_type, const record_type& to_type) noexcept
