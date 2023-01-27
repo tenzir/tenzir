@@ -13,7 +13,7 @@
 #include "vast/logger.hpp"
 #include "vast/pipeline.hpp"
 #include "vast/system/node.hpp"
-#include "vast/system/parse_query.hpp".hpp "
+#include "vast/system/parse_query.hpp"
 #include "vast/system/pivoter.hpp"
 
 #include <caf/event_based_actor.hpp>

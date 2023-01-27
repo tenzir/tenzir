@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/system/parse_query.hpp"
+
 #include "vast/detail/collect.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
