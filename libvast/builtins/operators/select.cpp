@@ -9,6 +9,7 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
@@ -107,6 +108,31 @@ public:
     if (!config)
       return config.error();
     return std::make_unique<select_operator>(std::move(*config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor, parsers::extractor_char,
+      parsers::extractor_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> extractor_list >> optional_ws
+                   >> end_of_pipeline_operator;
+    auto config = configuration{};
+    if (!p(f, l, config.fields)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse select "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<select_operator>(std::move(config)),
+    };
   }
 };
 

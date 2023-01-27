@@ -69,6 +69,19 @@ public:
   make_pipeline_operator(const vast::record&) const override {
     return std::make_unique<vast::plugins::example_pipeline_operator>();
   }
+
+  // This is called everytime a pipeline operator appears in a pipeline
+  // string, for example as part of the "vast export" command. The return
+  // value is the string_view of the pipeline that has to be parsed afterwards
+  // combined with either the operator or a parsing error.
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    return {
+      pipeline,
+      std::make_unique<vast::plugins::example_pipeline_operator>(),
+    };
+  }
 };
 
 } // namespace vast::plugins

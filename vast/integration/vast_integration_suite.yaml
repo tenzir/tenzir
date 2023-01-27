@@ -425,7 +425,7 @@ tests:
     tags: [import, arrow, disabled]
     fixture: ServerTester
     steps:
-      - command: import --batch-encoding=arrow arrow
+      - command: import -b --batch-encoding=arrow arrow
         # the input corresponds to conn.log.gz + eve.json (see above)
         input: data/suricata/arrow_ipc.bin
       - command: export -n 10 arrow '#type == "zeek.conn"'
@@ -579,6 +579,156 @@ tests:
       - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.alert"'
       - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.dns"'
       - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.fileinfo"'
+  Pipeline operator parsing everything but summarize:
+    tags: [server, client, import-export, transforms]
+    fixture: ServerTester
+    steps:
+      - command: import -b suricata
+        input: data/suricata/eve.json
+      - command: "export json 'identity'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list
+                               | replace new_list=2'"
+      - command: "export json 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list
+                               | replace new_list=2
+                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+  Pipeline operator parsing only summarize:
+    tags: [server, client, import-export, transforms]
+    fixture: ServerTester
+    steps:
+      - command: import -b -t sysmon.NetworkConnection json
+        input: data/json/sysmon.json
+      - command: export json 'summarize distinct(SourcePort) by SourceIp'
+      - command: export json 'summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute'
+      - command: export json 'summarize usercount=count(User), initiated=all(Initiated) by ProcessId'
+  Pipeline operator parsing after expression:
+    tags: [server, client, import-export, transforms]
+    fixture: ServerTester
+    steps:
+      - command: import -b suricata
+        input: data/suricata/eve.json
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list
+                               | replace new_list=2'"
+      - command: "export json 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list
+                               | replace new_list=2
+                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+  Pipeline operator summarize after expression:
+    tags: [server, client, import-export, transforms]
+    fixture: ServerTester
+    steps:
+      - command: import -b -t sysmon.NetworkConnection json
+        input: data/json/sysmon.json
+      - command: "export json 'SourcePort==56162 || SourcePort == 37156
+                               | summarize distinct(SourceIp) by SourcePort'"
 
   # TODO Reinstate negative test cases from compaction after story 31232 is completed
 

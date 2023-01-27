@@ -10,6 +10,9 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/core.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
+#include <vast/concept/parseable/vast/time.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
 #include <vast/pipeline.hpp>
@@ -815,6 +818,60 @@ public:
                     fmt::join(sections_to_reformat, "', '")));
     }
     return try_handle_deprecations(config, sections_to_reformat);
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::duration, parsers::extractor_list,
+      parsers::aggregation_function_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> aggregation_function_list >> required_ws
+                   >> ("by") >> required_ws >> extractor_list
+                   >> -(required_ws >> "resolution" >> required_ws >> duration)
+                   >> optional_ws >> end_of_pipeline_operator;
+    std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
+                                      std::vector<std::string>>>,
+               std::vector<std::string>, std::optional<vast::duration>>
+      parsed_aggregations{};
+    if (!p(f, l, parsed_aggregations)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "summarize "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto config = configuration{};
+    for (const auto& [output, function_name, arguments] :
+         std::get<0>(parsed_aggregations)) {
+      configuration::aggregation new_aggregation{};
+      if (!plugins::find<aggregation_function_plugin>(function_name)) {
+        return {
+          std::string_view{f, l},
+          caf::make_error(ec::syntax_error, fmt::format("invalid aggregation "
+                                                        "name: '{}'",
+                                                        function_name)),
+        };
+      }
+      new_aggregation.function_name = function_name;
+      new_aggregation.input_extractors = arguments;
+      new_aggregation.output
+        = (output)
+            ? *output
+            : fmt::format("{}({})", function_name, fmt::join(arguments, ","));
+      config.aggregations.push_back(std::move(new_aggregation));
+    }
+    config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
+    config.time_resolution = std::move(std::get<2>(parsed_aggregations));
+
+    return {
+      std::string_view{f, l},
+      std::make_unique<summarize_operator>(std::move(config)),
+    };
   }
 };
 

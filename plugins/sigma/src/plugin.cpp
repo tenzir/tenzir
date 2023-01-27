@@ -10,6 +10,7 @@
 
 #include <vast/data.hpp>
 #include <vast/error.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 
 #include <caf/error.hpp>
@@ -27,13 +28,18 @@ class plugin final : public virtual query_language_plugin {
     return "sigma";
   }
 
-  [[nodiscard]] caf::expected<expression>
+  [[nodiscard]] caf::expected<std::pair<expression, std::optional<pipeline>>>
   make_query(std::string_view query) const override {
-    if (auto yaml = from_yaml(query))
-      return parse_rule(*yaml);
-    else
+    if (auto yaml = from_yaml(query)) {
+      auto parsed = parse_rule(*yaml);
+      if (parsed) {
+        return std::pair{std::move(*parsed), std::optional<pipeline>{}};
+      }
+      return std::move(parsed.error());
+    } else {
       return caf::make_error(ec::invalid_query,
                              fmt::format("not a Sigma rule: {}", yaml.error()));
+    }
   }
 };
 

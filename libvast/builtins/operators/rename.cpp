@@ -11,6 +11,7 @@
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
@@ -168,6 +169,38 @@ public:
     if (!config)
       return config.error();
     return std::make_unique<rename_operator>(std::move(*config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor_assignment_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> extractor_assignment_list >> optional_ws
+                   >> end_of_pipeline_operator;
+    std::vector<std::tuple<std::string, std::string>> parsed_assignments;
+    if (!p(f, l, parsed_assignments)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto config = configuration{};
+    for (const auto& [to, from] : parsed_assignments) {
+      if (from.starts_with(':')) {
+        config.schemas.push_back({from.substr(1), to});
+      } else {
+        config.fields.push_back({from, to});
+      }
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<rename_operator>(std::move(config)),
+    };
   }
 };
 

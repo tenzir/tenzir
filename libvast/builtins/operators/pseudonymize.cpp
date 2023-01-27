@@ -11,6 +11,8 @@
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/concept/parseable/vast/option_set.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/ip.hpp>
 #include <vast/pipeline_operator.hpp>
@@ -178,6 +180,65 @@ public:
                              "contain a hexadecimal value");
     }
     return std::make_unique<pseudonymize_operator>(std::move(*config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor, parsers::extractor_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto options = option_set_parser{{{"method", 'm'}, {"seed", 's'}}};
+    const auto option_parser = required_ws >> options;
+    auto parsed_options = std::unordered_map<std::string, data>{};
+    if (!option_parser(f, l, parsed_options)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "pseudonymize "
+                                                      "operator options: '{}'",
+                                                      pipeline)),
+      };
+    }
+    const auto extractor_parser
+      = extractor_list >> optional_ws >> end_of_pipeline_operator;
+    auto parsed_extractors = std::vector<std::string>{};
+    if (!extractor_parser(f, l, parsed_extractors)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "pseudonymize "
+                                                      "operator extractor: "
+                                                      "'{}'",
+                                                      pipeline)),
+      };
+    }
+    auto config = configuration{};
+    config.fields = std::move(parsed_extractors);
+    for (const auto& [key, value] : parsed_options) {
+      auto value_str = caf::get_if<std::string>(&value);
+      if (!value_str) {
+        return {
+          std::string_view{f, l},
+          caf::make_error(ec::syntax_error, fmt::format("invalid option value "
+                                                        "string for "
+                                                        "pseudonymize "
+                                                        "operator: "
+                                                        "'{}'",
+                                                        value)),
+        };
+      }
+      if (key == "m" || key == "method") {
+        config.method = *value_str;
+      } else if (key == "s" || key == "seed") {
+        config.seed = *value_str;
+      }
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<pseudonymize_operator>(std::move(config)),
+    };
   }
 };
 

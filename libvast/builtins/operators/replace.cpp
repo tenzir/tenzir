@@ -9,6 +9,7 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
@@ -42,6 +43,7 @@ struct configuration {
   }
 
   std::unordered_map<std::string, data> extractor_to_value = {};
+  bool reparse_values{true};
 };
 
 /// The confguration bound to a specific schema.
@@ -57,7 +59,10 @@ struct bound_configuration {
       // The config parsing never produces all possible alternatives of the data
       // variant, e.g., addresses will be represented as strings. Because of
       // that we need to re-parse the data if it's a string.
-      auto reparsed_value = [](auto value) {
+      auto reparsed_value = [&config](auto value) {
+        if (!config.reparse_values) {
+          return value;
+        }
         const auto* str = caf::get_if<std::string>(&value);
         if (!str)
           return value;
@@ -180,6 +185,49 @@ public:
     if (!parsed_config)
       return parsed_config.error();
     return std::make_unique<replace_operator>(std::move(*parsed_config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor_value_assignment_list,
+      parsers::data;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> extractor_value_assignment_list >> optional_ws
+                   >> end_of_pipeline_operator;
+    std::vector<std::tuple<std::string, vast::data>> parsed_assignments;
+    if (!p(f, l, parsed_assignments)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    record config_record;
+    record fields_record;
+    for (const auto& [key, data] : parsed_assignments) {
+      fields_record[key] = data;
+    }
+    config_record["fields"] = std::move(fields_record);
+    auto config = configuration::make(std::move(config_record));
+    if (!config) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to generate "
+                                                      "configuration for "
+                                                      "extend "
+                                                      "operator: '{}'",
+                                                      config.error())),
+      };
+    }
+    config->reparse_values = false;
+    return {
+      std::string_view{f, l},
+      std::make_unique<replace_operator>(std::move(*config)),
+    };
   }
 };
 
