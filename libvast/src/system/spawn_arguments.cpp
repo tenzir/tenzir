@@ -18,6 +18,7 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 
 #include <caf/config_value.hpp>
@@ -31,7 +32,8 @@
 
 namespace vast::system {
 
-caf::expected<expression> parse_expression(const std::string& query) {
+caf::expected<std::pair<expression, std::optional<pipeline>>>
+parse_query(const std::string& query) {
   // Get all query languages, but make sure that VAST is at the front.
   // TODO: let the user choose exactly one language instead.
   auto query_languages = collect(plugins::get<query_language_plugin>());
@@ -42,35 +44,36 @@ caf::expected<expression> parse_expression(const std::string& query) {
     std::rotate(query_languages.begin(), it, it + 1);
   }
   for (const auto& query_language : query_languages) {
-    if (auto expr = query_language->make_query(query))
-      return expr;
+    if (auto query_result = query_language->make_query(query))
+      return query_result;
     else
       VAST_DEBUG("failed to parse query as {} language: {}",
-                 query_language->name(), expr.error());
+                 query_language->name(), query_result.error());
   }
   return caf::make_error(ec::syntax_error,
                          fmt::format("invalid query: {}", query));
 }
 
-caf::expected<expression>
-parse_expression(std::vector<std::string>::const_iterator begin,
-                 std::vector<std::string>::const_iterator end) {
+caf::expected<std::pair<expression, std::optional<pipeline>>>
+parse_query(std::vector<std::string>::const_iterator begin,
+            std::vector<std::string>::const_iterator end) {
   if (begin == end)
     return caf::make_error(ec::syntax_error, "no query expression given");
   auto query = detail::join(begin, end, " ");
-  return parse_expression(query);
+  return parse_query(query);
 }
 
-caf::expected<expression>
-parse_expression(const std::vector<std::string>& args) {
-  return parse_expression(args.begin(), args.end());
+caf::expected<std::pair<expression, std::optional<pipeline>>>
+parse_query(const std::vector<std::string>& args) {
+  return parse_query(args.begin(), args.end());
 }
 
-caf::expected<expression> parse_expression(const spawn_arguments& args) {
-  auto expr = system::parse_expression(args.inv.arguments);
-  if (!expr)
-    return expr.error();
-  return *expr;
+caf::expected<std::pair<expression, std::optional<pipeline>>>
+parse_query(const spawn_arguments& args) {
+  auto query_result = system::parse_query(args.inv.arguments);
+  if (!query_result)
+    return query_result.error();
+  return query_result;
 }
 
 caf::expected<std::optional<module>> read_module(const spawn_arguments& args) {

@@ -556,11 +556,12 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       } else {
         query_string = "#type != \"this_expression_matches_everything\"";
       }
-      auto expr = system::parse_expression(*query_string);
-      if (!expr)
+      auto query_result = system::parse_query(*query_string);
+      if (!query_result)
         return rq.response->abort(400, fmt::format("unparseable query: {}\n",
-                                                   expr.error()));
-      auto normalized_expr = normalize_and_validate(*expr);
+                                                   query_result.error()));
+      auto expr = query_result->first;
+      auto normalized_expr = normalize_and_validate(expr);
       if (!normalized_expr)
         return rq.response->abort(400, fmt::format("invalid query: {}\n",
                                                    normalized_expr.error()));

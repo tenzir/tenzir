@@ -6,8 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/concept/printable/to_string.hpp>
 #include <vast/error.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 
 namespace vast::plugins::vastql {
@@ -21,13 +24,63 @@ class plugin final : public virtual query_language_plugin {
     return "VASTQL";
   }
 
-  [[nodiscard]] caf::expected<expression>
+  [[nodiscard]] caf::expected<std::pair<expression, std::optional<pipeline>>>
   make_query(std::string_view query) const override {
-    auto result = expression{};
-    if (parsers::expr(query, result))
-      return result;
-    return caf::make_error(ec::invalid_query,
-                           fmt::format("not a valid query: '{}'", query));
+    static const auto match_everything = expression{predicate{
+      meta_extractor{meta_extractor::kind::type},
+      relational_operator::not_equal,
+      data{"this expression matches everything"},
+    }};
+    if (query.empty()) {
+      return std::pair{
+        match_everything,
+        std::optional<pipeline>{},
+      };
+    }
+    using parsers::blank, parsers::expr, parsers::eoi;
+    auto f = query.begin();
+    const auto l = query.end();
+    auto parsed_expr = expression{};
+    const auto optional_ws = ignore(*blank);
+    bool has_expr = true;
+    if (!expr(f, l, parsed_expr)) {
+      VAST_DEBUG("failed to parse expr from '{}'", query);
+      parsed_expr = match_everything;
+      has_expr = false;
+    }
+    VAST_DEBUG("parsed expr = {}", parsed_expr);
+    // <expr> | <pipeline>
+    //       ^ we start here
+    const auto has_no_pipeline_parser = optional_ws >> eoi;
+    if (has_no_pipeline_parser(f, l, unused)) {
+      return std::pair{
+        std::move(parsed_expr),
+        std::optional<pipeline>{},
+      };
+    }
+    if (has_expr) {
+      const auto has_pipeline_parser = optional_ws >> '|';
+      if (!has_pipeline_parser(f, l, unused)) {
+        return caf::make_error(ec::syntax_error,
+                               fmt::format("failed to parse "
+                                           "pipeline in query "
+                                           "'{}': missing pipe",
+                                           query));
+      }
+    }
+    const auto pipeline_query = std::string_view{f, l};
+    auto parsed_pipeline = pipeline::parse("export", pipeline_query);
+    if (!parsed_pipeline) {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("failed to parse pipeline in query "
+                                         "'{}': {}",
+                                         query, parsed_pipeline.error()));
+    }
+    VAST_DEBUG("parsed pipeline = {}", pipeline_query);
+    return std::pair{
+      std::move(parsed_expr),
+      std::move(*parsed_pipeline),
+    };
   }
 };
 

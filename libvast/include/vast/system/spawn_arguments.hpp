@@ -56,17 +56,19 @@ struct spawn_arguments {
 };
 
 /// Attempts to parse `query` as ::expression.
-caf::expected<expression> parse_expression(const std::string& query);
+caf::expected<std::pair<expression, std::optional<pipeline>>>
+parse_query(const std::string& query);
 
 /// Attempts to parse `[begin, end)` as ::expression.
-caf::expected<expression>
-parse_expression(std::vector<std::string>::const_iterator begin,
-                 std::vector<std::string>::const_iterator end);
+caf::expected<std::pair<expression, std::optional<pipeline>>>
+parse_query(std::vector<std::string>::const_iterator begin,
+            std::vector<std::string>::const_iterator end);
 
-caf::expected<expression>
-parse_expression(const std::vector<std::string>& args);
+caf::expected<std::pair<expression, std::optional<pipeline>>>
+parse_query(const std::vector<std::string>& args);
 
-caf::expected<expression> parse_expression(const spawn_arguments& args);
+caf::expected<std::pair<expression, std::optional<pipeline>>>
+parse_query(const spawn_arguments& args);
 
 /// Attemps to read a module file and parse its content. Can either 1) return
 /// nothing if the user didn't specifiy a module file in `args.options`, 2)

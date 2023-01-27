@@ -11,6 +11,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/pivoter.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -31,10 +32,17 @@ spawn_pivoter(node_actor::stateful_pointer<node_state> self,
   // Parse given expression.
   auto query_begin = std::next(arguments.begin());
   expression expr;
-  auto expr_ = system::parse_expression(query_begin, arguments.end());
-  if (!expr_)
-    return expr_.error();
-  expr = *expr_;
+  auto query_result_ = system::parse_query(query_begin, arguments.end());
+  if (!query_result_)
+    return query_result_.error();
+  if (query_result_->second) {
+    return caf::make_error(ec::invalid_configuration,
+                           fmt::format("{} parsed a pipeline string which "
+                                       "should "
+                                       "be impossible",
+                                       *self));
+  }
+  expr = query_result_->first;
   auto handle = self->spawn(pivoter, self, target_name, expr);
   VAST_VERBOSE("{} spawned a pivoter for {}", *self, to_string(expr));
   return handle;

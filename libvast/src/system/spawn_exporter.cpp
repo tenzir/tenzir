@@ -31,69 +31,6 @@
 
 namespace vast::system {
 
-namespace {
-
-caf::expected<std::pair<expression, std::optional<pipeline>>>
-parse_arguments(const std::vector<std::string>& args) {
-  static const auto match_everything = expression{predicate{
-    meta_extractor{meta_extractor::kind::type},
-    relational_operator::not_equal,
-    data{"this expression matches everything"},
-  }};
-  if (args.empty()) {
-    return std::pair{
-      match_everything,
-      std::optional<pipeline>{},
-    };
-  }
-  const auto repr = detail::join(args.begin(), args.end(), " ");
-  using parsers::blank, parsers::expr, parsers::eoi;
-  auto f = repr.begin();
-  const auto l = repr.end();
-  auto parsed_expr = expression{};
-  const auto optional_ws = ignore(*blank);
-  bool has_expr = true;
-  if (!expr(f, l, parsed_expr)) {
-    VAST_DEBUG("failed to parse expr from '{}'", repr);
-    parsed_expr = match_everything;
-    has_expr = false;
-  }
-  VAST_DEBUG("parsed expr = {}", parsed_expr);
-  // <expr> | <pipeline>
-  //       ^ we start here
-  const auto has_no_pipeline_parser = optional_ws >> eoi;
-  if (has_no_pipeline_parser(f, l, unused)) {
-    return std::pair{
-      std::move(parsed_expr),
-      std::optional<pipeline>{},
-    };
-  }
-  if (has_expr) {
-    const auto has_pipeline_parser = optional_ws >> '|';
-    if (!has_pipeline_parser(f, l, unused)) {
-      return caf::make_error(ec::syntax_error, fmt::format("failed to parse "
-                                                           "pipeline in query "
-                                                           "'{}': missing pipe",
-                                                           repr));
-    }
-  }
-  const auto pipeline_repr = std::string_view{f, l};
-  auto parsed_pipeline = pipeline::parse("export", pipeline_repr);
-  if (!parsed_pipeline) {
-    return caf::make_error(ec::syntax_error,
-                           fmt::format("failed to parse pipeline in query "
-                                       "'{}': {}",
-                                       repr, parsed_pipeline.error()));
-  }
-  VAST_DEBUG("parsed pipeline = {}", pipeline_repr);
-  return std::pair{
-    std::move(parsed_expr),
-    std::move(*parsed_pipeline),
-  };
-}
-
-} // namespace
-
 caf::expected<caf::actor>
 spawn_exporter(node_actor::stateful_pointer<node_state> self,
                spawn_arguments& args) {
@@ -103,8 +40,8 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     = make_pipelines(pipelines_location::server_export, args.inv.options);
   if (!pipelines)
     return pipelines.error();
-  // Parse given expression.
-  auto parse_result = parse_arguments(args.inv.arguments);
+  // Parse given query.
+  auto parse_result = system::parse_query(args.inv.arguments);
   if (!parse_result)
     return parse_result.error();
   auto [expr, pipeline] = std::move(*parse_result);
