@@ -3,12 +3,6 @@
     "zeek.conn": {
       "record": [
         {
-          "_path": "string"
-        },
-        {
-          "_write_ts": "time"
-        },
-        {
           "ts": {
             "timestamp": "time"
           }
@@ -94,6 +88,9 @@
         },
         {
           "community_id": "string"
+        },
+        {
+          "_write_ts": "time"
         }
       ]
     }

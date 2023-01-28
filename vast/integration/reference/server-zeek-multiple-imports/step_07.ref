@@ -1,7 +1,5 @@
 - zeek.dns:
     record:
-      - _path: string
-      - _write_ts: time
       - ts:
           timestamp: time
       - uid:
@@ -37,10 +35,9 @@
       - TTLs:
           list: duration
       - rejected: bool
+      - _write_ts: time
 - zeek.conn:
     record:
-      - _path: string
-      - _write_ts: time
       - ts:
           timestamp: time
       - uid:
@@ -73,3 +70,4 @@
       - tunnel_parents:
           list: string
       - community_id: string
+      - _write_ts: time

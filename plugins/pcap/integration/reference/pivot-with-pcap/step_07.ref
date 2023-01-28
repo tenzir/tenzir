@@ -1,12 +1,12 @@
 #empty_field	(empty)
-#fields	_path	_write_ts	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	community_id
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	community_id	_write_ts
 #path	conn
 #separator 	
 #set_separator	,
-#types	string	time	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	vector[string]	string
+#types	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	vector[string]	string	time
 #unset_field	-
--	-	1540889849.325075	C4xvGs2g6UWECwk2Rb	192.168.168.100	61206	72.247.178.18	80	tcp	http	115.721079	890	1736	SF	-	-	0	ShADadFf	19	1758	16	2576	-	1:aiB9ixqgqVUlxDucVgiCzPCos7A=
--	-	1540889849.325117	CUtqdo25al9U3RGVr3	192.168.168.100	61207	72.247.178.18	80	tcp	http	115.721076	445	868	SF	-	-	0	ShADadFf	17	1209	15	1656	-	1:JvzWHQdEF7h98wpzA1qPdP0/cAU=
--	-	1540889849.325145	CnDxlq40ITKKeEYTW3	192.168.168.100	61208	72.247.178.18	80	tcp	http	115.721008	445	868	SF	-	-	0	ShADadFf	17	1209	15	1656	-	1:yZL4x1ra1wearOeXlyhuOH+A1qE=
--	-	1540889849.325226	CcAj0Y2U8EU6iPHeW4	192.168.168.100	61209	72.247.178.18	80	tcp	http	115.720806	445	868	SF	-	-	0	ShADadFf	17	1209	15	1656	-	1:6vVq2GDCfUtz+oh2oh6y5sM8Q5M=
--	-	1540889849.346318	CpOjhd2G4wG4Ae8J6i	192.168.168.100	61210	72.247.178.18	80	tcp	-	5.0340250	0	0	SF	-	-	0	ShAFaf	4	220	3	164	-	1:XW8RnI0g5aEs7vhnOuehNkGD8H4=
+1540889849.325075	C4xvGs2g6UWECwk2Rb	192.168.168.100	61206	72.247.178.18	80	tcp	http	115.721079	890	1736	SF	-	-	0	ShADadFf	19	1758	16	2576	-	1:aiB9ixqgqVUlxDucVgiCzPCos7A=	-
+1540889849.325117	CUtqdo25al9U3RGVr3	192.168.168.100	61207	72.247.178.18	80	tcp	http	115.721076	445	868	SF	-	-	0	ShADadFf	17	1209	15	1656	-	1:JvzWHQdEF7h98wpzA1qPdP0/cAU=	-
+1540889849.325145	CnDxlq40ITKKeEYTW3	192.168.168.100	61208	72.247.178.18	80	tcp	http	115.721008	445	868	SF	-	-	0	ShADadFf	17	1209	15	1656	-	1:yZL4x1ra1wearOeXlyhuOH+A1qE=	-
+1540889849.325226	CcAj0Y2U8EU6iPHeW4	192.168.168.100	61209	72.247.178.18	80	tcp	http	115.720806	445	868	SF	-	-	0	ShADadFf	17	1209	15	1656	-	1:6vVq2GDCfUtz+oh2oh6y5sM8Q5M=	-
+1540889849.346318	CpOjhd2G4wG4Ae8J6i	192.168.168.100	61210	72.247.178.18	80	tcp	-	5.0340250	0	0	SF	-	-	0	ShAFaf	4	220	3	164	-	1:XW8RnI0g5aEs7vhnOuehNkGD8H4=	-

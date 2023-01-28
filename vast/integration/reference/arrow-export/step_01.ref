@@ -21,7 +21,6 @@
   child 3, resp_p: uint64
 -- schema metadata --
 VAST:name:0: 'zeek.conn'
-_path: string
 _write_ts: timestamp[ns]
 community_id: string
 conn_state: string

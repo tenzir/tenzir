@@ -3,14 +3,6 @@
     "name": "zeek.conn",
     "schema": [
       {
-        "name": "_path",
-        "type": "string"
-      },
-      {
-        "name": "_write_ts",
-        "type": "time"
-      },
-      {
         "name": "ts",
         "type": "timestamp"
       },
@@ -97,12 +89,14 @@
       {
         "name": "community_id",
         "type": "string"
+      },
+      {
+        "name": "_write_ts",
+        "type": "time"
       }
     ],
     "data": [
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:00:21.486539",
         "uid": "Pii6cUUq1v4",
         "id": {
@@ -126,11 +120,10 @@
         "resp_pkts": 1,
         "resp_ip_bytes": 328,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:08:00.237253",
         "uid": "nkCxlvNN8pi",
         "id": {
@@ -154,11 +147,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:08:13.816224",
         "uid": "9VdICMMnxQ7",
         "id": {
@@ -182,11 +174,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:07:15.800932",
         "uid": "bEgBnkI31Vf",
         "id": {
@@ -210,11 +201,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:08:13.825211",
         "uid": "Ol4qkvXOksc",
         "id": {
@@ -238,11 +228,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:10:03.872834",
         "uid": "kmnBNBtl96d",
         "id": {
@@ -266,11 +255,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:09:07.077011",
         "uid": "CFIX6YVTFp2",
         "id": {
@@ -294,11 +282,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:12:04.321413",
         "uid": "KlF6tbPUSQ1",
         "id": {
@@ -322,11 +309,10 @@
         "resp_pkts": 1,
         "resp_ip_bytes": 328,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:12:19.613070",
         "uid": "tP3DM6npTdj",
         "id": {
@@ -350,11 +336,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:14:06.693816",
         "uid": "Jb4jIDToo77",
         "id": {
@@ -378,11 +363,10 @@
         "resp_pkts": 1,
         "resp_ip_bytes": 328,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:15:43.457078",
         "uid": "xvWLhxgUmj5",
         "id": {
@@ -406,11 +390,10 @@
         "resp_pkts": 1,
         "resp_ip_bytes": 243,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:16:43.657267",
         "uid": "feNcvrZfDbf",
         "id": {
@@ -434,11 +417,10 @@
         "resp_pkts": 1,
         "resp_ip_bytes": 243,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:20:04.734263",
         "uid": "vLsf6ZHtak9",
         "id": {
@@ -462,11 +444,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:20:18.272516",
         "uid": "Su3RwTCaHL3",
         "id": {
@@ -490,11 +471,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:20:04.859430",
         "uid": "rPM1dfJKPmj",
         "id": {
@@ -518,11 +498,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:20:56.089023",
         "uid": "4x5ezf34Rkh",
         "id": {
@@ -546,11 +525,10 @@
         "resp_pkts": 1,
         "resp_ip_bytes": 525,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:20:18.281001",
         "uid": "mymcd8Veike",
         "id": {
@@ -574,11 +552,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:22:08.348891",
         "uid": "H3qLO3SV0j",
         "id": {
@@ -602,11 +579,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:22:08.357384",
         "uid": "rPqxmvEhfBb",
         "id": {
@@ -630,11 +606,10 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       },
       {
-        "_path": null,
-        "_write_ts": null,
         "ts": "2009-11-18T08:24:17.288676",
         "uid": "AbCe0UeHRD6",
         "id": {
@@ -658,7 +633,8 @@
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
         "tunnel_parents": [],
-        "community_id": null
+        "community_id": null,
+        "_write_ts": null
       }
     ]
   }
