@@ -251,6 +251,7 @@ private:
   std::string unset_field_;
   vast::module module_;
   type schema_;
+  type output_schema_;
   std::optional<size_t> proto_field_;
   std::vector<rule<iterator_type, data>> parsers_;
 };

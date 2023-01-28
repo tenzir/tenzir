@@ -51,7 +51,7 @@ MaxEmptyLinesToKeep: 1
 NamespaceIndentation: None
 PenaltyBreakAssignment: 0
 PenaltyBreakBeforeFirstCallParameter: 30
-PenaltyBreakString: 50
+PenaltyBreakString: 80
 PenaltyExcessCharacter: 100
 PenaltyReturnTypeOnItsOwnLine: 5
 PointerAlignment: Left

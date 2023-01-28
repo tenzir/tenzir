@@ -6,14 +6,18 @@
           type: string
           attributes:
             index: hash
-      - id.orig_h: ip
-      - id.orig_p:
-          port: uint64
-      - id.resp_h: ip
-      - id.resp_p:
-          port: uint64
+      - id:
+          zeek.conn_id:
+            record:
+              - orig_h: ip
+              - orig_p:
+                  port: uint64
+              - resp_h: ip
+              - resp_p:
+                  port: uint64
       - proto: string
       - trans_id: uint64
+      - rtt: duration
       - query: string
       - qclass: uint64
       - qclass_name: string
@@ -31,6 +35,7 @@
       - TTLs:
           list: duration
       - rejected: bool
+      - _write_ts: time
 - zeek.conn:
     record:
       - ts:
@@ -39,12 +44,15 @@
           type: string
           attributes:
             index: hash
-      - id.orig_h: ip
-      - id.orig_p:
-          port: uint64
-      - id.resp_h: ip
-      - id.resp_p:
-          port: uint64
+      - id:
+          zeek.conn_id:
+            record:
+              - orig_h: ip
+              - orig_p:
+                  port: uint64
+              - resp_h: ip
+              - resp_p:
+                  port: uint64
       - proto: string
       - service: string
       - duration: duration
@@ -52,6 +60,7 @@
       - resp_bytes: uint64
       - conn_state: string
       - local_orig: bool
+      - local_resp: bool
       - missed_bytes: uint64
       - history: string
       - orig_pkts: uint64
@@ -60,3 +69,5 @@
       - resp_ip_bytes: uint64
       - tunnel_parents:
           list: string
+      - community_id: string
+      - _write_ts: time

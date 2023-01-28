@@ -11,19 +11,19 @@
         "type": "string"
       },
       {
-        "name": "id.orig_h",
+        "name": "orig_h",
         "type": "ip"
       },
       {
-        "name": "id.orig_p",
+        "name": "orig_p",
         "type": "port"
       },
       {
-        "name": "id.resp_h",
+        "name": "resp_h",
         "type": "ip"
       },
       {
-        "name": "id.resp_p",
+        "name": "resp_p",
         "type": "port"
       },
       {
@@ -55,6 +55,10 @@
         "type": "bool"
       },
       {
+        "name": "local_resp",
+        "type": "bool"
+      },
+      {
         "name": "missed_bytes",
         "type": "uint64"
       },
@@ -81,16 +85,26 @@
       {
         "name": "tunnel_parents",
         "type": "list<string>"
+      },
+      {
+        "name": "community_id",
+        "type": "string"
+      },
+      {
+        "name": "_write_ts",
+        "type": "time"
       }
     ],
     "data": [
       {
         "ts": "2009-11-18T08:00:21.486539",
         "uid": "Pii6cUUq1v4",
-        "id.orig_h": "192.168.1.102",
-        "id.orig_p": 68,
-        "id.resp_h": "192.168.1.1",
-        "id.resp_p": 67,
+        "id": {
+          "orig_h": "192.168.1.102",
+          "orig_p": 68,
+          "resp_h": "192.168.1.1",
+          "resp_p": 67
+        },
         "proto": "udp",
         "service": null,
         "duration": "163.82ms",
@@ -98,21 +112,26 @@
         "resp_bytes": 300,
         "conn_state": "SF",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "Dd",
         "orig_pkts": 1,
         "orig_ip_bytes": 329,
         "resp_pkts": 1,
         "resp_ip_bytes": 328,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:08:00.237253",
         "uid": "nkCxlvNN8pi",
-        "id.orig_h": "192.168.1.103",
-        "id.orig_p": 137,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 137,
+        "id": {
+          "orig_h": "192.168.1.103",
+          "orig_p": 137,
+          "resp_h": "192.168.1.255",
+          "resp_p": 137
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "3.78s",
@@ -120,21 +139,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 7,
         "orig_ip_bytes": 546,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:08:13.816224",
         "uid": "9VdICMMnxQ7",
-        "id.orig_h": "192.168.1.102",
-        "id.orig_p": 137,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 137,
+        "id": {
+          "orig_h": "192.168.1.102",
+          "orig_p": 137,
+          "resp_h": "192.168.1.255",
+          "resp_p": 137
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "3.75s",
@@ -142,21 +166,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 7,
         "orig_ip_bytes": 546,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:07:15.800932",
         "uid": "bEgBnkI31Vf",
-        "id.orig_h": "192.168.1.103",
-        "id.orig_p": 138,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 138,
+        "id": {
+          "orig_h": "192.168.1.103",
+          "orig_p": 138,
+          "resp_h": "192.168.1.255",
+          "resp_p": 138
+        },
         "proto": "udp",
         "service": null,
         "duration": "46.73s",
@@ -164,21 +193,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 3,
         "orig_ip_bytes": 644,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:08:13.825211",
         "uid": "Ol4qkvXOksc",
-        "id.orig_h": "192.168.1.102",
-        "id.orig_p": 138,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 138,
+        "id": {
+          "orig_h": "192.168.1.102",
+          "orig_p": 138,
+          "resp_h": "192.168.1.255",
+          "resp_p": 138
+        },
         "proto": "udp",
         "service": null,
         "duration": "2.25s",
@@ -186,21 +220,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 2,
         "orig_ip_bytes": 404,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:10:03.872834",
         "uid": "kmnBNBtl96d",
-        "id.orig_h": "192.168.1.104",
-        "id.orig_p": 137,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 137,
+        "id": {
+          "orig_h": "192.168.1.104",
+          "orig_p": 137,
+          "resp_h": "192.168.1.255",
+          "resp_p": 137
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "3.75s",
@@ -208,21 +247,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 7,
         "orig_ip_bytes": 546,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:09:07.077011",
         "uid": "CFIX6YVTFp2",
-        "id.orig_h": "192.168.1.104",
-        "id.orig_p": 138,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 138,
+        "id": {
+          "orig_h": "192.168.1.104",
+          "orig_p": 138,
+          "resp_h": "192.168.1.255",
+          "resp_p": 138
+        },
         "proto": "udp",
         "service": null,
         "duration": "59.05s",
@@ -230,21 +274,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 3,
         "orig_ip_bytes": 633,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:12:04.321413",
         "uid": "KlF6tbPUSQ1",
-        "id.orig_h": "192.168.1.103",
-        "id.orig_p": 68,
-        "id.resp_h": "192.168.1.1",
-        "id.resp_p": 67,
+        "id": {
+          "orig_h": "192.168.1.103",
+          "orig_p": 68,
+          "resp_h": "192.168.1.1",
+          "resp_p": 67
+        },
         "proto": "udp",
         "service": null,
         "duration": "44.78ms",
@@ -252,21 +301,26 @@
         "resp_bytes": 300,
         "conn_state": "SF",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "Dd",
         "orig_pkts": 1,
         "orig_ip_bytes": 331,
         "resp_pkts": 1,
         "resp_ip_bytes": 328,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:12:19.613070",
         "uid": "tP3DM6npTdj",
-        "id.orig_h": "192.168.1.102",
-        "id.orig_p": 138,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 138,
+        "id": {
+          "orig_h": "192.168.1.102",
+          "orig_p": 138,
+          "resp_h": "192.168.1.255",
+          "resp_p": 138
+        },
         "proto": "udp",
         "service": null,
         "duration": null,
@@ -274,21 +328,26 @@
         "resp_bytes": null,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 1,
         "orig_ip_bytes": 229,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:14:06.693816",
         "uid": "Jb4jIDToo77",
-        "id.orig_h": "192.168.1.104",
-        "id.orig_p": 68,
-        "id.resp_h": "192.168.1.1",
-        "id.resp_p": 67,
+        "id": {
+          "orig_h": "192.168.1.104",
+          "orig_p": 68,
+          "resp_h": "192.168.1.1",
+          "resp_p": 67
+        },
         "proto": "udp",
         "service": null,
         "duration": "2.1ms",
@@ -296,21 +355,26 @@
         "resp_bytes": 300,
         "conn_state": "SF",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "Dd",
         "orig_pkts": 1,
         "orig_ip_bytes": 339,
         "resp_pkts": 1,
         "resp_ip_bytes": 328,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:15:43.457078",
         "uid": "xvWLhxgUmj5",
-        "id.orig_h": "192.168.1.102",
-        "id.orig_p": 1170,
-        "id.resp_h": "192.168.1.1",
-        "id.resp_p": 53,
+        "id": {
+          "orig_h": "192.168.1.102",
+          "orig_p": 1170,
+          "resp_h": "192.168.1.1",
+          "resp_p": 53
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "68.51ms",
@@ -318,21 +382,26 @@
         "resp_bytes": 215,
         "conn_state": "SF",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "Dd",
         "orig_pkts": 1,
         "orig_ip_bytes": 64,
         "resp_pkts": 1,
         "resp_ip_bytes": 243,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:16:43.657267",
         "uid": "feNcvrZfDbf",
-        "id.orig_h": "192.168.1.104",
-        "id.orig_p": 1174,
-        "id.resp_h": "192.168.1.1",
-        "id.resp_p": 53,
+        "id": {
+          "orig_h": "192.168.1.104",
+          "orig_p": 1174,
+          "resp_h": "192.168.1.1",
+          "resp_p": 53
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "170.96ms",
@@ -340,21 +409,26 @@
         "resp_bytes": 215,
         "conn_state": "SF",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "Dd",
         "orig_pkts": 1,
         "orig_ip_bytes": 64,
         "resp_pkts": 1,
         "resp_ip_bytes": 243,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:18:51.365294",
         "uid": "aLsTcZJHAwa",
-        "id.orig_h": "192.168.1.1",
-        "id.orig_p": 5353,
-        "id.resp_h": "224.0.0.251",
-        "id.resp_p": 5353,
+        "id": {
+          "orig_h": "192.168.1.1",
+          "orig_p": 5353,
+          "resp_h": "224.0.0.251",
+          "resp_p": 5353
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "100.38ms",
@@ -362,21 +436,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 2,
         "orig_ip_bytes": 329,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:18:51.365329",
         "uid": "EK79I6iD5gl",
-        "id.orig_h": "fe80::219:e3ff:fee7:5d23",
-        "id.orig_p": 5353,
-        "id.resp_h": "ff02::fb",
-        "id.resp_p": 5353,
+        "id": {
+          "orig_h": "fe80::219:e3ff:fee7:5d23",
+          "orig_p": 5353,
+          "resp_h": "ff02::fb",
+          "resp_p": 5353
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "100.37ms",
@@ -384,21 +463,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 2,
         "orig_ip_bytes": 369,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:20:04.734263",
         "uid": "vLsf6ZHtak9",
-        "id.orig_h": "192.168.1.103",
-        "id.orig_p": 137,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 137,
+        "id": {
+          "orig_h": "192.168.1.103",
+          "orig_p": 137,
+          "resp_h": "192.168.1.255",
+          "resp_p": 137
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "3.87s",
@@ -406,21 +490,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 7,
         "orig_ip_bytes": 546,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:20:18.272516",
         "uid": "Su3RwTCaHL3",
-        "id.orig_h": "192.168.1.102",
-        "id.orig_p": 137,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 137,
+        "id": {
+          "orig_h": "192.168.1.102",
+          "orig_p": 137,
+          "resp_h": "192.168.1.255",
+          "resp_p": 137
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "3.75s",
@@ -428,21 +517,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 7,
         "orig_ip_bytes": 546,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:20:04.859430",
         "uid": "rPM1dfJKPmj",
-        "id.orig_h": "192.168.1.103",
-        "id.orig_p": 138,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 138,
+        "id": {
+          "orig_h": "192.168.1.103",
+          "orig_p": 138,
+          "resp_h": "192.168.1.255",
+          "resp_p": 138
+        },
         "proto": "udp",
         "service": null,
         "duration": "2.26s",
@@ -450,21 +544,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 2,
         "orig_ip_bytes": 404,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:20:56.089023",
         "uid": "4x5ezf34Rkh",
-        "id.orig_h": "192.168.1.102",
-        "id.orig_p": 1173,
-        "id.resp_h": "192.168.1.1",
-        "id.resp_p": 53,
+        "id": {
+          "orig_h": "192.168.1.102",
+          "orig_p": 1173,
+          "resp_h": "192.168.1.1",
+          "resp_p": 53
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "267.0us",
@@ -472,21 +571,26 @@
         "resp_bytes": 497,
         "conn_state": "SF",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "Dd",
         "orig_pkts": 1,
         "orig_ip_bytes": 61,
         "resp_pkts": 1,
         "resp_ip_bytes": 525,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:20:18.281001",
         "uid": "mymcd8Veike",
-        "id.orig_h": "192.168.1.102",
-        "id.orig_p": 138,
-        "id.resp_h": "192.168.1.255",
-        "id.resp_p": 138,
+        "id": {
+          "orig_h": "192.168.1.102",
+          "orig_p": 138,
+          "resp_h": "192.168.1.255",
+          "resp_p": 138
+        },
         "proto": "udp",
         "service": null,
         "duration": "2.25s",
@@ -494,21 +598,26 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 2,
         "orig_ip_bytes": 404,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       },
       {
         "ts": "2009-11-18T08:22:05.592454",
         "uid": "07mJRfg5RU5",
-        "id.orig_h": "192.168.1.1",
-        "id.orig_p": 5353,
-        "id.resp_h": "224.0.0.251",
-        "id.resp_p": 5353,
+        "id": {
+          "orig_h": "192.168.1.1",
+          "orig_p": 5353,
+          "resp_h": "224.0.0.251",
+          "resp_p": 5353
+        },
         "proto": "udp",
         "service": "dns",
         "duration": "99.82ms",
@@ -516,13 +625,16 @@
         "resp_bytes": 0,
         "conn_state": "S0",
         "local_orig": null,
+        "local_resp": null,
         "missed_bytes": 0,
         "history": "D",
         "orig_pkts": 2,
         "orig_ip_bytes": 329,
         "resp_pkts": 0,
         "resp_ip_bytes": 0,
-        "tunnel_parents": []
+        "tunnel_parents": [],
+        "community_id": null,
+        "_write_ts": null
       }
     ]
   }
