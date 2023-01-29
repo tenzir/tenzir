@@ -76,7 +76,7 @@ available types. Each letter in a cell denotes a set of operators:
  **Bool** | E |  |  |  |  |  |  |  |  |  |  | M | M
  **Int64** |  | ER |  |  |  |  |  |  |  |  |  | M | M
  **UInt64** |  |  | ER |  |  |  |  |  |  |  |  | M | M
- **Real** |  |  |  | ER |  |  |  |  |  |  |  | M | M
+ **Double** |  |  |  | ER |  |  |  |  |  |  |  | M | M
  **Duration** |  |  |  |  | ER |  |  |  |  |  |  | M | M
  **Time** |  |  |  |  |  | ER |  |  |  |  |  | M | M
  **String** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
@@ -137,15 +137,15 @@ extractors work for all [basic
 types](/docs/understand/data-model/type-system) and user-defined aliases.
 
 A search for type `:T` includes all aliased types. For example, given the alias
-`port` that maps to `count`, then the `:uint64` type extractor will also consider
+`port` that maps to `uint64`, then the `:uint64` type extractor will also consider
 instances of type `port`. However, a `:port` query does not include `:uint64`
 types because an alias is a strict refinement of an existing type.
 
 ##### Examples
 
 - `:timestamp > 1 hour ago`: events with a `timestamp` alias in the last hour
-- `:ip == 6.6.6.6`: events with any field of type `addr` equal to 6.6.6.6
-- `:uint64 > 42M`: events where `count` values is greater than 42M
+- `:ip == 6.6.6.6`: events with any field of type `ip` equal to 6.6.6.6
+- `:uint64 > 42M`: events where `uint64` values is greater than 42M
 - `"evil" in :string`: events where any `string` field contains the substring
   `evil`
 
