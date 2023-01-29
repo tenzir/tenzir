@@ -56,14 +56,13 @@ class hash_operator : public pipeline_operator {
 public:
   explicit hash_operator(configuration configuration);
 
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  [[nodiscard]] caf::error add(table_slice slice) override {
     VAST_TRACE("hash operator adds batch");
     // Get the target field if it exists.
-    const auto& schema_rt = caf::get<record_type>(schema);
+    const auto& schema_rt = caf::get<record_type>(slice.schema());
     auto column_index = schema_rt.resolve_key(config_.field);
     if (!column_index) {
-      transformed_.emplace_back(schema, std::move(batch));
+      transformed_.push_back(std::move(slice));
       return caf::none;
     }
     // Apply the transformation.
@@ -102,23 +101,19 @@ public:
         },
       };
     };
-    auto [adjusted_schema, adjusted_batch] = transform_columns(
-      schema, batch, {{*column_index, std::move(transform_fn)}});
-    VAST_ASSERT(adjusted_schema);
-    VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_schema),
-                              std::move(adjusted_batch));
+    transformed_.push_back(
+      transform_columns(slice, {{*column_index, std::move(transform_fn)}}));
     return caf::none;
   }
 
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
     VAST_DEBUG("hash operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_;
+  std::vector<table_slice> transformed_;
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};

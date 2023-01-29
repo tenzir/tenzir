@@ -23,21 +23,20 @@ public:
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
   /// VAST schema.
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  [[nodiscard]] caf::error add(table_slice slice) override {
     // Transform the table slice here.
-    transformed_.emplace_back(std::move(schema), std::move(batch));
+    transformed_.emplace_back(std::move(slice));
     return caf::none;
   }
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_;
+  std::vector<table_slice> transformed_;
 };
 
 // The plugin definition itself is below.

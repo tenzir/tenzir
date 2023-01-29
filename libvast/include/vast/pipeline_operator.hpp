@@ -17,14 +17,6 @@
 
 namespace vast {
 
-struct pipeline_batch {
-  pipeline_batch(type schema, std::shared_ptr<arrow::RecordBatch> batch)
-    : schema(std::move(schema)), batch(std::move(batch)) {
-  }
-  vast::type schema;
-  std::shared_ptr<arrow::RecordBatch> batch;
-};
-
 /// An individual pipeline operator. This is mainly used in the plugin API,
 /// later code deals with a complete `transform`.
 class pipeline_operator {
@@ -39,14 +31,12 @@ public:
 
   /// Starts applyings the transformation to a batch with a corresponding vast
   /// schema.
-  [[nodiscard]] virtual caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch)
-    = 0;
+  [[nodiscard]] virtual caf::error add(table_slice slice) = 0;
 
   /// Retrieves the result of the transformation, resets the internal state.
   /// TODO: add another function abort() to free up internal resources.
   /// NOTE: If there is nothing to transform return an empty vector.
-  [[nodiscard]] virtual caf::expected<std::vector<pipeline_batch>> finish() = 0;
+  [[nodiscard]] virtual caf::expected<std::vector<table_slice>> finish() = 0;
 };
 
 caf::expected<std::unique_ptr<pipeline_operator>>

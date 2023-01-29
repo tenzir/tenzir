@@ -62,25 +62,22 @@ public:
 
   /// Applies the transformation to a record batch with a corresponding vast
   /// schema.
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  [[nodiscard]] caf::error add(table_slice slice) override {
     VAST_TRACE("where operator adds batch");
-    auto tailored_expr = tailor(expr_, schema);
+    auto tailored_expr = tailor(expr_, slice.schema());
     if (!tailored_expr) {
       transformed_.clear();
       return tailored_expr.error();
     }
     // TODO: Replace this with an Arrow-native filter function as soon as we are
     // able to directly evaluate expressions on a record batch.
-    if (auto new_slice = filter(table_slice{batch}, *tailored_expr)) {
-      auto as_batch = to_record_batch(*new_slice);
-      transformed_.emplace_back(new_slice->schema(), std::move(as_batch));
-    }
+    if (auto new_slice = filter(slice, *tailored_expr))
+      transformed_.push_back(*new_slice);
     return caf::none;
   }
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
     VAST_DEBUG("where operator finished transformation");
     return std::exchange(transformed_, {});
   }
@@ -89,7 +86,7 @@ private:
   expression expr_ = {};
 
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_ = {};
+  std::vector<table_slice> transformed_ = {};
 };
 
 class plugin final : public virtual pipeline_operator_plugin {

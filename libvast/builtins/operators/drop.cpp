@@ -56,14 +56,13 @@ public:
     // nop
   }
 
-  caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  caf::error add(table_slice slice) override {
     VAST_DEBUG("drop operator adds batch");
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
       = std::any_of(config_.schemas.begin(), config_.schemas.end(),
                     [&](const auto& dropped_schema) {
-                      return dropped_schema == schema.name();
+                      return dropped_schema == slice.schema().name();
                     });
     if (drop_schema)
       return caf::none;
@@ -76,32 +75,27 @@ public:
     };
     auto transformations = std::vector<indexed_transformation>{};
     for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
-             field, schema.name()))
+      for (auto&& index : caf::get<record_type>(slice.schema())
+                            .resolve_key_suffix(field, slice.schema().name()))
         transformations.push_back({std::move(index), transform_fn});
     // transform_columns requires the transformations to be sorted, and that may
     // not necessarily be true if we have multiple fields configured, so we sort
     // again in that case.
     if (config_.fields.size() > 1)
       std::sort(transformations.begin(), transformations.end());
-    auto [adjusted_schema, adjusted_batch]
-      = transform_columns(schema, batch, transformations);
-    if (adjusted_schema) {
-      VAST_ASSERT(adjusted_batch);
-      transformed_.emplace_back(std::move(adjusted_schema),
-                                std::move(adjusted_batch));
-    }
+    auto adjusted_slice = transform_columns(slice, transformations);
+    transformed_.push_back(transform_columns(slice, transformations));
     return caf::none;
   }
 
-  caf::expected<std::vector<pipeline_batch>> finish() override {
+  caf::expected<std::vector<table_slice>> finish() override {
     VAST_DEBUG("drop operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_;
+  std::vector<table_slice> transformed_;
 
   /// The underlying configuration of the transformation.
   configuration config_;

@@ -539,7 +539,7 @@ public:
   }
 
   /// Finish the buckets into a new batch.
-  [[nodiscard]] caf::expected<pipeline_batch> finish() {
+  [[nodiscard]] caf::expected<table_slice> finish() {
     auto builder = caf::get<record_type>(output_schema)
                      .make_arrow_builder(arrow::default_memory_pool());
     VAST_ASSERT(builder);
@@ -590,7 +590,7 @@ public:
       output_schema.to_arrow_schema(), num_rows,
       caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
         .fields());
-    return pipeline_batch{output_schema, std::move(batch)};
+    return table_slice{batch, std::move(output_schema)};
   }
 
 private:
@@ -667,50 +667,44 @@ private:
 
   /// Adds a batch to the operator, which effectively calls the corresponding
   /// add for the lazily created aggregation for the schema.
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_ASSERT(schema);
-    VAST_ASSERT(caf::holds_alternative<record_type>(schema));
-    VAST_ASSERT(batch);
+  [[nodiscard]] caf::error add(table_slice slice) override {
     // Try to find whether we have an aggregation already for the schema to
     // forward the batch to it.
-    if (auto aggregation = aggregations_.find(schema);
+    if (auto aggregation = aggregations_.find(slice.schema());
         aggregation != aggregations_.end()) {
-      aggregation->second.add(batch);
+      aggregation->second.add(to_record_batch(slice));
       return {};
     }
-    // Check if we already blacklisted this schema.
-    if (auto blacklist_entry = blacklist_.find(schema);
-        blacklist_entry != blacklist_.end()) {
-      blacklist_entry->second.emplace_back(std::move(schema), std::move(batch));
-      return {};
-    }
-    // We didn't have one, so we create a new one for this schema.
-    auto aggregation = aggregation::make(schema, config_);
     // Note: We intentionally decouple the lifetime of the type's underlying
     // chunk here in order to make sure that no data is held alive for the
     // duration of the pipeline operator's existence.
-    auto decoupled_schema = type{chunk::copy(schema)};
+    auto decoupled_schema = type{chunk::copy(slice.schema())};
+    // Check if we already blacklisted this schema.
+    if (auto blacklist_entry = blacklist_.find(slice.schema());
+        blacklist_entry != blacklist_.end()) {
+      blacklist_entry->second.push_back(std::move(slice));
+      return {};
+    }
+    // We didn't have one, so we create a new one for this schema.
+    auto aggregation = aggregation::make(decoupled_schema, config_);
     if (!aggregation) {
       VAST_WARN("summarize operator does not apply to schema {} and leaves "
                 "events unchanged: {}",
-                schema, aggregation.error());
-      auto blacklist_entry
-        = std::vector<pipeline_batch>{{std::move(schema), std::move(batch)}};
+                slice.schema(), aggregation.error());
       blacklist_.emplace(std::move(decoupled_schema),
-                         std::move(blacklist_entry));
+                         std::vector{std::move(slice)});
       return {};
     }
     auto [it, inserted] = aggregations_.emplace(std::move(decoupled_schema),
                                                 std::move(*aggregation));
     VAST_ASSERT(inserted);
-    it->second.add(batch);
+    it->second.add(to_record_batch(slice));
     return {};
   }
 
   /// Retrieves the results of all configured aggregations.
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
-    auto result = std::vector<pipeline_batch>{};
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
+    auto result = std::vector<table_slice>{};
     result.reserve(aggregations_.size());
     for (auto& [schema, aggregation] : aggregations_) {
       auto batch = aggregation.finish();
@@ -723,7 +717,6 @@ private:
       result.insert(result.end(), std::make_move_iterator(batches.begin()),
                     std::make_move_iterator(batches.end()));
     }
-
     return result;
   }
 
@@ -734,7 +727,7 @@ private:
   std::unordered_map<type, aggregation> aggregations_ = {};
 
   /// Batches that do not apply to any aggregation.
-  std::unordered_map<type, std::vector<pipeline_batch>> blacklist_ = {};
+  std::unordered_map<type, std::vector<table_slice>> blacklist_ = {};
 };
 
 caf::expected<std::unique_ptr<pipeline_operator>>

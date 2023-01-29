@@ -61,9 +61,7 @@ public:
     // nop
   }
 
-  caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
-    auto slice = table_slice{batch, std::move(schema)};
+  caf::error add(table_slice slice) override {
     const auto buffered_rows = rows(buffer_) + slice.rows();
     if (buffered_rows < desired_batch_size_) {
       buffer_.push_back(std::move(slice));
@@ -72,16 +70,16 @@ public:
       auto [head, tail] = split(slice, slice.rows() - remainder);
       buffer_.push_back(head);
       auto result = concatenate(std::exchange(buffer_, {}));
-      results_.emplace_back(result.schema(), to_record_batch(result));
+      results_.emplace_back(std::move(result));
       buffer_.push_back(tail);
     }
     return {};
   }
 
-  caf::expected<std::vector<pipeline_batch>> finish() override {
+  caf::expected<std::vector<table_slice>> finish() override {
     if (rows(buffer_) > 0) {
       auto result = concatenate(std::exchange(buffer_, {}));
-      results_.emplace_back(result.schema(), to_record_batch(result));
+      results_.emplace_back(std::move(result));
     }
     return std::exchange(results_, {});
   }
@@ -90,7 +88,7 @@ private:
   type schema_ = {};
   size_t desired_batch_size_ = {};
   std::vector<table_slice> buffer_ = {};
-  std::vector<pipeline_batch> results_ = {};
+  std::vector<table_slice> results_ = {};
 };
 
 /// The threshold at which to consider a partition undersized, relative to the

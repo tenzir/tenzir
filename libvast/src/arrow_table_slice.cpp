@@ -414,6 +414,19 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
   };
 }
 
+table_slice transform_columns(
+  const table_slice& slice,
+  const std::vector<indexed_transformation>& transformations) noexcept {
+  auto [schema, batch] = transform_columns(
+    slice.schema(), to_record_batch(slice), transformations);
+  if (!schema)
+    return {};
+  auto result = table_slice{batch, std::move(schema)};
+  result.offset(slice.offset());
+  result.import_time(slice.import_time());
+  return result;
+}
+
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                const std::vector<offset>& indices) noexcept {
@@ -524,6 +537,18 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
     arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
                              std::move(layer.arrays)),
   };
+}
+
+table_slice select_columns(const table_slice& slice,
+                           const std::vector<offset>& indices) noexcept {
+  auto [schema, batch]
+    = select_columns(slice.schema(), to_record_batch(slice), indices);
+  if (!schema)
+    return {};
+  auto result = table_slice{batch, std::move(schema)};
+  result.offset(slice.offset());
+  result.import_time(slice.import_time());
+  return result;
 }
 
 // -- template machinery -------------------------------------------------------

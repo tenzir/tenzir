@@ -113,11 +113,10 @@ TEST(summarize Zeek conn log) {
     = unbox(summarize_plugin->make_pipeline_operator(opts));
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
   for (const auto& slice : zeek_conn_log_full)
-    CHECK_EQUAL(summarize_operator->add(slice.schema(), to_record_batch(slice)),
-                caf::none);
-  const auto result = unbox(summarize_operator->finish());
-  REQUIRE_EQUAL(result.size(), 1u);
-  const auto summarized_slice = table_slice{result[0].batch};
+    CHECK_EQUAL(summarize_operator->add(slice), caf::none);
+  const auto summarized_slice
+    = concatenate(unbox(summarize_operator->finish()));
+  REQUIRE_EQUAL(summarized_slice.rows(), 2u);
   // NOTE: I calculated this data ahead of time using jq, so it can safely be
   // used for comparison here. As an example, here's how to calculate the
   // grouped sums of the duration values using jq:
@@ -179,11 +178,10 @@ TEST(summarize test) {
   };
   auto summarize_operator
     = unbox(summarize_plugin->make_pipeline_operator(opts));
-  REQUIRE_SUCCESS(
-    summarize_operator->add(agg_test_schema, to_record_batch(make_testdata())));
-  const auto result = unbox(summarize_operator->finish());
-  REQUIRE_EQUAL(result.size(), 1u);
-  const auto summarized_slice = table_slice{result[0].batch};
+  REQUIRE_SUCCESS(summarize_operator->add(make_testdata()));
+  const auto summarized_slice
+    = concatenate(unbox(summarize_operator->finish()));
+  REQUIRE_EQUAL(summarized_slice.rows(), 1u);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 0)),
               data{vast::time{std::chrono::seconds(1258329600)}});
   CHECK_EQUAL(materialize(summarized_slice.at(0, 1)), ip::v4(0xC0A80101));
@@ -238,11 +236,10 @@ TEST(summarize test fully qualified field names) {
   };
   auto summarize_operator
     = unbox(summarize_plugin->make_pipeline_operator(opts));
-  const auto test_batch = to_record_batch(make_testdata());
-  REQUIRE_SUCCESS(summarize_operator->add(agg_test_schema, test_batch));
-  const auto result = unbox(summarize_operator->finish());
-  REQUIRE_EQUAL(result.size(), 1u);
-  const auto summarized_slice = table_slice{result[0].batch};
+  REQUIRE_SUCCESS(summarize_operator->add(make_testdata()));
+  const auto summarized_slice
+    = concatenate(unbox(summarize_operator->finish()));
+  REQUIRE_EQUAL(summarized_slice.rows(), 1u);
   REQUIRE_EQUAL(summarized_slice.columns(), 11u);
   CHECK_EQUAL(materialize(summarized_slice.at(0, 0)),
               vast::time{std::chrono::seconds(1258329600)});
