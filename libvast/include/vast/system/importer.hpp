@@ -87,6 +87,9 @@ struct importer_state {
 
   accountant_actor accountant;
 
+  /// The executor for transforming table slices in a pipeline.
+  pipeline_executor executor;
+
   /// Name of this actor in log events.
   static inline const char* name = "importer";
 };

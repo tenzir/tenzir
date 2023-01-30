@@ -52,6 +52,13 @@ caf::behavior datagram_source(
     self->quit();
     return {};
   }
+  self->state.executor = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::yes)) {
+    VAST_ERROR("datagram_source contains invalid pipeline {}", err);
+    self->quit();
+    return {};
+  }
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {

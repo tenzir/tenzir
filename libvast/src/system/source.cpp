@@ -139,7 +139,15 @@ void source_state::filter_and_push(
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
                  slice.schema());
-      push_to_out(std::move(*filtered_slice));
+      auto import_ok = executor.add(std::move(*filtered_slice));
+      if (import_ok) {
+        VAST_WARN("source can not add slice to pipeline executor - data "
+                  "loss");
+      }
+      auto transformed_slices = executor.finish();
+      for (auto&& slice : *transformed_slices) {
+        push_to_out(std::move(slice));
+      }
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
                  reader->name(), unfiltered_rows, slice.schema());
@@ -147,7 +155,15 @@ void source_state::filter_and_push(
   } else {
     VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
                unfiltered_rows, slice.schema());
-    push_to_out(std::move(slice));
+    auto import_ok = executor.add(std::move(slice));
+    if (import_ok) {
+      VAST_WARN("source can not add slice to pipeline executor - data "
+                "loss");
+    }
+    auto transformed_slices = executor.finish();
+    for (auto&& slice : *transformed_slices) {
+      push_to_out(std::move(slice));
+    }
   }
 }
 
@@ -172,6 +188,13 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     = self->spawn(transformer, "source-transformer", std::move(pipelines));
   if (!self->state.transformer) {
     VAST_ERROR("{} failed to spawn transformer", *self);
+    self->quit();
+    return {};
+  }
+  self->state.executor = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::yes)) {
+    VAST_ERROR("source contains invalid pipeline {}", err);
     self->quit();
     return {};
   }

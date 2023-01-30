@@ -58,6 +58,9 @@ struct source_state {
   /// Actor that receives events.
   transformer_actor transformer = {};
 
+  /// The executor for transforming table slices in a pipeline.
+  pipeline_executor executor;
+
   /// The `source` only supports a single sink, so we track here if we
   /// already got it.
   bool has_sink = {};

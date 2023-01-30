@@ -57,6 +57,18 @@ public:
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
     for (auto&& slice : std::exchange(slices, {})) {
+      auto import_ok = state.executor.add(std::move(slice));
+      if (import_ok) {
+        VAST_WARN("importer can not add slice to pipeline executor - data "
+                  "loss");
+      }
+    }
+    auto transformed_slices = state.executor.finish();
+    if (!transformed_slices) {
+      VAST_WARN("importer can not transform slices in pipeline - data "
+                "loss");
+    }
+    for (auto&& slice : *transformed_slices) {
       auto rows = slice.rows();
       events += rows;
       auto name = slice.schema().name();
@@ -216,6 +228,13 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
+  self->state.executor = pipeline_executor{std::move(input_transformations)};
+  if (auto err = self->state.executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::yes)) {
+    VAST_ERROR("importer contains invalid pipeline {}", err);
+    self->quit();
+    return importer_actor::behavior_type::make_empty_behavior();
+  }
   self->state.transformer
     = self->spawn(importer_transformer, "input_transformer",
                   std::move(input_transformations));
