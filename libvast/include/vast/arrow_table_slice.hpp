@@ -369,7 +369,7 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
   type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   const std::vector<indexed_transformation>& transformations) noexcept;
 
-/// Applies a list of transformations to both a table slice.
+/// Applies a list of transformations to a table slice.
 /// @pre Transformations must be sorted by index.
 /// @pre Transformation indices must not be a subset of the following
 /// transformation's index.

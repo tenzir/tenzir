@@ -83,7 +83,6 @@ public:
     // again in that case.
     if (config_.fields.size() > 1)
       std::sort(transformations.begin(), transformations.end());
-    auto adjusted_slice = transform_columns(slice, transformations);
     transformed_.push_back(transform_columns(slice, transformations));
     return caf::none;
   }
