@@ -165,7 +165,7 @@ FIXTURE_SCOPE(pipeline_tests, pipelines_fixture)
 TEST(head 1) {
   const auto* vastql
     = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("head"));
+  auto [expr, pipeline] = unbox(vastql->make_query("head 1"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
     CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
@@ -178,24 +178,39 @@ TEST(head 1) {
   REQUIRE_EQUAL(results[0], vast::head(concatenate(zeek_conn_log), 1u));
 }
 
-TEST(head 5 with overlap) {
+TEST(head 0) {
   const auto* vastql
     = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("head 5"));
+  auto [expr, pipeline] = unbox(vastql->make_query("head 0"));
   REQUIRE(pipeline);
-  CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 4u)),
+  for (auto slice : zeek_conn_log)
+    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
+  for (auto slice : zeek_http_log)
+    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
+  for (auto slice : zeek_dns_log)
+    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
+  auto results = unbox(pipeline->finish());
+  CHECK(results.empty());
+}
+
+TEST(head 10 with overlap) {
+  const auto* vastql
+    = vast::plugins::find<vast::query_language_plugin>("vastql");
+  auto [expr, pipeline] = unbox(vastql->make_query("head"));
+  REQUIRE(pipeline);
+  CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 9u)),
               caf::error{});
   CHECK_EQUAL(pipeline->add(concatenate(zeek_http_log)), caf::error{});
   auto results = unbox(pipeline->finish());
   REQUIRE_EQUAL(results.size(), 2u);
-  REQUIRE_EQUAL(results[0], vast::head(concatenate(zeek_conn_log), 4u));
+  REQUIRE_EQUAL(results[0], vast::head(concatenate(zeek_conn_log), 9u));
   REQUIRE_EQUAL(results[1], vast::head(concatenate(zeek_http_log), 1u));
 }
 
 TEST(taste 1) {
   const auto* vastql
     = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("taste"));
+  auto [expr, pipeline] = unbox(vastql->make_query("taste 1"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
     CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
@@ -210,10 +225,25 @@ TEST(taste 1) {
   REQUIRE_EQUAL(results[2], vast::head(concatenate(zeek_dns_log), 1u));
 }
 
-TEST(taste 5 with overlap) {
+TEST(taste 0) {
   const auto* vastql
     = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("taste 5"));
+  auto [expr, pipeline] = unbox(vastql->make_query("taste 0"));
+  REQUIRE(pipeline);
+  for (auto slice : zeek_conn_log)
+    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
+  for (auto slice : zeek_http_log)
+    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
+  for (auto slice : zeek_dns_log)
+    CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
+  auto results = unbox(pipeline->finish());
+  CHECK(results.empty());
+}
+
+TEST(taste 10 with overlap) {
+  const auto* vastql
+    = vast::plugins::find<vast::query_language_plugin>("vastql");
+  auto [expr, pipeline] = unbox(vastql->make_query("taste"));
   REQUIRE(pipeline);
   CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 4u)),
               caf::error{});
@@ -221,7 +251,14 @@ TEST(taste 5 with overlap) {
   auto results = unbox(pipeline->finish());
   REQUIRE_EQUAL(results.size(), 2u);
   REQUIRE_EQUAL(results[0], vast::head(concatenate(zeek_conn_log), 4u));
-  REQUIRE_EQUAL(results[1], vast::head(concatenate(zeek_http_log), 5u));
+  REQUIRE_EQUAL(results[1], vast::head(concatenate(zeek_http_log), 10u));
+}
+
+TEST(head and taste fail with negative limit) {
+  const auto* vastql
+    = vast::plugins::find<vast::query_language_plugin>("vastql");
+  REQUIRE_ERROR(vastql->make_query("head -1"));
+  REQUIRE_ERROR(vastql->make_query("taste -5"));
 }
 
 TEST(drop operator) {
