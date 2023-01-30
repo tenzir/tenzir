@@ -63,10 +63,9 @@ vast import zeek < conn.log
 ```
 
 :::info type mapping
-The `import zeek` command implicitly
-[aliases](/docs/understand/data-model/type-system.md) the types `count`, `real`,
-and `addr` from the Zeek TSV `#types` header line to VAST's basic types
-`uint64`, `double`, and `ip`.
+The `import zeek` command maps the types `count`, `real`, and `addr` from the
+Zeek TSV `#types` header line to VAST's basic types `uint64`, `double`, and
+`ip`.
 :::
 
 When Zeek [rotates logs][zeek-log-rotation], it produces compressed batches of
