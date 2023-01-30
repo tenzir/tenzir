@@ -87,7 +87,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<head_operator>(limit.value_or(1)),
+      std::make_unique<head_operator>(limit.value_or(10)),
     };
   }
 };

@@ -1,11 +1,11 @@
 # taste
 
 Limits the input to the first N results per unique schema. The limit defaults to
-1.
+10.
 
 ## Pipeline Operator String Syntax (Experimental)
 
-Get the first result of each unique schema.
+Get the first ten results of each unique schema.
 
 ```
 taste
@@ -14,5 +14,5 @@ taste
 Get the first five results of each unique schema.
 
 ```
-head 5
+taste 5
 ```
