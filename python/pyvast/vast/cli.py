@@ -1,9 +1,9 @@
 import asyncio
 import subprocess
 
-import vast.utils.logging
+import pyvast.utils.logging
 
-logger = vast.utils.logging.get(__name__)
+logger = pyvast.utils.logging.get(__name__)
 
 
 class CLI:

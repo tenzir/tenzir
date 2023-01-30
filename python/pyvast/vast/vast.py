@@ -6,13 +6,13 @@ from typing import AsyncIterable
 import secrets
 
 import pyarrow as pa
-import vast.utils.arrow
-import vast.utils.config
-import vast.utils.logging
+import pyvast.utils.arrow
+import pyvast.utils.config
+import pyvast.utils.logging
 
 from .cli import CLI
 
-logger = vast.utils.logging.get(__name__)
+logger = pyvast.utils.logging.get(__name__)
 
 
 class ExportMode(Enum):

@@ -1,13 +1,13 @@
-from vast import VAST, ExportMode, collect_pyarrow, to_json_rows, VastRow
-import vast.utils.logging
-import vast.utils.asyncio
+from pyvast import VAST, ExportMode, collect_pyarrow, to_json_rows, VastRow
+import pyvast.utils.logging
+import pyvast.utils.asyncio
 import asyncio
 from asyncio.subprocess import PIPE
 import os
 import pytest
 import shutil
 
-logger = vast.utils.logging.get("vast.test")
+logger = pyvast.utils.logging.get("vast.test")
 
 if "VAST_PYTHON_INTEGRATION" not in os.environ:
     # Tests in this module require access to integration test files and the VAST binary

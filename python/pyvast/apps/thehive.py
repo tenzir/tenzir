@@ -7,9 +7,9 @@ import time
 from typing import Optional
 
 import aiohttp
-import vast.utils.logging as logging
+import pyvast.utils.logging as logging
 
-from vast import VAST, ExportMode, to_json_rows
+from pyvast import VAST, ExportMode, to_json_rows
 
 logger = logging.get("vast.thehive.app")
 

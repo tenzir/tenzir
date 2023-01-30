@@ -42,8 +42,8 @@ asyncio_mode = "auto" # required for async fixtures
 thehive = ["aiohttp"]
 
 [tool.poetry.scripts]
-app-thehive-run = { callable = "vast.apps.thehive:run", extras = ["thehive"] }
-app-thehive-count-alerts = { callable = "vast.apps.thehive:count_alerts", extras = ["thehive"] }
+app-thehive-run = { callable = "pyvast.apps.thehive:run", extras = ["thehive"] }
+app-thehive-count-alerts = { callable = "pyvast.apps.thehive:count_alerts", extras = ["thehive"] }
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
