@@ -1143,6 +1143,35 @@ jobs:
         run: |
           poetry build
 
+  python-package-test:
+    needs:
+      - python
+      - configure
+    if: ${{ needs.configure.outputs.run-python == 'true' }}
+    name: Python Package Test
+    runs-on: ubuntu-20.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Setup Poetry image
+        uses: abatilo/actions-poetry@v2.2.0
+        with:
+          poetry-version: 1.3.0
+      - name: Configure Test PyPI
+        working-directory: python
+        run: |
+          poetry config repositories.test-pypi https://test.pypi.org/legacy/
+          poetry config pypi-token.test-pypi "${{ secrets.TEST_PYPI_TOKEN }}"
+      - name: Publish ${{ needs.configure.outputs.release-version }} to Test PyPI
+        working-directory: python
+        run: |
+          poetry publish --build -r test-pypi --no-interaction
+
   python-package:
     needs:
       - python
@@ -1162,26 +1191,14 @@ jobs:
         uses: abatilo/actions-poetry@v2.2.0
         with:
           poetry-version: 1.3.0
-      - name: Configure Test PyPI
-        working-directory: python
-        run: |
-          poetry config repositories.test-pypi https://test.pypi.org/legacy/
-          poetry config pypi-token.test-pypi "${{ secrets.TEST_PYPI_TOKEN }}"
       - name: Configure PyPI
         working-directory: python
         run: |
           poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
-      - name: Publish ${{ needs.configure.outputs.release-version }} to Test PyPI
+      - name: Publish to PyPI
         working-directory: python
         run: |
-          poetry publish --build -r test-pypi --no-interaction
-      # FIXME: Temporarily disabled until the name-squatting on PyPI is
-      # resolved, or we have decided on another name. See this PEP 541 request
-      # for reference: https://github.com/pypa/pypi-support/issues/2352
-      # - name: Publish to PyPI
-      #   working-directory: python
-      #   run: |
-      #     poetry publish --build --no-interaction
+          poetry publish --build --no-interaction
 
   pass-branch-protections:
     needs:
