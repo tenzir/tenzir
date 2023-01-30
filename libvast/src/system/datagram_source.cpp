@@ -82,8 +82,6 @@ caf::behavior datagram_source(
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
     self->state.done = true;
-    if (self->state.mgr)
-      self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
@@ -94,7 +92,7 @@ caf::behavior datagram_source(
       self->state.start_time = std::chrono::system_clock::now();
     },
     // get next element
-    [](caf::unit_t&, caf::downstream<detail::framed<table_slice>>&, size_t) {
+    [](caf::unit_t&, caf::downstream<table_slice>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?

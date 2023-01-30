@@ -80,8 +80,7 @@ struct transformer_fixture
   }
 
   // Creates a table slice with a single string field and random data.
-  static std::vector<vast::detail::framed<vast::table_slice>>
-  make_pipelines_testdata() {
+  static std::vector<vast::table_slice> make_pipelines_testdata() {
     auto schema = vast::type{
       "vast.test",
       vast::record_type{

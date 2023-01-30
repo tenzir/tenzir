@@ -206,7 +206,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     self->state.done = true;
     if (self->state.mgr) {
       self->state.mgr->shutdown();
-      self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
       self->state.mgr->out().fan_out_flush();
       self->state.mgr->out().close();
       self->state.mgr->out().force_emit_batches();
@@ -237,8 +236,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                  metrics_metadata{});
     },
     // get next element
-    [self](caf::unit_t&, caf::downstream<detail::framed<table_slice>>&,
-           size_t num) {
+    [self](caf::unit_t&, caf::downstream<table_slice>&, size_t num) {
       if (self->state.has_sink && self->state.mgr->out().num_paths() == 0) {
         VAST_WARN("{} discards request for {} messages because all its "
                   "outbound paths were removed",
@@ -291,8 +289,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto finish = [&] {
         self->state.done = true;
         self->state.send_report();
-        self->state.mgr->out().push(
-          detail::framed<vast::table_slice>::make_eof());
         self->quit();
       };
       if (self->state.requested

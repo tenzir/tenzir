@@ -446,12 +446,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
       std::unordered_map<vast::uuid, vast::partition_synopsis_ptr>>))
   VAST_ADD_TYPE_ID((std::vector<vast::partition_synopsis_pair>))
 
-  VAST_ADD_TYPE_ID((vast::detail::framed<vast::table_slice>))
-  VAST_ADD_TYPE_ID((std::vector<vast::detail::framed<vast::table_slice>>))
-  VAST_ADD_TYPE_ID((caf::stream<vast::detail::framed<vast::table_slice>>))
-  VAST_ADD_TYPE_ID(
-    (caf::inbound_stream_slot<vast::detail::framed<vast::table_slice>>))
-
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>))
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>))
   VAST_ADD_TYPE_ID((caf::inbound_stream_slot<vast::table_slice>))

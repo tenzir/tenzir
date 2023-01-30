@@ -12,7 +12,6 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/framed.hpp"
 #include "vast/detail/heterogeneous_string_hash.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
@@ -65,8 +64,8 @@ struct importer_state {
   id_block current;
 
   /// The continous stage that moves data from all sources to all subscribers.
-  caf::stream_stage_ptr<
-    table_slice, caf::broadcast_downstream_manager<detail::framed<table_slice>>>
+  caf::stream_stage_ptr<table_slice,
+                        caf::broadcast_downstream_manager<table_slice>>
     stage;
 
   transformer_actor transformer;

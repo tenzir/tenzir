@@ -411,7 +411,7 @@ using transformer_actor = typed_actor_fwd<
   auto(stream_sink_actor<table_slice, std::string>, std::string)
     ->caf::result<void>>
   // Conform to the protocol of the STREAM SINK actor for framed table slices
-  ::extend_with<stream_sink_actor<detail::framed<table_slice>>>
+  ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 

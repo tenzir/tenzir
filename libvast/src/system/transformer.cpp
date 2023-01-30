@@ -31,9 +31,8 @@ transformer_stream_stage_ptr attach_pipeline_stage(
     [](caf::unit_t&) {
       // nop
     },
-    [self](caf::unit_t&, caf::downstream<table_slice>& out,
-           detail::framed<table_slice> x) {
-      if (x.header == detail::stream_control_header::eof) {
+    [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
+      /*if (x.header == detail::stream_control_header::eof) {
         VAST_DEBUG("{} quits after receiving EOF control message in stream",
                    self->state.transformer_name);
         self->send_exit(self, caf::make_error(ec::end_of_input));
@@ -66,7 +65,7 @@ transformer_stream_stage_ptr attach_pipeline_stage(
         }
       }
       for (auto& t2 : *transformed)
-        out.push(std::move(t2));
+        out.push(std::move(t2));*/
     },
     [=](caf::unit_t&, const caf::error&) {
       // nop
@@ -116,8 +115,8 @@ transformer(transformer_actor::stateful_pointer<transformer_state> self,
       self->state.stage->add_outbound_path(sink,
                                            std::make_tuple(std::move(name)));
     },
-    [self](caf::stream<detail::framed<table_slice>> in)
-      -> caf::inbound_stream_slot<detail::framed<table_slice>> {
+    [self](
+      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       // There's a race condition (mostly when using `vast -N`) that prevents
       // shutdown when the importer shuts down before the stream handshake
       // finishes. In this case the `eof` it sends never arrives (because we
