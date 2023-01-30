@@ -145,8 +145,8 @@ caf::error pipeline::add_slice(table_slice slice) {
 }
 
 caf::error
-pipeline::process_queue(const std::unique_ptr<pipeline_operator>& op,
-                        std::vector<table_slice>& result, bool check_schema) {
+pipeline::process_queue(pipeline_operator& op, std::vector<table_slice>& result,
+                        bool check_schema) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {
@@ -160,7 +160,7 @@ pipeline::process_queue(const std::unique_ptr<pipeline_operator>& op,
       result.push_back(std::move(slice));
       continue;
     }
-    if (auto err = op->add(std::move(slice))) {
+    if (auto err = op.add(std::move(slice))) {
       failed = caf::make_error(
         static_cast<vast::ec>(err.code()),
         fmt::format("transform aborts because of an error: {}", err));
@@ -169,7 +169,7 @@ pipeline::process_queue(const std::unique_ptr<pipeline_operator>& op,
     }
   }
   // Finish frees up resource inside the plugin.
-  auto finished = op->finish();
+  auto finished = op.finish();
   if (!finished && !failed)
     failed = std::move(finished.error());
   if (failed) {
@@ -187,7 +187,7 @@ caf::expected<std::vector<table_slice>> pipeline::finish_batch() {
   bool first_run = true;
   std::vector<table_slice> result{};
   for (const auto& op : operators_) {
-    auto failed = process_queue(op, result, first_run);
+    auto failed = process_queue(*op, result, first_run);
     first_run = false;
     if (failed) {
       to_transform_.clear();
