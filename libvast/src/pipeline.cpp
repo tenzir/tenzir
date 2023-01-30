@@ -27,8 +27,8 @@ caf::expected<pipeline>
 pipeline::parse(std::string name, std::string_view repr) {
   auto result = pipeline{std::move(name), {}};
   // plugin name parser
-  using parsers::alnum, parsers::chr, parsers::blank;
-  const auto optional_ws = ignore(*blank);
+  using parsers::alnum, parsers::chr, parsers::space;
+  const auto optional_ws = ignore(*space);
   const auto plugin_name_char_parser = alnum | chr{'-'};
   const auto plugin_name_parser = optional_ws >> +plugin_name_char_parser;
   while (!repr.empty()) {

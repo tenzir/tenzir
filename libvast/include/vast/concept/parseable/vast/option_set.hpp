@@ -96,7 +96,7 @@ private:
     }
     return true;
   }
-  static constexpr auto whitespace = parsers::blank;
+  static constexpr auto whitespace = parsers::space;
   std::vector<std::pair<std::string, char>> defined_options_;
 };
 

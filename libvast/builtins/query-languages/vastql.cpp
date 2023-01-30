@@ -37,11 +37,11 @@ class plugin final : public virtual query_language_plugin {
         std::optional<pipeline>{},
       };
     }
-    using parsers::blank, parsers::expr, parsers::eoi;
+    using parsers::space, parsers::expr, parsers::eoi;
     auto f = query.begin();
     const auto l = query.end();
     auto parsed_expr = expression{};
-    const auto optional_ws = ignore(*blank);
+    const auto optional_ws = ignore(*space);
     bool has_expr = true;
     if (!expr(f, l, parsed_expr)) {
       VAST_DEBUG("failed to parse expr from '{}'", query);
