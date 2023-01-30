@@ -22,7 +22,7 @@ namespace {
 
 class head_operator : public pipeline_operator {
 public:
-  explicit head_operator(uint64_t remaining) noexcept : remaining_{remaining} {
+  explicit head_operator(uint64_t limit) noexcept : remaining_{limit} {
     // nop
   }
 
@@ -33,6 +33,7 @@ public:
     if (remaining_ == 0)
       return {};
     slice = vast::head(slice, remaining_);
+    VAST_ASSERT(remaining_ >= slice.rows());
     remaining_ -= slice.rows();
     buffer_.push_back(std::move(slice));
     return {};
@@ -75,8 +76,8 @@ public:
     const auto* const l = pipeline.end();
     const auto p
       = -(required_ws >> u64) >> optional_ws >> end_of_pipeline_operator;
-    auto remaining = std::optional<uint64_t>{};
-    if (!p(f, l, remaining)) {
+    auto limit = std::optional<uint64_t>{};
+    if (!p(f, l, limit)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -86,7 +87,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<head_operator>(remaining.value_or(1)),
+      std::make_unique<head_operator>(limit.value_or(1)),
     };
   }
 };

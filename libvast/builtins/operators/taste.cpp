@@ -27,7 +27,9 @@ public:
   }
 
   caf::error add(table_slice slice) override {
-    // Determine the number of remaining events for this schema.
+    // Determine the number of remaining events for this schema; if we see a
+    // schema for the first time, initialize that number with the configured
+    // limit.
     auto remaining_it = remaining_.find(slice.schema());
     if (remaining_it == remaining_.end()) {
       remaining_it
@@ -37,6 +39,7 @@ public:
     if (remaining == 0)
       return {};
     slice = vast::head(slice, remaining);
+    VAST_ASSERT(remaining >= slice.rows());
     remaining -= slice.rows();
     buffer_.push_back(std::move(slice));
     return {};
@@ -80,8 +83,8 @@ public:
     const auto* const l = pipeline.end();
     const auto p
       = -(required_ws >> u64) >> optional_ws >> end_of_pipeline_operator;
-    auto remaining = std::optional<uint64_t>{};
-    if (!p(f, l, remaining)) {
+    auto limit = std::optional<uint64_t>{};
+    if (!p(f, l, limit)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -91,7 +94,7 @@ public:
     }
     return {
       std::string_view{f, l},
-      std::make_unique<taste_operator>(remaining.value_or(1)),
+      std::make_unique<taste_operator>(limit.value_or(1)),
     };
   }
 };
