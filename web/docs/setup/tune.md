@@ -205,7 +205,7 @@ vast:
 This configuration includes two rules (= two sketches), where the first rule
 includes a field extractor and the second a type extractor. The first rule
 applies to a single field, `suricata.http.http.url`, and has false-positive rate
-of 0.5%. The second rule creates one sketch for all fields of type `addr` that
+of 0.5%. The second rule creates one sketch for all fields of type `ip` that
 has a false-positive rate of 10%.
 
 ### Skip partition index creation
@@ -224,7 +224,7 @@ vast:
       - targets:
           - suricata.http.http.url
         partition-index: false
-        # Don't create partition indexes for fields of type addr.
+        # Don't create partition indexes for fields of type ip.
       - targets:
           - :ip
         partition-index: false

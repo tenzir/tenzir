@@ -177,37 +177,37 @@ vast show schemas --yaml
         },
         {
           "flow_id": {
-            "type": "count",
+            "type": "uint64",
             "attributes": {
               "index": "hash"
             }
           }
         },
         {
-          "pcap_cnt": "count"
+          "pcap_cnt": "uint64"
         },
         {
           "vlan": {
-            "list": "count"
+            "list": "uint64"
           }
         },
         {
           "in_iface": "string"
         },
         {
-          "src_ip": "addr"
+          "src_ip": "ip"
         },
         {
           "src_port": {
-            "port": "count"
+            "port": "uint64"
           }
         },
         {
-          "dest_ip": "addr"
+          "dest_ip": "ip"
         },
         {
           "dest_port": {
-            "port": "count"
+            "port": "uint64"
           }
         },
         {
@@ -229,16 +229,16 @@ vast show schemas --yaml
             "suricata.component.flow": {
               "record": [
                 {
-                  "pkts_toserver": "count"
+                  "pkts_toserver": "uint64"
                 },
                 {
-                  "pkts_toclient": "count"
+                  "pkts_toclient": "uint64"
                 },
                 {
-                  "bytes_toserver": "count"
+                  "bytes_toserver": "uint64"
                 },
                 {
-                  "bytes_toclient": "count"
+                  "bytes_toclient": "uint64"
                 },
                 {
                   "start": "time"
@@ -247,7 +247,7 @@ vast show schemas --yaml
                   "end": "time"
                 },
                 {
-                  "age": "count"
+                  "age": "uint64"
                 },
                 {
                   "state": "string"

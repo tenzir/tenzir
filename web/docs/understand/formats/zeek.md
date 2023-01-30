@@ -62,8 +62,14 @@ You can import this log as follows:
 vast import zeek < conn.log
 ```
 
+:::info type mapping
+The `import zeek` command maps the types `count`, `real`, and `addr` from the
+Zeek TSV `#types` header line to VAST's basic types `uint64`, `double`, and
+`ip`.
+:::
+
 When Zeek [rotates logs][zeek-log-rotation], it produces compressed batches of
-`*.tar.gz` regularly. If log freshness is not a priority, you could trigger an
+`*.log.gz` regularly. If log freshness is not a priority, you could trigger an
 ad-hoc ingestion for every compressed batch of Zeek logs:
 
 ```bash
