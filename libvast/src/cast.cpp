@@ -28,7 +28,10 @@ auto cast(table_slice from_slice, const type& to_schema) noexcept
   const auto to_batch = arrow::RecordBatch::Make(to_schema.to_arrow_schema(),
                                                  to_struct_array->length(),
                                                  to_struct_array->fields());
-  return table_slice{to_batch, to_schema};
+  auto result = table_slice{to_batch, to_schema};
+  result.offset(from_slice.offset());
+  result.import_time(from_slice.import_time());
+  return result;
 }
 
 } // namespace vast

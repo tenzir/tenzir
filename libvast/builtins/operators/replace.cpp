@@ -133,34 +133,29 @@ public:
     // nop
   }
 
-  caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
-    auto config = bound_config_.find(schema);
+  caf::error add(table_slice slice) override {
+    auto config = bound_config_.find(slice.schema());
     if (config == bound_config_.end()) {
-      auto new_config = bound_configuration::make(schema, config_);
+      auto new_config = bound_configuration::make(slice.schema(), config_);
       if (!new_config)
         return new_config.error();
-      auto [it, inserted] = bound_config_.emplace(type{chunk::copy(schema)},
-                                                  std::move(*new_config));
+      auto [it, inserted] = bound_config_.emplace(
+        type{chunk::copy(slice.schema())}, std::move(*new_config));
       VAST_ASSERT(inserted);
       config = it;
     }
-    auto [adjusted_schema, adjusted_batch]
-      = transform_columns(schema, batch, config->second.transformations);
-    VAST_ASSERT(adjusted_schema);
-    VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_schema),
-                              std::move(adjusted_batch));
+    transformed_.push_back(
+      transform_columns(slice, config->second.transformations));
     return caf::none;
   }
 
-  caf::expected<std::vector<pipeline_batch>> finish() override {
+  caf::expected<std::vector<table_slice>> finish() override {
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The transformed slices.
-  std::vector<pipeline_batch> transformed_ = {};
+  std::vector<table_slice> transformed_ = {};
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};

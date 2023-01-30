@@ -24,21 +24,20 @@ class identity_operator : public pipeline_operator {
 public:
   identity_operator() noexcept = default;
 
-  caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  caf::error add(table_slice slice) override {
     VAST_TRACE("identity operator adds batch");
-    transformed_.emplace_back(schema, std::move(batch));
+    transformed_.push_back(std::move(slice));
     return caf::none;
   }
 
-  caf::expected<std::vector<pipeline_batch>> finish() override {
+  caf::expected<std::vector<table_slice>> finish() override {
     VAST_DEBUG("identity operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_ = {};
+  std::vector<table_slice> transformed_ = {};
 };
 
 class plugin final : public virtual pipeline_operator_plugin {

@@ -107,34 +107,27 @@ public:
     // nop
   }
 
-  caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
-    const auto& schema_rt = caf::get<record_type>(schema);
+  caf::error add(table_slice slice) override {
+    const auto& schema_rt = caf::get<record_type>(slice.schema());
     for (const auto& field : config_.fields)
       if (schema_rt.resolve_key(field).has_value())
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("cannot extend {} with field {} "
                                            "as it already has a field with "
                                            "this name",
-                                           schema, field));
-    auto [adjusted_schema, adjusted_batch] = transform_columns(
-      schema, batch,
-      {{offset{caf::get<record_type>(schema).num_fields() - 1},
-        config_.transformation}});
-    VAST_ASSERT(adjusted_schema);
-    VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_schema),
-                              std::move(adjusted_batch));
+                                           slice.schema(), field));
+    transformed_.push_back(transform_columns(
+      slice, {{offset{schema_rt.num_fields() - 1}, config_.transformation}}));
     return caf::none;
   }
 
-  caf::expected<std::vector<pipeline_batch>> finish() override {
+  caf::expected<std::vector<table_slice>> finish() override {
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The transformed slices.
-  std::vector<pipeline_batch> transformed_ = {};
+  std::vector<table_slice> transformed_ = {};
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};

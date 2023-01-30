@@ -56,8 +56,7 @@ public:
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
   /// VAST schema.
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  [[nodiscard]] caf::error add(table_slice slice) override {
     std::vector<indexed_transformation> transformations;
     auto transformation = [&](struct record_type::field field,
                               std::shared_ptr<arrow::Array> array) noexcept
@@ -84,9 +83,11 @@ public:
       };
     };
     for (const auto& field_name : config_.fields) {
-      for (const auto& index : caf::get<record_type>(schema).resolve_key_suffix(
-             field_name, schema.name())) {
-        auto index_type = caf::get<record_type>(schema).field(index).type;
+      for (const auto& index :
+           caf::get<record_type>(slice.schema())
+             .resolve_key_suffix(field_name, slice.schema().name())) {
+        auto index_type
+          = caf::get<record_type>(slice.schema()).field(index).type;
         if (!caf::holds_alternative<ip_type>(index_type)) {
           VAST_DEBUG("pseudonymize operator skips field '{}' of unsupported "
                      "type '{}'",
@@ -100,21 +101,18 @@ public:
     transformations.erase(std::unique(transformations.begin(),
                                       transformations.end()),
                           transformations.end());
-    auto [adjusted_schema, adjusted_batch]
-      = transform_columns(schema, batch, transformations);
-    transformed_batches_.emplace_back(std::move(adjusted_schema),
-                                      std::move(adjusted_batch));
+    transformed_.push_back(transform_columns(slice, transformations));
     return caf::none;
   }
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
-    return std::exchange(transformed_batches_, {});
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
+    return std::exchange(transformed_, {});
   }
 
 private:
   /// Cache for transformed batches.
-  std::vector<pipeline_batch> transformed_batches_ = {};
+  std::vector<table_slice> transformed_ = {};
 
   /// Step-specific configuration, including the seed and field names.
   configuration config_ = {};

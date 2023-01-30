@@ -54,33 +54,27 @@ public:
 
   /// Projects an arrow record batch.
   /// @returns The new schema and the projected record batch.
-  caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  caf::error add(table_slice slice) override {
     VAST_TRACE("select operator adds batch");
     auto indices = std::vector<offset>{};
     for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
-             field, schema.name()))
+      for (auto&& index : caf::get<record_type>(slice.schema())
+                            .resolve_key_suffix(field, slice.schema().name()))
         indices.push_back(std::move(index));
     std::sort(indices.begin(), indices.end());
-    auto [adjusted_schema, adjusted_batch]
-      = select_columns(schema, batch, indices);
-    if (adjusted_schema) {
-      VAST_ASSERT(adjusted_batch);
-      transformed_.emplace_back(std::move(adjusted_schema),
-                                std::move(adjusted_batch));
-    }
+    slice = select_columns(slice, indices);
+    transformed_.push_back(std::move(slice));
     return caf::none;
   }
 
-  caf::expected<std::vector<pipeline_batch>> finish() override {
+  caf::expected<std::vector<table_slice>> finish() override {
     VAST_TRACE("select operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_ = {};
+  std::vector<table_slice> transformed_ = {};
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};
