@@ -281,10 +281,14 @@ time table_slice::import_time() const noexcept {
 }
 
 void table_slice::import_time(time import_time) noexcept {
-  if (!chunk_->unique()) {
-    VAST_WARN("setting import timestamp on a shared table slice incurs a copy");
-    *this = table_slice{chunk::copy(*chunk_), verify::no};
-  }
+  if (import_time == this->import_time())
+    return;
+  // We work around the uniqueness requirement for the const_cast below by
+  // creating a new table slice here that points to the same data as the current
+  // table slice. This implies that the table slice is no longer in one
+  // contiguous buffer.
+  if (chunk_ && !chunk_->unique())
+    *this = table_slice{to_record_batch(*this), schema()};
   auto f = detail::overload{
     []() noexcept {
       die("cannot assign import time to invalid table slice");
