@@ -1142,15 +1142,6 @@ jobs:
         working-directory: python
         run: |
           poetry build
-      - name: Configure Test PyPI
-        working-directory: python
-        run: |
-          poetry config repositories.test-pypi https://test.pypi.org/legacy/
-          poetry config pypi-token.test-pypi "${{ secrets.TEST_PYPI_TOKEN }}"
-      - name: Publish ${{ needs.configure.outputs.release-version }} to Test PyPI
-        working-directory: python
-        run: |
-          poetry publish -r test-pypi --no-interaction
 
   python-package:
     needs:
