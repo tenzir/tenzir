@@ -13,10 +13,14 @@
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/heterogeneous_string_hash.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/transformer.hpp"
+#include "vast/table_slice.hpp"
 
+#include <caf/broadcast_downstream_manager.hpp>
+#include <caf/settings.hpp>
+#include <caf/stream_stage.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
@@ -67,8 +71,6 @@ struct importer_state {
   caf::stream_stage_ptr<table_slice,
                         caf::broadcast_downstream_manager<table_slice>>
     stage;
-
-  transformer_actor transformer;
 
   /// Pointer to the owning actor.
   importer_actor::pointer self;

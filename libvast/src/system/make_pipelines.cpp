@@ -12,19 +12,23 @@
 #include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/plugin.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/sink.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/config_value.hpp>
 #include <caf/expected.hpp>
 #include <caf/local_actor.hpp>
 #include <caf/settings.hpp>
+#include <caf/stream_stage.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 using namespace vast::binary_byte_literals;

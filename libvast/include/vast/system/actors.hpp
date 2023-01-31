@@ -401,20 +401,6 @@ using datagram_source_actor = typed_actor_fwd<
   // Conform to the protocol of the SOURCE actor.
   ::extend_with<source_actor>::unwrap_as_broker;
 
-/// The interface of an TRANSFORMER actor.
-using transformer_actor = typed_actor_fwd<
-  // Send transformed slices to this sink.
-  auto(stream_sink_actor<table_slice>)
-    ->caf::result<caf::outbound_stream_slot<table_slice>>,
-  // Send transformed slices to this sink; pass the string through along with
-  // the stream handshake.
-  auto(stream_sink_actor<table_slice, std::string>, std::string)
-    ->caf::result<void>>
-  // Conform to the protocol of the STREAM SINK actor for framed table slices
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
   // Run an invocation in the node.

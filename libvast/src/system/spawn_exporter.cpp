@@ -12,18 +12,23 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/query_options.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/sink.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/system/transformer.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/actor.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/send.hpp>
 #include <caf/settings.hpp>
+#include <caf/stream_stage.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {

@@ -150,9 +150,6 @@ importer_state::status(status_verbosity v) const {
   // General state such as open streams.
   if (v >= status_verbosity::debug)
     detail::fill_status_map(rs->content, self);
-  // Retrieve an additional subsection from the transformer.
-  const auto timeout = defaults::system::status_request_timeout / 5 * 4;
-  collect_status(rs, timeout, v, transformer, rs->content, "transformer");
   return rs->promise;
 }
 
@@ -213,14 +210,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->state.send_report();
     if (self->state.stage) {
       detail::shutdown_stream_stage(self->state.stage);
-      // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
-      // for reasoning.
-      auto dummy = self->spawn(dummy_transformer_sink);
-      self
-        ->request(self->state.transformer, caf::infinite,
-                  static_cast<stream_sink_actor<table_slice>>(dummy))
-        .then([](caf::outbound_stream_slot<table_slice>) {},
-              [](const caf::error&) {});
     }
     self->quit(msg.reason);
   });
@@ -232,25 +221,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->quit();
     return importer_actor::behavior_type::make_empty_behavior();
   }
-  self->state.transformer
-    = self->spawn(importer_transformer, "input_transformer",
-                  std::move(input_transformations));
-  if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", *self);
-    self->quit();
-    return importer_actor::behavior_type::make_empty_behavior();
-  }
-  self->state.stage->add_outbound_path(self->state.transformer);
   if (index) {
     self->state.index = std::move(index);
-    self
-      ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(self->state.index))
-      .then([](const caf::outbound_stream_slot<table_slice>&) {},
-            [self](caf::error& error) {
-              VAST_ERROR("failed to connect index to the importer: {}", error);
-              self->quit(std::move(error));
-            });
   }
   if (accountant) {
     VAST_DEBUG("{} registers accountant {}", *self, accountant);
@@ -265,7 +237,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) {
       VAST_DEBUG("{} adds a new sink: {}", *self, sink);
-      return self->delegate(self->state.transformer, sink);
+      return self->state.stage->add_outbound_path(sink);
     },
     // Register a FLUSH LISTENER actor.
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {

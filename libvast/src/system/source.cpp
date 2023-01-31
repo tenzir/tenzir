@@ -22,18 +22,23 @@
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/sink.hpp"
 #include "vast/system/status.hpp"
-#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type_set.hpp"
 
 #include <caf/attach_continuous_stream_source.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
+#include <caf/stream_stage.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
 #include <optional>
@@ -184,13 +189,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.table_slice_size = table_slice_size;
   self->state.has_sink = false;
   self->state.done = false;
-  self->state.transformer
-    = self->spawn(transformer, "source-transformer", std::move(pipelines));
-  if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", *self);
-    self->quit();
-    return {};
-  }
   self->state.executor = pipeline_executor{std::move(pipelines)};
   if (auto err = self->state.executor.validate(
         pipeline_executor::allow_aggregate_pipelines::yes)) {
@@ -209,20 +207,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       self->state.mgr->out().fan_out_flush();
       self->state.mgr->out().close();
       self->state.mgr->out().force_emit_batches();
-      // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
-      // for reasoning.
-      auto dummy = self->spawn(dummy_transformer_sink);
-      dummy->attach_functor([=](const caf::error& reason) {
-        if (!reason || reason == caf::exit_reason::user_shutdown)
-          VAST_INFO("dummy transformer shut down");
-        else
-          VAST_WARN("dummy transformer shut down with error: {}", reason);
-      });
-      self
-        ->request(self->state.transformer, caf::infinite,
-                  static_cast<stream_sink_actor<table_slice>>(dummy))
-        .then([](caf::outbound_stream_slot<table_slice>) {},
-              [](const caf::error&) {});
     }
     self->quit(msg.reason);
   });
@@ -377,12 +361,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                                     [self] {
                                       self->state.send_report();
                                     });
-      // Start streaming. Note that we add the outbound path only now,
-      // otherwise for small imports the source might already shut down
-      // before we receive a sink.
-      self->state.mgr->add_outbound_path(self->state.transformer);
-      auto name = std::string{self->state.reader->name()};
-      self->delegate(self->state.transformer, sink, name);
     },
     [self](atom::status, status_verbosity v) {
       auto rs = make_status_request_state(self);
@@ -394,24 +372,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
-        const auto timeout = defaults::system::status_request_timeout / 5 * 4;
-        collect_status(
-          rs, timeout, v, self->state.transformer,
-          [rs, src](record& response) mutable {
-            src["transformer"] = std::move(response);
-            auto xs = list{};
-            xs.emplace_back(std::move(src));
-            rs->content["sources"] = std::move(xs);
-          },
-          [rs, src](const caf::error& err) mutable {
-            VAST_WARN("{} failed to retrieve status for the key transformer: "
-                      "{}",
-                      *rs->self, err);
-            src["transformer"] = fmt::to_string(err);
-            auto xs = list{};
-            xs.emplace_back(std::move(src));
-            rs->content["sources"] = std::move(xs);
-          });
       }
       return rs->promise;
     },

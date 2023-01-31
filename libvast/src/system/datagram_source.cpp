@@ -24,14 +24,20 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
+#include "vast/pipeline.hpp"
+#include "vast/system/actors.hpp"
+#include "vast/system/sink.hpp"
 #include "vast/system/status.hpp"
-#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/attach_continuous_stream_source.hpp>
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/downstream.hpp>
 #include <caf/io/broker.hpp>
+#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
+#include <caf/stream_stage.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
 #include <optional>
@@ -45,13 +51,6 @@ caf::behavior datagram_source(
   const catalog_actor& catalog, vast::module local_module,
   std::string type_filter, accountant_actor accountant,
   std::vector<pipeline>&& pipelines) {
-  self->state.transformer
-    = self->spawn(transformer, "source-transformer", std::move(pipelines));
-  if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", *self);
-    self->quit();
-    return {};
-  }
   self->state.executor = pipeline_executor{std::move(pipelines)};
   if (auto err = self->state.executor.validate(
         pipeline_executor::allow_aggregate_pipelines::yes)) {
@@ -163,10 +162,6 @@ caf::behavior datagram_source(
             }
           });
       }
-      // Start streaming.
-      self->state.mgr->add_outbound_path(self->state.transformer);
-      auto name = std::string{self->state.reader->name()};
-      self->delegate(self->state.transformer, sink, name);
     },
     [self](atom::get, atom::module) -> caf::result<module> {
       return self->state.reader->module();
@@ -189,24 +184,6 @@ caf::behavior datagram_source(
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
-        const auto timeout = defaults::system::status_request_timeout / 5 * 4;
-        collect_status(
-          rs, timeout, v, self->state.transformer,
-          [rs, src](record& response) mutable {
-            src["transformer"] = std::move(response);
-            auto xs = list{};
-            xs.emplace_back(std::move(src));
-            rs->content["sources"] = std::move(xs);
-          },
-          [rs, src](const caf::error& err) mutable {
-            VAST_WARN("{} failed to retrieve status for the key transformer: "
-                      "{}",
-                      *rs->self, err);
-            src["transformer"] = fmt::to_string(err);
-            auto xs = list{};
-            xs.emplace_back(std::move(src));
-            rs->content["sources"] = std::move(xs);
-          });
       }
       return rs->promise;
     },

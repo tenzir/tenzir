@@ -53,9 +53,6 @@ struct source_state {
   /// Actor for collecting statistics.
   accountant_actor accountant = {};
 
-  /// Actor that receives events.
-  transformer_actor transformer = {};
-
   /// The executor for transforming table slices in a pipeline.
   pipeline_executor executor;
 
