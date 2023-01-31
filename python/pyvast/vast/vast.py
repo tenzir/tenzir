@@ -76,8 +76,9 @@ class AsyncRecordBatchStreamReader:
 class VAST:
     """An instance of a VAST node."""
 
-    def __init__(self):
-        pass
+    def __init__(self, endpoint="127.0.0.1:42000"):
+        self.endpoint = endpoint
+        self.cli = CLI(endpoint=self.endpoint)
 
     @staticmethod
     def _export_args(mode: ExportMode, limit: int):
@@ -93,23 +94,22 @@ class VAST:
             args["max_events"] = limit
         return args
 
-    @staticmethod
-    async def start():
+    async def start(self):
         """Starts a VAST node."""
-        self = VAST()
-        proc = await CLI().start().exec()
+        proc = await self.cli.start().exec()
         await proc.communicate()
         logger.debug(proc.stderr.decode())
-        return self
 
-    @staticmethod
     async def export(
-        expression: str, mode: ExportMode = ExportMode.HISTORICAL, limit: int = 100
+        self,
+        expression: str,
+        mode: ExportMode = ExportMode.HISTORICAL,
+        limit: int = 100,
     ) -> AsyncIterable[TableSlice]:
         """Executes a VAST and receives results as Arrow Tables."""
         if limit == 0:
             return
-        cmd = CLI().export(**VAST._export_args(mode, limit))
+        cmd = self.cli.export(**VAST._export_args(mode, limit))
         if expression == "":
             cmd = cmd.arrow()
         else:
@@ -150,8 +150,7 @@ class VAST:
                 await asyncio.wait_for(t, 3)
                 raise e
 
-    @staticmethod
-    async def status(timeout=0, retry_delay=0.5, **kwargs) -> str:
+    async def status(self, timeout=0, retry_delay=0.5, **kwargs) -> str:
         """Executes the `vast status` command and return the response string.
 
         If `timeout` is greater than 0, the invocation of `vast status` will be
@@ -161,7 +160,7 @@ class VAST:
         """
         start = time.time()
         while True:
-            proc = await CLI().status(**kwargs).exec()
+            proc = await self.cli.status(**kwargs).exec()
             stdout, stderr = await proc.communicate()
             logger.debug(stderr.decode())
             if proc.returncode == 0:
@@ -173,13 +172,12 @@ class VAST:
                     raise Exception(msg)
                 await asyncio.sleep(retry_delay)
 
-    @staticmethod
-    async def count(*args, **kwargs) -> int:
+    async def count(self, *args, **kwargs) -> int:
         """
         Executes the VAST count command and return the response number.
         Examples: `count()`, `count("#type == /suricata.alert/", estimate=True)`.
         """
-        proc = await CLI().count(*args, **kwargs).exec()
+        proc = await self.cli.count(*args, **kwargs).exec()
         stdout, stderr = await proc.communicate()
         logger.debug(stderr.decode())
         if proc.returncode != 0:
