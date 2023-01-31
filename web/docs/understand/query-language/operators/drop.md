@@ -23,3 +23,17 @@ drop:
     # Drop all suricata.dns events in their entirety
     - suricata.dns
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+drop EXTRACTOR[, …]
+```
+
+### Example
+
+Drop the fields `source_ip` and `dest_ip`, and all schemas of type `suricata.dns`:
+
+```
+drop source_ip, dest_ip, :suricata.dns
+```

@@ -26,6 +26,7 @@
 #include "vast/module.hpp"
 #include "vast/optional.hpp"
 #include "vast/system/datagram_source.hpp"
+#include "vast/system/parse_query.hpp"
 #include "vast/system/source.hpp"
 #include "vast/uuid.hpp"
 
@@ -36,15 +37,6 @@
 namespace vast::system {
 
 namespace {
-
-caf::expected<expression> parse_expression(command::argument_iterator begin,
-                                           command::argument_iterator end) {
-  auto str = detail::join(begin, end, " ");
-  auto expr = to<expression>(str);
-  if (expr)
-    expr = normalize_and_validate(*expr);
-  return expr;
-}
 
 template <class... Args>
 void send_to_source(caf::actor& source, Args&&... args) {
@@ -150,10 +142,19 @@ make_source(caf::actor_system& sys, const std::string& format,
   VAST_ASSERT(src);
   // Attempt to parse the remainder as an expression.
   if (!inv.arguments.empty()) {
-    auto expr = parse_expression(inv.arguments.begin(), inv.arguments.end());
-    if (!expr)
-      return expr.error();
-    send_to_source(src, atom::normalize_v, std::move(*expr));
+    auto query_result
+      = system::parse_query(inv.arguments.begin(), inv.arguments.end());
+    if (!query_result)
+      return query_result.error();
+    if (query_result->second) {
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("{} failed to make source: the "
+                                         "provided query must not contain a "
+                                         "pipeline",
+                                         inv.full_name));
+    }
+    auto expr = query_result->first;
+    send_to_source(src, atom::normalize_v, std::move(expr));
   }
   // Connect source to importer.
   VAST_DEBUG("{} connects to {}", inv.full_name, VAST_ARG(importer));

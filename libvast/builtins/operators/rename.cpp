@@ -7,10 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <vast/arrow_table_slice.hpp>
+#include <vast/cast.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/pipeline_operator.hpp>
 #include <vast/plugin.hpp>
@@ -74,15 +76,14 @@ public:
 
   /// Applies the transformation to an Arrow Record Batch with a corresponding
   /// VAST schema.
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  [[nodiscard]] caf::error add(table_slice slice) override {
     // Step 1: Adjust field names.
     if (!config_.fields.empty()) {
       auto field_transformations = std::vector<indexed_transformation>{};
       for (const auto& field : config_.fields) {
         for (const auto& index :
-             caf::get<record_type>(schema).resolve_key_suffix(field.from,
-                                                              schema.name())) {
+             caf::get<record_type>(slice.schema())
+               .resolve_key_suffix(field.from, slice.schema().name())) {
           auto transformation
             = [&](struct record_type::field old_field,
                   std::shared_ptr<arrow::Array> array) noexcept
@@ -96,41 +97,39 @@ public:
         }
       }
       std::sort(field_transformations.begin(), field_transformations.end());
-      std::tie(schema, batch)
-        = transform_columns(schema, batch, field_transformations);
+      slice = transform_columns(slice, field_transformations);
     }
     // Step 2: Adjust schema names.
     if (!config_.schemas.empty()) {
       const auto schema_mapping
         = std::find_if(config_.schemas.begin(), config_.schemas.end(),
                        [&](const auto& name_mapping) noexcept {
-                         return name_mapping.from == schema.name();
+                         return name_mapping.from == slice.schema().name();
                        });
       if (schema_mapping == config_.schemas.end()) {
-        transformed_batches_.emplace_back(std::move(schema), std::move(batch));
+        transformed_.push_back(std::move(slice));
         return caf::none;
       }
       auto rename_schema = [&](const concrete_type auto& pruned_schema) {
-        VAST_ASSERT(!schema.has_attributes());
+        VAST_ASSERT(!slice.schema().has_attributes());
         return type{schema_mapping->to, pruned_schema};
       };
-      schema = caf::visit(rename_schema, schema);
-      batch = arrow::RecordBatch::Make(schema.to_arrow_schema(),
-                                       batch->num_rows(), batch->columns());
+      auto renamed_schema = caf::visit(rename_schema, slice.schema());
+      slice = cast(std::move(slice), renamed_schema);
     }
     // Finally, store the result for later retrieval.
-    transformed_batches_.emplace_back(std::move(schema), std::move(batch));
+    transformed_.push_back(std::move(slice));
     return caf::none;
   } // namespace vast::plugins::rename
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
-    return std::exchange(transformed_batches_, {});
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
+    return std::exchange(transformed_, {});
   }
 
 private:
   /// Cache for transformed batches.
-  std::vector<pipeline_batch> transformed_batches_ = {};
+  std::vector<table_slice> transformed_ = {};
 
   /// Step-specific configuration, including the schema name mapping.
   configuration config_ = {};
@@ -168,6 +167,38 @@ public:
     if (!config)
       return config.error();
     return std::make_unique<rename_operator>(std::move(*config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor_assignment_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> extractor_assignment_list >> optional_ws
+                   >> end_of_pipeline_operator;
+    std::vector<std::tuple<std::string, std::string>> parsed_assignments;
+    if (!p(f, l, parsed_assignments)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto config = configuration{};
+    for (const auto& [to, from] : parsed_assignments) {
+      if (from.starts_with(':')) {
+        config.schemas.push_back({from.substr(1), to});
+      } else {
+        config.fields.push_back({from, to});
+      }
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<rename_operator>(std::move(config)),
+    };
   }
 };
 

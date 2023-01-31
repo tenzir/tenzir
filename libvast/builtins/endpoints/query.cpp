@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/format/json.hpp"
+#include "vast/pipeline.hpp"
 
 #include <vast/command.hpp>
 #include <vast/concept/convertible/to.hpp>
@@ -17,8 +18,8 @@
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
 #include <vast/system/node_control.hpp>
+#include <vast/system/parse_query.hpp>
 #include <vast/system/query_cursor.hpp>
-#include <vast/system/spawn_arguments.hpp>
 #include <vast/table_slice.hpp>
 
 #include <caf/stateful_actor.hpp>
@@ -288,11 +289,12 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         } else {
           return rq.response->abort(422, "missing parameter 'expression'\n");
         }
-        auto expr = system::parse_expression(*query_string);
-        if (!expr)
+        auto query_result = system::parse_query(*query_string);
+        if (!query_result)
           return rq.response->abort(400, fmt::format("unparseable query: {}\n",
-                                                     expr.error()));
-        auto normalized_expr = normalize_and_validate(*expr);
+                                                     query_result.error()));
+        auto expr = query_result->first;
+        auto normalized_expr = normalize_and_validate(expr);
         if (!normalized_expr)
           return rq.response->abort(400, fmt::format("invalid query: {}\n",
                                                      normalized_expr.error()));

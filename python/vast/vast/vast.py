@@ -1,10 +1,9 @@
 import asyncio
-import io
-import json
 import time
-from collections import defaultdict
+from abc import ABC
 from enum import Enum, auto
-from typing import Any, AsyncIterable, Dict
+from typing import AsyncIterable
+import secrets
 
 import pyarrow as pa
 import vast.utils.arrow
@@ -22,6 +21,58 @@ class ExportMode(Enum):
     UNIFIED = auto()
 
 
+class TableSlice(ABC):
+    """The VAST abstraction wrapping Arrow record batches"""
+
+
+class PyArrowTableSlice(TableSlice):
+    """A TableSlice internally represented by a PyArrow RecordBatch"""
+
+    def __init__(self, batch: pa.RecordBatch):
+        self._batch = batch
+
+
+class _LazyReader:
+    """Helper class that instantiates the PyArrow RecordBatchStreamReader in a
+    dedicated thread to avoid blocking"""
+
+    def __init__(self, source):
+        self.source = source
+        self._reader = None
+
+    async def get(self):
+        if self._reader is None:
+            self._reader = await asyncio.to_thread(
+                pa.RecordBatchStreamReader, self.source
+            )
+        return self._reader
+
+
+class AsyncRecordBatchStreamReader:
+    """A thread based wrapper that makes PyArrow RecordBatchStreamReader
+    async"""
+
+    def __init__(self, source):
+        self.reader: _LazyReader = _LazyReader(source)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> TableSlice:
+        reader = await self.reader.get()
+
+        def _next_batch():
+            try:
+                return PyArrowTableSlice(reader.read_next_batch())
+            except StopIteration:
+                return None
+
+        value = await asyncio.to_thread(_next_batch)
+        if value is None:
+            raise StopAsyncIteration
+        return value
+
+
 class VAST:
     """An instance of a VAST node."""
 
@@ -29,62 +80,7 @@ class VAST:
         pass
 
     @staticmethod
-    async def start():
-        """Starts a VAST node."""
-        self = VAST()
-        proc = await CLI().start().exec()
-        await proc.communicate()
-        logger.debug(proc.stderr.decode())
-        return self
-
-    async def export(self, expression: str, limit: int = 100):
-        """Executes a VAST and receives results as Arrow Tables."""
-        proc = await CLI().export(max_events=limit).arrow(expression).exec()
-        stdout, stderr = await proc.communicate()
-        logger.debug(stderr.decode())
-        istream = pa.input_stream(io.BytesIO(stdout))
-        num_batches = 0
-        num_rows = 0
-        batches = defaultdict(list)
-        try:
-            while True:
-                reader = pa.ipc.RecordBatchStreamReader(istream)
-                try:
-                    while True:
-                        batch = reader.read_next_batch()
-                        name = vast.utils.arrow.name(batch.schema)
-                        logger.debug(f"got batch of {name}")
-                        num_batches += 1
-                        num_rows += batch.num_rows
-                        # TODO: this might be slow, but schemas are not
-                        # hashable. The string representation is the next best
-                        # thing to determine uniqueness.
-                        batches[batch.schema.to_string()].append(batch)
-                except StopIteration:
-                    logger.debug(f"read {num_batches}/{num_rows} batches/rows")
-                    num_batches = 0
-                    num_rows = 0
-        except pa.ArrowInvalid:
-            logger.debug("completed processing stream of record batches")
-        result = defaultdict(list)
-        for (_, batches) in batches.items():
-            table = pa.Table.from_batches(batches)
-            name = vast.utils.arrow.name(table.schema)
-            result[name].append(table)
-        return result
-
-    @staticmethod
-    async def export_rows(
-        expression: str, mode: ExportMode, limit: int = -1
-    ) -> AsyncIterable[Dict[str, Any]]:
-        """Get a row wise view of the data
-
-        This method does not provide type information because it is using json
-        as export format. It is a temporary workaround for asynchronicity issues
-        with PyArrow, but we plan to have all VAST Python exports properly typed
-        and backed by Arrow."""
-        if limit == 0:
-            return
+    def _export_args(mode: ExportMode, limit: int):
         args = {}
         match mode:
             case ExportMode.CONTINUOUS:
@@ -95,20 +91,64 @@ class VAST:
                 pass
         if limit > 0:
             args["max_events"] = limit
-        proc = await CLI().export(**args).json(expression).exec()
-        while True:
-            if proc.stdout.at_eof():
-                break
-            line = await proc.stdout.readline()
-            if line.strip() == b"":
-                continue
-            line_dict = json.loads(line)
-            assert isinstance(line_dict, Dict)
-            yield line_dict
+        return args
 
-        _, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            logger.error(stderr.decode())
+    @staticmethod
+    async def start():
+        """Starts a VAST node."""
+        self = VAST()
+        proc = await CLI().start().exec()
+        await proc.communicate()
+        logger.debug(proc.stderr.decode())
+        return self
+
+    @staticmethod
+    async def export(
+        expression: str, mode: ExportMode = ExportMode.HISTORICAL, limit: int = 100
+    ) -> AsyncIterable[TableSlice]:
+        """Executes a VAST and receives results as Arrow Tables."""
+        if limit == 0:
+            return
+        cmd = CLI().export(**VAST._export_args(mode, limit))
+        if expression == "":
+            cmd = cmd.arrow()
+        else:
+            cmd = cmd.arrow(expression)
+        proc = cmd.sync_exec()
+
+        def log():
+            id = secrets.token_hex(6)
+            export_str = f"export({expression}, {mode}, {limit})"
+            logger.debug(f"[export-{id}] Start logging for {export_str}")
+            for line in iter(proc.stderr.readline, b""):
+                logger.debug(f"[export-{id}] {line.decode().strip()}")
+            logger.debug(f"[export-{id}] Stop logging")
+
+        # TODO: don't use default thread pool here as this method
+        # will block one thread per running export, risking exhaustion of
+        # the pool if we run many in parallel.
+        t = asyncio.create_task(asyncio.to_thread(log))
+
+        try:
+            # VAST concatenates IPC streams for different types so we need to
+            # spawn multiple stream readers
+            while True:
+                logger.debug("starting new record batch stream")
+                async for batch in AsyncRecordBatchStreamReader(proc.stdout):
+                    yield batch
+        except Exception as e:
+            if isinstance(e, pa.ArrowInvalid):
+                logger.debug("completed processing stream of record batches")
+            else:
+                # Use SIGKILL as we are already in an unexpected error state, so
+                # there is no point in trying a graceful exit.
+                proc.kill()
+                # We set a timeout to make sure that we don't hang while tearing
+                # down the logging task. The duration of 3s is arbitrary and is
+                # expected to be more than enough for the logger task to
+                # complete.
+                await asyncio.wait_for(t, 3)
+                raise e
 
     @staticmethod
     async def status(timeout=0, retry_delay=0.5, **kwargs) -> str:

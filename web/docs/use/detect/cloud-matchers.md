@@ -48,7 +48,7 @@ You can then create [VAST
 matchers](https://vast.io/docs/use/detect/match-threat-intel#start-matchers)
 through the Lambda client:
 ```bash
-./vast-cloud vast.lambda-client -c "vast matcher start --mode=exact --match-types=addr feodo"
+./vast-cloud vast.lambda-client -c "vast matcher start --mode=exact --match-types=ip feodo"
 ```
 Similarly, you can load indicators into the created matchers.
 

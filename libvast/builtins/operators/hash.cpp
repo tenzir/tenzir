@@ -9,6 +9,9 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/core.hpp>
+#include <vast/concept/parseable/vast/option_set.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
@@ -53,14 +56,13 @@ class hash_operator : public pipeline_operator {
 public:
   explicit hash_operator(configuration configuration);
 
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  [[nodiscard]] caf::error add(table_slice slice) override {
     VAST_TRACE("hash operator adds batch");
     // Get the target field if it exists.
-    const auto& schema_rt = caf::get<record_type>(schema);
+    const auto& schema_rt = caf::get<record_type>(slice.schema());
     auto column_index = schema_rt.resolve_key(config_.field);
     if (!column_index) {
-      transformed_.emplace_back(schema, std::move(batch));
+      transformed_.push_back(std::move(slice));
       return caf::none;
     }
     // Apply the transformation.
@@ -99,23 +101,19 @@ public:
         },
       };
     };
-    auto [adjusted_schema, adjusted_batch] = transform_columns(
-      schema, batch, {{*column_index, std::move(transform_fn)}});
-    VAST_ASSERT(adjusted_schema);
-    VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_schema),
-                              std::move(adjusted_batch));
+    transformed_.push_back(
+      transform_columns(slice, {{*column_index, std::move(transform_fn)}}));
     return caf::none;
   }
 
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
     VAST_DEBUG("hash operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_;
+  std::vector<table_slice> transformed_;
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};
@@ -151,6 +149,62 @@ public:
     if (!config)
       return config.error();
     return std::make_unique<hash_operator>(std::move(*config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto options = option_set_parser{{{"salt", 's'}}};
+    const auto option_parser = (required_ws >> options);
+    auto parsed_options = std::unordered_map<std::string, data>{};
+    if (!option_parser(f, l, parsed_options)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse hash "
+                                                      "operator options: '{}'",
+                                                      pipeline)),
+      };
+    }
+    const auto extractor_parser = optional_ws >> extractor_list >> optional_ws
+                                  >> end_of_pipeline_operator;
+    auto parsed_extractors = std::vector<std::string>{};
+    if (!extractor_parser(f, l, parsed_extractors)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse hash "
+                                                      "operator extractor: "
+                                                      "'{}'",
+                                                      pipeline)),
+      };
+    }
+    auto config = configuration{};
+    config.field = parsed_extractors.front();
+    config.out = parsed_extractors.front() + "_hashed";
+    for (const auto& [key, value] : parsed_options) {
+      auto value_str = caf::get_if<std::string>(&value);
+      if (!value_str) {
+        return {
+          std::string_view{f, l},
+          caf::make_error(ec::syntax_error, fmt::format("invalid option value "
+                                                        "string for "
+                                                        "pseudonymize "
+                                                        "operator: "
+                                                        "'{}'",
+                                                        value)),
+        };
+      }
+      if (key == "s" || key == "salt") {
+        config.salt = *value_str;
+      }
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<hash_operator>(std::move(config)),
+    };
   }
 };
 

@@ -18,3 +18,17 @@ select:
     - ip
     - timestamp
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+select EXTRACTOR[, …]
+```
+
+### Example
+
+Keep the `ip` and `timestamp` fields.
+
+```
+select ip, timestamp
+```

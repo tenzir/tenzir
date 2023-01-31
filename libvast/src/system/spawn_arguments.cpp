@@ -9,16 +9,10 @@
 #include "vast/system/spawn_arguments.hpp"
 
 #include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/detail/collect.hpp"
 #include "vast/detail/load_contents.hpp"
-#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
 #include "vast/module.hpp"
-#include "vast/plugin.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/error.hpp>
@@ -30,48 +24,6 @@
 #include <optional>
 
 namespace vast::system {
-
-caf::expected<expression> parse_expression(const std::string& query) {
-  // Get all query languages, but make sure that VAST is at the front.
-  // TODO: let the user choose exactly one language instead.
-  auto query_languages = collect(plugins::get<query_language_plugin>());
-  if (const auto* vastql = plugins::find<query_language_plugin>("VASTQL")) {
-    const auto it
-      = std::find(query_languages.begin(), query_languages.end(), vastql);
-    VAST_ASSERT_CHEAP(it != query_languages.end());
-    std::rotate(query_languages.begin(), it, it + 1);
-  }
-  for (const auto& query_language : query_languages) {
-    if (auto expr = query_language->make_query(query))
-      return expr;
-    else
-      VAST_DEBUG("failed to parse query as {} language: {}",
-                 query_language->name(), expr.error());
-  }
-  return caf::make_error(ec::syntax_error,
-                         fmt::format("invalid query: {}", query));
-}
-
-caf::expected<expression>
-parse_expression(std::vector<std::string>::const_iterator begin,
-                 std::vector<std::string>::const_iterator end) {
-  if (begin == end)
-    return caf::make_error(ec::syntax_error, "no query expression given");
-  auto query = detail::join(begin, end, " ");
-  return parse_expression(query);
-}
-
-caf::expected<expression>
-parse_expression(const std::vector<std::string>& args) {
-  return parse_expression(args.begin(), args.end());
-}
-
-caf::expected<expression> parse_expression(const spawn_arguments& args) {
-  auto expr = system::parse_expression(args.inv.arguments);
-  if (!expr)
-    return expr.error();
-  return *expr;
-}
 
 caf::expected<std::optional<module>> read_module(const spawn_arguments& args) {
   auto module_file_ptr = caf::get_if<std::string>(&args.inv.options, "schema");

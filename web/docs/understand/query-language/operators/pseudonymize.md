@@ -24,3 +24,18 @@ pseudonymize:
     - ip_origin
     - ip_dest
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+pseudonymize (-m|--method=STRING) (-s|--seed=STRING) FIELD[, …]
+```
+
+### Example
+
+Pseudonymize all values of the fields `ip_origin` and `ip_dest` using the
+`crypto-pan` algorithm and `deadbeef` seed:
+
+```
+pseudonymize --method="crypto-pan" --seed="deadbeef" ip_origin, ip_dest
+```

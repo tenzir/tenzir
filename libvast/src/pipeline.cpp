@@ -8,7 +8,9 @@
 
 #include "vast/pipeline.hpp"
 
+#include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_encoding.hpp"
 
@@ -20,6 +22,46 @@
 #include <algorithm>
 
 namespace vast {
+
+caf::expected<pipeline>
+pipeline::parse(std::string name, std::string_view repr) {
+  auto result = pipeline{std::move(name), {}};
+  // plugin name parser
+  using parsers::alnum, parsers::chr, parsers::space;
+  const auto optional_ws = ignore(*space);
+  const auto plugin_name_char_parser = alnum | chr{'-'};
+  const auto plugin_name_parser = optional_ws >> +plugin_name_char_parser;
+  while (!repr.empty()) {
+    // 1. parse a single word as operator plugin name
+    const auto* f = repr.begin();
+    const auto* const l = repr.end();
+    auto plugin_name = std::string{};
+    if (!plugin_name_parser(f, l, plugin_name)) {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("failed to parse pipeline '{}': "
+                                         "operator name is invalid",
+                                         repr));
+    }
+    // 2. find plugin using operator name
+    const auto* plugin = plugins::find<pipeline_operator_plugin>(plugin_name);
+    if (!plugin) {
+      return caf::make_error(ec::syntax_error,
+                             fmt::format("failed to parse pipeline '{}': "
+                                         "operator '{}' does not exist",
+                                         repr, plugin_name));
+    }
+    // 3. ask the plugin to parse itself from the remainder
+    auto [remaining_repr, op]
+      = plugin->make_pipeline_operator(std::string_view{f, l});
+    if (!op)
+      return caf::make_error(ec::unspecified, fmt::format("failed to parse "
+                                                          "pipeline '{}': {}",
+                                                          repr, op.error()));
+    result.add_operator(std::move(*op));
+    repr = remaining_repr;
+  }
+  return result;
+}
 
 pipeline::pipeline(std::string name, std::vector<std::string>&& schema_names)
   : name_(std::move(name)), schema_names_(std::move(schema_names)) {
@@ -52,8 +94,7 @@ bool pipeline::applies_to(std::string_view event_name) const {
 caf::error pipeline::add(table_slice&& x) {
   VAST_DEBUG("transform {} adds a slice", name_);
   import_timestamps_.push_back(x.import_time());
-  auto batch = to_record_batch(x);
-  return add_batch(x.schema(), batch);
+  return add_slice(std::move(x));
 }
 
 caf::expected<std::vector<table_slice>> pipeline::finish() {
@@ -78,42 +119,48 @@ caf::expected<std::vector<table_slice>> pipeline::finish() {
     VAST_ASSERT_CHEAP(!import_timestamps_.empty());
     auto max_import_timestamp
       = *std::max_element(import_timestamps_.begin(), import_timestamps_.end());
-    for (auto& [schema, batch] : *finished) {
-      auto& slice = result.emplace_back(batch);
-      slice.import_time(max_import_timestamp);
+    for (auto& slice : *finished) {
+      if (slice.rows() == 0)
+        continue;
+      if (slice.import_time() == time{})
+        slice.import_time(max_import_timestamp);
+      result.push_back(std::move(slice));
     }
   } else {
-    for (size_t i = 0; auto& [schema, batch] : *finished) {
-      auto& slice = result.emplace_back(batch);
-      slice.import_time(import_timestamps_[i++]);
+    for (size_t i = 0; auto& slice : *finished) {
+      if (slice.rows() == 0)
+        continue;
+      if (slice.import_time() == time{})
+        slice.import_time(import_timestamps_[i++]);
+      result.push_back(std::move(slice));
     }
   }
   return result;
 }
 
-caf::error pipeline::add_batch(vast::type schema,
-                               std::shared_ptr<arrow::RecordBatch> batch) {
+caf::error pipeline::add_slice(table_slice slice) {
   VAST_TRACE("add arrow data to transform {}", name_);
-  to_transform_.emplace_back(std::move(schema), std::move(batch));
+  to_transform_.emplace_back(std::move(slice));
   return caf::none;
 }
 
-caf::error pipeline::process_queue(const std::unique_ptr<pipeline_operator>& op,
-                                   std::vector<pipeline_batch>& result,
-                                   bool check_schema) {
+caf::error
+pipeline::process_queue(pipeline_operator& op, std::vector<table_slice>& result,
+                        bool check_schema) {
   caf::error failed{};
   const auto size = to_transform_.size();
   for (size_t i = 0; i < size; ++i) {
-    auto [schema, batch] = std::move(to_transform_.front());
+    auto slice = std::move(to_transform_.front());
     to_transform_.pop_front();
-    if (check_schema && !applies_to(schema.name())) {
+    if (check_schema && !applies_to(slice.schema().name())) {
       // The transform does not change slices of unconfigured event types.
       VAST_TRACE("{} transform skips a '{}' schema slice with {} event(s)",
-                 this->name(), std::string{schema.name()}, batch->num_rows());
-      result.emplace_back(std::move(schema), std::move(batch));
+                 this->name(), std::string{slice.schema().name()},
+                 slice.rows());
+      result.push_back(std::move(slice));
       continue;
     }
-    if (auto err = op->add(std::move(schema), std::move(batch))) {
+    if (auto err = op.add(std::move(slice))) {
       failed = caf::make_error(
         static_cast<vast::ec>(err.code()),
         fmt::format("transform aborts because of an error: {}", err));
@@ -122,7 +169,7 @@ caf::error pipeline::process_queue(const std::unique_ptr<pipeline_operator>& op,
     }
   }
   // Finish frees up resource inside the plugin.
-  auto finished = op->finish();
+  auto finished = op.finish();
   if (!finished && !failed)
     failed = std::move(finished.error());
   if (failed) {
@@ -130,16 +177,17 @@ caf::error pipeline::process_queue(const std::unique_ptr<pipeline_operator>& op,
     return failed;
   }
   for (const auto& b : *finished)
-    to_transform_.push_back(b);
+    if (b.rows() > 0)
+      to_transform_.push_back(b);
   return caf::none;
 }
 
-caf::expected<std::vector<pipeline_batch>> pipeline::finish_batch() {
+caf::expected<std::vector<table_slice>> pipeline::finish_batch() {
   VAST_DEBUG("applying {} pipeline {}", operators_.size(), name_);
   bool first_run = true;
-  std::vector<pipeline_batch> result{};
+  std::vector<table_slice> result{};
   for (const auto& op : operators_) {
-    auto failed = process_queue(op, result, first_run);
+    auto failed = process_queue(*op, result, first_run);
     first_run = false;
     if (failed) {
       to_transform_.clear();
@@ -192,13 +240,13 @@ caf::error pipeline_executor::add(table_slice&& x) {
 }
 
 caf::error pipeline_executor::process_queue(pipeline& pipeline,
-                                            std::deque<pipeline_batch>& queue) {
+                                            std::deque<table_slice>& queue) {
   caf::error failed{};
   const auto size = queue.size();
   for (size_t i = 0; i < size; ++i) {
-    auto [schema, batch] = std::move(queue.front());
+    auto slice = std::move(queue.front());
     queue.pop_front();
-    if (auto err = pipeline.add_batch(schema, batch)) {
+    if (auto err = pipeline.add_slice(std::move(slice))) {
       failed = err;
       while (!queue.empty())
         queue.pop_front();
@@ -220,7 +268,7 @@ caf::error pipeline_executor::process_queue(pipeline& pipeline,
 caf::expected<std::vector<table_slice>> pipeline_executor::finish() {
   VAST_TRACE("pipeline engine retrieves results");
   auto to_transform = std::exchange(to_transform_, {});
-  std::unordered_map<vast::type, std::deque<pipeline_batch>> batches{};
+  std::unordered_map<vast::type, std::deque<table_slice>> batches{};
   std::vector<table_slice> result{};
   for (auto& [schema, queue] : to_transform) {
     // TODO: Consider using a tsl robin map instead for transparent key lookup.
@@ -235,10 +283,8 @@ caf::expected<std::vector<table_slice>> pipeline_executor::finish() {
       continue;
     }
     auto& bq = batches[schema];
-    for (auto& s : queue) {
-      auto b = to_record_batch(s);
-      bq.emplace_back(schema, b);
-    }
+    for (auto& slice : queue)
+      bq.push_back(std::move(slice));
     queue.clear();
     auto indices = matching == schema_mapping_.end() ? std::vector<size_t>{}
                                                      : matching->second;
@@ -265,8 +311,8 @@ caf::expected<std::vector<table_slice>> pipeline_executor::finish() {
     }
   }
   for (auto& [schema, queue] : batches) {
-    for (auto& [schema, batch] : queue)
-      result.emplace_back(batch);
+    for (auto& slice : queue)
+      result.push_back(std::move(slice));
     queue.clear();
   }
   return result;

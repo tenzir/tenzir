@@ -9,6 +9,7 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
@@ -53,33 +54,27 @@ public:
 
   /// Projects an arrow record batch.
   /// @returns The new schema and the projected record batch.
-  caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  caf::error add(table_slice slice) override {
     VAST_TRACE("select operator adds batch");
     auto indices = std::vector<offset>{};
     for (const auto& field : config_.fields)
-      for (auto&& index : caf::get<record_type>(schema).resolve_key_suffix(
-             field, schema.name()))
+      for (auto&& index : caf::get<record_type>(slice.schema())
+                            .resolve_key_suffix(field, slice.schema().name()))
         indices.push_back(std::move(index));
     std::sort(indices.begin(), indices.end());
-    auto [adjusted_schema, adjusted_batch]
-      = select_columns(schema, batch, indices);
-    if (adjusted_schema) {
-      VAST_ASSERT(adjusted_batch);
-      transformed_.emplace_back(std::move(adjusted_schema),
-                                std::move(adjusted_batch));
-    }
+    slice = select_columns(slice, indices);
+    transformed_.push_back(std::move(slice));
     return caf::none;
   }
 
-  caf::expected<std::vector<pipeline_batch>> finish() override {
+  caf::expected<std::vector<table_slice>> finish() override {
     VAST_TRACE("select operator finished transformation");
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_ = {};
+  std::vector<table_slice> transformed_ = {};
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};
@@ -107,6 +102,31 @@ public:
     if (!config)
       return config.error();
     return std::make_unique<select_operator>(std::move(*config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor, parsers::extractor_char,
+      parsers::extractor_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> extractor_list >> optional_ws
+                   >> end_of_pipeline_operator;
+    auto config = configuration{};
+    if (!p(f, l, config.fields)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse select "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<select_operator>(std::move(config)),
+    };
   }
 };
 

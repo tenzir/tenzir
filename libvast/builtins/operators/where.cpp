@@ -8,8 +8,10 @@
 
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/string/char_class.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/error.hpp>
 #include <vast/expression.hpp>
 #include <vast/logger.hpp>
@@ -60,25 +62,22 @@ public:
 
   /// Applies the transformation to a record batch with a corresponding vast
   /// schema.
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
+  [[nodiscard]] caf::error add(table_slice slice) override {
     VAST_TRACE("where operator adds batch");
-    auto tailored_expr = tailor(expr_, schema);
+    auto tailored_expr = tailor(expr_, slice.schema());
     if (!tailored_expr) {
       transformed_.clear();
       return tailored_expr.error();
     }
     // TODO: Replace this with an Arrow-native filter function as soon as we are
     // able to directly evaluate expressions on a record batch.
-    if (auto new_slice = filter(table_slice{batch}, *tailored_expr)) {
-      auto as_batch = to_record_batch(*new_slice);
-      transformed_.emplace_back(new_slice->schema(), std::move(as_batch));
-    }
+    if (auto new_slice = filter(slice, *tailored_expr))
+      transformed_.push_back(*new_slice);
     return caf::none;
   }
 
   /// Retrieves the result of the transformation.
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
     VAST_DEBUG("where operator finished transformation");
     return std::exchange(transformed_, {});
   }
@@ -87,7 +86,7 @@ private:
   expression expr_ = {};
 
   /// The slices being transformed.
-  std::vector<pipeline_batch> transformed_ = {};
+  std::vector<table_slice> transformed_ = {};
 };
 
 class plugin final : public virtual pipeline_operator_plugin {
@@ -126,6 +125,41 @@ public:
                     *expr, normalized_and_validated_expr.error()));
     return std::make_unique<where_operator>(
       std::move(*normalized_and_validated_expr));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::optional_ws, parsers::required_ws,
+      parsers::end_of_pipeline_operator, parsers::expr;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p
+      = required_ws >> expr >> optional_ws >> end_of_pipeline_operator;
+    auto parse_result = expression{};
+    if (!p(f, l, parse_result)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse where "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto normalized_and_validated_expr = normalize_and_validate(parse_result);
+    if (!normalized_and_validated_expr) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(
+          ec::invalid_configuration,
+          fmt::format("failed to normalized and validate expression '{}': {}",
+                      parse_result, normalized_and_validated_expr.error())),
+      };
+    }
+    return {
+      std::string_view{f, l},
+      std::make_unique<where_operator>(
+        std::move(*normalized_and_validated_expr)),
+    };
   }
 };
 

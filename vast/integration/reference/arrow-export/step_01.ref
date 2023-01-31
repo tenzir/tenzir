@@ -1,30 +1,36 @@
+    -- field metadata --
+    -- field metadata --
+    -- field metadata --
+    -- field metadata --
+    ARROW:extension:metadata: 'vast.address'
+    ARROW:extension:metadata: 'vast.address'
+    ARROW:extension:name: 'vast.address'
+    ARROW:extension:name: 'vast.address'
+    VAST:name:0: 'port'
+    VAST:name:0: 'port'
   -- field metadata --
   -- field metadata --
   -- field metadata --
-  -- field metadata --
-  -- field metadata --
-  -- field metadata --
-  ARROW:extension:metadata: 'vast.address'
-  ARROW:extension:metadata: 'vast.address'
-  ARROW:extension:name: 'vast.address'
-  ARROW:extension:name: 'vast.address'
   VAST:attributes:0: '{ "index": "hash" }'
-  VAST:name:0: 'port'
-  VAST:name:0: 'port'
   VAST:name:0: 'timestamp'
+  VAST:name:0: 'zeek.conn_id'
   child 0, item: string
+  child 0, orig_h: fixed_size_binary[16]
+  child 1, orig_p: uint64
+  child 2, resp_h: fixed_size_binary[16]
+  child 3, resp_p: uint64
 -- schema metadata --
 VAST:name:0: 'zeek.conn'
+_write_ts: timestamp[ns]
+community_id: string
 conn_state: string
 done with all readers
 done with current reader, rows: 10
 duration: duration[ns]
 history: string
-id.orig_h: fixed_size_binary[16]
-id.orig_p: uint64
-id.resp_h: fixed_size_binary[16]
-id.resp_p: uint64
+id: struct<orig_h: fixed_size_binary[16], orig_p: uint64, resp_h: fixed_size_binary[16], resp_p: uint64>
 local_orig: bool
+local_resp: bool
 missed_bytes: uint64
 open next reader
 open next reader

@@ -13,3 +13,17 @@ input.
 where:
   expression: "dest_port == 53"
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+where EXPRESSION
+```
+
+### Example
+
+Evaluate the expression `dest_port == 53`.
+
+```
+where dest_port == 53
+```

@@ -176,7 +176,7 @@ Using type extractors (and thereby value predicates) hinges on having
 a powerful type system. If you only have strings and numbers, this is not
 helping much. VAST's [type system](/docs/understand/data-model/type-system)
 supports *aliases*, e.g., you can define an alias called `port` that points to a
-`count`. Then you'd write a query only over ports:
+`uint64`. Then you'd write a query only over ports:
 
 ```c
 :port != 443

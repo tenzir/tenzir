@@ -10,7 +10,10 @@
 
 #include "vast/table_slice.hpp"
 
+#include "vast/arrow_table_slice.hpp"
+#include "vast/cast.hpp"
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/collect.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
@@ -22,6 +25,7 @@
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
+#include <arrow/record_batch.h>
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
 
@@ -278,6 +282,100 @@ TEST(evaluate) {
       };
   check_eval("#type == \"zeek.conn\"", {{0, 8}});
   check_eval("#type != \"zeek.conn\"", {});
+}
+
+TEST(cast) {
+  const auto sut = head(zeek_conn_log_full[0], 3);
+  REQUIRE_EQUAL(sut.rows(), 3u);
+  const auto output_schema = type{
+    "zeek.custom",
+    record_type{
+      // We can add null columns.
+      {"foo", int64_type{}},
+      // We can remove and assign metadata at the same time.
+      {"ts", type{"not_timestamp", time_type{}, {{"foo"}}}},
+      // We can change nesting.
+      {"id",
+       record_type{
+         // Even nested fields can be re-ordered.
+         {"orig_p", uint64_type{}},
+         {"orig_h", ip_type{}},
+         // Casting requires a full match on the key, so id.id.resp_h will be
+         // all nulls.
+         {"id",
+          record_type{
+            {"resp_h", ip_type{}},
+          }},
+       }},
+      // We can also partially change nesting.
+      {"id.resp_h", ip_type{}},
+    },
+  };
+  CHECK_NOT_EQUAL(sut.schema(), output_schema);
+  REQUIRE(can_cast(sut.schema(), output_schema));
+  const auto output = cast(sut, output_schema);
+  REQUIRE_EQUAL(output.schema(), output_schema);
+  REQUIRE_EQUAL(output.rows(), 3u);
+  const auto rows
+    = collect(values(caf::get<record_type>(output_schema),
+                     *to_record_batch(output)->ToStructArray().ValueOrDie()));
+  const auto expected_rows = std::vector<record>{
+    record{
+      {"foo", caf::none},
+      {"ts", unbox(to<vast::time>("2009-11-18T08:00:21.486539"))},
+      {"id",
+       record{
+         {"orig_p", uint64_t{68}},
+         {"orig_h", unbox(to<ip>("192.168.1.102"))},
+         {"id",
+          record{
+            {"resp_h", caf::none},
+          }},
+       }},
+      {"id.resp_h", unbox(to<ip>("192.168.1.1"))},
+    },
+    record{
+      {"foo", caf::none},
+      {"ts", unbox(to<vast::time>("2009-11-18T08:08:00.237253"))},
+      {"id",
+       record{
+         {"orig_p", uint64_t{137}},
+         {"orig_h", unbox(to<ip>("192.168.1.103"))},
+         {"id",
+          record{
+            {"resp_h", caf::none},
+          }},
+       }},
+      {"id.resp_h", unbox(to<ip>("192.168.1.255"))},
+    },
+    record{
+      {"foo", caf::none},
+      {"ts", unbox(to<vast::time>("2009-11-18T08:08:13.816224"))},
+      {"id",
+       record{
+         {"orig_p", uint64_t{137}},
+         {"orig_h", unbox(to<ip>("192.168.1.102"))},
+         {"id",
+          record{
+            {"resp_h", caf::none},
+          }},
+       }},
+      {"id.resp_h", unbox(to<ip>("192.168.1.255"))},
+    },
+  };
+  REQUIRE_EQUAL(rows.size(), expected_rows.size());
+  REQUIRE(rows[0]);
+  REQUIRE(rows[1]);
+  REQUIRE(rows[2]);
+  // The string to time parsing has rounding errors, so we compare the strings
+  // of records instead here; the time values are off by a few bits, but that
+  // allows for using to<time>(...) above.
+  CHECK_EQUAL(fmt::to_string(materialize(*rows[0])),
+              fmt::to_string(expected_rows[0]));
+  CHECK_EQUAL(fmt::to_string(materialize(*rows[1])),
+              fmt::to_string(expected_rows[1]));
+  CHECK_EQUAL(fmt::to_string(materialize(*rows[2])),
+              fmt::to_string(expected_rows[2]));
 }
 
 TEST(project column flat index) {

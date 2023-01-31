@@ -11,6 +11,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/passthrough.hpp"
 #include "vast/table_slice.hpp"
 
 #include <arrow/array.h>
@@ -322,6 +323,23 @@ auto values(const Type& type, const type_to_arrow_array_t<Type>& arr) noexcept
   }
 }
 
+auto values(const type& type,
+            const std::same_as<arrow::Array> auto& array) noexcept
+  -> detail::generator<data_view> {
+  const auto f = []<concrete_type Type>(
+                   const Type& type,
+                   const arrow::Array& array) -> detail::generator<data_view> {
+    for (auto&& result :
+         values(type, caf::get<type_to_arrow_array_t<Type>>(array))) {
+      if (!result)
+        co_yield {};
+      else
+        co_yield std::move(*result);
+    }
+  };
+  return caf::visit(f, type, detail::passthrough(array));
+}
+
 struct indexed_transformation {
   using function_type = std::function<std::vector<
     std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>(
@@ -351,7 +369,15 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
   type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   const std::vector<indexed_transformation>& transformations) noexcept;
 
-/// Removed all unspecified columns from both a VAST schema and an Arrow record
+/// Applies a list of transformations to a table slice.
+/// @pre Transformations must be sorted by index.
+/// @pre Transformation indices must not be a subset of the following
+/// transformation's index.
+table_slice transform_columns(
+  const table_slice& slice,
+  const std::vector<indexed_transformation>& transformations) noexcept;
+
+/// Remove all unspecified columns from both a VAST schema and an Arrow record
 /// batch.
 /// @pre VAST schema and Arrow schema must match.
 /// @pre Indices must be sorted.
@@ -359,6 +385,12 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                const std::vector<offset>& indices) noexcept;
+
+/// Remove all unspecified columns from a table slice.
+/// @pre Indices must be sorted.
+/// @pre Indices must not be a subset of the following index.
+table_slice select_columns(const table_slice& slice,
+                           const std::vector<offset>& indices) noexcept;
 
 // -- template machinery -------------------------------------------------------
 

@@ -9,15 +9,11 @@
 #include "vast/arrow_table_slice.hpp"
 
 #include "vast/config.hpp"
-#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/detail/passthrough.hpp"
-#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
-#include "vast/legacy_type.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/value_index.hpp"
@@ -32,26 +28,6 @@
 #include <utility>
 
 namespace vast {
-
-auto values(const type& type,
-            const std::same_as<arrow::Array> auto& array) noexcept
-  -> detail::generator<data_view> {
-  const auto f = []<concrete_type Type>(
-                   const Type& type,
-                   const arrow::Array& array) -> detail::generator<data_view> {
-    for (auto&& result :
-         values(type, caf::get<type_to_arrow_array_t<Type>>(array))) {
-      if (!result)
-        co_yield {};
-      else
-        co_yield std::move(*result);
-    }
-  };
-  return caf::visit(f, type, detail::passthrough(array));
-}
-
-template auto values(const type& type, const arrow::Array& array) noexcept
-  -> detail::generator<data_view>;
 
 // -- utility for converting Buffer to RecordBatch -----------------------------
 
@@ -438,6 +414,19 @@ std::pair<type, std::shared_ptr<arrow::RecordBatch>> transform_columns(
   };
 }
 
+table_slice transform_columns(
+  const table_slice& slice,
+  const std::vector<indexed_transformation>& transformations) noexcept {
+  auto [schema, batch] = transform_columns(
+    slice.schema(), to_record_batch(slice), transformations);
+  if (!schema)
+    return {};
+  auto result = table_slice{batch, std::move(schema)};
+  result.offset(slice.offset());
+  result.import_time(slice.import_time());
+  return result;
+}
+
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                const std::vector<offset>& indices) noexcept {
@@ -548,6 +537,18 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
     arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
                              std::move(layer.arrays)),
   };
+}
+
+table_slice select_columns(const table_slice& slice,
+                           const std::vector<offset>& indices) noexcept {
+  auto [schema, batch]
+    = select_columns(slice.schema(), to_record_batch(slice), indices);
+  if (!schema)
+    return {};
+  auto result = table_slice{batch, std::move(schema)};
+  result.offset(slice.offset());
+  result.import_time(slice.import_time());
+  return result;
 }
 
 // -- template machinery -------------------------------------------------------

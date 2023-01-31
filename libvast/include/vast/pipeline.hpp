@@ -18,6 +18,11 @@ namespace vast {
 
 class pipeline {
 public:
+  /// Parse a pipeline from its textual representation.
+  /// @param name the pipeline name
+  /// @param repr the textual representation of the pipeline itself
+  static caf::expected<pipeline> parse(std::string name, std::string_view repr);
+
   pipeline(std::string name, std::vector<std::string>&& schema_names);
 
   ~pipeline() = default;
@@ -51,17 +56,15 @@ private:
   [[nodiscard]] const std::vector<std::string>& schema_names() const;
 
   /// Add the batch to the internal queue of batches to be transformed.
-  [[nodiscard]] caf::error
-  add_batch(vast::type schema, std::shared_ptr<arrow::RecordBatch> batch);
+  [[nodiscard]] caf::error add_slice(table_slice slice);
 
   /// Applies pipelines to the batches in the internal queue.
   /// @note The offsets of the slices may not be preserved.
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish_batch();
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish_batch();
 
   /// Applies the pipeline operator to every batch in the queue.
-  caf::error
-  process_queue(const std::unique_ptr<pipeline_operator>& op,
-                std::vector<pipeline_batch>& result, bool check_schema);
+  caf::error process_queue(pipeline_operator& op,
+                           std::vector<table_slice>& result, bool check_schema);
 
   /// Grant access to the pipelines engine so it can call
   /// add_batch/finsih_batch.
@@ -77,7 +80,7 @@ private:
   std::vector<std::string> schema_names_;
 
   /// The slices being transformed.
-  std::deque<pipeline_batch> to_transform_;
+  std::deque<table_slice> to_transform_;
 
   /// The import timestamps collected since the last call to finish.
   std::vector<time> import_timestamps_ = {};
@@ -113,7 +116,7 @@ public:
 
 private:
   static caf::error
-  process_queue(pipeline& transform, std::deque<pipeline_batch>& queue);
+  process_queue(pipeline& transform, std::deque<table_slice>& queue);
 
   /// Apply relevant pipelines to the table slice.
   caf::expected<table_slice> transform_slice(table_slice&& x);

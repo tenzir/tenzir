@@ -24,7 +24,13 @@ else ()
   set(PARQUET_LIBRARY Parquet::parquet_static)
 endif ()
 
-find_package(Parquet 10.0)
+find_package(Parquet)
+if (Parquet_VERSION_MAJOR LESS 10)
+  message(
+    FATAL_ERROR
+      "The Parquet plugin requires at least Parquet version 10.0, but found ${PARQUET_VERSION}"
+  )
+endif ()
 if (NOT Parquet_FOUND)
   # Compatibility for Arrow < 10. The ParquetConfig.cmake file is in the wrong
   # location in that case.

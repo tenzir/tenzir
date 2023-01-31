@@ -10,6 +10,9 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/convertible/data.hpp>
 #include <vast/concept/convertible/to.hpp>
+#include <vast/concept/parseable/core.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
+#include <vast/concept/parseable/vast/time.hpp>
 #include <vast/error.hpp>
 #include <vast/hash/hash_append.hpp>
 #include <vast/pipeline.hpp>
@@ -536,7 +539,7 @@ public:
   }
 
   /// Finish the buckets into a new batch.
-  [[nodiscard]] caf::expected<pipeline_batch> finish() {
+  [[nodiscard]] caf::expected<table_slice> finish() {
     auto builder = caf::get<record_type>(output_schema)
                      .make_arrow_builder(arrow::default_memory_pool());
     VAST_ASSERT(builder);
@@ -587,7 +590,7 @@ public:
       output_schema.to_arrow_schema(), num_rows,
       caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
         .fields());
-    return pipeline_batch{output_schema, std::move(batch)};
+    return table_slice{batch, std::move(output_schema)};
   }
 
 private:
@@ -664,50 +667,44 @@ private:
 
   /// Adds a batch to the operator, which effectively calls the corresponding
   /// add for the lazily created aggregation for the schema.
-  [[nodiscard]] caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
-    VAST_ASSERT(schema);
-    VAST_ASSERT(caf::holds_alternative<record_type>(schema));
-    VAST_ASSERT(batch);
+  [[nodiscard]] caf::error add(table_slice slice) override {
     // Try to find whether we have an aggregation already for the schema to
     // forward the batch to it.
-    if (auto aggregation = aggregations_.find(schema);
+    if (auto aggregation = aggregations_.find(slice.schema());
         aggregation != aggregations_.end()) {
-      aggregation->second.add(batch);
+      aggregation->second.add(to_record_batch(slice));
       return {};
     }
-    // Check if we already blacklisted this schema.
-    if (auto blacklist_entry = blacklist_.find(schema);
-        blacklist_entry != blacklist_.end()) {
-      blacklist_entry->second.emplace_back(std::move(schema), std::move(batch));
-      return {};
-    }
-    // We didn't have one, so we create a new one for this schema.
-    auto aggregation = aggregation::make(schema, config_);
     // Note: We intentionally decouple the lifetime of the type's underlying
     // chunk here in order to make sure that no data is held alive for the
     // duration of the pipeline operator's existence.
-    auto decoupled_schema = type{chunk::copy(schema)};
+    auto decoupled_schema = type{chunk::copy(slice.schema())};
+    // Check if we already blacklisted this schema.
+    if (auto blacklist_entry = blacklist_.find(slice.schema());
+        blacklist_entry != blacklist_.end()) {
+      blacklist_entry->second.push_back(std::move(slice));
+      return {};
+    }
+    // We didn't have one, so we create a new one for this schema.
+    auto aggregation = aggregation::make(decoupled_schema, config_);
     if (!aggregation) {
       VAST_WARN("summarize operator does not apply to schema {} and leaves "
                 "events unchanged: {}",
-                schema, aggregation.error());
-      auto blacklist_entry
-        = std::vector<pipeline_batch>{{std::move(schema), std::move(batch)}};
+                slice.schema(), aggregation.error());
       blacklist_.emplace(std::move(decoupled_schema),
-                         std::move(blacklist_entry));
+                         std::vector{std::move(slice)});
       return {};
     }
     auto [it, inserted] = aggregations_.emplace(std::move(decoupled_schema),
                                                 std::move(*aggregation));
     VAST_ASSERT(inserted);
-    it->second.add(batch);
+    it->second.add(to_record_batch(slice));
     return {};
   }
 
   /// Retrieves the results of all configured aggregations.
-  [[nodiscard]] caf::expected<std::vector<pipeline_batch>> finish() override {
-    auto result = std::vector<pipeline_batch>{};
+  [[nodiscard]] caf::expected<std::vector<table_slice>> finish() override {
+    auto result = std::vector<table_slice>{};
     result.reserve(aggregations_.size());
     for (auto& [schema, aggregation] : aggregations_) {
       auto batch = aggregation.finish();
@@ -720,7 +717,6 @@ private:
       result.insert(result.end(), std::make_move_iterator(batches.begin()),
                     std::make_move_iterator(batches.end()));
     }
-
     return result;
   }
 
@@ -731,7 +727,7 @@ private:
   std::unordered_map<type, aggregation> aggregations_ = {};
 
   /// Batches that do not apply to any aggregation.
-  std::unordered_map<type, std::vector<pipeline_batch>> blacklist_ = {};
+  std::unordered_map<type, std::vector<table_slice>> blacklist_ = {};
 };
 
 caf::expected<std::unique_ptr<pipeline_operator>>
@@ -815,6 +811,60 @@ public:
                     fmt::join(sections_to_reformat, "', '")));
     }
     return try_handle_deprecations(config, sections_to_reformat);
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::duration, parsers::extractor_list,
+      parsers::aggregation_function_list;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> aggregation_function_list >> required_ws
+                   >> ("by") >> required_ws >> extractor_list
+                   >> -(required_ws >> "resolution" >> required_ws >> duration)
+                   >> optional_ws >> end_of_pipeline_operator;
+    std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
+                                      std::vector<std::string>>>,
+               std::vector<std::string>, std::optional<vast::duration>>
+      parsed_aggregations{};
+    if (!p(f, l, parsed_aggregations)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse "
+                                                      "summarize "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    auto config = configuration{};
+    for (const auto& [output, function_name, arguments] :
+         std::get<0>(parsed_aggregations)) {
+      configuration::aggregation new_aggregation{};
+      if (!plugins::find<aggregation_function_plugin>(function_name)) {
+        return {
+          std::string_view{f, l},
+          caf::make_error(ec::syntax_error, fmt::format("invalid aggregation "
+                                                        "name: '{}'",
+                                                        function_name)),
+        };
+      }
+      new_aggregation.function_name = function_name;
+      new_aggregation.input_extractors = arguments;
+      new_aggregation.output
+        = (output)
+            ? *output
+            : fmt::format("{}({})", function_name, fmt::join(arguments, ","));
+      config.aggregations.push_back(std::move(new_aggregation));
+    }
+    config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
+    config.time_resolution = std::move(std::get<2>(parsed_aggregations));
+
+    return {
+      std::string_view{f, l},
+      std::make_unique<summarize_operator>(std::move(config)),
+    };
   }
 };
 

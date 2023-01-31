@@ -12,3 +12,9 @@ debugging.)
 ```yaml
 identity:
 ```
+
+## Pipeline Operator String Syntax (Experimental)
+
+```
+identity
+```

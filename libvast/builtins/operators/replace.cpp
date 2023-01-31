@@ -9,6 +9,7 @@
 #include <vast/arrow_table_slice.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/data.hpp>
+#include <vast/concept/parseable/vast/pipeline.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/error.hpp>
 #include <vast/pipeline.hpp>
@@ -42,6 +43,7 @@ struct configuration {
   }
 
   std::unordered_map<std::string, data> extractor_to_value = {};
+  bool reparse_values{true};
 };
 
 /// The confguration bound to a specific schema.
@@ -57,7 +59,10 @@ struct bound_configuration {
       // The config parsing never produces all possible alternatives of the data
       // variant, e.g., addresses will be represented as strings. Because of
       // that we need to re-parse the data if it's a string.
-      auto reparsed_value = [](auto value) {
+      auto reparsed_value = [&config](auto value) {
+        if (!config.reparse_values) {
+          return value;
+        }
         const auto* str = caf::get_if<std::string>(&value);
         if (!str)
           return value;
@@ -128,34 +133,29 @@ public:
     // nop
   }
 
-  caf::error
-  add(type schema, std::shared_ptr<arrow::RecordBatch> batch) override {
-    auto config = bound_config_.find(schema);
+  caf::error add(table_slice slice) override {
+    auto config = bound_config_.find(slice.schema());
     if (config == bound_config_.end()) {
-      auto new_config = bound_configuration::make(schema, config_);
+      auto new_config = bound_configuration::make(slice.schema(), config_);
       if (!new_config)
         return new_config.error();
-      auto [it, inserted] = bound_config_.emplace(type{chunk::copy(schema)},
-                                                  std::move(*new_config));
+      auto [it, inserted] = bound_config_.emplace(
+        type{chunk::copy(slice.schema())}, std::move(*new_config));
       VAST_ASSERT(inserted);
       config = it;
     }
-    auto [adjusted_schema, adjusted_batch]
-      = transform_columns(schema, batch, config->second.transformations);
-    VAST_ASSERT(adjusted_schema);
-    VAST_ASSERT(adjusted_batch);
-    transformed_.emplace_back(std::move(adjusted_schema),
-                              std::move(adjusted_batch));
+    transformed_.push_back(
+      transform_columns(slice, config->second.transformations));
     return caf::none;
   }
 
-  caf::expected<std::vector<pipeline_batch>> finish() override {
+  caf::expected<std::vector<table_slice>> finish() override {
     return std::exchange(transformed_, {});
   }
 
 private:
   /// The transformed slices.
-  std::vector<pipeline_batch> transformed_ = {};
+  std::vector<table_slice> transformed_ = {};
 
   /// The underlying configuration of the transformation.
   configuration config_ = {};
@@ -180,6 +180,49 @@ public:
     if (!parsed_config)
       return parsed_config.error();
     return std::make_unique<replace_operator>(std::move(*parsed_config));
+  }
+
+  [[nodiscard]] std::pair<std::string_view,
+                          caf::expected<std::unique_ptr<pipeline_operator>>>
+  make_pipeline_operator(std::string_view pipeline) const override {
+    using parsers::end_of_pipeline_operator, parsers::required_ws,
+      parsers::optional_ws, parsers::extractor_value_assignment_list,
+      parsers::data;
+    const auto* f = pipeline.begin();
+    const auto* const l = pipeline.end();
+    const auto p = required_ws >> extractor_value_assignment_list >> optional_ws
+                   >> end_of_pipeline_operator;
+    std::vector<std::tuple<std::string, vast::data>> parsed_assignments;
+    if (!p(f, l, parsed_assignments)) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to parse extend "
+                                                      "operator: '{}'",
+                                                      pipeline)),
+      };
+    }
+    record config_record;
+    record fields_record;
+    for (const auto& [key, data] : parsed_assignments) {
+      fields_record[key] = data;
+    }
+    config_record["fields"] = std::move(fields_record);
+    auto config = configuration::make(std::move(config_record));
+    if (!config) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, fmt::format("failed to generate "
+                                                      "configuration for "
+                                                      "extend "
+                                                      "operator: '{}'",
+                                                      config.error())),
+      };
+    }
+    config->reparse_values = false;
+    return {
+      std::string_view{f, l},
+      std::make_unique<replace_operator>(std::move(*config)),
+    };
   }
 };
 

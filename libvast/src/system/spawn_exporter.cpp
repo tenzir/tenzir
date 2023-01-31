@@ -8,9 +8,12 @@
 
 #include "vast/system/spawn_exporter.hpp"
 
+#include "vast/concept/parseable/string/char_class.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
+#include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/pipeline.hpp"
 #include "vast/query_options.hpp"
@@ -18,6 +21,7 @@
 #include "vast/system/exporter.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/parse_query.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/table_slice.hpp"
 
@@ -34,14 +38,18 @@ caf::expected<caf::actor>
 spawn_exporter(node_actor::stateful_pointer<node_state> self,
                spawn_arguments& args) {
   VAST_TRACE_SCOPE("{}", VAST_ARG(args));
-  // Parse given expression.
-  auto expr = parse_expression(args);
-  if (!expr)
-    return expr.error();
+  // Pipelines from configuration.
   auto pipelines
     = make_pipelines(pipelines_location::server_export, args.inv.options);
   if (!pipelines)
     return pipelines.error();
+  // Parse given query.
+  auto parse_result = system::parse_query(args.inv.arguments);
+  if (!parse_result)
+    return parse_result.error();
+  auto [expr, pipeline] = std::move(*parse_result);
+  if (pipeline)
+    pipelines->push_back(std::move(*pipeline));
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "vast.export.continuous", false))
@@ -54,8 +62,11 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   // Mark the query as low priority if explicitly requested.
   if (get_or(args.inv.options, "vast.export.low-priority", false))
     query_opts = query_opts + low_priority;
-  auto handle = self->spawn(exporter, *expr, query_opts, std::move(*pipelines));
-  VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(*expr));
+  auto max_events = get_or(args.inv.options, "vast.export.max-events",
+                           defaults::export_::max_events);
+  auto handle = self->spawn(exporter, expr, query_opts, max_events,
+                            std::move(*pipelines));
+  VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
   // Wire the exporter to all components.
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
@@ -78,8 +89,6 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     self->send(handle, atom::set_v, index);
   }
   // Setting max-events to 0 means infinite.
-  auto max_events = get_or(args.inv.options, "vast.export.max-events",
-                           defaults::export_::max_events);
   if (max_events > 0)
     self->send(handle, atom::extract_v, static_cast<uint64_t>(max_events));
   else

@@ -109,11 +109,11 @@ plugins:
         match-fields:
           - net.domain
           - net.hostname
-      # A Cuckoo matcher that operates on all fields of type address.
+      # A Cuckoo matcher that operates on all fields of type IP.
       ips:
         mode: cuckoo
         match-types:
-          - addr
+          - ip
       # A DCSO bloom matcher that operates on all fields of type string
       iocs:
         mode: dcso-bloom
