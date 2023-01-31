@@ -12,15 +12,9 @@
 
 #include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/sink.hpp"
-#include "vast/table_slice.hpp"
 
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
-#include <caf/settings.hpp>
-#include <caf/stream_stage.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 

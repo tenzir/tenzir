@@ -25,20 +25,15 @@
 #include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/sink.hpp"
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type_set.hpp"
 
 #include <caf/attach_continuous_stream_source.hpp>
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
-#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
-#include <caf/stream_stage.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
 #include <optional>

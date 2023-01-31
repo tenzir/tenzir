@@ -19,8 +19,6 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>
-#include <caf/settings.hpp>
-#include <caf/stream_stage.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
