@@ -77,8 +77,8 @@ class VAST:
     """An instance of a VAST node."""
 
     def __init__(self, endpoint=None):
-        if endpoint is not None:
-            self.cli = CLI(endpoint=endpoint)
+        cli_kwargs = {"endpoint": endpoint} if endpoint else {}
+        self.cli = CLI(**cli_kwargs)
 
     @staticmethod
     def _export_args(mode: ExportMode, limit: int):
