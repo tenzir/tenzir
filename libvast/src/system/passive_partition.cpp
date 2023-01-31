@@ -161,6 +161,8 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
   // Deserialize the value index and spawn a passive_indexer lazily when it is
   // requested for the first time.
   const auto* qualified_index = flatbuffer->indexes()->Get(position);
+  if (!qualified_index || !qualified_index->index())
+    return {};
   if (auto value_index
       = unpack_value_index(*qualified_index->index(), *container)) {
     indexer = self->spawn(passive_indexer, id, std::move(value_index));
