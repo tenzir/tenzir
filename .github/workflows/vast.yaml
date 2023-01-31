@@ -1150,7 +1150,7 @@ jobs:
       - name: Publish ${{ needs.configure.outputs.release-version }} to Test PyPI
         working-directory: python
         run: |
-          poetry publish --build -r test-pypi --no-interaction
+          poetry publish -r test-pypi --no-interaction
 
   python-package:
     needs:
@@ -1171,10 +1171,6 @@ jobs:
         uses: abatilo/actions-poetry@v2.2.0
         with:
           poetry-version: 1.3.0
-      - name: Build package
-        working-directory: python
-        run: |
-          poetry build
       - name: Configure PyPI
         working-directory: python
         run: |
