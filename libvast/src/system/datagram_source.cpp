@@ -156,6 +156,7 @@ caf::behavior datagram_source(
             }
           });
       }
+      self->state.mgr->add_outbound_path(sink);
     },
     [self](atom::get, atom::module) -> caf::result<module> {
       return self->state.reader->module();
