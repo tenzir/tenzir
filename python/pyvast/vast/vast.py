@@ -76,9 +76,9 @@ class AsyncRecordBatchStreamReader:
 class VAST:
     """An instance of a VAST node."""
 
-    def __init__(self, endpoint="127.0.0.1:42000"):
-        self.endpoint = endpoint
-        self.cli = CLI(endpoint=self.endpoint)
+    def __init__(self, endpoint=None):
+        if endpoint is not None:
+            self.cli = CLI(endpoint=endpoint)
 
     @staticmethod
     def _export_args(mode: ExportMode, limit: int):

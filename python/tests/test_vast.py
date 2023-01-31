@@ -17,6 +17,8 @@ if "VAST_PYTHON_INTEGRATION" not in os.environ:
     )
 
 TEST_DB_DIR = "/tmp/test-vast-db"
+if os.path.isdir(TEST_DB_DIR):
+    shutil.rmtree(TEST_DB_DIR)
 
 
 @pytest.fixture()
@@ -128,9 +130,7 @@ async def test_export_continuous_rows(endpoint):
     vast = VAST(endpoint)
 
     async def run_export():
-        result = vast.export(
-            '#type == "suricata.alert"', ExportMode.CONTINUOUS, limit=1
-        )
+        result = vast.export('#type == "suricata.alert"', ExportMode.CONTINUOUS)
         return await anext(to_json_rows(result))
 
     task = asyncio.create_task(run_export())
