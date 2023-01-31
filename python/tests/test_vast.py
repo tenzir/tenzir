@@ -17,32 +17,47 @@ if "VAST_PYTHON_INTEGRATION" not in os.environ:
     )
 
 TEST_DB_DIR = "/tmp/test-vast-db"
+if os.path.isdir(TEST_DB_DIR):
+    shutil.rmtree(TEST_DB_DIR)
 
 
-@pytest.fixture(autouse=True)
-async def vast_server():
+@pytest.fixture()
+async def endpoint():
     proc = await asyncio.create_subprocess_exec(
-        "vast", "-d", TEST_DB_DIR, "start", stderr=asyncio.subprocess.PIPE
+        "vast",
+        "-e",
+        ":0",
+        "-d",
+        TEST_DB_DIR,
+        "start",
+        "--print-endpoint",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    await asyncio.sleep(3)
-    yield
+    endpoint = await proc.stdout.readline()
+    endpoint = endpoint.decode("utf-8").strip()
+    logger.debug(f"{endpoint = }")
+    yield endpoint
     proc.terminate()
+    # TODO: kill if in case of timeout.
     await asyncio.wait_for(proc.wait(), 5)
     await asyncio.to_thread(shutil.rmtree, TEST_DB_DIR)
 
 
-async def vast_import(expression: list[str]):
+async def vast_import(endpoint, expression: list[str]):
     # import
-    logger.debug(f"> vast import --blocking {' '.join(expression)}")
+    logger.debug(f"> vast -e {endpoint} import --blocking {' '.join(expression)}")
     import_proc = await asyncio.create_subprocess_exec(
-        "vast", "import", "--blocking", *expression, stderr=PIPE
+        "vast", "-e", endpoint, "import", "--blocking", *expression, stderr=PIPE
     )
     (_, import_err) = await asyncio.wait_for(import_proc.communicate(), 3)
     assert import_proc.returncode == 0
     logger.debug(f"vast import stderr:\n{import_err.decode()}")
     # flush
-    logger.debug(f"> vast flush")
-    flush_proc = await asyncio.create_subprocess_exec("vast", "flush", stderr=PIPE)
+    logger.debug(f"> vast -e {endpoint} flush")
+    flush_proc = await asyncio.create_subprocess_exec(
+        "vast", "-e", endpoint, "flush", stderr=PIPE
+    )
     (_, flush_err) = await asyncio.wait_for(flush_proc.communicate(), 3)
     assert flush_proc.returncode == 0
     logger.debug(f"vast flush stderr:\n{flush_err.decode()}")
@@ -54,25 +69,31 @@ def integration_data(path):
 
 
 @pytest.mark.asyncio
-async def test_count():
-    result = await VAST.count()
+async def test_count(endpoint):
+    vast = VAST(endpoint)
+    result = await vast.count()
     assert result == 0
-    await vast_import(["-r", integration_data("suricata/eve.json"), "suricata"])
-    result = await VAST.count()
+    await vast_import(
+        endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
+    )
+    result = await vast.count()
     assert result == 8
 
 
 @pytest.mark.asyncio
-async def test_export_collect_pyarrow():
-    await vast_import(["-r", integration_data("suricata/eve.json"), "suricata"])
-    result = VAST.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
+async def test_export_collect_pyarrow(endpoint):
+    await vast_import(
+        endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
+    )
+    vast = VAST(endpoint)
+    result = vast.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
     tables = await collect_pyarrow(result)
     assert set(tables.keys()) == {"suricata.alert"}
     alerts = tables["suricata.alert"]
     assert len(alerts) == 1
     assert alerts[0].num_rows == 1
 
-    result = VAST.export("", ExportMode.HISTORICAL)
+    result = vast.export("", ExportMode.HISTORICAL)
     tables = await collect_pyarrow(result)
     assert set(tables.keys()) == {
         "suricata.alert",
@@ -87,9 +108,12 @@ async def test_export_collect_pyarrow():
 
 
 @pytest.mark.asyncio
-async def test_export_historical_rows():
-    await vast_import(["-r", integration_data("suricata/eve.json"), "suricata"])
-    result = VAST.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
+async def test_export_historical_rows(endpoint):
+    await vast_import(
+        endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
+    )
+    vast = VAST(endpoint)
+    result = vast.export('#type == "suricata.alert"', ExportMode.HISTORICAL)
     rows: list[VastRow] = []
     async for row in to_json_rows(result):
         rows.append(row)
@@ -102,14 +126,17 @@ async def test_export_historical_rows():
 
 
 @pytest.mark.asyncio
-async def test_export_continuous_rows():
+async def test_export_continuous_rows(endpoint):
+    vast = VAST(endpoint)
+
     async def run_export():
-        result = VAST.export('#type == "suricata.alert"', ExportMode.CONTINUOUS)
+        result = vast.export('#type == "suricata.alert"', ExportMode.CONTINUOUS)
         return await anext(to_json_rows(result))
 
     task = asyncio.create_task(run_export())
-    await asyncio.sleep(3)
-    await vast_import(["-r", integration_data("suricata/eve.json"), "suricata"])
+    await vast_import(
+        endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
+    )
     logger.info("await task")
     row = await asyncio.wait_for(task, 5)
     logger.info("task awaited")
