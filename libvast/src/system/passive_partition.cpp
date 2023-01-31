@@ -110,31 +110,24 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     auto bytes = as_bytes(*uncompressed_data);
     caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
     value_index_ptr state_ptr;
-    if (!sink.apply(state_ptr) || !state_ptr) {
-      VAST_ERROR("failed to deserialize value index using CAF 0.18");
+    if (!sink.apply(state_ptr) || !state_ptr)
       return {};
-    }
     return state_ptr;
   }
   if (const auto* data = index_fbs.caf_0_17_data()) {
     auto uncompressed_data = uncompress(*data);
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr) {
-      VAST_ERROR("failed to deserialize value index using CAF 0.17");
+    if (!sink(state_ptr) || !state_ptr)
       return {};
-    }
     return state_ptr;
   }
   if (auto ext_index = index_fbs.caf_0_17_external_container_idx()) {
     auto uncompressed_data = uncompress(container.get_raw(ext_index));
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr) {
-      VAST_ERROR("failed to deserialize value index with CAF 0.17 external "
-                 "container idx");
+    if (!sink(state_ptr) || !state_ptr)
       return {};
-    }
     return state_ptr;
   }
   if (auto ext_index = index_fbs.caf_0_18_external_container_idx()) {
@@ -142,11 +135,8 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     auto bytes = as_bytes(*uncompressed_data);
     caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
     value_index_ptr state_ptr;
-    if (!sink.apply(state_ptr) || !state_ptr) {
-      VAST_ERROR("failed to deserialize value index with CAF 0.18 external "
-                 "container idx");
+    if (!sink.apply(state_ptr) || !state_ptr)
       return {};
-    }
     return state_ptr;
   }
   return {};
