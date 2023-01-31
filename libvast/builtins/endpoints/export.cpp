@@ -92,7 +92,7 @@ static auto const* SPEC_V0 = R"_(
             schema:
                 type: object
                 properties:
-                  num_events:
+                  num-events:
                     type: int64
                   version:
                     type: string
@@ -102,7 +102,7 @@ static auto const* SPEC_V0 = R"_(
                       type: object
                 example:
                   version: v2.3.0-169-ge42a9652e5-dirty
-                  num_events: 3
+                  num-events: 3
                   events:
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
                     - "{\"timestamp\": \"2011-08-12T13:00:36.378914\", \"flow_id\": 269421754201300, \"pcap_cnt\": 22569, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 1027, \"dest_ip\": \"74.125.232.202\", \"dest_port\": 80, \"proto\": \"TCP\", \"event_type\": \"http\", \"community_id\": null, \"http\": {\"hostname\": \"cr-tools.clients.google.com\", \"url\": \"/service/check2?appid=%7B430FD4D0-B729-4F61-AA34-91526481799D%7D&appversion=1.3.21.65&applang=&machine=0&version=1.3.21.65&osversion=5.1&servicepack=Service%20Pack%202\", \"http_port\": null, \"http_user_agent\": \"Google Update/1.3.21.65;winhttp\", \"http_content_type\": null, \"http_method\": \"GET\", \"http_refer\": null, \"protocol\": \"HTTP/1.1\", \"status\": null, \"redirect\": null, \"length\": 0}, \"tx_id\": 0}"
@@ -165,21 +165,18 @@ static auto const* SPEC_V0 = R"_(
             schema:
                 type: object
                 properties:
-                  num_events:
+                  num-events:
                     type: int64
-                  version:
-                    type: string
                   events:
                     type: array
                     items:
                       type: object
                 example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
                   events:
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
                     - "{\"timestamp\": \"2011-08-12T13:00:36.378914\", \"flow_id\": 269421754201300, \"pcap_cnt\": 22569, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 1027, \"dest_ip\": \"74.125.232.202\", \"dest_port\": 80, \"proto\": \"TCP\", \"event_type\": \"http\", \"community_id\": null, \"http\": {\"hostname\": \"cr-tools.clients.google.com\", \"url\": \"/service/check2?appid=%7B430FD4D0-B729-4F61-AA34-91526481799D%7D&appversion=1.3.21.65&applang=&machine=0&version=1.3.21.65&osversion=5.1&servicepack=Service%20Pack%202\", \"http_port\": null, \"http_user_agent\": \"Google Update/1.3.21.65;winhttp\", \"http_content_type\": null, \"http_method\": \"GET\", \"http_refer\": null, \"protocol\": \"HTTP/1.1\", \"status\": null, \"redirect\": null, \"length\": 0}, \"tx_id\": 0}"
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
-                  num_events: 3
+                  num-events: 3
       401:
         description: Not authenticated.
       422:
@@ -332,8 +329,7 @@ struct export_helper_state {
 // clang-format off
 //
 //  {
-//    "version": "v2.4-rc2",
-//    "num_events": 3,
+//    "num-events": 3,
 //    "events": [
 //      {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null}
 //      {"_path": "snmp", "_write_ts": "2020-04-01T16:24:33.525023", "ts": "2020-04-01T16:19:33.529926", "uid": "C8Z7zO3pFoxOiC4yj9", "id.orig_h": "104.206.128.30", "id.orig_p": 63509, "id.resp_h": "141.9.71.231", "id.resp_p": 161, "duration": "0.0ns", "version": "1", "community": "public", "get_requests": 1, "get_bulk_requests": 0, "get_responses": 0, "set_requests": 0, "display_string": null, "up_since": null}
@@ -360,7 +356,7 @@ std::string format_result_flat(const std::vector<table_slice>& slices,
   std::replace(data.begin(), data.end(), '\n', ',');
   if (!data.empty())
     data.back() = ' ';
-  return fmt::format("{{\"version\": \"{}\",\n \"num_events\": {},\n "
+  return fmt::format("{{\"num-events\": {},\n "
                      "\"events\": "
                      "[{}] }}",
                      vast::version::version, num_events, data);
@@ -370,7 +366,6 @@ std::string format_result_flat(const std::vector<table_slice>& slices,
 // clang-format off
 //
 // {
-//   "version": "v2.4-rc2",
 //   "num_events": 3,
 //   "events": [
 //      {
@@ -434,7 +429,7 @@ std::string format_result_typed(const std::vector<table_slice>& slices,
                                       "{},\n \"data\": [{}] }}",
                                       type.name(), schemas[type], data);
   }
-  return fmt::format("{{\"version\": \"{}\",\n \"num_events\": {},\n "
+  return fmt::format("{{\"num-events\": {},\n "
                      "\"events\": [\n{}\n] }}",
                      vast::version::version, num_events, events_stringified);
 }
