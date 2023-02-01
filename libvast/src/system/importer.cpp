@@ -55,11 +55,10 @@ public:
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
     for (auto&& slice : std::exchange(slices, {})) {
-      auto import_ok = state.executor.add(std::move(slice));
-      if (import_ok) {
+      if (auto err = state.executor.add(std::move(slice))) {
         VAST_ERROR("importer can not add slice to pipeline executor - data "
                    "loss due to error: {}",
-                   import_ok);
+                   err);
       }
     }
     auto transformed_slices = state.executor.finish();

@@ -139,11 +139,10 @@ void source_state::filter_and_push(
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
                  slice.schema());
-      auto import_ok = executor.add(std::move(*filtered_slice));
-      if (import_ok) {
+      if (auto err = executor.add(std::move(*filtered_slice))) {
         VAST_ERROR("source can not add slice to pipeline executor - data "
                    "loss due to error: {}",
-                   import_ok);
+                   err);
       }
       auto transformed_slices = executor.finish();
       if (!transformed_slices) {
