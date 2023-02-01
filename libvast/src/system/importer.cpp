@@ -223,6 +223,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   }
   if (index) {
     self->state.index = std::move(index);
+    self->state.stage->add_outbound_path(self->state.index);
   }
   if (accountant) {
     VAST_DEBUG("{} registers accountant {}", *self, accountant);
