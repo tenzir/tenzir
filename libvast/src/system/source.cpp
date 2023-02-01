@@ -356,7 +356,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                                     [self] {
                                       self->state.send_report();
                                     });
-      self->state.mgr->add_outbound_path(sink);
+      self->state.mgr->add_outbound_path(
+        sink, std::make_tuple(self->state.reader->name()));
     },
     [self](atom::status, status_verbosity v) {
       auto rs = make_status_request_state(self);

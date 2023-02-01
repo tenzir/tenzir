@@ -156,7 +156,8 @@ caf::behavior datagram_source(
             }
           });
       }
-      self->state.mgr->add_outbound_path(sink);
+      self->state.mgr->add_outbound_path(
+        sink, std::make_tuple(self->state.reader->name()));
     },
     [self](atom::get, atom::module) -> caf::result<module> {
       return self->state.reader->module();
