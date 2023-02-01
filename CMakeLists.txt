@@ -792,6 +792,9 @@ else ()
            "\nmark_as_advanced(caf_build_header_path)")
     set(CAF_FOUND true)
   endif ()
+  # Make bundled CAF available for component-based CPack installations.
+  install(TARGETS libcaf_core libcaf_openssl libcaf_io COMPONENT Runtime)
+  install(TARGETS libcaf_test COMPONENT Development)
 endif ()
 
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
