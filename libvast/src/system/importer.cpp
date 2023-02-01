@@ -57,26 +57,29 @@ public:
     for (auto&& slice : std::exchange(slices, {})) {
       auto import_ok = state.executor.add(std::move(slice));
       if (import_ok) {
-        VAST_WARN("importer can not add slice to pipeline executor - data "
-                  "loss");
+        VAST_ERROR("importer can not add slice to pipeline executor - data "
+                   "loss due to error: {}",
+                   import_ok);
       }
     }
     auto transformed_slices = state.executor.finish();
     if (!transformed_slices) {
-      VAST_WARN("importer can not transform slices in pipeline - data "
-                "loss");
-    }
-    for (auto&& slice : *transformed_slices) {
-      auto rows = slice.rows();
-      events += rows;
-      auto name = slice.schema().name();
-      if (auto it = state.schema_counters.find(name);
-          it != state.schema_counters.end())
-        it.value() += rows;
-      else
-        state.schema_counters.emplace(std::string{name}, rows);
-      slice.import_time(time::clock::now());
-      out.push(std::move(slice));
+      VAST_ERROR("importer can not transform slices in pipeline - data "
+                 "loss due to error: {}",
+                 transformed_slices.error());
+    } else {
+      for (auto&& slice : *transformed_slices) {
+        auto rows = slice.rows();
+        events += rows;
+        auto name = slice.schema().name();
+        if (auto it = state.schema_counters.find(name);
+            it != state.schema_counters.end())
+          it.value() += rows;
+        else
+          state.schema_counters.emplace(std::string{name}, rows);
+        slice.import_time(time::clock::now());
+        out.push(std::move(slice));
+      }
     }
     t.stop(events);
   }
