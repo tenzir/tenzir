@@ -381,8 +381,6 @@ using analyzer_plugin_actor = typed_actor_fwd<>
 
 /// The interface of a SOURCE actor.
 using source_actor = typed_actor_fwd<
-  // INTERNAL: Progress.
-  auto(atom::internal, atom::run, uint64_t)->caf::result<void>,
   // Retrieve the currently used module of the SOURCE.
   auto(atom::get, atom::module)->caf::result<module>,
   // Update the currently used module of the SOURCE.
