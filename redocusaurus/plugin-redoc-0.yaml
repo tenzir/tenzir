@@ -87,7 +87,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  num_events:
+                  num-events:
                     type: int64
                   version:
                     type: string
@@ -96,8 +96,7 @@ paths:
                     items:
                       type: object
                 example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
-                  num_events: 3
+                  num-events: 3
                   events:
                     - >-
                       {"timestamp": "2011-08-14T05:38:55.549713", "flow_id":
@@ -196,7 +195,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  num_events:
+                  num-events:
                     type: int64
                   version:
                     type: string
@@ -205,7 +204,6 @@ paths:
                     items:
                       type: object
                 example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
                   events:
                     - >-
                       {"timestamp": "2011-08-14T05:38:55.549713", "flow_id":
@@ -241,7 +239,7 @@ paths:
                       "2011-08-12T12:53:47.928539", "end":
                       "2011-08-12T12:53:47.928552", "age": 0}, "app_proto":
                       "failed"}
-                  num_events: 3
+                  num-events: 3
         '401':
           description: Not authenticated.
         '422':
@@ -309,10 +307,8 @@ paths:
               schema:
                 type: object
                 properties:
-                  num_events:
+                  num-events:
                     type: int64
-                  version:
-                    type: string
                   events:
                     type: array
                     items:
@@ -334,8 +330,7 @@ paths:
                           items:
                             type: object
                 example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
-                  num_events: 3
+                  num-events: 3
                   events:
                     - name: suricata.netflow
                       schema:
