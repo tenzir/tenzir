@@ -2,7 +2,7 @@ import json
 import ipaddress
 import pyarrow as pa
 
-import vast.utils.arrow as vua
+import pyvast.utils.arrow as vua
 
 
 def test_ip_ip_extension_type():

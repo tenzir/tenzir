@@ -1,9 +1,10 @@
 import asyncio
+import copy
 import subprocess
 
-import vast.utils.logging
+import pyvast.utils.logging
 
-logger = vast.utils.logging.get(__name__)
+logger = pyvast.utils.logging.get(__name__)
 
 
 class CLI:
@@ -65,17 +66,21 @@ class CLI:
 
     def __getattr__(self, name, **kwargs):
         """Chains every unknown method call to the internal call stack."""
+        # Don't break `__special__` attributes.
+        if name.startswith("__"):
+            raise AttributeError(name)
+        new = copy.deepcopy(self)
         if name.endswith("_"):
             # trim trailing underscores to overcome the 'import' keyword
             name = name[:-1]
         if not name == "__iter_":
-            self.args.append(name.replace("_", "-"))
+            new.args.append(name.replace("_", "-"))
 
         def command(*args, **kwargs):
             if kwargs:
-                self.args.extend(CLI.arguments(**kwargs))
+                new.args.extend(CLI.arguments(**kwargs))
             if args:
-                self.args.extend(args)
-            return self
+                new.args.extend(args)
+            return new
 
         return command

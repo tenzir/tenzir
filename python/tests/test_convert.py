@@ -1,8 +1,8 @@
 import pyarrow as pa
 import numpy as np
 import pytest
-import vast.utils.arrow as vua
-import vast
+import pyvast.utils.arrow as vua
+import pyvast
 
 new_array = vua.extension_array
 
@@ -67,7 +67,7 @@ def extension_types_batch() -> pa.RecordBatch:
 async def test_arrow_dict_to_json_dict_native_types():
     native_dict = native_types_batch().to_pylist()[0]
 
-    assert vast.arrow_dict_to_json_dict(native_dict) == {
+    assert pyvast.arrow_dict_to_json_dict(native_dict) == {
         "NullArray": None,
         "BooleanArray": True,
         "Int8Array": 1,
@@ -103,7 +103,7 @@ async def test_arrow_dict_to_json_dict_native_types():
 async def test_arrow_dict_to_json_dict_extension_types():
     extension_dict = extension_types_batch().to_pylist()[0]
 
-    assert vast.arrow_dict_to_json_dict(extension_dict) == {
+    assert pyvast.arrow_dict_to_json_dict(extension_dict) == {
         "vast.address": "10.1.21.165",
         "vast.subnet": "10.1.20.0/25",
         "vast.enumeration": "foo",
