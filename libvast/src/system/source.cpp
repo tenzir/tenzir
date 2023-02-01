@@ -141,12 +141,19 @@ void source_state::filter_and_push(
                  slice.schema());
       auto import_ok = executor.add(std::move(*filtered_slice));
       if (import_ok) {
-        VAST_WARN("source can not add slice to pipeline executor - data "
-                  "loss");
+        VAST_ERROR("source can not add slice to pipeline executor - data "
+                   "loss due to error: {}",
+                   import_ok);
       }
       auto transformed_slices = executor.finish();
-      for (auto&& slice : *transformed_slices) {
-        push_to_out(std::move(slice));
+      if (!transformed_slices) {
+        VAST_ERROR("source can not transform slices in pipeline - data "
+                   "loss due to error: {}",
+                   transformed_slices.error());
+      } else {
+        for (auto&& slice : *transformed_slices) {
+          push_to_out(std::move(slice));
+        }
       }
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
