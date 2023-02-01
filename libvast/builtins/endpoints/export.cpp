@@ -359,14 +359,14 @@ std::string format_result_flat(const std::vector<table_slice>& slices,
   return fmt::format("{{\"num-events\": {},\n "
                      "\"events\": "
                      "[{}] }}",
-                     vast::version::version, num_events, data);
+                     num_events, data);
 }
 
 /// Format a set of table slices like this:
 // clang-format off
 //
 // {
-//   "num_events": 3,
+//   "num-events": 3,
 //   "events": [
 //      {
 //        "name": "zeek.conn",
@@ -431,7 +431,7 @@ std::string format_result_typed(const std::vector<table_slice>& slices,
   }
   return fmt::format("{{\"num-events\": {},\n "
                      "\"events\": [\n{}\n] }}",
-                     vast::version::version, num_events, events_stringified);
+                     num_events, events_stringified);
 }
 
 std::string format_results(const std::vector<table_slice>& slices,
