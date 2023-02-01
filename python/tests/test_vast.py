@@ -134,6 +134,8 @@ async def test_export_continuous_rows(endpoint):
         return await anext(to_json_rows(result))
 
     task = asyncio.create_task(run_export())
+    # Wait for the export task to be ready before triggering import
+    await asyncio.sleep(3)
     await vast_import(
         endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
     )
