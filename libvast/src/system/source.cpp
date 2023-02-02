@@ -193,8 +193,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.executor = pipeline_executor{std::move(pipelines)};
   if (auto err = self->state.executor.validate(
         pipeline_executor::allow_aggregate_pipelines::yes)) {
-    VAST_ERROR("source contains invalid pipeline {}", err);
-    self->quit();
+    self->quit(caf::make_error(
+      ec::invalid_argument,
+      fmt::format("{} received an invalid pipeline: {}", *self, err)));
     return {};
   }
   // Register with the accountant.
