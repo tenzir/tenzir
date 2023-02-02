@@ -518,7 +518,7 @@ tests:
       - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.alert"'
       - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.dns"'
       - command: --config=@./vast-pipelines.yaml export json '#type == "suricata.fileinfo"'
-  Pipeline operator parsing everything but summarize:
+  Export pipeline operator parsing everything but summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
     steps:
@@ -579,7 +579,7 @@ tests:
                                | rename new_list=abc_list
                                | replace new_list=2
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
-  Pipeline operator parsing only summarize:
+  Export pipeline operator parsing only summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
     steps:
@@ -588,7 +588,7 @@ tests:
       - command: export json 'summarize distinct(SourcePort) by SourceIp'
       - command: export json 'summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute'
       - command: export json 'summarize usercount=count(User), initiated=all(Initiated) by ProcessId'
-  Pipeline operator parsing after expression:
+  Export pipeline operator parsing after expression:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
     steps:
@@ -660,7 +660,7 @@ tests:
                                | rename new_list=abc_list
                                | replace new_list=2
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
-  Pipeline operator summarize after expression:
+  Export pipeline operator summarize after expression:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
     steps:
