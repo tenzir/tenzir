@@ -579,6 +579,22 @@ tests:
                                | rename new_list=abc_list
                                | replace new_list=2
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+  Import pipeline operator parsing everything but summarize:
+    tags: [server, client, import-export, transforms]
+    fixture: ServerTester
+    steps:
+      - command: "import -b suricata 'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list
+                               | replace new_list=2
+                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+        input: data/suricata/eve.json
+      - command: export json
   Export pipeline operator parsing only summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -588,6 +604,13 @@ tests:
       - command: export json 'summarize distinct(SourcePort) by SourceIp'
       - command: export json 'summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute'
       - command: export json 'summarize usercount=count(User), initiated=all(Initiated) by ProcessId'
+  Import pipeline operator parsing only summarize:
+    tags: [server, client, import-export, transforms]
+    fixture: ServerTester
+    steps:
+      - command: "import -b -t sysmon.NetworkConnection json 'summarize distinct(SourcePort) by SourceIp'"
+        input: data/json/sysmon.json
+      - command: export json
   Export pipeline operator parsing after expression:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -660,6 +683,23 @@ tests:
                                | rename new_list=abc_list
                                | replace new_list=2
                                | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+  Import pipeline operator parsing after expression:
+    tags: [server, client, import-export, transforms]
+    fixture: ServerTester
+    steps:
+      - command: "import -b suricata 'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list
+                               | replace new_list=2
+                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+        input: data/suricata/eve.json
+      - command: export json
   Export pipeline operator summarize after expression:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -668,6 +708,14 @@ tests:
         input: data/json/sysmon.json
       - command: "export json 'SourcePort==56162 || SourcePort == 37156
                                | summarize distinct(SourceIp) by SourcePort'"
+  Import pipeline operator summarize after expression:
+    tags: [server, client, import-export, transforms]
+    fixture: ServerTester
+    steps:
+      - command: "import -b -t sysmon.NetworkConnection json 'SourcePort==56162 || SourcePort == 37156
+                               | summarize distinct(SourceIp) by SourcePort'"
+        input: data/json/sysmon.json
+      - command: export json
 
   # TODO Reinstate negative test cases from compaction after story 31232 is completed
 
