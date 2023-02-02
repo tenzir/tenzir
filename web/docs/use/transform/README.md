@@ -186,13 +186,18 @@ VAST configuration.
 vast:
   plugins: [compaction]
   pipelines:
-    anonymize_urls:
-      - replace:
-          field: net.url
-          value: "xxx"
-    aggregate_flows:
-      - aggregate-suricata-flow:
-          bucket: 10min
+    anonymize_urls: |
+      replace net.url="xxx"
+    aggregate_flows: |
+       summarize 
+         pkts_toserver=sum(flow.pkts_toserver),
+         pkts_toclient=sum(flow.pkts_toclient),
+         bytes_toserver=sum(flow.bytes_toserver),
+         bytes_toclient=sum(flow.bytes_toclient),
+         start=min(flow.start),
+         end=max(flow.end)
+       by timestamp, src_ip, dest_ip
+       resolution 10 mins
 plugins:
   compaction:
     time:

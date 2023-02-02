@@ -8,38 +8,15 @@ pipelines, a group comprises a single batch (configurable as
 `vast.import.batch-size`). For compaction, a group comprises an entire partition
 (configurable as `vast.max-partition-size`).
 
-## Parameters
+## Synopsis
 
-The `summarize` operator has grouping and aggregation options. The general
-structure looks as follows:
-
-```yaml
-summarize:
-  group-by:
-    # inputs
-  time-resolution:
-    # bucketing for temporal grouping
-  aggregate:
-    # output 
+```
+summarize [FIELD=]AGGREGATION(EXTRACTOR[, …])[, …] by EXTRACTOR[, …] [resolution DURATION]
 ```
 
-### Grouping
+### Aggregation Functions
 
-The `group-by` option specifies a list of
-[extractors](/docs/understand/query-language/expressions#extractors) that
-should form a group. VAST internally calculates the combined hash for all
-extractors for every row and puts the data into buckets for subsequent
-aggregation.
-
-### Time Resolution
-
-The `time-resolution` option specifies an optional duration value that specifies
-the tolerance when comparing time values in the `group-by` section. For example,
-`01:48` is rounded down to `01:00` when a 1-hour `time-resolution` is used.
-
-### Aggregate Functions
-
-Aggregate functions compute a single value of one or more columns in a given
+Aggregation functions compute a single value of one or more columns in a given
 group. Fields that neither occur in an aggregation function nor in the
 `group-by` list are dropped from the output.
 
@@ -57,7 +34,64 @@ The following aggregation functions are available:
 - `sample`: Takes the first of all grouped values that is not nil.
 - `count`: Counts all grouped values that are not nil.
 
-There exist three ways to configure an aggregation function:
+### Grouping
+
+The `group-by` option specifies a list of
+[extractors](/docs/understand/query-language/expressions#extractors) that
+should form a group. VAST internally calculates the combined hash for all
+extractors for every row and puts the data into buckets for subsequent
+aggregation.
+
+### Time Resolution
+
+The `resolution` option specifies an optional duration value that specifies the
+tolerance when comparing time values in the `group-by` section. For example,
+`01:48` is rounded down to `01:00` when a 1-hour `resolution` is used.
+
+## Example
+
+Show all distinct `id.origin_port` values grouped by `id.origin_ip` values.
+
+```
+summarize distinct(id.origin_port) by id.origin_ip'
+```
+
+Show all distinct `id.origin_port` values grouped by `id.origin_ip` values in
+a field with the custom name `total_ports`.
+
+```
+summarize total_ports=distinct(id.origin_port) by id.origin_ip'
+```
+
+Show the result of `any(Initiated)` grouped by the `SourceIp, SourcePort,
+DestinationPoint` and `UtcTime` values, with an optional time resolution of one
+minute.
+
+```
+summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute
+```
+
+## YAML Syntax Example
+
+:::info Deprecated
+The YAML syntax is deprecated, and will be removed in a future release. Please
+use the pipeline syntax instead.
+:::
+
+The `summarize` operator has grouping and aggregation options. The general
+structure looks as follows:
+
+```yaml
+summarize:
+  group-by:
+    # inputs
+  time-resolution:
+    # bucketing for temporal grouping
+  aggregate:
+    # output 
+```
+
+There exist three ways to configure an aggregation function in the YAML syntax:
 
 ```yaml
 # Long form: Specify a list of input extractors explicitly.
@@ -75,7 +109,7 @@ output_field_name:
 output_field_name: aggregation_function
 ```
 
-## Example
+Here's a full example:
 
 ```yaml
 summarize:
@@ -100,33 +134,4 @@ summarize:
       distinct:
         - src_ip
         - dest_ip
-```
-
-## Pipeline Operator String Syntax (Experimental)
-
-```
-summarize [STRING = ]AGGREGATION(EXTRACTOR[, …])[, …] by EXTRACTOR[, …] [resolution DURATION]
-```
-
-### Example
-
-Show all distinct `id.origin_port` values grouped by `id.origin_ip` values.
-
-```
-summarize distinct(id.origin_port) by id.origin_ip'
-```
-
-Show all distinct `id.origin_port` values grouped by `id.origin_ip` values in
-a field with the custom name `total_ports`.
-
-```
-summarize total_ports=distinct(id.origin_port) by id.origin_ip'
-```
-
-Show the result of `any(Initiated)` grouped by the `SourceIp, SourcePort,
-DestinationPoint` and `UtcTime` values, with an optional time resolution of one
-minute.
-
-```
-summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute
 ```
