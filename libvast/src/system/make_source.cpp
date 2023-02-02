@@ -146,13 +146,6 @@ make_source(caf::actor_system& sys, const std::string& format,
       = system::parse_query(inv.arguments.begin(), inv.arguments.end());
     if (!query_result)
       return query_result.error();
-    if (query_result->second) {
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("{} failed to make source: the "
-                                         "provided query must not contain a "
-                                         "pipeline",
-                                         inv.full_name));
-    }
     auto expr = query_result->first;
     send_to_source(src, atom::normalize_v, std::move(expr));
   }
