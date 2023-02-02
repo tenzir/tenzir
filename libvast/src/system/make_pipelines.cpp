@@ -190,16 +190,23 @@ make_pipeline(const std::string& name,
   if (!pipelines.contains(name))
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("unknown pipeline '{}'", name));
-  auto pipeline = std::make_shared<vast::pipeline>(
+  auto result = std::make_shared<vast::pipeline>(
     name, std::vector<std::string>{event_types});
-  auto list = caf::get_if<caf::config_value::list>(&pipelines, name);
-  if (!list)
-    return caf::make_error(
-      ec::invalid_configuration,
-      fmt::format("expected a list of steps in pipeline '{}'", name));
-  if (auto err = parse_pipeline_operators(*pipeline, *list))
-    return err;
-  return pipeline;
+  if (const auto* pipeline_def = caf::get_if<std::string>(&pipelines, name)) {
+    auto pipeline = pipeline::parse(name, *pipeline_def, event_types);
+    if (!pipeline)
+      return std::move(pipeline.error());
+    *result = std::move(*pipeline);
+  } else {
+    auto list = caf::get_if<caf::config_value::list>(&pipelines, name);
+    if (!list)
+      return caf::make_error(
+        ec::invalid_configuration,
+        fmt::format("expected a list of steps in pipeline '{}'", name));
+    if (auto err = parse_pipeline_operators(*result, *list))
+      return err;
+  }
+  return result;
 }
 
 } // namespace vast::system
