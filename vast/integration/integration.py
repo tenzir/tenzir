@@ -98,6 +98,7 @@ signal.signal(signal.SIGINT, handle_exit_signal)
 signal.signal(signal.SIGTERM, handle_exit_signal)
 signal.signal(signal.SIGALRM, timeout_handler)
 
+
 # TODO tobim: check if asyncio would be a better approach
 def spawn(*popenargs, **kwargs):
     """Helper function around the Popen constructor
@@ -730,6 +731,7 @@ def main():
     ch.setLevel(args.verbosity)
     ch.setFormatter(formatter)
     LOGGER.addHandler(ch)
+
     # Create a new handler for log level CRITICAL.
     class ShutdownHandler(logging.Handler):
         def emit(self, record):
