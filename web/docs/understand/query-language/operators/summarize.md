@@ -74,8 +74,8 @@ summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime reso
 ## YAML Syntax Example
 
 :::info Deprecated
-The YAML syntax is deprecated, and will be removed in a future release. Please
-use the pipeline syntax instead.
+The YAML syntax is deprecated since VAST v3.0, and will be removed in a future
+release. Please use the pipeline syntax instead.
 :::
 
 The `summarize` operator has grouping and aggregation options. The general
