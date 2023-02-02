@@ -58,12 +58,14 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     = make_pipelines(pipelines_location::client_source, inv.options);
   if (!pipelines)
     return caf::make_message(pipelines.error());
+  std::optional<expression> expr;
   if (!inv.arguments.empty()) {
     auto parse_result = parse_query(inv.arguments);
     if (!parse_result) {
       return caf::make_message(parse_result.error());
     }
-    auto [expr, pipeline] = std::move(*parse_result);
+    auto [parsed_expr, pipeline] = std::move(*parse_result);
+    expr.emplace(parsed_expr);
     if (pipeline) {
       pipelines->push_back(std::move(*pipeline));
     }
@@ -71,7 +73,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   const auto format = std::string{inv.name()};
   // Start the source.
   auto src_result = make_source(sys, format, inv, accountant, catalog, importer,
-                                std::move(*pipelines));
+                                std::move(*pipelines), std::move(expr));
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(*src_result);

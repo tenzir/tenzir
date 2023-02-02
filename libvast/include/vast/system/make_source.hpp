@@ -33,6 +33,7 @@ make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
             catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
-            std::vector<pipeline>&& pipelines, bool detached = false);
+            std::vector<pipeline>&& pipelines, std::optional<expression> expr,
+            bool detached = false);
 
 } // namespace vast::system

@@ -54,7 +54,8 @@ make_source(caf::actor_system& sys, const std::string& format,
             const invocation& inv, accountant_actor accountant,
             catalog_actor catalog,
             stream_sink_actor<table_slice, std::string> importer,
-            std::vector<pipeline>&& pipelines, bool detached) {
+            std::vector<pipeline>&& pipelines, std::optional<expression> expr,
+            bool detached) {
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
   // Placeholder thingies.
@@ -140,14 +141,8 @@ make_source(caf::actor_system& sys, const std::string& format,
       std::move(local_module), std::move(type_filter), std::move(accountant),
       std::move(pipelines));
   VAST_ASSERT(src);
-  // Attempt to parse the remainder as an expression.
-  if (!inv.arguments.empty()) {
-    auto query_result
-      = system::parse_query(inv.arguments.begin(), inv.arguments.end());
-    if (!query_result)
-      return query_result.error();
-    auto expr = query_result->first;
-    send_to_source(src, atom::normalize_v, std::move(expr));
+  if (expr) {
+    send_to_source(src, atom::normalize_v, std::move(*expr));
   }
   // Connect source to importer.
   VAST_DEBUG("{} connects to {}", inv.full_name, VAST_ARG(importer));

@@ -37,12 +37,14 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
     = make_pipelines(pipelines_location::server_import, args.inv.options);
   if (!pipelines)
     return pipelines.error();
+  std::optional<expression> expr;
   if (!args.inv.arguments.empty()) {
     auto parse_result = parse_query(args.inv.arguments);
     if (!parse_result) {
       return parse_result.error();
     }
-    auto [expr, pipeline] = std::move(*parse_result);
+    auto [parsed_expr, pipeline] = std::move(*parse_result);
+    expr.emplace(parsed_expr);
     if (pipeline) {
       pipelines->push_back(std::move(*pipeline));
     }
@@ -60,7 +62,7 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
                                 caf::actor_cast<accountant_actor>(accountant),
                                 caf::actor_cast<catalog_actor>(catalog),
                                 caf::actor_cast<importer_actor>(importer),
-                                std::move(*pipelines), true);
+                                std::move(*pipelines), std::move(expr), true);
   if (!src_result)
     return src_result.error();
   auto src = *src_result;
