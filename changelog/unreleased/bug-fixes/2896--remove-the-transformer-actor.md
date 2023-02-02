@@ -1,2 +1,2 @@
-The transformer actor does not exist anymore. This resolves potential shutdown
-issues when using pipelines that contain aggregations.
+Pipelines that reduce the number of events do not prevent `vast export`
+processes that have a `max-events` limit from terminating any more.
