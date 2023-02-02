@@ -1,10 +1,20 @@
 # head
 
-Limits the input to the first N results. The limit defaults to 10.
+Limits the input to the first N results.
 
-## Pipeline Operator String Syntax (Experimental)
+## Synopsis
 
-Get the first 10 results.
+```
+head [LIMIT]
+```
+
+### Limit
+
+An unsigned integer denoting how many events to keep. Defaults to 10.
+
+## Example
+
+Get the first ten results.
 
 ```
 head

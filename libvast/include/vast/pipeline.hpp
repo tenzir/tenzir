@@ -21,7 +21,10 @@ public:
   /// Parse a pipeline from its textual representation.
   /// @param name the pipeline name
   /// @param repr the textual representation of the pipeline itself
-  static caf::expected<pipeline> parse(std::string name, std::string_view repr);
+  /// @param schema_names the schemas to restrict the pipeline to
+  static caf::expected<pipeline>
+  parse(std::string name, std::string_view repr,
+        std::vector<std::string> schema_names = {});
 
   pipeline(std::string name, std::vector<std::string>&& schema_names);
 

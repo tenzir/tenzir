@@ -1,9 +1,18 @@
 # taste
 
-Limits the input to the first N results per unique schema. The limit defaults to
-10.
+Limits the input to the first N results per unique schema.
 
-## Pipeline Operator String Syntax (Experimental)
+## Synopsis
+
+```
+taste [LIMIT]
+```
+
+### Limit
+
+An unsigned integer denoting how many events to keep per schema. Defaults to 10.
+
+## Example
 
 Get the first ten results of each unique schema.
 

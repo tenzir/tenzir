@@ -30,22 +30,18 @@ configuration file:
 ```yaml
 vast:
   pipelines:
-     example:
-       - hash:
-           field: src_ip
-           out: pseudonym
-           salt: "B3IwnumKPEJDAA4u"
-       - summarize:
-           group-by:
-             - src_ip
-             - dest_ip
-           aggregate:
-             flow.pkts_toserver: sum
-             flow.pkts_toclient: sum
-             flow.bytes_toserver: sum
-             flow.bytes_toclient: sum
-             flow.start: min
-             flow.end: max
+     example: |
+       hash --salt="B3IwnumKPEJDAA4u" src_ip
+       | summarize 
+           pkts_toserver=sum(flow.pkts_toserver),
+           pkts_toclient=sum(flow.pkts_toclient),
+           bytes_toserver=sum(flow.bytes_toserver),
+           bytes_toclient=sum(flow.bytes_toclient),
+           start=min(flow.start),
+           end=max(flow.end)
+         by
+           src_ip,
+           dest_ip
 ```
 
 The above `example` pipeline consists of two operators, `hash` and `summarize`

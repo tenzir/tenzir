@@ -23,9 +23,9 @@
 
 namespace vast {
 
-caf::expected<pipeline>
-pipeline::parse(std::string name, std::string_view repr) {
-  auto result = pipeline{std::move(name), {}};
+caf::expected<pipeline> pipeline::parse(std::string name, std::string_view repr,
+                                        std::vector<std::string> schema_names) {
+  auto result = pipeline{std::move(name), std::move(schema_names)};
   // plugin name parser
   using parsers::alnum, parsers::chr, parsers::space;
   const auto optional_ws = ignore(*space);
