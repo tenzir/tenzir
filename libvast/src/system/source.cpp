@@ -22,10 +22,10 @@
 #include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/status.hpp"
-#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type_set.hpp"
 
@@ -139,7 +139,21 @@ void source_state::filter_and_push(
       VAST_DEBUG("{} forwards {}/{} produced {} events after filtering",
                  reader->name(), filtered_slice->rows(), unfiltered_rows,
                  slice.schema());
-      push_to_out(std::move(*filtered_slice));
+      if (auto err = executor.add(std::move(*filtered_slice))) {
+        VAST_ERROR("source can not add slice to pipeline executor - data "
+                   "loss due to error: {}",
+                   err);
+      }
+      auto transformed_slices = executor.finish();
+      if (!transformed_slices) {
+        VAST_ERROR("source can not transform slices in pipeline - data "
+                   "loss due to error: {}",
+                   transformed_slices.error());
+      } else {
+        for (auto&& slice : *transformed_slices) {
+          push_to_out(std::move(slice));
+        }
+      }
     } else {
       VAST_DEBUG("{} forwards 0/{} produced {} events after filtering",
                  reader->name(), unfiltered_rows, slice.schema());
@@ -147,7 +161,15 @@ void source_state::filter_and_push(
   } else {
     VAST_DEBUG("{} forwards {} produced {} events", reader->name(),
                unfiltered_rows, slice.schema());
-    push_to_out(std::move(slice));
+    auto import_ok = executor.add(std::move(slice));
+    if (import_ok) {
+      VAST_WARN("source can not add slice to pipeline executor - data "
+                "loss");
+    }
+    auto transformed_slices = executor.finish();
+    for (auto&& slice : *transformed_slices) {
+      push_to_out(std::move(slice));
+    }
   }
 }
 
@@ -168,11 +190,12 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
   self->state.table_slice_size = table_slice_size;
   self->state.has_sink = false;
   self->state.done = false;
-  self->state.transformer
-    = self->spawn(transformer, "source-transformer", std::move(pipelines));
-  if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", *self);
-    self->quit();
+  self->state.executor = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::yes)) {
+    self->quit(caf::make_error(
+      ec::invalid_argument,
+      fmt::format("{} received an invalid pipeline: {}", *self, err)));
     return {};
   }
   // Register with the accountant.
@@ -183,24 +206,9 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
     self->state.done = true;
     if (self->state.mgr) {
       self->state.mgr->shutdown();
-      self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
       self->state.mgr->out().fan_out_flush();
       self->state.mgr->out().close();
       self->state.mgr->out().force_emit_batches();
-      // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
-      // for reasoning.
-      auto dummy = self->spawn(dummy_transformer_sink);
-      dummy->attach_functor([=](const caf::error& reason) {
-        if (!reason || reason == caf::exit_reason::user_shutdown)
-          VAST_INFO("dummy transformer shut down");
-        else
-          VAST_WARN("dummy transformer shut down with error: {}", reason);
-      });
-      self
-        ->request(self->state.transformer, caf::infinite,
-                  static_cast<stream_sink_actor<table_slice>>(dummy))
-        .then([](caf::outbound_stream_slot<table_slice>) {},
-              [](const caf::error&) {});
     }
     self->quit(msg.reason);
   });
@@ -214,8 +222,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                  metrics_metadata{});
     },
     // get next element
-    [self](caf::unit_t&, caf::downstream<detail::framed<table_slice>>& out,
-           size_t num) {
+    [self](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
       if (self->state.has_sink && self->state.mgr->out().num_paths() == 0) {
         VAST_WARN("{} discards request for {} messages because all its "
                   "outbound paths were removed",
@@ -249,7 +256,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       auto finish = [&] {
         self->state.done = true;
         self->state.send_report();
-        out.push(detail::framed<vast::table_slice>::make_eof());
         self->quit();
       };
       if (self->state.requested
@@ -343,12 +349,8 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                                     [self] {
                                       self->state.send_report();
                                     });
-      // Start streaming. Note that we add the outbound path only now,
-      // otherwise for small imports the source might already shut down
-      // before we receive a sink.
-      self->state.mgr->add_outbound_path(self->state.transformer);
-      auto name = std::string{self->state.reader->name()};
-      self->delegate(self->state.transformer, sink, name);
+      self->state.mgr->add_outbound_path(
+        sink, std::make_tuple(self->state.reader->name()));
     },
     [self](atom::status, status_verbosity v) {
       auto rs = make_status_request_state(self);
@@ -360,24 +362,6 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
-        const auto timeout = defaults::system::status_request_timeout / 5 * 4;
-        collect_status(
-          rs, timeout, v, self->state.transformer,
-          [rs, src](record& response) mutable {
-            src["transformer"] = std::move(response);
-            auto xs = list{};
-            xs.emplace_back(std::move(src));
-            rs->content["sources"] = std::move(xs);
-          },
-          [rs, src](const caf::error& err) mutable {
-            VAST_WARN("{} failed to retrieve status for the key transformer: "
-                      "{}",
-                      *rs->self, err);
-            src["transformer"] = fmt::to_string(err);
-            auto xs = list{};
-            xs.emplace_back(std::move(src));
-            rs->content["sources"] = std::move(xs);
-          });
       }
       return rs->promise;
     },

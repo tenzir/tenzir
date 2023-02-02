@@ -10,8 +10,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
-#include "vast/system/transformer.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>

@@ -15,13 +15,15 @@
 #include "vast/defaults.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/query_options.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/system/make_pipelines.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/parse_query.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/system/transformer.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>

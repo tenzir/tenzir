@@ -12,11 +12,11 @@
 
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/query_context.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/query_status.hpp"
-#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 

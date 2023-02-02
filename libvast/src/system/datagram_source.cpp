@@ -24,8 +24,8 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/module.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/status.hpp"
-#include "vast/system/transformer.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/attach_continuous_stream_source.hpp>
@@ -45,11 +45,12 @@ caf::behavior datagram_source(
   const catalog_actor& catalog, vast::module local_module,
   std::string type_filter, accountant_actor accountant,
   std::vector<pipeline>&& pipelines) {
-  self->state.transformer
-    = self->spawn(transformer, "source-transformer", std::move(pipelines));
-  if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", *self);
-    self->quit();
+  self->state.executor = pipeline_executor{std::move(pipelines)};
+  if (auto err = self->state.executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::yes)) {
+    self->quit(caf::make_error(
+      ec::invalid_argument,
+      fmt::format("{} received an invalid pipeline: {}", *self, err)));
     return {};
   }
   // Try to open requested UDP port.
@@ -75,8 +76,6 @@ caf::behavior datagram_source(
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", *self, msg.source);
     self->state.done = true;
-    if (self->state.mgr)
-      self->state.mgr->out().push(detail::framed<table_slice>::make_eof());
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
@@ -87,7 +86,7 @@ caf::behavior datagram_source(
       self->state.start_time = std::chrono::system_clock::now();
     },
     // get next element
-    [](caf::unit_t&, caf::downstream<detail::framed<table_slice>>&, size_t) {
+    [](caf::unit_t&, caf::downstream<table_slice>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
@@ -155,10 +154,8 @@ caf::behavior datagram_source(
             }
           });
       }
-      // Start streaming.
-      self->state.mgr->add_outbound_path(self->state.transformer);
-      auto name = std::string{self->state.reader->name()};
-      self->delegate(self->state.transformer, sink, name);
+      self->state.mgr->add_outbound_path(
+        sink, std::make_tuple(self->state.reader->name()));
     },
     [self](atom::get, atom::module) -> caf::result<module> {
       return self->state.reader->module();
@@ -181,24 +178,6 @@ caf::behavior datagram_source(
         // General state such as open streams.
         if (v >= status_verbosity::debug)
           detail::fill_status_map(src, self);
-        const auto timeout = defaults::system::status_request_timeout / 5 * 4;
-        collect_status(
-          rs, timeout, v, self->state.transformer,
-          [rs, src](record& response) mutable {
-            src["transformer"] = std::move(response);
-            auto xs = list{};
-            xs.emplace_back(std::move(src));
-            rs->content["sources"] = std::move(xs);
-          },
-          [rs, src](const caf::error& err) mutable {
-            VAST_WARN("{} failed to retrieve status for the key transformer: "
-                      "{}",
-                      *rs->self, err);
-            src["transformer"] = fmt::to_string(err);
-            auto xs = list{};
-            xs.emplace_back(std::move(src));
-            rs->content["sources"] = std::move(xs);
-          });
       }
       return rs->promise;
     },

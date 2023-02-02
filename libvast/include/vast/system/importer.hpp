@@ -12,12 +12,13 @@
 
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/framed.hpp"
 #include "vast/detail/heterogeneous_string_hash.hpp"
+#include "vast/pipeline.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/transformer.hpp"
+#include "vast/table_slice.hpp"
 
+#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
@@ -65,11 +66,9 @@ struct importer_state {
   id_block current;
 
   /// The continous stage that moves data from all sources to all subscribers.
-  caf::stream_stage_ptr<
-    table_slice, caf::broadcast_downstream_manager<detail::framed<table_slice>>>
+  caf::stream_stage_ptr<table_slice,
+                        caf::broadcast_downstream_manager<table_slice>>
     stage;
-
-  transformer_actor transformer;
 
   /// Pointer to the owning actor.
   importer_actor::pointer self;
@@ -86,6 +85,9 @@ struct importer_state {
   index_actor index;
 
   accountant_actor accountant;
+
+  /// The executor for transforming table slices in a pipeline.
+  pipeline_executor executor;
 
   /// Name of this actor in log events.
   static inline const char* name = "importer";

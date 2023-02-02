@@ -10,7 +10,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/detail/framed.hpp"
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/module.hpp"
@@ -38,8 +37,7 @@ struct source_state {
 
   // -- member types -----------------------------------------------------------
 
-  using downstream_manager
-    = caf::broadcast_downstream_manager<detail::framed<table_slice>>;
+  using downstream_manager = caf::broadcast_downstream_manager<table_slice>;
 
   // -- member variables -------------------------------------------------------
 
@@ -55,8 +53,8 @@ struct source_state {
   /// Actor for collecting statistics.
   accountant_actor accountant = {};
 
-  /// Actor that receives events.
-  transformer_actor transformer = {};
+  /// The executor for transforming table slices in a pipeline.
+  pipeline_executor executor;
 
   /// The `source` only supports a single sink, so we track here if we
   /// already got it.

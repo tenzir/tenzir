@@ -40,33 +40,45 @@ namespace vast::system {
 
 namespace {
 
-class driver
-  : public caf::stream_stage_driver<
-      table_slice,
-      caf::broadcast_downstream_manager<detail::framed<table_slice>>> {
+class driver : public caf::stream_stage_driver<
+                 table_slice, caf::broadcast_downstream_manager<table_slice>> {
 public:
-  driver(caf::broadcast_downstream_manager<detail::framed<table_slice>>& out,
+  driver(caf::broadcast_downstream_manager<table_slice>& out,
          importer_state& state)
     : stream_stage_driver(out), state{state} {
     // nop
   }
 
-  void process(caf::downstream<detail::framed<table_slice>>& out,
+  void process(caf::downstream<table_slice>& out,
                std::vector<table_slice>& slices) override {
     VAST_TRACE_SCOPE("{}", VAST_ARG(slices));
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
     for (auto&& slice : std::exchange(slices, {})) {
-      auto rows = slice.rows();
-      events += rows;
-      auto name = slice.schema().name();
-      if (auto it = state.schema_counters.find(name);
-          it != state.schema_counters.end())
-        it.value() += rows;
-      else
-        state.schema_counters.emplace(std::string{name}, rows);
-      slice.import_time(time::clock::now());
-      out.push(std::move(slice));
+      if (auto err = state.executor.add(std::move(slice))) {
+        VAST_ERROR("importer can not add slice to pipeline executor - data "
+                   "loss due to error: {}",
+                   err);
+      }
+    }
+    auto transformed_slices = state.executor.finish();
+    if (!transformed_slices) {
+      VAST_ERROR("importer can not transform slices in pipeline - data "
+                 "loss due to error: {}",
+                 transformed_slices.error());
+    } else {
+      for (auto&& slice : *transformed_slices) {
+        auto rows = slice.rows();
+        events += rows;
+        auto name = slice.schema().name();
+        if (auto it = state.schema_counters.find(name);
+            it != state.schema_counters.end())
+          it.value() += rows;
+        else
+          state.schema_counters.emplace(std::string{name}, rows);
+        slice.import_time(time::clock::now());
+        out.push(std::move(slice));
+      }
     }
     t.stop(events);
   }
@@ -140,9 +152,6 @@ importer_state::status(status_verbosity v) const {
   // General state such as open streams.
   if (v >= status_verbosity::debug)
     detail::fill_status_map(rs->content, self);
-  // Retrieve an additional subsection from the transformer.
-  const auto timeout = defaults::system::status_request_timeout / 5 * 4;
-  collect_status(rs, timeout, v, transformer, rs->content, "transformer");
   return rs->promise;
 }
 
@@ -202,39 +211,22 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
     if (self->state.stage) {
-      self->state.stage->out().push(detail::framed<table_slice>::make_eof());
       detail::shutdown_stream_stage(self->state.stage);
-      // Spawn a dummy transformer sink. See comment at `dummy_transformer_sink`
-      // for reasoning.
-      auto dummy = self->spawn(dummy_transformer_sink);
-      self
-        ->request(self->state.transformer, caf::infinite,
-                  static_cast<stream_sink_actor<table_slice>>(dummy))
-        .then([](caf::outbound_stream_slot<table_slice>) {},
-              [](const caf::error&) {});
     }
     self->quit(msg.reason);
   });
   self->state.stage = make_importer_stage(self);
-  self->state.transformer
-    = self->spawn(importer_transformer, "input_transformer",
-                  std::move(input_transformations));
-  if (!self->state.transformer) {
-    VAST_ERROR("{} failed to spawn transformer", *self);
-    self->quit();
+  self->state.executor = pipeline_executor{std::move(input_transformations)};
+  if (auto err = self->state.executor.validate(
+        pipeline_executor::allow_aggregate_pipelines::yes)) {
+    self->quit(caf::make_error(
+      ec::invalid_argument,
+      fmt::format("{} received an invalid pipeline: {}", *self, err)));
     return importer_actor::behavior_type::make_empty_behavior();
   }
-  self->state.stage->add_outbound_path(self->state.transformer);
   if (index) {
     self->state.index = std::move(index);
-    self
-      ->request(self->state.transformer, caf::infinite,
-                static_cast<stream_sink_actor<table_slice>>(self->state.index))
-      .then([](const caf::outbound_stream_slot<table_slice>&) {},
-            [self](caf::error& error) {
-              VAST_ERROR("failed to connect index to the importer: {}", error);
-              self->quit(std::move(error));
-            });
+    self->state.stage->add_outbound_path(self->state.index);
   }
   if (accountant) {
     VAST_DEBUG("{} registers accountant {}", *self, accountant);
@@ -249,7 +241,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) {
       VAST_DEBUG("{} adds a new sink: {}", *self, sink);
-      return self->delegate(self->state.transformer, sink);
+      return self->state.stage->add_outbound_path(sink);
     },
     // Register a FLUSH LISTENER actor.
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
