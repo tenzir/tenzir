@@ -2,7 +2,7 @@
 
 Replaces the fields matching the configured extractors with fixed values.
 
-:::warning Unstable
+:::warning Experimental
 We plan to merge the `extend` and `replace` operators into a single `put`
 operator in the near future, removing the need for the `replace` operator.
 :::
@@ -15,7 +15,7 @@ replace FIELDS=VALUE[, …]
 
 ### Fields
 
-The fields to repalce with fixed values.
+The fields to replace with fixed values.
 
 ### Example
 

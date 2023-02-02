@@ -12,9 +12,9 @@ vast:
     replace_rrname: |
       replace dns.rrname="foobar.net"
     select_row: |
-      where "dest_port > 53"
+      where dest_port > 53
     hash_uid: |
-      hash --salt="foo"  fileinfo.filename
+      hash --salt="foo" fileinfo.filename
     select_fields: |
       select ip, alert.category, timestamp, alert.action
     pseudonymize_ips: |

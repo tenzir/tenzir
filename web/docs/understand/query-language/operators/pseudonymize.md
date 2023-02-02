@@ -3,7 +3,7 @@
 Pseudonymizes IP addresses according to a certain method. Currently, VAST only
 uses the [Crypto-PAn](https://en.wikipedia.org/wiki/Crypto-PAn) algorithm.
 
-:::warning Unstable
+:::warning Experimental
 We plan to change the `pseudonymize` operator into a function usable in an
 upcoming `put` operator, removing the need for `pseudonymize` as an operator.
 :::

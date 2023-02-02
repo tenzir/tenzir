@@ -17,8 +17,8 @@ summarize [FIELD=]AGGREGATION(EXTRACTOR[, …])[, …] by EXTRACTOR[, …] [reso
 ### Aggregation Functions
 
 Aggregation functions compute a single value of one or more columns in a given
-group. Fields that neither occur in an aggregation function nor in the
-`group-by` list are dropped from the output.
+group. Fields that neither occur in an aggregation function nor in the `by` list
+are dropped from the output.
 
 The following aggregation functions are available:
 - `sum`: Computes the sum of all grouped values.
@@ -53,14 +53,14 @@ tolerance when comparing time values in the `group-by` section. For example,
 Show all distinct `id.origin_port` values grouped by `id.origin_ip` values.
 
 ```
-summarize distinct(id.origin_port) by id.origin_ip'
+summarize distinct(id.origin_port) by id.origin_ip
 ```
 
 Show all distinct `id.origin_port` values grouped by `id.origin_ip` values in
 a field with the custom name `total_ports`.
 
 ```
-summarize total_ports=distinct(id.origin_port) by id.origin_ip'
+summarize total_ports=distinct(id.origin_port) by id.origin_ip
 ```
 
 Show the result of `any(Initiated)` grouped by the `SourceIp, SourcePort,

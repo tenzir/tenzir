@@ -2,7 +2,7 @@
 
 Adds the configured fields with fixed values.
 
-:::warning Unstable
+:::warning Experimental
 We plan to merge the `extend` and `replace` operators into a single `put`
 operator in the near future, removing the need for the `extend` operator.
 :::
