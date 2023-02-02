@@ -150,23 +150,38 @@ make_pipelines(pipelines_location location, const caf::settings& settings) {
   if (!pipeline_definitions) {
     return caf::make_error(ec::invalid_configuration, "invalid");
   }
-  std::map<std::string, caf::config_value::list> pipelines;
+  std::map<std::string, caf::config_value> pipelines;
   for (auto [name, value] : *pipeline_definitions) {
-    auto* pipeline_operators = caf::get_if<caf::config_value::list>(&value);
-    if (!pipeline_operators) {
+    if (caf::holds_alternative<std::string>(value)) {
+      pipelines[name] = value;
+    } else if (caf::holds_alternative<caf::config_value::list>(value)) {
+      VAST_WARN("the YAML syntax used to define the pipeline '{}' is "
+                "deprecated; please use the new textual representation instead",
+                name);
+      pipelines[name] = value;
+    } else {
       return caf::make_error(ec::invalid_configuration,
                              "could not interpret pipeline operators as list");
     }
-    pipelines[name] = *pipeline_operators;
   }
   for (auto [name, event_types] : pipeline_triggers) {
     if (!pipelines.contains(name)) {
       return caf::make_error(ec::invalid_configuration,
                              fmt::format("unknown pipeline '{}'", name));
     }
-    auto& pipeline = result.emplace_back(name, std::move(event_types));
-    if (auto err = parse_pipeline_operators(pipeline, pipelines.at(name)))
-      return err;
+    if (const auto* pipeline_def
+        = caf::get_if<std::string>(&pipelines.at(name))) {
+      auto pipeline
+        = pipeline::parse(name, *pipeline_def, std::move(event_types));
+      if (!pipeline)
+        return std::move(pipeline.error());
+      result.push_back(std::move(*pipeline));
+    } else if (const auto* yaml_def
+               = caf::get_if<caf::config_value::list>(&pipelines.at(name))) {
+      auto& pipeline = result.emplace_back(name, std::move(event_types));
+      if (auto err = parse_pipeline_operators(pipeline, *yaml_def))
+        return err;
+    }
   }
   return result;
 }

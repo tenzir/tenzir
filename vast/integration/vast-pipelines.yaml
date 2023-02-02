@@ -5,39 +5,23 @@ vast:
     zeek:
       disable-timestamp-tags: true
   pipelines:
-    remove_flow:
-      - drop:
-          fields:
-            - flow_id
-    remove_action:
-      - drop:
-          fields:
-            - alert.action
-    replace_rrname:
-      - replace:
-          fields:
-            dns.rrname: "foobar.net"
-    select_row:
-      - where:
-          expression: "dest_port > 53"
-    hash_uid:
-      - hash:
-          field: fileinfo.filename
-          out: filename_hash
-    select_fields:
-      - select:
-          fields:
-            - ip
-            - alert.category
-            - timestamp
-            - alert.action
-    pseudonymize_ips:
-      - pseudonymize:
-          method: crypto-pan
-          seed: 8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c968be5de53836e
-          fields:
-            - src_ip
-            - dest_ip
+    remove_flow: |
+      drop flow_id
+    remove_action: |
+      drop alert.action
+    replace_rrname: |
+      replace dns.rrname="foobar.net"
+    select_row: |
+      where "dest_port > 53"
+    hash_uid: |
+      hash --salt="foo"  fileinfo.filename
+    select_fields: |
+      select ip, alert.category, timestamp, alert.action
+    pseudonymize_ips: |
+      pseudonymize
+        -m "crypto-pan"
+        -s "8009ab3a605435bea0c385bea18485d8b0a1103d6590bdf48c968be5de53836e"
+        src_ip, dest_ip
 
   pipeline-triggers:
     import:
