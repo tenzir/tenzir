@@ -64,12 +64,12 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
     query_opts = query_opts + low_priority;
   auto max_events = get_or(args.inv.options, "vast.export.max-events",
                            defaults::export_::max_events);
-  auto handle = self->spawn(exporter, expr, query_opts, max_events,
-                            std::move(*pipelines));
-  VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
-  // Wire the exporter to all components.
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
+  auto handle = self->spawn(exporter, expr, query_opts, max_events,
+                            std::move(*pipelines), std::move(index));
+  VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
+  // Wire the exporter to all components.
   if (accountant)
     self->send(handle, atom::set_v, accountant);
   if (importer && has_continuous_option(query_opts))
@@ -84,15 +84,6 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
           VAST_ERROR("{} failed to connect to importer {}: {}", *self, importer,
                      err);
         });
-  if (index) {
-    VAST_DEBUG("{} connects index to new exporter", *self);
-    self->send(handle, atom::set_v, index);
-  }
-  // Setting max-events to 0 means infinite.
-  if (max_events > 0)
-    self->send(handle, atom::extract_v, static_cast<uint64_t>(max_events));
-  else
-    self->send(handle, atom::extract_v);
   return caf::actor_cast<caf::actor>(handle);
 }
 

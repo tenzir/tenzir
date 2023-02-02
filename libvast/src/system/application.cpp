@@ -16,10 +16,8 @@
 #include "vast/plugin.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
-#include "vast/system/explore_command.hpp"
 #include "vast/system/import_command.hpp"
 #include "vast/system/infer_command.hpp"
-#include "vast/system/pivot_command.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
 #include "vast/system/stop_command.hpp"
@@ -52,21 +50,6 @@ auto make_count_command() {
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<bool>("estimate,e", "estimate an upper bound by "
                                "skipping candidate checks"));
-}
-
-auto make_explore_command() {
-  return std::make_unique<command>(
-    "explore", "explore context around query results",
-    opts("?vast.explore")
-      .add<std::string>("format", "output format (default: JSON)")
-      .add<std::string>("after,A", "include all records up to this much"
-                                   " time after each result")
-      .add<std::string>("before,B", "include all records up to this much"
-                                    " time before each result")
-      .add<std::string>("by", "perform an equijoin on the given field")
-      .add<int64_t>("max-events,n", "maximum number of results")
-      .add<int64_t>("max-events-query", "maximum results for initial query")
-      .add<int64_t>("max-events-context", "maximum results per exploration"));
 }
 
 auto make_export_command() {
@@ -146,18 +129,6 @@ auto make_kill_command() {
 auto make_peer_command() {
   return std::make_unique<command>("peer", "peers with another node",
                                    opts("?vast.peer"), false);
-}
-
-auto make_pivot_command() {
-  auto pivot = std::make_unique<command>(
-    "pivot", "extracts related events of a given type",
-    opts("?vast.pivot")
-      .add<int64_t>("flush-interval,f", "flush to disk after this many packets "
-                                        "(only with the PCAP plugin)")
-      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
-      .add<std::string>("format", "output format "
-                                  "(default: JSON)"));
-  return pivot;
 }
 
 auto make_send_command() {
@@ -251,12 +222,6 @@ auto make_spawn_command() {
   spawn->add_subcommand("accountant", "spawns the accountant",
                         opts("?vast.spawn.accountant"), false);
   spawn->add_subcommand(
-    "explorer", "creates a new explorer",
-    opts("?vast.spawn.explorer")
-      .add<vast::duration>("after,A", "timebox after each result")
-      .add<vast::duration>("before,B", "timebox before each result"),
-    false);
-  spawn->add_subcommand(
     "exporter", "creates a new exporter",
     opts("?vast.spawn.exporter")
       .add<bool>("continuous,c", "marks a query as continuous")
@@ -315,7 +280,6 @@ auto make_command_factory() {
   // clang-format off
   auto result = command::factory{
     {"count", count_command},
-    {"explore", explore_command},
     {"export ascii", make_writer_command("ascii")},
     {"export csv", make_writer_command("csv")},
     {"export json", make_writer_command("json")},
@@ -333,12 +297,10 @@ auto make_command_factory() {
     {"import arrow", import_command},
     {"kill", remote_command},
     {"peer", remote_command},
-    {"pivot", pivot_command},
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn eraser", remote_command},
     {"spawn exporter", remote_command},
-    {"spawn explorer", remote_command},
     {"spawn importer", remote_command},
     {"spawn index", remote_command},
     {"spawn sink ascii", remote_command},
@@ -433,13 +395,11 @@ auto make_root_command(std::string_view path) {
   ob = add_index_opts(std::move(ob));
   auto root = std::make_unique<command>(path, "", std::move(ob));
   root->add_subcommand(make_count_command());
-  root->add_subcommand(make_explore_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_infer_command());
   root->add_subcommand(make_kill_command());
   root->add_subcommand(make_peer_command());
-  root->add_subcommand(make_pivot_command());
   root->add_subcommand(make_send_command());
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());

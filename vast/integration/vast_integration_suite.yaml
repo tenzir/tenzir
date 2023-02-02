@@ -354,26 +354,6 @@ tests:
       - command: -N export ascii
         input: queries/multi_addr.txt
 
-  Pivot:
-    tags: [node, pivot]
-    steps:
-      - command: -N import suricata
-        input: data/pcap/suricata/eve.json.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/conn.log.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/files.log.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/http.log.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/packet_filter.log.gz
-      - command: -N import zeek
-        input: data/pcap/zeek/ssh.log.gz
-      - command: -N pivot --format=zeek zeek.conn '#type == /suricata.*/ && dest_ip == 72.247.178.18'
-        transformation: awk '!/^#(open|close)/'
-      - command: -N pivot zeek.conn '#type == /zeek.http/ && method == "GET"'
-        transformation: awk '!/^#(open|close)/'
-
   Taxonomy queries:
     tags: [concepts, models]
     fixture: ServerTester
@@ -422,7 +402,7 @@ tests:
         transformation: python @./misc/scripts/print-arrow.py
   Arrow Import:
     condition: version | jq -e '."Apache Arrow"'
-    tags: [import, arrow, disabled]
+    tags: [import, arrow]
     fixture: ServerTester
     steps:
       - command: import -b --batch-encoding=arrow arrow
@@ -439,47 +419,6 @@ tests:
       - command: -N import syslog
         input: data/syslog/syslog.log
       - command: -N export ascii '#type == /syslog.*/'
-  Explore Zeek:
-    tags: [explore, zeek]
-    fixture: ServerTester
-    steps:
-      - command: import -b zeek
-        input: data/zeek/conn.log.gz
-      - command: explore --after=3min 'uid == "Yaix3QBP3Xg"'
-      - command: explore --format=ascii --after=3min 'uid == "Yaix3QBP3Xg"'
-  # The first queries are stress tests for the deduplication: The query
-  # selects every event, and the huge timebox ensures that every event
-  # is included in the context of every other event.
-  # TODO: Re-enable this test once its flakiness has been resolved.
-  # Explore Suricata With Overlap:
-  #   tags: [explore, suricata]
-  #   steps:
-  #     - command: -N import suricata
-  #       input: data/suricata/eve.json
-  #     - command: -N explore --before=10years --after=10years '#type == /suricata.*/'
-  #     - command: -N explore --max-events=3 --before=10years --after=10years '#type == /suricata.*/'
-  #       transformation: wc -l | tr -d ' '
-  #     - command: -N explore --max-events-query=1 --before=10years --after=10years '#type == /suricata.*/'
-  #       transformation: wc -l | tr -d ' '
-  #     - command: -N explore --max-events-query=3 --before=0s --after=1ns '#type == /suricata.*/'
-  #       transformation: wc -l | tr -d ' '
-  #     - command: -N explore --max-events-query=1 --max-events-context=2 --before=10years --after=10years '#type == /suricata.*/'
-  #       transformation: wc -l | tr -d ' '
-  # TODO(ch15579): Re-enable this test once the slow zeek export is fixed.
-  # Explore Zeek With Overlap:
-  #   tags: [explore, zeek]
-  #   steps:
-  #     - command: -N import zeek
-  #       input: data/zeek/conn.log.gz
-  #     - command: -N explore --before=10000h --after=10000h '#type == /zeek.*/'
-  Explore Zeek By Field:
-    tags: [explore, zeek]
-    steps:
-      - command: -N import zeek
-        input: data/zeek/conn.log.gz
-      - command: -N import zeek
-        input: data/zeek/dns.log.gz
-      - command: -N explore --by='id.orig_h' --after=1s --before=0s 'zeek.dns.query == "survey.112.2o7.net"'
   Heterogeneous JSONL import:
     tags: [import, json, sysmon]
     steps:

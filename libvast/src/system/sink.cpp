@@ -20,10 +20,74 @@
 #include "vast/system/status.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/attach_stream_sink.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
 
 namespace vast::system {
+
+namespace {
+
+void process_slice(caf::stateful_actor<sink_state>* self, table_slice slice) {
+  VAST_DEBUG("{} got: {} events from {}", *self, slice.rows(),
+             self->current_sender());
+  auto now = std::chrono::steady_clock::now();
+  auto time_since_flush = now - self->state.last_flush;
+  if (self->state.processed == 0) {
+    VAST_INFO("{} received first result with a latency of {}", self->state.name,
+              to_string(time_since_flush));
+  }
+  if (auto err = self->state.executor.add(std::move(slice))) {
+    VAST_ERROR("sink failed to add slice: {}", err);
+    return;
+  }
+  auto transformed = self->state.executor.finish();
+  if (!transformed) {
+    VAST_WARN("discarding slice; error in output transformation: {}",
+              transformed.error());
+    return;
+  }
+  auto reached_max_events = [&] {
+    VAST_INFO("{} reached limit of {} events", *self, self->state.max_events);
+    self->state.writer->flush();
+    self->state.send_report();
+    self->quit();
+  };
+  auto t = timer::start(self->state.measurement);
+  table_slice::size_type starting_rows = self->state.processed;
+  for (auto& slice : *transformed) {
+    // Drop excess elements.
+    auto remaining = self->state.max_events - self->state.processed;
+    if (remaining == 0) {
+      t.stop(self->state.processed - starting_rows);
+      return reached_max_events();
+    }
+    if (slice.rows() > remaining)
+      slice = head(std::move(slice), remaining);
+    // Handle events.
+    if (auto err = self->state.writer->write(slice)) {
+      VAST_ERROR("{} {}", *self, render(err));
+      t.stop(self->state.processed - starting_rows);
+      self->quit(std::move(err));
+      return;
+    }
+    // Stop when reaching configured limit.
+    self->state.processed += slice.rows();
+    if (self->state.processed >= self->state.max_events) {
+      t.stop(self->state.processed - starting_rows);
+      return reached_max_events();
+    }
+  }
+  t.stop(self->state.processed - starting_rows);
+  // Force flush if necessary.
+  if (time_since_flush > self->state.flush_interval) {
+    self->state.writer->flush();
+    self->state.last_flush = now;
+    self->state.send_report();
+  }
+}
+
+} // namespace
 
 sink_state::sink_state(caf::event_based_actor* self_ptr) : self(self_ptr) {
   // nop
@@ -73,64 +137,33 @@ transforming_sink(caf::stateful_actor<sink_state>* self,
     self->quit(msg.reason);
   });
   return {
-    [self](table_slice slice) {
-      VAST_DEBUG("{} got: {} events from {}", *self, slice.rows(),
-                 self->current_sender());
-      auto now = steady_clock::now();
-      auto time_since_flush = now - self->state.last_flush;
-      if (self->state.processed == 0) {
-        VAST_INFO("{} received first result with a latency of {}",
-                  self->state.name, to_string(time_since_flush));
-      }
-      if (auto err = self->state.executor.add(std::move(slice))) {
-        VAST_ERROR("sink failed to add slice: {}", err);
-        return;
-      }
-      auto transformed = self->state.executor.finish();
-      if (!transformed) {
-        VAST_WARN("discarding slice; error in output transformation: {}",
-                  transformed.error());
-        return;
-      }
-      auto reached_max_events = [&] {
-        VAST_INFO("{} reached limit of {} events", *self,
-                  self->state.max_events);
-        self->state.writer->flush();
-        self->state.send_report();
-        self->quit();
+    [self](
+      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+      struct stream_state {
+        caf::actor self;
+        caf::stateful_actor<sink_state>* self_ptr{nullptr};
       };
-      auto t = timer::start(self->state.measurement);
-      table_slice::size_type starting_rows = self->state.processed;
-      for (auto& slice : *transformed) {
-        // Drop excess elements.
-        auto remaining = self->state.max_events - self->state.processed;
-        if (remaining == 0) {
-          t.stop(self->state.processed - starting_rows);
-          return reached_max_events();
-        }
-        if (slice.rows() > remaining)
-          slice = head(std::move(slice), remaining);
-        // Handle events.
-        if (auto err = self->state.writer->write(slice)) {
-          VAST_ERROR("{} {}", *self, render(err));
-          t.stop(self->state.processed - starting_rows);
-          self->quit(std::move(err));
-          return;
-        }
-        // Stop when reaching configured limit.
-        self->state.processed += slice.rows();
-        if (self->state.processed >= self->state.max_events) {
-          t.stop(self->state.processed - starting_rows);
-          return reached_max_events();
-        }
-      }
-      t.stop(self->state.processed - starting_rows);
-      // Force flush if necessary.
-      if (time_since_flush > self->state.flush_interval) {
-        self->state.writer->flush();
-        self->state.last_flush = now;
-        self->state.send_report();
-      }
+      return caf::attach_stream_sink(
+               self, in,
+               [self](stream_state& state) {
+                 state.self = self;
+                 state.self_ptr = self;
+               },
+               [](stream_state& state, table_slice slice) {
+                 process_slice(state.self_ptr, std::move(slice));
+               },
+               [](stream_state& state, const caf::error& err) {
+                 if (err)
+                   VAST_ERROR("{} got error during streaming: {}",
+                              *state.self_ptr, err);
+                 state.self_ptr->state.writer->flush();
+                 state.self_ptr->state.send_report();
+                 state.self_ptr->quit(err);
+               })
+        .inbound_slot();
+    },
+    [self](table_slice slice) {
+      process_slice(self, std::move(slice));
     },
     [self](atom::limit, uint64_t max) {
       VAST_DEBUG("{} caps event export at {} events", *self, max);

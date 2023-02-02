@@ -339,14 +339,8 @@ using active_partition_actor = typed_actor_fwd<
 
 /// The interface of the EXPORTER actor.
 using exporter_actor = typed_actor_fwd<
-  // Request extraction of all events.
-  auto(atom::extract)->caf::result<void>,
-  // Request extraction of the given number of events.
-  auto(atom::extract, uint64_t)->caf::result<void>,
   // Register the ACCOUNTANT actor.
   auto(atom::set, accountant_actor)->caf::result<void>,
-  // Register the INDEX actor.
-  auto(atom::set, index_actor)->caf::result<void>,
   // Register the SINK actor.
   auto(atom::sink, caf::actor)->caf::result<void>,
   // Execute previously registered query.

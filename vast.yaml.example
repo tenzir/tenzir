@@ -298,30 +298,6 @@ vast:
     # Maximum number of bytes to buffer.
     buffer: 8192
 
-  # The `vast explore` command explore context around query results.
-  explore:
-
-    # The output format.
-    format: json
-
-    # Include all records up to this much time after each result.
-    after:
-
-    # Include all records up to this much time before each result.
-    before:
-
-    # Perform an equijoin on the given field.
-    by:
-
-    # Maximum number of results.
-    #max-events: <infinity>
-
-    # Maximum number of results for initial query.
-    max-events-query: 100
-
-    # Maximum number of results per exploration.
-    max-events-context: 100
-
   # The `vast import` command imports data from stdin, files or over the
   # network.
   import:
@@ -412,13 +388,6 @@ vast:
       # does the same. Settings this flag to true skips printing these tags,
       # which may help when fully deterministic output is desired.
       disable-timestamp-tags: false
-
-  # The `vast pivot` command extracts related events of a given type.
-  # For additionally available options, see export.pcap.
-  pivot:
-
-    # The output format.
-    format: json
 
   # The `vast status` command prints a JSON-formatted status summary of the
   # node.
