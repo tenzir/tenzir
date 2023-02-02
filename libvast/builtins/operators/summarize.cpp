@@ -540,6 +540,7 @@ public:
 
   /// Finish the buckets into a new batch.
   [[nodiscard]] caf::expected<table_slice> finish() {
+    VAST_ASSERT(output_schema);
     auto builder = caf::get<record_type>(output_schema)
                      .make_arrow_builder(arrow::default_memory_pool());
     VAST_ASSERT(builder);
@@ -590,7 +591,7 @@ public:
       output_schema.to_arrow_schema(), num_rows,
       caf::get<type_to_arrow_array_t<record_type>>(*array.MoveValueUnsafe())
         .fields());
-    return table_slice{batch, std::move(output_schema)};
+    return table_slice{batch, output_schema};
   }
 
 private:
