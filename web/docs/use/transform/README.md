@@ -37,9 +37,9 @@ configuration:
 ```yaml
 vast:
   pipelines:
-     example_pipeline:
-       - operator1:
-       - operator2:
+     example_pipeline: |
+       operator1
+       | operator2
   pipeline-triggers:
     import:
       - pipeline: example_pipeline
@@ -196,8 +196,12 @@ vast:
          bytes_toclient=sum(flow.bytes_toclient),
          start=min(flow.start),
          end=max(flow.end)
-       by timestamp, src_ip, dest_ip
-       resolution 10 mins
+       by
+         timestamp,
+         src_ip,
+         dest_ip
+       resolution
+         10 mins
 plugins:
   compaction:
     time:
