@@ -5,8 +5,7 @@ uses the [Crypto-PAn](https://en.wikipedia.org/wiki/Crypto-PAn) algorithm.
 
 :::warning Unstable
 We plan to change the `pseudonymize` operator into a function usable in an
-upcoming `put` operator, removing the need removing the need for `pseudonymize`
-as an operator.
+upcoming `put` operator, removing the need for `pseudonymize` as an operator.
 :::
 
 ## Synopsis

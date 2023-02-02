@@ -4,7 +4,7 @@ Computes a SHA256 hash digest of a given field.
 
 :::warning Unstable
 We plan to change the `hash` operator into a function usable in an upcoming
-`put` operator, removing the need removing the need for `hash` as an operator.
+`put` operator, removing the need for `hash` as an operator.
 :::
 
 ## Synopsis
