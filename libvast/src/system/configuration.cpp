@@ -369,6 +369,13 @@ caf::error configuration::parse(int argc, char** argv) {
     return settings.error();
   if (auto err = embed_config(*settings))
     return err;
+  // Work around CAF quirk where options in the `openssl` group have no effect
+  // if they are not seen by the native option or config file parsers.
+  openssl_certificate = caf::get_or(content, "caf.openssl.certificate", "");
+  openssl_key = caf::get_or(content, "caf.openssl.key", "");
+  openssl_passphrase = caf::get_or(content, "caf.openssl.passphrase", "");
+  openssl_capath = caf::get_or(content, "caf.openssl.capath", "");
+  openssl_cafile = caf::get_or(content, "caf.openssl.cafile", "");
   // Detect when plugins, plugin-dirs, or schema-dirs are specified on the
   // command line. This needs to happen before the regular parsing of the
   // command line since plugins may add additional commands and schemas.
