@@ -129,9 +129,6 @@ caf::behavior datagram_source(
       if (self->state.done)
         self->state.send_report();
     },
-    [](atom::internal, atom::run, uint64_t) {
-      // nop
-    },
     [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG("{} (datagram) registers sink {}", *self, sink);

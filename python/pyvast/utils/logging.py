@@ -2,12 +2,11 @@ import logging
 import sys
 
 import coloredlogs
-from dynaconf import Dynaconf
 
-import vast.utils.config
+from pyvast.utils.config import create as create_config, Config
 
 
-def configure(config: Dynaconf, logger: logging.Logger):
+def configure(config: Config, logger: logging.Logger):
     fmt = "%(asctime)s %(name)s %(levelname)-7s %(message)s"
     colored_formatter = coloredlogs.ColoredFormatter(fmt)
     plain_formatter = logging.Formatter(fmt)
@@ -49,6 +48,5 @@ def get(name=None):
     vast_logger.propagate = False
     # If the logger has no handlers, it means it hasn't been configured yet.
     if not vast_logger.hasHandlers():
-        config = vast.utils.config.create()
-        configure(config, vast_logger)
+        configure(create_config(), vast_logger)
     return logging.getLogger(name)

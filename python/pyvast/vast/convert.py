@@ -7,12 +7,12 @@ from typing import Any, AsyncIterable
 
 import numpy as np
 import pyarrow as pa
-import vast.utils.arrow
-import vast.utils.logging
+import pyvast.utils.arrow
+import pyvast.utils.logging
 
 from .vast import TableSlice
 
-logger = vast.utils.logging.get("vast.vast")
+logger = pyvast.utils.logging.get("vast.vast")
 
 _JSON_COMPATIBILITY_DOCSTRING_ = """JSON types are numbers, booleans, strings, arrays and objects
 - dates and times are formated with ISO 8601
@@ -38,7 +38,7 @@ async def collect_pyarrow(
     batches = defaultdict(list)
     async for slice in stream:
         batch = to_pyarrow(slice)
-        name = vast.utils.arrow.name(batch.schema)
+        name = pyvast.utils.arrow.name(batch.schema)
         logger.debug(f"got batch of {name}")
         num_batches += 1
         num_rows += batch.num_rows
@@ -49,7 +49,7 @@ async def collect_pyarrow(
     result = defaultdict(list)
     for (_, batches) in batches.items():
         table = pa.Table.from_batches(batches)
-        name = vast.utils.arrow.name(table.schema)
+        name = pyvast.utils.arrow.name(table.schema)
         result[name].append(table)
     return result
 
@@ -101,6 +101,6 @@ async def to_json_rows(
     {_JSON_COMPATIBILITY_DOCSTRING_}"""
     async for slice in stream:
         batch = to_pyarrow(slice)
-        name = vast.utils.arrow.name(batch.schema)
+        name = pyvast.utils.arrow.name(batch.schema)
         for row in batch.to_pylist():
             yield VastRow(name, arrow_dict_to_json_dict(row))

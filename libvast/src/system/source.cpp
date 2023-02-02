@@ -222,32 +222,13 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
                  metrics_metadata{});
     },
     // get next element
-    [self](caf::unit_t&, caf::downstream<table_slice>&, size_t num) {
+    [self](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
       if (self->state.has_sink && self->state.mgr->out().num_paths() == 0) {
         VAST_WARN("{} discards request for {} messages because all its "
                   "outbound paths were removed",
                   *self, num);
         return;
       }
-      VAST_DEBUG("{} schedules generation of {} messages", *self, num);
-      self
-        ->request(caf::actor_cast<source_actor>(self), caf::infinite,
-                  atom::internal_v, atom::run_v, static_cast<uint64_t>(num))
-        .then(
-          [=]() {
-            VAST_DEBUG("{} finished generation of {} messages", *self, num);
-          },
-          [=](const caf::error& err) {
-            VAST_WARN("{} failed generation of {} messages: {}", *self, num,
-                      err);
-          });
-    },
-    // done?
-    [self](const caf::unit_t&) {
-      return self->state.done;
-    });
-  auto result = source_actor::behavior_type{
-    [self](atom::internal, atom::run, uint64_t num) {
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) {
@@ -255,7 +236,7 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
           const auto& schema = slice.schema();
           self->state.event_counters[std::string{schema.name()}]
             += slice.rows();
-          self->state.mgr->out().push(std::move(slice));
+          out.push(std::move(slice));
         });
       };
       // We can produce up to num * table_slice_size events per run.
@@ -324,6 +305,11 @@ source(caf::stateful_actor<source_state>* self, format::reader_ptr reader,
       }
       VAST_DEBUG("{} ended a generation round regularly", *self);
     },
+    // done?
+    [self](const caf::unit_t&) {
+      return self->state.done;
+    });
+  auto result = source_actor::behavior_type{
     [self](atom::get, atom::module) { //
       return self->state.reader->module();
     },

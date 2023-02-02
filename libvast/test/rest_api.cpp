@@ -152,7 +152,7 @@ TEST(export endpoint) {
     simdjson::dom::element doc;
     auto error = parser.parse(padded_string).get(doc);
     REQUIRE(!error);
-    CHECK_EQUAL(int64_t{doc["num_events"]}, 16);
+    CHECK_EQUAL(int64_t{doc["num-events"]}, 16);
     CHECK_EQUAL(doc["events"].get_array().size(), 16ull);
   }
   //
@@ -197,7 +197,7 @@ TEST(export endpoint) {
     simdjson::dom::element doc;
     auto error = parser.parse(padded_string).get(doc);
     REQUIRE(!error);
-    CHECK_EQUAL(int64_t{doc["num_events"]}, 16);
+    CHECK_EQUAL(int64_t{doc["num-events"]}, 16);
     CHECK_EQUAL(doc["events"].get_array().size(), 16ull);
   }
   { // POST /export/with-schema
@@ -221,7 +221,7 @@ TEST(export endpoint) {
     simdjson::dom::element doc;
     auto error = parser.parse(padded_string).get(doc);
     REQUIRE(!error);
-    CHECK_EQUAL(int64_t{doc["num_events"]}, 16);
+    CHECK_EQUAL(int64_t{doc["num-events"]}, 16);
     auto first = doc["events"].get_array().at(0);
     CHECK(!first.error());
     CHECK_EQUAL(std::string_view{first["name"]}, "zeek.conn");
