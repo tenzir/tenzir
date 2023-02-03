@@ -12,6 +12,8 @@
 #include "vast/detail/operators.hpp"
 #include "vast/hash/uniquely_represented.hpp"
 
+#include <fmt/format.h>
+
 #include <cstdint>
 
 namespace vast {
@@ -81,3 +83,16 @@ struct is_uniquely_represented<port>
 bool convert(const port& p, data& d);
 
 } // namespace vast
+
+template <>
+struct fmt::formatter<vast::port> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::port& p, FormatContext& ctx) const {
+    return format_to(ctx.out(), "{}", p.number());
+  }
+};
