@@ -420,7 +420,7 @@ caf:
     profiling-resolution: 100ms
 
     # Forces a fixed number of threads if set. Defaults to the number of
-    # available CPU cores if starting a VAST node, or *2* for client commands.
+    # available CPU cores if starting a VAST node.
     #max-threads: <number of cores>
 
     # Maximum number of messages actors can consume in one run.
