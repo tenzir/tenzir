@@ -716,7 +716,39 @@ tests:
                                | summarize distinct(SourceIp) by SourcePort'"
         input: data/json/sysmon.json
       - command: export json
-
+  Spawn source with pipeline operators:
+    tags: [import-export, spawn-source, transforms, zeek]
+    fixture: ServerTester
+    steps:
+      - command: "spawn source -r @./data/suricata/eve.json suricata
+                               'identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list
+                               | replace new_list=2
+                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+      - command: export json
+  Spawn source with expression and pipeline operators:
+    tags: [import-export, spawn-source, transforms, zeek]
+    fixture: ServerTester
+    steps:
+      - command: "spawn source -r @./data/suricata/eve.json suricata
+                               'src_ip==147.32.84.165 && (src_port==1181 || src_port == 138)
+                               | identity
+                               | select timestamp, flow_id, src_ip, dest_ip, src_port
+                               | drop timestamp
+                               | hash --salt=\"abcdefghij12\" flow_id
+                               | drop flow_id
+                               | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
+                               | extend abc=123,abc_str=\"123\", abc_list=[1,2,3]
+                               | rename new_list=abc_list
+                               | replace new_list=2
+                               | where #type ==\"suricata.alert\" || #type == \"suricata.fileinfo\"'"
+      - command: export json
   # TODO Reinstate negative test cases from compaction after story 31232 is completed
 
   # A (small) stress test to see how the server handles queries that time out
