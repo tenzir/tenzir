@@ -20,6 +20,7 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/application.hpp"
+#include "vast/system/connect_to_node.hpp"
 #include "vast/system/spawn_node.hpp"
 #include "vast/systemd.hpp"
 
@@ -94,10 +95,10 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
                        : node_endpoint.host.c_str();
   auto publish = [&]() -> caf::expected<uint16_t> {
     const auto reuse_address = true;
-    if (sys.has_openssl_manager()) {
-      return caf::openssl::publish(node, node_endpoint.port->number(), host,
-                                   reuse_address);
-    }
+    // if (sys.has_openssl_manager()) {
+    //   return caf::openssl::publish(node, node_endpoint.port->number(), host,
+    //                                reuse_address);
+    // }
     auto& mm = sys.middleman();
     return mm.publish(node, node_endpoint.port->number(), host, reuse_address);
   };
@@ -123,6 +124,11 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         = caf::get_if<std::string>(&inv.options, "vast.start.commands"))
       commands.push_back(*command);
   }
+  // ---
+  auto node2_opts = caf::settings{};
+  caf::put(node2_opts, "vast.endpoint", "tenant-a.fleet.tenzir.net");
+  auto node2 = connect_to_node(self, node2_opts);
+  // ---
   std::vector<command_runner_actor> command_runners;
   if (!commands.empty()) {
     auto [root, root_factory] = make_application("vast");
