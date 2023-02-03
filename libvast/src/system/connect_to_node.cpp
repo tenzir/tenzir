@@ -98,6 +98,29 @@ std::optional<caf::timespan> get_retry_delay(const caf::settings& settings) {
   return retry_delay;
 }
 
+// FIXME: Make this more generic and/or move into a plugin
+std::vector<std::string> get_tls_destinations(const caf::settings& settings) {
+  auto result = std::vector<std::string>{};
+  if (auto const* url
+      = caf::get_if<std::string>(&settings, "vast.fleet.manager-url"))
+    result.push_back(*url);
+  // VAST only has a single listening port, so if we're running that in TLS mode
+  // even connections from within the same process via `connect_to_node()` need
+  // to be TLS. This should only be relevant for the manager node.
+  // TODO: The condition here should probably be `if (VAST is expecting incoming
+  // TLS)`
+  if (auto const* is_manager
+      = caf::get_if<bool>(&settings, "vast.fleet.is-manager-node");
+      *is_manager) {
+    auto endpoint = get_node_endpoint(settings);
+    VAST_ASSERT_CHEAP(endpoint); // Already checked in `connect_to_node()`.
+    VAST_ASSERT_CHEAP(
+      endpoint->port); // Always assigned in `get_node_endpoint()`.
+    result.push_back(fmt::format("{}:{}", endpoint->host, *endpoint->port));
+  }
+  return result;
+}
+
 } // namespace
 
 caf::expected<node_actor>
@@ -108,7 +131,8 @@ connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
     return std::move(node_endpoint.error());
   auto timeout = node_connection_timeout(opts);
   auto connector_actor
-    = self->spawn(connector, get_retry_delay(opts), get_deadline(timeout));
+    = self->spawn(connector, get_retry_delay(opts), get_deadline(timeout),
+                  get_tls_destinations(opts));
   auto result = caf::expected<node_actor>{caf::error{}};
   self
     ->request(connector_actor, caf::infinite, atom::connect_v,

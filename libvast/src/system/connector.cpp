@@ -155,10 +155,14 @@ connector_actor::behavior_type make_no_retry_behavior(
                                fmt::format("{} couldn't connect to VAST node"
                                            "within a given deadline",
                                            *self));
+      VAST_INFO("using middleman? {}", self->state.is_tls_destination(request));
+      auto middleman = self->state.is_tls_destination(request)
+                         ? self->system().openssl_manager().actor_handle()
+                         : self->system().middleman().actor_handle();
       auto rp = self->make_response_promise<node_actor>();
       self
-        ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
-                  request.host, request.port)
+        ->request(middleman, *remaining_time, caf::connect_atom_v, request.host,
+                  request.port)
         .then(
           [rp, request](const caf::node_id&, caf::strong_actor_ptr& node,
                         const std::set<std::string>&) mutable {
@@ -179,19 +183,34 @@ connector_actor::behavior_type make_no_retry_behavior(
 
 } // namespace
 
+bool connector_state::is_tls_destination(connect_request request) const {
+  // TODO: Allow a default port without writing it out
+  auto dest_url = fmt::format("{}:{}", request.host, request.port);
+  // if (dest_url == "127.0.0.1:42000")
+  // return true; // FIXME
+  VAST_INFO("using {} against outgoing whitelist: {}", dest_url,
+            tls_whitelist); // FIXME: INFO -> DEBUG
+  return std::find(tls_whitelist.begin(), tls_whitelist.end(), dest_url)
+         != tls_whitelist.end();
+}
+
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
-          std::optional<std::chrono::steady_clock::time_point> deadline) {
-  self->state.middleman = self->system().has_openssl_manager()
-                            ? self->system().openssl_manager().actor_handle()
-                            : self->system().middleman().actor_handle();
-
+          std::optional<std::chrono::steady_clock::time_point> deadline,
+          std::vector<std::string> tls_whitelist) {
   if (!retry_delay)
     return make_no_retry_behavior(std::move(self), deadline);
+  if (!tls_whitelist.empty())
+    VAST_ASSERT(self->system().has_openssl_manager()); // FIXME
+  self->state.tls_whitelist = std::move(tls_whitelist);
   return {
     [self, delay = *retry_delay, deadline](
       atom::connect, connect_request request) -> caf::result<node_actor> {
+      VAST_INFO("using middleman? {}", self->state.is_tls_destination(request));
+      auto middleman = self->state.is_tls_destination(request)
+                         ? self->system().openssl_manager().actor_handle()
+                         : self->system().middleman().actor_handle();
       const auto remaining_time = calculate_remaining_time(deadline);
       if (!remaining_time)
         return caf::make_error(ec::timeout,
@@ -200,8 +219,8 @@ connector(connector_actor::stateful_pointer<connector_state> self,
                                            *self));
       auto rp = self->make_response_promise<node_actor>();
       self
-        ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
-                  request.host, request.port)
+        ->request(middleman, *remaining_time, caf::connect_atom_v, request.host,
+                  request.port)
         .then(
           [rp, req = request](const caf::node_id&, caf::strong_actor_ptr& node,
                               const std::set<std::string>&) mutable {

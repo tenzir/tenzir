@@ -20,8 +20,10 @@
 namespace vast::system {
 
 struct connector_state {
-  // Actor responsible for TCP connection with a remote node.
-  caf::io::middleman_actor middleman;
+  /// List of remote destinations for which to use mTLS connections.
+  std::vector<std::string> tls_whitelist;
+
+  [[nodiscard]] bool is_tls_destination(connect_request request) const;
 };
 
 /// @brief Creates an actor that establishes the connection to a remote VAST
@@ -34,6 +36,7 @@ struct connector_state {
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
-          std::optional<std::chrono::steady_clock::time_point> deadline);
+          std::optional<std::chrono::steady_clock::time_point> deadline,
+          std::vector<std::string> tls_whitelist);
 
 } // namespace vast::system
