@@ -73,9 +73,12 @@ void attach_stream(exporter_actor::stateful_pointer<exporter_state> self) {
         [continuous](const stream_state& state) {
           if (continuous)
             return false;
-          return state.self_ptr->state.query_status.received
-                   == state.self_ptr->state.query_status.expected
-                 && state.self_ptr->state.results.empty();
+          auto should_end = state.self_ptr->state.query_status.received
+                              == state.self_ptr->state.query_status.expected
+                            && state.self_ptr->state.results.empty();
+          if (should_end)
+            shutdown_stream(state.self_ptr->state.source);
+          return should_end;
         })
         .ptr();
 }
@@ -97,10 +100,12 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self,
                transformed.error());
     return;
   }
-  if (!self->state.source) [[unlikely]]
-    attach_stream(self);
+  if (transformed->empty())
+    return;
   for (auto& t : *transformed)
     self->state.results.push(std::move(t));
+  if (!self->state.source) [[unlikely]]
+    attach_stream(self);
 }
 
 void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
@@ -207,16 +212,8 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
 
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, unsigned long export_max_events,
-         std::vector<pipeline>&& pipelines, index_actor index) {
-  if (!pipelines.empty() && export_max_events > 0) {
-    self->quit(caf::make_error(
-      ec::invalid_argument, fmt::format("{} is unable to use pipelines when "
-                                        "limiting events using "
-                                        "'vast.export.max-events' (set to {})",
-                                        *self, export_max_events)));
-    return exporter_actor::behavior_type::make_empty_behavior();
-  }
+         query_options options, std::vector<pipeline>&& pipelines,
+         index_actor index) {
   auto normalized_expr = normalize_and_validate(std::move(expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,

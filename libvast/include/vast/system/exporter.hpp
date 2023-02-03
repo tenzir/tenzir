@@ -93,7 +93,7 @@ struct exporter_state {
 /// @param index The index actor.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, unsigned long export_max_events,
-         std::vector<pipeline>&& pipelines, index_actor index);
+         query_options options, std::vector<pipeline>&& pipelines,
+         index_actor index);
 
 } // namespace vast::system
