@@ -480,6 +480,10 @@ partition_actor::behavior_type passive_partition(
         .then(
           [self, rp, start,
            query_context = std::move(query_context)](const ids& hits) mutable {
+            if (!hits.empty() && hits.size() != self->state.events)
+              VAST_WARN("{} received evaluator results with wrong length: "
+                        "expected {}, got {}",
+                        *self, self->state.events, hits.size());
             VAST_DEBUG("{} received results from the evaluator", *self);
             duration runtime = std::chrono::steady_clock::now() - start;
             auto id_str = fmt::to_string(query_context.id);
