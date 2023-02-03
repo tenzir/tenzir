@@ -45,9 +45,7 @@ using view = typename view_trait<T>::type;
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
   };                                                                           \
-  inline type_name materialize(view<type_name> x) {                            \
-    return x;                                                                  \
-  }
+  inline type_name materialize(view<type_name> x) { return x; }
 
 VAST_VIEW_TRAIT(bool)
 VAST_VIEW_TRAIT(int64_t)
