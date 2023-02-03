@@ -1,19 +1,12 @@
 - name: Info message
   ansible.builtin.debug:
     msg: "Using static binary install"
-- name: Stop vast service
-  ansible.builtin.service:
-    name: vast
-    state: stopped
-  ignore_errors: yes
-- name: Remove VAST debian package
-  ansible.builtin.apt:
-    name: "vast"
-    state: absent
+
 - name: Create vast group
   ansible.builtin.group:
     name: vast
     state: present
+
 - name: Create vast user
   ansible.builtin.user:
     name: vast
@@ -30,22 +23,14 @@
     owner: root
     group: root
 
-- name: Download VAST release
-  ansible.builtin.get_url:
-    url: "{{ url }}"
-    dest: "/opt/{{ vast_archive }}"
-    mode: '0440'
-  register: vast_download
-
-- name: Debug vast_download
-  debug:
-    msg: "vast_download `{{ vast_download }}`"
-
-- name: Create "{{ install_root }}"
-  ansible.builtin.file:
-    path: "{{ install_root }}"
-    state: directory
-    mode: '0755'
+- name: Copy the tarball to the target host
+  ansible.builtin.copy:
+    src: "{{ vast_archive }}"
+    dest: /tmp/vast.tar.gz
+    mode: '0640'
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
+  register: download
 
 - name: Create /var/lib/vast
   ansible.builtin.file:
@@ -65,18 +50,6 @@
 
 - name: Unarchive VAST release tarball
   ansible.builtin.unarchive:
-    src: "/opt/{{ vast_archive }}"
-    dest: "{{ install_root }}"
+    src: "/tmp/vast.tar.gz"
+    dest: /
     remote_src: yes
-      # when: vast_download.changed
-
-- name: Start vast
-  systemd:
-    name: vast
-    state: started
-    enabled: yes
-
-- name: Start vast service
-  ansible.builtin.service:
-    name: vast
-    state: started

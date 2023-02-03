@@ -42,12 +42,12 @@ the playbook.
 
 ### `read_write_paths`
 
-A list of paths that vast shall be granted access to in addition to its own
+A list of paths that VAST shall be granted access to in addition to its own
 state and log directories.
 
 ### `vast_archive`
 
-A tarball of vast structured like those that can be downloaded from the [GitHub
+A tarball of VAST structured like those that can be downloaded from the [GitHub
 Releases Page](https://github.com/tenzir/vast/releases). This is used for target
 distributions that are not based on the `apt` package manager.
 

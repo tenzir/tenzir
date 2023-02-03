@@ -32,10 +32,10 @@
     group: root
   register: overrides
 - include_tasks: debian.yaml
-  when: ansible_pkg_manager == "apt"
+  when: ansible_pkg_mgr == "apt"
   register: package
 - include_tasks: static.yaml
-  when: ansible_pkg_manager != "apt"
+  when: ansible_pkg_mgr != "apt"
   register: package
 - name: Restart if config changed
   # Handler notification can't express conjuncion or negation, so we use a task.
