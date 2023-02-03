@@ -457,7 +457,7 @@ caf:
 
     # Selects an implementation for credit computation.
     # Accepted alternative: "token-based".
-    credit-policy: size-based
+    credit-policy: token-based
 
     # When using "size-based" as credit-policy.
     size-based-policy:
@@ -484,7 +484,7 @@ caf:
       batch-size: 1
 
       # Max. number of elements in the input buffer.
-      buffer-size: 32
+      buffer-size: 64
 
   # Collecting metrics can be resource consuming. This section is used for
   # filtering what should and what should not be collected
