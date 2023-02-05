@@ -1,10 +1,17 @@
-{ makeTest, pkgs, self }:
 {
-  vast-vm-systemd = makeTest
+  makeTest,
+  pkgs,
+  self,
+}: {
+  vast-vm-systemd =
+    makeTest
     {
       name = "vast-systemd";
-      machine = { config, pkgs, ... }: {
-
+      machine = {
+        config,
+        pkgs,
+        ...
+      }: {
         environment.systemPackages = with pkgs; [
           pkgs.vast
         ];
