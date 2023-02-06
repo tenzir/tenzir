@@ -1,7 +1,9 @@
 {
-  stdenv,
   lib,
+  stdenv,
+  callPackage,
   vast-source,
+  vast,
   nix-gitignore,
   cmake,
   cmake-format,
@@ -29,6 +31,9 @@
   versionLongOverride ? null,
   versionShortOverride ? null,
   extraPlugins ? [],
+  symlinkJoin,
+  runCommand,
+  makeWrapper,
   extraCmakeFlags ? [],
   disableTests ? true,
   pkgsBuildHost,
@@ -46,6 +51,7 @@
     ]);
 
   src = vast-source;
+  vast-plugins = callPackage ./plugins {};
 
   versionLongOverride' = lib.removePrefix "v" versionLongOverride;
   versionShortOverride' = lib.removePrefix "v" versionShortOverride;
@@ -176,6 +182,28 @@ in
           --app ${placeholder "out"}/bin/vast \
           --disable "Disk Monitor"
       '';
+
+      passthru.withPlugins = plugins: let
+        actualPlugins = plugins vast-plugins;
+      in
+        if isStatic
+        then
+          vast.override {
+            extraPlugins = map (x: x.src) actualPlugins;
+          }
+        else let
+          pluginDir = symlinkJoin {
+            name = "vast-plugin-dir";
+            paths = [actualPlugins];
+          };
+        in
+          runCommand "vast-with-plugins"
+          {
+            nativeBuildInputs = [makeWrapper];
+          } ''
+            makeWrapper ${vast}/bin/vast $out/bin/vast \
+              --set VAST_PLUGIN_DIRS "${pluginDir}/lib/vast/plugins"
+          '';
 
       meta = with lib; {
         description = "Visibility Across Space and Time";

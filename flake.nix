@@ -62,6 +62,8 @@
         packages = flake-utils.lib.flattenTree {
           vast = pkgs.vast;
           vast-static = pkgs.pkgsStatic.vast;
+          vast-ce = pkgs.vast.withPlugins (ps: [ps.compaction]);
+          vast-ce-static = pkgs.pkgsStatic.vast.withPlugins (ps: [ps.compaction]);
           vast-integration-test-shell = pkgs.mkShell {
             packages = pkgs.vast-integration-test-deps;
           };
