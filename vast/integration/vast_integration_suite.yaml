@@ -827,3 +827,17 @@ tests:
       - command: export json
       - command: export arrow
         transformation: python @./misc/scripts/print-arrow-batch-size.py
+
+  Export shutdown behavior:
+    fixture: ServerTester
+    tags: [import, export]
+    steps:
+      - command: export json
+      - command: import --blocking suricata
+        input: data/suricata/eve.json
+      - command: export --max-events=2 json 'head 1'
+        transformation: jq -ers 'length'
+      - command: export json 'head 1'
+        transformation: jq -ers 'length'
+      - command: export --max-events=1 json 'head 0'
+      - command: export json 'head 0'
