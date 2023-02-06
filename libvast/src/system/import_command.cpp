@@ -58,14 +58,14 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     = make_pipelines(pipelines_location::client_source, inv.options);
   if (!pipelines)
     return caf::make_message(pipelines.error());
-  std::optional<expression> expr;
+  expression expr;
   if (!inv.arguments.empty()) {
     auto parse_result = parse_query(inv.arguments);
     if (!parse_result) {
       return caf::make_message(parse_result.error());
     }
     auto [parsed_expr, pipeline] = std::move(*parse_result);
-    expr.emplace(parsed_expr);
+    expr = parsed_expr;
     if (pipeline) {
       pipelines->push_back(std::move(*pipeline));
     }

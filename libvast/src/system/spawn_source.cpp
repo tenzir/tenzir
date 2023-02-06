@@ -37,14 +37,14 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
     = make_pipelines(pipelines_location::server_import, args.inv.options);
   if (!pipelines)
     return pipelines.error();
-  std::optional<expression> expr;
+  expression expr;
   if (!args.inv.arguments.empty()) {
     auto parse_result = parse_query(args.inv.arguments);
     if (!parse_result) {
       return parse_result.error();
     }
     auto [parsed_expr, pipeline] = std::move(*parse_result);
-    expr.emplace(parsed_expr);
+    expr = parsed_expr;
     if (pipeline) {
       pipelines->push_back(std::move(*pipeline));
     }
