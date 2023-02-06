@@ -29,6 +29,7 @@ struct configuration {
   // field for future extensibility; currently we only use the Crypto-PAn method
   std::string method;
   std::string seed;
+  std::vector<subnet> internal_subnets;
   std::array<ip::byte_type, vast::ip::pseudonymization_seed_array_size>
     seed_bytes{};
   std::vector<std::string> fields;
@@ -62,24 +63,40 @@ public:
                               std::shared_ptr<arrow::Array> array) noexcept
       -> std::vector<
         std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
-      auto builder = ip_type::make_arrow_builder(arrow::default_memory_pool());
-      auto address_view_generator
+      auto ip_builder
+        = ip_type::make_arrow_builder(arrow::default_memory_pool());
+      auto ip_view_generator
         = values(ip_type{}, caf::get<type_to_arrow_array_t<ip_type>>(*array));
-      for (const auto& address : address_view_generator) {
-        auto append_status = arrow::Status{};
-        if (address) {
-          auto pseudonymized_address
-            = vast::ip::pseudonymize(*address, config_.seed_bytes);
-          append_status
-            = append_builder(ip_type{}, *builder, pseudonymized_address);
+      for (const auto& ip : ip_view_generator) {
+        if (ip) {
+          // If the address is internal, then hash rather than pseudonymize it.
+          const auto is_internal
+            = std::any_of(config_.internal_subnets.begin(),
+                          config_.internal_subnets.end(),
+                          [&](const subnet& internal_subnet) noexcept {
+                            return internal_subnet.contains(*ip);
+                          });
+          if (is_internal) {
+            const auto ip_append_status = ip_builder->AppendNull();
+            VAST_ASSERT(ip_append_status.ok(),
+                        ip_append_status.ToString().c_str());
+          } else {
+            // pseudonymize external
+            auto pseudonymized_address
+              = vast::ip::pseudonymize(*ip, config_.seed_bytes);
+            const auto ip_append_status
+              = append_builder(ip_type{}, *ip_builder, pseudonymized_address);
+            VAST_ASSERT(ip_append_status.ok(),
+                        ip_append_status.ToString().c_str());
+          }
         } else {
-          append_status = builder->AppendNull();
+          const auto ip_append_status = ip_builder->AppendNull();
+          VAST_ASSERT(ip_append_status.ok(),
+                      ip_append_status.ToString().c_str());
         }
-        VAST_ASSERT(append_status.ok(), append_status.ToString().c_str());
       }
-      auto new_array = builder->Finish().ValueOrDie();
       return {
-        {field, new_array},
+        {field, ip_builder->Finish().ValueOrDie()},
       };
     };
     for (const auto& field_name : config_.fields) {
@@ -187,7 +204,8 @@ public:
       parsers::optional_ws, parsers::extractor, parsers::extractor_list;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    const auto options = option_set_parser{{{"method", 'm'}, {"seed", 's'}}};
+    const auto options
+      = option_set_parser{{{"method", 'm'}, {"seed", 's'}, {"internal", 'i'}}};
     const auto option_parser = required_ws >> options;
     auto parsed_options = std::unordered_map<std::string, data>{};
     if (!option_parser(f, l, parsed_options)) {
@@ -214,24 +232,49 @@ public:
     }
     auto config = configuration{};
     config.fields = std::move(parsed_extractors);
-    for (const auto& [key, value] : parsed_options) {
-      auto value_str = caf::get_if<std::string>(&value);
-      if (!value_str) {
-        return {
-          std::string_view{f, l},
-          caf::make_error(ec::syntax_error, fmt::format("invalid option value "
-                                                        "string for "
-                                                        "pseudonymize "
-                                                        "operator: "
-                                                        "'{}'",
-                                                        value)),
-        };
+    for (auto& [key, value] : parsed_options) {
+      if (key == "method") {
+        if (auto* method = caf::get_if<std::string>(&value)) {
+          config.method = std::move(*method);
+          continue;
+        }
       }
-      if (key == "m" || key == "method") {
-        config.method = *value_str;
-      } else if (key == "s" || key == "seed") {
-        config.seed = *value_str;
+      if (key == "seed") {
+        if (auto* seed = caf::get_if<std::string>(&value)) {
+          config.seed = std::move(*seed);
+          continue;
+        }
       }
+      if (key == "internal") {
+        if (auto* internal_subnet = caf::get_if<subnet>(&value)) {
+          config.internal_subnets.push_back(*internal_subnet);
+          continue;
+        }
+        if (auto* internal_subnets = caf::get_if<list>(&value)) {
+          for (auto& value : *internal_subnets) {
+            if (auto* internal_subnet = caf::get_if<subnet>(&value)) {
+              config.internal_subnets.push_back(*internal_subnet);
+            } else {
+              return {
+                std::string_view{f, l},
+                caf::make_error(ec::syntax_error,
+                                fmt::format("invalid list element '{}' for "
+                                            "'{}' option in pseudonymize "
+                                            "operator: not a subnet",
+                                            value, key)),
+              };
+            }
+          }
+          continue;
+        }
+      }
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error,
+                        fmt::format("invalid option value '{}' for '{}' option "
+                                    "in pseudonymize operator",
+                                    value, key)),
+      };
     }
     return {
       std::string_view{f, l},
