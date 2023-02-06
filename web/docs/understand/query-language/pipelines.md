@@ -53,9 +53,10 @@ operators](operators) to better understand what you can do with the data.
 
 ## Launch pipelines dynamically (experimental)
 
-As an alternative to configuration file-based pipelines, the `export` command
-supports launching a dynamically defined pipeline. The command will
-provide the beginning dataset in this case.
+As an alternative to configuration file-based pipelines, the `export` and
+`import` commands support launching a dynamically defined pipeline. The
+`export` command and the data loaded by the `import` command will provide the
+respective beginning datasets.
 
 This dynamic pipeline is an optional string parameter, with operators chained
 by the `|` delimiter. This pipeline can be put after an expression so it will
@@ -63,6 +64,10 @@ only be applied to the resulting dataset of that expression. For example:
 
 `export json 'src_ip == 192.168.1.104 | select timestamp, flow_id, src_ip,
 dest_ip, src_port | drop timestamp'`
+
+`import suricata < data/suricata/eve.json 'src_ip==147.32.84.165 &&
+(src_port==1181 || src_prt == 138) | select timestamp, flow_id, src_ip,
+dest_ip, src_port'`
 
 Have a look at [all available operators](operators) for more details about the
 respective pipeline operator string syntax. Please note that this feature is
