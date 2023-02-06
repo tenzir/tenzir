@@ -272,11 +272,7 @@ macro (VASTInstallExampleConfiguration target source prefix destination)
 
   # Set a temporary variable for the example dir location. Because we're in a
   # macro we're unsetting the variable again later on.
-  if (VAST_CMAKE_INSTALL_DOCDIR)
-    set(_example_dir "${VAST_CMAKE_INSTALL_DOCDIR}/examples")
-  else ()
-    set(_example_dir "${CMAKE_INSTALL_DOCDIR}/examples")
-  endif ()
+  set(_example_dir "${CMAKE_INSTALL_DOCDIR}/examples")
 
   # Write a CMake file that does the desired text transformations.
   file(
@@ -448,11 +444,6 @@ function (VASTRegisterPlugin)
     list(REMOVE_ITEM PLUGIN_SOURCES "${PLUGIN_ENTRYPOINT}")
   endif ()
 
-  # Set a fallback for the docdir.
-  if (NOT VAST_CMAKE_INSTALL_DOCDIR)
-    set(VAST_CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
-  endif ()
-
   # Create an object library target for our plugin _without_ the entrypoint.
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.h" "")
   list(APPEND PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.h")
@@ -605,7 +596,7 @@ function (VASTRegisterPlugin)
     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${doc}")
       install(
         FILES "${CMAKE_CURRENT_SOURCE_DIR}/${doc}"
-        DESTINATION "${VAST_CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}"
+        DESTINATION "${CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}"
         COMPONENT Runtime)
     endif ()
   endforeach ()
