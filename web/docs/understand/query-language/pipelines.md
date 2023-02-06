@@ -65,7 +65,7 @@ only be applied to the resulting dataset of that expression. For example:
 `export json 'src_ip == 192.168.1.104 | select timestamp, flow_id, src_ip,
 dest_ip, src_port | drop timestamp'`
 
-`import -b suricata < data/suricata/eve.json 'src_ip==147.32.84.165 &&
+`import suricata < data/suricata/eve.json 'src_ip==147.32.84.165 &&
 (src_port==1181 || src_prt == 138) | select timestamp, flow_id, src_ip,
 dest_ip, src_port'`
 
