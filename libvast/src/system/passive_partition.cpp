@@ -110,31 +110,24 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     auto bytes = as_bytes(*uncompressed_data);
     caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
     value_index_ptr state_ptr;
-    if (!sink.apply(state_ptr) || !state_ptr) {
-      VAST_ERROR("failed to deserialize value index using CAF 0.18");
+    if (!sink.apply(state_ptr) || !state_ptr)
       return {};
-    }
     return state_ptr;
   }
   if (const auto* data = index_fbs.caf_0_17_data()) {
     auto uncompressed_data = uncompress(*data);
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr) {
-      VAST_ERROR("failed to deserialize value index using CAF 0.17");
+    if (!sink(state_ptr) || !state_ptr)
       return {};
-    }
     return state_ptr;
   }
   if (auto ext_index = index_fbs.caf_0_17_external_container_idx()) {
     auto uncompressed_data = uncompress(container.get_raw(ext_index));
     detail::legacy_deserializer sink(as_bytes(*uncompressed_data));
     value_index_ptr state_ptr;
-    if (!sink(state_ptr) || !state_ptr) {
-      VAST_ERROR("failed to deserialize value index with CAF 0.17 external "
-                 "container idx");
+    if (!sink(state_ptr) || !state_ptr)
       return {};
-    }
     return state_ptr;
   }
   if (auto ext_index = index_fbs.caf_0_18_external_container_idx()) {
@@ -142,11 +135,8 @@ unpack_value_index(const fbs::value_index::detail::LegacyValueIndex& index_fbs,
     auto bytes = as_bytes(*uncompressed_data);
     caf::binary_deserializer sink{nullptr, bytes.data(), bytes.size()};
     value_index_ptr state_ptr;
-    if (!sink.apply(state_ptr) || !state_ptr) {
-      VAST_ERROR("failed to deserialize value index with CAF 0.18 external "
-                 "container idx");
+    if (!sink.apply(state_ptr) || !state_ptr)
       return {};
-    }
     return state_ptr;
   }
   return {};
@@ -161,12 +151,16 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
   // Deserialize the value index and spawn a passive_indexer lazily when it is
   // requested for the first time.
   const auto* qualified_index = flatbuffer->indexes()->Get(position);
+  if (!qualified_index || !qualified_index->index())
+    return {};
   if (auto value_index
       = unpack_value_index(*qualified_index->index(), *container)) {
     indexer = self->spawn(passive_indexer, id, std::move(value_index));
     return indexer;
   }
-  VAST_ERROR("{} failed to deserialize value index at {}", *self, position);
+  VAST_WARN("passive-partition ({}) failed to deserialize value index for "
+            "field {}",
+            id, qualified_index->field_name()->string_view());
   return {};
 }
 
@@ -486,6 +480,10 @@ partition_actor::behavior_type passive_partition(
         .then(
           [self, rp, start,
            query_context = std::move(query_context)](const ids& hits) mutable {
+            if (!hits.empty() && hits.size() != self->state.events)
+              VAST_WARN("{} received evaluator results with wrong length: "
+                        "expected {}, got {}",
+                        *self, self->state.events, hits.size());
             VAST_DEBUG("{} received results from the evaluator", *self);
             duration runtime = std::chrono::steady_clock::now() - start;
             auto id_str = fmt::to_string(query_context.id);

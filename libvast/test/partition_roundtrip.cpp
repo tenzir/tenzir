@@ -299,6 +299,7 @@ TEST(full partition roundtrip) {
     run();
     self->send_exit(dummy, caf::exit_reason::user_shutdown);
     run();
+    MESSAGE("testing expression: " << expression);
     CHECK_EQUAL(*result, expected_hits);
     CHECK_EQUAL(tally, expected_hits);
     return true;
