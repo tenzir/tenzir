@@ -42,7 +42,7 @@ apt-get -y --no-install-recommends install \
 wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb"
 apt-get -y --no-install-recommends install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 apt-get update
-apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev
+apt-get -y --no-install-recommends install libarrow-dev=11.0.0-1 libprotobuf-dev libparquet-dev=11.0.0-1
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 
 # Node 18.x and Yarn
