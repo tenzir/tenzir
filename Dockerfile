@@ -118,7 +118,7 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1000 libparquet1000 && \
+    apt-get -y --no-install-recommends install libarrow1100 libparquet1100 && \
     rm -rf /var/lib/apt/lists/*
 
 USER vast:vast
@@ -126,6 +126,9 @@ USER vast:vast
 EXPOSE 42000/tcp
 WORKDIR /var/lib/vast
 VOLUME ["/var/lib/vast"]
+
+# Verify that VAST starts up correctly.
+RUN vast version
 
 ENTRYPOINT ["vast"]
 CMD ["--help"]
