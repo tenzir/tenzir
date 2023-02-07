@@ -13,6 +13,8 @@
 #include "vast/concept/printable/numeric/real.hpp"
 #include "vast/time.hpp"
 
+#include <fmt/format.h>
+
 #include <chrono>
 #include <string>
 
@@ -72,6 +74,17 @@ struct duration_printer : printer_base<duration_printer<Rep, Period, Policy>> {
 
 #undef UNIT_SUFFIX
 
+private:
+  static bool
+  print_adaptive(auto& out, double duration, std::string_view suffix) {
+    auto double_str = fmt::format("{:.2f}", duration);
+    if (double_str.back() == '0')
+      double_str.pop_back();
+    fmt::format_to(out, "{}{}", std::move(double_str), suffix);
+    return true;
+  }
+
+public:
   template <class Iterator>
   bool print(Iterator& out, std::chrono::duration<Rep, Period> d) const {
     if constexpr (std::is_same_v<Policy, policy::fixed>) {
@@ -79,20 +92,19 @@ struct duration_printer : printer_base<duration_printer<Rep, Period, Policy>> {
       return p(out, d.count());
     } else if constexpr (std::is_same_v<Policy, policy::adaptive>) {
       using namespace std::chrono;
-      auto num = printers::real2;
       if (is_at_least<days>(d))
-        return (num << 'd')(out, count<days>(d));
+        return print_adaptive(out, count<days>(d), "d");
       if (is_at_least<hours>(d))
-        return (num << 'h')(out, count<hours>(d));
+        return print_adaptive(out, count<hours>(d), "h");
       if (is_at_least<minutes>(d))
-        return (num << 'm')(out, count<minutes>(d));
+        return print_adaptive(out, count<minutes>(d), "m");
       if (is_at_least<seconds>(d))
-        return (num << 's')(out, count<seconds>(d));
+        return print_adaptive(out, count<seconds>(d), "s");
       if (is_at_least<milliseconds>(d))
-        return (num << "ms")(out, count<milliseconds>(d));
+        return print_adaptive(out, count<milliseconds>(d), "ms");
       if (is_at_least<microseconds>(d))
-        return (num << "us")(out, count<microseconds>(d));
-      return (num << "ns")(out, count<nanoseconds>(d));
+        return print_adaptive(out, count<microseconds>(d), "us");
+      return print_adaptive(out, count<nanoseconds>(d), "ns");
     }
   }
 };
