@@ -56,8 +56,7 @@ altogether in a future version. The new pipeline operators [`head`][head-op] and
 
 ## VASTQL Upgrades
 
-The 3.x series of VAST releases is also all about the **VAST** **Q**uery
-**L**anguage. To kick this off, we've done some breaking changes to the language
+We've done some breaking changes to the the **VAST** **Q**uery **L**anguage
 that we've wanted to do in quite a while. Here's a summary:
 
 1. Several built-in types have a new name:
