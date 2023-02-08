@@ -12,8 +12,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/ip.hpp"
 #include "vast/ip.hpp"
-
-#define SUITE address
 #include "vast/test/test.hpp"
 
 #include <unordered_map>

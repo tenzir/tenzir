@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE detail
-
 #include "vast/detail/cache.hpp"
 
 #include "vast/detail/legacy_deserialize.hpp"

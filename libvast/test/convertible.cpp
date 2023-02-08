@@ -6,9 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <iterator>
-#define SUITE convertible
-
 #include "vast/concept/convertible/data.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/ip.hpp"
@@ -19,6 +16,8 @@
 #include "vast/test/test.hpp"
 
 #include <caf/test/dsl.hpp>
+
+#include <iterator>
 
 using namespace vast;
 using namespace vast::test;

@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE pipeline_parsing
-
 #include "vast/system/make_pipelines.hpp"
 
 #include <vast/pipeline.hpp>

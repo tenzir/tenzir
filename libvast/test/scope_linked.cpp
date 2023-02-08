@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE scope_linked
-
 #include "vast/scope_linked.hpp"
 
 #include "vast/test/fixtures/actor_system.hpp"

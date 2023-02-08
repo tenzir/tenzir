@@ -11,8 +11,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/port.hpp"
 #include "vast/subnet.hpp"
-
-#define SUITE port
 #include "vast/test/test.hpp"
 
 using namespace vast;

@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE base64
-
 #include "vast/detail/base64.hpp"
 
 #include "vast/test/test.hpp"

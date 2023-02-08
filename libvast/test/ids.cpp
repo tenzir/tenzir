@@ -8,7 +8,6 @@
 
 #include "vast/ids.hpp"
 
-#define SUITE ids
 #include "vast/test/test.hpp"
 
 using namespace vast;

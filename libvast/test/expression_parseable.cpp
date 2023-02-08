@@ -6,9 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/expression.hpp"
-#define SUITE expression
-
 #include "vast/fwd.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -17,6 +14,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/expression.hpp"
 #include "vast/test/test.hpp"
 
 #include <caf/sum_type.hpp>

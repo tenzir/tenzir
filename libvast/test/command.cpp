@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE command
-
 #include "vast/command.hpp"
 
 #include "vast/system/version_command.hpp"

@@ -9,8 +9,6 @@
 #include "vast/fbs/flatbuffer_container.hpp"
 
 #include "vast/as_bytes.hpp"
-
-#define SUITE flatbuffer_container
 #include "vast/test/test.hpp"
 
 TEST(roundtrip) {

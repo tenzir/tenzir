@@ -10,8 +10,6 @@
 // does not contain any meaningful tests for the example plugin. It merely
 // exists to show how to setup unit tests.
 
-#define SUITE example
-
 #include <vast/test/test.hpp>
 
 TEST(multiply) {

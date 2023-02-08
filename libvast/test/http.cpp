@@ -12,8 +12,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/http.hpp"
 #include "vast/concept/printable/vast/uri.hpp"
-
-#define SUITE http
 #include "vast/test/test.hpp"
 
 using namespace vast;

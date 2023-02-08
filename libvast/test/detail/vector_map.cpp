@@ -6,14 +6,12 @@
 // SPDX-FileCopyrightText: (c) 2017 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/config.hpp"
 #include "vast/detail/stable_map.hpp"
+#include "vast/test/test.hpp"
 
 #include <string>
 #include <string_view>
-
-#define SUITE detail
-#include "vast/config.hpp"
-#include "vast/test/test.hpp"
 
 using namespace std::string_view_literals;
 using namespace vast;

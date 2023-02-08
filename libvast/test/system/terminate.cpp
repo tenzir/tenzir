@@ -11,13 +11,11 @@
 #include "vast/fwd.hpp"
 
 #include "vast/atoms.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
-
-#define SUITE terminator
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/test.hpp"
 
 using namespace vast;
 using namespace vast::system;

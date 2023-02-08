@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE inspection_common
-
 #include "vast/detail/inspection_common.hpp"
 
 #include "vast/test/test.hpp"

@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE partition_synopsis
-
 #include "vast/partition_synopsis.hpp"
 
 #include "vast/bloom_filter_synopsis.hpp"

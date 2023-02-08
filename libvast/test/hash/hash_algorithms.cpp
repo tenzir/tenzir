@@ -13,8 +13,6 @@
 #include "vast/hash/sha1.hpp"
 #include "vast/hash/uhash.hpp"
 #include "vast/hash/xxhash.hpp"
-
-#define SUITE hashable
 #include "vast/test/test.hpp"
 
 using namespace vast;

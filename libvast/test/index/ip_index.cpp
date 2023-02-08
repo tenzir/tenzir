@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE value_index
-
 #include "vast/index/ip_index.hpp"
 
 #include "vast/concept/parseable/to.hpp"
