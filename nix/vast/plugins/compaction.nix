@@ -1,7 +1,7 @@
 {
   lib,
   stdenv,
-  eh,
+  vast-plugins,
   cmake,
   vast,
   arrow-cpp,
@@ -15,7 +15,7 @@ stdenv.mkDerivation {
   pname = "vast-plugin-compaction";
   version = "1.4.0";
 
-  src = "${eh}/vast-plugins/compaction";
+  src = "${vast-plugins}/compaction";
 
   nativeBuildInputs = [cmake];
   buildInputs = [

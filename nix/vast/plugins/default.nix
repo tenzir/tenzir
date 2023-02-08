@@ -1,9 +1,9 @@
 {callPackage, ...}: let
-  eh = builtins.fetchGit {
-    url = "git@github.com:tenzir/event-horizon";
-    ref = "master";
-    rev = "9cdce2d7d6ecf60b15ac4544c682dc5cee0e3846";
+  vast-plugins = builtins.fetchGit {
+    url = "git@github.com:tenzir/vast-plugins";
+    ref = "main";
+    rev = "eb679d515d8d2f71697f8b20711c4e523fe0c933";
   };
 in {
-  compaction = callPackage ./compaction.nix {inherit eh;};
+  compaction = callPackage ./compaction.nix {inherit vast-plugins;};
 }
