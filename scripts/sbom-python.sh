@@ -12,13 +12,6 @@ fi
 # make a temporary directory
 BOMDIR=$(mktemp -d)
 
-# Generate the frontend ui SBOM
-# The primary reason for using cdxgen (and then converting to spdx format via syft)
-# is that it can look up nodeJS license fields online
-FETCH_LICENSE=true gum spin --spinner dot --title \
-  "Generating CycloneDX SBOM for the Frontend UI packages. Fetching the licenses from online may take a while..." \
-  -- cdxgen plugins/web/ui -o $BOMDIR/ui_cyclonedx.json
-
 # Generate the python deps SBOM
 gum spin --spinner dot --title "Generating CycloneDX SBOM for the Python packages..." \
   -- cdxgen python -o $BOMDIR/python_cyclonedx.json
@@ -26,7 +19,6 @@ gum spin --spinner dot --title "Generating CycloneDX SBOM for the Python package
 # Convert to SPDX formats
 touch $BOMDIR/output.spdx
 
-syft convert $BOMDIR/ui_cyclonedx.json -o spdx-tag-value >$BOMDIR/ui.spdx
 syft convert $BOMDIR/python_cyclonedx.json -o spdx-tag-value >$BOMDIR/python.spdx
 
 cat $BOMDIR/ui.spdx $BOMDIR/python.spdx |
@@ -38,9 +30,6 @@ echo "\n"
 
 echo "Python packages..."
 cat $BOMDIR/python_cyclonedx.json | jq '.components | [.[] | select(.licenses == [])] | map(."bom-ref" ) | map (match("\/(.*?)@") | .captures | .[] | .string)'
-
-echo "NodeJS packages..."
-cat $BOMDIR/ui_cyclonedx.json | jq '.components | [.[] | select(.licenses == [])] | map(."bom-ref" ) | map (match("\/(.*?)@") | .captures | .[] | .string)'
 
 # delete the $BOMDIR directory
 rm -r $BOMDIR
