@@ -9,6 +9,7 @@
   - [Dominik Lohmann](https://github.com/dominiklohmann)
   - [Rémi Dettai](https://github.com/rdettai)
   - [Tobias Mayer](https://github.com/tobim)
+  - [Anthony Verez](https://github.com/netantho)
 - **Discussion**: [PR #2577](https://github.com/tenzir/vast/pull/2577)
 
 ## Overview
