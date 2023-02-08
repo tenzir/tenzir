@@ -155,9 +155,9 @@ const config = {
             position: 'right',
           },
           {
-            href: 'http://slack.tenzir.com',
-            'aria-label': 'Slack',
-            className: 'header-slack-link',
+            href: 'https://vast.io/discord',
+            'aria-label': 'Discord',
+            className: 'header-discord-link',
             position: 'right',
           },
           {
@@ -209,8 +209,8 @@ const config = {
             title: 'Community',
             items: [
               {
-                label: 'Slack',
-                href: 'http://slack.tenzir.com',
+                label: 'Discord',
+                href: '/discord',
               },
               {
                 label: 'GitHub',
