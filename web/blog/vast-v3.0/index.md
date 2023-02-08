@@ -13,8 +13,6 @@ TODO: Outstanding tasks for the blog post before we can publish
 - Remove this comment
 - Find a better title
 - Create an iamge for the blog post
-- Write about export and import pipelines as the headlining feature
-- Write about new syntax for pipelines in configuration
 - Optional: Make CEF a builtin rather than a plugin; there's little need for it
   to be a plugin as it has no additional dependencies.
 --->
@@ -27,9 +25,35 @@ expressions.
 
 <!--truncate-->
 
+## Unix-Style Pipelines
+
+Starting from v3.0, VAST introduces new and more dynamic ways to execute
+pipelines. Aside from using the YAML syntax for pipelines in a configuration
+file, it is now possible to define a Unix-style chain of pipeline operators in
+a single string. The `vast export` and `vast import` commands accept such a
+pipeline as a string parameter. The commands will then instantly evaluate and
+execute the pipeline. This new functionality allows for quicker and more
+responsive data transformation.
+
+Refer to the ["Pipelines" section of the documentation][pipeline-doc] for more
+details on how to use the new Unix-style pipeline syntax.
+
+:::info Pipeline YAML Syntax Deprecation
+This change introduces a transitional period from YAML-style to Unix-style
+pipelines. The old YAML syntax for pipelines and for pre-v3.0 pipeline operators
+will be deprecated and removed altogether in a future version. The new pipeline
+operators [`head`][head-op] and [`taste`][taste-op] do not already contain a
+YAML syntax. The syntax of some pre-v3.0 pipeline operators will also be
+subject to change/deprecation.
+:::
+
+[pipeline-doc]: //vast.io/docs/understand/query-language/pipelines#define-a-pipeline
+[head-op]: //vast.io/docs/understand/query-language/operators/head
+[taste-op]: //vast.io/docs/understand/query-language/operators/taste
+
 ## VASTQL Upgrades
 
-The 3.x series of VAST releases is all about the **VAST** **Q**uery
+The 3.x series of VAST releases is also all about the **VAST** **Q**uery
 **L**anguage. To kick this off, we've done some breaking changes to the language
 that we've wanted to do in quite a while. Here's a summary:
 
