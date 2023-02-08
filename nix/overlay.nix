@@ -174,7 +174,7 @@ in {
     include = [
       (inputs.nix-filter.lib.inDirectory ../changelog)
       (inputs.nix-filter.lib.inDirectory ../cmake)
-      (inputs.nix-filter.lib.inDirectory ../cmake)
+      (inputs.nix-filter.lib.inDirectory ../contrib)
       (inputs.nix-filter.lib.inDirectory ../docs)
       (inputs.nix-filter.lib.inDirectory ../docs)
       (inputs.nix-filter.lib.inDirectory ../libvast)
@@ -183,7 +183,6 @@ in {
       (inputs.nix-filter.lib.inDirectory ../python)
       (inputs.nix-filter.lib.inDirectory ../schema)
       (inputs.nix-filter.lib.inDirectory ../scripts)
-      (inputs.nix-filter.lib.inDirectory ../tools)
       (inputs.nix-filter.lib.inDirectory ../vast)
       ../VERSIONING.md
       ../CMakeLists.txt

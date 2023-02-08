@@ -15,13 +15,13 @@ RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 # VAST
 COPY changelog ./changelog
 COPY cmake ./cmake
+COPY contrib ./contrib
 COPY examples ./examples
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
 COPY plugins ./plugins
 COPY python ./python
 COPY schema ./schema
-COPY tools ./tools
 COPY vast ./vast
 COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
      vast.yaml.example version.json ./
