@@ -1,8 +1,8 @@
 # Remote Pipelines
 
-- **Status**: WIP
+- **Status**: Obsolete
 - **Created**: Sep 14, 2022
-- **ETA**: Oct 14, 2022
+- **Dismissed**: Feb 08, 2023
 - **Authors**:
   - [Matthias Vallentin](https://github.com/mavam)
 - **Contributors**:
