@@ -571,6 +571,16 @@ active_partition_actor::behavior_type active_partition(
     },
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
       auto rp = self->make_response_promise<uint64_t>();
+      if (!self->state.data.synopsis) {
+        rp.deliver(caf::make_error(ec::logic_error,
+                                   "querying a partition without a synopsis"));
+        return rp;
+      }
+      if (!self->state.data.synopsis->schema) {
+        rp.deliver(caf::make_error(ec::logic_error,
+                                   "querying a partition without a schema"));
+        return rp;
+      }
       auto resolved = resolve(*self->state.taxonomies, query_context.expr,
                               self->state.data.synopsis->schema);
       if (!resolved) {
