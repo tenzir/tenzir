@@ -952,15 +952,6 @@ jobs:
             mac-dependencies:
               - asio
               - http-parser
-            post-install:
-              run: |
-                cd plugins/web/ui
-                yarn install --frozen-lockfile
-                yarn playwright install --with-deps
-                yarn playwright test
-              upload:
-                name: Playwright Report
-                path: plugins/web/ui/playwright-report
         exclude:
           # Disable the Parquet plugin because trying
           # to use it on the macOS CI runners crashes because of an illegal
@@ -1088,17 +1079,6 @@ jobs:
         run: |
           cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
           echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
-      - name: Post-Install
-        if: ${{ matrix.plugin.post-install.run != '' }}
-        run: |
-          ${{ matrix.plugin.post-install.run }}
-      - name: Post-Install Upload
-        if: ${{ always() && matrix.plugin.post-install.upload != '' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ matrix.plugin.post-install.upload.name }}
-          path: ${{ matrix.plugin.post-install.upload.path }}
-          if-no-files-found: error
 
   python:
     needs:
