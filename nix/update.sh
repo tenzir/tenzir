@@ -7,6 +7,11 @@ dir=$(dirname "$(readlink -f "$0")")
 toplevel=$(git -C "${dir}" rev-parse --show-toplevel)
 mainroot="$(git -C "${dir}" rev-parse --path-format=absolute --show-toplevel)"
 
+get-submodule-rev() {
+  local _submodule="$1"
+  git -C "${toplevel}" submodule status -- "${_submodule}" | cut -c2- | cut -d' ' -f 1
+}
+
 update-source-github() {
   local _name="$1"
   local _submodule="$2"
@@ -14,7 +19,7 @@ update-source-github() {
   local _repo="$4"
   local _path="${toplevel}/${_submodule}"
   local _rev _version
-  _rev="$(git -C "${toplevel}" submodule status -- "${_submodule}" | cut -c2- | cut -d' ' -f 1)"
+  _rev="$(get-submodule-rev "${_submodule}")"
   git -C "${toplevel}" submodule update --init "${_submodule}"
   _version="$(git -C "${_path}" describe --tag)"
 
@@ -28,7 +33,7 @@ update-source() {
   local _submodule="$2"
   local _url
   _url="$(git config --file "${mainroot}/.gitmodules" --get "submodule.${_submodule}.url")"
-  echo "updating ${_name} at ${_submodule} from ${_url}"
+  echo "checking ${_name} at ${_submodule} from ${_url}"
 
   re="^((https?|ssh|git|ftps?):\/\/)?(([^\/@]+)@)?([^\/:]+)[\/:]([^\/:]+)\/(.+)\/?$"
 
@@ -51,4 +56,8 @@ update-source() {
 
 update-source caf "libvast/aux/caf"
 update-source fast_float "libvast/aux/fast_float"
-update-source vast-plugins "contrib/vast-plugins"
+
+vast_plugins_rev="$(get-submodule-rev "contrib/vast-plugins")"
+vast_plugins_json="$(jq --arg rev "${vast_plugins_rev#rev}" \
+  '."rev" = $rev' "${dir}/vast/plugins/source.json")"
+echo -E "${vast_plugins_json}" > "${dir}/vast/plugins/source.json"
