@@ -1,0 +1,12 @@
+---
+- name: Deploy vast
+  become: true
+  hosts: example_vast_server
+  remote_user: deployer
+  roles:
+    - role: vast
+      vars:
+        config_file: ./vast.yaml
+        read_write_paths: [/tmp]
+        vast_archive: ./vast.tar.gz
+        vast_debian_package: ./vast.deb

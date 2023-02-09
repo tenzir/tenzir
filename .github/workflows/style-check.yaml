@@ -48,6 +48,11 @@ jobs:
           pip install --upgrade yamllint
           git ls-files '*.yaml' '.yml' | xargs yamllint
 
+      - name: Ansible Lint
+        run: |
+          pip install --upgrade ansible-lint
+          ansible-lint --strict --profile production ansible
+
       - name: Terraform fmt
         run: |
           terraform fmt -check -recursive -diff
