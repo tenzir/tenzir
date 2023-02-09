@@ -1,0 +1,16 @@
+[
+  {
+    "name": "zeek.conn",
+    "schema": [
+      {
+        "name": "orig_bytes",
+        "type": "uint64"
+      }
+    ],
+    "data": [
+      {
+        "orig_bytes": 301
+      }
+    ]
+  }
+]
