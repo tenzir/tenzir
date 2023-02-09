@@ -206,6 +206,10 @@ in {
       # https://github.com/NixOS/nixpkgs/issues/130963
       NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
     });
+  vast-ce = final.vast.withPlugins (ps: [
+    ps.matcher
+    ps.netflow
+  ]);
   vast-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [

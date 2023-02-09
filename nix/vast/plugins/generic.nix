@@ -1,15 +1,14 @@
 {
   lib,
   stdenv,
-  vast-plugins,
+  pname,
+  version,
+  src,
   cmake,
   vast,
 }:
 stdenv.mkDerivation {
-  pname = "vast-plugin-compaction";
-  version = "1.4.0";
-
-  src = "${vast-plugins}/compaction";
+  inherit pname version src;
 
   nativeBuildInputs = [cmake];
   buildInputs = [vast];
