@@ -415,6 +415,20 @@ public:
     = 0;
 };
 
+class stdin_loader_plugin : public virtual loader_plugin {
+public:
+  [[nodiscard]] auto make_loader(options, const bool_operator*) const
+    -> caf::expected<input_loader> override;
+
+  /// Returns the default parser for this loader.
+  [[nodiscard]] auto make_default_parser(options, const bool_operator*) const
+    -> caf::expected<input_parser> override;
+
+  [[nodiscard]] caf::error initialize(data config) override;
+
+  [[nodiscard]] std::string name() const override;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.

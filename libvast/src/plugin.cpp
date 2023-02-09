@@ -380,6 +380,34 @@ store_plugin::make_store(system::accountant_actor accountant,
                                                  std::move(path), name());
 }
 
+// -- loader plugin -------------------------------------------------------------
+
+auto stdin_loader_plugin::make_loader(options, const bool_operator*) const
+  -> caf::expected<input_loader> {
+  return []() -> detail::generator<chunk_ptr> {
+    for (std::istream_iterator<std::string> stdin_it(std::cin);
+         stdin_it != std::istream_iterator<std::string>(); ++stdin_it) {
+      auto chunk = chunk::copy(*stdin_it);
+      co_yield std::move(chunk);
+    }
+    co_return;
+  };
+}
+
+auto stdin_loader_plugin::make_default_parser(options,
+                                              const bool_operator*) const
+  -> caf::expected<input_parser> {
+  return caf::make_error(ec::unimplemented, "parser currently not implemented");
+}
+
+caf::error stdin_loader_plugin::initialize(data config) {
+  return caf::none;
+}
+
+std::string stdin_loader_plugin::name() const {
+  return "stdin_loader_plugin";
+}
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 caf::expected<plugin_ptr>
