@@ -56,8 +56,8 @@ altogether in a future version. The new pipeline operators [`head`][head-op] and
 
 ## VASTQL Upgrades
 
-We've done some breaking changes to the the **VAST** **Q**uery **L**anguage
-that we've wanted to do in quite a while. Here's a summary:
+We've made some breaking changes to the the **VAST** **Q**uery **L**anguage
+that we've wanted to do for a long time. Here's a summary:
 
 1. Several built-in types have a new name:
    - `int` → `int64`
