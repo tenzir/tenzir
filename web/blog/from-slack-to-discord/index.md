@@ -2,7 +2,7 @@
 title: From Slack to Discord
 description: Moving our community chat from Slack to Discord
 authors: mavam
-image: slack-to-discord.light.png
+image: /img/slack-to-discord.light.png
 date: 2023-02-09
 tags: [community, chat, discord]
 ---
@@ -22,8 +22,8 @@ that abandons Slack. [Numerous][meilisearch] [open-source][appwrite]
 
 <!--truncate-->
 
-![Slack-to-Discord](slack-to-discord.light.png#gh-light-mode-only)
-![Slack-to-Discord](slack-to-discord.dark.png#gh-dark-mode-only)
+![Slack-to-Discord](/img/slack-to-discord.light.png#gh-light-mode-only)
+![Slack-to-Discord](/img/slack-to-discord.dark.png#gh-dark-mode-only)
 
 :::info Discord Invite Link
 You can join our Discord community chat via <https://vast.io/discord>.
