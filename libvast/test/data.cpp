@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE data
-
 #include "vast/data.hpp"
 
 #include "vast/concept/convertible/to.hpp"

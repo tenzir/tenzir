@@ -7,8 +7,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE cef
-
 #include "cef/parse.hpp"
 
 #include <vast/concept/convertible/to.hpp>

@@ -8,7 +8,6 @@
 
 #include "vast/detail/iterator.hpp"
 
-#define SUITE detail
 #include "vast/test/test.hpp"
 
 using namespace vast;

@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE arrow_table_slice
-
 #include "vast/arrow_table_slice.hpp"
 
 #include "vast/concept/parseable/to.hpp"

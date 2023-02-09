@@ -8,10 +8,9 @@
 
 #include "vast/word.hpp"
 
-#include <cstdint>
-
-#define SUITE word
 #include "vast/test/test.hpp"
+
+#include <cstdint>
 
 using namespace vast;
 

@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE test
-
 #include "vast/error.hpp"
 
 #include "vast/test/test.hpp"

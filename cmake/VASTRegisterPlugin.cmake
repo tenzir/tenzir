@@ -650,6 +650,16 @@ function (VASTRegisterPlugin)
 
   # Setup unit tests.
   if (VAST_ENABLE_UNIT_TESTS AND PLUGIN_TEST_SOURCES)
+    set(VAST_UNIT_TEST_TIMEOUT
+        "60"
+        CACHE STRING "The per-test timeout in unit tests" FORCE)
+    unset(suites)
+    foreach (test_source IN LISTS PLUGIN_TEST_SOURCES)
+      get_filename_component(suite "${test_source}" NAME_WE)
+      set_property(SOURCE "${test_source}" PROPERTY COMPILE_DEFINITIONS
+                                                    "SUITE=${suite}")
+      list(APPEND suites "${suite}")
+    endforeach ()
     add_executable(${PLUGIN_TARGET}-test ${PLUGIN_TEST_SOURCES})
     VASTTargetEnableTooling(${PLUGIN_TARGET}-test)
     target_link_libraries(${PLUGIN_TARGET}-test PRIVATE vast::test
@@ -665,10 +675,15 @@ function (VASTRegisterPlugin)
       build-${PLUGIN_TARGET}-test
       PROPERTIES FIXTURES_SETUP vast_${PLUGIN_TARGET}_unit_test_fixture
                  FIXTURES_REQUIRED vast_unit_test_fixture)
-    add_test(NAME ${PLUGIN_TARGET} COMMAND ${PLUGIN_TARGET}-test -v 4 -r 60)
-    set_tests_properties(
-      ${PLUGIN_TARGET} PROPERTIES FIXTURES_REQUIRED
-                                  vast_${PLUGIN_TARGET}_unit_test_fixture)
+    foreach (suite IN LISTS suites)
+      string(REPLACE " " "_" test_name ${suite})
+      add_test(NAME "plugin/${PLUGIN_TARGET}/${test_name}"
+               COMMAND ${PLUGIN_TARGET}-test -v 4 -r
+                       "${VAST_UNIT_TEST_TIMEOUT}" -s "${suite}")
+      set_tests_properties(
+        "plugin/${PLUGIN_TARGET}/${test_name}"
+        PROPERTIES FIXTURES_REQUIRED vast_${PLUGIN_TARGET}_unit_test_fixture)
+    endforeach ()
   endif ()
 
   # Ensure that a target integration always exists, even if a plugin does not

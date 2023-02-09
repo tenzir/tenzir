@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE offset
-
 #include "vast/offset.hpp"
 
 #include "vast/concept/parseable/to.hpp"

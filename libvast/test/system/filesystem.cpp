@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE filesystem
-
 #include "vast/chunk.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/write.hpp"

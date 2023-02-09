@@ -6,6 +6,15 @@ file(GLOB_RECURSE test_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(SORT test_sources)
 
+unset(suites)
+foreach (test_source IN LISTS test_sources)
+  get_filename_component(suite "${test_source}" NAME_WE)
+  set_property(SOURCE "${test_source}" PROPERTY COMPILE_DEFINITIONS
+                                                "SUITE=${suite}")
+  list(APPEND suites "${suite}")
+endforeach ()
+list(REMOVE_DUPLICATES suites)
+
 file(GLOB_RECURSE test_headers CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 list(SORT test_headers)
@@ -22,32 +31,13 @@ add_test(NAME build-vast-test
                  "$<CONFIG>" --target vast-test)
 set_tests_properties(build-vast-test PROPERTIES FIXTURES_SETUP
                                                 vast_unit_test_fixture)
-# Helper macro to construct a CMake test from a VAST test suite.
-macro (make_test suite)
+
+# Enable unit testing via CMake/CTest and add all test suites.
+foreach (suite IN LISTS suites)
   string(REPLACE " " "_" test_name ${suite})
-  add_test(NAME ${test_name}
+  add_test(NAME "libvast/${test_name}"
            COMMAND vast-test -v 4 -r "${VAST_UNIT_TEST_TIMEOUT}" -s
                    "^${suite}$" ${ARGN})
-  set_tests_properties(${test_name} PROPERTIES FIXTURES_REQUIRED
-                                               vast_unit_test_fixture)
-endmacro ()
-
-# Find all test suites.
-foreach (test ${test_sources})
-  file(STRINGS ${test} contents)
-  foreach (line ${contents})
-    if ("${line}" MATCHES "^ *# *define +SUITE +[^ ]+ *$")
-      string(REGEX REPLACE "^ *# *define +SUITE +\([^ ]+\) *$" "\\1" suite
-                           ${line})
-      list(APPEND suites ${suite})
-      # We only support a single suite per source file, so we can stop
-      # considering the remaining lines in this file.
-      break()
-    endif ()
-  endforeach ()
-endforeach ()
-list(REMOVE_DUPLICATES suites)
-# Enable unit testing via CMake/CTest and add all test suites.
-foreach (suite ${suites})
-  make_test("${suite}")
+  set_tests_properties("libvast/${test_name}" PROPERTIES FIXTURES_REQUIRED
+                                                         vast_unit_test_fixture)
 endforeach ()

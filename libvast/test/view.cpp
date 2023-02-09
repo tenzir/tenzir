@@ -8,7 +8,6 @@
 
 #include "vast/view.hpp"
 
-#define SUITE view
 #include "vast/test/test.hpp"
 
 using namespace vast;

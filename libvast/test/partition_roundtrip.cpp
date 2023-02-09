@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE partition_roundtrip
-
 #include "vast/fwd.hpp"
 
 #include "vast/chunk.hpp"

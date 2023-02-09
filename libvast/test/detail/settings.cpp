@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE settings
-
 #include "vast/detail/settings.hpp"
 
 #include "vast/test/fixtures/actor_system.hpp"

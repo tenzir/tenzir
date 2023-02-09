@@ -8,7 +8,6 @@
 
 #include "vast/detail/string.hpp"
 
-#define SUITE string
 #include "vast/test/test.hpp"
 
 using namespace vast;

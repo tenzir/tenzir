@@ -8,10 +8,9 @@
 
 #include "vast/bits.hpp"
 
-#include <cstdint>
-
-#define SUITE bits
 #include "vast/test/test.hpp"
+
+#include <cstdint>
 
 using namespace vast;
 

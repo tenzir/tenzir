@@ -6,12 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/test/fixtures/filesystem.hpp"
+
 #include "vast/detail/system.hpp"
 #include "vast/file.hpp"
 #include "vast/si_literals.hpp"
-
-#define SUITE filesystem
-#include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
 
 #include <cstddef>

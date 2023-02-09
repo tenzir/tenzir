@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE column_iterator
-
 #include "vast/detail/column_iterator.hpp"
 
 #include "vast/detail/range.hpp"
