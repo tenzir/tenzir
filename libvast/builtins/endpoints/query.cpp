@@ -34,7 +34,7 @@ static auto const* SPEC_V0 = R"_(
     description: Create a new export query in VAST
     parameters:
       - in: query
-        name: expression
+        name: query
         schema:
           type: string
           example: ":ip in 10.42.0.0/16"
@@ -133,22 +133,25 @@ drain_buffer(std::deque<table_slice>& slices, size_t n) {
   bool error_encountered = false;
   auto ostream = std::make_unique<std::stringstream>();
   auto writer = vast::format::json::writer{std::move(ostream), caf::settings{}};
-  for (auto it = slices.begin(); it != slices.end(); ++it) {
+  auto it = slices.begin();
+  for (; it != slices.end(); ++it) {
     auto& slice = *it;
     if (slice.rows() < n) {
       written += slice.rows();
       if (auto error = writer.write(slice))
         error_encountered = true;
+      n -= slice.rows();
     } else {
       auto [first, second] = split(slice, n);
       written += first.rows();
       if (auto error = writer.write(first))
         error_encountered = true;
       slice = second;
-      slices.erase(slices.begin(), it);
       break;
     }
   }
+  //  Remove events that will be shipped in the response.
+  slices.erase(slices.begin(), it);
   if (error_encountered)
     VAST_WARN("query endpoint encountered error writing json data");
   return {written, static_cast<std::stringstream&>(writer.out()).str()};
@@ -163,17 +166,60 @@ struct query_manager_state {
 
   static constexpr auto name = "query_manager";
 
-  bool query_in_progress = false;
   system::index_actor index = {};
   caf::typed_response_promise<atom::done> promise = {};
   http_request request;
-  size_t position = 0;
-  size_t events = 0;
-  size_t limit = std::string::npos;
+  size_t returned_events_count = 0;
+  size_t limit = 0u;
   std::string response_body; // The current response to the GET endpoint
-  std::string body_buffer;   // JSONLD buildup of current response
   std::deque<table_slice> slice_buffer;
+  // Events produced after application of a pipeline.
+  std::deque<table_slice> processed_slices;
+  size_t shippable_events_count = 0;
   std::optional<system::query_cursor> cursor = std::nullopt;
+  size_t processed_partitions = 0u;
+  std::optional<pipeline_executor> pipeline_executor_;
+
+  std::string create_response() {
+    auto [drained_events, events_as_json]
+      = drain_buffer(processed_slices, limit);
+    shippable_events_count -= drained_events;
+    returned_events_count += drained_events;
+    auto events = detail::split(events_as_json, "\n");
+    return fmt::format("{{\"position\": {}, \"events\": [\n{}]}}\n",
+                       returned_events_count, fmt::join(events, ",\n"));
+  }
+
+  void apply_pipelines() {
+    for (auto&& slice : std::exchange(slice_buffer, {}))
+      if (auto err = pipeline_executor_->add(std::move(slice)))
+        VAST_WARN("adding a slice to pipeline executor resulted in "
+                  "error: {}",
+                  std::move(err));
+    auto transformed = pipeline_executor_->finish();
+    if (not transformed) {
+      VAST_WARN("error while apllying a pipeline: {}", transformed.error());
+      return;
+    }
+    for (auto& slice : *transformed) {
+      shippable_events_count += slice.rows();
+      processed_slices.push_back(std::move(slice));
+    }
+  }
+
+  void enable_buffered_slices_to_be_shipped() {
+    if (pipeline_executor_)
+      return apply_pipelines();
+    for (auto& slice : std::exchange(slice_buffer, {})) {
+      shippable_events_count += slice.rows();
+      processed_slices.push_back(std::move(slice));
+    }
+  }
+
+  bool should_ship_results() const {
+    return shippable_events_count >= limit
+           or cursor->candidate_partitions == processed_partitions;
+  }
 };
 
 struct request_multiplexer_state {
@@ -187,8 +233,10 @@ struct request_multiplexer_state {
 
 query_manager_actor::behavior_type
 query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
-              system::index_actor index) {
+              system::index_actor index,
+              std::optional<vast::pipeline_executor> executor) {
   self->state.index = std::move(index);
+  self->state.pipeline_executor_ = std::move(executor);
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     if (self->state.promise.pending())
       self->state.promise.deliver(msg.reason);
@@ -198,65 +246,38 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
             self->state.cursor = cursor;
           },
           [self](atom::next, http_request& rq,
-                 uint64_t n) -> caf::result<atom::done> {
+                 uint64_t max_events_to_output) -> caf::result<atom::done> {
             if (!self->state.cursor)
               rq.response->abort(500, "query manager not ready");
-            if (self->state.query_in_progress)
-              rq.response->abort(503, "previous request still in progress");
+            self->state.limit = max_events_to_output;
+            if (self->state.should_ship_results()) {
+              rq.response->append(self->state.create_response());
+              return atom::done_v;
+            }
+            self->send(self->state.index, atom::query_v, self->state.cursor->id,
+                       BATCH_SIZE);
             self->state.request = std::move(rq);
-            self->state.limit = n;
-            self->state.position += self->state.events;
-            self->state.body_buffer = "";
             self->state.promise = self->make_response_promise<atom::done>();
-            std::tie(self->state.events, self->state.body_buffer)
-              = drain_buffer(self->state.slice_buffer, n);
-            // Forward to the `done` handler to avoid repeating the same logic
-            // here.
-            self->send(self, atom::done_v);
             return self->state.promise;
           },
           // Index-facing API
-          [self](const vast::table_slice& slice) {
-            self->state.slice_buffer.push_back(slice);
-            if (self->state.limit <= self->state.events)
-              return;
-            auto remaining = self->state.limit - self->state.events;
-            auto [n, json] = drain_buffer(self->state.slice_buffer, remaining);
-            self->state.body_buffer += json;
-            self->state.events += n;
+          [self](vast::table_slice& slice) {
+            self->state.slice_buffer.push_back(std::move(slice));
           },
           [self](atom::done) {
             // There's technically a race condition with atom::provision here,
             // since the index sends the first `done` asynchronously. But since
             // we always set `taste == 0`, we will not miss any data due to this.
-            if (!self->state.cursor)
-              return;
-            if (!self->state.promise.pending())
-              return;
-            bool remaining_partitions
-              = self->state.cursor->candidate_partitions
-                > self->state.cursor->scheduled_partitions;
-            auto remaining_events = self->state.limit > self->state.events;
-            if (remaining_partitions && remaining_events) {
-              self->state.cursor->scheduled_partitions += BATCH_SIZE;
-              self->send(self->state.index, atom::query_v,
-                         self->state.cursor->id, BATCH_SIZE);
-            } else {
-              self->state.response_body = fmt::format(
-                "{{\"position\": {}, \"events\": [\n", self->state.position);
-              std::istringstream iss{self->state.body_buffer};
-              size_t count = 0ull;
-              std::string line;
-              while (std::getline(iss, line)) {
-                if (count++ != 0)
-                  self->state.response_body += ",\n";
-                self->state.response_body += line;
-              }
-              self->state.response_body += "]}\n";
+            ++self->state.processed_partitions;
+            self->state.enable_buffered_slices_to_be_shipped();
+            if (self->state.should_ship_results()) {
               auto request = std::exchange(self->state.request, {});
-              request.response->append(self->state.response_body);
+              request.response->append(self->state.create_response());
               self->state.promise.deliver(atom::done_v);
+              return;
             }
+            self->send(self->state.index, atom::query_v, self->state.cursor->id,
+                       BATCH_SIZE);
           }};
 }
 
@@ -281,24 +302,31 @@ request_multiplexer_actor::behavior_type request_multiplexer(
       VAST_VERBOSE("{} handles /query request", *self);
       if (endpoint_id == QUERY_NEW_ENDPOINT) {
         auto query_string = std::optional<std::string>{};
-        if (rq.params.contains("expression")) {
-          auto& param = rq.params.at("expression");
+        if (rq.params.contains("query")) {
+          auto& param = rq.params.at("query");
           // Should be type-checked by the server.
           VAST_ASSERT(caf::holds_alternative<std::string>(param));
           query_string = caf::get<std::string>(param);
         } else {
-          return rq.response->abort(422, "missing parameter 'expression'\n");
+          return rq.response->abort(422, "missing parameter 'query'\n");
         }
-        auto query_result = system::parse_query(*query_string);
-        if (!query_result)
+        auto parse_result = system::parse_query(*query_string);
+        if (!parse_result)
           return rq.response->abort(400, fmt::format("unparseable query: {}\n",
-                                                     query_result.error()));
-        auto expr = query_result->first;
+                                                     parse_result.error()));
+        auto [expr, pipeline] = std::move(*parse_result);
         auto normalized_expr = normalize_and_validate(expr);
         if (!normalized_expr)
           return rq.response->abort(400, fmt::format("invalid query: {}\n",
                                                      normalized_expr.error()));
-        auto handler = self->spawn(query_manager, self->state.index_);
+        auto pipeline_executor = std::optional<vast::pipeline_executor>{};
+        if (pipeline) {
+          auto pipelines = std::vector<vast::pipeline>{};
+          pipelines.emplace_back(std::move(*pipeline));
+          pipeline_executor.emplace(std::move(pipelines));
+        }
+        auto handler = self->spawn(query_manager, self->state.index_,
+                                   std::move(pipeline_executor));
         auto query = vast::query_context::make_extract(
           "http-request", handler, std::move(*normalized_expr));
         query.taste = 0;
@@ -370,7 +398,7 @@ class plugin final : public virtual rest_endpoint_plugin {
         .method = http_method::post,
         .path = "/query/new",
         .params = vast::record_type{
-          {"expression", vast::string_type{}},
+          {"query", vast::string_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,

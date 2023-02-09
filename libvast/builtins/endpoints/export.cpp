@@ -7,13 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/format/json.hpp"
-#include "vast/system/make_pipelines.hpp"
 
 #include <vast/command.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/numeric.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
@@ -34,7 +34,7 @@ static auto const* SPEC_V0 = R"_(
     description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
     parameters:
       - in: query
-        name: expression
+        name: query
         schema:
           type: string
           default: A query matching every event.
@@ -49,17 +49,6 @@ static auto const* SPEC_V0 = R"_(
         required: false
         description: Maximum number of returned events.
         example: 3
-      - in: query
-        name: pipeline
-        schema:
-          type: object
-          properties:
-            steps:
-              type: array
-              items:
-                type: object
-        required: false
-        description: A JSON description of a pipeline to be applied to the exported data.
       - in: query
         name: flatten
         schema:
@@ -122,9 +111,9 @@ static auto const* SPEC_V0 = R"_(
         application/json:
           schema:
             type: object
-            required: ["expression"]
+            required: ["query"]
             properties:
-              expression:
+              query:
                 type: string
                 description: The query expression to execute.
                 example: ":ip in 10.42.0.0/16"
@@ -134,14 +123,6 @@ static auto const* SPEC_V0 = R"_(
                 default: 50
                 description: Maximum number of returned events
                 example: 3
-              pipeline:
-                type: object
-                properties:
-                  steps:
-                    type: array
-                    items:
-                      type: object
-                description: A JSON object describing a pipeline to be applied on the exported data.
               omit-nulls:
                 type: boolean
                 description: Omit null elements in the response data.
@@ -196,9 +177,9 @@ static auto const* SPEC_V0 = R"_(
         application/json:
           schema:
             type: object
-            required: ["expression"]
+            required: ["query"]
             properties:
-              expression:
+              query:
                 type: string
                 description: The query expression to execute.
                 example: ":ip in 10.42.0.0/16"
@@ -208,15 +189,6 @@ static auto const* SPEC_V0 = R"_(
                 default: 50
                 description: Maximum number of returned events
                 example: 3
-              pipeline:
-                type: object
-                required: ["steps"]
-                properties:
-                  steps:
-                    type: array
-                    items:
-                      type: object
-                description: A JSON object describing a pipeline to be applied on the exported data.
               omit-nulls:
                 type: boolean
                 description: Omit null elements in the response data.
@@ -308,6 +280,7 @@ struct export_format_options {
 
 struct export_parameters {
   vast::expression expr = {};
+
   size_t limit = defaults::rest::export_::limit;
   export_format_options format_opts = {};
 };
@@ -319,7 +292,7 @@ struct export_helper_state {
   export_parameters params_ = {};
   size_t events_ = 0;
   size_t limit_ = std::string::npos;
-  std::optional<pipeline_executor> pipeline_ = {};
+  std::optional<pipeline_executor> pipeline_executor_ = {};
   std::optional<system::query_cursor> cursor_ = std::nullopt;
   std::vector<table_slice> results_ = {};
   http_request request_;
@@ -464,7 +437,7 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
   self->state.index_ = std::move(index);
   self->state.request_ = std::move(request);
   self->state.params_ = std::move(params);
-  self->state.pipeline_ = std::move(executor);
+  self->state.pipeline_executor_ = std::move(executor);
   auto query
     = vast::query_context::make_extract("api", self, self->state.params_.expr);
   self->request(self->state.index_, caf::infinite, atom::evaluate_v, query)
@@ -500,13 +473,14 @@ export_helper(export_helper_actor::stateful_pointer<export_helper_state> self,
                    next_batch_size);
       } else {
         std::vector<table_slice> slices;
-        if (self->state.pipeline_) {
+        if (self->state.pipeline_executor_) {
           for (auto&& slice : std::exchange(self->state.results_, {}))
-            if (auto error = self->state.pipeline_->add(std::move(slice))) {
+            if (auto error
+                = self->state.pipeline_executor_->add(std::move(slice))) {
               VAST_WARN("{} failed to add slice to pipeline: {}", *self, error);
               break; // Assume that `finish()` will also fail now.
             }
-          auto transformed = self->state.pipeline_->finish();
+          auto transformed = self->state.pipeline_executor_->finish();
           if (!transformed)
             return self->state.request_.response->abort(
               500,
@@ -543,8 +517,8 @@ export_multiplexer_actor::behavior_type export_multiplexer(
     [self](atom::http_request, uint64_t endpoint_id, http_request rq) {
       VAST_VERBOSE("{} handles /export request", *self);
       auto query_string = std::optional<std::string>{};
-      if (rq.params.contains("expression")) {
-        auto& param = rq.params.at("expression");
+      if (rq.params.contains("query")) {
+        auto& param = rq.params.at("query");
         // Should be type-checked by the server.
         VAST_ASSERT(caf::holds_alternative<std::string>(param));
         query_string = caf::get<std::string>(param);
@@ -555,8 +529,8 @@ export_multiplexer_actor::behavior_type export_multiplexer(
       if (!query_result)
         return rq.response->abort(400, fmt::format("unparseable query: {}\n",
                                                    query_result.error()));
-      auto expr = query_result->first;
-      auto normalized_expr = normalize_and_validate(expr);
+      auto [expr, pipeline] = std::move(*query_result);
+      auto normalized_expr = normalize_and_validate(std::move(expr));
       if (!normalized_expr)
         return rq.response->abort(400, fmt::format("invalid query: {}\n",
                                                    normalized_expr.error()));
@@ -587,35 +561,10 @@ export_multiplexer_actor::behavior_type export_multiplexer(
         params.format_opts.numeric_durations = caf::get<bool>(param);
       }
       auto pipeline_executor = std::optional<vast::pipeline_executor>{};
-      if (rq.params.contains("pipeline")) {
-        auto data = from_json(caf::get<std::string>(rq.params.at("pipeline")));
-        if (!data)
-          return rq.response->abort(400, "couldn't parse pipeline "
-                                         "definition\n");
-        if (!caf::holds_alternative<record>(*data))
-          return rq.response->abort(400, "expected json object for parameter "
-                                         "'pipeline'\n");
-        auto& record = caf::get<vast::record>(*data);
-        if (!record.contains("steps"))
-          return rq.response->abort(400, "missing 'steps'\n");
-        auto settings = caf::config_value{};
-        auto error = convert(record.at("steps"), settings);
-        if (error)
-          return rq.response->abort(400, "couldn't convert pipeline "
-                                         "definition to caf::settings\n");
-        if (!caf::holds_alternative<caf::config_value::list>(settings))
-          return rq.response->abort(400, "expected a list of steps\n");
-        auto& steps = caf::get<caf::config_value::list>(settings);
-        // TODO: get name and types from json data
-        auto pipeline
-          = vast::pipeline{"rest-adhoc-pipeline", std::vector<std::string>{}};
-        error = system::parse_pipeline_operators(pipeline, steps);
-        if (error)
-          return rq.response->abort(400, "couldn't convert pipeline "
-                                         "definition\n");
+      if (pipeline) {
         auto pipelines = std::vector<vast::pipeline>{};
-        pipelines.emplace_back(std::move(pipeline));
-        pipeline_executor = vast::pipeline_executor{std::move(pipelines)};
+        pipelines.emplace_back(std::move(*pipeline));
+        pipeline_executor.emplace(std::move(pipelines));
       }
       // TODO: Abort the request after some time limit has passed.
       auto exporter
@@ -652,9 +601,8 @@ class plugin final : public virtual rest_endpoint_plugin {
   [[nodiscard]] const std::vector<rest_endpoint>&
   rest_endpoints() const override {
     static auto common_parameters = vast::record_type{
-      {"expression", vast::string_type{}},
+      {"query", vast::string_type{}},
       {"limit", vast::uint64_type{}},
-      {"pipeline", vast::string_type{}},
       {"flatten", vast::bool_type{}},
       {"omit-nulls", vast::bool_type{}},
       {"numeric-durations", vast::bool_type{}},
