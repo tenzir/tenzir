@@ -41,7 +41,6 @@
             git nixUnstable coreutils
           ];
         };
-        vast-ui = pkgs.vast-ui;
         default = pkgs.vast;
       };
       apps.vast = flake-utils.lib.mkApp { drv = packages.vast; };

@@ -193,16 +193,4 @@ in
     '';
     subPackages = [ "cmd/speeve" ];
   };
-
-  vast-ui = nnbp.buildYarnPackage {
-    name = "vast-ui";
-    src = ../plugins/web/ui; # TODO use nix-filter ?
-    yarnBuildMore = ''
-      export HOME=$(mktemp -d)
-      yarn build
-    '';
-    installPhase = ''
-      mv build $out
-    '';
-  };
 }
