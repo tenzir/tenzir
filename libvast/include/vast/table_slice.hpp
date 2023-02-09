@@ -293,7 +293,7 @@ table_slice concatenate(std::vector<table_slice> slices);
 /// @param expr The filter expression.
 /// @param hints ID set for selecting events from `slice`.
 /// @pre `slice.encoding() != table_slice_encoding::none`
-detail::generator<table_slice>
+generator<table_slice>
 select(const table_slice& slice, expression expr, const ids& hints);
 
 /// Produces a new table slice consisting only of events addressed in `hints`

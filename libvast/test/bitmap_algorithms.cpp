@@ -8,7 +8,7 @@
 
 #include "vast/bitmap_algorithms.hpp"
 
-#include "vast/detail/collect.hpp"
+#include "vast/collect.hpp"
 #include "vast/ids.hpp"
 #include "vast/test/test.hpp"
 
@@ -46,7 +46,7 @@ TEST(bitwise_range select) {
 TEST(select runs) {
   auto bm = make_ids({{0, 1}, {50000, 50001}, {100000, 100003}});
   {
-    auto ranges = detail::collect(select_runs(bm));
+    auto ranges = collect(select_runs(bm));
     REQUIRE_EQUAL(ranges.size(), 3u);
     CHECK_EQUAL(ranges[0].first, 0u);
     CHECK_EQUAL(ranges[0].last, 1u);
@@ -56,7 +56,7 @@ TEST(select runs) {
     CHECK_EQUAL(ranges[2].last, 100003u);
   }
   {
-    auto ranges = detail::collect(select_runs<0>(bm));
+    auto ranges = collect(select_runs<0>(bm));
     REQUIRE_EQUAL(ranges.size(), 2u);
     CHECK_EQUAL(ranges[0].first, 1u);
     CHECK_EQUAL(ranges[0].last, 50000u);
@@ -65,7 +65,7 @@ TEST(select runs) {
   }
   bm.append_bit(false);
   {
-    auto ranges = detail::collect(select_runs(bm));
+    auto ranges = collect(select_runs(bm));
     REQUIRE_EQUAL(ranges.size(), 3u);
     CHECK_EQUAL(ranges[0].first, 0u);
     CHECK_EQUAL(ranges[0].last, 1u);
@@ -75,7 +75,7 @@ TEST(select runs) {
     CHECK_EQUAL(ranges[2].last, 100003u);
   }
   {
-    auto ranges = detail::collect(select_runs<0>(bm));
+    auto ranges = collect(select_runs<0>(bm));
     REQUIRE_EQUAL(ranges.size(), 3u);
     CHECK_EQUAL(ranges[0].first, 1u);
     CHECK_EQUAL(ranges[0].last, 50000u);

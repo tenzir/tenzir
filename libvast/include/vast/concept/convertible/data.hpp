@@ -544,8 +544,8 @@ public:
 
   const record_type& schema;
   const record& src;
-  detail::generator<record_type::field_view> field_generator_ = schema.fields();
-  detail::generator<record_type::field_view>::iterator current_iterator_
+  generator<record_type::field_view> field_generator_ = schema.fields();
+  generator<record_type::field_view>::iterator current_iterator_
     = field_generator_.begin();
 };
 

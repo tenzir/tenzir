@@ -12,8 +12,8 @@
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
-#include "vast/detail/generator.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/generator.hpp"
 #include "vast/hash/hash.hpp"
 #include "vast/offset.hpp"
 
@@ -324,8 +324,8 @@ public:
   [[nodiscard]] std::string_view name() && = delete;
 
   /// Returns a view of all names of this type.
-  [[nodiscard]] detail::generator<std::string_view> names() const& noexcept;
-  [[nodiscard]] detail::generator<std::string_view> names() && = delete;
+  [[nodiscard]] generator<std::string_view> names() const& noexcept;
+  [[nodiscard]] generator<std::string_view> names() && = delete;
 
   /// Returns the value of an attribute by name, if it exists.
   /// @param key The key of the attribute.
@@ -343,13 +343,13 @@ public:
   [[nodiscard]] bool has_attributes() const noexcept;
 
   /// Returns a view on all attributes.
-  [[nodiscard]] detail::generator<attribute_view>
+  [[nodiscard]] generator<attribute_view>
   attributes(type::recurse recurse = type::recurse::yes) const& noexcept;
-  [[nodiscard]] detail::generator<attribute_view>
+  [[nodiscard]] generator<attribute_view>
   attributes(type::recurse recurse = type::recurse::yes) && = delete;
 
   /// Returns all aliases of this type, excluding this type itself.
-  [[nodiscard]] detail::generator<type> aliases() const noexcept;
+  [[nodiscard]] generator<type> aliases() const noexcept;
 
   /// Returns a flattened type.
   friend type flatten(const type& type) noexcept;
@@ -1218,10 +1218,10 @@ public:
   make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
 
   /// Returns an iterable view over the fields of a record type.
-  [[nodiscard]] detail::generator<field_view> fields() const noexcept;
+  [[nodiscard]] generator<field_view> fields() const noexcept;
 
   /// Returns an iterable view over the leaf fields of a record type.
-  [[nodiscard]] detail::generator<leaf_view> leaves() const noexcept;
+  [[nodiscard]] generator<leaf_view> leaves() const noexcept;
 
   /// Returns the numnber of fields in a record.
   [[nodiscard]] size_t num_fields() const noexcept;
@@ -1243,7 +1243,7 @@ public:
   /// not 'x.other_y.z'.
   /// @note The key may optionally begin with a given prefix for backwards
   /// compatilibty with the old type system.
-  [[nodiscard]] detail::generator<offset>
+  [[nodiscard]] generator<offset>
   resolve_key_suffix(std::string_view key, std::string_view prefix
                                            = "") const noexcept;
 
