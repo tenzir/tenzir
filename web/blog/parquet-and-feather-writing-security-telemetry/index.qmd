@@ -4,7 +4,7 @@ authors:
   - dispanser
   - mavam
 date: 2022-10-24
-last_updated: 2023-01-10
+last_updated: 2023-02-08
 image: image.jpg
 tags: [benchmark, arrow, parquet, feather, quarto, r]
 ---
@@ -662,7 +662,7 @@ spent by disabling the compression code path. Perhaps compression results in
 different memory layout that is more cache-efficient. Unfortunately, we did not
 have the time to dig deeper into the analysis to figure out why disabling
 Parquet compression is slower. Please don't hesitate to reach out, e.g., via our
-[Community Slack](http://slack.tenzir.com).
+[community chat](/discord).
 
 Let's compare Parquet and Feather by compression level, per schema:
 

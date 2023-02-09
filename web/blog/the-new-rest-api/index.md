@@ -2,6 +2,7 @@
 title: The New REST API
 authors: [lava, mavam]
 date: 2023-01-26
+last_updated: 2023-02-08
 image: /img/rest-api-deployment-single.light.png
 tags: [frontend, rest, api, architecture]
 ---
@@ -364,5 +365,5 @@ stability guarantees at the moment.
 :::
 
 As always, if you have any question on usage, swing by our [community
-Slack](http://slack.tenzir.com). Missing routes? Let us know so that we know
+chat](/discord). Missing routes? Let us know so that we know
 what to prioritize. Now happy curling! :curling_stone:
