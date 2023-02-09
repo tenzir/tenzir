@@ -4,12 +4,6 @@
   vast-plugins,
   cmake,
   vast,
-  arrow-cpp,
-  jemalloc,
-  robin-map,
-  openssl,
-  spdlog,
-  simdjson,
 }:
 stdenv.mkDerivation {
   pname = "vast-plugin-compaction";
@@ -18,15 +12,7 @@ stdenv.mkDerivation {
   src = "${vast-plugins}/compaction";
 
   nativeBuildInputs = [cmake];
-  buildInputs = [
-    vast
-    arrow-cpp
-    jemalloc
-    robin-map
-    openssl
-    spdlog
-    simdjson
-  ];
+  buildInputs = [vast];
 
   meta = with lib; {
     platforms = platforms.linux;

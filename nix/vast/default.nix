@@ -96,19 +96,19 @@ in
       propagatedNativeBuildInputs = [pkg-config pandoc];
       buildInputs = [
         fast_float
-        jemalloc
         libpcap
         libunwind
         libyamlcpp
-        robin-map
-        simdjson
-        spdlog
         restinio
       ];
       propagatedBuildInputs = [
         arrow-cpp
         caf
         flatbuffers
+        jemalloc
+        robin-map
+        simdjson
+        spdlog
         xxHash
       ];
 

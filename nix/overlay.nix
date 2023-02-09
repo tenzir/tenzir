@@ -109,6 +109,9 @@ in {
         # is a required argument, and it has to be passed explicitly instead.
         src = lib.callPackageWith source final.fetchFromGitHub {inherit (source) sha256;};
         inherit (source) version;
+        # The OpenSSL dependency appears in the interface of CAF, so it has to
+        # be propagated downstream.
+        propagatedBuildInputs = [final.openssl];
         NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer";
         # Building statically implies using -flto. Since we produce a final binary with
         # link time optimizaitons in VAST, we need to make sure that type definitions that
