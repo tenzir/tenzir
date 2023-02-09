@@ -40,7 +40,7 @@ Here are our top reasons why we switched:
 
 - **Invitation**: Unlimited invite links that do not expire.
 
-- **Inclusion**: users can self-assign their preferred pronouns.
+- **Inclusion**: Users can self-assign their preferred pronouns.
 
 We hope that the majority of our Slack users understand these concerns and
-will rejoice with us over at Discord. See you there!
+will join us over at Discord. See you there!
