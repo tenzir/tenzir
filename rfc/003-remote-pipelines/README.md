@@ -183,16 +183,6 @@ follows:
 vast mutate lake1 'where 10.0.0.0/8 | put orig.h resp.h'
 ```
 
-
-
-
-
----
-
-TODO: here be dragons; the following is verbatim copied from RFC-001 and the
-content still needs to be adapted.
-
-
 ## Implementation
 
 ### Case study: remote matcher
