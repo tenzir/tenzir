@@ -39,7 +39,7 @@
   register: package
 - name: Restart if config changed
   # Handler notification can't express conjuncion or negation, so we use a task.
-  when: config.changed or overrides.changed and not package.changed # noqa no-handler
+  when: config.changed or overrides.changed and not package.changed  # noqa no-handler
   ansible.builtin.systemd:
     name: vast
     state: restarted
