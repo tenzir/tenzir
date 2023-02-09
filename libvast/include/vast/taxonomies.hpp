@@ -127,27 +127,10 @@ resolve_concepts(const concepts_map& concepts,
 /// replacement expressions containing only concrete field names.
 /// @param t The set of taxonomies to apply.
 /// @param e The original expression.
+/// @param schema An optional schema to restrict taxonomy resolution by.
 /// @returns The sustitute expression.
-caf::expected<expression> resolve(const taxonomies& t, const expression& e);
-
-/// Substitutes concept and model identifiers in field extractors with
-/// replacement expressions containing only concrete field names.
-/// @param t The set of taxonomies to apply.
-/// @param e The original expression.
-/// @param seen The set of all types in the database.
-/// @returns The sustitute expression.
-[[deprecated]] caf::expected<expression>
-resolve(const taxonomies& t, const expression& e,
-        const std::map<std::string, type_set>& seen);
-
-/// Substitutes concept and model identifiers in field extractors with
-/// replacement expressions containing only concrete field names.
-/// @param t The set of taxonomies to apply.
-/// @param e The original expression.
-/// @param single_type A type in the database.
-/// @returns The sustitute expression.
-caf::expected<expression> resolve(const taxonomies& t, const expression& e,
-                                  const vast::type& single_type);
+caf::expected<expression>
+resolve(const taxonomies& t, const expression& e, const type& schema = {});
 
 } // namespace vast
 
