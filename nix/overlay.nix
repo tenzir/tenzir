@@ -5,7 +5,6 @@ let
   inherit (final.stdenv.hostPlatform) isMusl;
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if final.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
-  nnbp = final.callPackage inputs.nix-npm-buildpackage {};
 in
 {
   abseil-cpp = if !isStatic then prev.abseil-cpp else prev.abseil-cpp_202206;
