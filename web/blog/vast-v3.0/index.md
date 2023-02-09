@@ -37,7 +37,7 @@ The new syntax resembles the well-known Unix paradigm of command chaining. The
 difference to Unix pipelines is that VAST exchanges structured data between
 operators. The `vast export` and `vast import` commands accept such a
 pipeline as a string argument. Previously, VAST only supported a YAML-like
-definition of pipeline in configuration files. This new, ad-hoc form enables
+definition of pipelines in configuration files. This new, ad-hoc form enables
 much quicker data transformation.
 
 Refer to the [pipelines documentation][pipeline-doc] for more details on how to
