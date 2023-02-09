@@ -136,8 +136,9 @@ caf::expected<expression> resolve(const taxonomies& t, const expression& e);
 /// @param e The original expression.
 /// @param seen The set of all types in the database.
 /// @returns The sustitute expression.
-caf::expected<expression> resolve(const taxonomies& t, const expression& e,
-                                  const std::map<std::string, type_set>& seen);
+[[deprecated]] caf::expected<expression>
+resolve(const taxonomies& t, const expression& e,
+        const std::map<std::string, type_set>& seen);
 
 /// Substitutes concept and model identifiers in field extractors with
 /// replacement expressions containing only concrete field names.
