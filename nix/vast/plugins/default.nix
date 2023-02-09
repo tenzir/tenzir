@@ -1,20 +1,10 @@
 {callPackage, ...}: let
   source = builtins.fromJSON (builtins.readFile ./source.json);
   vast-plugins = builtins.fetchGit source;
-in {
-  compaction = callPackage ./generic.nix {
-    pname = "compaction";
-    version = "1.4.0";
-    src = "${vast-plugins}/compaction";
+  versions = import ./versions.nix; 
+  f = name: version: callPackage ./generic.nix {
+    pname = name;
+    version = version;
+    src = "${vast-plugins}/${name}";
   };
-  matcher = callPackage ./generic.nix {
-    pname = "matcher";
-    version = "3.0.0";
-    src = "${vast-plugins}/matcher";
-  };
-  netflow = callPackage ./generic.nix {
-    pname = "netflow";
-    version = "1.0.0";
-    src = "${vast-plugins}/netflow";
-  };
-}
+in builtins.mapAttrs f versions

@@ -57,7 +57,21 @@ update-source() {
 update-source caf "libvast/aux/caf"
 update-source fast_float "libvast/aux/fast_float"
 
+echo "Updating contrib/vast-plugins"
+git -C "${toplevel}" submodule update --init "contrib/vast-plugins"
 vast_plugins_rev="$(get-submodule-rev "contrib/vast-plugins")"
 vast_plugins_json="$(jq --arg rev "${vast_plugins_rev#rev}" \
   '."rev" = $rev' "${dir}/vast/plugins/source.json")"
 echo -E "${vast_plugins_json}" > "${dir}/vast/plugins/source.json"
+
+echo "Extracting plugin versions..."
+{
+  printf "{\n"
+  for cm in contrib/vast-plugins/*/CMakeLists.txt; do
+    plugin="$(basename "$(dirname "$cm")")"
+    version="$(sed -n 's|[^(]VERSION\s\+\([0-9A-Za-z\.-_]\+\)$|\1|p' "$cm" | tr -d '[:space:]')"
+    echo "plugin = $plugin, version = $version" >&2
+    echo "  $plugin = \"$version\";"
+  done
+  printf "}\n"
+} > "${dir}/vast/plugins/versions.nix"
