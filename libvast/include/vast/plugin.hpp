@@ -398,6 +398,23 @@ public:
     = 0;
 };
 
+using input_loader = std::function<auto()->generator<chunk_ptr>>;
+using input_parser = std::function<auto(chunk_ptr)->generator<table_slice>>;
+using options = record;
+
+class loader_plugin : public virtual plugin {
+public:
+  [[nodiscard]] virtual auto make_loader(options, const bool_operator*) const
+    -> caf::expected<input_loader>
+    = 0;
+
+  /// Returns the default parser for this loader.
+  [[nodiscard]] virtual auto
+  make_default_parser(options, const bool_operator*) const
+    -> caf::expected<input_parser>
+    = 0;
+};
+
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
