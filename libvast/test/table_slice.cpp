@@ -10,10 +10,10 @@
 
 #include "vast/arrow_table_slice.hpp"
 #include "vast/cast.hpp"
+#include "vast/collect.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/detail/collect.hpp"
 #include "vast/detail/legacy_deserialize.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"

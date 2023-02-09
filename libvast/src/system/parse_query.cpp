@@ -8,7 +8,7 @@
 
 #include "vast/system/parse_query.hpp"
 
-#include "vast/detail/collect.hpp"
+#include "vast/collect.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"

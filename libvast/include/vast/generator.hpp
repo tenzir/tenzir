@@ -35,7 +35,7 @@ namespace stdcoro = std::experimental;
 
 #endif
 
-namespace vast::detail {
+namespace vast {
 
 /// A generator represents a coroutine type that produces a sequence of values
 /// of type, T, where values are produced lazily and synchronously.
@@ -276,4 +276,4 @@ fmap(FUNC func, generator<T> source) {
   }
 }
 
-} // namespace vast::detail
+} // namespace vast

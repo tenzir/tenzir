@@ -88,7 +88,7 @@ LicenseConcluded: CC-BY-SA
 LicenseComment: See https://stackoverflow.com/a/6089413/92560
 
 SPDXID: SPDXRef-File
-FileName: ./libvast/include/vast/detail/generator.hpp
+FileName: ./libvast/include/vast/generator.hpp
 FileCopyrightText: (c) 2017 Lewis Baker
 LicenseConcluded: MIT
 LicenseComment: Includes code from https://github.com/lewissbaker/cppcoro

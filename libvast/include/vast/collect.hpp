@@ -8,21 +8,21 @@
 
 #pragma once
 
-#include <vast/detail/generator.hpp>
+#include <vast/generator.hpp>
 
-namespace vast::detail {
+namespace vast {
 
 /// A utility function to collect all results produced by a
-/// `vast::detail::generator<T>` into a suitable container.
+/// `vast::generator<T>` into a suitable container.
 /// Example:
-///     auto g = vast::detail::generator<string_view>{};
-///     auto v = vast::detail::collect<std::vector<std::string>>(g);
+///     auto g = vast::generator<string_view>{};
+///     auto v = vast::collect<std::vector<std::string>>(g);
 template <class Container, class T>
   requires requires(Container c, T& t) {
-    c.reserve(size_t{});
-    c.emplace(c.end(), t);
-  }
-Container collect(vast::detail::generator<T> g, size_t size_hint = 0) {
+             c.reserve(size_t{});
+             c.emplace(c.end(), t);
+           }
+Container collect(vast::generator<T> g, size_t size_hint = 0) {
   Container result = {};
   if (size_hint)
     result.reserve(size_hint);
@@ -32,13 +32,13 @@ Container collect(vast::detail::generator<T> g, size_t size_hint = 0) {
 }
 
 /// A utility function to collect all results produced by a
-/// `vast::detail::generator<T>` into a `std::vector<T>`.
+/// `vast::generator<T>` into a `std::vector<T>`.
 /// Example:
-///     auto g = vast::detail::generator<int>{};
-///     auto v = vast::detail::collect(g);
+///     auto g = vast::generator<int>{};
+///     auto v = vast::collect(g);
 template <class T>
-std::vector<T> collect(vast::detail::generator<T> g, size_t size_hint = 0) {
+std::vector<T> collect(vast::generator<T> g, size_t size_hint = 0) {
   return collect<std::vector<T>>(std::move(g), size_hint);
 }
 
-} // namespace vast::detail
+} // namespace vast

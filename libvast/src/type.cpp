@@ -1045,7 +1045,7 @@ std::string_view type::name() const& noexcept {
   __builtin_unreachable();
 }
 
-detail::generator<std::string_view> type::names() const& noexcept {
+generator<std::string_view> type::names() const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
@@ -1155,7 +1155,7 @@ bool type::has_attributes() const noexcept {
   __builtin_unreachable();
 }
 
-detail::generator<type::attribute_view>
+generator<type::attribute_view>
 type::attributes(type::recurse recurse) const& noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
@@ -1200,7 +1200,7 @@ type::attributes(type::recurse recurse) const& noexcept {
   __builtin_unreachable();
 }
 
-detail::generator<type> type::aliases() const noexcept {
+generator<type> type::aliases() const noexcept {
   const auto* root = &table(transparent::no);
   while (true) {
     switch (root->type_type()) {
@@ -2451,8 +2451,7 @@ record_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
     to_arrow_type(), pool, std::move(field_builders));
 }
 
-detail::generator<record_type::field_view>
-record_type::fields() const noexcept {
+generator<record_type::field_view> record_type::fields() const noexcept {
   const auto* record = table().type_as_record_type();
   VAST_ASSERT(record);
   const auto* fields = record->fields();
@@ -2466,7 +2465,7 @@ record_type::fields() const noexcept {
   co_return;
 }
 
-detail::generator<record_type::leaf_view> record_type::leaves() const noexcept {
+generator<record_type::leaf_view> record_type::leaves() const noexcept {
   auto index = offset{0};
   auto history = detail::stack_vector<const fbs::type::RecordType*, 64>{
     table().type_as_record_type()};
@@ -2723,7 +2722,7 @@ record_type::resolve_key(std::string_view key) const noexcept {
   return {};
 }
 
-detail::generator<offset>
+generator<offset>
 record_type::resolve_key_suffix(std::string_view key,
                                 std::string_view prefix) const noexcept {
   if (key.empty())
@@ -3107,13 +3106,12 @@ merge(const record_type& lhs, const record_type& rhs,
                               "field {}; failed to merge {} and {}",
                               lfield.type.name(), rfield.type.name(),
                               rfield.name, lhs, rhs));
-              auto to_vector
-                = [](detail::generator<type::attribute_view>&& rng) {
-                    auto result = std::vector<type::attribute_view>{};
-                    for (auto&& elem : std::move(rng))
-                      result.push_back(std::move(elem));
-                    return result;
-                  };
+              auto to_vector = [](generator<type::attribute_view>&& rng) {
+                auto result = std::vector<type::attribute_view>{};
+                for (auto&& elem : std::move(rng))
+                  result.push_back(std::move(elem));
+                return result;
+              };
               auto lhs_attributes = to_vector(lfield.type.attributes());
               const auto rhs_attributes = to_vector(rfield.type.attributes());
               const auto conflicting_attribute = std::any_of(

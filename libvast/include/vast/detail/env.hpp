@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "vast/detail/generator.hpp"
+#include "vast/generator.hpp"
 
 #include <caf/error.hpp>
 
