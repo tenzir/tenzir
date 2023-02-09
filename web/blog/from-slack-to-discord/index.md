@@ -29,7 +29,7 @@ that abandons Slack. [Numerous][meilisearch] [open-source][appwrite]
 You can join our Discord community chat via <https://vast.io/discord>.
 :::
 
-Here are the four top reasons why we are switching:
+Here are the top four reasons why we are switching:
 
 - **Retention**: Slack's free plan has only 90 days message retention. We prefer
   permanence of our community discussion.
