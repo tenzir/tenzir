@@ -57,6 +57,33 @@
           versionSuffix;
         # Simulate `git describe --abbrev=10 --long --match='v[0-9]*`.
         versionLongOverride = "${vast-version-fallback}${versionSuffix}";
+        stream-image = pkg: {
+          type = "app";
+          program = "${pkgs.dockerTools.streamLayeredImage {
+            name = "tenzir/vast-slim";
+            tag = "latest";
+            config = let
+              vast-dir = "/var/lib/vast";
+            in {
+              Entrypoint = ["${self.packages.${system}."${pkg}"}/bin/vast"];
+              CMD = ["--help"];
+              Env = [
+                # When changing these, make sure to also update the entries in the
+                # Dockerfile.
+                "VAST_ENDPOINT=0.0.0.0:42000"
+                "VAST_DB_DIRECTORY=${vast-dir}"
+                "VAST_LOG_FILE=/var/log/vast/server.log"
+              ];
+              ExposedPorts = {
+                "42000/tcp" = {};
+              };
+              WorkingDir = "${vast-dir}";
+              Volumes = {
+                "${vast-dir}" = {};
+              };
+            };
+          }}";
+        };
       in rec {
         inherit pkgs;
         packages = flake-utils.lib.flattenTree {
@@ -79,33 +106,10 @@
         };
         apps.vast = flake-utils.lib.mkApp {drv = packages.vast;};
         apps.vast-static = flake-utils.lib.mkApp {drv = packages.vast-static;};
-        apps.stream-static-image = {
-          type = "app";
-          program = "${pkgs.dockerTools.streamLayeredImage {
-            name = "tenzir/vast-slim";
-            tag = "latest";
-            config = let
-              vast-dir = "/var/lib/vast";
-            in {
-              Entrypoint = ["${self.packages.${system}."vast-static"}/bin/vast"];
-              CMD = ["--help"];
-              Env = [
-                # When changing these, make sure to also update the entries in the
-                # Dockerfile.
-                "VAST_ENDPOINT=0.0.0.0:42000"
-                "VAST_DB_DIRECTORY=${vast-dir}"
-                "VAST_LOG_FILE=/var/log/vast/server.log"
-              ];
-              ExposedPorts = {
-                "42000/tcp" = {};
-              };
-              WorkingDir = "${vast-dir}";
-              Volumes = {
-                "${vast-dir}" = {};
-              };
-            };
-          }}";
-        };
+        apps.stream-image = stream-image "vast";
+        apps.stream-static-image = stream-image "vast-static";
+        apps.stream-ce-image = stream-image "vast-ce";
+        apps.stream-ce-static-image = stream-image "vast-ce-static";
         apps.default = apps.vast;
         devShell = import ./shell.nix {inherit pkgs;};
         formatter = pkgs.alejandra;
