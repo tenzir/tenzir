@@ -384,7 +384,7 @@ store_plugin::make_store(system::accountant_actor accountant,
 
 auto stdin_loader_plugin::make_loader(options, const bool_operator*) const
   -> caf::expected<input_loader> {
-  return []() -> detail::generator<chunk_ptr> {
+  return []() -> generator<chunk_ptr> {
     auto input = std::string{};
     auto c = char{};
     while (std::cin.get(c)) {
@@ -404,7 +404,7 @@ auto stdin_loader_plugin::make_default_parser(options,
   return caf::make_error(ec::unimplemented, "parser currently not implemented");
 }
 
-caf::error stdin_loader_plugin::initialize(data config) {
+caf::error stdin_loader_plugin::initialize(data) {
   return caf::none;
 }
 

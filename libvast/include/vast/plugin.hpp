@@ -398,12 +398,17 @@ public:
     = 0;
 };
 
+// -- loader plugin -----------------------------------------------------
+
 using input_loader = std::function<auto()->generator<chunk_ptr>>;
 using input_parser = std::function<auto(chunk_ptr)->generator<table_slice>>;
 using options = record;
 
+/// A loader plugin transfers input data into a stream of chunks.
+/// @relates plugin
 class loader_plugin : public virtual plugin {
 public:
+  /// Returns the loader.
   [[nodiscard]] virtual auto make_loader(options, const bool_operator*) const
     -> caf::expected<input_loader>
     = 0;
@@ -420,7 +425,6 @@ public:
   [[nodiscard]] auto make_loader(options, const bool_operator*) const
     -> caf::expected<input_loader> override;
 
-  /// Returns the default parser for this loader.
   [[nodiscard]] auto make_default_parser(options, const bool_operator*) const
     -> caf::expected<input_parser> override;
 
