@@ -385,9 +385,13 @@ store_plugin::make_store(system::accountant_actor accountant,
 auto stdin_loader_plugin::make_loader(options, const bool_operator*) const
   -> caf::expected<input_loader> {
   return []() -> detail::generator<chunk_ptr> {
-    for (std::istream_iterator<std::string> stdin_it(std::cin);
-         stdin_it != std::istream_iterator<std::string>(); ++stdin_it) {
-      auto chunk = chunk::copy(*stdin_it);
+    auto input = std::string{};
+    auto c = char{};
+    while (std::cin.get(c)) {
+      input += c;
+    }
+    if (not input.empty()) {
+      auto chunk = chunk::make(std::move(input));
       co_yield std::move(chunk);
     }
     co_return;
