@@ -23,7 +23,7 @@ CEF:0|Cynet|Cynet 360|4.5.4.22139|0|Memory Pattern - Cobalt Strike Beacon Reflec
 
 ## Input
 
-VAST's CEF plugin supports parsing such lines using the `cef` format:
+VAST's CEF reader supports parsing such lines using the `cef` format:
 
 ```bash
 vast import cef < cef.log

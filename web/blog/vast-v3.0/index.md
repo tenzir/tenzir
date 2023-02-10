@@ -12,14 +12,12 @@ tags: [release, vastql, cef, performance, introspection, regex]
 TODO: Outstanding tasks for the blog post before we can publish
 - Remove this comment
 - Find a better title
-- Create an iamge for the blog post
-- Optional: Make CEF a builtin rather than a plugin; there's little need for it
-  to be a plugin as it has no additional dependencies.
+- Create an image for the blog post
 --->
 
 [VAST v3.0][github-vast-release] is out. The release brings some major updates
-to VAST's query language, including the ability to search using regular
-expressions.
+to VAST's query language, including the abilities to reshape outputs on demand
+and search using regular expressions.
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v3.0.0
 
@@ -94,7 +92,7 @@ VAST now supports searching with regular expressions. For example, let's say you
 looking for all events that contain a GUID surrounded by braces whose third and
 fourth section are `5ec2-7015`:
 
-```json title="vast export -n 1 json '/\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7015-[0-9a-f]{12}\}/'"
+```json {0} title="vast export -n 1 json '/\{[0-9a-f]{8}-[0-9a-f]\{4}-5ec2-7015-[0-9a-f]\{12}\}/'"
 {
   "RuleName": "-",
   "UtcTime": "2020-05-18T09:42:40.443000",
@@ -128,7 +126,7 @@ The event distribution statistics moved in the output of `vast status`.
 What previously was available under the `index.statistics` section when using
 the `--detailed` option:
 
-```json title="VAST v2.4.1 ❯ vast status --detailed | jq .index.statistics"
+```json {0} title="VAST v2.4.1 ❯ vast status --detailed | jq .index.statistics"
 {
   "events": {
     "total": 42
@@ -148,7 +146,7 @@ the `--detailed` option:
 
 Is now always under the `catalog` section and shows some additional information:
 
-```json title="VAST v3.0 ❯ vast status | jq .catalog"
+```json {0} title="VAST v3.0 ❯ vast status | jq .catalog"
 {
   "num-events": 42,
   "num-partitions": 3,
@@ -178,7 +176,7 @@ Is now always under the `catalog` section and shows some additional information:
 The `vast show schemas` command makes it easy to see the structure of events in
 the database at a glance.
 
-```yaml title="vast show schemas --yaml suricata.flow"
+```yaml {0} title="vast show schemas --yaml suricata.flow"
 - suricata.flow:
     record:
       - timestamp:
@@ -246,7 +244,7 @@ CEF:0|Cynet|Cynet 360|4.5.4.22139|0|Memory Pattern - Cobalt Strike Beacon Reflec
 
 VAST's CEF plugin supports parsing such lines using the `cef` format:
 
-```bash
+```
 vast import cef < cef.log
 ```
 
@@ -254,7 +252,7 @@ VAST translates the `extension` field to a nested record, where the key-value
 pairs of the extensions map to record fields. Here is an example of the above
 event:
 
-```json title="vast export json '172.31.5.93' | jq"
+```json {0} title="vast export json '172.31.5.93' | jq"
 {
   "cef_version": 0,
   "device_vendor": "Cynet",
@@ -351,17 +349,17 @@ ingested or quickly finishing queries.
 To quantify this, we've created a database with nearly 300M Zeek events, and ran
 an export of a single event with both VAST v2.4.1 and VAST v3.0 repeatedly.
 
-```text title="❯ vast -qq count --estimate | numfmt --grouping"
+```text {0} title="❯ vast -qq count --estimate | numfmt --grouping"
 299,759,532
 ```
 
-```text title="VAST v2.4.1 ❯ hyperfine --warmup=5 --min-runs=20 'vast -qq --bare-mode export -n1 null' 'vast -qq --bare-mode export -n1000000 null' 'vast -qq --bare-mode export -n10000000 null'"
+```text {0} title="VAST v2.4.1 ❯ hyperfine --warmup=5 --min-runs=20 'vast -qq --bare-mode export -n1 null'"
 Benchmark 1: vast -qq --bare-mode export -n1 null
   Time (mean ± σ):     975.5 ms ±   4.8 ms    [User: 111.2 ms, System: 51.9 ms]
   Range (min … max):   966.3 ms … 985.3 ms    20 runs
 ```
 
-```text title="VAST v3.0 ❯ hyperfine --warmup=5 --min-runs=20 'vast -qq export -n1 null' 'vast -qq export -n1000000 null'"
+```text {0} title="VAST v3.0 ❯ hyperfine --warmup=5 --min-runs=20 'vast -qq export -n1 null'"
 Benchmark 1: vast -qq --bare-mode export -n1 null
   Time (mean ± σ):     210.8 ms ±   3.5 ms    [User: 99.8 ms, System: 42.5 ms]
   Range (min … max):   204.1 ms … 217.1 ms    20 runs
