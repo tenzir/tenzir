@@ -10,7 +10,6 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/data.hpp>
-#include <vast/detail/fanout_counter.hpp>
 #include <vast/detail/inspection_common.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/fwd.hpp>
@@ -33,6 +32,7 @@
 
 #include <arrow/table.h>
 #include <caf/expected.hpp>
+#include <caf/policy/select_all.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/type_id.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -321,14 +321,6 @@ struct rebuilder_state {
                                              result.partition_infos.begin(),
                                              result.partition_infos.end());
           }
-          auto counter = detail::make_fanout_counter(
-            run->options.parallel,
-            [finish]() mutable {
-              finish({});
-            },
-            [finish](caf::error error) mutable {
-              finish(std::move(error));
-            });
           if (run->options.automatic)
             VAST_VERBOSE("{} triggered an automatic run for {} candidate "
                          "partitions with {} threads",
@@ -338,18 +330,17 @@ struct rebuilder_state {
             VAST_INFO("{} triggered a run for {} candidate partitions with {} "
                       "threads",
                       *self, run->statistics.num_total, run->options.parallel);
-          for (size_t i = 0; i < run->options.parallel; ++i) {
-            self
-              ->request(static_cast<rebuilder_actor>(self), caf::infinite,
-                        atom::internal_v, atom::rebuild_v)
-              .then(
-                [counter]() {
-                  counter->receive_success();
-                },
-                [counter](caf::error& error) {
-                  counter->receive_error(std::move(error));
-                });
-          }
+          self
+            ->fan_out_request<caf::policy::select_all>(
+              std::vector<rebuilder_actor>(run->options.parallel, self),
+              caf::infinite, atom::internal_v, atom::rebuild_v)
+            .then(
+              [finish]() mutable {
+                finish({});
+              },
+              [finish](caf::error& error) mutable {
+                finish(std::move(error));
+              });
         },
         [finish](caf::error& error) mutable {
           finish(std::move(error));
