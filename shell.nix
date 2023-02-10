@@ -6,7 +6,7 @@ in
 pkgs.mkShell ({
   name = "vast-dev";
   hardeningDisable = [ "fortify" ] ++ lib.optional isStatic "pic";
-  inputsFrom = [ pkgs.vast pkgs.vast-ui ];
+  inputsFrom = [ pkgs.vast ];
   nativeBuildInputs = [ pkgs.ccache pkgs.speeve pkgs.clang-tools ]
     ++ pkgs.vast-integration-test-deps
     ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [

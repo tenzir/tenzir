@@ -5,7 +5,6 @@ let
   inherit (final.stdenv.hostPlatform) isMusl;
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if final.stdenv.isDarwin then final.llvmPackages_12.stdenv else final.gcc11Stdenv;
-  nnbp = final.callPackage inputs.nix-npm-buildpackage {};
 in
 {
   abseil-cpp = if !isStatic then prev.abseil-cpp else prev.abseil-cpp_202206;
@@ -192,17 +191,5 @@ in
       cp ${./speeve-go.sum} go.sum
     '';
     subPackages = [ "cmd/speeve" ];
-  };
-
-  vast-ui = nnbp.buildYarnPackage {
-    name = "vast-ui";
-    src = ../plugins/web/ui; # TODO use nix-filter ?
-    yarnBuildMore = ''
-      export HOME=$(mktemp -d)
-      yarn build
-    '';
-    installPhase = ''
-      mv build $out
-    '';
   };
 }
