@@ -4,8 +4,8 @@
 const lightCodeTheme = require('prism-react-renderer/themes/github');
 const darkCodeTheme = require('prism-react-renderer/themes/vsDark');
 
-/** @type {import('@docusaurus/types').Config} */
-const config = {
+async function createConfig() {
+  return {
   title: 'VAST',
   tagline: 'Actionable insights at your fingertips.',
   url: 'https://vast.io',
@@ -288,5 +288,6 @@ const config = {
 
   scripts: [{src: 'https://plausible.io/js/script.js', aysnc: true, defer: true, 'data-domain': 'vast.io'}],
 };
+}
 
-module.exports = config;
+module.exports = createConfig;
