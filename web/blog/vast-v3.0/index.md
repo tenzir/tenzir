@@ -12,9 +12,7 @@ tags: [release, vastql, cef, performance, introspection, regex]
 TODO: Outstanding tasks for the blog post before we can publish
 - Remove this comment
 - Find a better title
-- Create an iamge for the blog post
-- Optional: Make CEF a builtin rather than a plugin; there's little need for it
-  to be a plugin as it has no additional dependencies.
+- Create an image for the blog post
 --->
 
 [VAST v3.0][github-vast-release] is out. The release brings some major updates
