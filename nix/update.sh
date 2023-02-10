@@ -58,7 +58,6 @@ update-source caf "libvast/aux/caf"
 update-source fast_float "libvast/aux/fast_float"
 
 echo "Updating contrib/vast-plugins"
-git -C "${toplevel}" submodule update --init "contrib/vast-plugins"
 vast_plugins_rev="$(get-submodule-rev "contrib/vast-plugins")"
 vast_plugins_json="$(jq --arg rev "${vast_plugins_rev#rev}" \
   '."rev" = $rev' "${dir}/vast/plugins/source.json")"
