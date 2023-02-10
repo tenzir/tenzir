@@ -3,6 +3,7 @@ title: Richer Typing in Sigma
 description: Towards Native Sigma Rule Execution
 authors: mavam
 date: 2022-08-12
+last_updated: 2023-02-08
 tags: [sigma, regex, query-frontend]
 ---
 
@@ -147,6 +148,6 @@ three missing pieces for Sigma rule execution to become viable in VAST:
 [field-extractors]: https://vast.io/docs/understand/query-language/expressions#field-extractor
 [concepts]: https://vast.io/docs/understand/data-model/taxonomies#concepts
 
-Please don't hesitate to swing by our [Community Slack](http://slack.tenzir.com)
+Please don't hesitate to swing by our [community chat](/discord)
 and talk with us if you are passionate about Sigma and other topics around open
 detection and response.

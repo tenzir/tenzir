@@ -2,7 +2,7 @@
 
 :::tip Get Help
 Welcome to the VAST documentation! If you have any questions, do not hesitate to
-join our [community Slack](http://slack.tenzir.com) or open a [GitHub
+join our [community chat](/discord) or open a [GitHub
 discussion](https://github.com/tenzir/vast/discussions).
 :::
 

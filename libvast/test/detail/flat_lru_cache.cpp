@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2018 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE flat_lru_cache
 #include "vast/detail/flat_lru_cache.hpp"
 
 #include "vast/test/test.hpp"

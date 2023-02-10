@@ -127,8 +127,6 @@
             "-DVAST_ENABLE_PYTHON_BINDINGS=OFF"
             "-DVAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
             "-DVAST_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
-            # TODO limit this to just web plugin
-            "-DVAST_WEB_UI_BUNDLE=${pkgsBuildHost.vast-ui}"
           ]
           ++ lib.optionals isStatic [
             "-DBUILD_SHARED_LIBS:BOOL=OFF"

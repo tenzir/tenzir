@@ -46,26 +46,6 @@
         "type": "github"
       }
     },
-    "nix-npm-buildpackage": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1667408533,
-        "narHash": "sha256-w8e5t/C0rR7ui58F12UigRv/zy6/6iuNpsuOGb/eZk0=",
-        "owner": "dit7ya",
-        "repo": "nix-npm-buildpackage",
-        "rev": "8eed92d382f6a5ebe1f53edd21639512a284b8b9",
-        "type": "github"
-      },
-      "original": {
-        "owner": "dit7ya",
-        "repo": "nix-npm-buildpackage",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1667565588,
@@ -87,7 +67,6 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "nix-filter": "nix-filter",
-        "nix-npm-buildpackage": "nix-npm-buildpackage",
         "nixpkgs": "nixpkgs"
       }
     }

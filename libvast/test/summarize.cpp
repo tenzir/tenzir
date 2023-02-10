@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE summarize
-
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast.hpp>
 #include <vast/pipeline.hpp>

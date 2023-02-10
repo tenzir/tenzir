@@ -13,8 +13,6 @@ TODO: Outstanding tasks for the blog post before we can publish
 - Remove this comment
 - Find a better title
 - Create an iamge for the blog post
-- Write about export and import pipelines as the headlining feature
-- Write about new syntax for pipelines in configuration
 - Optional: Make CEF a builtin rather than a plugin; there's little need for it
   to be a plugin as it has no additional dependencies.
 --->
@@ -27,11 +25,39 @@ expressions.
 
 <!--truncate-->
 
+## Unix-Style Pipelines
+
+Starting with v3.0, VAST introduces a new way to write pipelines, with a syntax
+similar to [splunk](https://splunk.com), [Kusto][kusto],
+[PRQL](https://prql-lang.org/), and [Zed](https://zed.brimdata.io/).
+
+[kusto]: https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/
+
+The new syntax resembles the well-known Unix paradigm of command chaining. The
+difference to Unix pipelines is that VAST exchanges structured data between
+operators. The `vast export` and `vast import` commands accept such a
+pipeline as a string argument. Previously, VAST only supported a YAML-like
+definition of pipelines in configuration files. This new, ad-hoc form enables
+much quicker data transformation.
+
+Refer to the [pipelines documentation][pipeline-doc] for more details on how to
+use the new pipeline syntax.
+
+:::info Pipeline YAML Syntax Deprecation
+This release introduces a transitional period from YAML-style to Unix-style
+pipelines. The old YAML syntax for pipelines will be deprecated and removed
+altogether in a future version. The new pipeline operators [`head`][head-op] and
+[`taste`][taste-op] have no YAML equivalent.
+:::
+
+[pipeline-doc]: /docs/understand/query-language/pipelines#define-a-pipeline
+[head-op]: /docs/understand/query-language/operators/head
+[taste-op]: /docs/understand/query-language/operators/taste
+
 ## VASTQL Upgrades
 
-The 3.x series of VAST releases is all about the **VAST** **Q**uery
-**L**anguage. To kick this off, we've done some breaking changes to the language
-that we've wanted to do in quite a while. Here's a summary:
+We've made some breaking changes to the the **VAST** **Q**uery **L**anguage
+that we've wanted to do for a long time. Here's a summary:
 
 1. Several built-in types have a new name:
    - `int` → `int64`

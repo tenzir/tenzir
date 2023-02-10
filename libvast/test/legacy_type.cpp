@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE legacy_type
-
 #include "vast/legacy_type.hpp"
 
 #include "vast/concept/parseable/to.hpp"

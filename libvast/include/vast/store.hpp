@@ -10,7 +10,7 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/detail/generator.hpp"
+#include "vast/generator.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
@@ -27,7 +27,7 @@ public:
 
   /// Retrieve the slices of the store.
   /// @returns The contained slices.
-  [[nodiscard]] virtual detail::generator<table_slice> slices() const = 0;
+  [[nodiscard]] virtual generator<table_slice> slices() const = 0;
 
   /// Retrieve the number of contained events.
   /// @returns The number of rows in all contained slices.
@@ -41,14 +41,14 @@ public:
   /// @param expr The expression to filter events.
   /// @param selection Pre-filtered ids to consider.
   /// @return The results of applying the count query to each table slice.
-  [[nodiscard]] virtual detail::generator<uint64_t>
+  [[nodiscard]] virtual generator<uint64_t>
   count(expression expr, ids selection) const;
 
   /// Execute an extract query against the store.
   /// @param expr The expression to filter events.
   /// @param selection Pre-filtered ids to consider.
   /// @return The results of applying the extract query to each table slice.
-  [[nodiscard]] virtual detail::generator<table_slice>
+  [[nodiscard]] virtual generator<table_slice>
   extract(expression expr, ids selection) const;
 };
 
@@ -78,9 +78,9 @@ public:
 template <class ResultType>
 struct base_query_state {
   /// Generator producing results per stored table slice.
-  detail::generator<ResultType> generator = {};
+  generator<ResultType> result_generator = {};
   /// Iterator for result of processing current table lsice.
-  typename detail::generator<ResultType>::iterator result_iterator = {};
+  typename generator<ResultType>::iterator result_iterator = {};
   /// Aggregator for number of matching events.
   uint64_t num_hits = {};
   /// Actor to send the final / intermediate results to.

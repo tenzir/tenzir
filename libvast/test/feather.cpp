@@ -6,13 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE feather
-
 #include <vast/chunk.hpp>
+#include <vast/collect.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/parseable/vast/subnet.hpp>
-#include <vast/detail/collect.hpp>
 #include <vast/detail/narrow.hpp>
 #include <vast/detail/spawn_container_source.hpp>
 #include <vast/expression.hpp>

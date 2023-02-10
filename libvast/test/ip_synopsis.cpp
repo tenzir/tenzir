@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2020 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE ip_synopsis
-
 #include "vast/ip_synopsis.hpp"
 
 #include "vast/concept/parseable/to.hpp"

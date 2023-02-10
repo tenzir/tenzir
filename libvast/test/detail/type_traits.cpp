@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE type_traits
-
 #include "vast/detail/type_traits.hpp"
 
 #include "vast/test/test.hpp"

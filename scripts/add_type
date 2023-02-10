@@ -51,7 +51,6 @@ namespace %(namespace)s {
 """
 
 test_tpl = """
-#define SUITE %(class)s
 #include "test.hpp"
 
 #include "%(hpp)s"

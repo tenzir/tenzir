@@ -6,13 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE partition_synopsis
-
 #include "vast/partition_synopsis.hpp"
 
 #include "vast/bloom_filter_synopsis.hpp"
+#include "vast/collect.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/collect.hpp"
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
@@ -59,7 +57,7 @@ TEST(custom index_config) {
   auto& url_synopsis = ps.field_synopses_.at(uri_field);
   REQUIRE_NOT_EQUAL(url_synopsis, nullptr);
   auto const& type = url_synopsis->type();
-  auto attributes = vast::detail::collect(type.attributes());
+  auto attributes = vast::collect(type.attributes());
   auto url_parameters = vast::parse_parameters(url_synopsis->type());
   REQUIRE(url_parameters.has_value());
   CHECK_EQUAL(url_parameters->p, 0.001);

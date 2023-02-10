@@ -10,8 +10,6 @@
 // does not contain any meaningful tests for the example plugin. It merely
 // exists to show how to setup unit tests.
 
-#define SUITE pipeline_plugin
-
 #include <vast/concept/convertible/to.hpp>
 #include <vast/data.hpp>
 #include <vast/system/make_pipelines.hpp>

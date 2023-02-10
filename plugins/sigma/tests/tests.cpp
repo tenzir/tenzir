@@ -1,4 +1,3 @@
-
 //    _   _____   __________
 //   | | / / _ | / __/_  __/     Visibility
 //   | |/ / __ |_\ \  / /          Across
@@ -6,8 +5,6 @@
 //
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
-
-#define SUITE sigma
 
 #include "sigma/parse.hpp"
 

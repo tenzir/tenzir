@@ -11,9 +11,9 @@
 #include "vast/arrow_table_slice.hpp"
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/chunk.hpp"
+#include "vast/collect.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/collect.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/passthrough.hpp"
 #include "vast/detail/string.hpp"
@@ -520,7 +520,7 @@ table_slice concatenate(std::vector<table_slice> slices) {
   return result;
 }
 
-detail::generator<table_slice>
+generator<table_slice>
 select(const table_slice& slice, expression expr, const ids& hints) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();

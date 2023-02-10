@@ -8,7 +8,6 @@
 
 #include "vast/binner.hpp"
 
-#define SUITE bitmap_index
 #include "vast/test/test.hpp"
 
 using namespace vast;

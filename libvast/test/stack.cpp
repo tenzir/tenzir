@@ -7,11 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/detail/stack_vector.hpp"
+#include "vast/test/test.hpp"
 
 using namespace vast;
-
-#define SUITE stack
-#include "vast/test/test.hpp"
 
 using stack_vector = detail::stack_vector<int, 16>;
 

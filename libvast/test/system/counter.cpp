@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE counter
-
 #include "vast/system/counter.hpp"
 
 #include "vast/fwd.hpp"

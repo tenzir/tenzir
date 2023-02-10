@@ -11,8 +11,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/pattern.hpp"
 #include "vast/pattern.hpp"
-
-#define SUITE pattern
 #include "vast/test/test.hpp"
 
 using namespace vast;

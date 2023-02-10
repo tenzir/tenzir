@@ -16,7 +16,6 @@
 // - Created:    April 14th, 2016 4:48 AM
 // - License:    BSD 3-Clause
 
-#define SUITE streambuf
 #include "vast/detail/streambuf.hpp"
 
 #include "caf/config.hpp"

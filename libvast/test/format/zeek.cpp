@@ -8,15 +8,6 @@
 
 #include "vast/format/zeek.hpp"
 
-#include "vast/type.hpp"
-
-#include <istream>
-#include <sstream>
-#include <thread>
-#include <unistd.h>
-
-#define SUITE format
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/legacy_type.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
@@ -25,6 +16,12 @@
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
+#include "vast/type.hpp"
+
+#include <istream>
+#include <sstream>
+#include <thread>
+#include <unistd.h>
 
 using namespace vast;
 using namespace std::string_literals;

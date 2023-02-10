@@ -8,8 +8,6 @@
 
 #include "vast/detail/flat_set.hpp"
 #include "vast/detail/stable_set.hpp"
-
-#define SUITE detail
 #include "vast/test/test.hpp"
 
 using namespace vast;

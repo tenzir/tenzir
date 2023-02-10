@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE schema
-
 #include "vast/concept/parseable/vast/schema.hpp"
 
 #include "vast/concept/parseable/to.hpp"

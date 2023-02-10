@@ -1,0 +1,52 @@
+[Unit]
+Description=VAST - Visibility Across Space and Time
+StartLimitIntervalSec=120
+StartLimitBurst=1
+OnFailure=vast-collect.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=notify
+
+# user + privileges
+# We explicitly don't use DynamicUser because that can lead to recursive `chown`s.
+# Doing that is pretty slow on some file systems (e.g., xfs).
+User=vast
+Group=vast
+NoNewPrivileges=yes
+
+# capabilities
+RestrictNamespaces=yes
+RestrictAddressFamilies=
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+
+# system access
+ExecPaths=/opt/vast/libexec/vast-df-percent.sh
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vast
+ReadWritePaths=/var/log/vast
+PrivateTmp=no
+# Allow read access to the home directory of the user so config files can be
+# read. In theory the config directory may be outside of the home directory, but
+# systemd has no mechanism to specify that.
+ProtectHome=read-only
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# service specifics
+TimeoutStopSec=600
+WorkingDirectory=/var/lib/vast
+ExecStop=/opt/vast/bin/vast stop
+ExecStart=/opt/vast/bin/vast start
+
+[Install]
+WantedBy=multi-user.target

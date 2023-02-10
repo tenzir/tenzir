@@ -239,7 +239,7 @@ documentation.
 If you think your plugin provides key functionality beneficial to all VAST
 users, feel free to [submit a pull
 request](https://github.com/tenzir/vast/pulls) to the main repository. But
-please consider swinging by our [Community Slack](http://slack.tenzir.com) or
+please consider swinging by our [community chat](/discord) or
 starting a [GitHub Discussion](https://github.com/tenzir/vast/discussions) to
 ensure that your contribution becomes a fruitful addition. 🙏
 ::::

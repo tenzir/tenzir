@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2019 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE format
-
 #include "vast/format/json.hpp"
 
 #include "vast/concept/parseable/to.hpp"

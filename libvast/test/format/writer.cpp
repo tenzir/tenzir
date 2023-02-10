@@ -10,8 +10,6 @@
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
-
-#define SUITE format
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 

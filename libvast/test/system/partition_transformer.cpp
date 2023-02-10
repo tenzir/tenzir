@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#define SUITE partition_transformer
-
 #include "vast/system/partition_transformer.hpp"
 
 #include "caf/make_copy_on_write.hpp"
