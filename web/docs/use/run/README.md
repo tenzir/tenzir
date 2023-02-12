@@ -18,8 +18,7 @@ will be able to connect multiple nodes together to create a distributed system.
 A standard deployment consists of a server close to the data sources and
 multiple clients that publish events and submit queries:
 
-![Client & Server](/img/run.light.png#gh-light-mode-only)
-![Client & Server](/img/run.dark.png#gh-dark-mode-only)
+![Client & Server](client-server.excalidraw.svg)
 
 ## Start a server
 

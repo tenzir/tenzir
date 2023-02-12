@@ -109,8 +109,7 @@ VAST has the following extractor types:
 
 The diagram below illustrate how extractors relate to each other:
 
-![Extractors #width500](/img/extractors.light.png#gh-light-mode-only)
-![Extractors #width500](/img/extractors.dark.png#gh-dark-mode-only)
+![Extractors #width500](extractors.excalidraw.svg)
 
 #### Field Extractor
 
