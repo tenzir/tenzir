@@ -59,6 +59,11 @@ This means the editing workflow looks as follows:
 The last part is crucial: If you don't check "Embed scene" it will no longer be
 able to recover the original diagram source.
 
+:::info Filename Convention
+By convention, we export all SVGs with embedded Excalidraw source with the
+filename extension `*.excalidraw.svg`.
+:::
+
 ## Cater to dark mode
 
 Our setup makes it easy to render different images whether light or dark mode is
