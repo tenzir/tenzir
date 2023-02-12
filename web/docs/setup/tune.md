@@ -276,8 +276,7 @@ a newer version, or recreate persistent state after changing configuration
 parameters, e.g., switching from the Feather to the Parquet store backend. The
 following diagram illustrates this "defragmentation" process:
 
-![Rebuild](/img/rebuild-light.png#gh-light-mode-only)
-![Rebuild](/img/rebuild-dark.png#gh-dark-mode-only)
+![Rebuild](rebuild.excalidraw.svg)
 
 Rebuilding partitions also recreates their sketches. The process takes place
 asynchronously in the background. Control this behavior in your `vast.yaml`
