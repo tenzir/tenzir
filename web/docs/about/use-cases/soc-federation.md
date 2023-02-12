@@ -15,8 +15,7 @@ and response perspective.
 Before discussing more specific use cases, we discuss our view on edge security
 architecture more generally. The diagram below shows an example environment:
 
-![Edge Nodes](/img/edge-nodes.light.png#gh-light-mode-only)
-![Edge Nodes](/img/edge-nodes.dark.png#gh-dark-mode-only)
+![Edge Nodes](edge-nodes.excalidraw.svg)
 
 The core idea is to keep the bulk of the data decentralized at their respective
 origin, and disseminate security content via a [security data

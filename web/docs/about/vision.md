@@ -39,8 +39,7 @@ yield an autonomously acting system.
 The diagram below illustrates the core idea of this architectural shift, away
 from point-to-point towards one-to-many integrations:
 
-![Security Data Fabric](/img/security-data-fabric.light.png#gh-light-mode-only)
-![Security Data Fabric](/img/security-data-fabric.dark.png#gh-dark-mode-only)
+![Security Data Fabric](security-data-fabric.excalidraw.svg)
 
 The network of VAST nodes forms the fabric where communication takes place over
 a pluggable messaging *backbone*, such as Kafka, RabbitMQ, or MQTT. In this
@@ -87,8 +86,7 @@ executes workflows and calls APIs, TIP manages security content, EDR raises
 alerts from the endpoint, NDR from the network, and CDR from the cloud—all
 served with metadata where possible. When combined, voilà XDR:
 
-![Traditional SOC Architecture](/img/traditional.light.png#gh-light-mode-only)
-![Traditional SOC Architecture](/img/traditional.dark.png#gh-dark-mode-only)
+![Traditional SOC](soc-traditional.excalidraw.svg)
 
 :::warning General Issues
 There are several general issues with this approach:
@@ -145,8 +143,7 @@ product and make it a modular function of the fabric nodes.
 
 The diagram below outlines the abstraction of the fabric:
 
-![Modern SOC Architecture](/img/modern-approach.light.png#gh-light-mode-only)
-![Modern SOC Architecture](/img/modern-approach.dark.png#gh-dark-mode-only)
+![Modern SOC](soc-modern.excalidraw.svg)
 
 :::tip Key Benefits
 

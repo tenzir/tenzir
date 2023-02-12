@@ -10,8 +10,7 @@ categories that ideally collaborate to achieve the SOC's mission of defending
 its constituency: the **SOC Analyst**, the **Detection Engineer**, and the
 **Data Scientist**.
 
-![Personae](/img/personae.light.png#gh-light-mode-only)
-![Personae](/img/personae.dark.png#gh-dark-mode-only)
+![Personae](personae.excalidraw.svg)
 
 In practice, the lines are blurred and a single person often has to wear
 multiple hats. We deem it still important to expose the key functional roles

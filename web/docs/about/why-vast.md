@@ -7,8 +7,7 @@ sidebar_position: 0
 VAST fills a gap in the market—powerful enough for data-intensive security use
 cases, but easy enough for security users that are not data engineers.
 
-![Spectra](/img/spectra.light.png#gh-light-mode-only)
-![Spectra](/img/spectra.dark.png#gh-dark-mode-only)
+![Spectra #width500](spectra.excalidraw.svg)
 
 One of the major challenges in cybersecurity is the increasing volume of data
 that organizations need to manage and analyze in order to protect their critical
