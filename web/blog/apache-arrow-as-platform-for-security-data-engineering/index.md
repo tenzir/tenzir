@@ -59,8 +59,7 @@ we started using Arrow as optional dependency as additional column-oriented
 encoding. We abstracted a batch of data encoding-independent behind a "table
 slice":
 
-![MsgPack & Arrow](msgpack-arrow.light.png#gh-light-mode-only)
-![MsgPack & Arrow](msgpack-arrow.dark.png#gh-dark-mode-only)
+![MsgPack & Arrow](msgpack-arrow.excalidraw.svg)
 
 Hiding the concrete encoding behind a cell-based access interface worked for
 low-volume use cases, but backfired as we scaled up and slowed us down
@@ -90,8 +89,7 @@ data representation. Arrow also comes with bag of tools for working with the
 standardized data. In the diagram below, we show the various Arrow pieces that
 power the architecture of VAST:
 
-![Arrow Data Plane](arrow-data-plane.light.png#gh-light-mode-only)
-![Arrow Data Plane](arrow-data-plane.dark.png#gh-dark-mode-only)
+![Arrow Data Plane](arrow-data-plane.excalidraw.svg)
 
 In the center we have the Arrow data plane that powers other parts of the
 system. Green elements highlight Arrow building blocks that we use today, and
@@ -150,7 +148,6 @@ use cases.
 [flight]: https://arrow.apache.org/docs/format/Flight.html
 [substrait]: https://substrait.io/
 [datafusion]: https://arrow.apache.org/datafusion/
-[datafusion-c]: https://github.com/datafusion-contrib/datafusion-c
 [msgpack]: https://msgpack.org/index.html
 [duckdb]: https://duckdb.org/
 [sigma]: https://github.com/SigmaHQ/sigma

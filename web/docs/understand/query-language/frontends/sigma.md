@@ -16,8 +16,7 @@ query expression, without going through the Python tooling provided by the
 SigmaHQ project. This has numerous advantages in exploiting the richer type
 system of VAST. The translation process looks as follows:
 
-![Sigma Query Frontend](/img/sigma-query-frontend-light.png#gh-light-mode-only)
-![Sigma Query Frontend](/img/sigma-query-frontend-dark.png#gh-dark-mode-only)
+![Sigma Query Frontend](sigma-query-frontend.excalidraw.svg)
 
 [sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
 
