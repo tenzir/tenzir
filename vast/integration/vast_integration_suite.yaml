@@ -248,7 +248,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: show schemas
+      - command: show schemas --expand
       - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
@@ -379,7 +379,7 @@ tests:
       - command: show concepts
         transformation: jq '.[] | select(.concept.name == "net.app") | .concept.fields | map(split(".")[0]) | unique'
       - command: show --yaml models
-      - command: show --yaml schemas
+      - command: show schemas
   Arrow Full Data Model:
     condition: version | jq -e '."Apache Arrow"'
     tags: [export, arrow]
