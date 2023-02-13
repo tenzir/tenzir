@@ -31,14 +31,10 @@ COPY CMakeLists.txt LICENSE VAST.spdx README.md VERSIONING.md \
 # well with repository-internal symlinks. The the integration test symlinks we
 # can get rid of by copying the integration test directory to the build
 # directory when building VAST.
-RUN ln -sf ../../vast/integration/data/ plugins/pcap/data/ && \
-    ln -sf ../../vast/integration/data/ plugins/sigma/integration/data/ && \
-    ln -sf ../vast/integration/misc/scripts/print-arrow.py scripts/print-arrow.py && \
-    ln -sf ../../../schema/types/base.schema libvast_test/artifacts/schemas/base.schema && \
-    ln -sf ../../../schema/types/suricata.schema libvast_test/artifacts/schemas/suricata.schema && \
-    ln -sf ../../contrib/vast-plugins/compaction plugins/compaction && \
-    ln -sf ../../contrib/vast-plugins/matcher plugins/matcher && \
-    ln -sf ../../contrib/vast-plugins/netflow plugins/netflow
+RUN for f in contrib/vast-plugins/*/CMakeLists.txt; do \
+      name="$(basename "$(dirname "$f")")"; \
+      ln -sf "../contrib/vast-plugins/$name" "plugins/$name"; \
+    done
 
 # -- development ---------------------------------------------------------------
 
