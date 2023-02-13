@@ -100,3 +100,8 @@
   flex-direction: column;
   justify-content: space-between;
 }
+
+.svgWrapper svg {
+  max-height: 200px;
+  max-width: 500px;
+}
