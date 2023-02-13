@@ -12,8 +12,7 @@ to the time when it can act. In addition, if there is no historical telemetry at
 the edge, the detection must also be applied to the SIEM out-of-band. The
 diagram below illustrates this:
 
-![Live Detection](/img/live-detection.light.png#gh-light-mode-only)
-![Live Detection](/img/live-detection.dark.png#gh-dark-mode-only)
+![Live Detection](live-detection.excalidraw.svg)
 
 What we really want is a *unified* approach for operationalizing security
 content: automated push-based dissemination with a negligible propagation delay
@@ -21,8 +20,7 @@ and installation at the detection edge, so the that future telemetry streams
 through the engine. When keeping telemetry at the edge, the new detection should
 also immediately trigger a retro scan:
 
-![Live & Retro Detection](/img/live-retro-detection.light.png#gh-light-mode-only)
-![Live & Retro Detection](/img/live-retro-detection.dark.png#gh-dark-mode-only)
+![Live & Retro Detection](live-retro-detection.excalidraw.svg)
 
 This architecture decouples the arrival of new security content from the
 execution of the detection. VAST runs in production with this use case for

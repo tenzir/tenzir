@@ -25,12 +25,12 @@ swapped this out with a more efficient implementation that does.
 
 This is best explained visually:
 
-![Incremental Reads](incremental-reads-light.png#gh-light-mode-only)
-![Incremental Reads](incremental-reads-dark.png#gh-dark-mode-only)
+![Incremental Reads](incremental-reads.excalidraw.svg)
 
 Within the scope of a single Feather store file, a single query takes the same
 amount of time overall, but there exist two distinct advantages of this
 approach:
+
 1. The first result arrives much faster at the client.
 2. Stores do less work for cancelled queries.
 
@@ -45,6 +45,7 @@ To verify and test this, we've created a VAST database with 300M Zeek events
 of VAST, i.e., we stopped and started VAST after every repetition of each test.
 
 We performed three tests:
+
 1. Export a single event (20 times)
 2. Export all events (20 times)
 3. [Rebuild][rebuild-docs] the entire database (3 times)

@@ -18,7 +18,7 @@ ingesting a file or running query. We map such actions to Lambda functions.
 The provided Terraform script creates the following architecture within a given
 VPC:
 
-![VAST VPC Architecture](https://user-images.githubusercontent.com/7913347/177141492-b99cce77-3c10-4740-bbdc-4fc2f43b8abc.png)
+![VAST VPC Architecture](aws-networks.excalidraw.svg)
 
 The assumption is that the VPC has an Internet Gateway attached. Given a CIDR
 block within this VPC, Terraform creates two subnets:
@@ -46,4 +46,4 @@ containing tooling such as:
 For that reason, our toolchain builds a Lambda and a Fargate specific image
 locally and pushes it to a private ECR repository.
 
-![Docker Workflow](https://user-images.githubusercontent.com/7913347/174258069-695b358b-30d0-4599-b0eb-53f0acf04a41.png)
+![Docker Workflow](aws-containers.excalidraw.svg)

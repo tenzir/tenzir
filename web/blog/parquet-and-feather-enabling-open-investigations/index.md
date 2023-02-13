@@ -72,8 +72,7 @@ IPC](https://arrow.apache.org/docs/python/ipc.html#ipc), making it conducive for
 memory mapping and zero-copy usage. On the spectrum of speed and
 space-efficiency, think of it this way:
 
-![Parquet vs. Feather](parquet-vs-feather.light.png#gh-light-mode-only)
-![Parquet vs. Feather](parquet-vs-feather.dark.png#gh-dark-mode-only)
+![Parquet vs. Feather](parquet-vs-feather.excalidraw.svg)
 
 Before Feather existed, VAST had its own storage format that was 95% like
 Feather, minus a thin framing. (We called it the *segment store*.)
@@ -96,8 +95,7 @@ Batches][arrow-record-batch]. A partition has thus a fixed schema. VAST's [store
 plugin][store-plugin] determines how a partition writes its buffered record
 batches to disk. The diagram below illustrates the architecture:
 
-![Parquet Analytics](parquet-analytics.light.png#gh-light-mode-only)
-![Parquet Analytics](parquet-analytics.dark.png#gh-dark-mode-only)
+![Parquet Analytics](parquet-analytics.excalidraw.svg)
 
 [arrow-table]: https://arrow.apache.org/docs/python/data.html#tables
 [arrow-record-batch]: https://arrow.apache.org/docs/python/data.html#record-batches
@@ -136,16 +134,14 @@ for the analysis.
 Here's how [VAST's type system](/docs/understand/data-model/type-system) looks
 like:
 
-![Type System](/img/type-system-vast.light.png#gh-light-mode-only)
-![Type System](/img/type-system-vast.dark.png#gh-dark-mode-only)
+![Type System - VAST](type-system-vast.excalidraw.svg)
 
 There exist two major classes of types: *basic*, stateless types with a static
 structure and a-priori known representation, and *complex*, stateful types that
 carry additional runtime information. We map this type system without
 information loss to Arrow:
 
-![Type System](/img/type-system-arrow.light.png#gh-light-mode-only)
-![Type System](/img/type-system-arrow.dark.png#gh-dark-mode-only)
+![Type System - Arrow](type-system-arrow.excalidraw.svg)
 
 VAST converts enum, address, and subnet types to
 [extension-types][arrow-extension-types]. All types are self-describing and part

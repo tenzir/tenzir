@@ -19,7 +19,7 @@ can use it in your playbook.
 This example playbook shows how to run a VAST service on the machine
 `example_vast_server`:
 
-```
+```yaml
 - name: Deploy vast
   become: true
   hosts: example_vast_server

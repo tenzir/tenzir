@@ -147,8 +147,7 @@ the server version. We recommend deploying the module at the server when all
 clients should see the contained schemas, and at the client when the scope is
 local. The diagram below illustrates the initial handshake:
 
-![Schema Transfer](/img/schema-transfer.light.png#gh-light-mode-only)
-![Schema Transfer](/img/schema-transfer.dark.png#gh-dark-mode-only)
+![Schema Transfer](schema-transfer.excalidraw.svg)
 
 Regardless of where you deploy the module, the procedure is the same at client
 and server: place the module in an existing module directory, such as

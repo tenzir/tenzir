@@ -5,7 +5,6 @@ authors:
   - mavam
 date: 2022-10-24
 last_updated: 2023-02-08
-image: image.jpg
 tags: [benchmark, arrow, parquet, feather, quarto, r]
 ---
 

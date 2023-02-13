@@ -22,14 +22,12 @@ There exist two major classes of types:
 
 The diagram below illustrates the type system:
 
-![Type System](/img/type-system-vast.light.png#gh-light-mode-only)
-![Type System](/img/type-system-vast.dark.png#gh-dark-mode-only)
+![Type System - VAST](type-system-vast.excalidraw.svg)
 
 There exists a one-to-one mapping of VAST's type system to Arrow's type system
 to ensure that transferred data is self-describing:
 
-![Type System](/img/type-system-arrow.light.png#gh-light-mode-only)
-![Type System](/img/type-system-arrow.dark.png#gh-dark-mode-only)
+![Type System - Arrow](type-system-arrow.excalidraw.svg)
 
 Note that VAST attaches attributes to a top-plevel type instance, where Arrow
 only allows type meta data for record fields. VAST converts enum, adress, and
@@ -38,8 +36,8 @@ subnet types to [extension-types][extension-types].
 [extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
 
 :::tip More on Arrow & VAST
-If you want to learn more about why VAST uses Apache Arrow, please read [our
-blog post](/blog/apache-arrow-as-platform-for-security-data-engineering) that
-explains why we use Arrow as corner stone for data interoperability and
-representation of the security domain model.
+If you want to learn more about why VAST uses Apache Arrow, please read our
+[two](/blog/apache-arrow-as-platform-for-security-data-engineering) [blog
+posts](/blog/parquet-and-feather-enabling-open-investigations) that explain why
+we build on top of Arrow.
 :::

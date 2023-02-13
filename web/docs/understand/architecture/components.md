@@ -19,8 +19,7 @@ instance can exist, e.g., because they guard access to an underlying resource.
 The diagram below illustrates VAST's key components in the dataflow between
 them:
 
-![Components](/img/components.light.png#gh-light-mode-only)
-![Components](/img/components.dark.png#gh-dark-mode-only)
+![Components](components.excalidraw.svg)
 
 By convention, we use ALL-CAPS naming for actor components and represent them as
 circles. Red circles are singletons and blue circles multi-instance actors. We
@@ -148,8 +147,7 @@ This section provides examples of how the different compentents interact.
 Sending data to VAST (aka *ingesting*) involves spinning up a VAST client
 that parses and ships the data to a [VAST server](/docs/use/run):
 
-![Ingest process](/img/ingest.light.png#gh-light-mode-only)
-![Ingest process](/img/ingest.dark.png#gh-dark-mode-only)
+![Ingest process](ingest.excalidraw.svg)
 
 VAST first acquires data through a *carrier* that represents the data transport
 medium. This typically involves I/O and has the effect of slicing the data into

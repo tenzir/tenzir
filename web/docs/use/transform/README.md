@@ -13,8 +13,7 @@ import and export pipelines can run in the server or client process. For
 imports, the client is the source generating the data, for exports the client is
 the sink receiving the exported data.
 
-![Pipelines](/img/pipelines.light.png#gh-light-mode-only)
-![Pipelines](/img/pipelines.dark.png#gh-dark-mode-only)
+![Pipelines](pipeline-locations.excalidraw.svg)
 
 The flexible combination of location and type of pipeline type enables multiple
 use cases:
