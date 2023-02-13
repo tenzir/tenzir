@@ -163,8 +163,7 @@ const CarouselCard = ({
         {imageLink && imageLink.startsWith('/') && (
           <ReactSVG
             src={imageLink}
-            className={styles.svgWrapper}
-            height="200px"
+            className={clsx("markdown-inline-svg", styles.svgWrapper)}
           />
         )}
       </div>
