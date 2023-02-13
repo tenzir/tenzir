@@ -105,32 +105,19 @@ resolve_concepts(const concepts_map& concepts,
   return fields_or_concepts;
 }
 
-static bool
-contains(const std::map<std::string, type_set>& seen, const std::string& x,
-         relational_operator op, const vast::data& data) {
-  std::string::size_type pos = 0;
-  while ((pos = x.find('.', pos)) != std::string::npos) {
-    auto i = seen.find(std::string{std::string_view{x.c_str(), pos}});
-    if (i != seen.end()) {
-      // A prefix of x matches an existing schema.
-      auto field = x.substr(pos + 1);
-      return std::any_of(
-        i->second.begin(), i->second.end(), [&](const type& t) {
-          if (const auto& schema = caf::get_if<record_type>(&t)) {
-            if (auto offset = schema->resolve_key(field))
-              return compatible(schema->field(*offset).type, op, data);
-          }
-          return false;
-        });
-    }
-    ++pos;
+static bool contains(const type& schema, const std::string& x,
+                     relational_operator op, const vast::data& data) {
+  const auto* rt = caf::get_if<record_type>(&schema);
+  VAST_ASSERT(rt);
+  for (const auto& offset : rt->resolve_key_suffix(x, schema.name())) {
+    if (compatible(rt->field(offset).type, op, data))
+      return true;
   }
   return false;
 }
 
-static caf::expected<expression>
-resolve_impl(const taxonomies& ts, const expression& e,
-             const std::map<std::string, type_set>& seen, bool prune) {
+caf::expected<expression>
+resolve(const taxonomies& ts, const expression& e, const type& schema) {
   return for_each_predicate(
     e, [&](const auto& pred) -> caf::expected<expression> {
       // TODO: Rename appropriately.
@@ -170,7 +157,7 @@ resolve_impl(const taxonomies& ts, const expression& e,
         disjunction d;
         auto make_pred = make_predicate(op, data);
         for (auto& x : target_fields) {
-          if (!prune || contains(seen, x, op, data))
+          if (!schema || contains(schema, x, op, data))
             d.emplace_back(make_pred(std::move(x)));
         }
         switch (d.size()) {
@@ -338,21 +325,6 @@ resolve_impl(const taxonomies& ts, const expression& e,
       }
       return expression{pred};
     });
-}
-
-caf::expected<expression> resolve(const taxonomies& ts, const expression& e) {
-  return resolve_impl(ts, e, {}, false);
-}
-
-caf::expected<expression> resolve(const taxonomies& ts, const expression& e,
-                                  const std::map<std::string, type_set>& seen) {
-  return resolve_impl(ts, e, seen, true);
-}
-
-caf::expected<expression> resolve(const taxonomies& ts, const expression& e,
-                                  const vast::type& single_type) {
-  return resolve_impl(ts, e, {{std::string(single_type.name()), {single_type}}},
-                      true);
 }
 
 } // namespace vast
