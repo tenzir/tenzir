@@ -241,6 +241,9 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
       -> restinio::request_handling_status_t {
       auto response = std::make_shared<restinio_response>(
         std::move(req), std::move(route_params), endpoint);
+      if (config.cors_allowed_origin)
+        response->add_header("Access-Control-Allow-Origin",
+                             *config.cors_allowed_origin);
       for (auto const& [field, value] : config.response_headers)
         response->add_header(field, value);
       self->send(dispatcher, atom::request_v, std::move(response),
@@ -249,6 +252,33 @@ void setup_route(caf::scoped_actor& self, std::unique_ptr<router_t>& router,
       // overhead and if so whether we can reject immediately in
       // some cases here.
       return restinio::request_accepted();
+    });
+}
+
+// Set up a static handler that responds to all preflight requests
+// with a 204 success response. We don't inspect the incoming path
+// to be able to return a 404 error for non-existent paths. (instead
+// of a CORS failure)
+// cf. https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
+void setup_cors_preflight_handlers(std::unique_ptr<router_t>& router,
+                                   const std::string& allowed_origin) {
+  VAST_VERBOSE("allowing CORS requests from origin '{}'", allowed_origin);
+  router->add_handler(
+    restinio::http_method_options(), "/:path(.*)",
+    [=](request_handle_t req, restinio::router::route_params_t)
+      -> restinio::request_handling_status_t {
+      auto const* requested_headers
+        = req->header().try_get_field("Access-Control-Request-Headers");
+      auto allowed_headers
+        = requested_headers ? *requested_headers : "Content-Type";
+      if (!requested_headers)
+        return req->create_response(restinio::status_bad_request()).done();
+      return req->create_response(restinio::status_no_content())
+        .append_header("Access-Control-Allow-Origin", allowed_origin)
+        .append_header("Access-Control-Allow-Methods", "POST, GET")
+        .append_header("Access-Control-Allow-Headers", allowed_headers)
+        .append_header("Access-Control-Max-Age", "86400")
+        .done();
     });
 }
 
@@ -330,9 +360,13 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
                   *server_config, std::move(endpoint), handler);
     }
   }
+  // Set up implicit CORS preflight handlers for all endpoints if desired
+  if (server_config->cors_allowed_origin)
+    setup_cors_preflight_handlers(router, *server_config->cors_allowed_origin);
   // Set up non-API routes.
   router->non_matched_request_handler([](auto req) {
-    VAST_VERBOSE("404 not found: {}", req->header().path());
+    VAST_VERBOSE("404 not found: {} {}", req->header().method(),
+                 req->header().path());
     return req->create_response(restinio::status_not_found())
       .set_body("404 not found\n")
       .done();

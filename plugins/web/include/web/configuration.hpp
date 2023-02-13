@@ -19,9 +19,13 @@ namespace vast::plugins::web {
 struct configuration {
   static const record_type& schema() noexcept {
     static auto result = vast::record_type{
-      {"bind", vast::string_type{}},    {"port", vast::int64_type{}},
-      {"mode", vast::string_type{}},    {"certfile", vast::string_type{}},
-      {"keyfile", vast::string_type{}}, {"web-root", vast::string_type{}},
+      {"bind", vast::string_type{}},
+      {"port", vast::int64_type{}},
+      {"mode", vast::string_type{}},
+      {"certfile", vast::string_type{}},
+      {"keyfile", vast::string_type{}},
+      {"web-root", vast::string_type{}},
+      {"cors-allowed-origin", vast::string_type{}},
     };
     return result;
   }
@@ -46,7 +50,8 @@ struct configuration {
   std::string certfile = {};
   std::string keyfile = {};
   std::string bind_address = "127.0.0.1";
-  std::string web_root;
+  std::string web_root = {};
+  std::string cors_allowed_origin = {};
   int port = 42001;
 };
 
@@ -79,8 +84,11 @@ public:
   /// The path to the TLS private key.
   std::filesystem::path keyfile = {};
 
-  /// Additional header to be inserted into every server response.
-  //  (eg. 'Server: VAST', 'Access-Control-Allow-Origin: *', ...)
+  /// Permit cross-site calls from this origin.
+  std::optional<std::string> cors_allowed_origin = {};
+
+  /// Additional headers to be inserted into every server response.
+  //  (eg. 'Server: VAST 2.4', ...)
   std::unordered_map<std::string, std::string> response_headers;
 
   /// The path from which to serve static files.
