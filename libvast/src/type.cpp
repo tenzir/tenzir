@@ -790,7 +790,7 @@ data type::construct() const noexcept {
   return *this ? caf::visit(f, *this) : data{};
 }
 
-data type::to_definition() const noexcept {
+data type::to_definition(bool expand) const noexcept {
   VAST_ASSERT(*this);
   // Utility function for adding the attributes to a type definition, if
   // required.
@@ -804,7 +804,7 @@ data type::to_definition() const noexcept {
         attributes_definition.emplace_back(std::string{key},
                                            std::string{value});
     }
-    if (attributes_definition.empty())
+    if (!expand && attributes_definition.empty())
       return type_definition;
     return record{
       {"type", std::move(type_definition)},
@@ -813,9 +813,10 @@ data type::to_definition() const noexcept {
   };
   // Check if there is an alias, and if there is then visit then one first.
   for (const auto& alias : aliases()) {
-    auto definition = attributes_enriched_definition(alias.to_definition());
+    auto definition
+      = attributes_enriched_definition(alias.to_definition(expand));
     const auto name = this->name();
-    if (name.empty())
+    if (!expand && name.empty())
       return definition;
     return record{
       {std::string{name}, std::move(definition)},
@@ -836,25 +837,26 @@ data type::to_definition() const noexcept {
         {"enum", std::move(definition)},
       };
     },
-    [](const list_type& self) noexcept -> data {
+    [&](const list_type& self) noexcept -> data {
       return record{
-        {"list", self.value_type().to_definition()},
+        {"list", self.value_type().to_definition(expand)},
       };
     },
-    [](const map_type& self) noexcept -> data {
+    [&](const map_type& self) noexcept -> data {
       return record{
         {"map",
          record{
-           {"key", self.key_type().to_definition()},
-           {"value", self.value_type().to_definition()},
+           {"key", self.key_type().to_definition(expand)},
+           {"value", self.value_type().to_definition(expand)},
          }},
       };
     },
-    [](const record_type& self) noexcept -> data {
+    [&](const record_type& self) noexcept -> data {
       auto definition = list{};
       definition.reserve(self.num_fields());
       for (const auto& [name, type] : self.fields())
-        definition.push_back(record{{std::string{name}, type.to_definition()}});
+        definition.push_back(
+          record{{std::string{name}, type.to_definition(expand)}});
       return record{
         {"record", std::move(definition)},
       };

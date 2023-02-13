@@ -130,8 +130,7 @@ generalize this concept to also include MAC addresses, we could define a concept
 `source` that includes both `source_ip` and a new field that represents a MAC
 address:
 
-![Concept Composition](/img/concept-composition.light.png#gh-light-mode-only)
-![Concept Composition](/img/concept-composition.dark.png#gh-dark-mode-only)
+![Concept Composition](concept-composition.excalidraw.svg)
 
 You define the composite concept in a module as follows:
 
@@ -178,8 +177,7 @@ model.
 In the above example, the `connection` model consists of the `source_endpoint`
 and `destination_endpoint` model, each of which contains two concepts:
 
-![Model Composition](/img/model-composition.light.png#gh-light-mode-only)
-![Model Composition](/img/model-composition.dark.png#gh-dark-mode-only)
+![Model Composition](model-composition.excalidraw.svg)
 
 You can query a model by providing a record literal:
 

@@ -119,13 +119,8 @@ We designed the [**VAST** **Q**uery **L**anguage
 schema and put constraints on it. Specifically, VAST's expression language has
 the concept of
 [extractors](/docs/understand/query-language/expressions#extractors) that refer
-to various parts of the event structure:
-
-![Extractors #width500](/img/extractors.light.png#gh-light-mode-only)
-![Extractors #width500](/img/extractors.dark.png#gh-dark-mode-only)
-
-For example, you can query the above schemas with a *meta extractor* to select a
-specific set of event types:
+to various parts of the event structure. For example, you can query the above
+schemas with a *meta extractor* to select a specific set of event types:
 
 ```c
 #type == /suricata.(http|flow)/

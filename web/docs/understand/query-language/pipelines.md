@@ -9,8 +9,7 @@ operator consumes data, performs a transformation, and produces new data,
 possibly with a different schema. Think of it as UNIX pipes where output from
 one command is input to the next.
 
-![Query Language](/img/query-language.light.png#gh-light-mode-only)
-![Query Language](/img/query-language.dark.png#gh-dark-mode-only)
+![Pipeline Dataflow](pipeline-dataflow.excalidraw.svg)
 
 The basic idea is that a query consists of two connected pieces: a *dataset* to
 represent a data source and a *pipeline* as a squence of operators to process

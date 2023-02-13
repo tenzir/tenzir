@@ -3,7 +3,7 @@ title: Richer Typing in Sigma
 description: Towards Native Sigma Rule Execution
 authors: mavam
 date: 2022-08-12
-last_updated: 2023-02-08
+last_updated: 2023-02-12
 tags: [sigma, regex, query-frontend]
 ---
 
@@ -28,8 +28,7 @@ How does the frontend work? Think of it as a parser that processes the YAML and
 translates it into an expression tree, where the leaves are predicates with
 typed operands according to VAST's data model. Here's how it works:
 
-![Sigma Query Frontend](/img/sigma-query-frontend-light.png#gh-light-mode-only)
-![Sigma Query Frontend](/img/sigma-query-frontend-dark.png#gh-dark-mode-only)
+![Sigma Query Frontend](sigma-query-frontend.excalidraw.svg)
 
 Let's take a closer look at some Sigma rule modifiers:
 

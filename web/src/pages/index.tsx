@@ -13,6 +13,7 @@ import Carousel from '../components/Carousel';
 
 import strip from 'strip-markdown';
 import {remark} from 'remark';
+import {ReactSVG} from 'react-svg';
 
 // NOTE: this is internal and may change, and the types might not be guaranteed
 const blogpostsInternalArchive = require('../../.docusaurus/docusaurus-plugin-content-blog/default/blog-archive-80c.json');
@@ -160,11 +161,9 @@ const CarouselCard = ({
         {/* HACK: This is to safeguard against one incompatible (wrong?) image url in
         https://github.com/tenzir/vast/tree/6c17f01e630c71a55df7002d2276697dfcfaa463/web/blog/parquet-and-feather-writing-security-telemetry/index.qmd */}
         {imageLink && imageLink.startsWith('/') && (
-          <img
+          <ReactSVG
             src={imageLink}
-            alt="Blogpost Figure"
-            className="svglite"
-            height="200px"
+            className={clsx("markdown-inline-svg", styles.svgWrapper)}
           />
         )}
       </div>

@@ -53,36 +53,34 @@
  * ability, specifically hi-res diagrams blow up to the full text width, which
  * often makes look textual annotations huge and out of proportion.
  */
-img[alt$="#width300"]{
+img[alt$="#width300"],
+.markdown-inline-svg {
   max-width: 300px;
   display: block;
 }
 
-img[alt$="#width400"]{
+img[alt$="#width400"],
+.markdown-inline-svg {
   max-width: 400px;
   display: block;
 }
 
-img[alt$="#width500"]{
+img[alt$="#width500"],
+.markdown-inline-svg {
   max-width: 500px;
   display: block;
 }
 
-img[alt$="#width600"]{
+img[alt$="#width600"],
+.markdown-inline-svg {
   max-width: 600px;
   display: block;
 }
 
-/* This enable dark mode for inline SVGs. For our GFM content, inlining an SVG
- * requires doing this:
- *
- *     import Svg from './path/to/image.svg';
- *
- *     <Svg />
- *
- * Thereafter, we have an Exalidraw-style dark mode "for free."
+/* This enable Excalidraw-style dark mode for inlined SVGs. We use
+ * https://github.com/alvinometric/remark-inline-svg for that.
  */
-[data-theme='dark'] .svglite {
+[data-theme='dark'] .markdown-inline-svg {
   filter: invert(100%) hue-rotate(180deg);
 }
 

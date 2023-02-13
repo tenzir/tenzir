@@ -13,8 +13,7 @@ spawns queries, or implements integrations with third-party libraries.
 There exist **dynamic plugins** that come in the form shared libraries, and
 **static plugins** that are compiled into libvast or VAST itself:
 
-![Plugins](/img/plugins.light.png#gh-light-mode-only)
-![Plugins](/img/plugins.dark.png#gh-dark-mode-only)
+![Plugins](plugins.excalidraw.svg)
 
 Plugins do not only exist for extensions by third parties, but VAST also
 implements core functionality through the plugin API. Such plugins compile as
@@ -25,8 +24,7 @@ static plugins. Because they are always built, we call them *builtins*.
 VAST offers several customization points to exchange or enhance functionality
 selectively. Here is a list of available plugin categories and plugin types:
 
-![Plugin types](/img/plugin-types.light.png#gh-light-mode-only)
-![Plugin types](/img/plugin-types.dark.png#gh-dark-mode-only)
+![Plugin Types](plugin-types.excalidraw.svg)
 
 ### Command
 

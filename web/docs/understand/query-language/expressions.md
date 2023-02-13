@@ -17,8 +17,7 @@ either sub-expressions or predicates, and can be composed via *conjunctions*
 
 The following diagram shows an example expression in tree form:
 
-![Spectra](/img/expressions.light.png#gh-light-mode-only)
-![Spectra](/img/expressions.dark.png#gh-dark-mode-only)
+![Expressions](expressions.excalidraw.svg)
 
 When written out, it looks like this:
 
@@ -109,8 +108,7 @@ VAST has the following extractor types:
 
 The diagram below illustrate how extractors relate to each other:
 
-![Extractors #width500](/img/extractors.light.png#gh-light-mode-only)
-![Extractors #width500](/img/extractors.dark.png#gh-dark-mode-only)
+![Extractors #width500](extractors.excalidraw.svg)
 
 #### Field Extractor
 

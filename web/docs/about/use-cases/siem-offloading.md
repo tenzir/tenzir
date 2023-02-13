@@ -10,8 +10,7 @@ capabilities, higher visibility, improved detection in a modern engine. And most
 importantly, *incremental deployability*: you can add a new system without
 disrupting existing services.
 
-![SIEM Offloading](/img/siem-offloading.light.png#gh-light-mode-only)
-![SIEM Offloading](/img/siem-offloading.dark.png#gh-dark-mode-only)
+![SIEM Offloading](siem-offloading.excalidraw.svg)
 
 When you realize that you need to deploy two SIEMs, you are basically taking the
 first step towards a distributed architecture. While it's possible to run the

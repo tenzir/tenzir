@@ -22,8 +22,7 @@ stability guarantees.
 There exist two ways to run the `web` plugin: either as a separate process or
 embedded inside a VAST server node:
 
-![REST API - Single Deployment](/img/rest-api-deployment-single.light.png#gh-light-mode-only)
-![REST API - Single Deployment](/img/rest-api-deployment-single.dark.png#gh-dark-mode-only)
+![REST API - Single Deployment](rest-api-deployment-single.excalidraw.svg)
 
 Running the REST API as dedicated process gives you more flexibility with
 respect to deployment, fault isolation, and scaling. An embedded setup offers
@@ -70,8 +69,7 @@ different use case.
 
 The developer mode bypasses encryption and authentication token verification.
 
-![REST API - Developer Mode](/img/rest-api-developer-mode.light.png#gh-light-mode-only)
-![REST API - Developer Mode](/img/rest-api-developer-mode.dark.png#gh-dark-mode-only)
+![REST API - Developer Mode](rest-api-mode-developer.excalidraw.svg)
 
 Pass `--mode=dev` to start the REST API in developer mode:
 
@@ -86,8 +84,7 @@ a network interface. This mode only accepts HTTPS connections and requires a
 valid authentication token for every request. This is the default mode of
 operation.
 
-![REST API - Server Mode](/img/rest-api-server-mode.light.png#gh-light-mode-only)
-![REST API - Server Mode](/img/rest-api-server-mode.dark.png#gh-dark-mode-only)
+![REST API - Server Mode](rest-api-mode-server.excalidraw.svg)
 
 Pass `--mode=server` to start the REST API in server mode:
 
@@ -101,8 +98,7 @@ The upstream TLS mode is suitable when VAST sits upstream of a separate
 TLS terminator that is running on the same machine. This kind of setup
 is commonly encountered when running nginx as a reverse proxy.
 
-![REST API - TLS Upstream Mode](/img/rest-api-tls-upstream-mode.light.png#gh-light-mode-only)
-![REST API - TLS Upstream Mode](/img/rest-api-tls-upstream-mode.dark.png#gh-dark-mode-only)
+![REST API - Upstream TLS Mode](rest-api-mode-upstream.excalidraw.svg)
 
 VAST only listens on localhost addresses, accepts plain HTTP but still
 checks authentication tokens.
@@ -124,8 +120,7 @@ VAST only accepts HTTPS requests, requires TLS client certificates for incoming
 connections, and requires valid authentication tokens for any authenticated
 endpoints.
 
-![REST API - Mutual TLS Mode](/img/rest-api-mutual-tls-mode.light.png#gh-light-mode-only)
-![REST API - Mutual TLS Mode](/img/rest-api-mutual-tls-mode.dark.png#gh-dark-mode-only)
+![REST API - mTLS Mode](rest-api-mode-mtls.excalidraw.svg)
 
 Pass `--mode=mtls` to start the REST API in server mode:
 
@@ -139,8 +134,7 @@ There are two ways to scale the REST API, shall it be the bottleneck. You can
 either spawn more REST API actors within VAST and expose them at different
 ports, or you can spawn more dedicated web server processes:
 
-![REST API - Multiple Deployments](/img/rest-api-deployment-multiple.light.png#gh-light-mode-only)
-![REST API - Multiple Deployments](/img/rest-api-deployment-multiple.dark.png#gh-dark-mode-only)
+![REST API - Multi Deployment](rest-api-deployment-multi.excalidraw.svg)
 
 We do not anticipate that the web frontend will be on the critical path, since
 the web server itself performs very little work. But we get this form of scaling
