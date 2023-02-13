@@ -3,7 +3,7 @@ title: The New REST API
 authors: [lava, mavam]
 date: 2023-01-26
 last_updated: 2023-02-08
-image: /img/rest-api-deployment-single.excalidraw.svg
+image: /img/blog/rest-api-deployment-single.excalidraw.svg
 tags: [frontend, rest, api, architecture]
 ---
 
