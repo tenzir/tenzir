@@ -570,6 +570,8 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
+      if (self->state.data.synopsis->events == 0u)
+        return 0u;
       auto rp = self->make_response_promise<uint64_t>();
       auto resolved = resolve(*self->state.taxonomies, query_context.expr,
                               self->state.data.synopsis->schema);
