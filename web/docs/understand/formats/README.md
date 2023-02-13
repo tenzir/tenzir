@@ -41,8 +41,7 @@ Sometimes (1) and (2) may not be separable, e.g., when a third-party library
 exposes structured data and performs the needed I/O itself. Because of this
 entanglement, we treat these cases separatetely:
 
-![Format](/img/format.light.png#gh-light-mode-only)
-![Format](/img/format.dark.png#gh-dark-mode-only)
+![Format](format.excalidraw.svg)
 
 In the left case, data input and output is a blackbox and cannot be separated in
 the format. In the right case, we have control about carrier and format

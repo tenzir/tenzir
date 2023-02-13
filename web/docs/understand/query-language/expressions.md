@@ -17,8 +17,7 @@ either sub-expressions or predicates, and can be composed via *conjunctions*
 
 The following diagram shows an example expression in tree form:
 
-![Spectra](/img/expressions.light.png#gh-light-mode-only)
-![Spectra](/img/expressions.dark.png#gh-dark-mode-only)
+![Expressions](expressions.excalidraw.svg)
 
 When written out, it looks like this:
 
