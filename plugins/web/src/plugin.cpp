@@ -60,7 +60,8 @@ class plugin final : public virtual command_plugin,
                                   "dev,server,upstream,mtls.")
         .add<std::string>("certfile", "path to TLS server certificate")
         .add<std::string>("keyfile", "path to TLS private key")
-        .add<std::string>("allowed-origin", "allowed origin for CORS requests")
+        .add<std::string>("allowed-origin", "allowed origin for CORS requests; "
+                                            "defaults to '*' in dev mode.")
         .add<std::string>("root", "document root of the server")
         .add<std::string>("bind", "listen address of server")
         .add<int64_t>("port", "listen port"));

@@ -85,6 +85,8 @@ public:
   std::filesystem::path keyfile = {};
 
   /// Permit cross-site calls from this origin.
+  //  If set, the server will insert a `Access-Control-Allow-Origin`
+  //  header into every API response.
   std::optional<std::string> cors_allowed_origin = {};
 
   /// Additional headers to be inserted into every server response.
