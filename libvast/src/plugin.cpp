@@ -34,6 +34,7 @@
 #include <dlfcn.h>
 #include <memory>
 #include <tuple>
+#include <unistd.h>
 
 namespace vast {
 
