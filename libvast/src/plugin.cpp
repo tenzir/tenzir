@@ -390,25 +390,24 @@ auto stdin_loader_plugin::make_loader(options, const bool_operator*) const
     in_buf.read_timeout() = read_timeout;
     auto chunk_str = std::string{};
     chunk_str.reserve(max_chunk_size);
-    auto eof_reached = false;
-    while (!eof_reached) {
-      auto c = in_buf.sbumpc();
-      if (c != detail::fdinbuf::traits_type::eof()) {
-        chunk_str += static_cast<char>(c);
+    auto current_char = detail::fdinbuf::int_type{};
+    while (current_char != detail::fdinbuf::traits_type::eof()) {
+      auto current_char = in_buf.sbumpc();
+      if (current_char != detail::fdinbuf::traits_type::eof()) {
+        chunk_str += static_cast<char>(current_char);
       } else if (in_buf.timed_out() && chunk_str.empty()) {
         co_yield chunk::make_empty();
         continue;
       } else if (!in_buf.timed_out()) {
-        eof_reached = true;
         if (chunk_str.empty()) {
           break;
         }
       }
-      if (c == detail::fdinbuf::traits_type::eof()
+      if (current_char == detail::fdinbuf::traits_type::eof()
           || chunk_str.size() == max_chunk_size) {
         auto chunk = chunk::make(std::exchange(chunk_str, {}));
         co_yield std::move(chunk);
-        if (!eof_reached) {
+        if (current_char != detail::fdinbuf::traits_type::eof()) {
           chunk_str.reserve(max_chunk_size);
         }
       }
