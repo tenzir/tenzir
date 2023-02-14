@@ -109,12 +109,12 @@
         apps.vast-ce-static = flake-utils.lib.mkApp {drv = packages.vast-ce-static;};
         apps.vast-full = flake-utils.lib.mkApp {drv = packages.vast-full;};
         apps.vast-full-static = flake-utils.lib.mkApp {drv = packages.vast-full-static;};
-        apps.stream-image = stream-image "vast";
-        apps.stream-static-image = stream-image "vast-static";
-        apps.stream-ce-image = stream-image "vast-ce";
-        apps.stream-ce-static-image = stream-image "vast-ce-static";
-        apps.stream-full-image = stream-image "vast-full";
-        apps.stream-full-static-image = stream-image "vast-full-static";
+        apps.stream-vast-image = stream-image "vast";
+        apps.stream-vast-static-image = stream-image "vast-static";
+        apps.stream-vast-ce-image = stream-image "vast-ce";
+        apps.stream-vast-ce-static-image = stream-image "vast-ce-static";
+        apps.stream-vast-full-image = stream-image "vast-full";
+        apps.stream-vast-full-static-image = stream-image "vast-full-static";
         apps.default = apps.vast;
         devShell = import ./shell.nix {inherit pkgs;};
         formatter = pkgs.alejandra;

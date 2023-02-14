@@ -70,7 +70,6 @@ jobs:
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
       run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
-      run-docker-vast-slim: ${{ steps.configure.outputs.run-docker-vast-slim }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-vast-nix: ${{ steps.configure.outputs.run-vast-nix }}
@@ -167,7 +166,6 @@ jobs:
             echo "run-python=true" >> $GITHUB_OUTPUT
             echo "run-vast-io=true" >> $GITHUB_OUTPUT
             echo "run-docker-vast=true" >> $GITHUB_OUTPUT
-            echo "run-docker-vast-slim=true" >> $GITHUB_OUTPUT
             echo "run-docker-compose=true" >> $GITHUB_OUTPUT
             echo "run-vast-nix=true" >> $GITHUB_OUTPUT
             echo "run-vast=true" >> $GITHUB_OUTPUT
@@ -234,11 +232,6 @@ jobs:
             run_vast_nix=true
           fi
           echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
-          run_docker_vast_slim="${run_vast_nix}"
-          if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
-            run_docker_vast_slim='false'
-          fi
-          echo "run-docker-vast-slim=${run_docker_vast_slim}" >> $GITHUB_OUTPUT
 
   changelog:
     name: Changelog
@@ -668,29 +661,6 @@ jobs:
           # for a build of the latest release.
           asset_name: "vast-linux-static.deb"
           asset_content_type: application/vnd.debian.binary-package
-
-  docker-vast-slim:
-    needs:
-      - configure
-    if: needs.configure.outputs.run-docker-vast-slim == 'true'
-    name: Docker (tenzir/vast-slim)
-    runs-on: ubuntu-20.04
-    env:
-      BUILD_DIR: build
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Install Nix
-        uses: cachix/install-nix-action@v19
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - name: Setup Cachix
-        uses: cachix/cachix-action@v12
-        with:
-          name: vast
-          signingKey: "${{ secrets.CACHIX_VAST_SIGNING_KEY }}"
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v2
@@ -706,11 +676,11 @@ jobs:
       - name: Build Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |
-          nix run .#stream-static-image | docker load
+          nix run .#stream-${{ matrix.vast-nix.package }}-image | docker load
       - name: Upload Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |
-          images=('tenzir/vast-slim')
+          image=$(echo "tenzir/${{ matrix.vast-nix.package }}" | sed -i 's|static|slim|')
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             registries=('ghcr.io/')
             tags=("${{ needs.configure.outputs.head-ref-slug }}")
@@ -725,11 +695,9 @@ jobs:
             exit 1
           fi
           for registry in "${registries[@]}"; do
-            for image in "${images[@]}"; do
-              for tag in "${tags[@]}"; do
-                docker tag "${image}:latest" "${registry}${image}:${tag}"
-                docker push "${registry}${image}:${tag}"
-              done
+            for tag in "${tags[@]}"; do
+              docker tag "${image}:latest" "${registry}${image}:${tag}"
+              docker push "${registry}${image}:${tag}"
             done
           done
 
@@ -1216,7 +1184,6 @@ jobs:
       - changelog
       - vast-io
       - docker-vast
-      - docker-vast-slim
       # We currently have a transient error on TheHive init script (sc-39576)
       # - docker-compose
       - example-notebooks
