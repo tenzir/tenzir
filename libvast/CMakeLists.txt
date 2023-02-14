@@ -255,20 +255,39 @@ string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(spdlog 1.5.0 REQUIRED)")
 target_link_libraries(libvast PUBLIC spdlog::spdlog)
 dependency_summary("spdlog" spdlog::spdlog "Dependencies")
 
-# Link against simdjson.
-find_package(
-  simdjson
-  REQUIRED
+# Link against simdjson
+option(VAST_ENABLE_BUNDLED_SIMDJSON "Use the simdjson submodule" OFF)
+add_feature_info("VAST_ENABLE_BUNDLED_SIMDJSON" VAST_ENABLE_BUNDLED_SIMDJSON
+                 "use the simdjson submodule.")
+
+if (NOT VAST_ENABLE_BUNDLED_SIMDJSON)
+  find_package(simdjson 3.1  REQUIRED
   # simdjson 0.8.0 exports it package configuration file under the wrong name,
   # so we look for "simdjson-targets.cmake" as well.
   CONFIGS
   "simdjson-config.cmake"
-  "simdjson-targets.cmake")
-string(APPEND VAST_FIND_DEPENDENCY_LIST
+  "simdjson-targets.cmake"
+  COMPONENTS )
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
        "\nfind_package(simdjson REQUIRED CONFIGS "
        "\"simdjson-config.cmake\" \"simdjson-targets.cmake\")")
+  dependency_summary("simdjson" simdjson::simdjson "Dependencies")
+else ()
+  if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson/CMakeLists.txt")
+    message(
+      FATAL_ERROR
+        "simdjson library not found. Initialize the libvast/aux/simdjson submodule"
+    )
+  endif ()
+  # todo think about it
+  set(SIMDJSON_ENABLE_THREADS OFF)
+  add_subdirectory(aux/simdjson)
+  VASTSystemizeTarget(simdjson)
+  dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
+                    "Dependencies")
+endif()
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
-dependency_summary("simdjson" simdjson::simdjson "Dependencies")
+
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)

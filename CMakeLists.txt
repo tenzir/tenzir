@@ -701,15 +701,6 @@ endif ()
 # CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
 find_package(OpenSSL REQUIRED)
 
-function (VASTSystemizeTarget tgt)
-  message(STATUS "Treating ${tgt} as a system dependency")
-  get_target_property(_includes ${tgt} INTERFACE_INCLUDE_DIRECTORIES)
-  set_property(
-    TARGET ${tgt}
-    APPEND
-    PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_includes}")
-endfunction ()
-
 # TODO: Require CAF to be installed.
 
 if (VAST_ENABLE_DEVELOPER_MODE
