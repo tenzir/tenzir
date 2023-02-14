@@ -29,7 +29,7 @@ paths:
         https://vast.io/docs/understand/query-language)
       parameters:
         - in: query
-          name: expression
+          name: query
           schema:
             type: string
             default: A query matching every event.
@@ -44,17 +44,6 @@ paths:
           required: false
           description: Maximum number of returned events.
           example: 3
-        - in: query
-          name: pipeline
-          schema:
-            type: object
-            properties:
-              steps:
-                type: array
-                items:
-                  type: object
-          required: false
-          description: A JSON description of a pipeline to be applied to the exported data.
         - in: query
           name: flatten
           schema:
@@ -96,6 +85,7 @@ paths:
                     items:
                       type: object
                 example:
+                  version: v2.3.0-169-ge42a9652e5-dirty
                   num-events: 3
                   events:
                     - >-
@@ -141,7 +131,8 @@ paths:
       description: >-
         Export data from VAST according to a query. The query must be a valid
         expression in the VAST Query Language. (see
-        https://vast.io/docs/understand/query-language)
+        https://vast.io/docs/understand/query-language) followed by an optional
+        pipeline string.
       requestBody:
         description: Request parameters
         required: false
@@ -150,28 +141,18 @@ paths:
             schema:
               type: object
               required:
-                - expression
+                - query
               properties:
-                expression:
+                query:
                   type: string
                   description: The query expression to execute.
-                  example: ':ip in 10.42.0.0/16'
+                  example: ':ip in 10.42.0.0/16 | head 50'
                   default: A query matching every event.
                 limit:
                   type: int64
                   default: 50
                   description: Maximum number of returned events
                   example: 3
-                pipeline:
-                  type: object
-                  properties:
-                    steps:
-                      type: array
-                      items:
-                        type: object
-                  description: >-
-                    A JSON object describing a pipeline to be applied on the
-                    exported data.
                 omit-nulls:
                   type: boolean
                   description: Omit null elements in the response data.
@@ -197,8 +178,6 @@ paths:
                 properties:
                   num-events:
                     type: int64
-                  version:
-                    type: string
                   events:
                     type: array
                     items:
@@ -260,30 +239,18 @@ paths:
             schema:
               type: object
               required:
-                - expression
+                - query
               properties:
-                expression:
+                query:
                   type: string
                   description: The query expression to execute.
-                  example: ':ip in 10.42.0.0/16'
+                  example: ':ip in 10.42.0.0/16 | head 50'
                   default: A query matching every event.
                 limit:
                   type: int64
                   default: 50
                   description: Maximum number of returned events
                   example: 3
-                pipeline:
-                  type: object
-                  required:
-                    - steps
-                  properties:
-                    steps:
-                      type: array
-                      items:
-                        type: object
-                  description: >-
-                    A JSON object describing a pipeline to be applied on the
-                    exported data.
                 omit-nulls:
                   type: boolean
                   description: Omit null elements in the response data.
@@ -307,8 +274,10 @@ paths:
               schema:
                 type: object
                 properties:
-                  num-events:
+                  num_events:
                     type: int64
+                  version:
+                    type: string
                   events:
                     type: array
                     items:
@@ -330,22 +299,23 @@ paths:
                           items:
                             type: object
                 example:
-                  num-events: 3
+                  version: v2.3.0-169-ge42a9652e5-dirty
+                  num_events: 3
                   events:
                     - name: suricata.netflow
                       schema:
                         - name: timestamp
                           type: timestamp
                         - name: pcap_cnt
-                          type: uint64
+                          type: count
                         - name: src_ip
-                          type: ip
+                          type: addr
                         - name: src_port
-                          type: uint64
+                          type: count
                         - name: pkts
-                          type: uint64
+                          type: count
                         - name: bytes
-                          type: uint64
+                          type: count
                         - name: action
                           type: 'enum {allowed: 0, blocked: 1}'
                       data:
@@ -364,10 +334,10 @@ paths:
       description: Create a new export query in VAST
       parameters:
         - in: query
-          name: expression
+          name: query
           schema:
             type: string
-            example: ':ip in 10.42.0.0/16'
+            example: ':ip in 10.42.0.0/16 | head 100'
           required: true
           description: Query string.
       responses:
