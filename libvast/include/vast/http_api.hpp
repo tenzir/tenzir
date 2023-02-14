@@ -118,3 +118,25 @@ public:
 };
 
 } // namespace vast
+
+template <>
+struct fmt::formatter<vast::http_method> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::http_method& value, FormatContext& ctx) const {
+    std::string value_string;
+    switch (value) {
+      case vast::http_method::get:
+        value_string = "GET";
+        break;
+      case vast::http_method::post:
+        value_string = "POST";
+        break;
+    }
+    return formatter<std::string_view>{}.format(value_string, ctx);
+  }
+};
