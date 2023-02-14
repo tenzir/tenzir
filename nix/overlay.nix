@@ -209,6 +209,12 @@ in {
     ps.matcher
     ps.netflow
   ]);
+  vast-full = final.vast.withPlugins (ps: [
+    ps.compaction
+    #ps.inventory
+    ps.matcher
+    ps.netflow
+  ]);
   vast-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [
