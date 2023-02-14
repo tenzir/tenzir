@@ -431,6 +431,9 @@ public:
   [[nodiscard]] caf::error initialize(data config) override;
 
   [[nodiscard]] std::string name() const override;
+
+  static constexpr inline auto max_chunk_size = size_t{16384};
+  static constexpr inline auto read_timeout = std::chrono::milliseconds{5000};
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

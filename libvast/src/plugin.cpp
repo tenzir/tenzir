@@ -13,6 +13,7 @@
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/env.hpp"
+#include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/installdirs.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/detail/stable_set.hpp"
@@ -385,14 +386,32 @@ store_plugin::make_store(system::accountant_actor accountant,
 auto stdin_loader_plugin::make_loader(options, const bool_operator*) const
   -> caf::expected<input_loader> {
   return []() -> generator<chunk_ptr> {
-    auto input = std::string{};
-    auto c = char{};
-    while (std::cin.get(c)) {
-      input += c;
-    }
-    if (not input.empty()) {
-      auto chunk = chunk::make(std::move(input));
-      co_yield std::move(chunk);
+    auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
+    in_buf.read_timeout() = read_timeout;
+    auto chunk_str = std::string{};
+    chunk_str.reserve(max_chunk_size);
+    auto eof_reached = false;
+    while (!eof_reached) {
+      auto c = in_buf.sbumpc();
+      if (c != detail::fdinbuf::traits_type::eof()) {
+        chunk_str += static_cast<char>(c);
+      } else if (in_buf.timed_out() && chunk_str.empty()) {
+        co_yield chunk::make_empty();
+        continue;
+      } else if (!in_buf.timed_out()) {
+        eof_reached = true;
+        if (chunk_str.empty()) {
+          break;
+        }
+      }
+      if (c == detail::fdinbuf::traits_type::eof()
+          || chunk_str.size() == max_chunk_size) {
+        auto chunk = chunk::make(std::exchange(chunk_str, {}));
+        co_yield std::move(chunk);
+        if (!eof_reached) {
+          chunk_str.reserve(max_chunk_size);
+        }
+      }
     }
     co_return;
   };
