@@ -557,19 +557,24 @@ jobs:
       - name: Build Static Packages
         id: build_static_packages
         run: |
-          STORE_PATH=$(nix build .#${{ matrix.vast-nix.package }}.package --print-out-paths)
-          echo "store_path=${STORE_PATH}" >> $GITHUB_OUTPUT
-      - name: Get Artifact Names
-        id: get_artifact_names
-        run: |
-          TAR_GZ=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "vast.*.tar.gz")
-          DEB=$(ls "${{ steps.build_static_packages.outputs.store_path }}" | grep "vast.*.deb")
+          STORE_PATH=$(nix --print-build-logs build .#${{ matrix.vast-nix.package }}.package --print-out-paths)
+          TAR_GZ=$(find "$STORE_PATH" -type f -name '*.tar.gz')
+          echo "TARBALL is at: $TAR_GZ"
           echo "tar_gz=${TAR_GZ}" >> $GITHUB_OUTPUT
+          DEB="$(find "$STORE_PATH" -type f -name '*.deb')"
+          echo "DEB is at: $DEB"
           echo "deb=${DEB}" >> $GITHUB_OUTPUT
+          # The debian package filename contains a colon (:), but GitHub does
+          # not allow this character in attached assets, so we create an extra
+          # copy.
+          DEB_GITHUB="$PWD/$(basename "$DEB" | tr ':' '_')"
+          echo "DEB_GITHUB is at: $DEB_GITHUB"
+          cp "$DEB" "$DEB_GITHUB"
+          echo "deb_github=${DEB_GITHUB}" >> $GITHUB_OUTPUT
       - name: Run Integration Tests
         run: |
           mkdir -p vast-integration-test
-          tar xf ./result-package/${{ steps.get_artifact_names.outputs.tar_gz }} --directory vast-integration-test
+          tar xf ${{ steps.build_static_packages.outputs.tar_gz }} --directory vast-integration-test
           nix develop .#vast-integration-test-shell --command python vast/integration/integration.py --app \
             vast-integration-test/opt/vast/bin/vast
       - name: Upload Integration Test Logs on Failure
@@ -583,13 +588,13 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: "vast.tar.gz"
-          path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
+          path: "${{ steps.build_static_packages.outputs.tar_gz }}"
           if-no-files-found: error
       - name: Upload Debian Package to Github
         uses: actions/upload-artifact@v3
         with:
           name: "vast.deb"
-          path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
+          path: "${{ steps.build_static_packages.outputs.deb_github }}"
           if-no-files-found: error
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -610,18 +615,19 @@ jobs:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
-          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.deb"
+          TAR_GZ_BASENAME="$(basename "${{ steps.build_static_packages.outputs.tar_gz }}")"
+          gsutil cp "${{ steps.build_static_packages.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/$(basename "${TAR_GZ_BASENAME}")"
+          gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${TAR_GZ_BASENAME}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_packages.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.deb"
       - name: Upload Artifact to GCS (release)
         if: github.event_name == 'release'
         env:
           PUBLIC_GCS_BUCKET: tenzir-public-data
           STATIC_BINARY_FOLDER: vast-static-builds
         run: |
-          VERSION=$(echo "${{ steps.get_artifact_names.outputs.tar_gz }}" | cut -d"-" -f2)
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.tar.gz"
-          gsutil cp "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.deb"
+          VERSION="${{ steps.configure.outputs.build-version-short }}"
+          gsutil cp "${{ steps.build_static_packages.outputs.tar_gz }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.tar.gz"
+          gsutil cp "${{ steps.build_static_packages.outputs.deb }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${VERSION}-static-latest.deb"
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete Release Assets
@@ -642,7 +648,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.tar_gz }}"
+          asset_path: "${{ steps.build_static_packages.outputs.tar_gz }}"
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
           # for a build of the latest release.
@@ -655,7 +661,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "${{ steps.build_static_packages.outputs.store_path }}/${{ steps.get_artifact_names.outputs.deb }}"
+          asset_path: "${{ steps.build_static_packages.outputs.deb_github }}"
           # The asset name is constant so we can permanently link to
           # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.deb
           # for a build of the latest release.
