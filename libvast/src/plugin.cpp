@@ -248,7 +248,8 @@ load(const std::vector<std::string>& bundled_plugins,
 caf::error initialize(caf::actor_system_config& cfg) {
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
-    // First, try to read the configuration from the merged VAST configuration.
+    auto global_config = record{};
+    // First, try to read the configurations from the merged VAST configuration.
     if (auto opts = caf::get_if<caf::settings>(
           &cfg, fmt::format("plugins.{}", plugin->name()))) {
       if (auto opts_data = to<record>(*opts))
@@ -300,7 +301,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
     // Third, initialize the plugin with the merged configuration.
     VAST_VERBOSE("initializing the {} plugin with options: {}", plugin->name(),
                  merged_config);
-    if (auto err = plugin->initialize(std::move(merged_config)))
+    if (auto err = plugin->initialize(std::move(merged_config),
+                                      std::move(global_config)))
       return caf::make_error(
         ec::unspecified, fmt::format("failed to initialize the {} plugin: {} ",
                                      plugin->name(), err));

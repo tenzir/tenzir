@@ -758,7 +758,8 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param config The relevant subsection of the configuration.
-  caf::error initialize(data) override {
+  caf::error initialize([[maybe_unused]] data plugin_config,
+                        [[maybe_unused]] data global_config) override {
     return caf::none;
   }
 

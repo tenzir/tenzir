@@ -264,10 +264,12 @@ private:
 };
 
 class plugin final : public virtual store_plugin {
-  [[nodiscard]] caf::error initialize(data options) override {
-    if (caf::holds_alternative<caf::none_t>(options))
+  [[nodiscard]] caf::error
+  initialize(data plugin_options,
+             [[maybe_unused]] data global_options) override {
+    if (caf::holds_alternative<caf::none_t>(plugin_options))
       return caf::none;
-    return convert(options, feather_config_);
+    return convert(plugin_options, feather_config_);
   }
 
   [[nodiscard]] std::string name() const override {

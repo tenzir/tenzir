@@ -141,9 +141,11 @@ public:
 
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
-  /// @param config The relevant subsection of the configuration.
-  caf::error initialize(data config) override {
-    if (auto* r = caf::get_if<record>(&config))
+  /// @param plugin_config The relevant subsection of the configuration.
+  /// @param global_config The entire VAST configuration for potential access to
+  /// global options.
+  caf::error initialize(data plugin_config, data global_config) override {
+    if (auto* r = caf::get_if<record>(&plugin_config))
       config_ = *r;
     return caf::none;
   }

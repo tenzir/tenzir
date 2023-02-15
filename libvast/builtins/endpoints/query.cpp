@@ -369,7 +369,8 @@ request_multiplexer_actor::behavior_type request_multiplexer(
 }
 
 class plugin final : public virtual rest_endpoint_plugin {
-  caf::error initialize([[maybe_unused]] data config) override {
+  caf::error initialize([[maybe_unused]] data plugin_config,
+                        [[maybe_unused]] data global_config) override {
     return {};
   }
 

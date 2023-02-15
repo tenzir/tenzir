@@ -121,7 +121,8 @@ status_handler(status_handler_actor::stateful_pointer<status_handler_state> self
 }
 
 class plugin final : public virtual rest_endpoint_plugin {
-  caf::error initialize([[maybe_unused]] data config) override {
+  caf::error initialize([[maybe_unused]] data plugin_config,
+                        [[maybe_unused]] data global_config) override {
     return {};
   }
 
