@@ -389,27 +389,29 @@ auto stdin_loader_plugin::make_loader(options, const bool_operator*) const
   return []() -> generator<chunk_ptr> {
     auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
     in_buf.read_timeout() = read_timeout;
-    auto chunk_str = std::string{};
-    chunk_str.reserve(max_chunk_size);
-    auto current_char = detail::fdinbuf::int_type{};
-    while (current_char != detail::fdinbuf::traits_type::eof()) {
+    auto current_data = std::vector<std::byte>{};
+    current_data.reserve(max_chunk_size);
+    auto eof_reached = false;
+    while (not eof_reached) {
       auto current_char = in_buf.sbumpc();
       if (current_char != detail::fdinbuf::traits_type::eof()) {
-        chunk_str += static_cast<char>(current_char);
-      } else if (in_buf.timed_out() && chunk_str.empty()) {
-        co_yield chunk::make_empty();
-        continue;
-      } else if (!in_buf.timed_out()) {
-        if (chunk_str.empty()) {
-          break;
+        current_data.emplace_back(static_cast<std::byte>(current_char));
+      } else {
+        eof_reached = (not in_buf.timed_out());
+        if (current_data.empty()) {
+          if (not eof_reached) {
+            co_yield chunk::make_empty();
+            continue;
+          } else {
+            break;
+          }
         }
       }
-      if (current_char == detail::fdinbuf::traits_type::eof()
-          || chunk_str.size() == max_chunk_size) {
-        auto chunk = chunk::make(std::exchange(chunk_str, {}));
+      if (eof_reached || current_data.size() == max_chunk_size) {
+        auto chunk = chunk::make(std::exchange(current_data, {}));
         co_yield std::move(chunk);
-        if (current_char != detail::fdinbuf::traits_type::eof()) {
-          chunk_str.reserve(max_chunk_size);
+        if (not eof_reached) {
+          current_data.reserve(max_chunk_size);
         }
       }
     }
@@ -428,7 +430,7 @@ caf::error stdin_loader_plugin::initialize(data) {
 }
 
 std::string stdin_loader_plugin::name() const {
-  return "stdin_loader_plugin";
+  return "stdin";
 }
 
 // -- plugin_ptr ---------------------------------------------------------------
