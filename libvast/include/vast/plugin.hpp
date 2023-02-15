@@ -16,6 +16,7 @@
 #include "vast/detail/pp.hpp"
 #include "vast/detail/weak_handle.hpp"
 #include "vast/http_api.hpp"
+#include "vast/operator_control_plane.hpp"
 #include "vast/system/actors.hpp"
 #include "vast/type.hpp"
 
@@ -409,23 +410,23 @@ using options = record;
 class loader_plugin : public virtual plugin {
 public:
   /// Returns the loader.
-  [[nodiscard]] virtual auto make_loader(options, const bool_operator*) const
+  [[nodiscard]] virtual auto make_loader(options, operator_control_plane&) const
     -> caf::expected<input_loader>
     = 0;
 
   /// Returns the default parser for this loader.
   [[nodiscard]] virtual auto
-  make_default_parser(options, const bool_operator*) const
+  make_default_parser(options, operator_control_plane&) const
     -> caf::expected<input_parser>
     = 0;
 };
 
 class stdin_loader_plugin : public virtual loader_plugin {
 public:
-  [[nodiscard]] auto make_loader(options, const bool_operator*) const
+  [[nodiscard]] auto make_loader(options, operator_control_plane&) const
     -> caf::expected<input_loader> override;
 
-  [[nodiscard]] auto make_default_parser(options, const bool_operator*) const
+  [[nodiscard]] auto make_default_parser(options, operator_control_plane&) const
     -> caf::expected<input_parser> override;
 
   [[nodiscard]] caf::error initialize(data config) override;

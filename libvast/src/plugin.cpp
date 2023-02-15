@@ -384,7 +384,7 @@ store_plugin::make_store(system::accountant_actor accountant,
 
 // -- loader plugin -------------------------------------------------------------
 
-auto stdin_loader_plugin::make_loader(options, const bool_operator*) const
+auto stdin_loader_plugin::make_loader(options, operator_control_plane&) const
   -> caf::expected<input_loader> {
   return []() -> generator<chunk_ptr> {
     auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
@@ -420,7 +420,7 @@ auto stdin_loader_plugin::make_loader(options, const bool_operator*) const
 }
 
 auto stdin_loader_plugin::make_default_parser(options,
-                                              const bool_operator*) const
+                                              operator_control_plane&) const
   -> caf::expected<input_parser> {
   return caf::make_error(ec::unimplemented, "parser currently not implemented");
 }
