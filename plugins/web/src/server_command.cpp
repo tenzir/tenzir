@@ -365,7 +365,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
     setup_cors_preflight_handlers(router, *server_config->cors_allowed_origin);
   // Set up non-API routes.
   router->non_matched_request_handler([](auto req) {
-    VAST_VERBOSE("404 not found: {} {}", req->header().method(),
+    VAST_VERBOSE("404 not found: {} {}", req->header().method().c_str(),
                  req->header().path());
     return req->create_response(restinio::status_not_found())
       .set_body("404 not found\n")
