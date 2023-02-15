@@ -686,7 +686,7 @@ jobs:
       - name: Upload Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |
-          image=$(echo "tenzir/${{ matrix.vast-nix.package }}" | sed -i 's|static|slim|')
+          image=$(echo "tenzir/${{ matrix.vast-nix.package }}" | sed 's|static|slim|')
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             registries=('ghcr.io/')
             tags=("${{ needs.configure.outputs.head-ref-slug }}")
