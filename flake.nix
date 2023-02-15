@@ -55,15 +55,19 @@
           versionSuffix;
         # Simulate `git describe --abbrev=10 --long --match='v[0-9]*`.
         versionLongOverride = "${vast-version-fallback}${versionSuffix}";
-        stream-image = pkg: {
+        stream-image = {
+          name,
+          pkg,
+        }: {
           type = "app";
           program = "${pkgs.dockerTools.streamLayeredImage {
-            name = "tenzir/vast-slim";
-            tag = "latest";
+            inherit name;
+            # Don't overwrite "latest" Dockerfile based build.
+            tag = "latest-nix";
             config = let
               vast-dir = "/var/lib/vast";
             in {
-              Entrypoint = ["${self.packages.${system}."${pkg}"}/bin/vast"];
+              Entrypoint = ["${pkgs.lib.getBin pkg}/bin/vast"];
               CMD = ["--help"];
               Env = [
                 # When changing these, make sure to also update the entries in the
@@ -109,12 +113,30 @@
         apps.vast-ce-static = flake-utils.lib.mkApp {drv = packages.vast-ce-static;};
         apps.vast-full = flake-utils.lib.mkApp {drv = packages.vast-full;};
         apps.vast-full-static = flake-utils.lib.mkApp {drv = packages.vast-full-static;};
-        apps.stream-vast-image = stream-image "vast";
-        apps.stream-vast-static-image = stream-image "vast-static";
-        apps.stream-vast-ce-image = stream-image "vast-ce";
-        apps.stream-vast-ce-static-image = stream-image "vast-ce-static";
-        apps.stream-vast-full-image = stream-image "vast-full";
-        apps.stream-vast-full-static-image = stream-image "vast-full-static";
+        apps.stream-vast-image = stream-image {
+          name = "vast";
+          pkg = self.packages.${system}.vast;
+        };
+        apps.stream-vast-slim-image = stream-image {
+          name = "vast-slim";
+          pkg = self.packages.${system}.vast-static;
+        };
+        apps.stream-vast-ce-image = stream-image {
+          name = "vast-ce";
+          pkg = self.packages.${system}.vast-ce;
+        };
+        apps.stream-vast-ce-slim-image = stream-image {
+          name = "vast-ce-slim";
+          pkg = self.packages.${system}.vast-ce-static;
+        };
+        apps.stream-vast-full-image = stream-image {
+          name = "vast-full";
+          pkg = self.packages.${system}.vast-full;
+        };
+        apps.stream-vast-full-slim-image = stream-image {
+          name = "vast-full-slim";
+          pkg = self.packages.${system}.vast-full-static;
+        };
         apps.default = apps.vast;
         devShell = import ./shell.nix {inherit pkgs;};
         formatter = pkgs.alejandra;

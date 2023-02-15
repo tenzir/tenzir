@@ -529,11 +529,17 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
+        # The values for `package` and `image-basename` should correspond to
+        # so that `-static` in the former is `-slim` in the latter. This way
+        # the binary artifacts built in one job are resused by the other.
+        # Both names are defined in `flake.nix`.
         vast-nix:
           - name: Open Source Edition
             package: vast-static
+            image-basename: vast-slim
           - name: Community Edition
             package: vast-ce-static
+            image-basename: vast-ce-slim
     env:
       BUILD_DIR: build
     steps:
@@ -682,11 +688,11 @@ jobs:
       - name: Build Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |
-          nix run .#stream-${{ matrix.vast-nix.package }}-image | docker load
+          nix run .#stream-${{ matrix.vast-nix.image-basename }}-image | docker load
       - name: Upload Docker Image
         if: github.event_name != 'workflow_dispatch'
         run: |
-          image=$(echo "tenzir/${{ matrix.vast-nix.package }}" | sed 's|static|slim|')
+          image="tenzir/${{ matrix.vast-nix.image-basename }}"
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             registries=('ghcr.io/')
             tags=("${{ needs.configure.outputs.head-ref-slug }}")
@@ -702,7 +708,7 @@ jobs:
           fi
           for registry in "${registries[@]}"; do
             for tag in "${tags[@]}"; do
-              docker tag "${image}:latest" "${registry}${image}:${tag}"
+              docker tag "${image}:latest-nix" "${registry}${image}:${tag}"
               docker push "${registry}${image}:${tag}"
             done
           done
