@@ -6,14 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2022 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/format/json.hpp"
-#include "vast/pipeline.hpp"
-
+#include <vast/arrow_table_slice.hpp>
 #include <vast/command.hpp>
 #include <vast/concept/convertible/to.hpp>
 #include <vast/concept/parseable/numeric.hpp>
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
+#include <vast/concept/printable/vast/json.hpp>
+#include <vast/format/json.hpp>
+#include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 #include <vast/query_context.hpp>
 #include <vast/system/actors.hpp>
@@ -125,38 +126,6 @@ using request_multiplexer_actor = system::typed_actor_fwd<>
 
 namespace {
 
-// Remove up to `n` events from the `slices` vector and return them
-// as a JSONLD string + number of events drained.
-std::pair<size_t, std::string>
-drain_buffer(std::deque<table_slice>& slices, size_t n) {
-  auto written = size_t{0};
-  bool error_encountered = false;
-  auto ostream = std::make_unique<std::stringstream>();
-  auto writer = vast::format::json::writer{std::move(ostream), caf::settings{}};
-  auto it = slices.begin();
-  for (; it != slices.end(); ++it) {
-    auto& slice = *it;
-    if (slice.rows() < n) {
-      written += slice.rows();
-      if (auto error = writer.write(slice))
-        error_encountered = true;
-      n -= slice.rows();
-    } else {
-      auto [first, second] = split(slice, n);
-      written += first.rows();
-      if (auto error = writer.write(first))
-        error_encountered = true;
-      slice = second;
-      break;
-    }
-  }
-  //  Remove events that will be shipped in the response.
-  slices.erase(slices.begin(), it);
-  if (error_encountered)
-    VAST_WARN("query endpoint encountered error writing json data");
-  return {written, static_cast<std::stringstream&>(writer.out()).str()};
-}
-
 constexpr auto BATCH_SIZE = uint32_t{1};
 
 } // namespace
@@ -181,13 +150,68 @@ struct query_manager_state {
   std::optional<pipeline_executor> pipeline_executor_;
 
   std::string create_response() {
-    auto [drained_events, events_as_json]
-      = drain_buffer(processed_slices, limit);
-    shippable_events_count -= drained_events;
-    shipped_events_count += drained_events;
-    auto events = detail::split(events_as_json, "\n");
-    return fmt::format("{{\"position\": {}, \"events\": [\n{}]}}\n",
-                       shipped_events_count, fmt::join(events, ",\n"));
+    auto printer = json_printer{{.oneline = true}};
+    auto result = std::string{};
+    auto out_iter = std::back_inserter(result);
+    auto seen_schemas = std::unordered_set<type>{};
+    auto written = size_t{0};
+    out_iter = fmt::format_to(out_iter, "{{\"events\":[");
+    // write slices
+    auto it = processed_slices.begin();
+    for (bool first = true; it != processed_slices.end(); ++it) {
+      auto slice = std::move(*it);
+      if (slice.rows() == 0)
+        continue;
+      if (const auto remaining = limit - written; slice.rows() > remaining) {
+        auto [head, tail] = split(slice, remaining);
+        *it = std::move(tail);
+        slice = std::move(head);
+      }
+      seen_schemas.insert(slice.schema());
+      auto resolved_slice = resolve_enumerations(slice);
+      auto type = caf::get<record_type>(resolved_slice.schema());
+      auto array
+        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      for (const auto& row : values(type, *array)) {
+        if (first)
+          out_iter = fmt::format_to(out_iter, "{{");
+        else
+          out_iter = fmt::format_to(out_iter, "}},{{");
+        first = false;
+        out_iter = fmt::format_to(
+          out_iter, "\"schema-ref\":\"{:x}\",\"data\":", hash(slice.schema()));
+        VAST_ASSERT_CHEAP(row);
+        const auto ok = printer.print(out_iter, *row);
+        VAST_ASSERT_CHEAP(ok);
+      }
+      written += slice.rows();
+      if (written >= limit) {
+        break;
+      }
+    }
+    //  Remove events that will be shipped in the response.
+    processed_slices.erase(processed_slices.begin(), it);
+    // Write schemas
+    if (written == 0) {
+      out_iter = fmt::format_to(out_iter, "],\"schemas\":[]}}\n");
+      return result;
+    }
+    out_iter = fmt::format_to(out_iter, "}}],\"schemas\":[");
+    for (bool first = true; const auto& schema : seen_schemas) {
+      if (first)
+        out_iter = fmt::format_to(out_iter, "{{");
+      else
+        out_iter = fmt::format_to(out_iter, "}},{{");
+      first = false;
+      out_iter = fmt::format_to(
+        out_iter, "\"schema-ref\":\"{:x}\",\"definition\":", hash(schema));
+      const auto ok = printer.print(out_iter, schema.to_definition(true));
+      VAST_ASSERT_CHEAP(ok);
+    }
+    out_iter = fmt::format_to(out_iter, "}}]}}\n");
+    shippable_events_count -= written;
+    shipped_events_count += written;
+    return result;
   }
 
   void apply_pipelines() {
