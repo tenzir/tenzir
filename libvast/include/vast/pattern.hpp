@@ -41,7 +41,7 @@ public:
 
   /// Constructs a pattern from a string.
   /// @param str The string containing the pattern.
-  explicit pattern(std::string str);
+  explicit pattern(std::string str, bool case_insensitive = false);
 
   /// Matches a string against the pattern.
   /// @param str The string to match.
@@ -90,6 +90,7 @@ public:
 
 private:
   std::string str_;
+  bool case_insensitive_;
 };
 
 } // namespace vast

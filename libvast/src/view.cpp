@@ -20,11 +20,13 @@ namespace vast {
 
 // -- pattern_view ------------------------------------------------------------
 
-pattern_view::pattern_view(const pattern& x) : pattern_{x.string()} {
+pattern_view::pattern_view(const pattern& x, bool case_insensitive)
+  : pattern_{x.string()}, case_insensitive_{case_insensitive} {
   // nop
 }
 
-pattern_view::pattern_view(std::string_view str) : pattern_{str} {
+pattern_view::pattern_view(std::string_view str, bool case_insensitive)
+  : pattern_{str}, case_insensitive_{case_insensitive} {
   // nop
 }
 
@@ -34,12 +36,20 @@ std::string_view pattern_view::string() const {
 
 bool pattern_view::match(std::string_view x) const {
   return std::regex_match(x.begin(), x.end(),
-                          std::regex{pattern_.begin(), pattern_.end()});
+                          std::regex{pattern_.begin(), pattern_.end(),
+                                     case_insensitive_
+                                       ? std::regex_constants::ECMAScript
+                                           | std::regex_constants::icase
+                                       : std::regex_constants::ECMAScript});
 }
 
 bool pattern_view::search(std::string_view x) const {
   return std::regex_search(x.begin(), x.end(),
-                           std::regex{pattern_.begin(), pattern_.end()});
+                           std::regex{pattern_.begin(), pattern_.end(),
+                                      case_insensitive_
+                                        ? std::regex_constants::ECMAScript
+                                            | std::regex_constants::icase
+                                        : std::regex_constants::ECMAScript});
 }
 
 bool operator==(pattern_view x, pattern_view y) noexcept {

@@ -24,15 +24,24 @@ pattern pattern::glob(std::string_view str) {
   return pattern{std::regex_replace(rx, std::regex("\\?"), ".")};
 }
 
-pattern::pattern(std::string str) : str_(std::move(str)) {
+pattern::pattern(std::string str, bool case_insensitive)
+  : str_(std::move(str)), case_insensitive_(case_insensitive) {
 }
 
 bool pattern::match(std::string_view str) const {
-  return std::regex_match(str.begin(), str.end(), std::regex{str_});
+  return std::regex_match(
+    str.begin(), str.end(),
+    std::regex{str_, case_insensitive_ ? std::regex_constants::ECMAScript
+                                           | std::regex_constants::icase
+                                       : std::regex_constants::ECMAScript});
 }
 
 bool pattern::search(std::string_view str) const {
-  return std::regex_search(str.begin(), str.end(), std::regex{str_});
+  return std::regex_search(
+    str.begin(), str.end(),
+    std::regex{str_, case_insensitive_ ? std::regex_constants::ECMAScript
+                                           | std::regex_constants::icase
+                                       : std::regex_constants::ECMAScript});
 }
 
 const std::string& pattern::string() const {
