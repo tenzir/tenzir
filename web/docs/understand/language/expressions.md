@@ -1,5 +1,5 @@
 ---
-sidebar_position: 0
+sidebar_position: 1
 ---
 
 # Expressions
@@ -66,6 +66,7 @@ The following operators separate two operands:
 
 The table below illustrates a partial function over the cross product of
 available types. Each letter in a cell denotes a set of operators:
+
 - **E**: equality operators `==`, `!=`
 - **R**: range operators `<`, `<=`, `>=`, `>`
 - **M**: membership operators `in`, `!in`, `ni`, `!ni`
