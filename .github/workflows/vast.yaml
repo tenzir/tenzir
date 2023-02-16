@@ -328,7 +328,9 @@ jobs:
       matrix:
         docker-vast:
           - name: vast
+            upload-dev-images: true
           - name: vast-ce
+            upload-dev-images: false
             plugins:
               - matcher
               - netflow
@@ -391,19 +393,19 @@ jobs:
             --platform linux/amd64 \
             --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
             --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/vast:build-cache" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
-          if [[ "${{ matrix.docker-vast.name }}" == "vast" ]]; then
-            docker buildx build . -t tenzir/vast-dev:latest --target development --load \
+            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache" \
+            --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
+          if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
+            docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-dev:latest --target development --load \
               --platform linux/amd64 \
               --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
               --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-              --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
-            docker buildx build . -t tenzir/vast-deps:latest --target dependencies --load \
+              --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
+            docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-deps:latest --target dependencies --load \
               --platform linux/amd64 \
               --build-arg "VAST_BUILD_OPTIONS=${docker_build_args}" \
               --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-              --cache-from "type=registry,ref=ghcr.io/tenzir/vast:build-cache"
+              --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
           fi
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             docker tag tenzir/${{ matrix.docker-vast.name }}:latest "ghcr.io/tenzir/${{ matrix.docker-vast.name }}:${ref_tag}"
@@ -414,8 +416,8 @@ jobs:
         run: |
           registries=('' 'ghcr.io/')
           images=('tenzir/${{ matrix.docker-vast.name }}')
-          if [[ "${{ matrix.docker-vast.name }}" == "vast" ]]; then
-            images+=('tenzir/vast-dev' 'tenzir/vast-deps')
+          if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
+            images+=('tenzir/${{ matrix.docker-vast.name }}-dev' 'tenzir/${{ matrix.docker-vast.name }}-deps')
           else
           fi
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
@@ -525,7 +527,7 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-vast-nix == 'true' }}
-    name: VAST Static (${{ matrix.vast-nix.name }})
+    name: ${{ matrix.vast-nix.name }} (Nix)
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -534,10 +536,10 @@ jobs:
         # the binary artifacts built in one job are resused by the other.
         # Both names are defined in `flake.nix`.
         vast-nix:
-          - name: Open Source Edition
+          - name: VAST
             package: vast-static
             image-basename: vast-slim
-          - name: Community Edition
+          - name: VAST CE
             package: vast-ce-static
             image-basename: vast-ce-slim
     env:
@@ -986,8 +988,10 @@ jobs:
           # to use it on the macOS CI runners crashes because of an illegal
           # instruction as of Arrow 10.0.0.
           - {setup: {os: macos-latest}, plugin: {name: Parquet}}
-          # Disable proprietary plugins on macOS to shorten CI turnaround.
+          # Disable proprietary and example plugins on macOS to shorten CI turnaround.
           # GitHub does not run more than 5 jobs in parallel on macOS.
+          - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
+          - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
           - {setup: {os: macos-latest}, plugin: {name: Compaction}}
           - {setup: {os: macos-latest}, plugin: {name: Inventory}}
           - {setup: {os: macos-latest}, plugin: {name: Matcher}}
