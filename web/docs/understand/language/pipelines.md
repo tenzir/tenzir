@@ -36,12 +36,12 @@ logical form, whereas the VAST defines the mapping to a physical representation
 that potentially looks differently. This distinction allows VAST to
 transparently optimize the execution. For example, filter predicates may be
 "pushed down" to reduce the amount of data that flows through a pipeline. Such
-optimizations are common practice in declartive query languages.
+optimizations are common practice in declarative query languages.
 
 ## Syntax
 
 VAST comes with its own language to define pipelines, geared towards working
-richly typed, structured event data across multiple schemas. There exist
+with richly typed, structured event data across multiple schemas. There exist
 numerous dataflow languages out there, and drew inspiration from others to
 achieve:
 
