@@ -145,7 +145,7 @@ public:
   /// @param global_config The entire VAST configuration for potential access to
   /// global options.
   caf::error initialize(const record& plugin_config,
-                        const record& global_config) override {
+                        [[maybe_unused]] const record& global_config) override {
     config_ = plugin_config;
     return caf::none;
   }
