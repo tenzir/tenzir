@@ -5,10 +5,10 @@ motion](#modify-data-in-motion) and [data at rest](#modify-data-at-rest). Both
 aspects rely on [pipelines](/docs/understand/language/pipelines) as building
 block.
 
-## Define a static pipeline
+## Define a pipeline
 
 To reference and use a pipeline as building block, you must add give it a unique
-nameunder the key `vast.pipelines` in the configuration file:
+name under the key `vast.pipelines` in the configuration file:
 
 ```yaml
 vast:
