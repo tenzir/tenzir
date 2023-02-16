@@ -23,7 +23,7 @@ struct access::printer<vast::pattern>
 
   template <class Iterator>
   bool print(Iterator& out, const pattern& pat) const {
-    auto p = '/' << printers::str << '/';
+    auto p = '/' << printers::str << ((pat.case_insensitive_) ? "/i" : "/");
     return p.print(out, pat.str_);
   }
 };

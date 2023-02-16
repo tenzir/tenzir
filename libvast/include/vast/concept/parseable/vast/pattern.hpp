@@ -29,7 +29,12 @@ struct access::parser_base<pattern>
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, pattern& a) const {
-    return pattern_parser{}(f, l, a.str_);
+    if (!pattern_parser{}(f, l, a.str_)) {
+      return false;
+    }
+    auto case_insens_parser = parsers::chr{pattern::case_insensitive_flag};
+    a.case_insensitive_ = case_insens_parser(f, l, unused);
+    return true;
   }
 };
 

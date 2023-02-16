@@ -25,6 +25,9 @@ class pattern : detail::totally_ordered<pattern>,
   friend access;
 
 public:
+  /// optional flag to make a pattern string case-insensitive.
+  static inline auto constexpr case_insensitive_flag = 'i';
+
   /// Constructs a pattern from a glob expression. A glob expression consists
   /// of the following elements:
   ///
