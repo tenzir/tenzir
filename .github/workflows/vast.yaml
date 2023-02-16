@@ -67,6 +67,7 @@ jobs:
       cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
       docker-build-args: ${{ steps.configure.outputs.docker-build-args }}
       vast-container-ref: ${{ steps.configure.outputs.vast-container-ref }}
+      run-policy-enforcement: ${{ steps.configure.outputs.run-policy-enforcement }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
       run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
@@ -159,6 +160,8 @@ jobs:
           if [[ $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
             run_example_notebooks=false
           fi
+          # Policy checks are not constrained.
+          echo "run-policy-enforcement=true" >> $GITHUB_OUTPUT
           echo "run-example-notebooks=${run_example_notebooks}" >> $GITHUB_OUTPUT
           echo "run-python-package=${run_python_package}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]] || ! is_unchanged .github/workflows/vast.yaml; then
@@ -232,6 +235,24 @@ jobs:
             run_vast_nix=true
           fi
           echo "run-vast-nix=${run_vast_nix}" >> $GITHUB_OUTPUT
+
+  policy-enforcement:
+    name: Policy Enforcement
+    needs:
+      - configure
+    if: ${{ needs.configure.outputs.run-policy-enforcement == 'true' }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Require contrib/vast-plugins to be on a main branch commit
+        run: |
+          git -C contrib/vast-plugins fetch origin main
+          git -C contrib/vast-plugins merge-base --is-ancestor \
+            $(git -C contrib/vast-plugins rev-parse HEAD) \
+            $(git -C contrib/vast-plugins rev-parse origin/main)
 
   changelog:
     name: Changelog
@@ -1198,6 +1219,7 @@ jobs:
 
   pass-branch-protections:
     needs:
+      - policy-enforcement
       - configure
       - changelog
       - vast-io
