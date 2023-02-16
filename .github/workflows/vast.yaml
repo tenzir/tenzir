@@ -322,14 +322,16 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
-    name: Docker (tenzir/${{ matrix.docker-vast.name }})
+    name: {{ matrix.docker-vast.job-name }} (Docker)
     runs-on: ubuntu-20.04
     strategy:
       matrix:
         docker-vast:
           - name: vast
+            job-name: VAST
             upload-dev-images: true
           - name: vast-ce
+            job-name: VAST CE
             upload-dev-images: false
             plugins:
               - matcher
