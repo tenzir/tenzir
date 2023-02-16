@@ -242,43 +242,45 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
       self->state.promise.deliver(msg.reason);
     self->quit();
   });
-  return {[self](atom::provision, system::query_cursor cursor) {
-            self->state.cursor = cursor;
-          },
-          [self](atom::next, http_request& rq,
-                 uint64_t max_events_to_output) -> caf::result<atom::done> {
-            if (!self->state.cursor)
-              rq.response->abort(500, "query manager not ready");
-            self->state.limit = max_events_to_output;
-            if (self->state.should_ship_results()) {
-              rq.response->append(self->state.create_response());
-              return atom::done_v;
-            }
-            self->send(self->state.index, atom::query_v, self->state.cursor->id,
-                       BATCH_SIZE);
-            self->state.request = std::move(rq);
-            self->state.promise = self->make_response_promise<atom::done>();
-            return self->state.promise;
-          },
-          // Index-facing API
-          [self](vast::table_slice& slice) {
-            self->state.slice_buffer.push_back(std::move(slice));
-          },
-          [self](atom::done) {
-            // There's technically a race condition with atom::provision here,
-            // since the index sends the first `done` asynchronously. But since
-            // we always set `taste == 0`, we will not miss any data due to this.
-            ++self->state.processed_partitions;
-            self->state.enable_buffered_slices_to_be_shipped();
-            if (self->state.should_ship_results()) {
-              auto request = std::exchange(self->state.request, {});
-              request.response->append(self->state.create_response());
-              self->state.promise.deliver(atom::done_v);
-              return;
-            }
-            self->send(self->state.index, atom::query_v, self->state.cursor->id,
-                       BATCH_SIZE);
-          }};
+  return {
+    [self](atom::provision, system::query_cursor cursor) {
+      self->state.cursor = cursor;
+    },
+    [self](atom::next, http_request& rq,
+           uint64_t max_events_to_output) -> caf::result<atom::done> {
+      if (!self->state.cursor)
+        rq.response->abort(500, "query manager not ready");
+      self->state.limit = max_events_to_output;
+      if (self->state.should_ship_results()) {
+        rq.response->append(self->state.create_response());
+        return atom::done_v;
+      }
+      self->send(self->state.index, atom::query_v, self->state.cursor->id,
+                 BATCH_SIZE);
+      self->state.request = std::move(rq);
+      self->state.promise = self->make_response_promise<atom::done>();
+      return self->state.promise;
+    },
+    // Index-facing API
+    [self](vast::table_slice& slice) {
+      self->state.slice_buffer.push_back(std::move(slice));
+    },
+    [self](atom::done) {
+      // There's technically a race condition with atom::provision here,
+      // since the index sends the first `done` asynchronously. But since
+      // we always set `taste == 0`, we will not miss any data due to this.
+      ++self->state.processed_partitions;
+      self->state.enable_buffered_slices_to_be_shipped();
+      if (self->state.should_ship_results()) {
+        auto request = std::exchange(self->state.request, {});
+        request.response->append(self->state.create_response());
+        self->state.promise.deliver(atom::done_v);
+        return;
+      }
+      self->send(self->state.index, atom::query_v, self->state.cursor->id,
+                 BATCH_SIZE);
+    },
+  };
 }
 
 request_multiplexer_actor::behavior_type request_multiplexer(
