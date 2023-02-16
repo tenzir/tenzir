@@ -116,7 +116,7 @@ public:
   /// @param global_config The entire VAST configuration for potential access to
   /// global options.
   [[nodiscard]] virtual caf::error
-  initialize(data plugin_config, data global_config)
+  initialize(const record& plugin_config, const record& global_config)
     = 0;
 
   /// Returns the unique name of the plugin.

@@ -312,7 +312,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
     // Third, initialize the plugin with the merged configuration.
     VAST_VERBOSE("initializing the {} plugin with options: {}", plugin->name(),
                  merged_config);
-    if (auto err = plugin->initialize(std::move(merged_config), global_config))
+    if (auto err = plugin->initialize(merged_config, global_config))
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to initialize "
                                          "the {} plugin: {} ",

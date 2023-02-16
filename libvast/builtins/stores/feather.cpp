@@ -265,11 +265,9 @@ private:
 
 class plugin final : public virtual store_plugin {
   [[nodiscard]] caf::error
-  initialize(data plugin_options,
-             [[maybe_unused]] data global_options) override {
-    if (caf::holds_alternative<caf::none_t>(plugin_options))
-      return caf::none;
-    return convert(plugin_options, feather_config_);
+  initialize(const record& plugin_config,
+             [[maybe_unused]] const record& global_config) override {
+    return convert(plugin_config, feather_config_);
   }
 
   [[nodiscard]] std::string name() const override {

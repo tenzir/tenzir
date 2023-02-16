@@ -103,8 +103,8 @@ private:
 class plugin final : public virtual pipeline_operator_plugin {
 public:
   // plugin API
-  caf::error initialize([[maybe_unused]] data plugin_config,
-                        [[maybe_unused]] data global_config) override {
+  caf::error initialize([[maybe_unused]] const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     return {};
   }
 

@@ -139,15 +139,13 @@ private:
 
 class plugin final : public virtual pipeline_operator_plugin {
 public:
-  caf::error initialize(data plugin_options,
-                        [[maybe_unused]] data global_options) override {
+  caf::error initialize(const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     // We don't use any plugin-specific configuration under
     // vast.plugins.rename, so nothing is needed here.
-    if (caf::holds_alternative<caf::none_t>(plugin_options))
+    if (plugin_config.empty()) {
       return caf::none;
-    if (const auto* rec = caf::get_if<record>(&plugin_options))
-      if (rec->empty())
-        return caf::none;
+    }
     return caf::make_error(ec::invalid_configuration, "expected empty "
                                                       "configuration under "
                                                       "vast.plugins.rename");
