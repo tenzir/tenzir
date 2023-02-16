@@ -85,8 +85,11 @@ public:
 
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
-  /// @param config The relevant subsection of the configuration.
-  caf::error initialize(data config) override;
+  /// @param plugin_config The relevant subsection of the configuration.
+  /// @param global_config The entire VAST configuration for potential access to
+  /// global options.
+  caf::error initialize(const record& plugin_config,
+                        const record& global_config) override;
 
   /// Returns the unique name of the plugin.
   std::string name() const override;
@@ -152,12 +155,13 @@ process the configuration snippet by overriding the following function of
 `vast::plugin`:
 
 ```
-caf::error initialize(data config) override;
+caf::error initialize(const record& plugin_config,
+                      const record& global_config) override;
 ```
 
 VAST expects the plugin to be fully operational after calling `initialize`.
-Subsequent calls the implemented customization points must have a well-defined
-behavior.
+Subsequent calls to the implemented customization points must have a
+well-defined behavior.
 
 ## Compile the source code
 
