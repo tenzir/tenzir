@@ -267,7 +267,15 @@ caf::error initialize(caf::actor_system_config& cfg) {
     auto merged_config = record{};
     // First, try to read the configurations from the merged VAST configuration.
     if (plugins_record.contains(plugin->name())) {
-      merged_config = caf::get<record>(plugins_record.at(plugin->name()));
+      if (auto plugins_entry
+          = caf::get_if<record>(&plugins_record.at(plugin->name()))) {
+        merged_config = std::move(*plugins_entry);
+      } else {
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("configuration for plugin {} "
+                                           "contains invalid format",
+                                           plugin->name()));
+      }
     }
     // Second, try to read the configuration from the plugin-specific
     // configuration files at <config-dir>/plugin/<plugin-name>.yaml.
