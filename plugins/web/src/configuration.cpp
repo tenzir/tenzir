@@ -36,7 +36,7 @@ caf::expected<server_config> convert_and_validate(configuration config) {
       result.require_clientcerts = false;
       result.require_authentication = false;
       result.require_localhost = false;
-      result.response_headers["Access-Control-Allow-Origin"] = "*";
+      result.cors_allowed_origin = "*";
       break;
     case configuration::server_mode::upstream:
       result.require_tls = false;
