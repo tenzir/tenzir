@@ -34,8 +34,8 @@ apply some early aggregations.
 For example, you could reduce a Suricata EVE JSON feed to just flow records:
 
 ```bash
-vast import suricata < eve.json 'src_ip in 10.0.0.0/8 
-  | select timestamp, flow_id, src_ip, dest_ip, src_port'`
+vast import -r eve.json suricata 'src_ip in 10.0.0.0/8 
+  | select timestamp, flow_id, src_ip, dest_ip, src_port'
 ````
 
 See the [language documentation](/docs/understand/language/) to learn more about
