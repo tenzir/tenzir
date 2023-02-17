@@ -13,6 +13,7 @@
 #include <vast/concept/parseable/to.hpp>
 #include <vast/concept/parseable/vast/expression.hpp>
 #include <vast/concept/printable/vast/json.hpp>
+#include <vast/detail/weak_run_delayed.hpp>
 #include <vast/format/json.hpp>
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
@@ -135,7 +136,11 @@ struct query_manager_state {
 
   static constexpr auto name = "query_manager";
 
+  query_manager_actor::pointer self;
   system::index_actor index = {};
+  bool expand = {};
+  duration ttl = {};
+  caf::disposable ttl_disposable = {};
   caf::typed_response_promise<atom::done> promise = {};
   http_request request;
   size_t shipped_events_count = 0;
@@ -148,6 +153,21 @@ struct query_manager_state {
   std::optional<system::query_cursor> cursor = std::nullopt;
   size_t processed_partitions = 0u;
   std::optional<pipeline_executor> pipeline_executor_;
+
+  void refresh_ttl() {
+    // Cancel the old TTL timeout one.
+    if (ttl_disposable.valid()) {
+      if (!ttl_disposable.disposed())
+        ttl_disposable.dispose();
+      else
+        VAST_WARN("{} refreshes TTL that was already disposed", *self);
+    }
+    // Create a new one.
+    ttl_disposable = detail::weak_run_delayed(self, ttl, [this] {
+      VAST_VERBOSE("{} quits after TTL of {} expired", *self, data{ttl});
+      self->quit();
+    });
+  }
 
   std::string create_response() {
     auto printer = json_printer{{.oneline = true}};
@@ -205,7 +225,7 @@ struct query_manager_state {
       first = false;
       out_iter = fmt::format_to(
         out_iter, "\"schema-ref\":\"{:x}\",\"definition\":", hash(schema));
-      const auto ok = printer.print(out_iter, schema.to_definition(true));
+      const auto ok = printer.print(out_iter, schema.to_definition(expand));
       VAST_ASSERT_CHEAP(ok);
     }
     out_iter = fmt::format_to(out_iter, "}}]}}\n");
@@ -258,8 +278,13 @@ struct request_multiplexer_state {
 query_manager_actor::behavior_type
 query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
               system::index_actor index,
-              std::optional<vast::pipeline_executor> executor) {
+              std::optional<vast::pipeline_executor> executor, bool expand,
+              duration ttl) {
+  VAST_VERBOSE("{} starts with a TTL of {}", *self, data{ttl});
+  self->state.self = self;
   self->state.index = std::move(index);
+  self->state.expand = expand;
+  self->state.ttl = ttl;
   self->state.pipeline_executor_ = std::move(executor);
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     if (self->state.promise.pending())
@@ -268,10 +293,12 @@ query_manager(query_manager_actor::stateful_pointer<query_manager_state> self,
   });
   return {
     [self](atom::provision, system::query_cursor cursor) {
+      self->state.refresh_ttl();
       self->state.cursor = cursor;
     },
     [self](atom::next, http_request& rq,
            uint64_t max_events_to_output) -> caf::result<atom::done> {
+      self->state.refresh_ttl();
       if (!self->state.cursor)
         rq.response->abort(500, "query manager not ready");
       self->state.limit = max_events_to_output;
@@ -323,11 +350,33 @@ request_multiplexer_actor::behavior_type request_multiplexer(
         VAST_ERROR("failed to get index from node: {}", std::move(err));
         self->quit();
       });
+  self->set_down_handler([self](const caf::down_msg& msg) {
+    VAST_VERBOSE("{} received DOWN from {}: {}", *self, msg.source, msg.reason);
+    auto it = std::find_if(self->state.live_queries_.begin(),
+                           self->state.live_queries_.end(),
+                           [addr = msg.source](const auto& query) {
+                             return query.second->address() == addr;
+                           });
+    if (it == self->state.live_queries_.end()) {
+      VAST_WARN("{} ignores received DOWN from an unknown actor {}: {}", *self,
+                msg.source, msg.reason);
+      return;
+    }
+    self->state.live_queries_.erase(it);
+  });
   return {
     [self](atom::http_request, uint64_t endpoint_id, http_request rq) {
-      VAST_VERBOSE("{} handles /query request", *self);
+      VAST_VERBOSE("{} handles /query request for endpoint id {} with params "
+                   "{}",
+                   *self, endpoint_id, rq.params);
       if (endpoint_id == QUERY_NEW_ENDPOINT) {
         auto query_string = std::optional<std::string>{};
+        auto expand = false;
+        if (rq.params.contains("expand"))
+          expand = caf::get<bool>(rq.params["expand"]);
+        auto ttl = duration{std::chrono::minutes{5}};
+        if (rq.params.contains("ttl"))
+          ttl = caf::get<duration>(rq.params["ttl"]);
         if (rq.params.contains("query")) {
           auto& param = rq.params.at("query");
           // Should be type-checked by the server.
@@ -351,8 +400,10 @@ request_multiplexer_actor::behavior_type request_multiplexer(
           pipelines.emplace_back(std::move(*pipeline));
           pipeline_executor.emplace(std::move(pipelines));
         }
-        auto handler = self->spawn(query_manager, self->state.index_,
-                                   std::move(pipeline_executor));
+        auto handler
+          = self->spawn<caf::monitored>(query_manager, self->state.index_,
+                                        std::move(pipeline_executor), expand,
+                                        ttl);
         auto query = vast::query_context::make_extract(
           "http-request", handler, std::move(*normalized_expr));
         query.taste = 0;
@@ -425,6 +476,8 @@ class plugin final : public virtual rest_endpoint_plugin {
         .path = "/query/new",
         .params = vast::record_type{
           {"query", vast::string_type{}},
+          {"expand", vast::bool_type{}},
+          {"ttl", vast::duration_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,
