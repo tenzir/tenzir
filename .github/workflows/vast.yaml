@@ -247,8 +247,13 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
       - name: Require contrib/vast-plugins to be on a main branch commit
         run: |
+          git submodule update --init contrib/vast-plugins
           git -C contrib/vast-plugins fetch origin main
           git -C contrib/vast-plugins merge-base --is-ancestor \
             $(git -C contrib/vast-plugins rev-parse HEAD) \
@@ -385,7 +390,7 @@ jobs:
       - if: ${{ matrix.docker-vast.name == 'vast-ce' }}
         name: Initialize Community Edition plugins
         run: |
-          git submodule update --init --recursive -- contrib/vast-plugins
+          git submodule update --init --recursive contrib/vast-plugins
           # Remove plugins that are not in matrix.docker-vast.plugins
           # We move everything out first and then only move the wanted plugins
           # back in.
