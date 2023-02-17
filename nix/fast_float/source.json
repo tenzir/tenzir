@@ -3,6 +3,5 @@
   "repo": "fast_float",
   "rev": "b7f9d6ca3980de0f47251921f307e88c894f6daa",
   "sha256": "QKCQCkqy8i0uyUYebHtlLFCNJZUJyUKnq+DkWYEbJAo=",
-  "fetchSubmodules": false,
   "version": "v3.4.0"
 }
