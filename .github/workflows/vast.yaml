@@ -253,6 +253,18 @@ jobs:
           git -C contrib/vast-plugins merge-base --is-ancestor \
             $(git -C contrib/vast-plugins rev-parse HEAD) \
             $(git -C contrib/vast-plugins rev-parse origin/main)
+      - name: Install Nix
+        uses: cachix/install-nix-action@v19
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Verify Nix sources are synchronized
+        run: |
+          nix/update.sh
+          git diff --quiet || { 
+            echo "Some Nix source references are not aligned with the git submodules."
+            echo "Please run `nix/update.sh` or apply the following diff directly:"
+            git diff
+          }
 
   changelog:
     name: Changelog
