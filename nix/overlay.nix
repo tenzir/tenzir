@@ -197,24 +197,29 @@ in {
       ../version.json
     ];
   };
-  vast =
-    (final.callPackage ./vast {
-      inherit stdenv versionShortOverride versionLongOverride;
-    })
-    .overrideAttrs (old: {
-      # https://github.com/NixOS/nixpkgs/issues/130963
-      NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
-    });
-  vast-ce = final.vast.withPlugins (ps: [
-    ps.matcher
-    ps.netflow
-  ]);
-  vast-full = final.vast.withPlugins (ps: [
-    ps.compaction
-    #ps.inventory
-    ps.matcher
-    ps.netflow
-  ]);
+  vast = final.callPackage ./vast {
+    inherit stdenv versionShortOverride versionLongOverride;
+  };
+  vast-ce = let
+    pkg = final.vast.override {
+      pname = "vast-ce";
+    };
+  in
+    pkg.withPlugins (ps: [
+      ps.matcher
+      ps.netflow
+    ]);
+  vast-full = let
+    pkg = final.vast.override {
+      pname = "vast-full";
+    };
+  in
+    pkg.withPlugins (ps: [
+      ps.compaction
+      #ps.inventory
+      ps.matcher
+      ps.netflow
+    ]);
   vast-integration-test-deps = let
     py3 = prev.python3.withPackages (ps:
       with ps; [

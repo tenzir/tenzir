@@ -4,6 +4,7 @@
     lib,
     stdenv,
     callPackage,
+    pname ? "vast",
     vast-source,
     cmake,
     cmake-format,
@@ -72,7 +73,7 @@
       ++ extraPlugins;
   in
     stdenv.mkDerivation ({
-        pname = "vast";
+        inherit pname;
         version = versionLong;
         src = vast-source;
 
@@ -131,7 +132,7 @@
             "-DBUILD_SHARED_LIBS:BOOL=OFF"
             "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCPACK_GENERATOR=TGZ;DEB"
-            "-DCPACK_PACKAGE_NAME=vast"
+            "-DCPACK_PACKAGE_NAME=${pname}"
             "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DVAST_PACKAGE_FILE_NAME_SUFFIX=static"
           ]
