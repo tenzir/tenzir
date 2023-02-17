@@ -169,7 +169,6 @@ struct query_manager_state {
   caf::disposable ttl_disposable = {};
   caf::typed_response_promise<atom::done> promise = {};
   http_request request;
-  size_t shipped_events_count = 0;
   size_t limit = 0u;
   std::string response_body; // The current response to the GET endpoint
   std::deque<table_slice> slice_buffer;
@@ -256,7 +255,6 @@ struct query_manager_state {
     }
     out_iter = fmt::format_to(out_iter, "}}]}}\n");
     shippable_events_count -= written;
-    shipped_events_count += written;
     return result;
   }
 
