@@ -58,7 +58,7 @@ struct cell_evaluator<relational_operator::equal> {
   }
 
   static bool evaluate(view<pattern> lhs, std::string_view rhs) noexcept {
-    return lhs.match(rhs);
+    return materialize(lhs).match(rhs);
   }
 };
 
@@ -152,7 +152,7 @@ struct cell_evaluator<relational_operator::in> {
   }
 
   static bool evaluate(view<std::string> lhs, view<pattern> rhs) noexcept {
-    return rhs.search(lhs);
+    return materialize(rhs).search(lhs);
   }
 
   static bool evaluate(view<ip> lhs, view<subnet> rhs) noexcept {
@@ -286,7 +286,7 @@ struct column_evaluator<Op, string_type, view<pattern>> {
   static ids evaluate(string_type type, id offset, const arrow::Array& array,
                       view<pattern> rhs, const ids& selection) noexcept {
     ids result{};
-    auto re = rhs.generate_regex();
+    auto re = *materialize(rhs).make_regex();
     for (auto id : select(selection)) {
       VAST_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);

@@ -38,21 +38,6 @@ bool pattern_view::case_insensitive() const {
   return case_insensitive_;
 }
 
-std::regex pattern_view::generate_regex() const {
-  return std::regex{pattern_.begin(), pattern_.end(),
-                    case_insensitive_ ? std::regex_constants::ECMAScript
-                                          | std::regex_constants::icase
-                                      : std::regex_constants::ECMAScript};
-}
-
-bool pattern_view::match(std::string_view x) const {
-  return std::regex_match(x.begin(), x.end(), generate_regex());
-}
-
-bool pattern_view::search(std::string_view x) const {
-  return std::regex_search(x.begin(), x.end(), generate_regex());
-}
-
 bool operator==(pattern_view x, pattern_view y) noexcept {
   return x.string() == y.string();
 }
@@ -162,7 +147,7 @@ std::string materialize(std::string_view x) {
 }
 
 pattern materialize(pattern_view x) {
-  return pattern{std::string{x.string()}};
+  return pattern{std::string{x.string()}, x.case_insensitive()};
 }
 
 namespace {
@@ -310,7 +295,7 @@ struct contains_predicate {
 
   bool
   operator()(const view<std::string>& lhs, const view<pattern>& rhs) const {
-    return rhs.search(lhs);
+    return materialize(rhs).search(lhs);
   }
 
   bool operator()(const view<ip>& lhs, const view<subnet>& rhs) const {
