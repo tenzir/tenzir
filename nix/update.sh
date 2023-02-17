@@ -1,53 +1,38 @@
-#!/usr/bin/env nix-shell
-#!nix-shell -i bash -p coreutils git jq nix-prefetch-github nix-prefetch-git
+#!/usr/bin/env bash
 
-set -euo pipefail
+set -eu
 
 dir=$(dirname "$(readlink -f "$0")")
-toplevel=$(git -C "${dir}" rev-parse --show-toplevel)
+
+"${dir}"/update-plugins.sh
+
+command -v nix > /dev/null && {
+  echo "Updating with the local Nix installation..."
+  "${dir}/update-impl.sh"
+  exit $?
+}
+
+toplevel="$(git -C "${dir}" rev-parse --show-toplevel)"
 mainroot="$(git -C "${dir}" rev-parse --path-format=absolute --show-toplevel)"
+gitdir="$(git -C "${dir}" rev-parse --path-format=absolute --git-common-dir)"
+echo "toplevel = ${toplevel}"
+echo "mainroot = ${mainroot}"
+echo "gitdir = ${gitdir}"
 
-update-source-github() {
-  local _name="$1"
-  local _submodule="$2"
-  local _user="$3"
-  local _repo="$4"
-  local _path="${toplevel}/${_submodule}"
-  local _rev _version
-  _rev="$(git -C "${toplevel}" submodule status -- "${_submodule}" | cut -c2- | cut -d' ' -f 1)"
-  git -C "${toplevel}" submodule update --init "${_submodule}"
-  _version="$(git -C "${_path}" describe --tag)"
-
-  nix-prefetch-github --no-fetch-submodules --rev="${_rev}" "${_user}" "${_repo}" \
-    | jq --arg version "${_version}" '. + {$version}' \
-    > "${dir}/${_name}/source.json"
-}
-
-update-source() {
-  local _name="$1"
-  local _submodule="$2"
-  local _url
-  _url="$(git config --file "${mainroot}/.gitmodules" --get "submodule.${_submodule}.url")"
-  echo "updating ${_name} at ${_submodule} from ${_url}"
-
-  re="^((https?|ssh|git|ftps?):\/\/)?(([^\/@]+)@)?([^\/:]+)[\/:]([^\/:]+)\/(.+)\/?$"
-
-  if [[ "${_url}" =~ ${re} ]]; then
-    local _hostname=${BASH_REMATCH[5]}
-    local _user=${BASH_REMATCH[6]}
-    local _repo=${BASH_REMATCH[7]}
-
-    if [[ "${_hostname}" == "github.com" ]]; then
-      update-source-github "${_name}" "${_submodule}" "${_user}" "${_repo}"
-    else
-      >&2 echo "Updating submodules from ${_hostname} is not implemented"
-      exit 1
-    fi
+command -v docker > /dev/null && {
+  echo "Updating with with a nix docker container..."
+  if [ "$toplevel/.git" = "$gitdir" ]; then
+    docker run \
+      -v "${toplevel}:${toplevel}" \
+      nixos/nix "${toplevel}/nix/update-impl.sh"
   else
-    >&2 echo "Remote URLs of type ${_url} not implemented"
-    exit 1
+    docker run \
+      -v "${toplevel}:${toplevel}" \
+      -v "${gitdir}:${gitdir}" \
+      nixos/nix "${toplevel}/nix/update-impl.sh"
   fi
+  exit $?
 }
 
-update-source caf "libvast/aux/caf"
-update-source fast_float "libvast/aux/fast_float"
+echo "Error: This update script requires either nix or docker."
+exit 1

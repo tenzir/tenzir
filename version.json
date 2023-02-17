@@ -5,6 +5,11 @@
     "This value gets updated automatically by `scripts/prepare-release`."
   ],
   "vast-version-fallback": "2.4.1",
+  "vast-version-rev-count_COMMENT": [
+    "This value stores the ancestor count of the tagged commit, calculated",
+    "with `git rev-list --count`"
+  ],
+  "vast-version-rev-count": 14144,
   "vast-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",
