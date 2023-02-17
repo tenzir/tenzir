@@ -118,13 +118,17 @@ static auto const* SPEC_V0 = R"_(
                     type: object
                   description: |
                     The schemas referenced in the events section of the same
-                    reply, usint the same format as the `vast show schemas`
+                    reply, using the same format as the `vast show schemas`
                     command.
               example:
-                position: 20
                 events:
-                  - {"ts": "2009-11-18T22:11:04.011822", "uid": "iKxhjl8i1n3", "id.orig_h": "192.168.1.103"}
-                  - {"ts": "2009-11-18T22:13:38.992072", "uid": "wsB2v2jcIXa", "id.orig_h": "192.168.1.103"}
+                  - schema-ref: "foobarbaz"
+                    data: {"ts": "2009-11-18T22:11:04.011822", "uid": "iKxhjl8i1n3", "id": {"orig_h": "192.168.1.103"}}
+                  - schema-ref: "foobarbaz"
+                    data: {"ts": "2009-11-18T22:11:04.011822", "uid": "iKxhjl8i1n3", "id": {"orig_h": "192.168.1.103"}}
+                schemas:
+                  - schema-ref: "foobarbaz"
+                    definition: <type-definition>
       401:
         description: Not authenticated.
       422:
@@ -180,6 +184,10 @@ struct query_manager_state {
   std::optional<pipeline_executor> pipeline_executor_;
 
   void refresh_ttl() {
+    // Zero TTL = no TTL at all. This is a requirement for the unit tests, which
+    // use a deterministic clock that does not play well with the TTL.
+    if (ttl == duration::zero())
+      return;
     // Cancel the old TTL timeout one.
     if (ttl_disposable.valid()) {
       if (!ttl_disposable.disposed())

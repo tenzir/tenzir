@@ -252,14 +252,16 @@ struct query_fixture : public fixture {
     // doesn't get invalidated on emplace_back()
     auto& parser = parsers_.emplace_back();
     auto error = parser.parse(padded_string).get(doc);
-    REQUIRE(!error);
+    if (error)
+      FAIL("failed to parse '" << response_body << "'");
     return doc;
   }
 
   auto send_new_query(std::string query) {
     auto response = std::make_shared<test_response>();
-    auto request
-      = vast::http_request{.params = {{"query", query}}, .response = response};
+    auto request = vast::http_request{
+      .params = {{"query", query}, {"ttl", vast::duration::zero()}},
+      .response = response};
     self->send(handler, vast::atom::http_request_v,
                new_query_endpoint.endpoint_id, std::move(request));
     run();
