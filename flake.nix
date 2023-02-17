@@ -114,27 +114,27 @@
         apps.vast-full = flake-utils.lib.mkApp {drv = packages.vast-full;};
         apps.vast-full-static = flake-utils.lib.mkApp {drv = packages.vast-full-static;};
         apps.stream-vast-image = stream-image {
-          name = "vast";
+          name = "tenzir/vast";
           pkg = self.packages.${system}.vast;
         };
         apps.stream-vast-slim-image = stream-image {
-          name = "vast-slim";
+          name = "tenzir/vast-slim";
           pkg = self.packages.${system}.vast-static;
         };
         apps.stream-vast-ce-image = stream-image {
-          name = "vast-ce";
+          name = "tenzir/vast-ce";
           pkg = self.packages.${system}.vast-ce;
         };
         apps.stream-vast-ce-slim-image = stream-image {
-          name = "vast-ce-slim";
+          name = "tenzir/vast-ce-slim";
           pkg = self.packages.${system}.vast-ce-static;
         };
         apps.stream-vast-full-image = stream-image {
-          name = "vast-full";
+          name = "tenzir/vast-full";
           pkg = self.packages.${system}.vast-full;
         };
         apps.stream-vast-full-slim-image = stream-image {
-          name = "vast-full-slim";
+          name = "tenzir/vast-full-slim";
           pkg = self.packages.${system}.vast-full-static;
         };
         apps.default = apps.vast;
