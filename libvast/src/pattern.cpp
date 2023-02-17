@@ -29,19 +29,17 @@ pattern::pattern(std::string str, bool case_insensitive)
 }
 
 bool pattern::match(std::string_view str) const {
-  return std::regex_match(
-    str.begin(), str.end(),
-    std::regex{str_, case_insensitive_ ? std::regex_constants::ECMAScript
-                                           | std::regex_constants::icase
-                                       : std::regex_constants::ECMAScript});
+  return std::regex_match(str.begin(), str.end(), generate_regex());
 }
 
 bool pattern::search(std::string_view str) const {
-  return std::regex_search(
-    str.begin(), str.end(),
-    std::regex{str_, case_insensitive_ ? std::regex_constants::ECMAScript
-                                           | std::regex_constants::icase
-                                       : std::regex_constants::ECMAScript});
+  return std::regex_search(str.begin(), str.end(), generate_regex());
+}
+
+std::regex pattern::generate_regex() const {
+  return std::regex{str_, case_insensitive_ ? std::regex_constants::ECMAScript
+                                                | std::regex_constants::icase
+                                            : std::regex_constants::ECMAScript};
 }
 
 const std::string& pattern::string() const {

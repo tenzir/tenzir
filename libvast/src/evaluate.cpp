@@ -286,7 +286,7 @@ struct column_evaluator<Op, string_type, view<pattern>> {
   static ids evaluate(string_type type, id offset, const arrow::Array& array,
                       view<pattern> rhs, const ids& selection) noexcept {
     ids result{};
-    auto re = std::regex{std::string{rhs.string()}};
+    auto re = rhs.generate_regex();
     for (auto id : select(selection)) {
       VAST_ASSERT(id >= offset);
       const auto row = detail::narrow_cast<int64_t>(id - offset);

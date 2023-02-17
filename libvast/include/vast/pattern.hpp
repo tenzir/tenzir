@@ -10,6 +10,7 @@
 
 #include "vast/detail/operators.hpp"
 
+#include <regex>
 #include <string>
 
 namespace vast {
@@ -55,6 +56,10 @@ public:
   /// @param str The string to search.
   /// @returns `true` if the pattern matches inside *str*.
   [[nodiscard]] bool search(std::string_view str) const;
+
+  /// Generates a regular expression for searching and matching.
+  /// @returns an `std::regex` object or an `std::regex_error`.
+  [[nodiscard]] std::regex generate_regex() const;
 
   [[nodiscard]] const std::string& string() const;
 

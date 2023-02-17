@@ -284,7 +284,7 @@ caf::expected<void> validator::operator()(const predicate& p) {
   if (auto dat = caf::get_if<data>(&p.rhs))
     if (auto pat = caf::get_if<pattern>(dat))
       try {
-        [[maybe_unused]] auto r = std::regex{pat->string()};
+        [[maybe_unused]] auto r = pat->generate_regex();
       } catch (const std::regex_error& err) {
         return caf::make_error(
           ec::syntax_error, "failed to create regular expression from pattern",

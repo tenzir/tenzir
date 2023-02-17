@@ -34,22 +34,19 @@ std::string_view pattern_view::string() const {
   return pattern_;
 }
 
+std::regex pattern_view::generate_regex() const {
+  return std::regex{pattern_.begin(), pattern_.end(),
+                    case_insensitive_ ? std::regex_constants::ECMAScript
+                                          | std::regex_constants::icase
+                                      : std::regex_constants::ECMAScript};
+}
+
 bool pattern_view::match(std::string_view x) const {
-  return std::regex_match(x.begin(), x.end(),
-                          std::regex{pattern_.begin(), pattern_.end(),
-                                     case_insensitive_
-                                       ? std::regex_constants::ECMAScript
-                                           | std::regex_constants::icase
-                                       : std::regex_constants::ECMAScript});
+  return std::regex_match(x.begin(), x.end(), generate_regex());
 }
 
 bool pattern_view::search(std::string_view x) const {
-  return std::regex_search(x.begin(), x.end(),
-                           std::regex{pattern_.begin(), pattern_.end(),
-                                      case_insensitive_
-                                        ? std::regex_constants::ECMAScript
-                                            | std::regex_constants::icase
-                                        : std::regex_constants::ECMAScript});
+  return std::regex_search(x.begin(), x.end(), generate_regex());
 }
 
 bool operator==(pattern_view x, pattern_view y) noexcept {

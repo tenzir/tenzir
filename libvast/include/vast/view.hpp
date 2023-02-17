@@ -85,6 +85,7 @@ public:
   [[nodiscard]] bool match(std::string_view x) const;
   [[nodiscard]] bool search(std::string_view x) const;
   [[nodiscard]] std::string_view string() const;
+  [[nodiscard]] std::regex generate_regex() const;
 
   template <class Hasher>
   friend void hash_append(Hasher& h, pattern_view x) {
