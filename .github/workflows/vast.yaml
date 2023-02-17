@@ -260,7 +260,7 @@ jobs:
       - name: Verify Nix sources are synchronized
         run: |
           nix/update.sh
-          git diff --quiet || { 
+          git diff --quiet || {
             echo "Some Nix source references are not aligned with the git submodules."
             echo "Please run `nix/update.sh` or apply the following diff directly:"
             git diff
@@ -355,7 +355,7 @@ jobs:
     needs:
       - configure
     if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
-    name: {{ matrix.docker-vast.job-name }} (Docker)
+    name: ${{ matrix.docker-vast.job-name }} (Docker)
     runs-on: ubuntu-20.04
     strategy:
       matrix:
