@@ -10,6 +10,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/data.hpp"
+#include "vast/error.hpp"
 #include "vast/pattern.hpp"
 
 #include <regex>
@@ -24,19 +25,38 @@ pattern pattern::glob(std::string_view str) {
   return pattern{std::regex_replace(rx, std::regex("\\?"), ".")};
 }
 
-pattern::pattern(std::string str) : str_(std::move(str)) {
+pattern::pattern(std::string str, bool case_insensitive)
+  : str_(std::move(str)), case_insensitive_(case_insensitive) {
 }
 
 bool pattern::match(std::string_view str) const {
-  return std::regex_match(str.begin(), str.end(), std::regex{str_});
+  return std::regex_match(str.begin(), str.end(), *make_regex());
 }
 
 bool pattern::search(std::string_view str) const {
-  return std::regex_search(str.begin(), str.end(), std::regex{str_});
+  return std::regex_search(str.begin(), str.end(), *make_regex());
+}
+
+caf::expected<std::regex> pattern::make_regex() const {
+  try {
+    return std::regex{str_, case_insensitive_
+                              ? std::regex_constants::ECMAScript
+                                  | std::regex_constants::icase
+                              : std::regex_constants::ECMAScript};
+  } catch (const std::regex_error& err) {
+    return caf::make_error(ec::syntax_error,
+                           fmt::format("exception when creating regular "
+                                       "expression: {}",
+                                       err.what()));
+  }
 }
 
 const std::string& pattern::string() const {
   return str_;
+}
+
+bool pattern::case_insensitive() const {
+  return case_insensitive_;
 }
 
 pattern& pattern::operator+=(const pattern& other) {
@@ -73,11 +93,11 @@ pattern& pattern::operator&=(std::string_view other) {
 }
 
 pattern operator+(const pattern& x, std::string_view y) {
-  return pattern{x.string() + std::string{y}};
+  return pattern{x.string() + std::string{y}, x.case_insensitive()};
 }
 
 pattern operator+(std::string_view x, const pattern& y) {
-  return pattern{std::string{x} + y.string()};
+  return pattern{std::string{x} + y.string(), y.case_insensitive()};
 }
 
 pattern operator|(const pattern& x, std::string_view y) {

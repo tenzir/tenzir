@@ -45,9 +45,7 @@ using view = typename view_trait<T>::type;
   struct view_trait<type_name> {                                               \
     using type = type_name;                                                    \
   };                                                                           \
-  inline type_name materialize(view<type_name> x) {                            \
-    return x;                                                                  \
-  }
+  inline type_name materialize(view<type_name> x) { return x; }
 
 VAST_VIEW_TRAIT(bool)
 VAST_VIEW_TRAIT(int64_t)
@@ -80,11 +78,10 @@ public:
 
   explicit pattern_view(const pattern& x);
 
-  explicit pattern_view(std::string_view str);
+  explicit pattern_view(std::string_view str, bool case_insensitive = false);
 
-  [[nodiscard]] bool match(std::string_view x) const;
-  [[nodiscard]] bool search(std::string_view x) const;
   [[nodiscard]] std::string_view string() const;
+  [[nodiscard]] bool case_insensitive() const;
 
   template <class Hasher>
   friend void hash_append(Hasher& h, pattern_view x) {
@@ -93,6 +90,7 @@ public:
 
 private:
   std::string_view pattern_;
+  bool case_insensitive_;
 };
 
 /// @relates pattern_view

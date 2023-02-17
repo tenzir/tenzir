@@ -10,6 +10,7 @@
 
 #include "vast/detail/operators.hpp"
 
+#include <regex>
 #include <string>
 
 namespace vast {
@@ -25,6 +26,9 @@ class pattern : detail::totally_ordered<pattern>,
   friend access;
 
 public:
+  /// optional flag to make a pattern string case-insensitive.
+  static inline auto constexpr case_insensitive_flag = 'i';
+
   /// Constructs a pattern from a glob expression. A glob expression consists
   /// of the following elements:
   ///
@@ -41,7 +45,7 @@ public:
 
   /// Constructs a pattern from a string.
   /// @param str The string containing the pattern.
-  explicit pattern(std::string str);
+  explicit pattern(std::string str, bool case_insensitive = false);
 
   /// Matches a string against the pattern.
   /// @param str The string to match.
@@ -53,7 +57,13 @@ public:
   /// @returns `true` if the pattern matches inside *str*.
   [[nodiscard]] bool search(std::string_view str) const;
 
+  /// Generates a regular expression for searching and matching.
+  /// @returns an `std::regex` object or a `caf::error`.
+  [[nodiscard]] caf::expected<std::regex> make_regex() const;
+
   [[nodiscard]] const std::string& string() const;
+
+  [[nodiscard]] bool case_insensitive() const;
 
   // -- concepts // ------------------------------------------------------------
 
@@ -90,6 +100,7 @@ public:
 
 private:
   std::string str_;
+  bool case_insensitive_;
 };
 
 } // namespace vast
