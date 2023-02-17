@@ -320,10 +320,10 @@ pack_full(const active_partition_state::serialization_data& x,
 }
 
 active_partition_actor::behavior_type active_partition(
-  active_partition_actor::stateful_pointer<active_partition_state> self, type schema,
-  uuid id, accountant_actor accountant, filesystem_actor filesystem,
-  caf::settings index_opts, const index_config& synopsis_opts,
-  const store_actor_plugin* store_plugin,
+  active_partition_actor::stateful_pointer<active_partition_state> self,
+  type schema, uuid id, accountant_actor accountant,
+  filesystem_actor filesystem, caf::settings index_opts,
+  const index_config& synopsis_opts, const store_actor_plugin* store_plugin,
   std::shared_ptr<vast::taxonomies> taxonomies) {
   VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
                    VAST_ARG(id));
