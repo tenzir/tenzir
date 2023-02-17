@@ -196,11 +196,10 @@ struct query_manager_state {
 
   std::string create_response() {
     auto printer = json_printer{{.oneline = true}};
-    auto result = std::string{};
+    auto result = std::string{"{\"events\":["};
     auto out_iter = std::back_inserter(result);
     auto seen_schemas = std::unordered_set<type>{};
     auto written = size_t{0};
-    out_iter = fmt::format_to(out_iter, "{{\"events\":[");
     // write slices
     auto it = processed_slices.begin();
     for (bool first = true; it != processed_slices.end(); ++it) {
