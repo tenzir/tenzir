@@ -24,7 +24,12 @@ echo "Extracting plugin versions..."
     # Extract the plugin version from CMakeLists.txt.
     # TODO: Remove this and only store the plugin names when we no longer print
     # plugin versions in `vast version`.
-    version="$(sed -n 's|[^(]VERSION\s\+\([0-9A-Za-z\.-_]\+\)$|\1|p' "$cm" | tr -d '[:space:]')"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      SED=gsed
+    else
+      SED=sed
+    fi
+    version="$("${SED}" -n 's|[^(]VERSION\s\+\([0-9A-Za-z\.-_]\+\)$|\1|p' "$cm" | tr -d '[:space:]')"
     echo "plugin = $plugin, version = $version" >&2
     echo "  $plugin = \"$version\";"
   done
