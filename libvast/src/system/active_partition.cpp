@@ -321,9 +321,9 @@ pack_full(const active_partition_state::serialization_data& x,
 
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  uuid id, accountant_actor accountant, filesystem_actor filesystem,
-  caf::settings index_opts, const index_config& synopsis_opts,
-  const store_actor_plugin* store_plugin,
+  type schema, uuid id, accountant_actor accountant,
+  filesystem_actor filesystem, caf::settings index_opts,
+  const index_config& synopsis_opts, const store_actor_plugin* store_plugin,
   std::shared_ptr<vast::taxonomies> taxonomies) {
   VAST_TRACE_SCOPE("active partition {} {}", VAST_ARG(self->id()),
                    VAST_ARG(id));
@@ -335,6 +335,7 @@ active_partition_actor::behavior_type active_partition(
   self->state.data.id = id;
   self->state.data.events = 0;
   self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
+  self->state.data.synopsis.unshared().schema = std::move(schema);
   self->state.partition_capacity
     = get_or(index_opts, "cardinality", defaults::system::max_partition_size);
   self->state.synopsis_index_config = synopsis_opts;
@@ -570,6 +571,9 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
+      if (!self->state.data.synopsis->schema)
+        return caf::make_error(ec::logic_error,
+                               "active partition must have a schema");
       auto rp = self->make_response_promise<uint64_t>();
       auto resolved = resolve(*self->state.taxonomies, query_context.expr,
                               self->state.data.synopsis->schema);
