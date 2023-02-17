@@ -34,6 +34,10 @@ std::string_view pattern_view::string() const {
   return pattern_;
 }
 
+bool pattern_view::case_insensitive() const {
+  return case_insensitive_;
+}
+
 std::regex pattern_view::generate_regex() const {
   return std::regex{pattern_.begin(), pattern_.end(),
                     case_insensitive_ ? std::regex_constants::ECMAScript
