@@ -193,6 +193,13 @@ request_dispatcher_actor::behavior_type request_dispatcher(
                 [&string_value](const string_type&) -> caf::expected<data> {
                   return data{string_value};
                 },
+                [&string_value](const bool_type&) -> caf::expected<data> {
+                  bool result = false;
+                  if (!parsers::boolean(string_value, result))
+                    return caf::make_error(ec::invalid_argument,
+                                           "not a boolean value");
+                  return data{result};
+                },
                 [&string_value]<basic_type Type>(
                   const Type&) -> caf::expected<data> {
                   using data_t = type_to_data_t<Type>;
@@ -211,7 +218,9 @@ request_dispatcher_actor::behavior_type request_dispatcher(
               leaf.field.type);
           if (!typed_value)
             return response->abort(
-              422, fmt::format("failed to parse parameter '{}'\n", name));
+              422, fmt::format("failed to parse parameter "
+                               "'{}' with value '{}': {}\n",
+                               name, string_value, typed_value.error()));
           params[name] = std::move(*typed_value);
         }
       }

@@ -258,7 +258,21 @@ paths:
             type: string
             example: :ip in 10.42.0.0/16 | head 100
           required: true
-          description: Query string.
+          description: "The query used, optionally including an open pipeline.\n"
+        - in: ttl
+          name: ttl
+          schema:
+            type: string
+            example: 5.0m
+          required: false
+          description: "The time after which a query is cancelled. Use the /query/:id/next\nendpoint to refresh the TTL. To refresh the TTL without requesting\nfurther events, request zero events.\n"
+        - in: expand
+          name: expand
+          schema:
+            type: bool
+            example: false
+          required: false
+          description: "Whether to use the expanded output schema.\n"
       responses:
         200:
           description: Success.
@@ -302,23 +316,33 @@ paths:
               schema:
                 type: object
                 properties:
-                  position:
-                    type: int64
-                    description: The total number of events that has been returned by previous calls to this endpoint.
                   events:
                     type: array
                     items:
                       type: object
-                    description: The returned events.
+                    description: "The returned events, including a schema-ref that uniquely\nidentifies the schema for each row.\n"
+                  schemas:
+                    type: array
+                    items:
+                      type: object
+                    description: "The schemas referenced in the events section of the same\nreply, using the same format as the `vast show schemas`\ncommand.\n"
                 example:
-                  position: 20
                   events:
-                    - ts: 2009-11-18T22:11:04.011822
-                      uid: iKxhjl8i1n3
-                      id.orig_h: 192.168.1.103
-                    - ts: 2009-11-18T22:13:38.992072
-                      uid: wsB2v2jcIXa
-                      id.orig_h: 192.168.1.103
+                    - schema-ref: foobarbaz
+                      data:
+                        ts: 2009-11-18T22:11:04.011822
+                        uid: iKxhjl8i1n3
+                        id:
+                          orig_h: 192.168.1.103
+                    - schema-ref: foobarbaz
+                      data:
+                        ts: 2009-11-18T22:11:04.011822
+                        uid: iKxhjl8i1n3
+                        id:
+                          orig_h: 192.168.1.103
+                  schemas:
+                    - schema-ref: foobarbaz
+                      definition: <type-definition>
         401:
           description: Not authenticated.
         422:
