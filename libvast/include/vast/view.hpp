@@ -78,7 +78,7 @@ class pattern_view : detail::totally_ordered<pattern_view> {
 public:
   static pattern glob(std::string_view x);
 
-  explicit pattern_view(const pattern& x, bool case_insensitive = false);
+  explicit pattern_view(const pattern& x);
 
   explicit pattern_view(std::string_view str, bool case_insensitive = false);
 

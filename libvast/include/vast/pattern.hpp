@@ -58,6 +58,8 @@ public:
 
   [[nodiscard]] const std::string& string() const;
 
+  [[nodiscard]] bool case_insensitive() const;
+
   // -- concepts // ------------------------------------------------------------
 
   pattern& operator+=(const pattern& other);

@@ -20,8 +20,8 @@ namespace vast {
 
 // -- pattern_view ------------------------------------------------------------
 
-pattern_view::pattern_view(const pattern& x, bool case_insensitive)
-  : pattern_{x.string()}, case_insensitive_{case_insensitive} {
+pattern_view::pattern_view(const pattern& x)
+  : pattern_{x.string()}, case_insensitive_{x.case_insensitive()} {
   // nop
 }
 

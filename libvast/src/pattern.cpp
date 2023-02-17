@@ -48,6 +48,10 @@ const std::string& pattern::string() const {
   return str_;
 }
 
+bool pattern::case_insensitive() const {
+  return case_insensitive_;
+}
+
 pattern& pattern::operator+=(const pattern& other) {
   return *this += std::string_view{other.str_};
 }
