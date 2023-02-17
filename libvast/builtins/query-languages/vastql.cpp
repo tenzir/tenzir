@@ -43,7 +43,8 @@ class plugin final : public virtual query_language_plugin {
     auto parsed_expr = expression{};
     const auto optional_ws = ignore(*space);
     bool has_expr = true;
-    if (!expr(f, l, parsed_expr)) {
+    const auto expr_parser = optional_ws >> expr;
+    if (!expr_parser(f, l, parsed_expr)) {
       VAST_DEBUG("failed to parse expr from '{}'", query);
       parsed_expr = match_everything;
       has_expr = false;
