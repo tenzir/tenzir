@@ -160,7 +160,7 @@ constexpr auto BATCH_SIZE = uint32_t{1};
 struct query_manager_state {
   query_manager_state() = default;
 
-  static constexpr auto name = "query_manager";
+  static constexpr auto name = "query-manager";
 
   query_manager_actor::pointer self;
   system::index_actor index = {};
@@ -293,7 +293,7 @@ struct query_manager_state {
 struct request_multiplexer_state {
   request_multiplexer_state() = default;
 
-  static constexpr auto name = "request_multiplexer";
+  static constexpr auto name = "request-multiplexer";
 
   system::index_actor index_ = {};
   std::unordered_map<std::string, query_manager_actor> live_queries_ = {};
