@@ -258,7 +258,21 @@ paths:
             type: string
             example: :ip in 10.42.0.0/16 | head 100
           required: true
-          description: Query string.
+          description: "The query used, optionally including an open pipeline.\n"
+        - in: ttl
+          name: ttl
+          schema:
+            type: string
+            example: 5.0m
+          required: false
+          description: "The time after which a query is cancelled. Use the /query/:id/next\nendpoint to refresh the TTL. To refresh the TTL without requesting\nfurther events, request zero events.\n"
+        - in: expand
+          name: expand
+          schema:
+            type: bool
+            example: false
+          required: false
+          description: "Whether to use the expanded output schema.\n"
       responses:
         200:
           description: Success.
@@ -302,14 +316,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  position:
-                    type: int64
-                    description: The total number of events that has been returned by previous calls to this endpoint.
                   events:
                     type: array
                     items:
                       type: object
-                    description: The returned events.
+                    description: "The returned events, including a schema-ref that uniquely\nidentifies the schema for each row.\n"
+                  schemas:
+                    type: array
+                    items:
+                      type: object
+                    description: "The schemas referenced in the events section of the same\nreply, usint the same format as the `vast show schemas`\ncommand.\n"
                 example:
                   position: 20
                   events:

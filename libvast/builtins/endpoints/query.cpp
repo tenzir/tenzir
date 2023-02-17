@@ -41,7 +41,26 @@ static auto const* SPEC_V0 = R"_(
           type: string
           example: ":ip in 10.42.0.0/16 | head 100"
         required: true
-        description: Query string.
+        description: |
+          The query used, optionally including an open pipeline.
+      - in: ttl
+        name: ttl
+        schema:
+          type: string
+          example: "5 minutes"
+        required: false
+        description: |
+          The time after which a query is cancelled. Use the /query/:id/next
+          endpoint to refresh the TTL. To refresh the TTL without requesting
+          further events, request zero events.
+      - in: expand
+        name: expand
+        schema:
+          type: bool
+          example: false
+        required: false
+        description: |
+          Whether to use the expanded output schema.
     responses:
       200:
         description: Success.
@@ -86,14 +105,21 @@ static auto const* SPEC_V0 = R"_(
             schema:
               type: object
               properties:
-                position:
-                  type: int64
-                  description: The total number of events that has been returned by previous calls to this endpoint.
                 events:
                   type: array
                   items:
                     type: object
-                  description: The returned events.
+                  description: |
+                    The returned events, including a schema-ref that uniquely
+                    identifies the schema for each row.
+                schemas:
+                  type: array
+                  items:
+                    type: object
+                  description: |
+                    The schemas referenced in the events section of the same
+                    reply, usint the same format as the `vast show schemas`
+                    command.
               example:
                 position: 20
                 events:
