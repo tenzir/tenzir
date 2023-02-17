@@ -8,6 +8,7 @@
 
 #include "vast/concept/parseable/vast/pattern.hpp"
 
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/pattern.hpp"
 #include "vast/pattern.hpp"
@@ -130,4 +131,15 @@ TEST(parseable) {
   CHECK_EQUAL(to_string(pat), "/foobar/");
   CHECK(pat.match("foobar"));
   CHECK(!pat.match("FOOBAR"));
+}
+
+TEST(to pattern) {
+  auto p1 = to<pattern>("/test/");
+  CHECK(p1);
+  CHECK_EQUAL(p1->string(), "test");
+  CHECK(!p1->case_insensitive());
+  auto p2 = to<pattern>("/test/i");
+  CHECK(p2);
+  CHECK_EQUAL(p2->string(), "test");
+  CHECK(p2->case_insensitive());
 }
