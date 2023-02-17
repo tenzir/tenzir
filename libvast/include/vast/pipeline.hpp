@@ -39,7 +39,7 @@ public:
   void add_operator(std::unique_ptr<pipeline_operator> op);
 
   /// Returns true if any of the pipeline operators is aggregate.
-  [[nodiscard]] bool is_aggregate() const;
+  [[nodiscard]] bool is_blocking() const;
 
   /// Tests whether the transform applies to events of the given type.
   [[nodiscard]] bool applies_to(std::string_view event_name) const;
@@ -91,21 +91,9 @@ private:
 
 class pipeline_executor {
 public:
-  /// Controls the validation of the pipelines Engine.
-  enum class allow_aggregate_pipelines {
-    yes, /// Allows the usage of aggregate pipeline operators.
-    no,  /// Forbids using aggregate pipeline operators.
-  };
-
-  // member functions
-
   /// Constructor.
   pipeline_executor() = default;
   explicit pipeline_executor(std::vector<pipeline>&&);
-
-  /// Returns an error if any of the pipelines is an aggregate and
-  /// aggregates are not allowed.
-  caf::error validate(enum allow_aggregate_pipelines);
 
   /// Starts applying relevant pipelines to the table.
   caf::error add(table_slice&&);
@@ -115,7 +103,10 @@ public:
   caf::expected<std::vector<table_slice>> finish();
 
   /// Get a list of the pipelines.
-  const std::vector<pipeline>& pipelines();
+  const std::vector<pipeline>& pipelines() const;
+
+  /// Returns whether any of the contained pipelines is blocking.
+  bool is_blocking() const;
 
 private:
   static caf::error

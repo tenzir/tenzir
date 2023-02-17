@@ -665,18 +665,4 @@ TEST(pipeline executor - multiple matching pipelines) {
     caf::get<vast::record_type>((*transformed)[0].schema()).num_fields(), 1ull);
 }
 
-TEST(pipeline executor - aggregate validation pipelines) {
-  std::vector<vast::pipeline> pipelines;
-  pipelines.emplace_back("t", std::vector<std::string>{"testdata"});
-  pipelines.at(0).add_operator(
-    unbox(vast::make_pipeline_operator("summarize", {{"group-by", {"foo"}}})));
-  vast::pipeline_executor executor(std::move(pipelines));
-  auto validation1 = executor.validate(
-    vast::pipeline_executor::allow_aggregate_pipelines::yes);
-  CHECK_SUCCESS(validation1);
-  auto validation2
-    = executor.validate(vast::pipeline_executor::allow_aggregate_pipelines::no);
-  CHECK_FAILURE(validation2);
-}
-
 FIXTURE_SCOPE_END()

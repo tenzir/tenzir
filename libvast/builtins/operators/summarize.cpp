@@ -660,9 +660,7 @@ public:
   }
 
 private:
-  /// Signal that the summarize operator aggregates, i.e., may return a
-  /// different number of events than it received.
-  [[nodiscard]] bool is_aggregate() const override {
+  [[nodiscard]] bool is_blocking() const override {
     return true;
   }
 
