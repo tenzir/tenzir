@@ -89,11 +89,12 @@ struct exporter_state {
 /// @param self The actor handle of the exporter.
 /// @param expr The AST of the query.
 /// @param options The query options.
+/// @param taste_size The number of partitions to probe for the initial taste.
 /// @param pipelines The applied pipelines.
 /// @param index The index actor.
 exporter_actor::behavior_type
 exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
-         query_options options, std::vector<pipeline>&& pipelines,
-         index_actor index);
+         query_options options, uint32_t taste_size,
+         std::vector<pipeline>&& pipelines, index_actor index);
 
 } // namespace vast::system

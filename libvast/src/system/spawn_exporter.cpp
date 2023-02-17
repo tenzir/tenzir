@@ -62,10 +62,12 @@ spawn_exporter(node_actor::stateful_pointer<node_state> self,
   // Mark the query as low priority if explicitly requested.
   if (get_or(args.inv.options, "vast.export.low-priority", false))
     query_opts = query_opts + low_priority;
+  auto taste_size = get_or(args.inv.options, "vast.export.taste-size",
+                           defaults::export_::taste_size);
   auto [accountant, importer, index]
     = self->state.registry.find<accountant_actor, importer_actor, index_actor>();
-  auto handle = self->spawn(exporter, expr, query_opts, std::move(*pipelines),
-                            std::move(index));
+  auto handle = self->spawn(exporter, expr, query_opts, taste_size,
+                            std::move(*pipelines), std::move(index));
   VAST_VERBOSE("{} spawned an exporter for {}", *self, to_string(expr));
   // Wire the exporter to all components.
   if (accountant)

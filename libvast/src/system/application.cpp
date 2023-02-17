@@ -67,6 +67,8 @@ auto make_export_command() {
       // doesnt' affect the formatted output.
       //.add<bool>("preserve-ids", "don't substitute taxonomy identifiers")
       .add<int64_t>("max-events,n", "maximum number of results")
+      .add<int64_t>("taste-size",
+                    "number of partitions in the first eval batch")
       .add<std::string>("read,r", "path for reading the query")
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));

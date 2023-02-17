@@ -83,6 +83,9 @@ inline constexpr std::string_view read = "-";
 /// Maximum number of results.
 inline constexpr size_t max_events = 0;
 
+/// Number of paritions to include in the first eval batch.
+inline constexpr uint32_t taste_size = 5;
+
 /// Path for writing query results or `-` for writing to STDOUT.
 inline constexpr std::string_view write = "-";
 

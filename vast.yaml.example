@@ -247,6 +247,9 @@ vast:
     # The maximum number of events to export.
     #max-events: <infinity>
 
+    # The number of partitions in the first eval batch.
+    #taste-size: 5
+
     # Path for reading the query or "-" for reading from stdin.
     # Note: Setting this option in the config file creates a conflict with
     # `vast export` with a positional query argument. This option is only
