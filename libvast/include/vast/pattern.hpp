@@ -58,8 +58,8 @@ public:
   [[nodiscard]] bool search(std::string_view str) const;
 
   /// Generates a regular expression for searching and matching.
-  /// @returns an `std::regex` object or an `std::regex_error`.
-  [[nodiscard]] std::regex generate_regex() const;
+  /// @returns an `std::regex` object or a `caf::error`.
+  [[nodiscard]] caf::expected<std::regex> make_regex() const;
 
   [[nodiscard]] const std::string& string() const;
 

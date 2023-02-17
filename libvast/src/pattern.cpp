@@ -10,6 +10,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/data.hpp"
+#include "vast/error.hpp"
 #include "vast/pattern.hpp"
 
 #include <regex>
@@ -29,17 +30,25 @@ pattern::pattern(std::string str, bool case_insensitive)
 }
 
 bool pattern::match(std::string_view str) const {
-  return std::regex_match(str.begin(), str.end(), generate_regex());
+  return std::regex_match(str.begin(), str.end(), *make_regex());
 }
 
 bool pattern::search(std::string_view str) const {
-  return std::regex_search(str.begin(), str.end(), generate_regex());
+  return std::regex_search(str.begin(), str.end(), *make_regex());
 }
 
-std::regex pattern::generate_regex() const {
-  return std::regex{str_, case_insensitive_ ? std::regex_constants::ECMAScript
-                                                | std::regex_constants::icase
-                                            : std::regex_constants::ECMAScript};
+caf::expected<std::regex> pattern::make_regex() const {
+  try {
+    return std::regex{str_, case_insensitive_
+                              ? std::regex_constants::ECMAScript
+                                  | std::regex_constants::icase
+                              : std::regex_constants::ECMAScript};
+  } catch (const std::regex_error& err) {
+    return caf::make_error(ec::syntax_error,
+                           fmt::format("exception when creating regular "
+                                       "expression: {}",
+                                       err.what()));
+  }
 }
 
 const std::string& pattern::string() const {
