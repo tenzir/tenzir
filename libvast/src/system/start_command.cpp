@@ -89,16 +89,27 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   if (!node_opt)
     return caf::make_message(std::move(node_opt.error()));
   auto const& node = node_opt->get();
+  // FIXME: Encapsulate this logic into a `fleet-client` plugin
+  if (!sys.has_openssl_manager()) {
+    return caf::make_message(caf::make_error(
+      ec::invalid_argument, "need valid tls credentials to connect to fleet"));
+  }
+  auto is_fleet_manager
+    = caf::get_or(inv.options, "vast.fleet.is-manager-node", false);
   // Publish our node.
   auto const* host = node_endpoint.host.empty()
                        ? defaults::system::endpoint_host.data()
                        : node_endpoint.host.c_str();
   auto publish = [&]() -> caf::expected<uint16_t> {
     const auto reuse_address = true;
-    // if (sys.has_openssl_manager()) {
-    //   return caf::openssl::publish(node, node_endpoint.port->number(), host,
-    //                                reuse_address);
-    // }
+    // The manager node only and always requires TLS connections, the
+    // non-manager nodes always publish the non-TLS endpoints (so that
+    // client commands can connect normally) and use TLS only when
+    // connecting to the manager.
+    if (is_fleet_manager) {
+      return caf::openssl::publish(node, node_endpoint.port->number(), host,
+                                   reuse_address);
+    }
     auto& mm = sys.middleman();
     return mm.publish(node, node_endpoint.port->number(), host, reuse_address);
   };
@@ -125,9 +136,19 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
       commands.push_back(*command);
   }
   // ---
-  auto node2_opts = caf::settings{};
-  caf::put(node2_opts, "vast.endpoint", "tenant-a.fleet.tenzir.net");
-  auto node2 = connect_to_node(self, node2_opts);
+  auto node2 = caf::expected<node_actor>{caf::none};
+  if (!is_fleet_manager) {
+    auto const* manager_url
+      = caf::get_if<std::string>(&inv.options, "vast.fleet.manager-url");
+    if (manager_url == nullptr)
+      return caf::make_message(
+        caf::make_error(ec::invalid_argument, "missing manager url"));
+    auto node2_opts = caf::settings{};
+    caf::put(node2_opts, "vast.endpoint", *manager_url);
+    node2 = connect_to_node(self, node2_opts);
+    if (node2)
+      VAST_INFO("connected to node {}", *node2);
+  }
   // ---
   std::vector<command_runner_actor> command_runners;
   if (!commands.empty()) {

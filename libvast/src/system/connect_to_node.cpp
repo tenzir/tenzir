@@ -98,6 +98,15 @@ std::optional<caf::timespan> get_retry_delay(const caf::settings& settings) {
   return retry_delay;
 }
 
+// FIXME: Make this more generic and/or move into a plugin
+std::vector<std::string> get_tls_destinations(const caf::settings& settings) {
+  auto result = std::vector<std::string>{};
+  if (auto const* url
+      = caf::get_if<std::string>(&settings, "vast.fleet.manager-url"))
+    result.push_back(*url);
+  return result;
+}
+
 } // namespace
 
 caf::expected<node_actor>
@@ -108,7 +117,8 @@ connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
     return std::move(node_endpoint.error());
   auto timeout = node_connection_timeout(opts);
   auto connector_actor
-    = self->spawn(connector, get_retry_delay(opts), get_deadline(timeout));
+    = self->spawn(connector, get_retry_delay(opts), get_deadline(timeout),
+                  get_tls_destinations(opts));
   auto result = caf::expected<node_actor>{caf::error{}};
   self
     ->request(connector_actor, caf::infinite, atom::connect_v,

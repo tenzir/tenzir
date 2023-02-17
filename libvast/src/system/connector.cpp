@@ -185,16 +185,20 @@ connector_actor::behavior_type make_no_retry_behavior(
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
-          std::optional<std::chrono::steady_clock::time_point> deadline) {
-
+          std::optional<std::chrono::steady_clock::time_point> deadline,
+          std::vector<std::string> tls_whitelist) {
   if (!retry_delay)
     return make_no_retry_behavior(std::move(self), deadline);
+  if (!tls_whitelist.empty())
+    VAST_ASSERT(self->system().has_openssl_manager()); // FIXME
   return {
-    [self, delay = *retry_delay, deadline](
+    [self, delay = *retry_delay, deadline, tls_whitelist](
       atom::connect, connect_request request) -> caf::result<node_actor> {
-      auto middleman = request.host == "tenant-a.fleet.tenzir.net"
-                         ? self->system().openssl_manager().actor_handle()
-                         : self->system().middleman().actor_handle();
+      auto middleman
+        = std::find(tls_whitelist.begin(), tls_whitelist.end(), request.host)
+              != tls_whitelist.end()
+            ? self->system().openssl_manager().actor_handle()
+            : self->system().middleman().actor_handle();
       const auto remaining_time = calculate_remaining_time(deadline);
       if (!remaining_time)
         return caf::make_error(ec::timeout,

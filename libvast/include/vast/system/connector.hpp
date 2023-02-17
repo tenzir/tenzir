@@ -34,6 +34,7 @@ struct connector_state {
 connector_actor::behavior_type
 connector(connector_actor::stateful_pointer<connector_state> self,
           std::optional<caf::timespan> retry_delay,
-          std::optional<std::chrono::steady_clock::time_point> deadline);
+          std::optional<std::chrono::steady_clock::time_point> deadline,
+          std::vector<std::string> tls_whitelist);
 
 } // namespace vast::system
