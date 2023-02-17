@@ -71,6 +71,35 @@ TEST(composition) {
   CHECK(!foo_and_bar.match("bar"));
 }
 
+TEST(composition with case insensitivity) {
+  auto foo = pattern{"foo", true};
+  auto bar = pattern{"bar"};
+  auto comp = foo + bar;
+  CHECK(comp.case_insensitive());
+  comp = bar + foo;
+  CHECK(!comp.case_insensitive());
+  comp = foo | bar;
+  CHECK(comp.case_insensitive());
+  comp = bar | foo;
+  CHECK(!comp.case_insensitive());
+  comp = foo & bar;
+  CHECK(comp.case_insensitive());
+  comp = bar & foo;
+  CHECK(!comp.case_insensitive());
+  comp = bar + "str";
+  CHECK(!comp.case_insensitive());
+  comp = "str" + bar;
+  CHECK(!comp.case_insensitive());
+  comp = foo + "str";
+  CHECK(comp.case_insensitive());
+  comp = "str" + foo;
+  CHECK(comp.case_insensitive());
+  foo += bar;
+  CHECK(foo.case_insensitive());
+  bar += foo;
+  CHECK(!bar.case_insensitive());
+}
+
 TEST(case insensitive) {
   auto pat = pattern("bar", true);
   CHECK(pat.search("bar"));

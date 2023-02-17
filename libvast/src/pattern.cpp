@@ -86,11 +86,11 @@ pattern& pattern::operator&=(std::string_view other) {
 }
 
 pattern operator+(const pattern& x, std::string_view y) {
-  return pattern{x.string() + std::string{y}};
+  return pattern{x.string() + std::string{y}, x.case_insensitive()};
 }
 
 pattern operator+(std::string_view x, const pattern& y) {
-  return pattern{std::string{x} + y.string()};
+  return pattern{std::string{x} + y.string(), y.case_insensitive()};
 }
 
 pattern operator|(const pattern& x, std::string_view y) {
