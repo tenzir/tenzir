@@ -458,7 +458,6 @@ jobs:
           images=('tenzir/${{ matrix.docker-vast.name }}')
           if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
             images+=('tenzir/${{ matrix.docker-vast.name }}-dev' 'tenzir/${{ matrix.docker-vast.name }}-deps')
-          else
           fi
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
