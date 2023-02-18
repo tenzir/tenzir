@@ -89,13 +89,20 @@ The pipeline performs the following steps:
 5. Take the top-20 items
 6. Write the output as JSON to standard output
 
-When [executing a pipeline](/docs/use/export) with the `vast` binary via the
-`export` command, source and sink operators are implicit. This means you would
-execute the pipeline as follows:
+:::caution Running closed pipelines
+We do not support running closed pipelines yet, but aim to ship this ability
+soon. The corresponding [roadmap
+item](https://github.com/tenzir/public-roadmap/issues/18) tracks the progress
+publicly.
+
+Until then, it is only possible to run an open pipelines. When using the `vast`
+binary, source and sink operators are implicit. You can [run an open
+pipeline](/docs/use/export) with the `export` command as follows:
 
 ```bash
 vast export json 'where ... | ... | head 20'
 ```
+:::
 
 ### Expressions
 
