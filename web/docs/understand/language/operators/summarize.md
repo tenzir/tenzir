@@ -37,7 +37,7 @@ The following aggregation functions are available:
 ### Grouping
 
 The `group-by` option specifies a list of
-[extractors](/docs/understand/query-language/expressions#extractors) that
+[extractors](/docs/understand/language/expressions#extractors) that
 should form a group. VAST internally calculates the combined hash for all
 extractors for every row and puts the data into buckets for subsequent
 aggregation.

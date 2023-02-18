@@ -19,7 +19,7 @@ paths:
   /export:
     get:
       summary: Export data
-      description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
+      description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/language)
       parameters:
         - in: query
           name: query
@@ -90,7 +90,7 @@ paths:
           description: Invalid query string or invalid limit.
     post:
       summary: Export data
-      description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language) followed by an optional pipeline string.
+      description: Export data from VAST according to a query. The query must be a valid expression in the VAST Language (see https://vast.io/docs/understand/query), followed by an optional pipeline.
       requestBody:
         description: Request parameters
         required: false
@@ -153,7 +153,7 @@ paths:
   /export/with-schemas:
     post:
       summary: Export data with schema information
-      description: "Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language) The data is returned grouped by schema.\n"
+      description: "Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/language) The data is returned grouped by schema.\n"
       requestBody:
         description: Request parameters
         required: false

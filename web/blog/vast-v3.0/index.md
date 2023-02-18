@@ -48,9 +48,9 @@ altogether in a future version. The new pipeline operators [`head`][head-op] and
 [`taste`][taste-op] have no YAML equivalent.
 :::
 
-[pipeline-doc]: /docs/understand/query-language/pipelines#define-a-pipeline
-[head-op]: /docs/understand/query-language/operators/head
-[taste-op]: /docs/understand/query-language/operators/taste
+[pipeline-doc]: /docs/understand/language/pipelines#define-a-pipeline
+[head-op]: /docs/understand/language/operators/head
+[taste-op]: /docs/understand/language/operators/taste
 
 ## VASTQL Upgrades
 

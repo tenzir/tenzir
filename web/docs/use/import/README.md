@@ -25,21 +25,21 @@ For example, to import a file in JSON, use the `json` format:
 vast import json < data.json
 ```
 
-## Discard events from a data source
+## Apply a pipeline during import
 
-To reduce the volume of a data source or to filter out unwanted content, you can
-provide a filter expression to the `import` command.
+You can apply a [pipeline](/docs/understand/language/pipelines) before sending
+data to VAST. This comes in handy to reduce data volume, perform reshaping, or
+apply some early aggregations.
 
-For example, you might want to import [Suricata EVE
-JSON](/docs/understand/formats/suricata), but skip over all `suricata.stats`
-events:
+For example, you could reduce a Suricata EVE JSON feed to just flow records:
 
 ```bash
-vast import suricata '#type != "suricata.stats"' < path/to/eve.json
-```
+vast import -r eve.json suricata 'src_ip in 10.0.0.0/8 
+  | select timestamp, flow_id, src_ip, dest_ip, src_port'
+````
 
-See the [query language documentation](/docs/understand/query-language/) to
-learn more about how to write filter expressions.
+See the [language documentation](/docs/understand/language/) to learn more about
+writing pipelines.
 
 ## Infer a schema automatically
 

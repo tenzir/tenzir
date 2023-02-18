@@ -20,7 +20,7 @@ ip,sn,str,rec.a,rec.b
 ```
 
 As with [JSON](json), CSV still requires explicit [selection of a
-schema](/docs/use/ingest/#map-events-to-schemas) via `--type` to understand the
+schema](/docs/use/import/#map-events-to-schemas) via `--type` to understand the
 field types corresponding the the column headers. Here's the corresponding
 schema:
 

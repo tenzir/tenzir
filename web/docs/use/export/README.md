@@ -1,4 +1,4 @@
-# Query
+# Export
 
 Querying data from VAST (aka *exporting*) involves spinning up a VAST client
 that executes a query expression. In the following, we assume that you [set up a
@@ -112,13 +112,12 @@ may print:
 The next section discusses how you can refer to various elements of this type
 schema.
 
-## Write a query expression
+## Begin with an expression
 
-We designed the [**VAST** **Q**uery **L**anguage
-(VASTQL)](/docs/understand/query-language) to make it easy to reference the data
-schema and put constraints on it. Specifically, VAST's expression language has
-the concept of
-[extractors](/docs/understand/query-language/expressions#extractors) that refer
+We designed the [VAST language](/docs/understand/language) to make it easy to
+reference the data schema and put constraints on it. Specifically, VAST's
+[expression language](/docs/understand/language/expressions) has the concept of
+[extractors](/docs/understand/language/expressions#extractors) that refer
 to various parts of the event structure. For example, you can query the above
 schemas with a *meta extractor* to select a specific set of event types:
 
@@ -160,8 +159,8 @@ above query as an example, you can also write:
 ```
 
 In fact, both predicates in this expression are what we call [value
-predicates](/docs/understand/query-language/expressions#value-predicates),
-making it possible to shorten this expression to:
+predicates](/docs/understand/language/expressions#value-predicates), making it
+possible to shorten this expression to:
 
 ```c
 "evil.com" || 10.0.0.0/8
@@ -198,6 +197,17 @@ been defined with. We defer to the [taxonomy documentation][taxonomies] for a
 more detailed discussion.
 
 [taxonomies]: /docs/understand/data-model/taxonomies
+
+## Apply a pipeline
+
+After providing a filter expression, you can optionally continue with a
+[pipeline](/docs/understand/language/pipelines).
+
+```cpp
+src_ip == 192.168.1.104
+| select timestamp, flow_id, src_ip, dest_ip, src_port
+| drop timestamp
+```
 
 ## Choose an export format
 
