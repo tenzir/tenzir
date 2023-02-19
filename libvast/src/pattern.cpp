@@ -14,30 +14,39 @@
 #include "vast/error.hpp"
 #include "vast/view.hpp"
 
-#include <regex>
+#include <re2/re2.h>
 
 namespace vast {
 
+struct regex_impl : re2::RE2 {
+  using RE2::RE2;
+};
+
 auto pattern::make(std::string str, bool case_insensitive) noexcept
   -> caf::expected<pattern> {
-  try {
-    auto mode = std::regex_constants::ECMAScript;
-    if (case_insensitive)
-      mode |= std::regex_constants::icase;
-    auto regex = std::regex{str, mode};
-    return pattern{std::move(str), case_insensitive, std::move(regex)};
-  } catch (const std::regex_error& err) {
+  auto opts = re2::RE2::Options(re2::RE2::CannedOptions::Quiet);
+  opts.set_case_sensitive(!case_insensitive);
+  auto regex = re2::RE2(str, opts);
+  auto result = pattern{};
+  result.str_ = std::move(str);
+  result.case_insensitive_ = case_insensitive;
+  result.regex_ = std::make_shared<regex_impl>(str, opts);
+  if (!result.regex_->ok())
     return caf::make_error(
-      ec::syntax_error, fmt::format("failed to create regex: {}", err.what()));
-  }
+      ec::syntax_error, fmt::format("failed to create regex from '{}'", str));
+  return result;
 }
 
 bool pattern::match(std::string_view str) const {
-  return std::regex_match(str.begin(), str.end(), regex_);
+  if (!regex_)
+    return false;
+  return re2::RE2::FullMatch(str, *regex_);
 }
 
 bool pattern::search(std::string_view str) const {
-  return std::regex_search(str.begin(), str.end(), regex_);
+  if (!regex_)
+    return false;
+  return re2::RE2::PartialMatch(str, *regex_);
 }
 
 const std::string& pattern::string() const {
@@ -64,13 +73,6 @@ bool operator==(const pattern& lhs, std::string_view rhs) noexcept {
 bool convert(const pattern& p, data& d) {
   d = to_string(p);
   return true;
-}
-
-pattern::pattern(std::string str, bool case_insensitive, std::regex regex)
-  : str_{std::move(str)},
-    case_insensitive_{case_insensitive},
-    regex_{std::move(regex)} {
-  // nop
 }
 
 } // namespace vast
