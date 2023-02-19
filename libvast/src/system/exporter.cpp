@@ -237,6 +237,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         : query_context::priority::normal;
   VAST_DEBUG("spawned exporter with {} pipelines", pipelines.size());
   self->state.pipeline = pipeline_executor{std::move(pipelines)};
+  // Always fetch all partitions for blocking pipelines.
+  if (self->state.pipeline.is_blocking())
+    self->state.query_context.taste = std::numeric_limits<uint32_t>::max();
   self->state.index = std::move(index);
   if (has_continuous_option(options)) {
     if (self->state.pipeline.is_blocking()) {

@@ -38,7 +38,7 @@ public:
 
   void add_operator(std::unique_ptr<pipeline_operator> op);
 
-  /// Returns true if any of the pipeline operators is aggregate.
+  /// Returns true if any of the pipeline operators is blocking.
   [[nodiscard]] bool is_blocking() const;
 
   /// Tests whether the transform applies to events of the given type.
