@@ -1,4 +1,4 @@
-# Ingest
+# Import
 
 Ingesting data to VAST (aka *importing*) involves spinning up a VAST client
 that parses and ships the data to a VAST server. In the following, we assume
