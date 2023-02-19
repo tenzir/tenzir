@@ -217,13 +217,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   });
   self->state.stage = make_importer_stage(self);
   self->state.executor = pipeline_executor{std::move(input_transformations)};
-  if (auto err = self->state.executor.validate(
-        pipeline_executor::allow_aggregate_pipelines::yes)) {
-    self->quit(caf::make_error(
-      ec::invalid_argument,
-      fmt::format("{} received an invalid pipeline: {}", *self, err)));
-    return importer_actor::behavior_type::make_empty_behavior();
-  }
   if (index) {
     self->state.index = std::move(index);
     self->state.stage->add_outbound_path(self->state.index);
