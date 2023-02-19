@@ -30,6 +30,7 @@ table String {
 
 table Pattern {
   value: string;
+  case_insensitive: bool;
 }
 
 struct IP {

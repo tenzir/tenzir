@@ -280,14 +280,6 @@ caf::expected<void> validator::operator()(const negation& n) {
 
 caf::expected<void> validator::operator()(const predicate& p) {
   op_ = p.op;
-  // If rhs is a pattern, validate early that it is a valid regular expression.
-  if (auto dat = caf::get_if<data>(&p.rhs))
-    if (auto pat = caf::get_if<pattern>(dat)) {
-      auto r = pat->make_regex();
-      if (!r) {
-        return r.error();
-      }
-    }
   return caf::visit(*this, p.lhs, p.rhs);
 }
 

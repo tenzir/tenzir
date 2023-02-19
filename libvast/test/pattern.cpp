@@ -14,94 +14,40 @@
 #include "vast/pattern.hpp"
 #include "vast/test/test.hpp"
 
+#include <caf/test/dsl.hpp>
+
 using namespace vast;
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
+#define MAKE_PATTERN(str) unbox(to<pattern>("/" str "/"))
+
 TEST(functionality) {
   std::string str = "1";
-  CHECK(pattern("[0-9]").match(str));
-  CHECK(!pattern("[^1]").match(str));
+  CHECK(MAKE_PATTERN("[0-9]").match(str));
+  CHECK(!MAKE_PATTERN("[^1]").match(str));
   str = "foobarbaz";
-  CHECK(pattern("bar").search(str));
-  CHECK(!pattern("bar").search("FOOBARBAZ"));
-  CHECK(!pattern("^bar$").search(str));
-  CHECK(pattern("^\\w{3}\\w{3}\\w{3}$").match(str));
-  CHECK(pattern::glob("foo*baz").match(str));
-  CHECK(pattern::glob("foo???baz").match(str));
-  CHECK(pattern::glob(str).match(str));
+  CHECK(MAKE_PATTERN("bar").search(str));
+  CHECK(!MAKE_PATTERN("bar").search("FOOBARBAZ"));
+  CHECK(!MAKE_PATTERN("^bar$").search(str));
+  CHECK(MAKE_PATTERN("^\\w{3}\\w{3}\\w{3}$").match(str));
   str = "Holla die Waldfee!";
-  pattern p{"\\w+ die Waldfe{2}."};
+  auto p = MAKE_PATTERN("\\w+ die Waldfe{2}.");
   CHECK(p.match(str));
   CHECK(p.search(str));
-  p = pattern("(\\w+ )");
+  p = MAKE_PATTERN("(\\w+ )");
   CHECK(!p.match(str));
   CHECK(p.search(str));
 }
 
 TEST(comparison with string) {
-  auto rx = pattern{"foo.*baz"};
+  auto rx = MAKE_PATTERN("foo.*baz");
   CHECK("foobarbaz"sv == rx);
   CHECK(rx == "foobarbaz"sv);
 }
 
-TEST(composition) {
-  auto foo = pattern{"foo"};
-  auto bar = pattern{"bar"};
-  auto foobar = "^" + foo + bar + "$";
-  CHECK(foobar.match("foobar"));
-  CHECK(!foobar.match("FOOBAR"));
-  CHECK(!foobar.match("fooBAR"));
-  CHECK(!foobar.match("FOObar"));
-  CHECK(!foobar.match("foo"));
-  CHECK(!foobar.match("bar"));
-  auto foo_or_bar = foo | bar;
-  CHECK(!foo_or_bar.match("foobar"));
-  CHECK(foo_or_bar.search("foobar"));
-  CHECK(foo_or_bar.match("foo"));
-  CHECK(foo_or_bar.match("bar"));
-  CHECK(!foo_or_bar.match("FOO"));
-  CHECK(!foo_or_bar.match("BAR"));
-  auto foo_and_bar = foo & bar;
-  CHECK(foo_and_bar.search("foobar"));
-  CHECK(foo_and_bar.match("foobar"));
-  CHECK(!foo_and_bar.search("FOOBAR"));
-  CHECK(!foo_and_bar.match("FOOBAR"));
-  CHECK(!foo_and_bar.match("foo"));
-  CHECK(!foo_and_bar.match("bar"));
-}
-
-TEST(composition with case insensitivity) {
-  auto foo = pattern{"foo", true};
-  auto bar = pattern{"bar"};
-  auto comp = foo + bar;
-  CHECK(comp.case_insensitive());
-  comp = bar + foo;
-  CHECK(!comp.case_insensitive());
-  comp = foo | bar;
-  CHECK(comp.case_insensitive());
-  comp = bar | foo;
-  CHECK(!comp.case_insensitive());
-  comp = foo & bar;
-  CHECK(comp.case_insensitive());
-  comp = bar & foo;
-  CHECK(!comp.case_insensitive());
-  comp = bar + "str";
-  CHECK(!comp.case_insensitive());
-  comp = "str" + bar;
-  CHECK(!comp.case_insensitive());
-  comp = foo + "str";
-  CHECK(comp.case_insensitive());
-  comp = "str" + foo;
-  CHECK(comp.case_insensitive());
-  foo += bar;
-  CHECK(foo.case_insensitive());
-  bar += foo;
-  CHECK(!bar.case_insensitive());
-}
-
 TEST(case insensitive) {
-  auto pat = pattern("bar", true);
+  auto pat = unbox(pattern::make("bar", true));
   CHECK(pat.search("bar"));
   CHECK(pat.search("BAR"));
   CHECK(pat.search("Bar"));
@@ -119,8 +65,8 @@ TEST(case insensitive) {
 }
 
 TEST(printable) {
-  auto p = pattern("(\\w+ )");
-  CHECK_EQUAL(to_string(p), "/(\\w+ )/");
+  auto p = MAKE_PATTERN("(\\w+ \\/)");
+  CHECK_EQUAL(to_string(p), "/(\\w+ \\/)/"sv);
 }
 
 TEST(parseable) {
