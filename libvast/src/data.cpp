@@ -91,8 +91,10 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
                              value_offset.Union());
     },
     [&](const pattern& value) -> flatbuffers::Offset<fbs::Data> {
-      const auto value_offset = fbs::data::CreatePattern(
-        builder, builder.CreateString(value.string()));
+      const auto value_offset
+        = fbs::data::CreatePattern(builder,
+                                   builder.CreateString(value.string()),
+                                   value.case_insensitive());
       return fbs::CreateData(builder, fbs::data::Data::pattern,
                              value_offset.Union());
     },
@@ -197,7 +199,11 @@ caf::error unpack(const fbs::Data& from, data& to) {
       return caf::none;
     }
     case fbs::data::Data::pattern: {
-      to = pattern{from.data_as_pattern()->value()->str()};
+      auto result = pattern::make(from.data_as_pattern()->value()->str(),
+                                  from.data_as_pattern()->case_insensitive());
+      if (!result)
+        return std::move(result.error());
+      to = std::move(*result);
       return caf::none;
     }
     case fbs::data::Data::ip: {

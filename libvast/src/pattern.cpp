@@ -6,49 +6,38 @@
 // SPDX-FileCopyrightText: (c) 2016 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "vast/concept/printable/vast/pattern.hpp"
+#include "vast/pattern.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/pattern.hpp"
 #include "vast/data.hpp"
 #include "vast/error.hpp"
-#include "vast/pattern.hpp"
+#include "vast/view.hpp"
 
 #include <regex>
 
 namespace vast {
 
-pattern pattern::glob(std::string_view str) {
-  std::string rx;
-  std::regex_replace(std::back_inserter(rx), str.begin(), str.end(),
-                     std::regex("\\."), "\\.");
-  rx = std::regex_replace(rx, std::regex("\\*"), ".*");
-  return pattern{std::regex_replace(rx, std::regex("\\?"), ".")};
-}
-
-pattern::pattern(std::string str, bool case_insensitive)
-  : str_(std::move(str)), case_insensitive_(case_insensitive) {
+auto pattern::make(std::string str, bool case_insensitive) noexcept
+  -> caf::expected<pattern> {
+  try {
+    auto mode = std::regex_constants::ECMAScript;
+    if (case_insensitive)
+      mode |= std::regex_constants::icase;
+    auto regex = std::regex{str, mode};
+    return pattern{std::move(str), case_insensitive, std::move(regex)};
+  } catch (const std::regex_error& err) {
+    return caf::make_error(
+      ec::syntax_error, fmt::format("failed to create regex: {}", err.what()));
+  }
 }
 
 bool pattern::match(std::string_view str) const {
-  return std::regex_match(str.begin(), str.end(), *make_regex());
+  return std::regex_match(str.begin(), str.end(), regex_);
 }
 
 bool pattern::search(std::string_view str) const {
-  return std::regex_search(str.begin(), str.end(), *make_regex());
-}
-
-caf::expected<std::regex> pattern::make_regex() const {
-  try {
-    return std::regex{str_, case_insensitive_
-                              ? std::regex_constants::ECMAScript
-                                  | std::regex_constants::icase
-                              : std::regex_constants::ECMAScript};
-  } catch (const std::regex_error& err) {
-    return caf::make_error(ec::syntax_error,
-                           fmt::format("exception when creating regular "
-                                       "expression: {}",
-                                       err.what()));
-  }
+  return std::regex_search(str.begin(), str.end(), regex_);
 }
 
 const std::string& pattern::string() const {
@@ -59,98 +48,29 @@ bool pattern::case_insensitive() const {
   return case_insensitive_;
 }
 
-pattern& pattern::operator+=(const pattern& other) {
-  return *this += std::string_view{other.str_};
+bool operator==(const pattern& lhs, const pattern& rhs) noexcept {
+  return pattern_view{lhs} == pattern_view{rhs};
 }
 
-pattern& pattern::operator+=(std::string_view other) {
-  str_ += other;
-  return *this;
+std::strong_ordering
+operator<=>(const pattern& lhs, const pattern& rhs) noexcept {
+  return pattern_view{lhs} <=> pattern_view{rhs};
 }
 
-pattern& pattern::operator|=(const pattern& other) {
-  return *this |= std::string_view{other.str_};
-}
-
-pattern& pattern::operator|=(std::string_view other) {
-  str_.insert(str_.begin(), '(');
-  str_ += ")|(";
-  str_.append(other.begin(), other.end());
-  str_ += ')';
-  return *this;
-}
-
-pattern& pattern::operator&=(const pattern& other) {
-  return *this &= std::string_view{other.str_};
-}
-
-pattern& pattern::operator&=(std::string_view other) {
-  str_.insert(str_.begin(), '(');
-  str_ += ")(";
-  str_.append(other.begin(), other.end());
-  str_ += ')';
-  return *this;
-}
-
-pattern operator+(const pattern& x, std::string_view y) {
-  return pattern{x.string() + std::string{y}, x.case_insensitive()};
-}
-
-pattern operator+(std::string_view x, const pattern& y) {
-  return pattern{std::string{x} + y.string(), y.case_insensitive()};
-}
-
-pattern operator|(const pattern& x, std::string_view y) {
-  pattern result{x};
-  result |= y;
-  return result;
-}
-
-pattern operator|(std::string_view x, const pattern& y) {
-  pattern result{std::string{x}};
-  result |= y;
-  return result;
-}
-
-pattern operator&(const pattern& x, std::string_view y) {
-  pattern result{x};
-  result &= y;
-  return result;
-}
-
-pattern operator&(std::string_view x, const pattern& y) {
-  pattern result{std::string{x}};
-  result &= y;
-  return result;
-}
-
-bool operator==(const pattern& lhs, const pattern& rhs) {
-  return lhs.str_ == rhs.str_;
-}
-
-bool operator<(const pattern& lhs, const pattern& rhs) {
-  return lhs.str_ < rhs.str_;
-}
-
-bool operator==(const pattern& lhs, std::string_view rhs) {
+bool operator==(const pattern& lhs, std::string_view rhs) noexcept {
   return lhs.match(rhs);
-}
-
-bool operator!=(const pattern& lhs, std::string_view rhs) {
-  return !(lhs == rhs);
-}
-
-bool operator==(std::string_view lhs, const pattern& rhs) {
-  return rhs.match(lhs);
-}
-
-bool operator!=(std::string_view lhs, const pattern& rhs) {
-  return !(lhs == rhs);
 }
 
 bool convert(const pattern& p, data& d) {
   d = to_string(p);
   return true;
+}
+
+pattern::pattern(std::string str, bool case_insensitive, std::regex regex)
+  : str_{std::move(str)},
+    case_insensitive_{case_insensitive},
+    regex_{std::move(regex)} {
+  // nop
 }
 
 } // namespace vast

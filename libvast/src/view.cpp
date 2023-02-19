@@ -25,11 +25,6 @@ pattern_view::pattern_view(const pattern& x)
   // nop
 }
 
-pattern_view::pattern_view(std::string_view str, bool case_insensitive)
-  : pattern_{str}, case_insensitive_{case_insensitive} {
-  // nop
-}
-
 std::string_view pattern_view::string() const {
   return pattern_;
 }
@@ -38,12 +33,22 @@ bool pattern_view::case_insensitive() const {
   return case_insensitive_;
 }
 
-bool operator==(pattern_view x, pattern_view y) noexcept {
-  return x.string() == y.string();
+bool operator==(pattern_view lhs, pattern_view rhs) noexcept {
+  return std::tie(lhs.pattern_, lhs.case_insensitive_)
+         == std::tie(rhs.pattern_, rhs.case_insensitive_);
 }
 
-bool operator<(pattern_view x, pattern_view y) noexcept {
-  return x.string() < y.string();
+std::strong_ordering operator<=>(pattern_view lhs, pattern_view rhs) noexcept {
+  while (!lhs.pattern_.empty() && !rhs.pattern_.empty()) {
+    if (lhs.pattern_[0] < rhs.pattern_[0])
+      return std::strong_ordering::less;
+    if (lhs.pattern_[0] > rhs.pattern_[0])
+      return std::strong_ordering::greater;
+    lhs.pattern_ = lhs.pattern_.substr(1);
+    rhs.pattern_ = rhs.pattern_.substr(1);
+  }
+  return static_cast<uint8_t>(lhs.case_insensitive_)
+         <=> static_cast<uint8_t>(rhs.case_insensitive_);
 }
 
 bool is_equal(const data& x, const data_view& y) {
@@ -147,7 +152,9 @@ std::string materialize(std::string_view x) {
 }
 
 pattern materialize(pattern_view x) {
-  return pattern{std::string{x.string()}, x.case_insensitive()};
+  auto result = pattern::make(std::string{x.string()}, x.case_insensitive());
+  VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
+  return std::move(*result);
 }
 
 namespace {
@@ -263,51 +270,6 @@ bool type_check(const type& x, const data_view& y) {
   };
   return caf::visit(f, x, y);
 }
-
-namespace {
-
-// Checks whether the left-hand side is contained in the right-hand side.
-struct contains_predicate {
-  template <class T, class U>
-  bool operator()(const T& lhs, const U& rhs) const {
-    if constexpr (std::is_same_v<U, view<list>>) {
-      auto equals_lhs = [&](const auto& y) {
-        if constexpr (std::is_same_v<T, std::decay_t<decltype(y)>>)
-          return lhs == y;
-        else
-          return false;
-      };
-      auto pred = [&](const auto& rhs_element) {
-        return caf::visit(equals_lhs, rhs_element);
-      };
-      return std::find_if(rhs->begin(), rhs->end(), pred) != rhs->end();
-      return false;
-    } else {
-      // Default case.
-      return false;
-    }
-  }
-
-  bool
-  operator()(const view<std::string>& lhs, const view<std::string>& rhs) const {
-    return rhs.find(lhs) != std::string::npos;
-  }
-
-  bool
-  operator()(const view<std::string>& lhs, const view<pattern>& rhs) const {
-    return materialize(rhs).search(lhs);
-  }
-
-  bool operator()(const view<ip>& lhs, const view<subnet>& rhs) const {
-    return rhs.contains(lhs);
-  }
-
-  bool operator()(const view<subnet>& lhs, const view<subnet>& rhs) const {
-    return rhs.contains(lhs);
-  }
-};
-
-} // namespace
 
 data_view to_canonical(const type& t, const data_view& x) {
   auto v = detail::overload{

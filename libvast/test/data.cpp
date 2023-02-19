@@ -130,7 +130,7 @@ TEST(construction) {
   CHECK(caf::holds_alternative<double>(data{4.2}));
   CHECK(caf::holds_alternative<std::string>(data{"foo"}));
   CHECK(caf::holds_alternative<std::string>(data{std::string{"foo"}}));
-  CHECK(caf::holds_alternative<pattern>(data{pattern{"foo"}}));
+  CHECK(caf::holds_alternative<pattern>(data{pattern{}}));
   CHECK(caf::holds_alternative<ip>(data{ip{}}));
   CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
   CHECK(caf::holds_alternative<list>(data{list{}}));
@@ -199,8 +199,10 @@ TEST(evaluation) {
 }
 
 TEST(evaluation - pattern matching) {
-  CHECK(evaluate(pattern{"f.*o"}, relational_operator::equal, "foo"));
-  CHECK(evaluate("foo", relational_operator::equal, pattern{"f.*o"}));
+  CHECK(
+    evaluate(unbox(to<pattern>("/f.*o/")), relational_operator::equal, "foo"));
+  CHECK(
+    evaluate("foo", relational_operator::equal, unbox(to<pattern>("/f.*o/"))));
 }
 
 TEST(serialization) {
@@ -266,7 +268,7 @@ TEST(parseable) {
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == pattern{"foo"});
+  CHECK(d == unbox(to<pattern>("/foo/")));
   MESSAGE("address");
   str = "10.0.0.1"s;
   f = str.begin();
@@ -375,7 +377,7 @@ TEST(pack / unpack) {
     {"duration", duration{5}},
     {"time", vast::time{} + duration{6}},
     {"string", std::string{"7"}},
-    {"pattern", pattern{"7"}},
+    {"pattern", unbox(to<pattern>("/7/"))},
     {"address", unbox(to<ip>("0.0.0.8"))},
     {"subnet", unbox(to<subnet>("0.0.0.9/24"))},
     {"enumeration", enumeration{10}},
