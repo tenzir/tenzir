@@ -12,7 +12,7 @@ predicates, extractors, and so on.
 The frontend is customizable through the [query language
 plugin][language-plugin]. For example, the [Sigma](frontends/sigma)
 frontend translates Sigma rules written in YAML to VAST queries. The
-[VASTQL](frontends/vastql) plugin is the default frontend that implements the
+[VAST](frontends/vast) plugin is the default frontend that implements the
 language we designed for VAST.
 
 [language-plugin]: /docs/understand/architecture/plugins#language

@@ -2,7 +2,7 @@
 
 The Sigma query frontend makes it possible to execute [Sigma
 rules](https://github.com/SigmaHQ/sigma) in VAST. This means you can
-provide a Sigma rule instead of a VASTQL expression when querying data. For
+provide a Sigma rule instead of a VAST expression when querying data. For
 example:
 
 ```bash

@@ -161,9 +161,8 @@ concatenate(caf::expected<std::vector<vast::table_slice>> slices) {
 FIXTURE_SCOPE(pipeline_tests, pipelines_fixture)
 
 TEST(head 1) {
-  const auto* vastql
-    = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("head 1"));
+  const auto* vast = vast::plugins::find<vast::language_plugin>("VAST");
+  auto [expr, pipeline] = unbox(vast->make_query("head 1"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
     CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
@@ -177,9 +176,8 @@ TEST(head 1) {
 }
 
 TEST(head 0) {
-  const auto* vastql
-    = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("head 0"));
+  const auto* vast = vast::plugins::find<vast::language_plugin>("VAST");
+  auto [expr, pipeline] = unbox(vast->make_query("head 0"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
     CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
@@ -192,9 +190,8 @@ TEST(head 0) {
 }
 
 TEST(head 10 with overlap) {
-  const auto* vastql
-    = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("head"));
+  const auto* vast = vast::plugins::find<vast::language_plugin>("VAST");
+  auto [expr, pipeline] = unbox(vast->make_query("head"));
   REQUIRE(pipeline);
   CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 9u)),
               caf::error{});
@@ -206,9 +203,8 @@ TEST(head 10 with overlap) {
 }
 
 TEST(taste 1) {
-  const auto* vastql
-    = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("taste 1"));
+  const auto* vast = vast::plugins::find<vast::language_plugin>("VAST");
+  auto [expr, pipeline] = unbox(vast->make_query("taste 1"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
     CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
@@ -224,9 +220,8 @@ TEST(taste 1) {
 }
 
 TEST(taste 0) {
-  const auto* vastql
-    = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("taste 0"));
+  const auto* vast = vast::plugins::find<vast::language_plugin>("VAST");
+  auto [expr, pipeline] = unbox(vast->make_query("taste 0"));
   REQUIRE(pipeline);
   for (auto slice : zeek_conn_log)
     CHECK_EQUAL(pipeline->add(std::move(slice)), caf::error{});
@@ -239,9 +234,8 @@ TEST(taste 0) {
 }
 
 TEST(taste 10 with overlap) {
-  const auto* vastql
-    = vast::plugins::find<vast::query_language_plugin>("vastql");
-  auto [expr, pipeline] = unbox(vastql->make_query("taste"));
+  const auto* vast = vast::plugins::find<vast::language_plugin>("VAST");
+  auto [expr, pipeline] = unbox(vast->make_query("taste"));
   REQUIRE(pipeline);
   CHECK_EQUAL(pipeline->add(head(concatenate(zeek_conn_log), 4u)),
               caf::error{});
@@ -253,10 +247,9 @@ TEST(taste 10 with overlap) {
 }
 
 TEST(head and taste fail with negative limit) {
-  const auto* vastql
-    = vast::plugins::find<vast::query_language_plugin>("vastql");
-  REQUIRE_ERROR(vastql->make_query("head -1"));
-  REQUIRE_ERROR(vastql->make_query("taste -5"));
+  const auto* vast = vast::plugins::find<vast::language_plugin>("VAST");
+  REQUIRE_ERROR(vast->make_query("head -1"));
+  REQUIRE_ERROR(vast->make_query("taste -5"));
 }
 
 TEST(drop operator) {

@@ -19,7 +19,7 @@
 
 namespace vast::plugins::sigma {
 
-class plugin final : public virtual query_language_plugin {
+class plugin final : public virtual language_plugin {
   caf::error initialize(data) override {
     return caf::none;
   }
