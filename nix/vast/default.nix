@@ -114,7 +114,7 @@
           [
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
             "-DCAF_ROOT_DIR=${caf}"
-            "-DVAST_EDITION_NAME=${pname}"
+            "-DVAST_EDITION_NAME=${lib.toUpper pname}"
             "-DVAST_VERSION_TAG=v${versionLong}"
             "-DVAST_VERSION_SHORT=v${versionShort}"
             "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${
