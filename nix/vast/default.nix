@@ -124,7 +124,6 @@
             }"
             "-DVAST_ENABLE_BACKTRACE=ON"
             "-DVAST_ENABLE_JEMALLOC=ON"
-            "-DVAST_ENABLE_LSVAST=ON"
             "-DVAST_ENABLE_PYTHON_BINDINGS=OFF"
             "-DVAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
             "-DVAST_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
