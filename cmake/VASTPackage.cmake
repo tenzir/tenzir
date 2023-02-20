@@ -11,24 +11,53 @@ else ()
         ${CMAKE_INSTALL_PREFIX} are known to produce broken packages")
   endif ()
 endif ()
+
+# VAST switched it's versioning scheme from CalVer to SemVer, so we have to set
+# the package epoch so an older package with calendar-based versioning is not
+# considered newer than this one. This for whatever reason implies that the
+# package revision must be set, which is just zero for us.
+set(CPACK_DEBIAN_PACKAGE_EPOCH "1")
+
 # Lowercase fits better for file names and such.
-set(CPACK_PACKAGE_NAME
-    "vast"
-    CACHE STRING "Choose the package name.")
+set(CPACK_PACKAGE_NAME "vast")
 set(CPACK_PACKAGE_VENDOR "Tenzir")
 set(CPACK_PACKAGE_CONTACT "engineering@tenzir.com")
 string(REGEX REPLACE "^v" "" CPACK_PACKAGE_VERSION "${VAST_VERSION_SHORT}")
 if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
   # CPACK_SYSTEM_NAME is empty when this is evaluated.
-  string(TOLOWER "${CMAKE_SYSTEM_NAME}" system_name_lower)
+  string(TOLOWER "${VAST_EDITION_NAME}" _edition_name_lower)
+  string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_name_lower)
   set(CPACK_PACKAGE_FILE_NAME
-      "${CPACK_PACKAGE_NAME}-${VAST_VERSION_SHORT}-${system_name_lower}")
-  unset(system_name_lower)
+      "${_edition_name_lower}-${VAST_VERSION_SHORT}-${_system_name_lower}")
+  unset(_system_name_lower)
   if (VAST_PACKAGE_FILE_NAME_SUFFIX)
     string(APPEND CPACK_PACKAGE_FILE_NAME "-${VAST_PACKAGE_FILE_NAME_SUFFIX}")
   endif ()
-  set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+  if (NOT DEFINED CPACK_DEBIAN_FILE_NAME)
+    set(_debian_package_version
+        "${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_PACKAGE_VERSION}")
+    # Taken from CPackDeb.cmake (BSD 3-Clause).
+    # BEGIN SNIPPET
+    find_program(DPKG_CMD dpkg)
+    if (NOT DPKG_CMD)
+      message(
+        STATUS "VASTPackage: Can not find dpkg in your path, default to i386.")
+      set(_debian_package_architecture i386)
+    endif ()
+    execute_process(
+      COMMAND "${DPKG_CMD}" --print-architecture
+      OUTPUT_VARIABLE _debian_package_architecture
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    # END SNIPPET
+    set(CPACK_DEBIAN_FILE_NAME
+        "${_edition_name_lower}_${_debian_package_version}_${_debian_package_architecture}.deb"
+    )
+    unset(_debian_package_architecture)
+    unset(_debian_package_version)
+    unset(_edition_name_lower)
+  endif ()
 endif ()
+
 # Put packages into a dedicated package sub directory inside the build
 # directory so we can find them a little easier.
 set(CPACK_PACKAGE_DIRECTORY "package")
@@ -38,15 +67,6 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_INSTALLED_DIRECTORIES "/var/lib/vast" "/var/log/vast")
 
-# Make sure only one edition of vast can be installed at a time.
-# TODO: Verify.
-set(CPACK_DEBIAN_PACKAGE_CONFLICTS "vast")
-
-# VAST switched it's versioning scheme from CalVer to SemVer, so we have to set
-# the package epoch so an older package with calendar-based versioning is not
-# considered newer than this one. This for whatever reason implies that the
-# package revision must be set, which is just zero for us.
-set(CPACK_DEBIAN_PACKAGE_EPOCH "1")
 set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
 
 set(CPACK_DEBIAN_COMPRESSION_TYPE "gzip")

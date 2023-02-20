@@ -114,6 +114,7 @@
           [
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
             "-DCAF_ROOT_DIR=${caf}"
+            "-DVAST_EDITION_NAME=${lib.toUpper pname}"
             "-DVAST_VERSION_TAG=v${versionLong}"
             "-DVAST_VERSION_SHORT=v${versionShort}"
             "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${
@@ -123,7 +124,6 @@
             }"
             "-DVAST_ENABLE_BACKTRACE=ON"
             "-DVAST_ENABLE_JEMALLOC=ON"
-            "-DVAST_ENABLE_LSVAST=ON"
             "-DVAST_ENABLE_PYTHON_BINDINGS=OFF"
             "-DVAST_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
             "-DVAST_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
@@ -132,7 +132,6 @@
             "-DBUILD_SHARED_LIBS:BOOL=OFF"
             "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCPACK_GENERATOR=TGZ;DEB"
-            "-DCPACK_PACKAGE_NAME=${pname}"
             "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DVAST_PACKAGE_FILE_NAME_SUFFIX=static"
           ]
