@@ -61,13 +61,16 @@ record retrieve_versions() {
 #else
   result["jemalloc"] = data{};
 #endif
-  record plugin_versions;
+  list plugin_names;
   for (const auto& plugin : plugins::get()) {
     if (plugin.type() == plugin_ptr::type::builtin)
       continue;
-    plugin_versions[plugin->name()] = plugin.version();
+    if (auto v = plugin.version())
+      plugin_names.push_back(fmt::format("{}-{}", plugin->name(), v));
+    else
+      plugin_names.push_back(fmt::format("{}", plugin->name()));
   }
-  result["plugins"] = std::move(plugin_versions);
+  result["plugins"] = std::move(plugin_names);
   return result;
 }
 
