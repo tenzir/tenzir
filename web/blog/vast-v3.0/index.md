@@ -123,6 +123,12 @@ and fourth section are `5ec2-7015`:
 }
 ```
 
+:::tip Case-Insensitive Patterns
+In addition to writing `/pattern/`, you can specify a regular expression that
+ignores the casing of characters via `/pattern/i`. The `/i` flag is currently
+the only support pattern modifier.
+:::
+
 ## Revamped Status for Event Distribution
 
 The event distribution statistics moved within the output of `vast status`.
