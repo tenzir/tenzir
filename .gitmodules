@@ -10,3 +10,6 @@
 [submodule "libvast/aux/caf"]
 	path = libvast/aux/caf
 	url = https://github.com/actor-framework/actor-framework
+[submodule "contrib/vast-plugins"]
+	path = contrib/vast-plugins
+	url = git@github.com:tenzir/vast-plugins

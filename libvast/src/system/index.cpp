@@ -714,8 +714,9 @@ index_state::create_active_partition(const type& schema) {
   VAST_ASSERT(active_partition != active_partitions.end());
   active_partition->second.spawn_time = std::chrono::steady_clock::now();
   active_partition->second.actor
-    = self->spawn(::vast::system::active_partition, id, accountant, filesystem,
-                  index_opts, synopsis_opts, store_actor_plugin, taxonomies);
+    = self->spawn(::vast::system::active_partition, schema, id, accountant,
+                  filesystem, index_opts, synopsis_opts, store_actor_plugin,
+                  taxonomies);
   active_partition->second.stream_slot
     = stage->add_outbound_path(active_partition->second.actor);
   stage->out().set_filter(active_partition->second.stream_slot, schema);

@@ -53,26 +53,22 @@
  * ability, specifically hi-res diagrams blow up to the full text width, which
  * often makes look textual annotations huge and out of proportion.
  */
-img[alt$="#width300"],
-.markdown-inline-svg {
+img[alt$="#width300"] {
   max-width: 300px;
   display: block;
 }
 
-img[alt$="#width400"],
-.markdown-inline-svg {
+img[alt$="#width400"] {
   max-width: 400px;
   display: block;
 }
 
-img[alt$="#width500"],
-.markdown-inline-svg {
+img[alt$="#width500"] {
   max-width: 500px;
   display: block;
 }
 
-img[alt$="#width600"],
-.markdown-inline-svg {
+img[alt$="#width600"] {
   max-width: 600px;
   display: block;
 }

@@ -216,6 +216,12 @@ TEST(empty partition roundtrip) {
 // finally does some queries on it to ensure the restored flatbuffer is still
 // able to return correct results.
 TEST(full partition roundtrip) {
+  auto schema = vast::type{
+    "y",
+    vast::record_type{
+      {"x", vast::uint64_type{}},
+    },
+  };
   // Spawn a partition.
   auto fs = self->spawn(vast::system::posix_filesystem, directory,
                         vast::system::accountant_actor{});
@@ -224,19 +230,13 @@ TEST(full partition roundtrip) {
     vast::defaults::system::store_backend);
   REQUIRE(store_plugin);
   auto partition
-    = sys.spawn(vast::system::active_partition, partition_uuid,
+    = sys.spawn(vast::system::active_partition, schema, partition_uuid,
                 vast::system::accountant_actor{}, fs, caf::settings{},
                 vast::index_config{}, store_plugin,
                 std::make_shared<vast::taxonomies>());
   run();
   REQUIRE(partition);
   // Add data to the partition.
-  auto schema = vast::type{
-    "y",
-    vast::record_type{
-      {"x", vast::uint64_type{}},
-    },
-  };
   auto builder = std::make_shared<vast::table_slice_builder>(schema);
   CHECK(builder->add(0u));
   auto slice = builder->finish();

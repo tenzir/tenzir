@@ -150,7 +150,7 @@ vast export pcap 'vlan.outer > 0 || vlan.inner in [1, 2, 3]' | tcpdump -r - -nl
 VLAN tags occur in many variations, and VAST extracts them in case of
 single-tagging and  [QinQ
 double-tagging](https://en.wikipedia.org/wiki/IEEE_802.1ad). Consult the [PCAP
-documentation](/docs/use/ingest#pcap) for details on this feature.
+documentation](/docs/understand/formats/pcap) for details on this feature.
 
 Internally, the packet decapsulation logic has been rewritten to follow a
 layered approach: frames, packets, and segments are the building blocks. The

@@ -174,6 +174,7 @@ pack_full(const active_partition_state::serialization_data& x,
 
 /// Spawns a partition.
 /// @param self The partition actor.
+/// @param schema The schema of this partition.
 /// @param id The UUID of this partition.
 /// @param accountant The actor handle of the accountant.
 /// @param filesystem The actor handle of the filesystem.
@@ -185,9 +186,9 @@ pack_full(const active_partition_state::serialization_data& x,
 // TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  uuid id, accountant_actor accountant, filesystem_actor filesystem,
-  caf::settings index_opts, const index_config& synopsis_opts,
-  const store_actor_plugin* store_plugin,
+  type schema, uuid id, accountant_actor accountant,
+  filesystem_actor filesystem, caf::settings index_opts,
+  const index_config& synopsis_opts, const store_actor_plugin* store_plugin,
   std::shared_ptr<vast::taxonomies> taxonomies);
 
 } // namespace vast::system

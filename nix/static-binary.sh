@@ -74,7 +74,7 @@ done
 read -r -d '' exp <<EOF || true
 let pkgs = (import ${dir}).pkgs."\${builtins.currentSystem}"; in
 (pkgs.pkgsStatic.vast.override {
-  versionOverride = "${desc}";
+  versionLongOverride = "${desc}";
   versionShortOverride = "${desc_short}";
   extraPlugins = [ ${extraPlugins[@]} ];
   extraCmakeFlags = [ ${cmakeFlags} ];

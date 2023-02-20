@@ -20,11 +20,13 @@ namespace vast {
 
 // -- pattern_view ------------------------------------------------------------
 
-pattern_view::pattern_view(const pattern& x) : pattern_{x.string()} {
+pattern_view::pattern_view(const pattern& x)
+  : pattern_{x.string()}, case_insensitive_{x.case_insensitive()} {
   // nop
 }
 
-pattern_view::pattern_view(std::string_view str) : pattern_{str} {
+pattern_view::pattern_view(std::string_view str, bool case_insensitive)
+  : pattern_{str}, case_insensitive_{case_insensitive} {
   // nop
 }
 
@@ -32,14 +34,8 @@ std::string_view pattern_view::string() const {
   return pattern_;
 }
 
-bool pattern_view::match(std::string_view x) const {
-  return std::regex_match(x.begin(), x.end(),
-                          std::regex{pattern_.begin(), pattern_.end()});
-}
-
-bool pattern_view::search(std::string_view x) const {
-  return std::regex_search(x.begin(), x.end(),
-                           std::regex{pattern_.begin(), pattern_.end()});
+bool pattern_view::case_insensitive() const {
+  return case_insensitive_;
 }
 
 bool operator==(pattern_view x, pattern_view y) noexcept {
@@ -151,7 +147,7 @@ std::string materialize(std::string_view x) {
 }
 
 pattern materialize(pattern_view x) {
-  return pattern{std::string{x.string()}};
+  return pattern{std::string{x.string()}, x.case_insensitive()};
 }
 
 namespace {
@@ -299,7 +295,7 @@ struct contains_predicate {
 
   bool
   operator()(const view<std::string>& lhs, const view<pattern>& rhs) const {
-    return rhs.search(lhs);
+    return materialize(rhs).search(lhs);
   }
 
   bool operator()(const view<ip>& lhs, const view<subnet>& rhs) const {

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 0
+sidebar_position: 1
 ---
 
 # Expressions
@@ -66,6 +66,7 @@ The following operators separate two operands:
 
 The table below illustrates a partial function over the cross product of
 available types. Each letter in a cell denotes a set of operators:
+
 - **E**: equality operators `==`, `!=`
 - **R**: range operators `<`, `<=`, `>=`, `>`
 - **M**: membership operators `in`, `!in`, `ni`, `!ni`
@@ -201,7 +202,7 @@ Here is an over view of basic types:
 | `duration` | A time span (nanosecond granularity)    | `-3us`, `24h`
 | `time`     | A time point (nanosecond granularity)   | `now`, `1h ago`, `2020-01-01+10:42:00`
 | `string`   | A sequence of characters                | `"foo"`
-| `pattern`  | A regular expression                    | `/fo*.bar$/`
+| `pattern`  | A regular expression                    | `/fo*.bar$/`, `/^\w{3}$/i`
 | `ip`       | An IPv4 or IPv6 address                 | `::1`, `10.0.0.1`, `2001:db8::`
 | `subnet`   | An IPv4 or IPv6 subnet                  | `::1/128`, `10.0.0.0/8`, `2001:db8::/32`
 
