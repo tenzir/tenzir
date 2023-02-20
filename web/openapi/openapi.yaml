@@ -32,7 +32,7 @@ paths:
         - in: query
           name: limit
           schema:
-            type: int64
+            type: integer
             default: 50
           required: false
           description: Maximum number of returned events.
@@ -70,15 +70,12 @@ paths:
                 type: object
                 properties:
                   num-events:
-                    type: int64
-                  version:
-                    type: string
+                    type: integer
                   events:
                     type: array
                     items:
                       type: object
                 example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
                   num-events: 3
                   events:
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
@@ -90,7 +87,7 @@ paths:
           description: Invalid query string or invalid limit.
     post:
       summary: Export data
-      description: Export data from VAST according to a query. The query must be a valid expression in the VAST language (see https://vast.io/docs/understand/query), followed by an optional pipeline.
+      description: Export data from VAST according to a query. The query must be a valid expression in the VAST language (see https://vast.io/docs/understand/language) followed by an optional pipeline string.
       requestBody:
         description: Request parameters
         required: false
@@ -107,7 +104,7 @@ paths:
                   example: :ip in 10.42.0.0/16 | head 50
                   default: A query matching every event.
                 limit:
-                  type: int64
+                  type: integer
                   default: 50
                   description: Maximum number of returned events
                   example: 3
@@ -135,7 +132,7 @@ paths:
                 type: object
                 properties:
                   num-events:
-                    type: int64
+                    type: integer
                   events:
                     type: array
                     items:
@@ -153,7 +150,7 @@ paths:
   /export/with-schemas:
     post:
       summary: Export data with schema information
-      description: "Export data from VAST according to a query. The query must be a valid expression in the VAST language. (see https://vast.io/docs/understand/language). The data is returned grouped by schema.\n"
+      description: "Export data from VAST according to a query. The query must be a valid expression in the VAST language. (see https://vast.io/docs/understand/language) The data is returned grouped by schema.\n"
       requestBody:
         description: Request parameters
         required: false
@@ -170,7 +167,7 @@ paths:
                   example: :ip in 10.42.0.0/16 | head 50
                   default: A query matching every event.
                 limit:
-                  type: int64
+                  type: integer
                   default: 50
                   description: Maximum number of returned events
                   example: 3
@@ -198,9 +195,7 @@ paths:
                 type: object
                 properties:
                   num_events:
-                    type: int64
-                  version:
-                    type: string
+                    type: integer
                   events:
                     type: array
                     items:
@@ -222,7 +217,6 @@ paths:
                           items:
                             type: object
                 example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
                   num_events: 3
                   events:
                     - name: suricata.netflow
@@ -256,21 +250,21 @@ paths:
           name: query
           schema:
             type: string
-            example: :ip in 10.42.0.0/16 | head 100
+          example: :ip in 10.42.0.0/16 | head 100
           required: true
           description: "The query used, optionally including an open pipeline.\n"
-        - in: ttl
+        - in: query
           name: ttl
           schema:
             type: string
-            example: 5.0m
+          example: 5.0m
           required: false
           description: "The time after which a query is cancelled. Use the /query/:id/next\nendpoint to refresh the TTL. To refresh the TTL without requesting\nfurther events, request zero events.\n"
-        - in: expand
+        - in: query
           name: expand
           schema:
-            type: bool
-            example: false
+            type: boolean
+          example: false
           required: false
           description: "Whether to use the expanded output schema.\n"
       responses:
@@ -304,7 +298,7 @@ paths:
         - in: query
           name: n
           schema:
-            type: int64
+            type: integer
           required: false
           example: 10
           description: Maximum number of returned events

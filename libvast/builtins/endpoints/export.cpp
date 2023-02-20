@@ -44,7 +44,7 @@ static auto const* SPEC_V0 = R"_(
       - in: query
         name: limit
         schema:
-          type: int64
+          type: integer
           default: 50
         required: false
         description: Maximum number of returned events.
@@ -82,15 +82,12 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num-events:
-                    type: int64
-                  version:
-                    type: string
+                    type: integer
                   events:
                     type: array
                     items:
                       type: object
                 example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
                   num-events: 3
                   events:
                     - "{\"timestamp\": \"2011-08-14T05:38:55.549713\", \"flow_id\": 929669869939483, \"pcap_cnt\": null, \"vlan\": null, \"in_iface\": null, \"src_ip\": \"147.32.84.165\", \"src_port\": 138, \"dest_ip\": \"147.32.84.255\", \"dest_port\": 138, \"proto\": \"UDP\", \"event_type\": \"netflow\", \"community_id\": null, \"netflow\": {\"pkts\": 2, \"bytes\": 486, \"start\": \"2011-08-12T12:53:47.928539\", \"end\": \"2011-08-12T12:53:47.928552\", \"age\": 0}, \"app_proto\": \"failed\"}"
@@ -119,7 +116,7 @@ static auto const* SPEC_V0 = R"_(
                 example: ":ip in 10.42.0.0/16 | head 50"
                 default: A query matching every event.
               limit:
-                type: int64
+                type: integer
                 default: 50
                 description: Maximum number of returned events
                 example: 3
@@ -147,7 +144,7 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num-events:
-                    type: int64
+                    type: integer
                   events:
                     type: array
                     items:
@@ -185,7 +182,7 @@ static auto const* SPEC_V0 = R"_(
                 example: ":ip in 10.42.0.0/16 | head 50"
                 default: A query matching every event.
               limit:
-                type: int64
+                type: integer
                 default: 50
                 description: Maximum number of returned events
                 example: 3
@@ -213,9 +210,7 @@ static auto const* SPEC_V0 = R"_(
                 type: object
                 properties:
                   num_events:
-                    type: int64
-                  version:
-                    type: string
+                    type: integer
                   events:
                     type: array
                     items:
@@ -238,7 +233,6 @@ static auto const* SPEC_V0 = R"_(
                             type: object
 
                 example:
-                  version: v2.3.0-169-ge42a9652e5-dirty
                   num_events: 3
                   events:
                     - name: "suricata.netflow"
