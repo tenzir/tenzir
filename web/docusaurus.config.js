@@ -148,6 +148,9 @@ async function createConfig() {
             postsPerPage: 20,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
           },
+          pages: {
+            beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
+          },
           theme: {
             customCss: require.resolve('./src/css/custom.scss'),
           },
@@ -324,6 +327,10 @@ async function createConfig() {
             {
               title: 'Tenzir',
               items: [
+                {
+                  label: 'VAST and Tenzir',
+                  to: '/vast-and-tenzir',
+                },
                 {
                   label: 'Blog',
                   href: 'https://tenzir.com/blog',
