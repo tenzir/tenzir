@@ -60,9 +60,9 @@ The writer plugin adds a new format to print data, such as JSON (ASCII) or PCAP
 
 Writer plugins automatically add the subcommand `vast export <plugin name>`.
 
-### Query Language
+### Language
 
-A query language plugin adds an alternative parser for a query expression. This
+A language plugin adds an alternative parser for a query expression. This
 plugin allows for replacing the query *frontend* while using VAST as *backend*
 execution engine.
 
