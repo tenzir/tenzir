@@ -133,7 +133,7 @@ the only support pattern modifier.
 
 The event distribution statistics moved within the output of `vast status`.
 
-This was previously available under the `index.statistics` section when using
+They were previously available under the `index.statistics` section when using
 the `--detailed` option:
 
 ```json {0} title="VAST v2.4.1 ❯ vast status --detailed | jq .index.statistics"
