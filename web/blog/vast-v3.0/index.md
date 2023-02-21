@@ -57,8 +57,8 @@ altogether in a future version. The new pipeline operators [`head`][head-op] and
 We've made some breaking changes to the the **VAST** **Q**uery **L**anguage
 that we've wanted to do for a long time. Here's a summary:
 
-1. We simplified the VASTQL naming: The VAST Query Language is now the VAST
-   Language, and "VAST" will supercede the "VASTQL" abbreviation.
+1. We removed the term VASTQL: The VAST Query Language is now simply
+   the VAST language, and "VAST" will supersede the "VASTQL" abbreviation.
 
 2. Several built-in types have a new name:
    - `int` → `int64`
