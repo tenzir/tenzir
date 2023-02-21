@@ -338,7 +338,7 @@ async function createConfig() {
                 },
                 {
                   label: 'Website',
-                  href: 'https://tenzir.com/blog',
+                  href: 'https://tenzir.com',
                 },
               ],
             },
