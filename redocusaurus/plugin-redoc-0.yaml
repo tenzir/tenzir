@@ -25,7 +25,7 @@ paths:
       summary: Export data
       description: >-
         Export data from VAST according to a query. The query must be a valid
-        expression in the VAST Query Language. (see
+        expression in the VAST language. (see
         https://vast.io/docs/understand/language)
       parameters:
         - in: query
@@ -130,7 +130,7 @@ paths:
       summary: Export data
       description: >-
         Export data from VAST according to a query. The query must be a valid
-        expression in the VAST Language (see
+        expression in the VAST language (see
         https://vast.io/docs/understand/query), followed by an optional
         pipeline.
       requestBody:
@@ -228,8 +228,8 @@ paths:
       summary: Export data with schema information
       description: >
         Export data from VAST according to a query. The query must be a valid
-        expression in the VAST Query Language. (see
-        https://vast.io/docs/understand/language) The data is returned grouped
+        expression in the VAST language. (see
+        https://vast.io/docs/understand/language). The data is returned grouped
         by schema.
       requestBody:
         description: Request parameters
