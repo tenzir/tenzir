@@ -13,15 +13,15 @@
 #include <vast/pipeline.hpp>
 #include <vast/plugin.hpp>
 
-namespace vast::plugins::vastql {
+namespace vast::plugins::vast {
 
-class plugin final : public virtual query_language_plugin {
+class plugin final : public virtual language_plugin {
   caf::error initialize(data) override {
     return caf::none;
   }
 
   [[nodiscard]] std::string name() const override {
-    return "VASTQL";
+    return "VAST";
   }
 
   [[nodiscard]] caf::expected<std::pair<expression, std::optional<pipeline>>>
@@ -85,6 +85,6 @@ class plugin final : public virtual query_language_plugin {
   }
 };
 
-} // namespace vast::plugins::vastql
+} // namespace vast::plugins::vast
 
-VAST_REGISTER_PLUGIN(vast::plugins::vastql::plugin)
+VAST_REGISTER_PLUGIN(vast::plugins::vast::plugin)

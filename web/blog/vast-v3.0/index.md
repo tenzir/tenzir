@@ -57,7 +57,10 @@ altogether in a future version. The new pipeline operators [`head`][head-op] and
 We've made some breaking changes to the the **VAST** **Q**uery **L**anguage
 that we've wanted to do for a long time. Here's a summary:
 
-1. Several built-in types have a new name:
+1. We removed the term VASTQL: The VAST Query Language is now simply
+   the VAST language, and "VAST" will supersede the "VASTQL" abbreviation.
+
+2. Several built-in types have a new name:
    - `int` → `int64`
    - `count` → `uint64`
    - `real` → `double`
@@ -67,16 +70,16 @@ that we've wanted to do for a long time. Here's a summary:
    warning on startup. We will remove support for the old names in a future
    release.
 
-2. The match operator `~` and its negated form `!~` no longer exist. Use `==`
+3. The match operator `~` and its negated form `!~` no longer exist. Use `==`
    and `!=` instead to perform searches with regular expressions, e.g., `url ==
    /^https?.*/`. Such queries now work for all string fields in addition to the
    previously supported `#type` meta extractor.
 
-3. We removed the `#field` meta extractor. That is, queries of the form `#field
+4. We removed the `#field` meta extractor. That is, queries of the form `#field
    == "some.field.name"` no longer work. Use `some.field.name != nil` to check
    for field existence moving forward.
 
-4. We renamed the boolean literal values `T` and `F` to `true` and `false`,
+5. We renamed the boolean literal values `T` and `F` to `true` and `false`,
    respectively. For example the query `suricata.alert.alerted == T` is no
    longer valid; use `suricata.alert.alerted == true` instead.
 

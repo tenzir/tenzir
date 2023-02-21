@@ -349,11 +349,11 @@ private:
              std::span<const std::byte> header) const final;
 };
 
-// -- query language plugin ---------------------------------------------------
+// -- language plugin ---------------------------------------------------
 
-/// A query language parser to pass query in a custom language to VAST.
+/// A language parser to pass query in a custom language to VAST.
 /// @relates plugin
-class query_language_plugin : public virtual plugin {
+class language_plugin : public virtual plugin {
 public:
   /// Parses a query expression string into a VAST expression.
   /// @param The string representing the custom query.
