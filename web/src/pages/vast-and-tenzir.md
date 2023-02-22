@@ -70,10 +70,22 @@ and developers that cultivate an active exchange, contribute enhancements, and
 spread the word. The mission of the VAST community is to offer a diverse
 exchange point at the intersection of security and data.
 
-Tenzir focuses on customers. The Community Edition is a free edition for
+Tenzir focuses on customers. The *community edition* is a free edition for
 consultants, small business, and researchers with a very small budget. The
-Enterprise Edition focuses on security professionals for larger enterprise
+*enterprise edition* focuses on security professionals for larger enterprise
 deployments, OEM/SI embeddings, as well as MSSP and MDR platforms.
+
+:::info Beta Testing
+We are working at full steam towards the launch of our community and enterprise
+editions. If you want to give it a spin as early as possible, we'd love to hear
+from you! We are working with a select group of early adopters who enjoy giving
+feedback and don't mind rough edges. If that's you, please sign up in the
+waiting list below.
+
+<div align="center">
+  <a class="button button--md button--primary margin-right--md" href="https://webforms.pipedrive.com/f/c6vwqvg8HuWVVyE4GOE3fTYE7gAfsA9ggVjjicdBWZa674pIQqh1BP2p7CbVxpbq95">Sign Up</a>
+</div>
+:::
 
 The following diagram illustrates the scope and audiences of the three editions:
 
