@@ -30,7 +30,9 @@ namespace vast::plugins::web {
 /// The API plugin.
 class plugin final : public virtual command_plugin,
                      public virtual component_plugin {
-  [[nodiscard]] caf::error initialize(data) override {
+  [[nodiscard]] caf::error
+  initialize([[maybe_unused]] const record& plugin_config,
+             [[maybe_unused]] const record& global_config) override {
     // We don't need to do anything here since the plugin config currently
     // only applies to the server command, which gets its own settings.
     return {};
@@ -60,6 +62,8 @@ class plugin final : public virtual command_plugin,
                                   "dev,server,upstream,mtls.")
         .add<std::string>("certfile", "path to TLS server certificate")
         .add<std::string>("keyfile", "path to TLS private key")
+        .add<std::string>("allowed-origin", "allowed origin for CORS requests; "
+                                            "defaults to '*' in dev mode.")
         .add<std::string>("root", "document root of the server")
         .add<std::string>("bind", "listen address of server")
         .add<int64_t>("port", "listen port"));

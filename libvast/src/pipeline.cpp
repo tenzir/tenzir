@@ -79,9 +79,9 @@ const std::vector<std::string>& pipeline::schema_names() const {
   return schema_names_;
 }
 
-bool pipeline::is_aggregate() const {
+bool pipeline::is_blocking() const {
   return std::any_of(operators_.begin(), operators_.end(), [](const auto& op) {
-    return op->is_aggregate();
+    return op->is_blocking();
   });
 }
 
@@ -115,7 +115,7 @@ caf::expected<std::vector<table_slice>> pipeline::finish() {
   // In case the numbers of input and output batches differ we use the
   // maximum of the input timestamps, otherwise we assume the input and output
   // streams are aligned.
-  if (is_aggregate() || finished->size() != import_timestamps_.size()) {
+  if (finished->size() != import_timestamps_.size()) {
     VAST_ASSERT_CHEAP(!import_timestamps_.empty());
     auto max_import_timestamp
       = *std::max_element(import_timestamps_.begin(), import_timestamps_.end());
@@ -214,23 +214,6 @@ pipeline_executor::pipeline_executor(std::vector<pipeline>&& pipelines)
   }
 }
 
-caf::error
-pipeline_executor::validate(enum allow_aggregate_pipelines allow_aggregates) {
-  const auto first_aggregate = std::find_if(
-    pipelines_.begin(), pipelines_.end(), [](const auto& pipeline) {
-      return pipeline.is_aggregate();
-    });
-  bool is_aggregate = first_aggregate != pipelines_.end();
-  auto is_aggregate_allowed
-    = allow_aggregates == allow_aggregate_pipelines::yes;
-  if (is_aggregate && !is_aggregate_allowed) {
-    return caf::make_error(ec::invalid_configuration,
-                           fmt::format("the pipeline {} is an aggregate",
-                                       first_aggregate->name()));
-  }
-  return caf::none;
-}
-
 /// Apply relevant pipelines to the table slice.
 caf::error pipeline_executor::add(table_slice&& x) {
   VAST_TRACE("pipeline engine adds a slice");
@@ -318,8 +301,15 @@ caf::expected<std::vector<table_slice>> pipeline_executor::finish() {
   return result;
 }
 
-const std::vector<pipeline>& pipeline_executor::pipelines() {
+const std::vector<pipeline>& pipeline_executor::pipelines() const {
   return pipelines_;
+}
+
+bool pipeline_executor::is_blocking() const {
+  return std::any_of(pipelines_.begin(), pipelines_.end(),
+                     [](const auto& pipeline) {
+                       return pipeline.is_blocking();
+                     });
 }
 
 } // namespace vast

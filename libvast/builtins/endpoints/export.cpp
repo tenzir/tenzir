@@ -31,7 +31,7 @@ static auto const* SPEC_V0 = R"_(
 /export:
   get:
     summary: Export data
-    description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
+    description: Export data from VAST according to a query. The query must be a valid expression in the VAST language. (see https://vast.io/docs/understand/language)
     parameters:
       - in: query
         name: query
@@ -103,7 +103,7 @@ static auto const* SPEC_V0 = R"_(
 
   post:
     summary: Export data
-    description: Export data from VAST according to a query. The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language) followed by an optional pipeline string.
+    description: Export data from VAST according to a query. The query must be a valid expression in the VAST language (see https://vast.io/docs/understand/language) followed by an optional pipeline string.
     requestBody:
       description: Request parameters
       required: false
@@ -168,7 +168,7 @@ static auto const* SPEC_V0 = R"_(
     summary: Export data with schema information
     description: >
       Export data from VAST according to a query.
-      The query must be a valid expression in the VAST Query Language. (see https://vast.io/docs/understand/query-language)
+      The query must be a valid expression in the VAST language. (see https://vast.io/docs/understand/language)
       The data is returned grouped by schema.
     requestBody:
       description: Request parameters
@@ -575,7 +575,8 @@ export_multiplexer_actor::behavior_type export_multiplexer(
 }
 
 class plugin final : public virtual rest_endpoint_plugin {
-  caf::error initialize([[maybe_unused]] data config) override {
+  caf::error initialize([[maybe_unused]] const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     return {};
   }
 

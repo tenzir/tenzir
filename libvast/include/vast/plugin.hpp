@@ -113,8 +113,12 @@ public:
 
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
-  /// @param config The relevant subsection of the configuration.
-  [[nodiscard]] virtual caf::error initialize(data config) = 0;
+  /// @param plugin_config The relevant subsection of the configuration.
+  /// @param global_config The entire VAST configuration for potential access to
+  /// global options.
+  [[nodiscard]] virtual caf::error
+  initialize(const record& plugin_config, const record& global_config)
+    = 0;
 
   /// Returns the unique name of the plugin.
   [[nodiscard]] virtual std::string name() const = 0;
@@ -350,11 +354,11 @@ private:
              std::span<const std::byte> header) const final;
 };
 
-// -- query language plugin ---------------------------------------------------
+// -- language plugin ---------------------------------------------------
 
-/// A query language parser to pass query in a custom language to VAST.
+/// A language parser to pass query in a custom language to VAST.
 /// @relates plugin
-class query_language_plugin : public virtual plugin {
+class language_plugin : public virtual plugin {
 public:
   /// Parses a query expression string into a VAST expression.
   /// @param The string representing the custom query.
@@ -429,12 +433,13 @@ public:
   [[nodiscard]] auto make_default_parser(options, operator_control_plane&) const
     -> caf::expected<input_parser> override;
 
-  [[nodiscard]] caf::error initialize(data config) override;
+  [[nodiscard]] caf::error
+  initialize(const record& plugin_config, const record& global_config) override;
 
   [[nodiscard]] std::string name() const override;
 
   static constexpr inline auto max_chunk_size = size_t{16384};
-  static constexpr inline auto read_timeout = std::chrono::milliseconds{5000};
+  std::chrono::milliseconds read_timeout{5000};
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

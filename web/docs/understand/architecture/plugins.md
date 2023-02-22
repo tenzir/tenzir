@@ -60,9 +60,9 @@ The writer plugin adds a new format to print data, such as JSON (ASCII) or PCAP
 
 Writer plugins automatically add the subcommand `vast export <plugin name>`.
 
-### Query Language
+### Language
 
-A query language plugin adds an alternative parser for a query expression. This
+A language plugin adds an alternative parser for a query expression. This
 plugin allows for replacing the query *frontend* while using VAST as *backend*
 execution engine.
 
@@ -73,14 +73,14 @@ historical data or runs it as live query.
 ### Pipeline Operator
 
 The pipeline operator plugin adds a new [pipeline
-operator](/docs/understand/query-language/operators) that users can
+operator](/docs/understand/language/operators) that users can
 reference in a [pipeline
-definition](/docs/understand/query-language/pipelines).
+definition](/docs/understand/language/pipelines).
 
 ### Aggregation Function
 
 The aggregation function plugin adds a new [aggregation
-function](/docs/understand/query-language/operators/summarize#aggregate-functions)
+function](/docs/understand/language/operators/summarize#aggregate-functions)
 for the `summarize` pipeline operator that performs an incremental aggregation
 over a set of grouped input values of a single type.
 

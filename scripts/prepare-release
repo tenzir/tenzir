@@ -45,8 +45,10 @@ fi
 git fetch origin master
 git switch -C "topic/release-${new_version}" origin/master
 
-# Update the fallback version.
-version_json="$(jq --arg v "${new_version#v}" '."vast-version-fallback" = $v' version.json)"
+# Update the fallback version and its ancestor count.
+rev_count="$(($(git rev-list --count) + 1))"
+version_json="$(jq --arg v "${new_version#v}" --arg cnt "${rev_count}" \
+  '."vast-version-fallback" = $v | ."vast-version-rev-count" = $cnt' version.json)"
 echo -E "${version_json}" > version.json
 
 # If the new version is not a release candidate, change mentions of the version

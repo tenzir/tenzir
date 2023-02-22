@@ -16,6 +16,10 @@ project(
   HOMEPAGE_URL "https://vast.io"
   LANGUAGES C CXX)
 
+set(VAST_EDITION_NAME
+    "VAST"
+    CACHE STRING "Set the edition name")
+
 # -- sanity checks -------------------------------------------------------------
 
 # Prohibit in-source builds.
@@ -813,7 +817,7 @@ endif ()
 
 add_subdirectory(libvast)
 add_subdirectory(libvast_test)
-add_subdirectory(tools)
+add_subdirectory(contrib/tools)
 add_subdirectory(vast)
 
 # -- cmake export/config installations -----------------------------------------
@@ -995,6 +999,7 @@ if (NOT VAST_IS_SUBPROJECT)
                   INCLUDE_QUIET_PACKAGES)
   unset(build_summary)
   list(APPEND build_summary "Build summary:\n")
+  list(APPEND build_summary " * Edition: ${VAST_EDITION_NAME}")
   list(APPEND build_summary " * Version: ${VAST_VERSION_TAG}")
   list(APPEND build_summary " * Build Tree Hash: ${VAST_BUILD_TREE_HASH}")
   list(APPEND build_summary "")

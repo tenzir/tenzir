@@ -304,7 +304,7 @@ TEST(passive parquet store fetchall small row group size) {
   auto _
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
     = const_cast<store_actor_plugin*>(plugin)->initialize(
-      record{{"row-group-size", 512u}});
+      record{{"row-group-size", 512u}}, {});
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
   REQUIRE_NOERROR(builder_and_header);

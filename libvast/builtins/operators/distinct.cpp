@@ -26,7 +26,8 @@ struct heterogeneous_data_hash {
   }
 
   [[nodiscard]] size_t operator()(const type_to_data_t<Type>& value) const
-    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>) {
+    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
+  {
     return hash(make_view(value));
   }
 };
@@ -42,7 +43,8 @@ struct heterogeneous_data_equal {
 
   [[nodiscard]] bool operator()(const type_to_data_t<Type>& lhs,
                                 view<type_to_data_t<Type>> rhs) const
-    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>) {
+    requires(!std::is_same_v<view<type_to_data_t<Type>>, type_to_data_t<Type>>)
+  {
     return make_view(lhs) == rhs;
   }
 };
@@ -99,7 +101,8 @@ private:
 };
 
 class plugin : public virtual aggregation_function_plugin {
-  caf::error initialize([[maybe_unused]] data config) override {
+  caf::error initialize([[maybe_unused]] const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     return {};
   }
 

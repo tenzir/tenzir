@@ -151,5 +151,5 @@ use cases.
 [msgpack]: https://msgpack.org/index.html
 [duckdb]: https://duckdb.org/
 [sigma]: https://github.com/SigmaHQ/sigma
-[sigma-plugin]: /docs/understand/query-language/frontends/sigma
+[sigma-plugin]: /docs/understand/language/frontends/sigma
 [zeek]: https://zeek.org

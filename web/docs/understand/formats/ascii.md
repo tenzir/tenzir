@@ -9,7 +9,7 @@ syntax][expression-values]. A value is a data literal that makes easy to infer
 its type. The main value is that it represents a maximally condensend view of
 heterogeneous data. Think of it like NDJSON, but without field names.
 
-[expression-values]: /docs/understand/query-language/expressions#values
+[expression-values]: /docs/understand/language/expressions#values
 
 For example, `1.2.3.4` is an IP address literal, whereas `"1.2.3.4"`
 is a string literals. Type inference isn't always possible, e.g., in the case of

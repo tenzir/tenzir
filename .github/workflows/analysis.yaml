@@ -36,7 +36,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          submodules: true
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive libvast
+          git submodule update --init --recursive plugins
       - name: Install Dependencies
         run: |
           ./scripts/debian/install-dev-dependencies.sh

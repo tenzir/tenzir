@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "vast/plugin.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/test/test.hpp"
 
 #include <iostream>
@@ -15,6 +16,38 @@ using namespace vast;
 namespace {
 
 struct fixture {
+  struct mock_control_plane : operator_control_plane {
+    [[nodiscard]] virtual auto self() noexcept -> caf::event_based_actor& {
+      FAIL("no mock implementation available");
+    }
+    virtual auto stop([[maybe_unused]] caf::error error = {}) noexcept -> void {
+      FAIL("no mock implementation available");
+    }
+
+    virtual auto warn([[maybe_unused]] caf::error warning) noexcept -> void {
+      FAIL("no mock implementation available");
+    }
+
+    virtual auto emit([[maybe_unused]] table_slice metrics) noexcept -> void {
+      FAIL("no mock implementation available");
+    }
+
+    [[nodiscard]] virtual auto
+    demand([[maybe_unused]] type schema = {}) const noexcept -> size_t {
+      FAIL("no mock implementation available");
+    }
+
+    [[nodiscard]] virtual auto schemas() const noexcept
+      -> const std::vector<type>& {
+      FAIL("no mock implementation available");
+    }
+
+    [[nodiscard]] virtual auto concepts() const noexcept
+      -> const concepts_map& {
+      FAIL("no mock implementation available");
+    }
+  };
+
   fixture() {
   }
 
@@ -27,6 +60,7 @@ struct fixture {
   int old_stdin_fd;
   caf::expected<input_loader> loader{caf::none};
   FILE* input_file{};
+  mock_control_plane control_plane;
 };
 
 } // namespace
@@ -38,7 +72,7 @@ TEST(stdin loader - process simple input) {
     = freopen(VAST_TEST_PATH "artifacts/inputs/simple.txt", "r", stdin);
   auto str = std::string{"foobarbaz\n"};
   vast::stdin_loader_plugin loader_plugin;
-  loader = loader_plugin.make_loader({}, nullptr);
+  loader = loader_plugin.make_loader({}, control_plane);
   REQUIRE(loader);
   auto loaded_chunk_generator = (*loader)();
   auto str_chunk = chunk::copy(str);
@@ -53,7 +87,7 @@ TEST(stdin loader - no input) {
     = freopen(VAST_TEST_PATH "artifacts/inputs/nothing.txt", "r", stdin);
   auto str = std::string{""};
   vast::stdin_loader_plugin loader_plugin;
-  loader = loader_plugin.make_loader({}, nullptr);
+  loader = loader_plugin.make_loader({}, control_plane);
   REQUIRE(loader);
   auto loaded_chunk_generator = (*loader)();
   auto str_chunk = chunk::copy(str);
@@ -68,7 +102,7 @@ TEST(stdin loader - process input with linebreaks) {
     = freopen(VAST_TEST_PATH "artifacts/inputs/linebreaks.txt", "r", stdin);
   auto str = std::string{"foo\nbar\nbaz\n"};
   vast::stdin_loader_plugin loader_plugin;
-  loader = loader_plugin.make_loader({}, nullptr);
+  loader = loader_plugin.make_loader({}, control_plane);
   REQUIRE(loader);
   auto loaded_chunk_generator = (*loader)();
   auto str_chunk = chunk::copy(str);
@@ -83,7 +117,7 @@ TEST(stdin loader - process input with spaces and tabs) {
                        "r", stdin);
   auto str = std::string{"foo bar\tbaz\n"};
   vast::stdin_loader_plugin loader_plugin;
-  loader = loader_plugin.make_loader({}, nullptr);
+  loader = loader_plugin.make_loader({}, control_plane);
   REQUIRE(loader);
   auto loaded_chunk_generator = (*loader)();
   auto str_chunk = chunk::copy(str);
@@ -99,7 +133,7 @@ TEST(stdin loader - chunking longer input) {
   const auto file_size = std::filesystem::file_size(
     VAST_TEST_PATH "artifacts/inputs/longer_input.txt");
   vast::stdin_loader_plugin loader_plugin;
-  loader = loader_plugin.make_loader({}, nullptr);
+  loader = loader_plugin.make_loader({}, control_plane);
   REQUIRE(loader);
   auto loaded_chunk_generator = (*loader)();
   auto generated_chunk_it = loaded_chunk_generator.begin();
@@ -121,7 +155,7 @@ TEST(stdin loader - one complete chunk) {
   auto str = std::string(stdin_loader_plugin::max_chunk_size - 1, '1');
   str += '\n';
   vast::stdin_loader_plugin loader_plugin;
-  loader = loader_plugin.make_loader({}, nullptr);
+  loader = loader_plugin.make_loader({}, control_plane);
   REQUIRE(loader);
   auto loaded_chunk_generator = (*loader)();
   auto str_chunk = chunk::copy(str);

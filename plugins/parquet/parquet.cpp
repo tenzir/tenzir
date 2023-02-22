@@ -477,10 +477,9 @@ private:
 };
 
 class plugin final : public virtual store_plugin {
-  caf::error initialize(data options) override {
-    if (caf::holds_alternative<caf::none_t>(options))
-      return caf::none;
-    return convert(options, parquet_config_);
+  caf::error initialize(const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
+    return convert(plugin_config, parquet_config_);
   }
 
   [[nodiscard]] std::string name() const override {

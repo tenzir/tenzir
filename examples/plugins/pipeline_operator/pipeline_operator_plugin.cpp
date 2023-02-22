@@ -42,7 +42,8 @@ private:
 // The plugin definition itself is below.
 class example_pipeline_plugin final : public virtual pipeline_operator_plugin {
 public:
-  caf::error initialize(data) override {
+  caf::error initialize([[maybe_unused]] const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     return {};
   }
 

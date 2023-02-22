@@ -128,7 +128,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   const auto* store_plugin = vast::plugins::find<vast::store_actor_plugin>(
     vast::defaults::system::store_backend);
   REQUIRE(store_plugin);
-  auto sut = sys.spawn(vast::system::active_partition, partition_id,
+  auto sut = sys.spawn(vast::system::active_partition, schema_, partition_id,
                        vast::system::accountant_actor{}, filesystem,
                        caf::settings{}, index_config_, store_plugin,
                        std::make_shared<vast::taxonomies>());
@@ -213,9 +213,9 @@ TEST(delegate query to store with all possible ids in partition when query is to
   std::map<std::filesystem::path, std::vector<vast::chunk_ptr>>
     last_written_chunks;
   auto filesystem = sys.spawn(dummy_filesystem, std::ref(last_written_chunks));
-  auto sut = sys.spawn(vast::system::active_partition, vast::uuid::random(),
-                       vast::system::accountant_actor{}, filesystem,
-                       caf::settings{}, index_config_, store_plugin,
+  auto sut = sys.spawn(vast::system::active_partition, schema_,
+                       vast::uuid::random(), vast::system::accountant_actor{},
+                       filesystem, caf::settings{}, index_config_, store_plugin,
                        std::make_shared<vast::taxonomies>());
   REQUIRE(sut);
   run();

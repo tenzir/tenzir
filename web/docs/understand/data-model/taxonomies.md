@@ -91,7 +91,7 @@ A *concept* is a set of [extractors][extractors] to enable more semantic
 querying. VAST translates a query expression containing a concept to a
 disjunction of all extractors.
 
-[extractors]: /docs/understand/query-language/expressions#extractors
+[extractors]: /docs/understand/language/expressions#extractors
 
 For example, Consider Sysmon and Suricata events, each of which have a notion of
 a network connection with a source IP address. The Sysmon event

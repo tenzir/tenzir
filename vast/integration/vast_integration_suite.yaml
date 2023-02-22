@@ -855,3 +855,12 @@ tests:
       - command: export json 'cef_version >= 0 && device_vendor == "Cynet"'
       - command: export json '172.31.5.93'
       - command: export json 'act == /Accept|Bypass/'
+
+  Patterns:
+    fixture: ServerTester
+    tags: [import, export]
+    steps:
+      - command: import -b suricata
+        input: data/suricata/eve.json
+      - command: export json 'event_type == /.*flow$/'
+      - command: export json 'event_type == /.*FLOW$/i'
