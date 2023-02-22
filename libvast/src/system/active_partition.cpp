@@ -571,71 +571,13 @@ active_partition_actor::behavior_type active_partition(
       if (!self->state.data.synopsis->schema)
         return caf::make_error(ec::logic_error,
                                "active partition must have a schema");
-      auto rp = self->make_response_promise<uint64_t>();
       auto resolved = resolve(*self->state.taxonomies, query_context.expr,
                               self->state.data.synopsis->schema);
-      if (!resolved) {
-        rp.deliver(std::move(resolved.error()));
-        return rp;
-      }
+      if (!resolved)
+        return std::move(resolved.error());
       query_context.expr = std::move(*resolved);
-      // Don't bother with with indexers, etc. if we already have an id set.
-      if (!query_context.ids.empty()) {
-        // TODO: Depending on the selectivity of the query and the rank of the
-        // ids, it may still be beneficial to load some of the indexers to prune
-        // the ids before hitting the store.
-        rp.delegate(self->state.store_builder, atom::query_v,
-                    std::move(query_context));
-        return rp;
-      }
-      auto start = std::chrono::steady_clock::now();
-      // TODO: We should do a candidate check using `self->state.synopsis` and
-      // return early if that doesn't yield any results.
-      auto triples = detail::evaluate(self->state, query_context.expr);
-      if (triples.empty()) {
-        rp.deliver(uint64_t{0});
-        return rp;
-      }
-      auto ids_for_evaluation
-        = detail::get_ids_for_evaluation(self->state.type_ids(), triples);
-      auto eval = self->spawn(evaluator, query_context.expr, std::move(triples),
-                              std::move(ids_for_evaluation));
-      self->request(eval, caf::infinite, atom::run_v)
-        .then(
-          [self, rp, start,
-           query_context = std::move(query_context)](const ids& hits) mutable {
-            duration runtime = std::chrono::steady_clock::now() - start;
-            auto id_str = fmt::to_string(query_context.id);
-            self->send(self->state.accountant, atom::metrics_v,
-                       "partition.lookup.runtime", runtime,
-                       metrics_metadata{
-                         {"query", id_str},
-                         {"issuer", query_context.issuer},
-                         {"partition-type", "active"},
-                       });
-            self->send(self->state.accountant, atom::metrics_v,
-                       "partition.lookup.hits", rank(hits),
-                       metrics_metadata{
-                         {"query", std::move(id_str)},
-                         {"issuer", query_context.issuer},
-                         {"partition-type", "active"},
-                       });
-            // TODO: Use the first path if the expression can be evaluated
-            // exactly.
-            auto* count = caf::get_if<count_query_context>(&query_context.cmd);
-            if (count && count->mode == count_query_context::estimate) {
-              self->send(count->sink, rank(hits));
-              rp.deliver(rank(hits));
-            } else {
-              query_context.ids = hits;
-              rp.delegate(self->state.store_builder, atom::query_v,
-                          std::move(query_context));
-            }
-          },
-          [rp](caf::error& err) mutable {
-            rp.deliver(std::move(err));
-          });
-      return rp;
+      return self->delegate(self->state.store_builder, atom::query_v,
+                            std::move(query_context));
     },
     [self](atom::status,
            status_verbosity v) -> caf::typed_response_promise<record> {
