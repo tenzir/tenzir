@@ -359,6 +359,8 @@ system::default_active_store_actor::behavior_type default_active_store(
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
       VAST_DEBUG("{} starts working on query {}", *self, query_context.id);
+      if (self->state.store->num_events() == 0)
+        return 0ull;
       return handle_query<system::default_active_store_actor>(self,
                                                               query_context);
     },
