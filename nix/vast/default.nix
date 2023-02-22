@@ -62,6 +62,7 @@
       then versionShortOverride'
       else versionLong;
 
+    extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
     bundledPlugins =
       [
         "plugins/cef"
@@ -70,12 +71,20 @@
         "plugins/sigma"
         "plugins/web"
       ]
-      ++ extraPlugins;
+      ++ extraPlugins';
   in
     stdenv.mkDerivation ({
         inherit pname;
         version = versionLong;
         src = vast-source;
+
+        postUnpack = ''
+          mkdir -p source/extra-plugins
+          for plug in ${lib.concatStringsSep " " extraPlugins}; do
+            cp -R $plug source/extra-plugins/$(basename $plug)
+          done
+          chmod -R u+w source/extra-plugins
+        '';
 
         outputs = ["out"] ++ lib.optionals isStatic ["package"];
 
@@ -158,6 +167,11 @@
         '';
 
         hardeningDisable = lib.optional isStatic "pic";
+
+        postBuild = lib.optionalString isStatic ''
+          ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/vast
+        '';
+        allowedRequisites = lib.optionals isStatic [ "out" ];
 
         fixupPhase = lib.optionalString isStatic ''
           rm -rf $out/nix-support
