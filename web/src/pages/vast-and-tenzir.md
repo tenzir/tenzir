@@ -75,7 +75,7 @@ consultants, small business, and researchers with a very small budget. The
 *enterprise edition* focuses on security professionals for larger enterprise
 deployments, OEM/SI embeddings, as well as MSSP and MDR platforms.
 
-:::info Beta Testing
+:::info Early Access
 We are working at full steam towards the launch of our community and enterprise
 editions. If you want to give it a spin as early as possible, we'd love to hear
 from you! We are working with a select group of early adopters who enjoy giving
