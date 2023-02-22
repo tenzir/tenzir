@@ -74,6 +74,9 @@ public:
 private:
   /// Constructs a pattern from a string.
   /// @param str The string containing the pattern.
+  /// @param case_insensitive The pattern case insensitivity modifier flag.
+  /// @param regex The regular expression object that will be used for searching
+  /// and matching.
   explicit pattern(std::string str, bool case_insensitive, std::regex regex);
 
   std::string str_ = {};
