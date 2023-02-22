@@ -4,8 +4,7 @@ sidebar_position: 0
 
 # Formats
 
-A **format** provide can provide the following
-[components](/docs/understand/architecture/components):
+A **format** is a way data is read or written.
 
 1. **Source**: an input format that provides a
    [reader](/docs/understand/architecture/plugins#reader)
@@ -14,8 +13,8 @@ A **format** provide can provide the following
    [writer](/docs/understand/architecture/plugins#writer) implementation that
    prints data.
 
-Sources and sinks compose with a carrier unless they have one built in.
-The table below shows the current support of input (source) and output (sink)
+Sources and sinks interact with a connector unless they have one built in. The
+table below shows the current support of input (source) and output (sink)
 formats.
 
 |Format|Description|Input|Output|
@@ -34,8 +33,8 @@ formats.
 
 Conceptually, getting data in and out of VAST involves two steps:
 
-  1. Acquiring data over a carrier medium by performing I/O
-  2. Converting data between the carrier-native format and Apache Arrow
+  1. Acquiring data from a connector by performing I/O
+  2. Converting data between the connector-native format and Apache Arrow
 
 Sometimes (1) and (2) may not be separable, e.g., when a third-party library
 exposes structured data and performs the needed I/O itself. Because of this
@@ -44,7 +43,7 @@ entanglement, we treat these cases separatetely:
 ![Format](format.excalidraw.svg)
 
 In the left case, data input and output is a blackbox and cannot be separated in
-the format. In the right case, we have control about carrier and format
+the format. In the right case, we have control about connector and format
 independently, allowing us to mix and match the two.
 
 The list below covers all formats that VAST supports.

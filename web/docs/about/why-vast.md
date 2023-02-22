@@ -94,7 +94,7 @@ the following relevant use cases where VAST has the edge:
 - **Data Onboarding**: it takes considerable effort to write and maintain
   schemas for the tables of the respective data sources. Since VAST is
   purpose-built for security data, integrations for key data sources and data
-  carriers exist out of the box.
+  connectors exist out of the box.
 
 - **Rich Typing**: modeling security event data with a generic database often
   reduces the values to strings or integers, as opposed to retaining

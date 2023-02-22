@@ -149,13 +149,13 @@ that parses and ships the data to a [VAST server](/docs/use/run):
 
 ![Ingest process](ingest.excalidraw.svg)
 
-VAST first acquires data through a *carrier* that represents the data transport
-medium. This typically involves I/O and has the effect of slicing the data into
-chunks of bytes. Thereafter, the *format* determines how to parse the bytes into
-structured events. At the server, VAST (1) creates indexes for accelerating
-querying, and (2) creates a *store* instance by transforming the in-memory Arrow
-representation into an on-disk format, e.g., [Feather][feather] or
-[Parquet][parquet].
+VAST first acquires data through a *connector* that represents the data
+transport medium. This typically involves I/O and has the effect of slicing the
+data into chunks of bytes. Thereafter, the *format* determines how to parse the
+bytes into structured events. At the server, VAST (1) creates indexes for
+accelerating querying, and (2) creates a *store* instance by transforming the
+in-memory Arrow representation into an on-disk format, e.g., [Feather][feather]
+or [Parquet][parquet].
 
 [feather]: https://arrow.apache.org/docs/python/feather.html
 [parquet]: https://parquet.apache.org/
