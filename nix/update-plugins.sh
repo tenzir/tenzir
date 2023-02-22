@@ -14,6 +14,15 @@ echo "Updating contrib/vast-plugins"
 vast_plugins_rev="$(get-submodule-rev "${toplevel}/contrib/vast-plugins")"
 vast_plugins_json="$(jq --arg rev "${vast_plugins_rev#rev}" \
   '."rev" = $rev' "${dir}/vast/plugins/source.json")"
+if git -C "${toplevel}/contrib/vast-plugins" branch --contains | grep -q main; then
+  # Remove 'allRefs = true' in case it was there before.
+  vast_plugins_json="$(jq 'del(.allRefs)' <<< "$vast_plugins_json")"
+else
+  # Insert 'allRefs = true' so Nix will find the rev that is not on the main
+  # branch.
+  vast_plugins_json="$(jq '."allRefs" = true' <<< "$vast_plugins_json")"
+fi
+
 echo -E "${vast_plugins_json}" > "${dir}/vast/plugins/source.json"
 
 echo "Extracting plugin versions..."
