@@ -27,20 +27,10 @@ echo -E "${vast_plugins_json}" > "${dir}/vast/plugins/source.json"
 
 echo "Extracting plugin versions..."
 {
-  printf "{\n"
+  printf "[\n"
   for cm in "${toplevel}"/contrib/vast-plugins/*/CMakeLists.txt; do
     plugin="$(basename "$(dirname "$cm")")"
-    # Extract the plugin version from CMakeLists.txt.
-    # TODO: Remove this and only store the plugin names when we no longer print
-    # plugin versions in `vast version`.
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      SED=gsed
-    else
-      SED=sed
-    fi
-    version="$("${SED}" -n 's|[^(]VERSION\s\+\([0-9A-Za-z\.-_]\+\)$|\1|p' "$cm" | tr -d '[:space:]')"
-    echo "plugin = $plugin, version = $version" >&2
-    echo "  $plugin = \"$version\";"
+    echo "  $plugin"
   done
-  printf "}\n"
-} > "${dir}/vast/plugins/versions.nix"
+  printf "]\n"
+} > "${dir}/vast/plugins/names.nix"

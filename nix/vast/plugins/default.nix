@@ -5,13 +5,12 @@
 }: let
   source = builtins.fromJSON (builtins.readFile ./source.json);
   vast-plugins = builtins.fetchGit source;
-  versions = import ./versions.nix;
-  f = name: version:
+  versions = import ./names.nix;
+  f = name:
     callPackage ./generic.nix {
-      pname = name;
-      version = version;
+      inherit name;
       src = "${vast-plugins}/${name}";
       inherit vast;
     };
 in
-  builtins.mapAttrs f versions
+  builtins.map f versions
