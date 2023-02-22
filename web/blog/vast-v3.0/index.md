@@ -1,7 +1,7 @@
 ---
 draft: true
 title: VAST v3.0
-description: VASTQL Refreshments
+description: The VAST Language Evolution — Dataflow Pipelines
 authors: [dominiklohmann, dakostu]
 date: 2023-02-15
 image: /path/to/image.png
@@ -15,34 +15,34 @@ TODO: Outstanding tasks for the blog post before we can publish
 - Create an image for the blog post
 --->
 
-[VAST v3.0][github-vast-release] is out. The release brings some major updates
-to VAST's query language, including the abilities to reshape outputs on demand
-and search using regular expressions.
+[VAST v3.0][github-vast-release] is out. This release brings some major updates
+to the syntax of the VAST language, making it easy to write down dataflow
+pipelines. In particular, the various pipeline operators allow you to reshape
+outputs on demand. Oh, and regular expressions search is now possible, too!
 
 [github-vast-release]: https://github.com/tenzir/vast/releases/tag/v3.0.0
 
 <!--truncate-->
 
-## Unix-Style Pipelines
+## The VAST Language: Dataflow Pipelines
 
 Starting with v3.0, VAST introduces a new way to write pipelines, with a syntax
 similar to [splunk](https://splunk.com), [Kusto][kusto],
-[PRQL](https://prql-lang.org/), and [Zed](https://zed.brimdata.io/).
+[PRQL](https://prql-lang.org/), and [Zed](https://zed.brimdata.io/). Previously,
+VAST only supported a YAML-like definition of pipelines in configuration files
+to deploy them statically during import, export, or use them during compaction.
 
 [kusto]: https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/
 
 The new syntax resembles the well-known Unix paradigm of command chaining. The
 difference to Unix pipelines is that VAST exchanges structured data between
-operators. The `vast export` and `vast import` commands accept such a
-pipeline as a string argument. Previously, VAST only supported a YAML-like
-definition of pipelines in configuration files. This new, ad-hoc form enables
-much quicker data transformation.
-
-Refer to the [pipelines documentation][pipeline-doc] for more details on how to
-use the new pipeline syntax.
+operators. The `vast export` and `vast import` commands now accept such a
+pipeline as a string argument. Refer to the [pipelines
+documentation][pipeline-doc] for more details on how to use the new pipeline
+syntax.
 
 :::info Pipeline YAML Syntax Deprecation
-This release introduces a transitional period from YAML-style to Unix-style
+This release introduces a transitional period from YAML-style to textual
 pipelines. The old YAML syntax for pipelines will be deprecated and removed
 altogether in a future version. The new pipeline operators [`head`][head-op] and
 [`taste`][taste-op] have no YAML equivalent.
@@ -52,15 +52,16 @@ altogether in a future version. The new pipeline operators [`head`][head-op] and
 [head-op]: /docs/understand/language/operators/head
 [taste-op]: /docs/understand/language/operators/taste
 
-## VASTQL Upgrades
+## Language Upgrades
 
-We've made some breaking changes to the the **VAST** **Q**uery **L**anguage
-that we've wanted to do for a long time. Here's a summary:
+We've made some breaking changes to the the VAST language that we've wanted to
+do for a long time. Here's a summary:
 
 1. We removed the term VASTQL: The VAST Query Language is now simply
    the VAST language, and "VAST" will supersede the "VASTQL" abbreviation.
 
 2. Several built-in types have a new name:
+
    - `int` → `int64`
    - `count` → `uint64`
    - `real` → `double`
@@ -92,8 +93,8 @@ much necessary as a preparatory step to making the language more useful.
 ## Regular Expression Evaluation
 
 VAST now supports searching with regular expressions. For example, let's say you
-looking for all events that contain a GUID surrounded by braces whose third and
-fourth section are `5ec2-7015`:
+are looking for all events that contain a GUID surrounded by braces whose third
+and fourth section are `5ec2-7015`:
 
 ```json {0} title="vast export -n 1 json '/\{[0-9a-f]{8}-[0-9a-f]\{4}-5ec2-7015-[0-9a-f]\{12}\}/'"
 {
@@ -122,11 +123,17 @@ fourth section are `5ec2-7015`:
 }
 ```
 
+:::tip Case-Insensitive Patterns
+In addition to writing `/pattern/`, you can specify a regular expression that
+ignores the casing of characters via `/pattern/i`. The `/i` flag is currently
+the only support pattern modifier.
+:::
+
 ## Revamped Status for Event Distribution
 
-The event distribution statistics moved in the output of `vast status`.
+The event distribution statistics moved within the output of `vast status`.
 
-What previously was available under the `index.statistics` section when using
+They were previously available under the `index.statistics` section when using
 the `--detailed` option:
 
 ```json {0} title="VAST v2.4.1 ❯ vast status --detailed | jq .index.statistics"
@@ -147,7 +154,7 @@ the `--detailed` option:
 }
 ```
 
-Is now always under the `catalog` section and shows some additional information:
+It is now under the `catalog` section and shows some additional information:
 
 ```json {0} title="VAST v3.0 ❯ vast status | jq .catalog"
 {
