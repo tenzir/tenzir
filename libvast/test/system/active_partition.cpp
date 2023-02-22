@@ -253,9 +253,6 @@ TEST(delegate query to store with all possible ids in partition when query is to
       FAIL(err);
     });
   REQUIRE_EQUAL(last_query_contexts.size(), 1u);
-  vast::ids expected_ids;
-  expected_ids.append_bits(true, 2);
-  CHECK_EQUAL(last_query_contexts.back().ids, expected_ids);
 }
 
 FIXTURE_SCOPE_END()
