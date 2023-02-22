@@ -160,10 +160,7 @@ void serialize(
               *self->state.persist_path, std::move(*partition))
     .then(
       [=](atom::ok) {
-        // Relinquish ownership and send the shrunken synopsis to
-        // the index.
         self->state.persistence_promise.deliver(self->state.data.synopsis);
-        self->state.data.synopsis.reset();
       },
       [=](caf::error e) {
         self->state.persistence_promise.deliver(std::move(e));
