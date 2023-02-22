@@ -112,8 +112,12 @@ public:
 
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
-  /// @param config The relevant subsection of the configuration.
-  [[nodiscard]] virtual caf::error initialize(data config) = 0;
+  /// @param plugin_config The relevant subsection of the configuration.
+  /// @param global_config The entire VAST configuration for potential access to
+  /// global options.
+  [[nodiscard]] virtual caf::error
+  initialize(const record& plugin_config, const record& global_config)
+    = 0;
 
   /// Returns the unique name of the plugin.
   [[nodiscard]] virtual std::string name() const = 0;

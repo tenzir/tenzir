@@ -246,17 +246,36 @@ load(const std::vector<std::string>& bundled_plugins,
 
 /// Initialize loaded plugins.
 caf::error initialize(caf::actor_system_config& cfg) {
+  auto global_config = record{};
+  auto global_opts = caf::content(cfg);
+  if (auto global_opts_data = to<record>(global_opts)) {
+    global_config = std::move(*global_opts_data);
+  } else {
+    VAST_DEBUG("unable to read global configuration options: {}",
+               global_opts_data.error());
+  }
+  auto plugins_record = record{};
+  if (global_config.contains("plugins")) {
+    if (auto plugins_entry
+        = caf::get_if<record>(&global_config.at("plugins"))) {
+      plugins_record = std::move(*plugins_entry);
+    }
+  }
+  VAST_DEBUG("collected {} global options for plugin initialization",
+             global_config.size());
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
-    // First, try to read the configuration from the merged VAST configuration.
-    if (auto opts = caf::get_if<caf::settings>(
-          &cfg, fmt::format("plugins.{}", plugin->name()))) {
-      if (auto opts_data = to<record>(*opts))
-        merged_config = std::move(*opts_data);
-      else
-        VAST_DEBUG("unable to read plugin options from VAST configuration at "
-                   "plugins.{}: {}",
-                   opts_data.error(), plugin->name());
+    // First, try to read the configurations from the merged VAST configuration.
+    if (plugins_record.contains(plugin->name())) {
+      if (auto plugins_entry
+          = caf::get_if<record>(&plugins_record.at(plugin->name()))) {
+        merged_config = std::move(*plugins_entry);
+      } else {
+        return caf::make_error(ec::invalid_configuration,
+                               fmt::format("configuration for plugin {} "
+                                           "contains invalid format",
+                                           plugin->name()));
+      }
     }
     // Second, try to read the configuration from the plugin-specific
     // configuration files at <config-dir>/plugin/<plugin-name>.yaml.
@@ -274,7 +293,8 @@ caf::error initialize(caf::actor_system_config& cfg) {
       if (yaml_path_exists && yml_path_exists)
         return caf::make_error(
           ec::invalid_configuration,
-          fmt::format("detected configuration files for the {} plugin at "
+          fmt::format("detected configuration files for the "
+                      "{} plugin at "
                       "conflicting paths {} and {}",
                       plugin->name(), yaml_path, yml_path));
       const auto& path = yaml_path_exists ? yaml_path : yml_path;
@@ -300,10 +320,11 @@ caf::error initialize(caf::actor_system_config& cfg) {
     // Third, initialize the plugin with the merged configuration.
     VAST_VERBOSE("initializing the {} plugin with options: {}", plugin->name(),
                  merged_config);
-    if (auto err = plugin->initialize(std::move(merged_config)))
-      return caf::make_error(
-        ec::unspecified, fmt::format("failed to initialize the {} plugin: {} ",
-                                     plugin->name(), err));
+    if (auto err = plugin->initialize(merged_config, global_config))
+      return caf::make_error(ec::unspecified,
+                             fmt::format("failed to initialize "
+                                         "the {} plugin: {} ",
+                                         plugin->name(), err));
   }
   return caf::none;
 }

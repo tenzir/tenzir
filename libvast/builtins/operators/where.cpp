@@ -91,7 +91,9 @@ private:
 
 class plugin final : public virtual pipeline_operator_plugin {
 public:
-  [[nodiscard]] caf::error initialize(data) override {
+  [[nodiscard]] caf::error
+  initialize([[maybe_unused]] const record& plugin_config,
+             [[maybe_unused]] const record& global_config) override {
     return {};
   }
 

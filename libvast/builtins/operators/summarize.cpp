@@ -780,7 +780,8 @@ try_handle_deprecations(const record& config,
 /// The summarize pipeline operator plugin.
 class plugin final : public virtual pipeline_operator_plugin {
 public:
-  caf::error initialize([[maybe_unused]] data config) override {
+  caf::error initialize([[maybe_unused]] const record& plugin_config,
+                        [[maybe_unused]] const record& global_config) override {
     // Native plugins never have any plugin-specific configuration, so there's
     // nothing to do here.
     return {};

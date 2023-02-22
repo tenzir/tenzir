@@ -30,7 +30,9 @@ namespace vast::plugins::web {
 /// The API plugin.
 class plugin final : public virtual command_plugin,
                      public virtual component_plugin {
-  [[nodiscard]] caf::error initialize(data) override {
+  [[nodiscard]] caf::error
+  initialize([[maybe_unused]] const record& plugin_config,
+             [[maybe_unused]] const record& global_config) override {
     // We don't need to do anything here since the plugin config currently
     // only applies to the server command, which gets its own settings.
     return {};
