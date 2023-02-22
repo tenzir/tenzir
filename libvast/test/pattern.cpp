@@ -20,28 +20,32 @@ using namespace vast;
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-#define MAKE_PATTERN(str) unbox(to<pattern>("/" str "/"))
+namespace {
+inline auto make_pattern(std::string_view str) {
+  return unbox(to<pattern>(fmt::format("/{}/", str)));
+}
+} // namespace
 
 TEST(functionality) {
   std::string str = "1";
-  CHECK(MAKE_PATTERN("[0-9]").match(str));
-  CHECK(!MAKE_PATTERN("[^1]").match(str));
+  CHECK(make_pattern("[0-9]").match(str));
+  CHECK(!make_pattern("[^1]").match(str));
   str = "foobarbaz";
-  CHECK(MAKE_PATTERN("bar").search(str));
-  CHECK(!MAKE_PATTERN("bar").search("FOOBARBAZ"));
-  CHECK(!MAKE_PATTERN("^bar$").search(str));
-  CHECK(MAKE_PATTERN("^\\w{3}\\w{3}\\w{3}$").match(str));
+  CHECK(make_pattern("bar").search(str));
+  CHECK(!make_pattern("bar").search("FOOBARBAZ"));
+  CHECK(!make_pattern("^bar$").search(str));
+  CHECK(make_pattern("^\\w{3}\\w{3}\\w{3}$").match(str));
   str = "Holla die Waldfee!";
-  auto p = MAKE_PATTERN("\\w+ die Waldfe{2}.");
+  auto p = make_pattern("\\w+ die Waldfe{2}.");
   CHECK(p.match(str));
   CHECK(p.search(str));
-  p = MAKE_PATTERN("(\\w+ )");
+  p = make_pattern("(\\w+ )");
   CHECK(!p.match(str));
   CHECK(p.search(str));
 }
 
 TEST(comparison with string) {
-  auto rx = MAKE_PATTERN("foo.*baz");
+  auto rx = make_pattern("foo.*baz");
   CHECK("foobarbaz"sv == rx);
   CHECK(rx == "foobarbaz"sv);
 }
@@ -65,7 +69,7 @@ TEST(case insensitive) {
 }
 
 TEST(printable) {
-  auto p = MAKE_PATTERN("(\\w+ \\/)");
+  auto p = make_pattern("(\\w+ \\/)");
   CHECK_EQUAL(to_string(p), "/(\\w+ \\/)/"sv);
 }
 
