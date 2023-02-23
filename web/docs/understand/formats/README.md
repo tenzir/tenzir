@@ -38,7 +38,7 @@ Conceptually, getting data in and out of VAST involves two steps:
 
 Sometimes (1) and (2) may not be separable, e.g., when a third-party library
 exposes structured data and performs the needed I/O itself. Because of this
-entanglement, we treat these cases separatetely:
+entanglement, we treat these cases separately:
 
 ![Format](format.excalidraw.svg)
 
