@@ -539,7 +539,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
   VAST_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
-    VAST_DEBUG("{} got DOWN from {}", *self, msg.source);
+    VAST_DEBUG("{} got DOWN from {} with {}", *self, msg.source, msg.reason);
     if (!self->state.tearing_down) {
       auto actor = caf::actor_cast<caf::actor>(msg.source);
       auto component = self->state.registry.remove(actor);
