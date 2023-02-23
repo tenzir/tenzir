@@ -169,4 +169,18 @@ TEST(stdin loader - one complete chunk) {
   REQUIRE(generated_chunk_it == loaded_chunk_generator.end());
 }
 
+TEST(stdin loader - initialization) {
+  input_file = freopen(VAST_TEST_PATH "artifacts/inputs/one_complete_chunk.txt",
+                       "r", stdin);
+  vast::stdin_loader_plugin loader_plugin;
+  record import_settings;
+  import_settings["read-timeout"] = "50ms";
+  record vast_settings;
+  vast_settings["import"] = import_settings;
+  record global_settings;
+  global_settings["vast"] = vast_settings;
+  auto load_error = loader_plugin.initialize(global_settings, global_settings);
+  REQUIRE_SUCCESS(load_error);
+}
+
 FIXTURE_SCOPE_END()
