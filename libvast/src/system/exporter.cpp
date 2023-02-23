@@ -94,8 +94,8 @@ void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
     return;
   for (auto& t : *transformed)
     self->state.results.push(std::move(t));
-  if (!self->state.source) [[unlikely]]
-    attach_stream(self);
+  // if (!self->state.source) [[unlikely]]
+  //   attach_stream(self);
 }
 
 void buffer_results(exporter_actor::stateful_pointer<exporter_state> self,
@@ -238,8 +238,10 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   VAST_DEBUG("spawned exporter with {} pipelines", pipelines.size());
   self->state.pipeline = pipeline_executor{std::move(pipelines)};
   // Always fetch all partitions for blocking pipelines.
-  if (self->state.pipeline.is_blocking())
+  if (self->state.pipeline.is_blocking()) {
+    VAST_INFO("pipeline is blocking. Size:{}", pipelines.size());
     self->state.query_context.taste = std::numeric_limits<uint32_t>::max();
+  }
   self->state.index = std::move(index);
   if (has_continuous_option(options)) {
     if (self->state.pipeline.is_blocking()) {
