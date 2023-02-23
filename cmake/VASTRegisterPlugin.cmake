@@ -481,8 +481,9 @@ function (VASTRegisterPlugin)
     # Determine the plugin version. We use the CMake project version, and then
     # optionally append the Git revision that last touched the project,
     # essentially reconstructing git-describe except for the revision count.
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
-         "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@VAST_PLUGIN_VERSION@\";\n")
+    file(
+      WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.cpp.in"
+      "const char* ${PLUGIN_TARGET_IDENTIFIER} = \"@VAST_PLUGIN_VERSION@\";\n")
     string(TOUPPER "VAST_PLUGIN_${PLUGIN_TARGET}_REVISION"
                    VAST_PLUGIN_REVISION_VAR)
     if (DEFINED "${VAST_PLUGIN_REVISION_VAR}")
