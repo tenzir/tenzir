@@ -1,4 +1,5 @@
 {
+  lib,
   callPackage,
   vast,
   ...
@@ -13,4 +14,4 @@
       inherit vast;
     };
 in
-  builtins.map f versions
+  lib.genAttrs versions f

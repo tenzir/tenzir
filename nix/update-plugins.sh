@@ -30,7 +30,7 @@ echo "Extracting plugin versions..."
   printf "[\n"
   for cm in "${toplevel}"/contrib/vast-plugins/*/CMakeLists.txt; do
     plugin="$(basename "$(dirname "$cm")")"
-    echo "  $plugin"
+    echo "  \"$plugin\""
   done
   printf "]\n"
 } > "${dir}/vast/plugins/names.nix"

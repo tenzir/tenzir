@@ -171,7 +171,7 @@
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/vast
         '';
-        allowedRequisites = lib.optionals isStatic [ "out" ];
+        allowedRequisites = lib.optionals isStatic ["out"];
 
         fixupPhase = lib.optionalString isStatic ''
           rm -rf $out/nix-support

@@ -1,6 +1,6 @@
 [
-  compaction
-  inventory
-  matcher
-  netflow
+  "compaction"
+  "inventory"
+  "matcher"
+  "netflow"
 ]
