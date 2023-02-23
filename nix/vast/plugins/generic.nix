@@ -1,14 +1,13 @@
 {
   lib,
   stdenv,
-  pname,
-  version,
+  name,
   src,
   cmake,
   vast,
 }:
 stdenv.mkDerivation {
-  inherit pname version src;
+  inherit name src;
 
   nativeBuildInputs = [cmake];
   buildInputs = [vast];

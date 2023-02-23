@@ -37,10 +37,8 @@ jobs:
           pip install --upgrade black
           # Note: black fails when it doesn't have to do anything.
           git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
-            grep -v '\(\.json\|\.csv\|\.ipynb\|\.hpp\.in\|\.ref\|\.example\|\.txt\|\.lock\|\.js\)$' |
-            grep -v '\(\.Renviron\)' |
-            grep -v 'plugins/web/ui' |
-            2>/dev/null xargs black || true
+            grep '\.py$' |
+            xargs --no-run-if-empty black || true
           git diff --exit-code
 
       - name: yamllint

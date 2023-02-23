@@ -1,0 +1,6 @@
+[
+  "compaction"
+  "inventory"
+  "matcher"
+  "netflow"
+]
