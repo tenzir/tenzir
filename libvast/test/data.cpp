@@ -203,6 +203,10 @@ TEST(evaluation - pattern matching) {
     evaluate(unbox(to<pattern>("/f.*o/")), relational_operator::equal, "foo"));
   CHECK(
     evaluate("foo", relational_operator::equal, unbox(to<pattern>("/f.*o/"))));
+  CHECK(
+    evaluate(unbox(to<pattern>("/f.*o/i")), relational_operator::equal, "FOO"));
+  CHECK(
+    evaluate("FOO", relational_operator::equal, unbox(to<pattern>("/f.*o/i"))));
 }
 
 TEST(serialization) {

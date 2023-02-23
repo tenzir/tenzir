@@ -21,8 +21,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 namespace {
-inline auto make_pattern(std::string_view str) {
-  return unbox(to<pattern>(fmt::format("/{}/", str)));
+inline auto make_pattern(std::string_view str, bool case_insensitive = false) {
+  return unbox(
+    to<pattern>(fmt::format("/{}/{}", str, (case_insensitive ? "i" : ""))));
 }
 } // namespace
 
@@ -51,7 +52,7 @@ TEST(comparison with string) {
 }
 
 TEST(case insensitive) {
-  auto pat = unbox(pattern::make("bar", true));
+  auto pat = make_pattern("bar", true);
   CHECK(pat.search("bar"));
   CHECK(pat.search("BAR"));
   CHECK(pat.search("Bar"));
