@@ -27,13 +27,23 @@ class pattern {
   friend access;
 
 public:
+  struct options {
+    bool case_insensitive{false};
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, options& o) -> bool {
+      return detail::apply_all(f, o.case_insensitive);
+      ;
+    }
+  };
+
   /// optional flag to make a pattern string case-insensitive.
   static inline auto constexpr case_insensitive_flag = 'i';
 
   /// Default-constructs an empty pattern.
   pattern() = default;
 
-  static auto make(std::string str, bool case_insensitive = false) noexcept
+  static auto make(std::string str, options pattern_options = {false}) noexcept
     -> caf::expected<pattern>;
 
   /// Matches a string against the pattern.
@@ -48,7 +58,7 @@ public:
 
   [[nodiscard]] const std::string& string() const;
 
-  [[nodiscard]] bool case_insensitive() const;
+  [[nodiscard]] const options& pattern_options() const;
 
   // -- concepts // ------------------------------------------------------------
 
@@ -60,9 +70,9 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, pattern& p) -> bool {
-    auto ok = detail::apply_all(f, p.str_, p.case_insensitive_);
+    auto ok = detail::apply_all(f, p.str_, p.options_);
     if constexpr (Inspector::is_loading) {
-      auto result = pattern::make(std::move(p.str_), p.case_insensitive_);
+      auto result = pattern::make(std::move(p.str_), p.options_);
       VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
       p = std::move(*result);
     }
@@ -77,10 +87,10 @@ private:
   /// @param case_insensitive The pattern case insensitivity modifier flag.
   /// @param regex The regular expression object that will be used for searching
   /// and matching.
-  explicit pattern(std::string str, bool case_insensitive, std::regex regex);
+  explicit pattern(std::string str, options pattern_options, std::regex regex);
 
   std::string str_ = {};
-  bool case_insensitive_ = {};
+  options options_ = {};
   std::regex regex_ = {};
 };
 

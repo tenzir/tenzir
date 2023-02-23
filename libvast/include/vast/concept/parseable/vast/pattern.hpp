@@ -33,7 +33,7 @@ struct access::parser_base<pattern>
     if (!slash_delimited_string{}(f, l, str))
       return false;
     auto case_insensitive = parsers::chr{pattern::case_insensitive_flag}(f, l);
-    auto result = pattern::make(std::move(str), case_insensitive);
+    auto result = pattern::make(std::move(str), {case_insensitive});
     if (!result)
       return false;
     a = std::move(*result);

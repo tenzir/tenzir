@@ -27,7 +27,7 @@ struct access::printer<vast::pattern>
   bool print(Iterator& out, const pattern& pat) const {
     auto escaper = detail::make_extra_print_escaper("/");
     auto p = '/' << printers::escape(escaper)
-                 << ((pat.case_insensitive_) ? "/i" : "/");
+                 << ((pat.options_.case_insensitive) ? "/i" : "/");
     return p.print(out, pat.str_);
   }
 };

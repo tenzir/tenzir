@@ -21,7 +21,8 @@ namespace vast {
 // -- pattern_view ------------------------------------------------------------
 
 pattern_view::pattern_view(const pattern& x)
-  : pattern_{x.string()}, case_insensitive_{x.case_insensitive()} {
+  : pattern_{x.string()},
+    case_insensitive_{x.pattern_options().case_insensitive} {
   // nop
 }
 
@@ -153,7 +154,8 @@ std::string materialize(std::string_view x) {
 }
 
 pattern materialize(pattern_view x) {
-  auto result = pattern::make(std::string{x.string()}, x.case_insensitive());
+  auto options = pattern::options{x.case_insensitive()};
+  auto result = pattern::make(std::string{x.string()}, options);
   VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
   return std::move(*result);
 }
