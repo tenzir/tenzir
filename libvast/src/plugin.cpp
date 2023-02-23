@@ -451,12 +451,17 @@ auto stdin_loader_plugin::make_default_parser(options,
 caf::error
 stdin_loader_plugin::initialize([[maybe_unused]] const record& plugin_config,
                                 const record& global_config) {
-  if (auto import_timeout_entry = caf::get_if<std::string>(
-        &global_config.at("vast.import.read-timeout"))) {
-    if (auto timeout_duration = to<vast::duration>(*import_timeout_entry)) {
-      read_timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
-        *timeout_duration);
-      return caf::none;
+  if (auto vast_settings = caf::get_if<record>(&global_config.at("vast"))) {
+    if (auto import_settings
+        = caf::get_if<record>(&vast_settings->at("import"))) {
+      if (auto read_timeout_entry
+          = caf::get_if<std::string>(&import_settings->at("read-timeout"))) {
+        if (auto timeout_duration = to<vast::duration>(*read_timeout_entry)) {
+          read_timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+            *timeout_duration);
+          return caf::none;
+        }
+      }
     }
   }
   VAST_DEBUG("unable to read vast.import.read-timeout, resorting to "

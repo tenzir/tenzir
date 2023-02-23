@@ -427,6 +427,8 @@ public:
 
 class stdin_loader_plugin : public virtual loader_plugin {
 public:
+  static constexpr inline auto max_chunk_size = size_t{16384};
+
   [[nodiscard]] auto make_loader(options, operator_control_plane&) const
     -> caf::expected<input_loader> override;
 
@@ -438,8 +440,8 @@ public:
 
   [[nodiscard]] std::string name() const override;
 
-  static constexpr inline auto max_chunk_size = size_t{16384};
-  std::chrono::milliseconds read_timeout{5000};
+private:
+  std::chrono::milliseconds read_timeout{vast::defaults::import::read_timeout};
 };
 
 // -- plugin_ptr ---------------------------------------------------------------
