@@ -39,6 +39,7 @@ bool operator==(pattern_view lhs, pattern_view rhs) noexcept {
 }
 
 std::strong_ordering operator<=>(pattern_view lhs, pattern_view rhs) noexcept {
+  // This is a polyfill for std::lexicographical_compare_threeway
   while (!lhs.pattern_.empty() && !rhs.pattern_.empty()) {
     if (lhs.pattern_[0] < rhs.pattern_[0])
       return std::strong_ordering::less;
