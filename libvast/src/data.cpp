@@ -200,8 +200,9 @@ caf::error unpack(const fbs::Data& from, data& to) {
     }
     case fbs::data::Data::pattern: {
       auto options = pattern_options{};
-      options.case_insensitive
-        = from.data_as_pattern()->options()->case_insensitive();
+      if (auto* unpacked_options = from.data_as_pattern()->options()) {
+        options.case_insensitive = unpacked_options->case_insensitive();
+      }
       auto result = pattern::make(from.data_as_pattern()->value()->str(),
                                   std::move(options));
       if (!result)
