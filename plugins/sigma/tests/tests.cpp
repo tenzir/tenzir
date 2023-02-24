@@ -40,16 +40,23 @@ expression to_expr(std::string_view expr) {
 } // namespace
 
 TEST(wildcard unescaping) {
-  CHECK_EQUAL(to_search_id("x: '*'"), to_expr("x == /.*/"));
-  CHECK_EQUAL(to_search_id("x: '?'"), to_expr("x == /./"));
-  CHECK_EQUAL(to_search_id("x: 'f*'"), to_expr("x == /f.*/"));
-  CHECK_EQUAL(to_search_id("x: 'f?'"), to_expr("x == /f./"));
-  CHECK_EQUAL(to_search_id("x: 'f*bar'"), to_expr("x == /f.*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f?bar'"), to_expr("x == /f.bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\*bar'"), to_expr("x == /f*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\?bar'"), to_expr("x == /f?bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\\\*bar'"), to_expr("x == /f\\.*bar/"));
-  CHECK_EQUAL(to_search_id("x: 'f\\\\?bar'"), to_expr("x == /f\\.bar/"));
+  auto check_pattern_equality
+    = [](std::string_view sigma, std::string_view pattern) {
+        // Patterns generated from Sigma patterns are not case sensitive.
+        auto case_insensitive_pattern = fmt::format("{}i", pattern);
+        CHECK_EQUAL(to_search_id(sigma), to_expr(case_insensitive_pattern));
+        CHECK_NOT_EQUAL(to_search_id(sigma), to_expr(pattern));
+      };
+  check_pattern_equality("x: '*'", "x == /.*/");
+  check_pattern_equality("x: '?'", "x == /./");
+  check_pattern_equality("x: 'f*'", "x == /f.*/");
+  check_pattern_equality("x: 'f?'", "x == /f./");
+  check_pattern_equality("x: 'f*bar'", "x == /f.*bar/");
+  check_pattern_equality("x: 'f?bar'", "x == /f.bar/");
+  check_pattern_equality("x: 'f\\*bar'", "x == /f*bar/");
+  check_pattern_equality("x: 'f\\?bar'", "x == /f?bar/");
+  check_pattern_equality("x: 'f\\\\*bar'", "x == /f\\.*bar/");
+  check_pattern_equality("x: 'f\\\\?bar'", "x == /f\\.bar/");
 }
 
 TEST(maps - single value) {
