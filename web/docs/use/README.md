@@ -4,8 +4,8 @@ This section describes VAST from a **user perspective**. There exist three
 different user interfaces today:
 
 1. Command line interface (CLI)
-2. REST API
-3. Python library
+2. [REST API](use/integrate/rest-api)
+3. [Python library](use/integrate/python)
 
 ![Interfaces](interfaces.excalidraw.svg)
 
