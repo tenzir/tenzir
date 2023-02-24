@@ -28,7 +28,7 @@ table String {
   value: string;
 }
 
-struct PatternOptions {
+table PatternOptions {
   case_insensitive: bool;
 }
 

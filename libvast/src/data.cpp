@@ -91,10 +91,10 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
                              value_offset.Union());
     },
     [&](const pattern& value) -> flatbuffers::Offset<fbs::Data> {
-      auto options = fbs::data::PatternOptions{};
-      options.mutate_case_insensitive(value.options().case_insensitive);
+      auto options = fbs::data::CreatePatternOptions(
+        builder, value.options().case_insensitive);
       const auto value_offset = fbs::data::CreatePattern(
-        builder, builder.CreateString(value.string()), &options);
+        builder, builder.CreateString(value.string()), options);
       return fbs::CreateData(builder, fbs::data::Data::pattern,
                              value_offset.Union());
     },
