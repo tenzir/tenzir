@@ -153,7 +153,7 @@ std::string materialize(std::string_view x) {
 }
 
 pattern materialize(pattern_view x) {
-  auto options = pattern::pattern_options{x.case_insensitive()};
+  auto options = pattern_options{x.case_insensitive()};
   auto result = pattern::make(std::string{x.string()}, options);
   VAST_ASSERT(result, fmt::to_string(result.error()).c_str());
   return std::move(*result);

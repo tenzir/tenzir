@@ -18,7 +18,7 @@
 
 namespace vast {
 
-auto pattern::make(std::string str, pattern::pattern_options options) noexcept
+auto pattern::make(std::string str, pattern_options options) noexcept
   -> caf::expected<pattern> {
   try {
     auto mode = std::regex_constants::ECMAScript;
@@ -44,7 +44,7 @@ const std::string& pattern::string() const {
   return str_;
 }
 
-const pattern::pattern_options& pattern::options() const {
+const pattern_options& pattern::options() const {
   return options_;
 }
 

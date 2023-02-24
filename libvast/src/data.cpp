@@ -199,7 +199,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       return caf::none;
     }
     case fbs::data::Data::pattern: {
-      auto options = pattern::pattern_options{};
+      auto options = pattern_options{};
       options.case_insensitive
         = from.data_as_pattern()->options()->case_insensitive();
       auto result = pattern::make(from.data_as_pattern()->value()->str(),

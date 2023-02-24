@@ -22,21 +22,22 @@ namespace vast {
 struct access;
 class data;
 
+// options that modify pattern behavior.
+struct pattern_options {
+  bool case_insensitive{false};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, pattern_options& o) -> bool {
+    return detail::apply_all(f, o.case_insensitive);
+    ;
+  }
+};
+
 /// A regular expression.
 class pattern {
   friend access;
 
 public:
-  struct pattern_options {
-    bool case_insensitive{false};
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, pattern_options& o) -> bool {
-      return detail::apply_all(f, o.case_insensitive);
-      ;
-    }
-  };
-
   /// optional flag to make a pattern string case-insensitive.
   static inline auto constexpr case_insensitive_flag = 'i';
 
