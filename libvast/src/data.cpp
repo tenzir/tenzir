@@ -92,7 +92,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const data& value) {
     },
     [&](const pattern& value) -> flatbuffers::Offset<fbs::Data> {
       auto options = fbs::data::PatternOptions{};
-      options.mutate_case_insensitive(value.pattern_options().case_insensitive);
+      options.mutate_case_insensitive(value.options().case_insensitive);
       const auto value_offset = fbs::data::CreatePattern(
         builder, builder.CreateString(value.string()), &options);
       return fbs::CreateData(builder, fbs::data::Data::pattern,
@@ -199,7 +199,7 @@ caf::error unpack(const fbs::Data& from, data& to) {
       return caf::none;
     }
     case fbs::data::Data::pattern: {
-      auto options = pattern::options{};
+      auto options = pattern::pattern_options{};
       options.case_insensitive
         = from.data_as_pattern()->options()->case_insensitive();
       auto result = pattern::make(from.data_as_pattern()->value()->str(),

@@ -18,15 +18,14 @@
 
 namespace vast {
 
-auto pattern::make(std::string str, pattern::options pattern_options) noexcept
+auto pattern::make(std::string str, pattern::pattern_options options) noexcept
   -> caf::expected<pattern> {
   try {
     auto mode = std::regex_constants::ECMAScript;
-    if (pattern_options.case_insensitive)
+    if (options.case_insensitive)
       mode |= std::regex_constants::icase;
     auto regex = std::regex{str, mode};
-    return pattern{std::move(str), std::move(pattern_options),
-                   std::move(regex)};
+    return pattern{std::move(str), std::move(options), std::move(regex)};
   } catch (const std::regex_error& err) {
     return caf::make_error(
       ec::syntax_error, fmt::format("failed to create regex: {}", err.what()));
@@ -45,7 +44,7 @@ const std::string& pattern::string() const {
   return str_;
 }
 
-const pattern::options& pattern::pattern_options() const {
+const pattern::pattern_options& pattern::options() const {
   return options_;
 }
 
@@ -67,10 +66,8 @@ bool convert(const pattern& p, data& d) {
   return true;
 }
 
-pattern::pattern(std::string str, options pattern_options, std::regex regex)
-  : str_{std::move(str)},
-    options_{std::move(pattern_options)},
-    regex_{std::move(regex)} {
+pattern::pattern(std::string str, pattern_options options, std::regex regex)
+  : str_{std::move(str)}, options_{std::move(options)}, regex_{std::move(regex)} {
   // nop
 }
 

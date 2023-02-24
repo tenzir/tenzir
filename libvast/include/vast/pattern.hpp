@@ -27,11 +27,11 @@ class pattern {
   friend access;
 
 public:
-  struct options {
+  struct pattern_options {
     bool case_insensitive{false};
 
     template <class Inspector>
-    friend auto inspect(Inspector& f, options& o) -> bool {
+    friend auto inspect(Inspector& f, pattern_options& o) -> bool {
       return detail::apply_all(f, o.case_insensitive);
       ;
     }
@@ -43,7 +43,7 @@ public:
   /// Default-constructs an empty pattern.
   pattern() = default;
 
-  static auto make(std::string str, options pattern_options = {false}) noexcept
+  static auto make(std::string str, pattern_options options = {false}) noexcept
     -> caf::expected<pattern>;
 
   /// Matches a string against the pattern.
@@ -58,7 +58,7 @@ public:
 
   [[nodiscard]] const std::string& string() const;
 
-  [[nodiscard]] const options& pattern_options() const;
+  [[nodiscard]] const pattern_options& options() const;
 
   // -- concepts // ------------------------------------------------------------
 
@@ -87,10 +87,11 @@ private:
   /// @param case_insensitive The pattern case insensitivity modifier flag.
   /// @param regex The regular expression object that will be used for searching
   /// and matching.
-  explicit pattern(std::string str, options pattern_options, std::regex regex);
+  explicit pattern(std::string str, pattern_options pattern_options,
+                   std::regex regex);
 
   std::string str_ = {};
-  options options_ = {};
+  pattern_options options_ = {};
   std::regex regex_ = {};
 };
 
