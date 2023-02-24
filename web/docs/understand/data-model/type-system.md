@@ -98,7 +98,8 @@ schema](https://json-schema.org/) fused with [Kaitai](https://kaitai.io/), with
 the goal that humans can jot it down quickly. We use YAML as vehicle to express
 the structure because that's already VAST's language for configuration.
 
-How do you refer to a type? The basic scaffold looks like this:
+How do you create a type? Let `T` be an existing type, then you can construct a
+new type like this:
 
 ```yaml
 type: T
@@ -107,9 +108,10 @@ attributes:
   - value # values are optional
 ```
 
-This assumes that the type `T` exists already. This begs a recursive question:
-what are valid values for `T`? These are either basic types, such as `bool`,
-`string`, `ip`, or types defined according the rules described below.
+This begs a recursive question: what are valid values for `T`?
+
+The answer: basic types, such as `bool`, `string`, `ip`, or complex types
+defined according the rules described below.
 
 ### Alias Type
 
@@ -129,6 +131,15 @@ url:
   type: string
   attributes:
     - unescaped
+```
+
+Aliases nest. For example, you can create three aliased types `A` → `B` → `C` →
+`string` like this:
+
+```yaml
+A:
+  B:
+    C: string
 ```
 
 ### Enumeration Type
