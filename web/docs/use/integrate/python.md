@@ -47,7 +47,6 @@ asyncio.run(example())
 PyVAST is meant to expose all the VAST features that are relevant in a Python
 environment. For now though, it is still in active development and only the
 following interfaces are exposed:
-- `start`
 - `export`
 - `count`
 - `status`

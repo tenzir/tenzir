@@ -94,12 +94,6 @@ class VAST:
             args["max_events"] = limit
         return args
 
-    async def start(self):
-        """Starts a VAST node."""
-        proc = await self.cli.start().exec()
-        await proc.communicate()
-        logger.debug(proc.stderr.decode())
-
     async def export(
         self,
         expression: str,
