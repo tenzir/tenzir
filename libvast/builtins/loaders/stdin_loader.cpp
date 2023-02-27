@@ -66,22 +66,26 @@ public:
   [[nodiscard]] caf::error
   initialize([[maybe_unused]] const record& plugin_config,
              const record& global_config) override {
-    if (auto vast_settings = caf::get_if<record>(&global_config.at("vast"))) {
-      if (auto import_settings
-          = caf::get_if<record>(&vast_settings->at("import"))) {
-        if (auto read_timeout_entry
-            = caf::get_if<std::string>(&import_settings->at("read-timeout"))) {
-          if (auto timeout_duration = to<vast::duration>(*read_timeout_entry)) {
-            read_timeout
-              = std::chrono::duration_cast<std::chrono::milliseconds>(
-                *timeout_duration);
-            return caf::none;
-          }
-        }
-      }
+    if (!global_config.contains("vast")) {
+      return caf::none;
     }
-    VAST_DEBUG("unable to read vast.import.read-timeout, resorting to "
-               "default value");
+    auto vast_settings = caf::get_if<record>(&global_config.at("vast"));
+    if (!vast_settings || !vast_settings->contains("import")) {
+      return caf::none;
+    }
+    auto import_settings = caf::get_if<record>(&vast_settings->at("import"));
+    if (!import_settings || !import_settings->contains("read-timeout")) {
+      return caf::none;
+    }
+    auto read_timeout_entry
+      = caf::get_if<std::string>(&import_settings->at("read-timeout"));
+    if (!read_timeout_entry) {
+      return caf::none;
+    }
+    if (auto timeout_duration = to<vast::duration>(*read_timeout_entry)) {
+      read_timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+        *timeout_duration);
+    }
     return caf::none;
   }
 
