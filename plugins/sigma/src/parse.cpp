@@ -189,7 +189,7 @@ struct detection_parser : parser_base<detection_parser> {
 // - Regular expressions are case-sensitive by default
 // - You don't have to escape characters except the string quotation
 //   marks '
-std::optional<pattern> make_pattern(std::string_view str) {
+std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
   auto f = str.begin();
   auto l = str.end();
   std::string rx;
@@ -235,7 +235,7 @@ std::optional<pattern> make_pattern(std::string_view str) {
   // TODO: check whether we need ^ and $ anchors.
   if (str == rx)
     return {};
-  return pattern{std::move(rx)};
+  return pattern::make(std::move(rx));
 }
 
 } // namespace
@@ -323,18 +323,24 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                                  "utf16 not yet implemented");
         } else if (*i == "re") {
           op = relational_operator::equal;
-          auto to_re = [](const data& d) -> data {
+          auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{
-              [](const auto& x) -> data {
+              [](const auto& x) -> caf::expected<data> {
                 auto str = to_string(x);
-                if (auto pat = make_pattern(str))
-                  return pat;
+                if (auto result = make_pattern(str)) {
+                  if (!result)
+                    return std::move(result->error());
+                  return std::move(**result);
+                }
                 return str;
               },
-              [](const std::string& x) -> data {
-                return pattern{x};
+              [](const std::string& x) -> caf::expected<data> {
+                auto result = pattern::make(x);
+                if (!result)
+                  return std::move(result.error());
+                return std::move(*result);
               },
-              [](const pattern& x) -> data {
+              [](pattern x) -> caf::expected<data> {
                 return x;
               },
             };
@@ -366,9 +372,9 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         // Convert strings to patterns if wildcarding is present.
         if (auto str = caf::get_if<std::string>(&value))
           if (!str->empty())
-            if (auto pat = make_pattern(*str))
+            if (auto pat = make_pattern(*str); pat && *pat)
               return predicate{extractor, relational_operator::equal,
-                               data{std::move(*pat)}};
+                               data{std::move(**pat)}};
         // The modifier 'base64offset' is unique in that it creates
         // multiple values represented as list. If followed by 'contains', then
         // we have substring search on each value; otherwise we can use equality

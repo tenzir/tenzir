@@ -8,7 +8,11 @@
 
 #include "vast/view.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/test/test.hpp"
+
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 using namespace std::literals;
@@ -157,7 +161,7 @@ TEST(hashing views) {
   data i = int64_t{1};
   data c = "chars";
   data s = "string"s;
-  data p = pattern{"x"};
+  data p = unbox(to<pattern>("/x/"));
   data v = list{int64_t{42}, true, "foo", 4.2};
   data m = map{{int64_t{42}, true}, {int64_t{84}, false}};
   data r = record{{"foo", int64_t{42}}, {"bar", true}};
