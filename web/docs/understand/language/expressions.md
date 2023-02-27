@@ -10,6 +10,11 @@ on multiple different schemas at once, as opposed to traditional expressions
 that apply to a single, fixed schema. The language captures this heterogeneity
 with [extractors](#extractors).
 
+:::tip Where?
+Expressions occur in pipeline operators. The [where](operators/where) operator
+is the most prominent example.
+:::
+
 An *expression* is a function over an event that evaluates to `true` or
 `false`, indicating whether it qualifies as result. Expression operands are
 either sub-expressions or predicates, and can be composed via *conjunctions*
