@@ -35,7 +35,7 @@ auto test_schema = record_type{
 
 auto test_layout2 = record_type{
   {"struct", record_type{
-    {"foo", type{string_type{}, {type::attribute_view{"required"}}}},
+    {"foo", type{string_type{}, {{"required"}}}},
     {"bar", string_type{}}
   }}};
 
