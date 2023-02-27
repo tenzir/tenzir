@@ -4,12 +4,11 @@
   versionLongOverride,
 }: final: prev: let
   inherit (final) lib;
-  inherit (final.stdenv.hostPlatform) isMusl;
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv =
     if final.stdenv.isDarwin
-    then final.llvmPackages_12.stdenv
-    else final.gcc11Stdenv;
+    then final.llvmPackages_15.stdenv
+    else final.stdenv;
 in {
   abseil-cpp =
     if !isStatic
@@ -36,34 +35,6 @@ in {
           ];
         doCheck = false;
         doInstallCheck = false;
-      });
-  flatbuffers = prev.flatbuffers.overrideAttrs (_: rec {
-    version = "1.12.0";
-    src = prev.fetchFromGitHub {
-      owner = "google";
-      repo = "flatbuffers";
-      rev = "v${version}";
-      hash = "sha256-L1B5Y/c897Jg9fGwT2J3+vaXsZ+lfXnskp8Gto1p/Tg=";
-    };
-    NIX_CFLAGS_COMPILE = "-Wno-error=class-memaccess";
-  });
-  libevent =
-    if !isStatic
-    then prev.libevent
-    else
-      prev.libevent.overrideAttrs (old: {
-        outputs = ["out"];
-        outputBin = null;
-        propagatedBuildOutputs = ["out"];
-        nativeBuildInputs =
-          old.nativeBuildInputs
-          ++ lib.optionals isStatic [
-            prev.buildPackages.cmake
-          ];
-        cmakeFlags = [
-          "-DEVENT__LIBRARY_TYPE=STATIC"
-        ];
-        postInstall = null;
       });
   http-parser =
     if !isStatic
@@ -138,38 +109,11 @@ in {
         ];
         dontStrip = true;
       });
-  c-ares = prev.c-ares.overrideAttrs (old: {
-    cmakeFlags =
-      (old.cmakeFlags or [])
-      ++ lib.optionals isStatic [
-        "-DCARES_SHARED=OFF"
-        "-DCARES_STATIC=ON"
-      ];
-  });
   fast_float = final.callPackage ./fast_float {};
   jemalloc = prev.jemalloc.overrideAttrs (old: {
     EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
     configureFlags = old.configureFlags ++ ["--enable-prof" "--enable-stats"];
     doCheck = !isStatic;
-  });
-  re2 = prev.re2.overrideAttrs (_: {
-    # Times out.
-    doInstallCheck = !isStatic;
-  });
-  simdjson = prev.simdjson.overrideAttrs (old: {
-    cmakeFlags =
-      old.cmakeFlags
-      ++ lib.optionals isStatic [
-        "-DSIMDJSON_BUILD_STATIC=ON"
-      ];
-  });
-  libunwind = prev.libunwind.overrideAttrs (old: {
-    postPatch =
-      if isStatic
-      then ''
-        substituteInPlace configure.ac --replace "-lgcc_s" ""
-      ''
-      else old.postPatch;
   });
   vast-source = inputs.nix-filter.lib.filter {
     root = ./..;
