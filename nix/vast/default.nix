@@ -98,9 +98,10 @@
           cmake
           cmake-format
           dpkg
+          pandoc
           poetry
         ];
-        propagatedNativeBuildInputs = [pkg-config pandoc];
+        propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
           fast_float
           libpcap
