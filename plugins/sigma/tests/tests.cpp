@@ -42,7 +42,7 @@ expression to_expr(std::string_view expr) {
 TEST(wildcard unescaping) {
   auto check_pattern_equality
     = [](std::string_view sigma, std::string_view pattern) {
-        // Patterns generated from Sigma patterns are not case sensitive.
+        // Patterns generated from Sigma patterns are case-insensitive.
         auto case_insensitive_pattern = fmt::format("{}i", pattern);
         CHECK_EQUAL(to_search_id(sigma), to_expr(case_insensitive_pattern));
         CHECK_NOT_EQUAL(to_search_id(sigma), to_expr(pattern));
@@ -158,7 +158,7 @@ TEST(modifier - re) {
     foo|re: "^.*$"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /^.*$/");
+  auto expected = to_expr("foo == /^.*$/i");
   CHECK_EQUAL(search_id, expected);
 }
 

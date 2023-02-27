@@ -340,7 +340,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
                 return str;
               },
               [](const std::string& x) -> caf::expected<data> {
-                auto result = pattern::make(x);
+                auto result = pattern::make(x, {.case_insensitive = true});
                 if (!result)
                   return std::move(result.error());
                 return std::move(*result);
