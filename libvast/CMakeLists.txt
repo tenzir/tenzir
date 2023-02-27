@@ -261,7 +261,7 @@ add_feature_info("VAST_ENABLE_BUNDLED_SIMDJSON" VAST_ENABLE_BUNDLED_SIMDJSON
                  "use the simdjson submodule.")
 
 if (NOT VAST_ENABLE_BUNDLED_SIMDJSON)
-  find_package(simdjson 3.1 REQUIRED)
+  find_package(simdjson 3.1)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
          "\nfind_package(simdjson 3.1 REQUIRED)")
   dependency_summary("simdjson" simdjson::simdjson "Dependencies")
