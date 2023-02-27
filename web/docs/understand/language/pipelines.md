@@ -142,20 +142,19 @@ include dataflow semantics.
 
 VAST has two low-level abstractions to integrate with the rest of the world:
 
-- **Connector**: performs low-level I/O to exchange data with a resource. A
-  connector provides a *loader* to acquire raw bytes, and/or a *dumper* to send
-  raw bytes to an external resource.
-
-- **Format**: translates bytes into structured events and vice versa. A format
-  provides a *parser* that generates events or a *printer* that translates
-  events into raw bytes.
-
-A connector is typically I/O-bound whereas a format CPU-bound.
+- [Connector](../connectors): performs low-level I/O to exchange data with a
+  resource. A connector provides a *loader* to acquire raw bytes, and/or a
+  *dumper* to send raw bytes to an external resource.
+- [Format](../formats): translates bytes into structured events and vice versa.
+  A format provides a *parser* that generates events or a *printer* that
+  translates events into raw bytes.
 
 The following diagram illustrates the dataflow between connectors, formats, and
 the remaining operators:
 
 ![Connectors & Formats](connector-format.excalidraw.svg)
+
+A connector is typically I/O-bound whereas a format CPU-bound.
 
 ## Logical and Phyiscal Operators
 
