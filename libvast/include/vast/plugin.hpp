@@ -425,25 +425,6 @@ public:
     = 0;
 };
 
-class stdin_loader_plugin : public virtual loader_plugin {
-public:
-  static constexpr inline auto max_chunk_size = size_t{16384};
-
-  [[nodiscard]] auto make_loader(options, operator_control_plane&) const
-    -> caf::expected<input_loader> override;
-
-  [[nodiscard]] auto make_default_parser(options, operator_control_plane&) const
-    -> caf::expected<input_parser> override;
-
-  [[nodiscard]] caf::error
-  initialize(const record& plugin_config, const record& global_config) override;
-
-  [[nodiscard]] std::string name() const override;
-
-private:
-  std::chrono::milliseconds read_timeout{vast::defaults::import::read_timeout};
-};
-
 // -- plugin_ptr ---------------------------------------------------------------
 
 /// An owned plugin and dynamically loaded plugin.
