@@ -4,7 +4,8 @@ sidebar_position: 2
 
 # Modules
 
-A **module** bundles [type definitions#type-construction](type-system),
+A **module** creates a namespace for [type
+definitions#type-construction](type-system),
 [pipelines](/docs/understand/language/pipelines), and [taxonomy](taxonomies)
 elements in single YAML file.
 
