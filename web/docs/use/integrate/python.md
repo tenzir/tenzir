@@ -106,18 +106,20 @@ Evaluate the sum of all events in the database that match the given expression.
 #### `status`
 
 ```py
-    coroutine status() -> str
+    coroutine status() -> dict
 ```
 
 Retrieve the current status from VAST.
 
-#### `start`
-
 ```py
-    coroutine start() -> str
+>>> st = await vast.status()
+>>> pprint.pprint(st["system"])
+{'current-memory-usage': 729628672,
+ 'database-path': '/var/lib/vast',
+ 'in-memory-table-slices': 0,
+ 'peak-memory-usage': 729628672,
+ 'swap-space-usage': 0}
 ```
-
-Spawns a new VAST node as a subprocess locally.
 
 ### `class TableSlice`
 

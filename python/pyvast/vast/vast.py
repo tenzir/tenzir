@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from abc import ABC
 from enum import Enum, auto
@@ -144,7 +145,7 @@ class VAST:
                 await asyncio.wait_for(t, 3)
                 raise e
 
-    async def status(self, timeout=0, retry_delay=0.5, **kwargs) -> str:
+    async def status(self, timeout=0, retry_delay=0.5, **kwargs) -> dict:
         """Executes the `vast status` command and return the response string.
 
         If `timeout` is greater than 0, the invocation of `vast status` will be
@@ -158,7 +159,9 @@ class VAST:
             stdout, stderr = await proc.communicate()
             logger.debug(stderr.decode())
             if proc.returncode == 0:
-                return stdout.decode("utf-8")
+                result = json.loads(stdout.decode("utf-8"))
+                assert isinstance(result, dict), 'Argument of wrong type!'
+                return result
             else:
                 duration = time.time() - start
                 if duration > timeout:
