@@ -34,9 +34,8 @@ and allow for flexible structuring of the provided functionality.
 
 ### Component
 
-The component plugin spawns a [component](components) inside the VAST node. A
-component is an [actor](actor-model) and runs in parallel with all other
-components.
+The component plugin spawns a component inside the VAST node. A component is an
+[actor](actor-model) and runs in parallel with all other components.
 
 This plugin is the most generic mechanism to introduce new functionality.
 

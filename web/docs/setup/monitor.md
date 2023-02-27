@@ -13,11 +13,10 @@ performance needs to be made available to other components of VAST.
 VAST keeps detailed track of system metrics that reflect runtime state, such
 as ingestion performance, query latencies, and resource usage.
 
-[Components](/docs/understand/architecture/components) send their metrics
-to a central *accountant* that relays the telemetry to a configured sink. The
-accountant is disabled by default and waits for metrics reports from other
-components. It represents telemetry as regular `vast.metrics` events with the
-following schema:
+Components send their metrics to a central *accountant* that relays the
+telemetry to a configured sink. The accountant is disabled by default and waits
+for metrics reports from other components. It represents telemetry as regular
+`vast.metrics` events with the following schema:
 
 ```yaml
 metrics:
