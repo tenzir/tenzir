@@ -39,25 +39,25 @@ static auto const* SPEC_V0 = R"_(
         name: query
         schema:
           type: string
-          example: ":ip in 10.42.0.0/16 | head 100"
+        example: ":ip in 10.42.0.0/16 | head 100"
         required: true
         description: |
           The query used, optionally including an open pipeline.
-      - in: ttl
+      - in: query
         name: ttl
         schema:
           type: string
-          example: "5 minutes"
+        example: "5 minutes"
         required: false
         description: |
           The time after which a query is cancelled. Use the /query/:id/next
           endpoint to refresh the TTL. To refresh the TTL without requesting
           further events, request zero events.
-      - in: expand
+      - in: query
         name: expand
         schema:
-          type: bool
-          example: false
+          type: boolean
+        example: false
         required: false
         description: |
           Whether to use the expanded output schema.
@@ -93,7 +93,7 @@ static auto const* SPEC_V0 = R"_(
       - in: query
         name: n
         schema:
-          type: int64
+          type: integer
         required: false
         example: 10
         description: Maximum number of returned events
