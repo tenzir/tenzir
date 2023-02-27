@@ -186,9 +186,10 @@ struct detection_parser : parser_base<detection_parser> {
 // - You can use wildcard characters '*' and '?' in strings
 // - Wildcards can be escaped with \, e.g. \*. If some wildcard after a
 //   backslash should be searched, the backslash has to be escaped: \\*.
-// - Regular expressions are case-sensitive by default
+// - All values are treated as case-insensitive strings
 // - You don't have to escape characters except the string quotation
 //   marks '
+// [https://github.com/SigmaHQ/sigma-specification/blob/main/Sigma_specification.md]
 std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
   auto f = str.begin();
   auto l = str.end();
@@ -235,7 +236,11 @@ std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
   // TODO: check whether we need ^ and $ anchors.
   if (str == rx)
     return {};
-  return pattern::make(std::move(rx));
+  // If we have a pattern, make it case-insensitive to reflect
+  // Sigma's string case insensitivity.
+  auto options = vast::pattern_options{};
+  options.case_insensitive = true;
+  return pattern::make(std::move(rx), std::move(options));
 }
 
 } // namespace
