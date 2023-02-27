@@ -54,6 +54,10 @@ auto inspect(Inspector& f, plugin_type_id_block& x) ->
 
 namespace plugins {
 
+using loader = std::function<auto()->generator<chunk_ptr>>;
+using parser
+  = std::function<auto(generator<chunk_ptr>)->generator<table_slice>>;
+
 /// Retrieves the system-wide plugin singleton.
 /// @note Use this function carefully; modifying the system-wide plugin
 /// singleton must only be done before the actor system is running.
@@ -405,23 +409,20 @@ public:
 
 // -- loader plugin -----------------------------------------------------
 
-using input_loader = std::function<auto()->generator<chunk_ptr>>;
-using input_parser = std::function<auto(chunk_ptr)->generator<table_slice>>;
-using options = record;
-
 /// A loader plugin transfers input data into a stream of chunks.
 /// @relates plugin
 class loader_plugin : public virtual plugin {
 public:
   /// Returns the loader.
-  [[nodiscard]] virtual auto make_loader(options, operator_control_plane&) const
-    -> caf::expected<input_loader>
+  [[nodiscard]] virtual auto
+  make_loader(const record&, operator_control_plane&) const
+    -> caf::expected<plugins::loader>
     = 0;
 
   /// Returns the default parser for this loader.
   [[nodiscard]] virtual auto
-  make_default_parser(options, operator_control_plane&) const
-    -> caf::expected<input_parser>
+  make_default_parser(const record&, operator_control_plane&) const
+    -> caf::expected<plugins::parser>
     = 0;
 };
 

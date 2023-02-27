@@ -21,8 +21,8 @@ class plugin : public virtual loader_plugin {
 public:
   static constexpr inline auto max_chunk_size = size_t{16384};
 
-  [[nodiscard]] auto make_loader(options, operator_control_plane&) const
-    -> caf::expected<input_loader> override {
+  [[nodiscard]] auto make_loader(const record&, operator_control_plane&) const
+    -> caf::expected<loader> override {
     return [this]() -> generator<chunk_ptr> {
       auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
       in_buf.read_timeout() = read_timeout;
@@ -56,8 +56,9 @@ public:
     };
   }
 
-  [[nodiscard]] auto make_default_parser(options, operator_control_plane&) const
-    -> caf::expected<input_parser> override {
+  [[nodiscard]] auto
+  make_default_parser(const record&, operator_control_plane&) const
+    -> caf::expected<parser> override {
     return caf::make_error(ec::unimplemented,
                            "parser currently not implemented");
   }

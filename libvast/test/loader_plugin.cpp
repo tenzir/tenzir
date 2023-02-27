@@ -58,7 +58,7 @@ struct fixture {
   }
 
   int old_stdin_fd;
-  caf::expected<input_loader> loader{caf::none};
+  caf::expected<vast::plugins::loader> current_loader{caf::none};
   FILE* input_file{};
   mock_control_plane control_plane;
 };
@@ -73,9 +73,9 @@ TEST(stdin loader - process simple input) {
   auto str = std::string{"foobarbaz\n"};
   auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
   REQUIRE(loader_plugin);
-  loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(loader);
-  auto loaded_chunk_generator = (*loader)();
+  current_loader = loader_plugin->make_loader({}, control_plane);
+  REQUIRE(current_loader);
+  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
   for (const auto& chunk : loaded_chunk_generator) {
     REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
@@ -89,9 +89,9 @@ TEST(stdin loader - no input) {
   auto str = std::string{""};
   auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
   REQUIRE(loader_plugin);
-  loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(loader);
-  auto loaded_chunk_generator = (*loader)();
+  current_loader = loader_plugin->make_loader({}, control_plane);
+  REQUIRE(current_loader);
+  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
   for (const auto& chunk : loaded_chunk_generator) {
     REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
@@ -105,9 +105,9 @@ TEST(stdin loader - process input with linebreaks) {
   auto str = std::string{"foo\nbar\nbaz\n"};
   auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
   REQUIRE(loader_plugin);
-  loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(loader);
-  auto loaded_chunk_generator = (*loader)();
+  current_loader = loader_plugin->make_loader({}, control_plane);
+  REQUIRE(current_loader);
+  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
   for (const auto& chunk : loaded_chunk_generator) {
     REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
@@ -121,9 +121,9 @@ TEST(stdin loader - process input with spaces and tabs) {
   auto str = std::string{"foo bar\tbaz\n"};
   auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
   REQUIRE(loader_plugin);
-  loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(loader);
-  auto loaded_chunk_generator = (*loader)();
+  current_loader = loader_plugin->make_loader({}, control_plane);
+  REQUIRE(current_loader);
+  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
   for (const auto& chunk : loaded_chunk_generator) {
     REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
@@ -139,9 +139,9 @@ TEST(stdin loader - chunking longer input) {
     VAST_TEST_PATH "artifacts/inputs/longer_input.txt");
   auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
   REQUIRE(loader_plugin);
-  loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(loader);
-  auto loaded_chunk_generator = (*loader)();
+  current_loader = loader_plugin->make_loader({}, control_plane);
+  REQUIRE(current_loader);
+  auto loaded_chunk_generator = (*current_loader)();
   auto generated_chunk_it = loaded_chunk_generator.begin();
   CHECK_EQUAL((*generated_chunk_it)->size(), max_chunk_size);
   ++generated_chunk_it;
@@ -160,9 +160,9 @@ TEST(stdin loader - one complete chunk) {
   str += '\n';
   auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
   REQUIRE(loader_plugin);
-  loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(loader);
-  auto loaded_chunk_generator = (*loader)();
+  current_loader = loader_plugin->make_loader({}, control_plane);
+  REQUIRE(current_loader);
+  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
   auto generated_chunk_it = loaded_chunk_generator.begin();
   CHECK_EQUAL((*generated_chunk_it)->size(), max_chunk_size);
