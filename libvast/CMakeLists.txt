@@ -282,7 +282,19 @@ else ()
   # todo think about it
   set(SIMDJSON_ENABLE_THREADS OFF)
   add_subdirectory(aux/simdjson)
+  export(
+    EXPORT simdjsonTargets
+    FILE simdjsonTargets.cmake
+    NAMESPACE simdjson::)
+  add_custom_target(
+    simdjson-targets-link
+    COMMAND
+      ${CMAKE_COMMAND} -E create_symlink
+      "${CMAKE_CURRENT_BINARY_DIR}/simdjsonTargets.cmake"
+      "${CMAKE_BINARY_DIR}/simdjsonTargets.cmake"
+    COMMENT "Linking simdjson targets")
   VASTSystemizeTarget(simdjson)
+  add_dependencies(simdjson simdjson-targets-link)
   dependency_summary("simdjson" "${CMAKE_CURRENT_SOURCE_DIR}/aux/simdjson"
                     "Dependencies")
 endif()
