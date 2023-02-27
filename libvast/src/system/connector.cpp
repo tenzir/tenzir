@@ -194,8 +194,12 @@ connector(connector_actor::stateful_pointer<connector_state> self,
   return {
     [self, delay = *retry_delay, deadline, tls_whitelist](
       atom::connect, connect_request request) -> caf::result<node_actor> {
+      // TODO: Allow a default port without writing it out
+      auto dest_url = fmt::format("{}:{}", request.host, request.port);
+      VAST_INFO("using {} against outgoing whitelist: {}", dest_url,
+                tls_whitelist); // FIXME: INFO -> DEBUG
       auto middleman
-        = std::find(tls_whitelist.begin(), tls_whitelist.end(), request.host)
+        = std::find(tls_whitelist.begin(), tls_whitelist.end(), dest_url)
               != tls_whitelist.end()
             ? self->system().openssl_manager().actor_handle()
             : self->system().middleman().actor_handle();

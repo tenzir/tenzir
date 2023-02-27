@@ -145,9 +145,12 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         caf::make_error(ec::invalid_argument, "missing manager url"));
     auto node2_opts = caf::settings{};
     caf::put(node2_opts, "vast.endpoint", *manager_url);
+    caf::put(node2_opts, "vast.fleet.manager-url", *manager_url);
     node2 = connect_to_node(self, node2_opts);
     if (node2)
       VAST_INFO("connected to node {}", *node2);
+    else
+      VAST_ERROR("failed to connect: {}", node2.error());
   }
   // ---
   std::vector<command_runner_actor> command_runners;
