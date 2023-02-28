@@ -8,8 +8,12 @@ VAST uses [CMake](https://cmake.org) as build system. Aside from a modern C++20
 compiler, you need to ensure availability of the dependencies in the table
 below.
 
-:::tip Deterministic Builds
-We also provide [Nix](#nix) expressions for deterministic builds.
+:::tip Deterministic Builds via Nix
+We provide a Nix flake to setup an environment in which all dependencies are
+available. Run `nix develop` inside the main source directory. You can also
+delegate the entire build process to Nix by invoking `nix build`, but be aware
+that this method does not support incremental
+builds.
 :::
 
 ## Dependencies
@@ -124,13 +128,3 @@ This avoids subtle configuration glitches of transitive dependencies. For
 example, CMake doesn't disable assertions when switching from a `Debug` to
 a `Release` build, but would do so when starting with a fresh build of type
 `Release`.
-
-## Nix Environment
-
-We provide a Nix flake you can use to setup an environment in which all
-dependencies are available. Running `nix develop` inside the main source
-directory will get you there.
-
-You can also delegate the entire build process to Nix by invoking
-`nix build`, but be aware that this method does not support incremental
-builds in case you plan to make changes to the source code.
