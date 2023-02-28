@@ -10,120 +10,139 @@
 </h1>
 <h4 align="center">
 
-The network telemetry engine for data-driven security investigations.
+VAST is an open-source pipeline and storage engine for security event data.
 
 [![Build Status][ci-badge]][ci-url]
 [![Static Build Status][ci-static-badge]][ci-static-url]
-[![Examples Status][ci-examples-badge]][ci-examples-url]
-[![Changelog][changelog-badge]][changelog-url]
-[![Since Release][since-release-badge]][since-release-url]
-[![License][license-badge]][license-url]
 [![CII Best Practices][cii-best-practices-badge]][cii-best-practices-url]
 
-[_Getting Started_](#getting-started) &mdash;
-[_Installation_][installation-url] &mdash;
-[_Documentation_][docs] &mdash;
-[_Development_][contributing-url] &mdash;
-[_Changelog_][changelog-url] &mdash;
-[_License and Scientific Use_](#license-and-scientific-use)
+[ci-badge]: https://github.com/tenzir/vast/workflows/VAST/badge.svg?branch=master
+[ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AVAST
+[ci-static-badge]: https://github.com/tenzir/vast/workflows/VAST%20Static/badge.svg?branch=master&event=push
+[ci-static-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST+Static%22
+[cii-best-practices-badge]: https://bestpractices.coreinfrastructure.org/projects/6366/badge
+[cii-best-practices-url]: https://bestpractices.coreinfrastructure.org/projects/6366
+
+[About](https://vast.io/docs/about) &mdash;
+[Try](https://vast.io/docs/try) &mdash;
+[Use](https://vast.io/docs/use) &mdash;
+[Understand](https://vast.io/docs/understand) &mdash;
+[Contribute](https://vast.io/docs/contribute) &mdash;
+[Develop](https://vast.io/docs/develop)
 </h4>
 <div align="center">
 
-[![Chat][chat-badge]][chat-url]
+[![Chat][chat-badge]](https://vast.io/discord)
 </div>
 
-## Key Features
+[chat-badge]: https://img.shields.io/badge/Discord-Community%20Chat-brightgreen?logo=discord&color=purple&style=social
 
-- **High-Throughput Ingestion**: import numerous log formats over 100k
-  events/second, including [Zeek](https://www.zeek.org/),
-  [Suricata](https://suricata-ids.org/), JSON, and CSV.
+<!-- Keep in sync with https://vast.io/about -->
 
-- **Low-Latency Queries**: sub-second response times over the entire data lake,
-  thanks to multi-level bitmap indexing and actor model concurrency.
-  Particularly helpful for instant indicator checking over the entire dataset.
+VAST is an open-source processing and storage engine for security event data.
 
-- **Flexible Export**: access data in common text formats (ASCII, JSON, CSV), in
-  binary form (MRT, PCAP), or via zero-copy relay through [Apache
-  Arrow](https://arrow.apache.org/) for arbitrary downstream analysis.
+<img src="./web/static/img/building-blocks.excalidraw.svg#gh-dark-mode-only" width="75%" alt="VAST">
+<img src="./web/static/img/building-blocks.excalidraw.svg#gh-light-mode-only" width="75%" alt="VAST">
 
-- **Powerful Data Model and Query Language**: the generic semi-structured data
-  model allows for expressing complex data in a typed fashion. An intuitive
-  query language that feels like grep and awk at scale enables powerful
-  subsetting of data with domain-specific operations, such as top-*k* prefix
-  search for IP addresses and subset relationships.
+VAST uses [dataflow pipelines](/docs/understand/language/pipelines) as unified
+abstraction for data acquisition, reshaping, routing, integration with
+third-party tools, and both live and historical query execution powered by a
+builtin indexed storage engine optimized for detection and response workloads.
 
-- **Schema Pivoting**: the missing link to navigate between related events,
-  e.g., extracting a PCAP for a given IDS alert, or locating all related logs
-  for a given query.
+Consider VAST if you want to:
+
+- Filter, shape, aggregate, and enrich security events before they hit your SIEM
+  or data lake
+- Normalize, enrich, and deduplicate events prior to passing them downstream
+- Store, compact, and search event data in an open storage format
+  ([Apache Parquet](https://parquet.apache.org/) &
+  [Feather](https://arrow.apache.org/docs/python/feather.html))
+- Perform high-bandwidth analytics with any data tool powered by
+  [Apache Arrow](https://arrow.apache.org)
+- Operationalize threat intelligence for live and retrospective detection
+- Build your own security data lake or federated XDR architecture
 
 ## Get VAST
 
-We offer pre-packaged versions of VAST for download:
-- **stable**: see the artifacts of the latest official [VAST release][latest-release]
-- **development**: we offer a [static
-build](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz) of the master branch for Linux
+Use our packages or Docker to get up and running. For Debian, use:
 
-```sh
-curl -L -O https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
+```bash
+curl -L -O https://vast.io/download/vast-linux-static.deb
+dpkg -i vast-linux-static.deb
 ```
 
-Unpack the archive. It contains three folders `bin`, `etc`, and `share`. To get
-started invoke the binary in the `bin` directory directly.
+For non-Debian Linux, use our static binary:
 
-```sh
-tar xfz vast-static-latest.tar.gz
+```bash
+mkdir -p /opt/vast/ && cd /opt/vast
+curl -L -O https://vast.io/download/vast-linux-static.tar.gz
+tar xzf -C /opt/vast vast-linux-static.tar.gz
+export "PATH:/opt/vast/bin:$PATH"
 bin/vast --help
 ```
 
-To install VAST locally, simply place the unpacked directories in your install
-prefix, e.g., `/usr/local`.
+Or pull our official Docker image and [take it from
+there](https://vast.io/docs/setup/deploy/docker):
 
-The [installation guide][installation-url] contains more detailed and
-platform-specific instructions on how to build and install VAST for all
-supported platforms.
+```bash
+docker pull tenzir/vast
+```
 
-## Getting Started
+Once you have local VAST installation, follow the [quick start
+guide](https://vast.io/docs/try) or read a TL;DR below on how to get started.
 
-Here are some commands to get a first glimpse of what VAST can do for you.
+## Try VAST
+
+VAST consists of two pieces: pipelines and storage.
+
+Once you have a VAST executable, you would typically start a VAST node and
+interact with it like a service. , which is
+basically a container for storage and piplines.
 
 **Start a VAST node**:
 
-```sh
+```bash
 vast start
 ```
 
 **Ingest [Zeek](http://www.zeek.org) logs of various kinds**:
 
-```sh
+```bash
 zcat *.log.gz | vast import zeek
 ```
 
 **Run a query over the last hour, rendered as JSON**:
 
-```sh
+```bash
 vast export json ':timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
 ```
 
 **Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
 flow cutoff**:
 
-```sh
+```bash
 vast import pcap -c 1024 < trace.pcap
 ```
 
 **Run a query over PCAP data, sort the packets by time, and feed them into**
 `tcpdump`:
 
-```sh
+```bash
 vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
   | ipsumdump --collate -w - \
   | tcpdump -r - -nl
 ```
 
-## License and Scientific Use
+## License
 
-VAST comes with a [3-clause BSD license][license-url]. When referring to VAST in
-a scientific context, please use the following citation:
+VAST comes with a [3-clause BSD license][license-url].
+
+[license-url]: https://raw.github.com/vast-io/vast/master/LICENSE
+
+## Scientific Use
+
+When referring to VAST in a scientific context, please use the following
+citation:
 
 ```bibtex
 @InProceedings{nsdi16:vast,
@@ -136,33 +155,12 @@ a scientific context, please use the following citation:
 }
 ```
 
-You can [download the paper][vast-paper] from the [NSDI '16
+You can [download the paper][vast-paper] from the [NSDI'16
 proceedings][nsdi-proceedings].
+
+[vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
+[nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
 
 <p align="center">
   Developed with ❤️ by <strong><a href="https://tenzir.com">Tenzir</a></strong>
 </p>
-
-[docs]: https://vast.io
-[chat-badge]: https://img.shields.io/badge/Slack-Tenzir%20Community%20Chat-brightgreen?logo=slack&color=purple&style=flat
-[chat-url]: http://slack.tenzir.com
-[ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AVAST
-[ci-badge]: https://github.com/tenzir/vast/workflows/VAST/badge.svg?branch=master
-[ci-examples-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22Jupyter+Notebook%22
-[ci-examples-badge]: https://github.com/tenzir/vast/workflows/Jupyter%20Notebook/badge.svg?branch=master
-[ci-static-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST+Static%22
-[ci-static-badge]: https://github.com/tenzir/vast/workflows/VAST%20Static/badge.svg?branch=master&event=push
-[license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
-[license-url]: https://raw.github.com/vast-io/vast/master/LICENSE
-[changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
-[changelog-url]: https://vast.io/changelog
-[contributing-url]: https://vast.io/docs/contribute
-[since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
-[since-release-url]: https://github.com/tenzir/vast/compare/2021.06.24...master
-[cii-best-practices-badge]: https://bestpractices.coreinfrastructure.org/projects/6366/badge
-[cii-best-practices-url]: https://bestpractices.coreinfrastructure.org/projects/6366
-[latest-release]: https://github.com/tenzir/vast/releases/latest
-[installation-url]: https://vast.io/docs/setup/install
-
-[vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
-[nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
