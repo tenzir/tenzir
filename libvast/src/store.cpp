@@ -40,13 +40,21 @@ namespace {
 template <class Actor>
 caf::result<uint64_t>
 handle_query(const auto& self, const query_context& query_context) {
+  VAST_TRACE("{} got a query: {}", *self, query_context);
   const auto start = std::chrono::steady_clock::now();
   const auto schema = self->state.store->schema();
   const auto tailored_expr = tailor(query_context.expr, schema);
-  if (!tailored_expr)
+  if (!tailored_expr) {
+    // In case the query was delegated from an active partition the
+    // taxonomy resolution is not guaranteed to have worked (whenever the
+    // type in this store did not exist in the catalog when the partition
+    // was created). In that case we simply discard the query.
+    if constexpr (std::is_same_v<system::default_active_store_actor, Actor>)
+      return 0ull;
     return caf::make_error(ec::invalid_query,
                            fmt::format("{} failed to tailor '{}' to '{}'",
                                        *self, query_context.expr, schema));
+  }
   auto rp = self->template make_response_promise<uint64_t>();
   auto f = detail::overload{
     [&](const count_query_context& count) -> void {
@@ -359,6 +367,8 @@ system::default_active_store_actor::behavior_type default_active_store(
     [self](atom::query,
            const query_context& query_context) -> caf::result<uint64_t> {
       VAST_DEBUG("{} starts working on query {}", *self, query_context.id);
+      if (self->state.store->num_events() == 0)
+        return 0ull;
       return handle_query<system::default_active_store_actor>(self,
                                                               query_context);
     },

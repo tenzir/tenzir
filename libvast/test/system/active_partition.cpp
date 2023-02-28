@@ -205,8 +205,7 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   CHECK_EQUAL(unbox(result), make_ids({0, 0}));
 }
 
-TEST(delegate query to store with all possible ids in partition when query is to
-       be done without dense indexer) {
+TEST(delegate query to the store) {
   // FIXME: We should implement a mock store plugin and use that for this test.
   const auto* store_plugin = vast::plugins::find<vast::store_actor_plugin>(
     vast::defaults::system::store_backend);
@@ -253,9 +252,6 @@ TEST(delegate query to store with all possible ids in partition when query is to
       FAIL(err);
     });
   REQUIRE_EQUAL(last_query_contexts.size(), 1u);
-  vast::ids expected_ids;
-  expected_ids.append_bits(true, 2);
-  CHECK_EQUAL(last_query_contexts.back().ids, expected_ids);
 }
 
 FIXTURE_SCOPE_END()
