@@ -269,11 +269,9 @@ TEST(parseable - complex types global) {
   auto str = R"__(
     type enum_t = enum{x, y, z}
     type list_t = list<ip>
-    type map_t = map<count, addr>
     type foo = record{
       e: enum_t,
       v: list_t,
-      t: map_t
     }
   )__";
   module mod;
@@ -281,7 +279,6 @@ TEST(parseable - complex types global) {
   auto enum_t = mod.find("enum_t");
   REQUIRE(enum_t);
   CHECK(mod.find("list_t"));
-  CHECK(mod.find("map_t"));
   auto foo = mod.find("foo");
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);

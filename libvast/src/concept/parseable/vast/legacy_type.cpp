@@ -91,17 +91,6 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     = ("list" >> skp >> '<' >> skp >> ref(type_type) >> skp >> '>')
       ->* to_list
     ;
-  // Map
-  using map_tuple = std::tuple<legacy_type, legacy_type>;
-  static auto to_map = [](map_tuple xs) -> legacy_type {
-    auto& [key_type, value_type] = xs;
-    return legacy_map_type{std::move(key_type), std::move(value_type)};
-  };
-  auto legacy_map_type_parser
-    = ("map" >> skp >> '<' >> skp
-    >> vast::ref(type_type) >> skp >> ',' >> skp >> ref(type_type) >> skp
-    >> '>') ->* to_map
-    ;
   // Record
   static auto to_field = [](std::tuple<std::string, legacy_type> xs) {
     auto& [field_name, field_type] = xs;
@@ -181,7 +170,6 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     | legacy_basic_type_parser
     | legacy_enum_type_parser
     | legacy_list_type_parser
-    | legacy_map_type_parser
     | legacy_record_type_parser
     | placeholder_parser
     ) >> attr_list) ->* insert_attributes
