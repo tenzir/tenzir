@@ -198,6 +198,9 @@ jobs:
           if ! is_unchanged plugins/; then
             run_vast_plugins=true
           fi
+          if ! is_unchanged contrib/vast-plugins/; then
+            run_vast_plugins=true
+          fi
           echo "run-vast-plugins=${run_vast_plugins}" >> $GITHUB_OUTPUT
           # Build vast if no artifact is present in google store
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
@@ -265,10 +268,10 @@ jobs:
       - name: Verify Nix sources are synchronized
         run: |
           nix/update.sh
-          git diff --quiet || {
+          git diff --quiet --exit-code || {
             echo "Some Nix source references are not aligned with the git submodules."
             echo "Please run `nix/update.sh` or apply the following diff directly:"
-            git diff
+            git diff --exit-code
           }
 
   changelog:
