@@ -4,24 +4,23 @@ sidebar_position: 1
 
 # Build
 
-Like many C++ projects, VAST uses [CMake](https://cmake.org) to manage the build
-process. Aside from a modern C++20 compiler, you need to ensure availability of
-the dependencies in the table below.
+VAST uses [CMake](https://cmake.org) as build system. Aside from a modern C++20
+compiler, you need to ensure availability of the dependencies in the table
+below.
 
-We provide [Nix](#nix) expressions for deterministic builds.
+:::tip Deterministic Builds
+We also provide [Nix](#nix) expressions for deterministic builds.
+:::
 
 ## Dependencies
 
-:::tip SPDX SBOM
 Every [release](https://github.com/tenzir/vast/releases) of VAST includes an
 [SBOM](https://en.wikipedia.org/wiki/Software_bill_of_materials) in
-[SPDX](https://spdx.dev) format that includes a comprehensive listing of all
-dependencies and versions.
+[SPDX](https://spdx.dev) format that lists all dependencies and their versions.
 
-👉 [Download the **latest SBOM** here][latest-sbom].
-:::
-
-[latest-sbom]: https://github.com/tenzir/vast/releases/latest/download/VAST.spdx
+<div align="center" class="padding-bottom--md">
+  <a class="button button--md button--primary margin-right--md" href="/download/sbom.spdx">Latest SBOM</a>
+</div>
 
 |Required|Dependency|Version|Description|
 |:-:|:-:|:-:|-|
@@ -46,16 +45,6 @@ dependencies and versions.
 
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
-
-### Nix Environment
-
-We provide a Nix flake you can use to setup an environment in which all
-dependencies are available. Running `nix develop` inside the main source
-directory will get you there.
-
-You can also delegate the entire build process to Nix with by invoking
-`nix build`, but be aware that this method does not support incremental
-builds in case you plan to make changes to the source code.
 
 ## Compile
 
@@ -113,12 +102,14 @@ verify that your build works as expected:
   cmake --install build
   ```
 
-:::note Customize Installation
 If you prefer to install into a custom install prefix, install with `--prefix
-/path/to/install/prefix`. To remove debug symbols from the installed binaries
-and libraries, pass `--strip`. To install only files relevant for running VAST
-and not for plugin development pass `--component Runtime`.
-:::
+/path/to/install/prefix`.
+
+To remove debug symbols from the installed binaries and libraries, pass
+`--strip`.
+
+To install only files relevant for running VAST and not for plugin development
+pass `--component Runtime`.
 
 ## Clean
 
@@ -133,3 +124,13 @@ This avoids subtle configuration glitches of transitive dependencies. For
 example, CMake doesn't disable assertions when switching from a `Debug` to
 a `Release` build, but would do so when starting with a fresh build of type
 `Release`.
+
+## Nix Environment
+
+We provide a Nix flake you can use to setup an environment in which all
+dependencies are available. Running `nix develop` inside the main source
+directory will get you there.
+
+You can also delegate the entire build process to Nix by invoking
+`nix build`, but be aware that this method does not support incremental
+builds in case you plan to make changes to the source code.
