@@ -265,10 +265,10 @@ jobs:
       - name: Verify Nix sources are synchronized
         run: |
           nix/update.sh
-          git diff --quiet || {
+          git diff --quiet --exit-code || {
             echo "Some Nix source references are not aligned with the git submodules."
             echo "Please run `nix/update.sh` or apply the following diff directly:"
-            git diff
+            git diff --exit-code
           }
 
   changelog:
