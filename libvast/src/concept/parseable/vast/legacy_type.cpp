@@ -157,7 +157,7 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
     | lplus_parser
     | minus_parser
     ;
-  legacy_type_expr_parser = (algebra_operand_parser >> skp >> (+(skp >> algebra_parser)))
+  legacy_type_expr_parser = (algebra_leaf_parser >> skp >> (+(skp >> algebra_parser)))
     ->* [](std::tuple<legacy_type, std::vector<record_field>> xs) -> legacy_type {
       auto& [lhs, op_operands] = xs;
       legacy_record_type result;
