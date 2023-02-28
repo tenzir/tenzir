@@ -198,6 +198,9 @@ jobs:
           if ! is_unchanged plugins/; then
             run_vast_plugins=true
           fi
+          if ! is_unchanged contrib/vast-plugins/; then
+            run_vast_plugins=true
+          fi
           echo "run-vast-plugins=${run_vast_plugins}" >> $GITHUB_OUTPUT
           # Build vast if no artifact is present in google store
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
