@@ -190,7 +190,7 @@ struct detection_parser : parser_base<detection_parser> {
 // - You don't have to escape characters except the string quotation
 //   marks '
 // [https://github.com/SigmaHQ/sigma-specification/blob/main/Sigma_specification.md]
-std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
+caf::expected<pattern> make_pattern(std::string_view str) {
   auto f = str.begin();
   auto l = str.end();
   std::string rx;
@@ -232,15 +232,9 @@ std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
       rx += c;
     }
   };
-  // It's only a pattern if it differs from a regular string.
-  // TODO: check whether we need ^ and $ anchors.
-  if (str == rx)
-    return {};
-  // If we have a pattern, make it case-insensitive to reflect
-  // Sigma's string case insensitivity.
-  auto options = vast::pattern_options{};
-  options.case_insensitive = true;
-  return pattern::make(std::move(rx), std::move(options));
+  // Make the pattern case-insensitive to reflect Sigma's string case
+  // insensitivity.
+  return pattern::make(std::move(rx), {.case_insensitive = true});
 }
 
 } // namespace
@@ -332,12 +326,10 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             auto f = detail::overload{
               [](const auto& x) -> caf::expected<data> {
                 auto str = to_string(x);
-                if (auto result = make_pattern(str)) {
-                  if (!result)
-                    return std::move(result->error());
-                  return std::move(**result);
-                }
-                return str;
+                auto result = make_pattern(str);
+                if (!result)
+                  return std::move(result.error());
+                return std::move(*result);
               },
               [](const std::string& x) -> caf::expected<data> {
                 auto result = pattern::make(x, {.case_insensitive = true});
@@ -374,12 +366,10 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       };
       // Helper to create an expression from a (transformed) value.
       auto make_predicate_expr = [&](const data& value) -> expression {
-        // Convert strings to patterns if wildcarding is present.
+        // Convert strings to case-insensitive patterns.
         if (auto str = caf::get_if<std::string>(&value))
-          if (!str->empty())
-            if (auto pat = make_pattern(*str); pat && *pat)
-              return predicate{extractor, relational_operator::equal,
-                               data{std::move(**pat)}};
+          if (auto pat = make_pattern(*str))
+            return predicate{extractor, op, data{std::move(*pat)}};
         // The modifier 'base64offset' is unique in that it creates
         // multiple values represented as list. If followed by 'contains', then
         // we have substring search on each value; otherwise we can use equality
