@@ -10,12 +10,9 @@
 
 #include "vast/chunk.hpp"
 #include "vast/concept/convertible/to.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/env.hpp"
-#include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/installdirs.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/detail/stable_set.hpp"
@@ -36,7 +33,6 @@
 #include <dlfcn.h>
 #include <memory>
 #include <tuple>
-#include <unistd.h>
 
 namespace vast {
 
