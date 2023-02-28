@@ -58,7 +58,7 @@ struct fixture {
   }
 
   int old_stdin_fd;
-  caf::expected<vast::plugins::loader> current_loader{caf::none};
+  caf::expected<vast::loader_plugin::loader> current_loader{caf::none};
   FILE* input_file{};
   mock_control_plane control_plane;
 };
