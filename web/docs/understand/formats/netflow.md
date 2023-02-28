@@ -21,7 +21,7 @@ support for additional Private Enterprise Numbers.
 [netflow-blog-post]: https://tenzir.com/blog/flexible-netflow-for-flexible-security-analytics/
 :::
 
-## Input
+## Parser
 
 VAST can either act as collector or parse binary NetFlow data on standard input.
 The NetFlow version is automatically identified at runtime, and mixing multiple

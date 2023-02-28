@@ -15,7 +15,7 @@ For example, `1.2.3.4` is an IP address literal, whereas `"1.2.3.4"`
 is a string literals. Type inference isn't always possible, e.g., in the case of
 empty lists (`[]`).
 
-## Output
+## Printer
 
 Use `export ascii` to render data in textual form:
 

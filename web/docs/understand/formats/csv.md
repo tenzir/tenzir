@@ -10,7 +10,7 @@ form. The first line in a CSV file is the header that describes the field names.
 The remaining lines contain concrete values. One line corresponds to one event,
 minus the header.
 
-## Input
+## Parser
 
 To read CSV data, consider this piece of data:
 
@@ -42,7 +42,7 @@ You can now ingest the CSV input as follows:
 vast import -s test.schema csv < file.csv
 ```
 
-## Output
+## Printer
 
 To render data as CSV, use the `export csv` command:
 

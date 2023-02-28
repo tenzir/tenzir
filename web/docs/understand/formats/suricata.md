@@ -15,7 +15,7 @@ according to a fixed schema. The output is a single stream of events where the
 
 [eve-json]: https://suricata.readthedocs.io/en/latest/output/eve/eve-json-output.html
 
-## Input
+## Parser
 
 The `import suricata` command format consumes EVE JSON logs. The command
 demultiplexes the JSON stream according to the `event_type` field.
