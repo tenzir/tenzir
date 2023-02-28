@@ -75,6 +75,7 @@ jobs:
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-vast-io: ${{ steps.configure.outputs.run-vast-io }}
       run-docker-vast: ${{ steps.configure.outputs.run-docker-vast }}
+      docker-config: ${{ steps.docker.outputs.docker-config }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
@@ -237,6 +238,34 @@ jobs:
           run_if_changed_default docker-vast $run_docker_vast
           run_if_changed_default regression-tests $run_docker_vast
           run_if_changed vast-nix "$VAST_SOURCES[@]" plugins/ contrib/vast-plugins/ flake.nix flake.lock nix/
+      - name: Configure Docker
+        id: docker
+        if: steps.configure.outputs.run-docker-vast == 'true'
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tags=("${{ steps.configure.outputs.head-ref-slug }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            tags=('latest' "${{ github.sha }}")
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            tags=('stable' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+          else
+            echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
+            exit 1
+          fi
+          docker_config="$(jq -c \
+            '."version" = $v | ."tags" = $ARGS.positional' \
+            .github/workflows/docker-config-base.json \
+            --arg v "${{ steps.configure.outputs.build-version-short }}" \
+            --args -- "${tags[@]}")"
+          # Clear push repos in case we're in a PR, but push the developer
+          # edition to ghcr.
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            docker_config="$(jq -c '(.editions[] | .registries) |= [] |
+              (.editions[] | select(.name == "vast") | .registries) |= ["ghcr.io"]' \
+              <<< "${docker_config}")"
+          fi
+          echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
+          echo "::notice docker-config = ${docker_config}"
 
   policy-enforcement:
     name: Policy Enforcement
@@ -269,7 +298,7 @@ jobs:
           nix/update.sh
           git diff --quiet --exit-code || {
             echo "Some Nix source references are not aligned with the git submodules."
-            echo "Please run `nix/update.sh` or apply the following diff directly:"
+            echo "Please run *nix/update.sh* or apply the following diff directly:"
             git diff --exit-code
           }
 
@@ -362,119 +391,11 @@ jobs:
     name: Docker
     needs:
       - configure
-    if: ${{ needs.configure.outputs.run-docker-vast == 'true' }}
-    name: ${{ matrix.docker-vast.job-name }} (Docker)
-    runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        docker-vast:
-          - name: vast
-            job-name: VAST
-            upload-dev-images: true
-          - name: vast-ce
-            job-name: VAST CE
-            upload-dev-images: false
-            plugins:
-              - matcher
-              - netflow
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Update submodules
-        run: |
-          git submodule update --init --recursive libvast plugins
-      - name: Configure ssh-agent
-        if: ${{ matrix.docker-vast.name == 'vast-ce' }}
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.VAST_PLUGINS_DEPLOY_KEY }}
-      - name: Initialize Community Edition plugins
-        if: ${{ matrix.docker-vast.name == 'vast-ce' }}
-        run: |
-          git submodule update --init --recursive contrib/vast-plugins
-          # Remove plugins that are not in matrix.docker-vast.plugins
-          # We move everything out first and then only move the wanted plugins
-          # back in.
-          mv contrib/vast-plugins _plugtmp
-          mkdir contrib/vast-plugins
-          for plugin in ${{ join(matrix.docker-vast.plugins, ' ') }}; do
-            mv "_plugtmp/$plugin" contrib/vast-plugins/
-          done
-          rm -rf _plugtmp
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Login to Docker Hub
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: tenzir-bot
-          password: ${{ secrets.TENZIR_BOT_GITHUB_TOKEN }}
-      - name: Build Docker Images
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            ref_tag="${{ needs.configure.outputs.head-ref-slug }}"
-          else
-            ref_tag="${{ github.sha }}"
-          fi
-          cmake_version_args="${{ needs.configure.outputs.cmake-version-args }}"
-          # Build the Docker images using ghcr.io/tenzir/vast as a registry-type
-          # layer cache. We upload this cache for every merge but also for every
-          # pull request, using the head ref slug as an identifier within PRs.
-          # We specify cache-from multiple times in order because we want to
-          # prefer an existing cache for the current trigger over the cache that
-          # we attempt to restore from, which is the before sha for pushes and
-          # the merge-base for pull requests.
-          docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}:latest --target production --load \
-            --platform linux/amd64 \
-            --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}" \
-            --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-            --cache-to "type=registry,mode=max,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache" \
-            --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
-          if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
-            docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-dev:latest --target development --load \
-              --platform linux/amd64 \
-              --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}" \
-              --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-              --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
-            docker buildx build . -t tenzir/${{ matrix.docker-vast.name }}-deps:latest --target dependencies --load \
-              --platform linux/amd64 \
-              --build-arg "VAST_BUILD_OPTIONS=${cmake_version_args}" \
-              --label "org.opencontainers.image.source=https://github.com/tenzir/vast" \
-              --cache-from "type=registry,ref=ghcr.io/tenzir/${{ matrix.docker-vast.name }}:build-cache"
-          fi
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            docker tag tenzir/${{ matrix.docker-vast.name }}:latest "ghcr.io/tenzir/${{ matrix.docker-vast.name }}:${ref_tag}"
-            docker push "ghcr.io/tenzir/${{ matrix.docker-vast.name }}:${ref_tag}"
-          fi
-      - name: Publish Docker Images
-        if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        run: |
-          registries=('' 'ghcr.io/')
-          images=('tenzir/${{ matrix.docker-vast.name }}')
-          if [[ "${{ matrix.docker-vast.upload-dev-images }}" == "true" ]]; then
-            images+=('tenzir/${{ matrix.docker-vast.name }}-dev' 'tenzir/${{ matrix.docker-vast.name }}-deps')
-          fi
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('stable' "${{ github.sha }}" "${{ needs.configure.outputs.release-version }}")
-          else
-            tags=('latest' "${{ github.sha }}")
-          fi
-          for registry in "${registries[@]}"; do
-            for image in "${images[@]}"; do
-              for tag in "${tags[@]}"; do
-                docker tag "${image}:latest" "${registry}${image}:${tag}"
-                docker push "${registry}${image}:${tag}"
-              done
-            done
-          done
+    if: needs.configure.outputs.run-docker-vast == 'true'
+    uses: ./.github/workflows/docker.yaml
+    with:
+      config: ${{ needs.configure.outputs.docker-config }}
+    secrets: inherit
 
   regression-tests:
     needs:
