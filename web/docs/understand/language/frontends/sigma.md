@@ -19,7 +19,7 @@ system of VAST. The translation process looks as follows:
 
 ![Sigma Query Frontend](sigma-query-frontend.excalidraw.svg)
 
-[sigma-spec]: https://github.com/SigmaHQ/sigma/wiki/Specification
+[sigma-spec]: https://sigmahq.github.io/sigma-specification/
 
 ## Usage
 
@@ -57,13 +57,13 @@ detection:
 VAST translates this rule piece by building a symbol table of all keys (`foo`
 and `bar`). Each sub-expression is a valid VAST expression itself:
 
-1. `foo`: `a == 42 && b == "evil"`
+1. `foo`: `a == 42 && b == /evil/i`
 2. `bar`: `c == 1.2.3.4`
 
 Finally, VAST combines the expression according to the `condition`:
 
 ```c
-(a == 42 && b == "evil") || ! (c == 1.2.3.4)
+(a == 42 && b == /evil/i) || ! (c == 1.2.3.4)
 ```
 
 :::note Rich YAML Typing
@@ -109,11 +109,8 @@ additional modifiers `lt`, `lte`, `gt`, `gte`.
 ## Compatibility
 
 VAST's support for Sigma is still in the early stages and does not support the
-full [language specification][sigma-spec]. Most notable, the concept of a
-"value" is different:
-
-- VAST does not yet offer case-insensitive string search
-- VAST does not yet treat `*` and `?` wildcards in strings as wildcards
+full [language specification][sigma-spec]. Most notable, UTF16 support is not
+yet implemented.
 
 The table below shows the current implementation status of modifiers, where ✅
 means implemented, 🚧 not yet implemented but possible, and ❌ not yet supported
@@ -129,7 +126,7 @@ by VAST's query engine:
 |`utf16le`/`wide`|transform the value to UTF16 little endian|✅|🚧
 |`utf16be`|transform the value to UTF16 big endian|✅|🚧
 |`utf16`|transform the value to UTF16|✅|🚧
-|`re`|interpret the value as regular expression|✅|🚧
+|`re`|interpret the value as regular expression|✅|✅
 |`cidr`|interpret the value as a IP CIDR|❌|✅
 |`all`|changes the expression logic from OR to AND|✅|✅
 |`lt`|compare less than (`<`) the value|❌|✅
