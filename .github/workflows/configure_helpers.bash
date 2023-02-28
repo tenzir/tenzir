@@ -8,12 +8,13 @@ run_if_changed_default() {
   shift
   shift
   job_shellvar="run_$(echo "$job" | tr '-' '_')"
-  if is_changed "${@}"; then
-    declare $job_shellvar="true"
-    echo "run-${job}=true" >> $GITHUB_OUTPUT
-  else
-    declare $job_shellvar="false"
+  local changed=${default}
+  # Any extra positional arguments are fed into `git diff`.
+  if [ $# -ne 0 ] && is_changed "${@}"; then
+    changed=true
   fi
+  declare "$job_shellvar"="${changed}"
+  echo "run-${job}=${changed}" >> $GITHUB_OUTPUT
 }
 
 run_if_changed() {
