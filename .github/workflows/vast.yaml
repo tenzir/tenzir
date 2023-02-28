@@ -1020,6 +1020,10 @@ jobs:
           - name: Compaction
             target: compaction
             path: plugins/compaction
+          # TODO: Enable once this builds without warnings
+          # - name: Fleet
+          #   target: fleet
+          #   path: plugins/fleet
           - name: Inventory
             target: inventory
             path: plugins/inventory
@@ -1039,6 +1043,7 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
           - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
           - {setup: {os: macos-latest}, plugin: {name: Compaction}}
+          - {setup: {os: macos-latest}, plugin: {name: Fleet}}
           - {setup: {os: macos-latest}, plugin: {name: Inventory}}
           - {setup: {os: macos-latest}, plugin: {name: Matcher}}
           - {setup: {os: macos-latest}, plugin: {name: Netflow}}
