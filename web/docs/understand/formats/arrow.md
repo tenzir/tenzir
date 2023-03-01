@@ -18,7 +18,7 @@ work with native types instead of relying on generic string or number
 representations.
 :::
 
-## Input
+## Parser
 
 The `import arrow` command imports [`Arrow IPC`][arrow-ipc] data. This allows
 for efficiently transferring data between VAST nodes:

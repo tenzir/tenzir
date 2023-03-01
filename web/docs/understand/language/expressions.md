@@ -10,6 +10,11 @@ on multiple different schemas at once, as opposed to traditional expressions
 that apply to a single, fixed schema. The language captures this heterogeneity
 with [extractors](#extractors).
 
+:::tip Where?
+Expressions occur in pipeline operators. The [where](operators/where) operator
+is the most prominent example.
+:::
+
 An *expression* is a function over an event that evaluates to `true` or
 `false`, indicating whether it qualifies as result. Expression operands are
 either sub-expressions or predicates, and can be composed via *conjunctions*
@@ -71,21 +76,20 @@ available types. Each letter in a cell denotes a set of operators:
 - **R**: range operators `<`, `<=`, `>=`, `>`
 - **M**: membership operators `in`, `!in`, `ni`, `!ni`
 
-| | **Bool** | **Int64** | **UInt64** | **Double** | **Duration** | **Time** | **String** | **Pattern** | **IP** | **Subnet** | **Enum** | **List** | **Map**
----|---|---|---|---|---|---|---|---|---|---|---|---|---
- **Bool** | E |  |  |  |  |  |  |  |  |  |  | M | M
- **Int64** |  | ER |  |  |  |  |  |  |  |  |  | M | M
- **UInt64** |  |  | ER |  |  |  |  |  |  |  |  | M | M
- **Double** |  |  |  | ER |  |  |  |  |  |  |  | M | M
- **Duration** |  |  |  |  | ER |  |  |  |  |  |  | M | M
- **Time** |  |  |  |  |  | ER |  |  |  |  |  | M | M
- **String** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
- **Pattern** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
- **IP** |  |  |  |  |  |  |  |  | E | EM |  | M | M
- **Subnet** |  |  |  |  |  |  |  |  | EM | EM |  | M | M
- **Enum** |  |  |  |  |  |  |  |  |  |  | E | M | M
- **List** | M | M | M | M | M | M | M | M | M | M | M | EM | M
- **Map** | M | M | M | M | M | M | M | M | M | M | M | M | EM
+| | **Bool** | **Int64** | **UInt64** | **Double** | **Duration** | **Time** | **String** | **Pattern** | **IP** | **Subnet** | **Enum** | **List**
+---|---|---|---|---|---|---|---|---|---|---|---|--
+ **Bool** | E |  |  |  |  |  |  |  |  |  |  | M
+ **Int64** |  | ER |  |  |  |  |  |  |  |  |  | M
+ **UInt64** |  |  | ER |  |  |  |  |  |  |  |  | M
+ **Double** |  |  |  | ER |  |  |  |  |  |  |  | M
+ **Duration** |  |  |  |  | ER |  |  |  |  |  |  | M
+ **Time** |  |  |  |  |  | ER |  |  |  |  |  | M
+ **String** |  |  |  |  |  |  | EM | EM |  |  |  | M
+ **Pattern** |  |  |  |  |  |  | EM | EM |  |  |  | M
+ **IP** |  |  |  |  |  |  |  |  | E | EM |  | M
+ **Subnet** |  |  |  |  |  |  |  |  | EM | EM |  | M
+ **Enum** |  |  |  |  |  |  |  |  |  |  | E | M
+ **List** | M | M | M | M | M | M | M | M | M | M | M | EM
 
 ### Extractors
 
@@ -136,9 +140,9 @@ extractors work for all [basic
 types](/docs/understand/data-model/type-system) and user-defined aliases.
 
 A search for type `:T` includes all aliased types. For example, given the alias
-`port` that maps to `uint64`, then the `:uint64` type extractor will also consider
-instances of type `port`. However, a `:port` query does not include `:uint64`
-types because an alias is a strict refinement of an existing type.
+`port` that maps to `uint64`, then the `:uint64` type extractor will also
+consider instances of type `port`. However, a `:port` query does not include
+`:uint64` types because an alias is a strict refinement of an existing type.
 
 ##### Examples
 
@@ -190,26 +194,18 @@ This makes it easier to search for IP addresses belonging to a specific subnet.
 Every [type](/docs/understand/data-model/type-system) has a corresponding
 value syntax in the expression language.
 
-Here is an over view of basic types:
-
-| Identifier | Description                             | Example Value
-| ---------- | --------------------------------------- | -------------
-| `none`     | Denotes an absent or invalid value      | `nil`
-| `bool`     | A boolean value                         | `true`, `false`
-| `int64`    | A 64-bit signed integer                 | `-42`, `+3`
-| `uint64`   | A 64-bit unsigned integer               | `0`, `42`
-| `double`   | A 64-bit double (IEEE 754)              | `-0.7`, `1.337`
-| `duration` | A time span (nanosecond granularity)    | `-3us`, `24h`
-| `time`     | A time point (nanosecond granularity)   | `now`, `1h ago`, `2020-01-01+10:42:00`
-| `string`   | A sequence of characters                | `"foo"`
-| `pattern`  | A regular expression                    | `/fo*.bar$/`, `/^\w{3}$/i`
-| `ip`       | An IPv4 or IPv6 address                 | `::1`, `10.0.0.1`, `2001:db8::`
-| `subnet`   | An IPv4 or IPv6 subnet                  | `::1/128`, `10.0.0.0/8`, `2001:db8::/32`
-
-Complex types:
-
-| Identifier  | Description                             | Example Data
-| ----------- | --------------------------------------- | ------------
-| `list`      | An ordered sequence of values where each element has type `T` | `[1, 2, 3]`, `[]`
-| `map`       | An associate array which maps keys to values | `{x -> a, y -> b, z -> c}`, `{}`
-| `record`    | a product type with one or more named fields | `<x: a, y: b, z: c>`, `<a, b, c>`, `<>`
+| Literal    | Example
+| ---------- | -------
+| `none`     | `nil`
+| `bool`     | `true`, `false`
+| `int64`    | `-42`, `+3`
+| `uint64`   | `0`, `42`
+| `double`   | `-0.7`, `1.337`
+| `duration` | `-3us`, `24h`
+| `time`     | `now`, `1h ago`, `2020-01-01+10:42:00`
+| `string`   | `"foo"`
+| `pattern`  | `/fo*.bar$/`, `/^\w{3}$/i`
+| `ip`       | `::1`, `10.0.0.1`, `2001:db8::`
+| `subnet`   | `::1/128`, `10.0.0.0/8`, `2001:db8::/32`
+| `list`      | `[1, 2, 3]`, `[]`
+| `record`    | `<x: a, y: b, z: c>`, `<a, b, c>`, `<>`

@@ -75,12 +75,11 @@ consultants, small business, and researchers with a very small budget. The
 *enterprise edition* focuses on security professionals for larger enterprise
 deployments, OEM/SI embeddings, as well as MSSP and MDR platforms.
 
-:::info Beta Testing
+:::info Early Access
 We are working at full steam towards the launch of our community and enterprise
-editions. If you want to give it a spin as early as possible, we'd love to hear
-from you! We are working with a select group of early adopters who enjoy giving
-feedback and don't mind rough edges. If that's you, please sign up in the
-waiting list below.
+editions. We are working with a select group of early adopters who enjoy giving
+feedback and don't mind rough edges. If that's you, please join the waitlist
+below.
 
 <div align="center">
   <a class="button button--md button--primary margin-right--md" href="https://webforms.pipedrive.com/f/c6vwqvg8HuWVVyE4GOE3fTYE7gAfsA9ggVjjicdBWZa674pIQqh1BP2p7CbVxpbq95">Sign Up</a>
