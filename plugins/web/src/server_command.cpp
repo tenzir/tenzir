@@ -386,7 +386,7 @@ auto server_command(const vast::invocation& inv, caf::actor_system& system)
       return request->create_response(restinio::status_temporary_redirect())
         .append_header(restinio::http_field::server, "VAST")
         .append_header_date_field()
-        .append_header(restinio::http_field::location, "/index")
+        .append_header(restinio::http_field::location, "/api/v0/status")
         .done();
     });
   auto openapi = generate_openapi_json();
