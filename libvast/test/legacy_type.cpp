@@ -171,6 +171,8 @@ TEST(parseable) {
   }.attributes({{"$algebra"}});
   // clang-format on
   CHECK_EQUAL(unbox(to<legacy_type>(str)), r);
+  MESSAGE("invalid");
+  CHECK_ERROR(parsers::legacy_type(":bool"));
 }
 
 namespace {
