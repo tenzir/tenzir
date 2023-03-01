@@ -6,11 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/collect.hpp"
+#include "vast/detail/string_literal.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/test/test.hpp"
 
-#include <iostream>
+#include <caf/test/dsl.hpp>
+
+#include <fcntl.h>
+#include <unistd.h>
+
 using namespace vast;
 
 namespace {
@@ -49,18 +55,41 @@ struct fixture {
   };
 
   fixture() {
+    // TODO: Move this into a separate fixture when we are starting to test more
+    // than one loader type.
+    loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
+    REQUIRE(loader_plugin);
+    current_loader = unbox(loader_plugin->make_loader({}, control_plane));
   }
 
   ~fixture() {
-    if (input_file) {
-      fclose(input_file);
-    }
   }
 
-  int old_stdin_fd;
-  caf::expected<vast::loader_plugin::loader> current_loader{caf::none};
-  FILE* input_file{};
+  const vast::loader_plugin* loader_plugin;
+  vast::loader_plugin::loader current_loader;
   mock_control_plane control_plane;
+};
+
+// Helper struct that, as long as it is alive, redirects stdin to the output of
+// a file.
+template <detail::string_literal FileName = "">
+struct stdin_file_input {
+  stdin_file_input() {
+    old_stdin_fd = ::dup(fileno(stdin));
+    REQUIRE_NOT_EQUAL(old_stdin_fd, -1);
+    auto input_file_fd = ::open(
+      fmt::format("{}{}", VAST_TEST_PATH, FileName.str()).c_str(), O_RDONLY);
+    REQUIRE_NOT_EQUAL(input_file_fd, -1);
+    ::dup2(input_file_fd, fileno(stdin));
+    ::close(input_file_fd);
+  }
+
+  ~stdin_file_input() {
+    auto old_stdin_status = ::dup2(old_stdin_fd, fileno(stdin));
+    REQUIRE_NOT_EQUAL(old_stdin_status, -1);
+    ::close(old_stdin_fd);
+  }
+  int old_stdin_fd;
 };
 
 } // namespace
@@ -68,109 +97,66 @@ struct fixture {
 FIXTURE_SCOPE(loader_plugin_tests, fixture)
 
 TEST(stdin loader - process simple input) {
-  input_file
-    = freopen(VAST_TEST_PATH "artifacts/inputs/simple.txt", "r", stdin);
+  stdin_file_input<"artifacts/inputs/simple.txt"> file;
   auto str = std::string{"foobarbaz\n"};
-  auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
-  REQUIRE(loader_plugin);
-  current_loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(current_loader);
-  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
-  for (const auto& chunk : loaded_chunk_generator) {
-    REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
-                       str_chunk->end()));
-  }
+  auto chunks = collect(current_loader());
+  REQUIRE_EQUAL(chunks.size(), size_t{1});
+  REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
+                     str_chunk->begin(), str_chunk->end()));
 }
 
 TEST(stdin loader - no input) {
-  input_file
-    = freopen(VAST_TEST_PATH "artifacts/inputs/nothing.txt", "r", stdin);
+  stdin_file_input<"artifacts/inputs/nothing.txt"> file;
   auto str = std::string{""};
-  auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
-  REQUIRE(loader_plugin);
-  current_loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(current_loader);
-  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
-  for (const auto& chunk : loaded_chunk_generator) {
-    REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
-                       str_chunk->end()));
-  }
+  auto chunks = collect(current_loader());
+  REQUIRE(chunks.empty());
 }
 
 TEST(stdin loader - process input with linebreaks) {
-  input_file
-    = freopen(VAST_TEST_PATH "artifacts/inputs/linebreaks.txt", "r", stdin);
+  stdin_file_input<"artifacts/inputs/linebreaks.txt"> file;
   auto str = std::string{"foo\nbar\nbaz\n"};
-  auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
-  REQUIRE(loader_plugin);
-  current_loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(current_loader);
-  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
-  for (const auto& chunk : loaded_chunk_generator) {
-    REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
-                       str_chunk->end()));
-  }
+  auto chunks = collect(current_loader());
+  REQUIRE_EQUAL(chunks.size(), size_t{1});
+  REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
+                     str_chunk->begin(), str_chunk->end()));
 }
 
 TEST(stdin loader - process input with spaces and tabs) {
-  input_file = freopen(VAST_TEST_PATH "artifacts/inputs/spaces_and_tabs.txt",
-                       "r", stdin);
+  stdin_file_input<"artifacts/inputs/spaces_and_tabs.txt"> file;
   auto str = std::string{"foo bar\tbaz\n"};
-  auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
-  REQUIRE(loader_plugin);
-  current_loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(current_loader);
-  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
-  for (const auto& chunk : loaded_chunk_generator) {
-    REQUIRE(std::equal(chunk->begin(), chunk->end(), str_chunk->begin(),
-                       str_chunk->end()));
-  }
+  auto chunks = collect(current_loader());
+  REQUIRE_EQUAL(chunks.size(), size_t{1});
+  REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
+                     str_chunk->begin(), str_chunk->end()));
 }
 
 TEST(stdin loader - chunking longer input) {
+  stdin_file_input<"artifacts/inputs/longer_input.txt"> file;
   constexpr auto max_chunk_size = size_t{16384};
-  input_file
-    = freopen(VAST_TEST_PATH "artifacts/inputs/longer_input.txt", "r", stdin);
   const auto file_size = std::filesystem::file_size(
     VAST_TEST_PATH "artifacts/inputs/longer_input.txt");
-  auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
-  REQUIRE(loader_plugin);
-  current_loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(current_loader);
-  auto loaded_chunk_generator = (*current_loader)();
-  auto generated_chunk_it = loaded_chunk_generator.begin();
-  CHECK_EQUAL((*generated_chunk_it)->size(), max_chunk_size);
-  ++generated_chunk_it;
-  CHECK_EQUAL((*generated_chunk_it)->size(), max_chunk_size);
-  ++generated_chunk_it;
-  CHECK_EQUAL((*generated_chunk_it)->size(), file_size - (max_chunk_size * 2));
-  ++generated_chunk_it;
-  REQUIRE(generated_chunk_it == loaded_chunk_generator.end());
+  auto chunks = collect(current_loader());
+  REQUIRE_EQUAL(chunks.size(), size_t{3});
+  REQUIRE_EQUAL(chunks[0]->size(), max_chunk_size);
+  REQUIRE_EQUAL(chunks[1]->size(), max_chunk_size);
+  REQUIRE_EQUAL(chunks[2]->size(), file_size - (max_chunk_size * 2));
 }
 
 TEST(stdin loader - one complete chunk) {
+  stdin_file_input<"artifacts/inputs/one_complete_chunk.txt"> file;
   constexpr auto max_chunk_size = size_t{16384};
-  input_file = freopen(VAST_TEST_PATH "artifacts/inputs/one_complete_chunk.txt",
-                       "r", stdin);
   auto str = std::string(max_chunk_size - 1, '1');
   str += '\n';
-  auto loader_plugin = vast::plugins::find<vast::loader_plugin>("stdin");
-  REQUIRE(loader_plugin);
-  current_loader = loader_plugin->make_loader({}, control_plane);
-  REQUIRE(current_loader);
-  auto loaded_chunk_generator = (*current_loader)();
   auto str_chunk = chunk::copy(str);
-  auto generated_chunk_it = loaded_chunk_generator.begin();
-  CHECK_EQUAL((*generated_chunk_it)->size(), max_chunk_size);
-  REQUIRE(std::equal((*generated_chunk_it)->begin(),
-                     (*generated_chunk_it)->end(), str_chunk->begin(),
-                     str_chunk->end()));
-  ++generated_chunk_it;
-  REQUIRE(generated_chunk_it == loaded_chunk_generator.end());
+  auto chunks = collect(current_loader());
+  REQUIRE_EQUAL(chunks.size(), size_t{1});
+  REQUIRE_EQUAL(chunks.front()->size(), max_chunk_size);
+  REQUIRE(std::equal(chunks.front()->begin(), chunks.front()->end(),
+                     str_chunk->begin(), str_chunk->end()));
 }
 
 FIXTURE_SCOPE_END()
