@@ -29,11 +29,14 @@ struct access::parser_base<pattern>
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, pattern& a) const {
-    if (!slash_delimited_string{}(f, l, a.str_)) {
+    auto str = std::string{};
+    if (!slash_delimited_string{}(f, l, str))
       return false;
-    }
-    auto case_insensitive_flag = parsers::chr{pattern::case_insensitive_flag};
-    a.case_insensitive_ = case_insensitive_flag(f, l, unused);
+    auto case_insensitive = parsers::chr{pattern::case_insensitive_flag}(f, l);
+    auto result = pattern::make(std::move(str), {case_insensitive});
+    if (!result)
+      return false;
+    a = std::move(*result);
     return true;
   }
 };

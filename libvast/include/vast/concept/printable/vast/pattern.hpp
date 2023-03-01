@@ -11,7 +11,9 @@
 #include "vast/access.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string/any.hpp"
+#include "vast/concept/printable/string/escape.hpp"
 #include "vast/concept/printable/string/string.hpp"
+#include "vast/detail/escapers.hpp"
 #include "vast/pattern.hpp"
 
 namespace vast {
@@ -23,7 +25,9 @@ struct access::printer<vast::pattern>
 
   template <class Iterator>
   bool print(Iterator& out, const pattern& pat) const {
-    auto p = '/' << printers::str << ((pat.case_insensitive_) ? "/i" : "/");
+    auto escaper = detail::make_extra_print_escaper("/");
+    auto p = '/' << printers::escape(escaper)
+                 << ((pat.options_.case_insensitive) ? "/i" : "/");
     return p.print(out, pat.str_);
   }
 };

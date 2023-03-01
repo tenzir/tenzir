@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.18...3.24 FATAL_ERROR)
 
 project(
   web
-  VERSION 1.0.0
   DESCRIPTION "Web plugin for VAST"
   LANGUAGES CXX)
 

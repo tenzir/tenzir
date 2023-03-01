@@ -27,60 +27,55 @@ namespace vast {
 
 namespace {
 
-template <class LhsView, class RhsView>
+template <class LhsView, class Rhs>
 inline constexpr auto requires_stdcmp
-  = std::is_integral_v<LhsView> && std::is_integral_v<RhsView>
-    && !std::is_same_v<LhsView, RhsView>
-    && !detail::is_any_v<bool, LhsView, RhsView>;
+  = std::is_integral_v<LhsView> && std::is_integral_v<Rhs>
+    && !std::is_same_v<LhsView, Rhs> && !detail::is_any_v<bool, LhsView, Rhs>;
 
 template <relational_operator Op>
 struct cell_evaluator;
 
 template <>
 struct cell_evaluator<relational_operator::equal> {
-  static bool evaluate(auto, auto) noexcept {
+  static bool evaluate(auto, const auto&) noexcept {
     return false;
   }
 
-  template <class LhsView, class RhsView>
-    requires requires(const LhsView& lhs, const RhsView& rhs) {
+  template <class LhsView, class Rhs>
+    requires requires(const LhsView& lhs, const Rhs& rhs) {
                { lhs == rhs } -> std::same_as<bool>;
              }
-  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, RhsView>)
+  static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
+    if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_equal(lhs, rhs);
     else
       return lhs == rhs;
   }
 
-  static bool evaluate(std::string_view lhs, view<pattern> rhs) noexcept {
-    return evaluate(rhs, lhs);
-  }
-
-  static bool evaluate(view<pattern> lhs, std::string_view rhs) noexcept {
-    return materialize(lhs).match(rhs);
+  static bool evaluate(std::string_view lhs, const pattern& rhs) noexcept {
+    return rhs.match(lhs);
   }
 };
 
 template <>
 struct cell_evaluator<relational_operator::not_equal> {
-  static bool evaluate(auto lhs, auto rhs) noexcept {
+  static bool evaluate(auto lhs, const auto& rhs) noexcept {
     return !cell_evaluator<relational_operator::equal>::evaluate(lhs, rhs);
   }
 };
 
 template <>
 struct cell_evaluator<relational_operator::less> {
-  static bool evaluate(auto, auto) noexcept {
+  static bool evaluate(auto, const auto&) noexcept {
     return false;
   }
 
-  template <class LhsView, class RhsView>
-    requires requires(const LhsView& lhs, const RhsView& rhs) {
+  template <class LhsView, class Rhs>
+    requires requires(const LhsView& lhs, const Rhs& rhs) {
                { lhs < rhs } -> std::same_as<bool>;
              }
-  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, RhsView>)
+  static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
+    if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_less(lhs, rhs);
     else
       return lhs < rhs;
@@ -89,16 +84,16 @@ struct cell_evaluator<relational_operator::less> {
 
 template <>
 struct cell_evaluator<relational_operator::less_equal> {
-  static bool evaluate(auto, auto) noexcept {
+  static bool evaluate(auto, const auto&) noexcept {
     return false;
   }
 
-  template <class LhsView, class RhsView>
-    requires requires(const LhsView& lhs, const RhsView& rhs) {
+  template <class LhsView, class Rhs>
+    requires requires(const LhsView& lhs, const Rhs& rhs) {
                { lhs <= rhs } -> std::same_as<bool>;
              }
-  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, RhsView>)
+  static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
+    if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_less_equal(lhs, rhs);
     else
       return lhs <= rhs;
@@ -107,16 +102,16 @@ struct cell_evaluator<relational_operator::less_equal> {
 
 template <>
 struct cell_evaluator<relational_operator::greater> {
-  static bool evaluate(auto, auto) noexcept {
+  static bool evaluate(auto, const auto&) noexcept {
     return false;
   }
 
-  template <class LhsView, class RhsView>
-    requires requires(const LhsView& lhs, const RhsView& rhs) {
+  template <class LhsView, class Rhs>
+    requires requires(const LhsView& lhs, const Rhs& rhs) {
                { lhs > rhs } -> std::same_as<bool>;
              }
-  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, RhsView>)
+  static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
+    if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_greater(lhs, rhs);
     else
       return lhs > rhs;
@@ -125,16 +120,16 @@ struct cell_evaluator<relational_operator::greater> {
 
 template <>
 struct cell_evaluator<relational_operator::greater_equal> {
-  static bool evaluate(auto, auto) noexcept {
+  static bool evaluate(auto, const auto&) noexcept {
     return false;
   }
 
-  template <class LhsView, class RhsView>
-    requires requires(const LhsView& lhs, const RhsView& rhs) {
+  template <class LhsView, class Rhs>
+    requires requires(const LhsView& lhs, const Rhs& rhs) {
                { lhs >= rhs } -> std::same_as<bool>;
              }
-  static bool evaluate(LhsView lhs, RhsView rhs) noexcept {
-    if constexpr (requires_stdcmp<LhsView, RhsView>)
+  static bool evaluate(LhsView lhs, const Rhs& rhs) noexcept {
+    if constexpr (requires_stdcmp<LhsView, Rhs>)
       return std::cmp_greater_equal(lhs, rhs);
     else
       return lhs >= rhs;
@@ -143,65 +138,88 @@ struct cell_evaluator<relational_operator::greater_equal> {
 
 template <>
 struct cell_evaluator<relational_operator::in> {
-  static bool evaluate(auto, auto) noexcept {
+  static bool evaluate(auto, const auto&) noexcept {
     return false;
   }
 
-  static bool evaluate(view<std::string> lhs, view<std::string> rhs) noexcept {
+  static bool evaluate(view<std::string> lhs, const std::string& rhs) noexcept {
     return rhs.find(lhs) != view<std::string>::npos;
   }
 
-  static bool evaluate(view<std::string> lhs, view<pattern> rhs) noexcept {
-    return materialize(rhs).search(lhs);
+  static bool evaluate(view<std::string> lhs, const pattern& rhs) noexcept {
+    return rhs.search(lhs);
   }
 
-  static bool evaluate(view<ip> lhs, view<subnet> rhs) noexcept {
+  static bool evaluate(view<ip> lhs, const subnet& rhs) noexcept {
     return rhs.contains(lhs);
   }
 
-  static bool evaluate(view<subnet> lhs, view<subnet> rhs) noexcept {
+  static bool evaluate(view<subnet> lhs, const subnet& rhs) noexcept {
     return rhs.contains(lhs);
   }
 
-  static bool evaluate(auto lhs, view<list> rhs) noexcept {
-    return std::any_of(rhs.begin(), rhs.end(), [lhs](data_view data) {
+  static bool evaluate(auto lhs, const list& rhs) noexcept {
+    return std::any_of(rhs.begin(), rhs.end(), [lhs](const data& element) {
       return caf::visit(
-        [lhs](auto view) noexcept {
+        [lhs](const auto& element) noexcept {
           return cell_evaluator<relational_operator::equal>::evaluate(lhs,
-                                                                      view);
+                                                                      element);
         },
-        data);
+        element);
     });
   }
 };
 
 template <>
 struct cell_evaluator<relational_operator::not_in> {
-  static bool evaluate(auto lhs, auto rhs) noexcept {
+  static bool evaluate(auto lhs, const auto& rhs) noexcept {
     return !cell_evaluator<relational_operator::in>::evaluate(lhs, rhs);
   }
 };
 
 template <>
 struct cell_evaluator<relational_operator::ni> {
-  static bool evaluate(auto lhs, auto rhs) noexcept {
-    return cell_evaluator<relational_operator::in>::evaluate(rhs, lhs);
+  static bool evaluate(auto, const auto&) noexcept {
+    return false;
+  }
+
+  static bool evaluate(view<std::string> lhs, const std::string& rhs) noexcept {
+    return lhs.find(rhs) != view<std::string>::npos;
+  }
+
+  static bool evaluate(view<subnet> lhs, const ip& rhs) noexcept {
+    return lhs.contains(rhs);
+  }
+
+  static bool evaluate(view<subnet> lhs, const subnet& rhs) noexcept {
+    return lhs.contains(rhs);
+  }
+
+  static bool evaluate(view<list> lhs, const auto& rhs) noexcept {
+    return std::any_of(lhs.begin(), lhs.end(), [rhs](const auto& element) {
+      return caf::visit(
+        [rhs](const auto& element) noexcept {
+          return cell_evaluator<relational_operator::equal>::evaluate(element,
+                                                                      rhs);
+        },
+        element);
+    });
   }
 };
 
 template <>
 struct cell_evaluator<relational_operator::not_ni> {
-  static bool evaluate(auto lhs, auto rhs) noexcept {
+  static bool evaluate(auto lhs, const auto& rhs) noexcept {
     return !cell_evaluator<relational_operator::ni>::evaluate(lhs, rhs);
   }
 };
 
 // The default implementation for the column evaluator that dispatches to the
 // cell evaluator for every relevant row.
-template <relational_operator Op, concrete_type LhsType, class RhsView>
+template <relational_operator Op, concrete_type LhsType, class Rhs>
 struct column_evaluator {
   static ids evaluate(LhsType type, id offset, const arrow::Array& array,
-                      RhsView rhs, const ids& selection) noexcept {
+                      const Rhs& rhs, const ids& selection) noexcept {
     ids result{};
     for (auto id : select(selection)) {
       VAST_ASSERT(id >= offset);
@@ -277,49 +295,14 @@ struct column_evaluator<Op, LhsType, caf::none_t> {
   }
 };
 
-// Speed up string and pattern comparisons by instantiating the regex object
-// less often.
-template <relational_operator Op>
-  requires(Op == relational_operator::equal
-           || Op == relational_operator::not_equal)
-struct column_evaluator<Op, string_type, view<pattern>> {
-  static ids evaluate(string_type type, id offset, const arrow::Array& array,
-                      view<pattern> rhs, const ids& selection) noexcept {
-    ids result{};
-    auto re = *materialize(rhs).make_regex();
-    for (auto id : select(selection)) {
-      VAST_ASSERT(id >= offset);
-      const auto row = detail::narrow_cast<int64_t>(id - offset);
-      // TODO: Instead of this in the loop, do selection &= array.null_bitmap
-      // outside of it.
-      if (array.IsNull(row))
-        continue;
-      result.append(false, id - result.size());
-      const auto value = value_at(type, array, row);
-      if constexpr (Op == relational_operator::equal) {
-        if (std::regex_match(value.begin(), value.end(), re))
-          result.append_bit(true);
-      } else if constexpr (Op == relational_operator::not_equal) {
-        if (!std::regex_match(value.begin(), value.end(), re))
-          result.append_bit(true);
-      } else {
-        static_assert(detail::always_false_v<decltype(Op)>,
-                      "unexpected relational operator");
-      }
-    }
-    result.append(false, offset + array.length() - result.size());
-    return result;
-  }
-};
-
 // For operations comparing enumeration arrays with a string view we want to
 // first convert the string view into its underlying integral representation,
 // and then dispatch to that column evaluator.
 template <relational_operator Op>
-struct column_evaluator<Op, enumeration_type, view<std::string>> {
+struct column_evaluator<Op, enumeration_type, std::string> {
   static ids
   evaluate(enumeration_type type, id offset, const arrow::Array& array,
-           view<std::string> rhs, const ids& selection) noexcept {
+           const std::string& rhs, const ids& selection) noexcept {
     if (auto key = type.resolve(rhs)) {
       auto rhs_internal = detail::narrow_cast<view<enumeration>>(*key);
       return column_evaluator<Op, enumeration_type, view<enumeration>>::evaluate(
@@ -342,7 +325,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
   case relational_operator::op: {                                              \
     auto f = [&](const auto& rhs) noexcept {                                   \
       return cell_evaluator<relational_operator::op>::evaluate(                \
-        slice.schema().name(), make_view(rhs));                                \
+        slice.schema().name(), rhs);                                           \
     };                                                                         \
     return caf::visit(f, rhs);                                                 \
   }
@@ -366,7 +349,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
   case relational_operator::op: {                                              \
     auto f = [&](const auto& rhs) noexcept {                                   \
       return cell_evaluator<relational_operator::op>::evaluate(                \
-        slice.import_time(), make_view(rhs));                                  \
+        slice.import_time(), rhs);                                             \
     };                                                                         \
     return caf::visit(f, rhs);                                                 \
   }
@@ -441,9 +424,8 @@ ids evaluate(const expression& expr, const table_slice& slice,
   case relational_operator::op: {                                              \
     auto f = [&]<concrete_type Type, class Rhs>(                               \
                Type type, const Rhs& rhs) noexcept -> ids {                    \
-      return column_evaluator<relational_operator::op, Type,                   \
-                              view<Rhs>>::evaluate(type, offset, *array,       \
-                                                   make_view(rhs), selection); \
+      return column_evaluator<relational_operator::op, Type, Rhs>::evaluate(   \
+        type, offset, *array, rhs, selection);                                 \
     };                                                                         \
     return caf::visit(f, type, rhs);                                           \
   }

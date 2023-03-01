@@ -528,7 +528,7 @@ private:
   void* library_ = {};
   plugin* instance_ = {};
   void (*deleter_)(plugin*) = {};
-  const char* version_ = {};
+  const char* version_ = nullptr;
   enum type type_ = {};
 };
 

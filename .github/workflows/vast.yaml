@@ -198,6 +198,9 @@ jobs:
           if ! is_unchanged plugins/; then
             run_vast_plugins=true
           fi
+          if ! is_unchanged contrib/vast-plugins/; then
+            run_vast_plugins=true
+          fi
           echo "run-vast-plugins=${run_vast_plugins}" >> $GITHUB_OUTPUT
           # Build vast if no artifact is present in google store
           if [[ ${run_vast_plugins} == "true" && ${run_vast} == "false" ]]; then
@@ -259,16 +262,16 @@ jobs:
             $(git -C contrib/vast-plugins rev-parse HEAD) \
             $(git -C contrib/vast-plugins rev-parse origin/main)
       - name: Install Nix
-        uses: cachix/install-nix-action@v19
+        uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Verify Nix sources are synchronized
         run: |
           nix/update.sh
-          git diff --quiet || {
+          git diff --quiet --exit-code || {
             echo "Some Nix source references are not aligned with the git submodules."
             echo "Please run `nix/update.sh` or apply the following diff directly:"
-            git diff
+            git diff --exit-code
           }
 
   changelog:
@@ -593,7 +596,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Nix
-        uses: cachix/install-nix-action@v19
+        uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Configure ssh-agent
@@ -1020,6 +1023,10 @@ jobs:
           - name: Compaction
             target: compaction
             path: plugins/compaction
+          # TODO: Enable once this builds without warnings
+          # - name: Fleet
+          #   target: fleet
+          #   path: plugins/fleet
           - name: Inventory
             target: inventory
             path: plugins/inventory
@@ -1039,6 +1046,7 @@ jobs:
           - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
           - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
           - {setup: {os: macos-latest}, plugin: {name: Compaction}}
+          - {setup: {os: macos-latest}, plugin: {name: Fleet}}
           - {setup: {os: macos-latest}, plugin: {name: Inventory}}
           - {setup: {os: macos-latest}, plugin: {name: Matcher}}
           - {setup: {os: macos-latest}, plugin: {name: Netflow}}
@@ -1189,7 +1197,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.2.0
+        uses: abatilo/actions-poetry@v2.3.0
         with:
           poetry-version: 1.3.0
       - name: Run poetry install
@@ -1228,7 +1236,7 @@ jobs:
         with:
           python-version: "3.10"
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.2.0
+        uses: abatilo/actions-poetry@v2.3.0
         with:
           poetry-version: 1.3.0
       - name: Configure PyPI
