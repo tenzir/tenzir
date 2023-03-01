@@ -278,16 +278,25 @@ field name clashes occur between the two records:
 
 ## Comparison to Arrow
 
-There exists a one-to-one mapping of VAST's type system to Arrow's type system
-to ensure that transferred data is self-describing:
+All VAST types have a lossless mapping to Arrow types, however, not all Arrow
+types have a VAST equivalent. As a result, it is currently not yet possible to
+import arbitrary Arrow data. In the future, we plan to extend our support for
+Arrow-native types and also offer conversion options for seamless data handover.
 
-![Type System - Arrow](type-system-arrow.excalidraw.svg)
+VAST has a few domain-specific types that map to Arrow [extension
+types][extension-types]. These are currently:
 
-Note that VAST attaches attributes to a top-level type instance, where Arrow
-only allows type meta data for record fields. VAST converts enum, IP, and
-subnet types to [extension-types][extension-types].
+- `enum`
+- `ip`
+- `subnet`
 
 [extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
+
+VAST treats type meta data differently from Arrow. In VAST, the type is the
+component that contains metadata. In Arrow, it's the record field. This makes
+VAST slightly more expressive and composable from a type system perspective,
+e.g., you can attach meta data to a basic boolean type, but in Arrow, it
+requires surrounding parent record.
 
 :::tip More on Arrow & VAST
 If you want to learn more about why VAST uses Apache Arrow, please read our
