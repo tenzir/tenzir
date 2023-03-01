@@ -158,7 +158,25 @@ TEST(modifier - re) {
     foo|re: "^.*$"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /^.*$/");
+  auto expected = to_expr("foo == /^.*$/i");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - re 2) {
+  auto yaml = R"__(
+    foo|re: '.*foobar.*'
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo == /.*foobar.*/i");
+  CHECK_EQUAL(search_id, expected);
+}
+
+TEST(modifier - re - case sensitive) {
+  auto yaml = R"__(
+    foo|re: 'foobar'
+  )__";
+  auto search_id = to_search_id(yaml);
+  auto expected = to_expr("foo == /foobar/");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -167,7 +185,7 @@ TEST(modifier - startswith) {
     foo|startswith: "x"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /^x/");
+  auto expected = to_expr("foo == /^x.*/");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -176,7 +194,7 @@ TEST(modifier - endswith) {
     foo|endswith: "x"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /x$/");
+  auto expected = to_expr("foo == /.*x$/");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -461,9 +479,9 @@ TEST(real example) {
   auto selection1 = R"__(CommandLine ni "7z.exe a -v500m -mx9 -r0 -p")__"s;
   auto selection2a = R"__(ParentCommandLine ni "wscript.exe" && ParentCommandLine ni ".vbs")__"s;
   auto selection2b = R"__(CommandLine ni "rundll32.exe" && CommandLine ni "C:\Windows" && CommandLine ni ".dll,Tk_")__"s;
-  auto selection3 = R"__(ParentImage == /\rundll32.exe$/ && ParentCommandLine ni "C:\Windows" && CommandLine ni "cmd.exe /C ")__"s;
+  auto selection3 = R"__(ParentImage == /.*\rundll32.exe$/ && ParentCommandLine ni "C:\Windows" && CommandLine ni "cmd.exe /C ")__"s;
   auto selection4 = R"__(CommandLine ni "rundll32 c:\windows\\" && CommandLine ni ".dll ")__"s;
-  auto specific1 = R"__(ParentImage == /\rundll32.exe$/ && Image == /\dllhost.exe$/)__"s;
+  auto specific1 = R"__(ParentImage == /.*\rundll32.exe$/ && Image == /.*\dllhost.exe$/)__"s;
   auto filter1 = R"__(CommandLine == " " || CommandLine == "")__"s;
   // clang-format on
   conjunction selection2;

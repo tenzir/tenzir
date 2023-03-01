@@ -323,33 +323,51 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         } else if (*i == "utf16") {
           return caf::make_error(ec::unimplemented, //
                                  "utf16 not yet implemented");
-        } else if (*i == "endswith" || *i == "startswith" || *i == "re") {
+        } else if (*i == "startswith") {
+          auto to_re = [](const data& d) -> caf::expected<data> {
+            auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
+              auto str = fmt::format("^{}.*", to_string(x));
+              auto result = pattern::make(str);
+              if (!result)
+                return std::move(result.error());
+              return std::move(*result);
+            }};
+            return caf::visit(f, d);
+          };
+          transforms.emplace_back(to_re);
+        } else if (*i == "endswith") {
           op = relational_operator::equal;
-          auto to_re = [i](const data& d) -> caf::expected<data> {
+          auto to_re = [](const data& d) -> caf::expected<data> {
+            auto f = detail::overload{[](const auto& x) -> caf::expected<data> {
+              auto str = fmt::format(".*{}$", to_string(x));
+              auto result = pattern::make(str);
+              if (!result)
+                return std::move(result.error());
+              return std::move(*result);
+            }};
+            return caf::visit(f, d);
+          };
+          transforms.emplace_back(to_re);
+        } else if (*i == "re") {
+          op = relational_operator::equal;
+          auto to_re = [](const data& d) -> caf::expected<data> {
             auto f = detail::overload{
-              [i](const auto& x) -> caf::expected<data> {
+              [](const auto& x) -> caf::expected<data> {
                 auto str = to_string(x);
-                auto pattern_str = str;
-                if (*i == "startswith") {
-                  pattern_str = "^" + pattern_str;
-                } else if (*i == "endswith") {
-                  pattern_str.append("$");
+                auto transformed = transform_sigma_string(str);
+                if (str == transformed) {
+                  return str;
                 }
-                if (auto result = make_pattern(pattern_str)) {
-                  if (!result)
-                    return std::move(result->error());
-                  return std::move(**result);
-                }
-                return str;
+                auto result
+                  = pattern::make(transformed, {.case_insensitive = true});
+                if (!result)
+                  return std::move(result.error());
+                return std::move(*result);
               },
-              [i](const std::string& x) -> caf::expected<data> {
-                auto pattern_str = x;
-                if (*i == "startswith") {
-                  pattern_str = "^" + pattern_str;
-                } else if (*i == "endswith") {
-                  pattern_str.append("$");
-                }
-                auto result = pattern::make(pattern_str);
+              [](const std::string& x) -> caf::expected<data> {
+                auto contains_wildcards = (x != transform_sigma_string(x));
+                auto result
+                  = pattern::make(x, {.case_insensitive = contains_wildcards});
                 if (!result)
                   return std::move(result.error());
                 return std::move(*result);
