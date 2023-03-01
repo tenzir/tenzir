@@ -70,7 +70,7 @@ struct accountant_state_impl {
   /// Stores the names of known actors to fill into the actor_name column.
   std::unordered_map<caf::actor_id, std::string> actor_map;
 
-  /// Stores the builder instance.
+  /// Stores the builder instance per type name.
   std::unordered_map<std::string, table_slice_builder_ptr> builders;
 
   /// Buffers table_slices, acting as a adaptor between the push based

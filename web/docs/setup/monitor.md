@@ -98,13 +98,13 @@ vast.metrics.<key>:
     - <metadata...>
 ```
 
-Here's an example that queries for the start up latency of VAST's stores,
-grouping into 10 second buckets and looking at the minimum and the maximum
+Here's an example that shows the start up latency of VAST's stores,
+grouped into 10 second buckets and looking at the minimum and the maximum
 latency, respectively, for all buckets.
 
 ```bash
 vast export json '#type == "vast.metrics.passive-store.init.runtime"
-  | select ts,value
+  | select ts, value
   | summarize min(value), max(value) by ts resolution 10s'
 ```
 

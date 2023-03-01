@@ -5,7 +5,7 @@ description: The VAST Language Evolution — Dataflow Pipelines
 authors: [dominiklohmann, dakostu]
 date: 2023-02-15
 image: /path/to/image.png
-tags: [release, vast-language, cef, performance, introspection, regex]
+tags: [release, language, cef, performance, introspection, regex]
 ---
 
 <!--
