@@ -67,17 +67,16 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
 FIXTURE_SCOPE(partition_transformer_tests, fixture)
 
-TEST(identity pipeline / done before persist) {
+TEST(pass pipeline / done before persist) {
   // Spawn partition transformer
   auto store_id = std::string{vast::defaults::system::store_backend};
   auto synopsis_opts = vast::index_config{};
   auto index_opts = caf::settings{};
   auto pipeline = std::make_shared<vast::pipeline>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
-  auto identity_operator
-    = vast::make_pipeline_operator("identity", vast::record{});
-  REQUIRE_NOERROR(identity_operator);
-  pipeline->add_operator(std::move(*identity_operator));
+  auto pass_operator = vast::make_pipeline_operator("pass", vast::record{});
+  REQUIRE_NOERROR(pass_operator);
+  pipeline->add_operator(std::move(*pass_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
                   index_opts, accountant, catalog, filesystem,
@@ -249,10 +248,9 @@ TEST(partition with multiple types) {
   auto index_opts = caf::settings{};
   auto pipeline = std::make_shared<vast::pipeline>("partition_transform"s,
                                                    std::vector<std::string>{});
-  auto identity_operator
-    = vast::make_pipeline_operator("identity", vast::record{});
-  REQUIRE_NOERROR(identity_operator);
-  pipeline->add_operator(std::move(*identity_operator));
+  auto pass_operator = vast::make_pipeline_operator("pass", vast::record{});
+  REQUIRE_NOERROR(pass_operator);
+  pipeline->add_operator(std::move(*pass_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
                   index_opts, accountant, catalog, filesystem,
@@ -315,7 +313,7 @@ TEST(partition with multiple types) {
   }
 }
 
-TEST(identity partition pipeline via the index) {
+TEST(pass partition pipeline via the index) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/vast/index"};
   auto catalog
@@ -383,10 +381,9 @@ TEST(identity partition pipeline via the index) {
   // Run a partition transformation.
   auto pipeline = std::make_shared<vast::pipeline>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
-  auto identity_operator
-    = vast::make_pipeline_operator("identity", vast::record{});
-  REQUIRE_NOERROR(identity_operator);
-  pipeline->add_operator(std::move(*identity_operator));
+  auto pass_operator = vast::make_pipeline_operator("pass", vast::record{});
+  REQUIRE_NOERROR(pass_operator);
+  pipeline->add_operator(std::move(*pass_operator));
   std::vector<vast::partition_info> partition_infos;
   auto& partition_info = partition_infos.emplace_back();
   partition_info.uuid = partition_uuid;
@@ -619,10 +616,9 @@ TEST(exceeded partition size) {
   index_opts["cardinality"] = 4;
   auto pipeline = std::make_shared<vast::pipeline>("partition_transform"s,
                                                    std::vector<std::string>{});
-  auto identity_operator
-    = vast::make_pipeline_operator("identity", vast::record{});
-  REQUIRE_NOERROR(identity_operator);
-  pipeline->add_operator(std::move(*identity_operator));
+  auto pass_operator = vast::make_pipeline_operator("pass", vast::record{});
+  REQUIRE_NOERROR(pass_operator);
+  pipeline->add_operator(std::move(*pass_operator));
   auto transformer
     = self->spawn(vast::system::partition_transformer, store_id, synopsis_opts,
                   index_opts, accountant, catalog, filesystem,
