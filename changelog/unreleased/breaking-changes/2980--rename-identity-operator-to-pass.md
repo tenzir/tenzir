@@ -1,1 +1,1 @@
-The `identity` operator was renamed to `pass`.
+We renamed the `identity` operator to `pass`.
