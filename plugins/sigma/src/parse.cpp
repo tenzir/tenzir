@@ -181,15 +181,17 @@ struct detection_parser : parser_base<detection_parser> {
   search_id_symbol_table search_id;
 };
 
-// The following invariants apply according to the Sigma spec:
-// - All values are treated as case-insensitive strings
-// - You can use wildcard characters '*' and '?' in strings
-// - Wildcards can be escaped with \, e.g. \*. If some wildcard after a
-//   backslash should be searched, the backslash has to be escaped: \\*.
-// - All values are treated as case-insensitive strings
-// - You don't have to escape characters except the string quotation
-//   marks '
-std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
+/// Transforms a string that may contain Sigma glob wildcards into a string with
+/// respective regular expression metacharacters.
+std::string transform_sigma_string(std::string_view str) {
+  // The following invariants apply according to the Sigma spec:
+  // - All values are treated as case-insensitive strings
+  // - You can use wildcard characters '*' and '?' in strings
+  // - Wildcards can be escaped with \, e.g. \*. If some wildcard after a
+  //   backslash should be searched, the backslash has to be escaped: \\*.
+  // - Regular expressions are case-sensitive by default
+  // - You don't have to escape characters except the string quotation
+  //   marks '
   auto f = str.begin();
   auto l = str.end();
   std::string rx;
@@ -231,6 +233,11 @@ std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
       rx += c;
     }
   };
+  return rx;
+}
+
+std::optional<caf::expected<pattern>> make_pattern(std::string_view str) {
+  auto rx = transform_sigma_string(str);
   // It's only a pattern if it differs from a regular string.
   // TODO: check whether we need ^ and $ anchors.
   if (str == rx)
