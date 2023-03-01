@@ -6,8 +6,8 @@ sidebar_position: 1
 
 VAST defines a **schema** as a *named* record type. Since all types can have
 a name, we define a schema as a type a that (1) is a record, and (2) has a name.
-From a data perspective, the schema specifies the column structure of a
-batch of records.
+From a data perspective, the schema specifies the structure of a batch of
+records.
 
 Ideally, each data source defines its own semantically rich schema to retain
 most of the domain-specific information of the data. This is desirable because
@@ -19,7 +19,7 @@ tags, and also support aliasing for building libraries of composable types.
 
 In practice, many tools often "dumb down" their rich internal representation
 into a generic piece of JSON, CSV, or text. This puts the burden of gaining
-actionable insights onto the analyst downstream: either they work with a minimal
+actionable insights onto the user downstream: either they work with a minimal
 layer of typing, or they put in effort to (re)apply a coat of typing by writing
 a schema.
 

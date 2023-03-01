@@ -76,21 +76,20 @@ available types. Each letter in a cell denotes a set of operators:
 - **R**: range operators `<`, `<=`, `>=`, `>`
 - **M**: membership operators `in`, `!in`, `ni`, `!ni`
 
-| | **Bool** | **Int64** | **UInt64** | **Double** | **Duration** | **Time** | **String** | **Pattern** | **IP** | **Subnet** | **Enum** | **List** | **Map**
----|---|---|---|---|---|---|---|---|---|---|---|---|---
- **Bool** | E |  |  |  |  |  |  |  |  |  |  | M | M
- **Int64** |  | ER |  |  |  |  |  |  |  |  |  | M | M
- **UInt64** |  |  | ER |  |  |  |  |  |  |  |  | M | M
- **Double** |  |  |  | ER |  |  |  |  |  |  |  | M | M
- **Duration** |  |  |  |  | ER |  |  |  |  |  |  | M | M
- **Time** |  |  |  |  |  | ER |  |  |  |  |  | M | M
- **String** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
- **Pattern** |  |  |  |  |  |  | EM | EM |  |  |  | M | M
- **IP** |  |  |  |  |  |  |  |  | E | EM |  | M | M
- **Subnet** |  |  |  |  |  |  |  |  | EM | EM |  | M | M
- **Enum** |  |  |  |  |  |  |  |  |  |  | E | M | M
- **List** | M | M | M | M | M | M | M | M | M | M | M | EM | M
- **Map** | M | M | M | M | M | M | M | M | M | M | M | M | EM
+| | **Bool** | **Int64** | **UInt64** | **Double** | **Duration** | **Time** | **String** | **Pattern** | **IP** | **Subnet** | **Enum** | **List**
+---|---|---|---|---|---|---|---|---|---|---|---|--
+ **Bool** | E |  |  |  |  |  |  |  |  |  |  | M
+ **Int64** |  | ER |  |  |  |  |  |  |  |  |  | M
+ **UInt64** |  |  | ER |  |  |  |  |  |  |  |  | M
+ **Double** |  |  |  | ER |  |  |  |  |  |  |  | M
+ **Duration** |  |  |  |  | ER |  |  |  |  |  |  | M
+ **Time** |  |  |  |  |  | ER |  |  |  |  |  | M
+ **String** |  |  |  |  |  |  | EM | EM |  |  |  | M
+ **Pattern** |  |  |  |  |  |  | EM | EM |  |  |  | M
+ **IP** |  |  |  |  |  |  |  |  | E | EM |  | M
+ **Subnet** |  |  |  |  |  |  |  |  | EM | EM |  | M
+ **Enum** |  |  |  |  |  |  |  |  |  |  | E | M
+ **List** | M | M | M | M | M | M | M | M | M | M | M | EM
 
 ### Extractors
 
@@ -141,9 +140,9 @@ extractors work for all [basic
 types](/docs/understand/data-model/type-system) and user-defined aliases.
 
 A search for type `:T` includes all aliased types. For example, given the alias
-`port` that maps to `uint64`, then the `:uint64` type extractor will also consider
-instances of type `port`. However, a `:port` query does not include `:uint64`
-types because an alias is a strict refinement of an existing type.
+`port` that maps to `uint64`, then the `:uint64` type extractor will also
+consider instances of type `port`. However, a `:port` query does not include
+`:uint64` types because an alias is a strict refinement of an existing type.
 
 ##### Examples
 
@@ -195,10 +194,8 @@ This makes it easier to search for IP addresses belonging to a specific subnet.
 Every [type](/docs/understand/data-model/type-system) has a corresponding
 value syntax in the expression language.
 
-### Basic Types
-
-| Type       | Example Value
-| ---------- | --------------
+| Literal    | Example
+| ---------- | -------
 | `none`     | `nil`
 | `bool`     | `true`, `false`
 | `int64`    | `-42`, `+3`
@@ -210,11 +207,5 @@ value syntax in the expression language.
 | `pattern`  | `/fo*.bar$/`, `/^\w{3}$/i`
 | `ip`       | `::1`, `10.0.0.1`, `2001:db8::`
 | `subnet`   | `::1/128`, `10.0.0.0/8`, `2001:db8::/32`
-
-### Complex Types
-
-| Type        | Example Value
-| ----------- | --------------
 | `list`      | `[1, 2, 3]`, `[]`
-| `map`       | `{x -> a, y -> b, z -> c}`, `{}`
 | `record`    | `<x: a, y: b, z: c>`, `<a, b, c>`, `<>`

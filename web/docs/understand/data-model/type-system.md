@@ -15,8 +15,6 @@ The diagram below illustrates the type system at a glance:
 
 ![Type System - VAST](type-system-vast.excalidraw.svg)
 
-All type have an optional name. They coexist in a global namespace.
-
 ### Basic Types
 
 Basic types are stateless types with a static structure. Their representation
@@ -64,8 +62,6 @@ The field name is an arbitrary UTF-8 string.
 
 The field type is any VAST type.
 
-Optionality of a field is reflected by its type.
-
 ### Optionality
 
 All types are optional in that there exists an additional `null` data point in
@@ -81,6 +77,8 @@ to enrich types with custom semantics.
 
 An alias wraps an existing type under a new name. Aliases are first-class types,
 meaning you can also attach separate attributes to them.
+
+All alias types have a name. They coexist in a global namespace.
 
 :::tip Alias = Specialization
 An alias always *refines* the type it points to, i.e., it is more specific that
@@ -292,11 +290,12 @@ types][extension-types]. These are currently:
 
 [extension-types]: https://arrow.apache.org/docs/format/Columnar.html#extension-types
 
+Note that VAST attaches attributes to a top-level type instance, where Arrow
+only allows type meta data for record fields.
+
 VAST treats type meta data differently from Arrow. In VAST, the type is the
-component that contains metadata. In Arrow, it's the record field. This makes
-VAST slightly more expressive and composable from a type system perspective,
-e.g., you can attach meta data to a basic boolean type, but in Arrow, it
-requires surrounding parent record.
+component that contains metadata. In Arrow, it's the record field or the schema.
+As a result, we can simply define a [schema](schemas) as named record type.
 
 :::tip More on Arrow & VAST
 If you want to learn more about why VAST uses Apache Arrow, please read our

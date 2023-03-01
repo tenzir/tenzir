@@ -54,7 +54,7 @@ transpiler](https://github.com/databrickslabs/transpiler). Our committment to
 Apache Arrow and efforts like [substrait](https://substrait.io/) and
 [ibis](https://ibis-project.org/) further show that there is a viable path to
 convergence. Unfortunately we cannot wait until these technologies are
-production grade; the needed [data engineering has a long
+production-grade; the needed [data engineering has a long
 tail](/blog/parquet-and-feather-data-engineering-woes).
 
 Second, our goal is to build an open system on top of Apache Arrow, allowing
