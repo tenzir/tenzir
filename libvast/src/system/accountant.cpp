@@ -263,7 +263,8 @@ struct accountant_state_impl {
     }
     if (start_file_sink) {
       auto s = detail::make_output_stream(root / cfg.file_sink.path,
-                                          std::filesystem::file_type::regular);
+                                          std::filesystem::file_type::regular,
+                                          std::ios_base::app);
       if (s) {
         VAST_INFO("{} writing metrics to {}", *self, cfg.file_sink.path);
         file_sink = std::move(*s);

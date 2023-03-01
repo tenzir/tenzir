@@ -27,7 +27,8 @@ make_output_stream(const std::string& output, socket_type st);
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output,
                    std::filesystem::file_type file_type
-                   = std::filesystem::file_type::regular);
+                   = std::filesystem::file_type::regular,
+                   std::ios_base::openmode mode = std::ios_base::out);
 
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const caf::settings& options);
