@@ -5,13 +5,12 @@ description: The VAST Language Evolution — Dataflow Pipelines
 authors: [dominiklohmann, dakostu]
 date: 2023-02-15
 image: /path/to/image.png
-tags: [release, vastql, cef, performance, introspection, regex]
+tags: [release, language, cef, performance, introspection, regex]
 ---
 
 <!--
 TODO: Outstanding tasks for the blog post before we can publish
 - Remove this comment
-- Find a better title
 - Create an image for the blog post
 --->
 
@@ -83,6 +82,9 @@ do for a long time. Here's a summary:
 5. We renamed the boolean literal values `T` and `F` to `true` and `false`,
    respectively. For example the query `suricata.alert.alerted == T` is no
    longer valid; use `suricata.alert.alerted == true` instead.
+
+6. The `map` type no longer exists: Instead of `map<T, U>`, use the equivalent
+   `list<record{ key: T, value: U }>`.
 
 Our goal is for these changes to make the query language feel more natural to
 our users. We've got [big plans][rfc-001] on how to extend it—and this felt very

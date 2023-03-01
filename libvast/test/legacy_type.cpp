@@ -128,10 +128,6 @@ TEST(parseable) {
   MESSAGE("container");
   CHECK(parsers::legacy_type("list<real>", t));
   CHECK(t == legacy_type{legacy_list_type{legacy_real_type{}}});
-  CHECK(parsers::legacy_type("map<count, bool>", t));
-  CHECK(
-    (t
-     == legacy_type{legacy_map_type{legacy_count_type{}, legacy_bool_type{}}}));
   MESSAGE("record");
   auto str = R"__(record{"a b": ip, b: bool})__"sv;
   CHECK(parsers::legacy_type(str, t));

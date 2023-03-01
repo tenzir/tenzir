@@ -5,8 +5,6 @@
       VAST:name:0: 'named_bool'
       child 0, contagious: bool
       child 0, item: struct<x1: int64, x2: uint64>
-      child 0, key: int64 not null
-      child 1, value: double
     -- field metadata --
     -- field metadata --
     -- field metadata --
@@ -22,7 +20,6 @@
   -- field metadata --
   -- field metadata --
   -- field metadata --
-  -- field metadata --
   ARROW:extension:metadata: 'vast.address'
   ARROW:extension:metadata: 'vast.subnet'
   ARROW:extension:metadata: '{ "A": 0, "B": 1, "C": 2 }'
@@ -31,9 +28,7 @@
   ARROW:extension:name: 'vast.subnet'
   VAST:attributes:0: '{ "description": "unnamed_extended_bool" }'
   VAST:attributes:0: '{ "skip": "" }'
-  VAST:attributes:0: '{ "skip": "" }'
   child 0, address: fixed_size_binary[16]
-  child 0, entries: struct<key: int64 not null, value: double> not null
   child 0, item: struct<contagious: bool>
   child 0, x: bool
   child 1, length: uint8
@@ -54,7 +49,6 @@ done with current reader, rows: 4
 e: dictionary<values=string, indices=uint8, ordered=0>
 i: int64
 l: list<item: struct<contagious: bool>>
-m: map<int64, double>
 n: struct<address: fixed_size_binary[16], length: uint8>
 open next reader
 open next reader
