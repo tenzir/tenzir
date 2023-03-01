@@ -69,7 +69,7 @@ TEST(maps - single value) {
 TEST(maps - empty value) {
   auto yaml = "foo: ''";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == //i");
+  auto expected = to_expr("foo == \"\"");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -158,7 +158,7 @@ TEST(modifier - re) {
     foo|re: "^.*$"
   )__";
   auto search_id = to_search_id(yaml);
-  auto expected = to_expr("foo == /^.*$/i");
+  auto expected = to_expr("foo == /^.*$/");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -167,9 +167,7 @@ TEST(modifier - startswith) {
     foo|startswith: "x"
   )__";
   auto search_id = to_search_id(yaml);
-  // TODO: blocked by VAST has pattern matching capability
-  // auto expected = to_expr("foo == /^x/");
-  auto expected = to_expr("foo ni /x/i");
+  auto expected = to_expr("foo == /^x/");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -178,9 +176,7 @@ TEST(modifier - endswith) {
     foo|endswith: "x"
   )__";
   auto search_id = to_search_id(yaml);
-  // TODO: blocked by VAST has pattern matching capability
-  // auto expected = to_expr("foo == /x$/");
-  auto expected = to_expr("foo ni /x/i");
+  auto expected = to_expr("foo == /x$/");
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -227,7 +223,7 @@ TEST(modifier - base64) {
   auto search_id = to_search_id(yaml);
   auto base64_value = detail::base64::encode("value"sv);
   REQUIRE_EQUAL(base64_value, "dmFsdWU="); // echo -n value | base64
-  auto expected = to_expr(fmt::format("foo == /{}/i", base64_value));
+  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -239,7 +235,7 @@ TEST(modifier - double base64) {
   auto base64_value = detail::base64::encode("value"sv);
   base64_value = detail::base64::encode(base64_value);
   REQUIRE_EQUAL(base64_value, "ZG1Gc2RXVT0="); // echo -n dmFsdWU= | base64
-  auto expected = to_expr(fmt::format("foo == /{}/i", base64_value));
+  auto expected = to_expr(fmt::format("foo == \"{}\"", base64_value));
   CHECK_EQUAL(search_id, expected);
 }
 
@@ -462,13 +458,13 @@ level: critical
 TEST(real example) {
   auto expr = to_rule(unc2452);
   // clang-format off
-  auto selection1 = R"__(CommandLine ni /7z.exe a -v500m -mx9 -r0 -p/i)__"s;
-  auto selection2a = R"__(ParentCommandLine ni /wscript.exe/i && ParentCommandLine ni /.vbs/i)__"s;
-  auto selection2b = R"__(CommandLine ni /rundll32.exe/i && CommandLine ni /C:\Windows/i && CommandLine ni /.dll,Tk_/i)__"s;
-  auto selection3 = R"__(ParentImage ni /\rundll32.exe/i && ParentCommandLine ni /C:\Windows/i && CommandLine ni /cmd.exe \/C /i)__"s;
-  auto selection4 = R"__(CommandLine ni /rundll32 c:\windows\\/i && CommandLine ni /.dll /i)__"s;
-  auto specific1 = R"__(ParentImage ni /\rundll32.exe/i && Image ni /\dllhost.exe/i)__"s;
-  auto filter1 = R"__(CommandLine == / /i || CommandLine == //i)__"s;
+  auto selection1 = R"__(CommandLine ni "7z.exe a -v500m -mx9 -r0 -p")__"s;
+  auto selection2a = R"__(ParentCommandLine ni "wscript.exe" && ParentCommandLine ni ".vbs")__"s;
+  auto selection2b = R"__(CommandLine ni "rundll32.exe" && CommandLine ni "C:\Windows" && CommandLine ni ".dll,Tk_")__"s;
+  auto selection3 = R"__(ParentImage == /\rundll32.exe$/ && ParentCommandLine ni "C:\Windows" && CommandLine ni "cmd.exe /C ")__"s;
+  auto selection4 = R"__(CommandLine ni "rundll32 c:\windows\\" && CommandLine ni ".dll ")__"s;
+  auto specific1 = R"__(ParentImage == /\rundll32.exe$/ && Image == /\dllhost.exe$/)__"s;
+  auto filter1 = R"__(CommandLine == " " || CommandLine == "")__"s;
   // clang-format on
   conjunction selection2;
   selection2.emplace_back(to_expr(selection2a));

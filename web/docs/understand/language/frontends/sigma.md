@@ -57,13 +57,13 @@ detection:
 VAST translates this rule piece by building a symbol table of all keys (`foo`
 and `bar`). Each sub-expression is a valid VAST expression itself:
 
-1. `foo`: `a == 42 && b == /evil/i`
+1. `foo`: `a == 42 && b == "evil"`
 2. `bar`: `c == 1.2.3.4`
 
 Finally, VAST combines the expression according to the `condition`:
 
 ```c
-(a == 42 && b == /evil/i) || ! (c == 1.2.3.4)
+(a == 42 && b == "evil") || ! (c == 1.2.3.4)
 ```
 
 :::note Rich YAML Typing
