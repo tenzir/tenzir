@@ -27,12 +27,12 @@ const latestReleaseBlogPost = blogpostsInternalArchive?.blogPosts?.find(
   (blogpost) =>
     blogpost?.metadata?.tags?.map((tag) => tag.label)?.includes('release')
 );
-const latestTwoNonReleaseBlogPosts = blogpostsInternalArchive?.blogPosts
+const latestNonReleaseBlogPosts = blogpostsInternalArchive?.blogPosts
   ?.filter(
     (blogpost) =>
       !blogpost?.metadata?.tags?.map((tag) => tag.label)?.includes('release')
   )
-  ?.slice(0, 2);
+  ?.slice(0, 3);
 
 const truncateDesc = (str: string, n: number) => {
   return str.length > n ? str.substring(0, n) + '...' : str;
@@ -67,13 +67,6 @@ function HomepageHeader() {
         <div className={styles.carousel}>
           <Carousel>
             {[
-              <CarouselCard
-                key="newsletter-carousel"
-                title="Sign up for our Newsletter"
-                link={'/newsletter'}
-                label="Get the latest news and updates from the VAST team"
-                buttonLabel="Subscribe"
-              />,
               latestReleaseBlogPost?.metadata?.title && (
                 <CarouselCard
                   key="latest-release-carousel"
@@ -81,16 +74,22 @@ function HomepageHeader() {
                   link={latestReleaseBlogPost?.metadata?.permalink}
                   label="Latest Relaese"
                   buttonLabel="Read Announcement"
+                  imageLink={latestReleaseBlogPost?.metadata?.frontMatter?.image}
+                  description={
+                    latestReleaseBlogPost?.metadata?.hasTruncateMarker
+                      ? extractTextBeforeTruncate(latestReleaseBlogPost?.content)
+                      : null
+                  }
                 />
               ),
             ].concat(
-              latestTwoNonReleaseBlogPosts?.map((post, idx) => {
+              latestNonReleaseBlogPosts?.map((post, idx) => {
                 return (
                   <CarouselCard
                     key="blogpost-${idx}-carousel"
                     title={post?.metadata?.title}
                     link={post?.metadata?.permalink}
-                    label="Latest Blogpost"
+                    label="Blogpost"
                     buttonLabel="Read Post"
                     imageLink={post?.metadata?.frontMatter?.image}
                     description={
@@ -101,6 +100,17 @@ function HomepageHeader() {
                   />
                 );
               })
+            ).concat(
+              [
+                <CarouselCard
+                  key="newsletter-carousel"
+                  title="Sign up for our Newsletter"
+                  link={'/newsletter'}
+                  label="Get the latest news and updates from the VAST team"
+                  imageLink={"/img/newsletter.excalidraw.svg"}
+                  buttonLabel="Subscribe"
+                />
+              ]
             )}
           </Carousel>
         </div>
