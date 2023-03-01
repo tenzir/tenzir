@@ -23,9 +23,9 @@ public:
 
   [[nodiscard]] auto make_loader(const record&, operator_control_plane&) const
     -> caf::expected<loader> override {
-    return [this]() -> generator<chunk_ptr> {
+    return [timeout = read_timeout]() -> generator<chunk_ptr> {
       auto in_buf = detail::fdinbuf(STDIN_FILENO, max_chunk_size);
-      in_buf.read_timeout() = read_timeout;
+      in_buf.read_timeout() = timeout;
       auto current_data = std::vector<std::byte>{};
       current_data.reserve(max_chunk_size);
       auto eof_reached = false;
