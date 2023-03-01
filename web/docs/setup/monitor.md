@@ -76,16 +76,16 @@ vast:
       enable: false
 ```
 
-Both the file and UDS sinks write metrics as NDJSON and inlines the `metadata`
+Both the file and UDS sinks write metrics as NDJSON and inline the `metadata`
 key-value pairs into the top-level object. VAST buffers metrics for these sinks
-in order to batch I/O operations. To enable real-time metrics reporting, set the
-options `vast.metrics.file-sink.real-time` or `vast.metrics.uds-sink.real-time`
+to batch I/O operations. To enable real-time metrics reporting, set the options
+`vast.metrics.file-sink.real-time` or `vast.metrics.uds-sink.real-time`
 respectively in your configuration file.
 
-:::tip Self Sink ❤️  Pipelines
-The self-sink routes metrics as events into VAST's internal database, allowing
-you to work with metrics using VAST's pipelines. The schema for the self-sink is
-slightly different, with the key being embedded in the schema name:
+:::tip Self Sink ❤️ Pipelines
+The self-sink routes metrics as events into VAST's internal storage engine,
+allowing you to work with metrics using VAST's pipelines. The schema for the
+self-sink is slightly different, with the key being embedded in the schema name:
 
 ```yaml
 vast.metrics.<key>:
