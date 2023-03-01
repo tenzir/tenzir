@@ -119,6 +119,29 @@ public:
   std::shared_ptr<http_response> response;
 };
 
+/// Used for serializing an incoming request to be able to send it as a caf
+/// message.
+class http_request_description {
+public:
+  /// The name of the plugin to handle the request.
+  std::string plugin;
+
+  /// Endpoint identifier within the plugin.
+  uint64_t endpoint_id;
+
+  /// Request parameters.
+  vast::record params;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, http_request_description& e) {
+    return f.object(e)
+      .pretty_name("vast.http_request_description")
+      .fields(f.field("plugin", e.plugin),
+              f.field("endpoint_id", e.endpoint_id),
+              f.field("params", e.params));
+  }
+};
+
 } // namespace vast
 
 template <>

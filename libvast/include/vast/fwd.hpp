@@ -124,6 +124,7 @@ class enumeration_type;
 class ewah_bitmap;
 class expression;
 class http_request;
+class http_request_description;
 class int64_type;
 class ip_type;
 class ip;
@@ -381,6 +382,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, first_vast_type_id)
   VAST_ADD_TYPE_ID((vast::extract_query_context))
   VAST_ADD_TYPE_ID((vast::field_extractor))
   VAST_ADD_TYPE_ID((vast::http_request))
+  VAST_ADD_TYPE_ID((vast::http_request_description))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::ip))
   VAST_ADD_TYPE_ID((vast::meta_extractor))
