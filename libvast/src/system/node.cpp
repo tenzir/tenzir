@@ -22,6 +22,7 @@
 #include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/internal_http_response.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/format/csv.hpp"
@@ -634,6 +635,31 @@ node(node_actor::stateful_pointer<node_state> self, std::string name,
       // Run the command.
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
+    },
+    [self](atom::proxy,
+           http_request_description desc) -> caf::result<std::string> {
+      auto const* foo = plugins::find<rest_endpoint_plugin>(desc.plugin);
+      if (!foo)
+        return caf::make_error(ec::invalid_argument, "unknown plugin");
+      auto handler = foo->handler(self->system(), self);
+      auto request = http_request{
+        .params = desc.params,
+        .response = std::make_shared<detail::internal_http_response>(),
+      };
+      auto rp = self->make_response_promise<std::string>();
+      self
+        ->request(handler, caf::infinite, atom::http_request_v,
+                  desc.endpoint_id, std::move(request))
+        .then(
+          [rp, rsp = request.response]() mutable {
+            auto* downcast
+              = static_cast<detail::internal_http_response*>(rsp.get());
+            rp.deliver(std::exchange(*downcast, {}).release());
+          },
+          [rp](const caf::error& e) mutable {
+            rp.deliver(e);
+          });
+      return rp;
     },
     [self](atom::internal, atom::spawn, atom::plugin) -> caf::result<void> {
       // Add all plugins to the component registry.

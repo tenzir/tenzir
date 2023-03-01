@@ -395,6 +395,13 @@ using datagram_source_actor = typed_actor_fwd<
 using node_actor = typed_actor_fwd<
   // Run an invocation in the node.
   auto(atom::run, invocation)->caf::result<caf::message>,
+  // Execute a REST endpoint on this node.
+  // This allows other nodes to access REST endpoints of this node over
+  // the CAF protocol, even if this node is not running a web server.
+  // Note that nodes connected via CAF trust each other completely,
+  // so this skips all authorization and access control mechanisms
+  // that come with HTTP(s).
+  auto(atom::proxy, http_request_description)->caf::result<std::string>,
   // INTERNAL: Spawn component plugins.
   auto(atom::internal, atom::spawn, atom::plugin)->caf::result<void>,
   // Run an invocation in the node that spawns an actor.
