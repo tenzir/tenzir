@@ -582,12 +582,12 @@ TEST(select pipeline with an empty result set) {
   // Run a partition transformation.
   auto pipeline = std::make_shared<vast::pipeline>(
     "partition_transform"s, std::vector<std::string>{"zeek.conn"});
-  auto identity_operator_config
+  auto where_operator_config
     = vast::record{{"expression", "#type == \"does_not_exist\""}};
-  auto identity_operator
-    = vast::make_pipeline_operator("where", identity_operator_config);
-  REQUIRE_NOERROR(identity_operator);
-  pipeline->add_operator(std::move(*identity_operator));
+  auto where_operator
+    = vast::make_pipeline_operator("where", where_operator_config);
+  REQUIRE_NOERROR(where_operator);
+  pipeline->add_operator(std::move(*where_operator));
   std::vector<vast::partition_info> partition_infos;
   auto& partition_info = partition_infos.emplace_back();
   partition_info.uuid = partition_uuid;
